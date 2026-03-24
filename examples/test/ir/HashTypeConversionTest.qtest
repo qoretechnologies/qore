@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
+%modern
 %enable-all-warnings
 
 # Test for hash type conversion in IR CallMethod fallback
@@ -16,17 +16,17 @@ hashdecl ExprInfo {
 }
 
 # Function that takes a complex hash parameter
-sub processExpressions(hash<string, hash<ExprInfo>> $expressions) {
+sub processExpressions(hash<string, hash<ExprInfo>> expressions) {
     # This should work correctly - expressions is a complex hash
-    foreach string $key in ($expressions.keys()) {
+    foreach string key in (expressions.keys()) {
         # Access a member of the hashdecl-typed value
-        my string $op = $expressions{$key}.op;
-        # printf("Processed key: %s with op: %s\n", $key, $op);
+        my string op = expressions{key}.op;
+        # printf("Processed key: %s with op: %s\n", key, op);
     }
 }
 
 # Main test
-my hash<string, hash<ExprInfo>> $test_data = (
+my hash<string, hash<ExprInfo>> test_data = (
     "a": <ExprInfo>{
         "name": "expr_a",
         "value": "val_a",
@@ -41,4 +41,4 @@ my hash<string, hash<ExprInfo>> $test_data = (
 
 # Call function - this should work without INVALID-MEMBER error
 # The IR CallMethod fallback path should properly handle the hash type
-processExpressions($test_data);
+processExpressions(test_data);

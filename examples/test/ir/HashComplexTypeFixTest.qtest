@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-%require-types
+%modern
 %enable-all-warnings
 %strict-types
 
@@ -19,22 +19,22 @@ hashdecl DataProviderExpressionInfo {
 
 # Function that accepts a complex hash parameter
 # The parameter type is hash<string, hash<DataProviderExpressionInfo>>
-sub test_hash_access(hash<string, hash<DataProviderExpressionInfo>> $expressions) {
+sub test_hash_access(hash<string, hash<DataProviderExpressionInfo>> expressions) {
     # Iterate and access members - this uses the IR fallback path
-    my int $count = 0;
-    foreach string $key in ($expressions.keys()) {
+    my int count = 0;
+    foreach string key in (expressions.keys()) {
         # This should work without INVALID-MEMBER error
-        my string $name = $expressions{$key}.name;
-        $count++;
+        my string name = expressions{key}.name;
+        count++;
     }
 
-    if ($count != 2) {
-        throw "TEST-ERROR", sprintf("Expected 2 items, got %d", $count);
+    if (count != 2) {
+        throw "TEST-ERROR", sprintf("Expected 2 items, got %d", count);
     }
 }
 
 # Create test data
-my hash<string, hash<DataProviderExpressionInfo>> $data = (
+my hash<string, hash<DataProviderExpressionInfo>> data = (
     "item1": <DataProviderExpressionInfo>{
         "name": "first",
         "type_name": "simple"
@@ -47,9 +47,9 @@ my hash<string, hash<DataProviderExpressionInfo>> $data = (
 
 # Run test - this should NOT throw INVALID-MEMBER
 try {
-    test_hash_access($data);
+    test_hash_access(data);
     printf("PASS: Hash type conversion test successful\n");
-} catch (hash<ExceptionInfo> $ex) {
-    printf("FAIL: %s: %s\n", $ex.err, $ex.desc);
+} catch (hash<ExceptionInfo> ex) {
+    printf("FAIL: %s: %s\n", ex.err, ex.desc);
     exit(1);
 }

@@ -1356,8 +1356,6 @@ public namespace AOTSplitTest {
 
         # Test script that uses all parts of the split module
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires AOTSplitTest
 
@@ -1390,8 +1388,6 @@ printf(\"%d\\n\", h.addTo(50));
         # Test a split module directory that contains only the main .qm file (no .qc/.ql)
         string mod_name = "AOTSplitQmOnly";
         string qm_code = "%modern
-%require-types
-%strict-args
 
 module AOTSplitQmOnly {
     version = \"1.0\";
@@ -1820,8 +1816,6 @@ public namespace StripHashDeclMod {
 
         # Create a test script that uses the hashdecl
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripHashDeclMod
 
@@ -1876,8 +1870,6 @@ public namespace StripHashDeclInhMod {
 
         # Create a test script that uses the derived hashdecl
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripHashDeclInhMod
 
@@ -1930,8 +1922,6 @@ public namespace StripEnumMod {
 
         # Create a test script that uses the enum
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripEnumMod
 
@@ -2026,8 +2016,6 @@ public namespace StripDepMod {
 
         # Create a test script that uses both modules
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripBaseTypes
 %requires StripDepMod
@@ -2104,8 +2092,6 @@ public namespace StripClassInhMod {
 
         # Create a test script that uses class inheritance
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripClassInhMod
 
@@ -2164,8 +2150,6 @@ public namespace StripStaticMod {
 
         # Create a test script that uses static methods
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripStaticMod
 
@@ -2363,7 +2347,7 @@ printf(\"%d %d\\n\", h.x, h.y);
 
     testPOHighBitsRoundTrip() {
         # Test that parse options high bits are correctly preserved through compilation
-        string code = "%modern\n%strict-args\n%require-types\nprintf(\"options test\\n\");\n";
+        string code = "%modern\nprintf(\"options test\\n\");\n";
 
         # Compile with parse options that include high bits
         string aot_out = compileAndRun(code);
@@ -2596,8 +2580,6 @@ public namespace StripStaticVarMod {
 
         # Create a test script that uses static methods
         string test_code = "%modern
-%require-types
-%strict-args
 
 %requires StripStaticVarMod
 
