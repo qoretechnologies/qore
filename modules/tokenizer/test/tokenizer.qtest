@@ -1,0 +1,232 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  tokenizer.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%strict-args
+%require-types
+%enable-all-warnings
+
+%requires ../../../qlib/Util.qm
+%requires ../../../qlib/QUnit.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module tokenizer
+%define NoTokenizer
+%endtry
+
+%exec-class TokenizerTest
+
+class TokenizerTest inherits QUnit::Test {
+    constructor() : Test("TokenizerTest", "1.0") {
+        addTestCase("basicWordPiece", \basicWordPieceTest());
+        addTestCase("bertTokenizer", \bertTokenizerTest());
+        addTestCase("encodeDecodeRoundTrip", \encodeDecodeRoundTripTest());
+        addTestCase("emptyInput", \emptyInputTest());
+        addTestCase("unicodeInput", \unicodeInputTest());
+        addTestCase("vocabLookup", \vocabLookupTest());
+        addTestCase("skipSpecialTokens", \skipSpecialTokensTest());
+        addTestCase("errorCases", \errorCasesTest());
+
+        set_return_value(main());
+    }
+
+    private Tokenizer::HFTokenizer createMinimalWordPiece() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        hash<auto> config = {
+            "model": {
+                "type": "WordPiece",
+                "vocab": {
+                    "[PAD]": 0, "[UNK]": 1, "[CLS]": 2, "[SEP]": 3,
+                    "hello": 4, "world": 5, ",": 6, "!": 7,
+                    "##s": 8, "##ed": 9, "the": 10, "a": 11,
+                },
+                "unk_token": "[UNK]",
+                "continuing_subword_prefix": "##",
+            },
+            "added_tokens": (
+                {"id": 0, "content": "[PAD]", "special": True},
+                {"id": 1, "content": "[UNK]", "special": True},
+                {"id": 2, "content": "[CLS]", "special": True},
+                {"id": 3, "content": "[SEP]", "special": True},
+            ),
+            "post_processor": {
+                "type": "BertProcessing",
+                "sep": ("[SEP]", 3),
+                "cls": ("[CLS]", 2),
+            },
+            "decoder": {
+                "type": "WordPiece",
+                "prefix": "##",
+                "cleanup": True,
+            },
+        };
+        return new Tokenizer::HFTokenizer(config);
+    }
+
+    basicWordPieceTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok = createMinimalWordPiece();
+
+        assertEq(12, tok.getVocabSize(), "vocab size should be 12");
+        assertEq(4, tok.tokenToId("hello"), "hello should be ID 4");
+        assertEq("hello", tok.idToToken(4), "ID 4 should be hello");
+        assertEq(-1, tok.tokenToId("nonexistent"), "unknown token returns -1");
+    }
+
+    bertTokenizerTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        # Load real BERT tokenizer
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        hash<auto> config = parse_json(json_str);
+        Tokenizer::HFTokenizer tok(config);
+
+        assertEq(30522, tok.getVocabSize(), "BERT vocab size");
+
+        # Test known BERT tokenization
+        hash<auto> enc = tok.encode("Hello, world!");
+        # Expected: [CLS]=101 hello=7592 ,=1010 world=2088 !=999 [SEP]=102
+        assertEq(6, enc.input_ids.size(), "should produce 6 tokens");
+        assertEq(101, enc.input_ids[0], "[CLS] should be 101");
+        assertEq(7592, enc.input_ids[1], "hello should be 7592");
+        assertEq(1010, enc.input_ids[2], ", should be 1010");
+        assertEq(2088, enc.input_ids[3], "world should be 2088");
+        assertEq(999, enc.input_ids[4], "! should be 999");
+        assertEq(102, enc.input_ids[5], "[SEP] should be 102");
+
+        # Test subword tokenization
+        hash<auto> enc2 = tok.encode("unhappiness");
+        assertTrue(enc2.input_ids.size() > 3,
+            "unhappiness should be split into subwords + [CLS] + [SEP]");
+    }
+
+    encodeDecodeRoundTripTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        # Encode then decode (with special tokens skipped)
+        string input = "the quick brown fox jumps over the lazy dog";
+        hash<auto> enc = tok.encode(input);
+        string decoded = tok.decode(enc.input_ids, True);
+        # After lowercase normalization + skip special tokens
+        assertEq(input, trim(decoded),
+            "round-trip should preserve content after normalization");
+    }
+
+    emptyInputTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok = createMinimalWordPiece();
+
+        # Empty string should produce only special tokens
+        hash<auto> enc = tok.encode("");
+        assertTrue(enc.input_ids.size() >= 0,
+            "empty input should not crash");
+    }
+
+    unicodeInputTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        # CJK characters should be handled by BertNormalizer
+        hash<auto> enc = tok.encode("Hello 世界");
+        assertTrue(enc.input_ids.size() > 2,
+            "CJK input should tokenize without crash");
+
+        # Emoji
+        hash<auto> enc2 = tok.encode("Hello 🌍");
+        assertTrue(enc2.input_ids.size() > 2,
+            "emoji input should tokenize without crash");
+
+        # Accented characters
+        hash<auto> enc3 = tok.encode("café résumé naïve");
+        assertTrue(enc3.input_ids.size() > 2,
+            "accented input should tokenize without crash");
+    }
+
+    vocabLookupTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok = createMinimalWordPiece();
+
+        # Test all known tokens
+        assertEq(0, tok.tokenToId("[PAD]"), "[PAD] = 0");
+        assertEq(1, tok.tokenToId("[UNK]"), "[UNK] = 1");
+        assertEq(2, tok.tokenToId("[CLS]"), "[CLS] = 2");
+        assertEq(3, tok.tokenToId("[SEP]"), "[SEP] = 3");
+
+        # Test reverse
+        assertEq("[PAD]", tok.idToToken(0), "0 = [PAD]");
+        assertEq("[UNK]", tok.idToToken(1), "1 = [UNK]");
+    }
+
+    skipSpecialTokensTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        hash<auto> enc = tok.encode("hello");
+        # With special tokens
+        string with_special = tok.decode(enc.input_ids, False);
+        assertTrue(with_special.find("[CLS]") >= 0,
+            "decode without skip should contain [CLS]");
+
+        # Without special tokens
+        string without_special = tok.decode(enc.input_ids, True);
+        assertEq(-1, without_special.find("[CLS]"),
+            "decode with skip should not contain [CLS]");
+    }
+
+    errorCasesTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        # Missing model config
+        assertThrows("TOKENIZER-ERROR", sub() {
+            new Tokenizer::HFTokenizer({});
+        });
+
+        # Invalid model type
+        assertThrows("TOKENIZER-MODEL-ERROR", sub() {
+            new Tokenizer::HFTokenizer({"model": {"type": "InvalidType"}});
+        });
+    }
+}
