@@ -1079,10 +1079,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Phase 3a: Register handler for inline lowering
-        // For now, only register OBE_Error handlers in runtime vector to avoid double execution
-        // OBE_Unconditional and OBE_Success will be inlined at compile time
-        // TODO: Phase 3b - resolve double-execution issue when inlining with runtime registration
+        // Phase 3a: Register handlers for inline lowering
+        // OBE_Unconditional and OBE_Success: inlined at block exit, NOT registered in runtime vector
+        // OBE_Error: registered in runtime vector for exception paths
 
         // Register in block_handlers for inline lowering
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
@@ -1094,7 +1093,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             });
         }
 
-        // Only register OBE_Error handlers in runtime vector
+        // Only register OBE_Error handlers in runtime vector (they're not inlined)
         if (on_block_exit_stmt->getType() == OBE_Error) {
             builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
         }
@@ -1787,15 +1786,15 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // Pop handler stack
     handler_stack.pop();
 
-    // At fall-through (normal exit), inline handlers and emit flush ScopeExit
+    // At fall-through (normal exit), inline handlers and emit ScopeExit
     if (has_on_block_exit) {
         if (!terminated) {
-            // Phase 3b: Inline non-error handlers
+            // Phase 3a: Inline non-error handlers
             if (!lowerHandlersAtExit(false, error, block_handler_start)) {
                 return false;
             }
-            // Emit flush-mode ScopeExit (handlers were inlined, skip runtime execution)
-            builder.createScopeExit(scope_id, false, nullptr, true);
+            // Emit ScopeExit (handlers inlined, no runtime handlers to execute)
+            builder.createScopeExit(scope_id, false, nullptr, false);
         }
         scope_stack.pop_back();
         cleanup_stack.pop_back();
@@ -1831,17 +1830,14 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry& entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
-                // Phase 3a: On non-error paths, inline non-error handlers
-                // On error paths, let runtime fire OBE_Error handlers
+                // Inline non-error handlers on normal paths
                 if (!is_error) {
-                    // Inline OBE_Unconditional and OBE_Success handlers
                     if (!lowerHandlersAtExit(false, error, entry.handler_start)) {
                         return false;
                     }
                 }
-                // Always emit ScopeExit - with inline_lowered=true on non-error (handlers inlined)
-                // or inline_lowered=false on error (let runtime fire OBE_Error handlers)
-                builder.createScopeExit(entry.scope_id, is_error, entry.loc, !is_error);
+                // Emit ScopeExit (handlers inlined or not registered in runtime vector)
+                builder.createScopeExit(entry.scope_id, is_error, entry.loc, false);
                 break;
             }
             case BlockCleanupEntry::Lvars:
