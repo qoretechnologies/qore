@@ -2042,6 +2042,48 @@ QoreIRLowering::HandlerVariableCapture QoreIRLowering::analyzeHandlerVariables(
     return capture;
 }
 
+QoreIRFunction* QoreIRLowering::compileHandlerToIR(
+        const StatementBlock* handler_code,
+        const HandlerVariableCapture& capture,
+        std::string& error) {
+    if (!handler_code) {
+        error = "handler code is null";
+        return nullptr;
+    }
+
+    // Phase 3b: Compile handler to IR function with captured variables as parameters
+    // Create a new IR function for the handler
+    auto handler_func = std::make_unique<QoreIRFunction>("handler");
+
+    // Create entry block
+    QoreIRBasicBlock* entry = handler_func->createBlock("entry");
+
+    // Create a builder for the handler function
+    QoreIRBuilder handler_builder(handler_func.get());
+    handler_builder.setBlock(entry);
+
+    // Create temporary lowering context for the handler body
+    QoreIRLowering handler_lowering(handler_builder, parse_context);
+
+    // Lower the handler body into the handler IR function
+    if (!handler_lowering.lowerStatementBlock(handler_code, error)) {
+        error = "handler body lowering failed: " + error;
+        return nullptr;
+    }
+
+    // If handler doesn't end with a terminator (return, throw, branch), add return nothing
+    if (entry->instructions.empty() || !isTerminator(entry->instructions.back()->opcode)) {
+        handler_builder.createReturnNothing();
+    }
+
+    // Update function metadata (value IDs from builder operations)
+    handler_func->max_value_id = handler_builder.getFunction()->max_value_id;
+    handler_func->max_local_slot_id = handler_builder.getFunction()->max_local_slot_id;
+
+    // Transfer ownership to caller
+    return handler_func.release();
+}
+
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
     // Lower all applicable handlers for current block in LIFO order
     // Handlers are executed in reverse registration order (innermost to outermost)

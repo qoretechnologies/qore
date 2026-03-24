@@ -186,6 +186,14 @@ private:
      */
     HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
 
+    //! Phase 3b: Compile handler code to IR function with captured variable parameters
+    /** Creates a QoreIRFunction for the handler with captured variables passed as parameters.
+     *  The handler body is lowered into the new function, which can be executed from any context.
+     *  Returns nullptr on compilation failure.
+     */
+    QoreIRFunction* compileHandlerToIR(const StatementBlock* handler_code,
+            const HandlerVariableCapture& capture, std::string& error);
+
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
     //! Native IR lowering for select operator with implicit argument context
