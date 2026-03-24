@@ -102,6 +102,10 @@ export PATH="${BUILD_DIR}:${PATH}"
 # when creating 8000+ threads overwhelms the pthread subsystem
 export SKIP_MAX_THREAD_TEST=1
 
+# Raise the file descriptor limit — macOS defaults to 256 which is too low for
+# tests that create many sockets (e.g. AsyncSocketIo scalability test needs ~430)
+ulimit -n 4096
+
 # Run the test suite (QORE_TEST_OPTS is read from the environment by run_tests.sh)
 ./run_tests.sh
 
