@@ -4,6 +4,10 @@
 
     Darts-clone DoubleArray trie implementation
 
+    Based on the SentencePiece normalizer's use of Darts-clone:
+    - github.com/google/sentencepiece/blob/master/src/normalizer.cc
+    - github.com/google/sentencepiece/blob/master/third_party/darts_clone/darts.h
+
     Copyright (C) 2026 Qore Technologies, s.r.o.
     MIT License
 */
@@ -60,6 +64,25 @@ bool DartsTrie::parse(const uint8_t* data, size_t size) {
     return true;
 }
 
+// Darts-clone DoubleArray traversal following the exact algorithm from darts.h:
+//
+// The DoubleArray encodes a trie where each node has:
+// - offset(): base address for children; child for byte `c` is at offset() ^ c
+// - has_leaf(): whether this node has a value (terminal)
+// - value(): the stored value (only valid at leaf nodes, i.e., at offset() ^ 0)
+//
+// To traverse for byte `c` from a node:
+//   next_pos = offset(unit[current_pos]) ^ c
+//   if unit[next_pos] exists and label(unit[next_pos]) == c, transition succeeded
+//
+// To check for a value at a node:
+//   if has_leaf(unit[current_pos]) is true, then unit[offset(unit[current_pos]) ^ 0]
+//   contains the value via value()
+//
+// label check: (unit ^ c) & ((1 << 31) | 0xFF) == c
+// But for commonPrefixSearch, we skip label validation for performance (the trie
+// is trusted data from the precompiled normalizer).
+
 std::vector<TrieMatch> DartsTrie::commonPrefixSearch(const uint8_t* input,
         size_t input_len) const {
     std::vector<TrieMatch> results;
@@ -68,43 +91,45 @@ std::vector<TrieMatch> DartsTrie::commonPrefixSearch(const uint8_t* input,
         return results;
     }
 
-    uint32_t node_pos = 0;
+    // Start at root (position 0)
     uint32_t unit = trie_units[0];
-    uint32_t node_offset = offset(unit);
+    size_t node_pos = offset(unit);  // children base for root
+
+    // Check if root itself has a value (empty string match)
+    if (hasLeaf(unit)) {
+        uint32_t leaf_pos = node_pos;  // offset ^ 0 = offset
+        if (leaf_pos < trie_units.size()) {
+            results.push_back({value(trie_units[leaf_pos]), 0});
+        }
+    }
 
     for (size_t i = 0; i < input_len; ++i) {
-        uint8_t key = input[i];
-        node_pos = node_offset ^ key;
-
-        if (node_pos >= trie_units.size()) {
+        // Traverse to child for input[i]
+        size_t child_pos = node_pos ^ (size_t)input[i];
+        if (child_pos >= trie_units.size()) {
             break;
         }
 
-        unit = trie_units[node_pos];
+        unit = trie_units[child_pos];
 
-        // Check if this node has a leaf (= a match at this prefix length)
+        // Verify label matches (lower 8 bits XOR should give the byte)
+        // In Darts-clone, label = unit & ((1 << 31) | 0xFF)
+        // For a valid transition, label should match the input byte
+        uint32_t label = unit & ((1u << 31) | 0xFF);
+        if (label != (uint32_t)input[i]) {
+            break;  // no valid transition
+        }
+
+        // Check if this node has a value (prefix match of length i+1)
         if (hasLeaf(unit)) {
-            uint32_t leaf_pos = node_offset ^ 0; // leaf is at label 0
-            if (leaf_pos < trie_units.size()) {
-                uint32_t leaf_unit = trie_units[leaf_pos];
-                // For non-zero label traversals, the leaf check is different
+            uint32_t leaf_offset = offset(unit);
+            if (leaf_offset < trie_units.size()) {
+                results.push_back({value(trie_units[leaf_offset]), i + 1});
             }
         }
 
-        node_offset = offset(unit);
-
-        // Check for a value at this node (via leaf at offset ^ 0)
-        if (node_offset < trie_units.size()) {
-            uint32_t leaf_check = node_offset; // position 0 under this node
-            if (leaf_check < trie_units.size()) {
-                uint32_t lc_unit = trie_units[leaf_check];
-                if (hasLeaf(lc_unit) || (lc_unit & (1u << 31))) {
-                    // This is a terminal node
-                    uint32_t val = value(lc_unit);
-                    results.push_back({val, i + 1});
-                }
-            }
-        }
+        // Advance: children of this node start at offset(unit)
+        node_pos = offset(unit);
     }
 
     // Sort by length descending (longest match first)
@@ -116,13 +141,13 @@ std::vector<TrieMatch> DartsTrie::commonPrefixSearch(const uint8_t* input,
     return results;
 }
 
-std::string DartsTrie::getNormalizedString(uint32_t offset) const {
-    if (offset >= string_pool.size()) {
+std::string DartsTrie::getNormalizedString(uint32_t off) const {
+    if (off >= string_pool.size()) {
         return "";
     }
     // Read null-terminated string from pool
-    size_t len = strnlen(string_pool.data() + offset, string_pool.size() - offset);
-    return std::string(string_pool.data() + offset, len);
+    size_t len = strnlen(string_pool.data() + off, string_pool.size() - off);
+    return std::string(string_pool.data() + off, len);
 }
 
 } // namespace QoreTokenizer

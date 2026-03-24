@@ -111,7 +111,8 @@ std::vector<int> QoreHFTokenizer::tokenizePreToken(const std::string& pre_token)
     return model->tokenize(pre_token);
 }
 
-std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
+// Internal: tokenize a text segment through normalize + pre-tokenize + model
+std::vector<int> QoreHFTokenizer::encodeSegment(const std::string& text) const {
     std::string normalized = text;
 
     // Step 1: Normalize
@@ -119,7 +120,7 @@ std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
         normalized = normalizer->normalize(normalized);
     }
 
-    // Step 2: Pre-tokenize
+    // Step 2: Pre-tokenize + model tokenize
     std::vector<int> all_ids;
 
     if (pre_tokenizer) {
@@ -129,8 +130,59 @@ std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
             all_ids.insert(all_ids.end(), ids.begin(), ids.end());
         }
     } else {
-        // No pre-tokenizer: tokenize the whole text
         all_ids = tokenizePreToken(normalized);
+    }
+
+    return all_ids;
+}
+
+std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
+    if (added_tokens.empty()) {
+        return encodeSegment(text);
+    }
+
+    // Split text on added tokens, tokenize segments between them
+    std::vector<int> all_ids;
+    std::string remaining = text;
+
+    while (!remaining.empty()) {
+        // Find the earliest occurring added token in remaining text
+        size_t best_pos = std::string::npos;
+        size_t best_len = 0;
+        int best_id = -1;
+
+        for (const auto& at : added_tokens) {
+            if (at.content.empty()) {
+                continue;
+            }
+            size_t pos = remaining.find(at.content);
+            if (pos != std::string::npos && (pos < best_pos
+                    || (pos == best_pos && at.content.size() > best_len))) {
+                best_pos = pos;
+                best_len = at.content.size();
+                best_id = at.id;
+            }
+        }
+
+        if (best_pos == std::string::npos) {
+            // No added tokens found — tokenize the rest normally
+            auto ids = encodeSegment(remaining);
+            all_ids.insert(all_ids.end(), ids.begin(), ids.end());
+            break;
+        }
+
+        // Tokenize text before the added token
+        if (best_pos > 0) {
+            std::string before = remaining.substr(0, best_pos);
+            auto ids = encodeSegment(before);
+            all_ids.insert(all_ids.end(), ids.begin(), ids.end());
+        }
+
+        // Insert the added token's ID directly
+        all_ids.push_back(best_id);
+
+        // Continue after the added token
+        remaining = remaining.substr(best_pos + best_len);
     }
 
     return all_ids;

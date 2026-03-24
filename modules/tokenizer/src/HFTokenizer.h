@@ -87,7 +87,10 @@ private:
     //! Internal: tokenize a single pre-token through the model
     std::vector<int> tokenizePreToken(const std::string& pre_token) const;
 
-    //! Internal: encode a single text through normalize + pre-tokenize + model
+    //! Internal: encode a text segment through normalize + pre-tokenize + model
+    std::vector<int> encodeSegment(const std::string& text) const;
+
+    //! Internal: encode text with added token splitting
     std::vector<int> encodeText(const std::string& text) const;
 };
 
