@@ -65,6 +65,9 @@ public:
     //! Converts a token string to its ID
     int tokenToId(const QoreStringNode* token) const;
 
+    //! Returns the full vocabulary as a token→id hash (includes added tokens)
+    QoreHashNode* getVocab(ExceptionSink* xsink) const;
+
 private:
     std::unique_ptr<AbstractNormalizer> normalizer;
     std::unique_ptr<AbstractPreTokenizer> pre_tokenizer;

@@ -48,8 +48,8 @@ private:
     //! Returns true if the byte is a UTF-8 leading byte for a letter character
     static bool isLetter(const std::string& s, size_t pos, size_t& charLen);
 
-    //! Returns true if the byte is an ASCII digit
-    static bool isDigit(unsigned char c);
+    //! Returns true if the character at pos is a Unicode decimal digit (Nd category)
+    static bool isDigit(const std::string& s, size_t pos, size_t& charLen);
 
     //! Returns true if the byte is a space character
     static bool isSpace(unsigned char c);

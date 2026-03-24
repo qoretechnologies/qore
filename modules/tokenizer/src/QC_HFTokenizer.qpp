@@ -99,3 +99,11 @@ string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
 int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
     return tok->tokenToId(token);
 }
+
+//! Returns the full vocabulary as a token-to-ID hash
+/** Includes all model vocabulary entries plus any added tokens.
+    @return a hash mapping token strings to their integer IDs
+*/
+hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
+    return tok->getVocab(xsink);
+}

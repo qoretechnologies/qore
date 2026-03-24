@@ -38,6 +38,7 @@ public:
     int vocabSize() const override;
     std::string idToToken(int id) const override;
     int tokenToId(const std::string& token) const override;
+    std::unordered_map<std::string, int> getVocab() const override;
 
 private:
     //! token string -> token ID

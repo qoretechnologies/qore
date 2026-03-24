@@ -216,4 +216,8 @@ int UnigramModel::tokenToId(const std::string& token) const {
     return -1;
 }
 
+std::unordered_map<std::string, int> UnigramModel::getVocab() const {
+    return token_to_id;
+}
+
 } // namespace QoreTokenizer

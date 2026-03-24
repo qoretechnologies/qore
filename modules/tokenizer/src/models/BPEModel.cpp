@@ -259,7 +259,7 @@ std::vector<int> BPEModel::tokenize(const std::string& pre_token) const {
 }
 
 int BPEModel::vocabSize() const {
-    return (int)id_to_token.size();
+    return (int)vocab.size();
 }
 
 std::string BPEModel::idToToken(int id) const {
@@ -275,6 +275,10 @@ int BPEModel::tokenToId(const std::string& token) const {
         return it->second;
     }
     return -1;
+}
+
+std::unordered_map<std::string, int> BPEModel::getVocab() const {
+    return vocab;
 }
 
 } // namespace QoreTokenizer

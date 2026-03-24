@@ -60,8 +60,35 @@ size_t ByteLevelPreTokenizer::utf8CharLen(unsigned char c) {
     return 1;
 }
 
-bool ByteLevelPreTokenizer::isDigit(unsigned char c) {
-    return c >= '0' && c <= '9';
+bool ByteLevelPreTokenizer::isDigit(const std::string& s, size_t pos, size_t& charLen) {
+    if (pos >= s.size()) {
+        charLen = 0;
+        return false;
+    }
+
+    unsigned char c = s[pos];
+    charLen = utf8CharLen(c);
+
+    if (pos + charLen > s.size()) {
+        charLen = 1;
+        return false;
+    }
+
+    // Decode the codepoint
+    int32_t cp;
+    if (charLen == 1) {
+        cp = c;
+    } else if (charLen == 2) {
+        cp = ((c & 0x1F) << 6) | (s[pos + 1] & 0x3F);
+    } else if (charLen == 3) {
+        cp = ((c & 0x0F) << 12) | ((s[pos + 1] & 0x3F) << 6) | (s[pos + 2] & 0x3F);
+    } else {
+        cp = ((c & 0x07) << 18) | ((s[pos + 1] & 0x3F) << 12)
+            | ((s[pos + 2] & 0x3F) << 6) | (s[pos + 3] & 0x3F);
+    }
+
+    // Check Unicode Nd (decimal digit number) category
+    return utf8proc_category(cp) == UTF8PROC_CATEGORY_ND;
 }
 
 bool ByteLevelPreTokenizer::isSpace(unsigned char c) {
@@ -212,10 +239,11 @@ std::vector<std::string> ByteLevelPreTokenizer::gpt2Split(const std::string& inp
             if (tpos < input.size() && input[tpos] == ' ') {
                 tpos++;
             }
-            if (tpos < input.size() && isDigit(input[tpos])) {
-                tpos++;
-                while (tpos < input.size() && isDigit(input[tpos])) {
-                    tpos++;
+            size_t dLen;
+            if (tpos < input.size() && isDigit(input, tpos, dLen)) {
+                tpos += dLen;
+                while (tpos < input.size() && isDigit(input, tpos, dLen)) {
+                    tpos += dLen;
                 }
                 tokens.push_back(input.substr(tstart, tpos - tstart));
                 i = tpos;
@@ -230,14 +258,14 @@ std::vector<std::string> ByteLevelPreTokenizer::gpt2Split(const std::string& inp
             if (tpos < input.size() && input[tpos] == ' ') {
                 tpos++;
             }
-            size_t charLen;
+            size_t charLen, dLen2;
             if (tpos < input.size() && !isSpace(input[tpos])
-                    && !isDigit(input[tpos])
+                    && !isDigit(input, tpos, dLen2)
                     && !isLetter(input, tpos, charLen)) {
                 // Consume the first non-letter-non-digit-non-space character
                 tpos += utf8CharLen(input[tpos]);
                 while (tpos < input.size() && !isSpace(input[tpos])
-                        && !isDigit(input[tpos])
+                        && !isDigit(input, tpos, dLen2)
                         && !isLetter(input, tpos, charLen)) {
                     tpos += utf8CharLen(input[tpos]);
                 }

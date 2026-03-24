@@ -13,6 +13,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <memory>
 
 #include "qore/Qore.h"
@@ -44,6 +45,9 @@ public:
         @return the token ID, or -1 if not found
     */
     virtual int tokenToId(const std::string& token) const = 0;
+
+    //! Returns the full vocabulary as a token-to-id mapping
+    virtual std::unordered_map<std::string, int> getVocab() const = 0;
 
     //! Factory: creates a model from a parsed tokenizer.json "model" config hash
     /** Dispatches on config.type:

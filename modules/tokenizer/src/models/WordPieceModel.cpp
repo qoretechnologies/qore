@@ -192,7 +192,7 @@ std::vector<int> WordPieceModel::tokenize(const std::string& pre_token) const {
 }
 
 int WordPieceModel::vocabSize() const {
-    return (int)id_to_token.size();
+    return (int)vocab.size();
 }
 
 std::string WordPieceModel::idToToken(int id) const {
@@ -208,6 +208,10 @@ int WordPieceModel::tokenToId(const std::string& token) const {
         return it->second;
     }
     return -1;
+}
+
+std::unordered_map<std::string, int> WordPieceModel::getVocab() const {
+    return vocab;
 }
 
 } // namespace QoreTokenizer

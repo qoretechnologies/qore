@@ -345,4 +345,26 @@ int QoreHFTokenizer::tokenToId(const QoreStringNode* token) const {
     return model->tokenToId(token->c_str());
 }
 
+QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
+    if (!model) {
+        xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
+        return nullptr;
+    }
+
+    auto vocab = model->getVocab();
+
+    // Include added tokens
+    for (const auto& at : added_tokens) {
+        if (!at.content.empty()) {
+            vocab[at.content] = at.id;
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(bigIntTypeInfo), xsink);
+    for (const auto& entry : vocab) {
+        result->setKeyValue(entry.first.c_str(), entry.second, xsink);
+    }
+    return result.release();
+}
+
 } // namespace QoreTokenizer
