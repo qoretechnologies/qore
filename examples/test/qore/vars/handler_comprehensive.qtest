@@ -1,0 +1,263 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class HandlerComprehensiveTest
+
+# Test helper functions
+string sub runBasicExitTest(*list log) {
+    log = ();
+    {
+        log += "body";
+        on_exit { log += "exit"; }
+    }
+    return (log.size() == 2 && log[0] == "body" && log[1] == "exit") ? "PASS" : "FAIL";
+}
+
+string sub runNestedExitTest(*list log) {
+    log = ();
+    {
+        log += "body1";
+        on_exit { log += "exit1"; }
+        {
+            log += "body2";
+            on_exit { log += "exit2"; }
+        }
+        log += "after2";
+    }
+    return (log.size() == 5 &&
+            log[0] == "body1" &&
+            log[1] == "body2" &&
+            log[2] == "exit2" &&
+            log[3] == "after2" &&
+            log[4] == "exit1") ? "PASS" : "FAIL";
+}
+
+string sub runMultipleExitTest(*list log) {
+    log = ();
+    {
+        log += "body";
+        on_exit { log += "exit1"; }
+        on_exit { log += "exit2"; }
+        on_exit { log += "exit3"; }
+    }
+    # Expected LIFO: body, exit3, exit2, exit1
+    return (log.size() == 4 &&
+            log[0] == "body" &&
+            log[1] == "exit3" &&
+            log[2] == "exit2" &&
+            log[3] == "exit1") ? "PASS" : "FAIL";
+}
+
+string sub runOnSuccessTest(*list log) {
+    log = ();
+    {
+        log += "body";
+        on_success { log += "success"; }
+    }
+    return (log.size() == 2 && log[0] == "body" && log[1] == "success") ? "PASS" : "FAIL";
+}
+
+string sub runOnErrorNormalTest(*list log) {
+    log = ();
+    {
+        log += "body";
+        on_error { log += "error"; }
+    }
+    # on_error should NOT fire on normal exit
+    return (log.size() == 1 && log[0] == "body") ? "PASS" : "FAIL";
+}
+
+string sub runOnErrorExceptionTest(*list log) {
+    log = ();
+    try {
+        {
+            log += "body";
+            on_error { log += "error"; }
+            throw "test-error";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught";
+    }
+    return (log.size() == 3 &&
+            log[0] == "body" &&
+            log[1] == "error" &&
+            log[2] == "caught") ? "PASS" : "FAIL";
+}
+
+string sub runHandlerScopeAccessTest() {
+    int x = 10;
+    {
+        x += 5;
+        on_exit { x += 20; }
+    }
+    return (x == 35) ? "PASS" : "FAIL";
+}
+
+string sub runMixedHandlerTypesTest(*list log) {
+    log = ();
+    try {
+        {
+            log += "body";
+            on_exit { log += "exit"; }
+            on_success { log += "success"; }
+            on_error { log += "error"; }
+            throw "error";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        log += "caught";
+    }
+    return (log.size() == 4 &&
+            log[0] == "body" &&
+            log[1] == "exit" &&
+            log[2] == "error" &&
+            log[3] == "caught") ? "PASS" : "FAIL";
+}
+
+string sub runDeepNestingTest(*list log) {
+    log = ();
+    {
+        log += "1";
+        on_exit { log += "1x"; }
+        {
+            log += "2";
+            on_exit { log += "2x"; }
+            {
+                log += "3";
+                on_exit { log += "3x"; }
+                {
+                    log += "4";
+                    on_exit { log += "4x"; }
+                }
+            }
+        }
+    }
+    return (log.size() == 8 &&
+            log[0] == "1" &&
+            log[1] == "2" &&
+            log[2] == "3" &&
+            log[3] == "4" &&
+            log[4] == "4x" &&
+            log[5] == "3x" &&
+            log[6] == "2x" &&
+            log[7] == "1x") ? "PASS" : "FAIL";
+}
+
+string sub runHandlerWithBreakTest(*list log) {
+    log = ();
+    for (int i = 0; i < 5; ++i) {
+        {
+            log += "body";
+            on_exit { log += "exit"; }
+            if (i == 2) {
+                break;
+            }
+        }
+    }
+    # Should execute body/exit for i=0,1,2 then exit loop
+    return (log.size() == 6) ? "PASS" : "FAIL";
+}
+
+string sub runHandlerWithContinueTest(*list log) {
+    log = ();
+    for (int i = 0; i < 3; ++i) {
+        {
+            on_exit { log += ("exit" + i); }
+            if (i == 1) {
+                continue;
+            }
+            log += ("body" + i);
+        }
+    }
+    return (log.size() == 5) ? "PASS" : "FAIL";
+}
+
+public class HandlerComprehensiveTest inherits QUnit::Test {
+    constructor() : Test("Handler Comprehensive Test", "1.0") {
+        addTestCase("basic on_exit", \basicExitTest());
+        addTestCase("nested on_exit (LIFO)", \nestedExitTest());
+        addTestCase("multiple on_exit handlers", \multipleExitTest());
+        addTestCase("on_success fires on normal exit", \onSuccessTest());
+        addTestCase("on_error doesn't fire on normal exit", \onErrorNormalTest());
+        addTestCase("on_error fires on exception", \onErrorExceptionTest());
+        addTestCase("handler accesses parent scope", \handlerScopeAccessTest());
+        addTestCase("mixed handler types", \mixedHandlerTypesTest());
+        addTestCase("deeply nested handlers", \deepNestingTest());
+        addTestCase("handler with break statement", \handlerWithBreakTest());
+        addTestCase("handler with continue statement", \handlerWithContinueTest());
+
+        set_return_value(main());
+    }
+
+    basicExitTest() {
+        list log = ();
+        string result = runBasicExitTest(log);
+        assertEq("PASS", result);
+        assertEq(2, log.size());
+        assertEq("body", log[0]);
+        assertEq("exit", log[1]);
+    }
+
+    nestedExitTest() {
+        list log = ();
+        string result = runNestedExitTest(log);
+        assertEq("PASS", result);
+    }
+
+    multipleExitTest() {
+        list log = ();
+        string result = runMultipleExitTest(log);
+        assertEq("PASS", result);
+    }
+
+    onSuccessTest() {
+        list log = ();
+        string result = runOnSuccessTest(log);
+        assertEq("PASS", result);
+    }
+
+    onErrorNormalTest() {
+        list log = ();
+        string result = runOnErrorNormalTest(log);
+        assertEq("PASS", result);
+    }
+
+    onErrorExceptionTest() {
+        list log = ();
+        string result = runOnErrorExceptionTest(log);
+        assertEq("PASS", result);
+    }
+
+    handlerScopeAccessTest() {
+        string result = runHandlerScopeAccessTest();
+        assertEq("PASS", result);
+    }
+
+    mixedHandlerTypesTest() {
+        list log = ();
+        string result = runMixedHandlerTypesTest(log);
+        assertEq("PASS", result);
+    }
+
+    deepNestingTest() {
+        list log = ();
+        string result = runDeepNestingTest(log);
+        assertEq("PASS", result);
+    }
+
+    handlerWithBreakTest() {
+        list log = ();
+        string result = runHandlerWithBreakTest(log);
+        assertEq("PASS", result);
+    }
+
+    handlerWithContinueTest() {
+        list log = ();
+        string result = runHandlerWithContinueTest(log);
+        assertEq("PASS", result);
+    }
+}
