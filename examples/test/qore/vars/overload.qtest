@@ -176,6 +176,25 @@ int sub exact_1() {
     return 0;
 }
 
+# union type variant selection tests
+# auto-first definition order
+string sub union_test(auto x) {
+    return "auto";
+}
+
+string sub union_test(int x) {
+    return "int";
+}
+
+# int-first definition order (should have same result)
+string sub union_test2(int x) {
+    return "int";
+}
+
+string sub union_test2(auto x) {
+    return "auto";
+}
+
 public class OverloadTest inherits QUnit::Test {
     public {
         const Api = "hash sub p() { return {}; }*hash sub p(string a) {return {};}any sub p(string a, string b) { return 1; }";
@@ -191,6 +210,7 @@ public class OverloadTest inherits QUnit::Test {
         addTestCase("softlist overload test", \softlistOverloadTest());
         addTestCase("issue 3861", \issue3861());
         addTestCase("issue 3441", \issue3441());
+        addTestCase("union type variant", \unionVariantTest());
         addTestCase("Values test", \testValues());
         addTestCase("Variables test", \testVariables());
         addTestCase("issue 1928", \issue1928());
@@ -337,6 +357,30 @@ public class OverloadTest inherits QUnit::Test {
         assertThrows("PARSE-TYPE-ERROR", sub() {
             p.parse("sub t(hash<string, bool> h) {} sub t(int x) {} hash<auto> h = <StatInfo>{}; t(h);", "");
         });
+    }
+
+    unionVariantTest() {
+        # auto-first definition order: auto must be selected for union type
+        auto v1;
+        if (True) {
+            v1 = 42;
+        } else {
+            v1 = NOTHING;
+        }
+        # v1 is narrowed to *int (int or nothing)
+        # union_test(*int) should select auto variant, not int variant
+        assertEq("auto", union_test(v1));
+
+        # int-first definition order: same result (must be order-independent)
+        auto v2;
+        if (True) {
+            v2 = 42;
+        } else {
+            v2 = NOTHING;
+        }
+        # v2 is narrowed to *int
+        # union_test2(*int) should still select auto variant regardless of definition order
+        assertEq("auto", union_test2(v2));
     }
 
     testValues() {
