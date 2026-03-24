@@ -1886,6 +1886,162 @@ bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_erro
     return false;
 }
 
+//! Helper function to recursively collect local variable references from an expression
+/** Walks the AST to find VarRefNode instances and stores their LocalVar references.
+ */
+static void collectLocalVarsFromExpr(const QoreValue& expr,
+        std::unordered_set<LocalVar*>& local_vars) {
+    if (!expr.hasNode()) {
+        return;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return;
+    }
+
+    qore_type_t ntype = expr.getType();
+
+    // VarRefNode — leaf node, check if it's a local variable
+    if (ntype == NT_VARREF) {
+        auto* var_ref = reinterpret_cast<const VarRefNode*>(node);
+        qore_var_t type = var_ref->getType();
+        if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && var_ref->ref.id) {
+            local_vars.insert(var_ref->ref.id);
+        }
+        return;
+    }
+
+    // Constants and literals — leaf nodes
+    if (ntype == NT_STRING || ntype == NT_INT || ntype == NT_FLOAT || ntype == NT_BOOLEAN
+            || ntype == NT_NOTHING || ntype == NT_NULL || ntype == NT_NUMBER
+            || ntype == NT_DATE || ntype == NT_BINARY || ntype == NT_HASH
+            || ntype == NT_LIST || ntype == NT_BACKQUOTE) {
+        return;
+    }
+
+    // Binary operators: recurse left and right
+    if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
+        collectLocalVarsFromExpr(binop->getLeft(), local_vars);
+        collectLocalVarsFromExpr(binop->getRight(), local_vars);
+        return;
+    }
+
+    // Unary/single expression operators: recurse expression
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
+        collectLocalVarsFromExpr(unop->getExp(), local_vars);
+        return;
+    }
+
+    // LValue single expression operators
+    if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
+        collectLocalVarsFromExpr(unop->getExp(), local_vars);
+        return;
+    }
+
+    // Function calls (FunctionCallNode, SelfFunctionCallNode, StaticMethodCallNode, etc.)
+    if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
+        if (const QoreParseListNode* args = call->getParseArgs()) {
+            for (size_t i = 0; i < args->size(); ++i) {
+                collectLocalVarsFromExpr(args->get(i), local_vars);
+            }
+        }
+        if (const QoreListNode* args = call->getArgs()) {
+            ConstListIterator li(args);
+            while (li.next()) {
+                collectLocalVarsFromExpr(li.getValue(), local_vars);
+            }
+        }
+        return;
+    }
+
+    // Subscript operators: recurse into container and index
+    if (auto* sub = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        collectLocalVarsFromExpr(sub->getLeft(), local_vars);
+        collectLocalVarsFromExpr(sub->getRight(), local_vars);
+        return;
+    }
+
+    // Hash dereference operator: recurse into left side
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        collectLocalVarsFromExpr(hd->getLeft(), local_vars);
+        return;
+    }
+}
+
+//! Helper function to recursively collect local variables from statements
+/** Walks the AST statement tree to find all VarRefNode instances in expressions.
+ */
+static void collectLocalVarsFromStatements(const StatementBlock* block,
+        std::unordered_set<LocalVar*>& local_vars) {
+    if (!block) {
+        return;
+    }
+    for (const auto* stmt : block->getStatements()) {
+        if (!stmt) {
+            continue;
+        }
+        // ExpressionStatement: walk expression
+        if (auto* expr_stmt = dynamic_cast<const ExpressionStatement*>(stmt)) {
+            collectLocalVarsFromExpr(expr_stmt->getExpression(), local_vars);
+            continue;
+        }
+        // IfStatement: walk condition, then-block, else-block
+        if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+            collectLocalVarsFromExpr(if_stmt->getCond(), local_vars);
+            collectLocalVarsFromStatements(if_stmt->getIfCode(), local_vars);
+            collectLocalVarsFromStatements(if_stmt->getElseCode(), local_vars);
+            continue;
+        }
+        // WhileStatement / DoWhileStatement: walk condition, body
+        if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+            collectLocalVarsFromExpr(while_stmt->getCond(), local_vars);
+            collectLocalVarsFromStatements(while_stmt->getCode(), local_vars);
+            continue;
+        }
+        if (auto* dowhile_stmt = dynamic_cast<const DoWhileStatement*>(stmt)) {
+            collectLocalVarsFromExpr(dowhile_stmt->getCond(), local_vars);
+            collectLocalVarsFromStatements(dowhile_stmt->getCode(), local_vars);
+            continue;
+        }
+        // ForStatement: walk assignment, condition, iterator, body
+        if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+            collectLocalVarsFromExpr(for_stmt->getAssignment(), local_vars);
+            collectLocalVarsFromExpr(for_stmt->getCond(), local_vars);
+            collectLocalVarsFromExpr(for_stmt->getIterator(), local_vars);
+            collectLocalVarsFromStatements(for_stmt->getCode(), local_vars);
+            continue;
+        }
+        // TryStatement: walk try-block, catch block
+        if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+            collectLocalVarsFromStatements(try_stmt->getTryBlock(), local_vars);
+            collectLocalVarsFromStatements(try_stmt->getCatchBlock(), local_vars);
+            continue;
+        }
+    }
+}
+
+QoreIRLowering::HandlerVariableCapture QoreIRLowering::analyzeHandlerVariables(
+        const StatementBlock* handler_code) {
+    HandlerVariableCapture capture;
+    if (!handler_code) {
+        return capture;
+    }
+
+    // Collect all local variables referenced in handler code
+    std::unordered_set<LocalVar*> all_locals;
+    collectLocalVarsFromStatements(handler_code, all_locals);
+
+    // Convert to vector, avoiding duplicates
+    for (LocalVar* lv : all_locals) {
+        if (capture.referenced_set.find(lv) == capture.referenced_set.end()) {
+            capture.referenced_locals.push_back(lv);
+            capture.referenced_set.insert(lv);
+        }
+    }
+
+    return capture;
+}
+
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
     // Lower all applicable handlers for current block in LIFO order
     // Handlers are executed in reverse registration order (innermost to outermost)

@@ -73,6 +73,15 @@ public:
         const QoreProgramLocation* loc;      //!< source location for error reporting
     };
 
+    //! Captured variables needed by a handler for parent scope access
+    /** Phase 3b: Stores information about local and global variables referenced by a handler.
+     *  These are captured as parameters to the handler IR function so it can access parent scope.
+     */
+    struct HandlerVariableCapture {
+        std::vector<LocalVar*> referenced_locals;      //!< local vars referenced by handler
+        std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
+    };
+
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr);
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
@@ -171,6 +180,12 @@ public:
     QoreIRValue lowerStaticCall(const QoreValue& expr, std::string& error);
 
 private:
+    //! Phase 3b: Analyze handler code for variable references to enable parameter capture
+    /** Walks the handler AST to identify which parent scope variables are referenced.
+     *  These variables will be passed as parameters to the compiled handler IR function.
+     */
+    HandlerVariableCapture analyzeHandlerVariables(const StatementBlock* handler_code);
+
     //! Native IR lowering for map operator with implicit argument context
     QoreIRValue lowerMapNative(const QoreMapOperatorNode* map, const QoreValue& expr, std::string& error);
     //! Native IR lowering for select operator with implicit argument context
