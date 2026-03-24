@@ -1148,7 +1148,7 @@ public:
                 const char* mode_str = priv->exec_mode == QEM_IR ? "IR" : "JIT";
                 if (xsink) {
                     xsink->raiseException("EXEC-MODE-ERROR", "Cannot execute in %s mode: code must use %%modern "
-                        "(requires %%new-style, %%require-types, and %%strict-args). "
+                        "(requires %%new-style, %%require-types, %%strict-args, and %%strong-encapsulation). "
                         "Please add '%%modern' directive to enable optimized execution modes.", mode_str);
                 }
                 return;
@@ -1259,6 +1259,11 @@ public:
             // finalize parsing, back out or commit all changes
             internParseCommit();
 
+            // Validate exec mode (IR/JIT requires %modern)
+            if (!*xsink) {
+                ensureIrExecMode(this, xsink);
+            }
+
 #ifdef DEBUG
             parseSink = nullptr;
 #endif
@@ -1315,6 +1320,11 @@ public:
         // parse text given
         if (!internParsePending(xsink, code, label, orig_src, offset))
             internParseCommit();   // finalize parsing, back out or commit all changes
+
+        // Validate exec mode (IR/JIT requires %modern)
+        if (!*xsink) {
+            ensureIrExecMode(this, xsink);
+        }
 
 #ifdef DEBUG
         parseSink = nullptr;

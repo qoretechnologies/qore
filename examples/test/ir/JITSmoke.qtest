@@ -386,10 +386,10 @@ printf(\"%s\\n\", h.key);
     }
 
     testJitNonModernFallback() {
-        # Non-%modern code should fall back to AST; check output contains "42"
+        # Non-%modern code should fail with EXEC-MODE-ERROR in JIT mode
         string code = "printf(\"%d\\n\", 42);\n";
         string result = runScript(code);
-        assertRegex("42", result, "non-modern fallback to AST produces correct output");
+        assertRegex("EXEC-MODE-ERROR", result, "non-modern code should fail in JIT mode");
     }
 
     testJitTryCatch() {

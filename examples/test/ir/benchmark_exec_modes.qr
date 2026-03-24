@@ -80,9 +80,7 @@ class BenchmarkRunner {
     # ==========================================================================
     # Test 1: Simple integer loop (baseline - tests typed int ops)
     # ==========================================================================
-    string loop_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string loop_code = sprintf("%%modern
 int sum = 0;
 for (int i = 0; i < %d; ++i) {
     sum += i;
@@ -93,9 +91,7 @@ printf(\"%%d\\n\", sum);
     # ==========================================================================
     # Test 2: Recursive fibonacci (tests deep call stack with CallDirect)
     # ==========================================================================
-    string fib_code = "%new-style
-%strict-args
-%require-types
+    string fib_code = "%modern
 int sub fib(int n) {
     if (n <= 1) {
         return n;
@@ -108,9 +104,7 @@ printf(\"%d\\n\", fib(30));
     # ==========================================================================
     # Test 3: self.method() calls on final class (CallMethodDirect)
     # ==========================================================================
-    string self_method_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string self_method_code = sprintf("%%modern
 
 final class SelfAccum {
     public {
@@ -138,9 +132,7 @@ printf(\"%%d\\n\", a.compute());
     # ==========================================================================
     # Test 4: obj.method() calls - DotEvalMethodDirect
     # ==========================================================================
-    string dot_eval_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string dot_eval_code = sprintf("%%modern
 
 class MyProcessor {
     private {
@@ -168,9 +160,7 @@ printf(\"%%d\\n\", result);
     # ==========================================================================
     # Test 5: obj.method() in try/catch - InvokeDotEvalMethodDirect
     # ==========================================================================
-    string dot_eval_try_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string dot_eval_try_code = sprintf("%%modern
 
 class MyCounter {
     private {
@@ -198,9 +188,7 @@ printf(\"%%d\\n\", result);
     # ==========================================================================
     # Test 6: Static method calls - CallStaticDirect
     # ==========================================================================
-    string static_call_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string static_call_code = sprintf("%%modern
 
 class MathHelper {
     static int square(int x) {
@@ -222,9 +210,7 @@ printf(\"%%d\\n\", sum);
     # ==========================================================================
     # Test 7: Functional operators - foldl
     # ==========================================================================
-    string foldl_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string foldl_code = sprintf("%%modern
 list<int> nums = range(%d);
 int sum = (foldl $1 + $2, nums, 0);
 printf(\"%%d\\n\", sum);
@@ -233,9 +219,7 @@ printf(\"%%d\\n\", sum);
     # ==========================================================================
     # Test 8: Functional operators - map (int list)
     # ==========================================================================
-    string map_int_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string map_int_code = sprintf("%%modern
 list<int> nums = range(%d);
 list<int> doubled = (map $1 * 2, nums);
 printf(\"%%d\\n\", doubled.size());
@@ -244,9 +228,7 @@ printf(\"%%d\\n\", doubled.size());
     # ==========================================================================
     # Test 9: map expression over list<hash<auto>> (hash key access pattern)
     # ==========================================================================
-    string map_hash_expr_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string map_hash_expr_code = sprintf("%%modern
 list<hash<auto>> sub build_data(int n) {
     list<hash<auto>> data = ();
     for (int i = 0; i < n; ++i) {
@@ -262,9 +244,7 @@ printf(\"%%d\\n\", vals.size());
     # ==========================================================================
     # Test 10: map hash body over list<hash<auto>> (hash remapping pattern)
     # ==========================================================================
-    string map_hash_body_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string map_hash_body_code = sprintf("%%modern
 hash<auto> sub remap(hash<auto> h) { return {\"n\": h.name, \"v\": h.value}; }
 list<hash<auto>> sub build_data(int n) {
     list<hash<auto>> data = ();
@@ -281,9 +261,7 @@ printf(\"%%d\\n\", result.size());
     # ==========================================================================
     # Test 11: select with hash predicate
     # ==========================================================================
-    string select_hash_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string select_hash_code = sprintf("%%modern
 list<hash<auto>> sub build_data(int n) {
     list<hash<auto>> data = ();
     for (int i = 0; i < n; ++i) {
@@ -299,9 +277,7 @@ printf(\"%%d\\n\", result.size());
     # ==========================================================================
     # Test 12: closure basic - closure captures variable, called in tight loop
     # ==========================================================================
-    string closure_basic_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string closure_basic_code = sprintf("%%modern
 int base = 100;
 code add_base = int sub(int x) { return x + base; };
 int sum = 0;
@@ -314,9 +290,7 @@ printf(\"%%d\\n\", sum);
     # ==========================================================================
     # Test 13: closure write-back - closure modifies captured variable
     # ==========================================================================
-    string closure_writeback_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string closure_writeback_code = sprintf("%%modern
 int counter = 0;
 code inc = sub() { ++counter; };
 for (int i = 0; i < %d; ++i) {
@@ -329,9 +303,7 @@ printf(\"%%d\\n\", counter);
     # Test 14: closure over loop variable - each iteration captures its own binding
     # (fixed: IR now properly creates a fresh CVV per loop iteration)
     # ==========================================================================
-    string closure_loop_var_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string closure_loop_var_code = sprintf("%%modern
 list<code> closures = ();
 for (int i = 0; i < %d; ++i) {
     int captured = i;
@@ -344,9 +316,7 @@ printf(\"%%d\\n\", sum);
     # ==========================================================================
     # Test 15: closure as comparator - closure used as sort/map callback
     # ==========================================================================
-    string closure_callback_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+    string closure_callback_code = sprintf("%%modern
 int multiplier = 3;
 code triple = int sub(int x) { return x * multiplier; };
 int sum = 0;

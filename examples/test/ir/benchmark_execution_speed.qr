@@ -61,9 +61,7 @@ class BenchmarkRunner {
     private main() {
         int iterations = int(ENV.BENCH_ITERS ?? DEFAULT_ITERATIONS);
 
-        string loop_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+        string loop_code = sprintf("%%modern
 int sum = 0;
 for (int i = 0; i < %d; ++i) {
     sum += i;
@@ -71,9 +69,7 @@ for (int i = 0; i < %d; ++i) {
 printf(\"%%d\\n\", sum);
 ", iterations);
 
-        string fib_code = "%new-style
-%strict-args
-%require-types
+        string fib_code = "%modern
 int sub fib(int n) {
     if (n <= 1) {
         return n;
@@ -83,9 +79,7 @@ int sub fib(int n) {
 printf(\"%d\\n\", fib(30));
 ";
 
-        string self_method_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+        string self_method_code = sprintf("%%modern
 
 final class SelfAccum {
     public {
@@ -110,9 +104,7 @@ SelfAccum a();
 printf(\"%%d\\n\", a.compute());
 ", iterations / 10);
 
-        string dot_eval_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+        string dot_eval_code = sprintf("%%modern
 
 class MyProcessor {
     private {
@@ -133,9 +125,7 @@ for (int i = 0; i < %d; ++i) {
 printf(\"%%d\\n\", result);
 ", iterations / 10);
 
-        string map_int_code = sprintf("%%new-style
-%%strict-args
-%%require-types
+        string map_int_code = sprintf("%%modern
 list<int> nums = range(%d);
 list<int> doubled = (map $1 * 2, nums);
 printf(\"%%d\\n\", doubled.size());

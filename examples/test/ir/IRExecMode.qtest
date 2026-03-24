@@ -11,12 +11,14 @@
 
 class IRExecModeTest inherits QUnit::Test {
     constructor() : QUnit::Test("IRExecModeTest", "1.0", \ARGV) {
-        addTestCase("IR fallback warning", \testIrFallbackWarning());
-        addTestCase("AST mode no fallback warning", \testAstModeNoFallbackWarning());
+        addTestCase("IR exec mode error without %modern", \testIrExecModeError());
+        addTestCase("JIT exec mode error without %modern", \testJitExecModeError());
+        addTestCase("Tiered mode silently demotes without %modern", \testTieredSilentDemotion());
+        addTestCase("AST mode no error", \testAstModeExitsClean());
         set_return_value(main());
     }
 
-    testIrFallbackWarning() {
+    testIrExecModeError() {
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
@@ -24,9 +26,7 @@ class IRExecModeTest inherits QUnit::Test {
         }
 
         TmpFile script();
-        script.file.write("%new-style\n");
-        script.file.write("auto n = NULL;\n");
-        script.file.write("printf(\"ok\\n\");\n");
+        script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
         script.file.close();
 
         TmpFile err();
@@ -39,15 +39,12 @@ class IRExecModeTest inherits QUnit::Test {
             testSkip("exec-mode option not supported by test qore binary");
             return;
         }
-        if (!(output =~ /IR exec fallback to AST:/)) {
-            testSkip("IR fallback warning not emitted by this build");
-            return;
-        }
-        assertEq(0, rc, "IR exec mode process should exit cleanly");
-        assertTrue(output =~ /IR exec fallback to AST:/, "IR fallback warning missing");
+        assertNeq(0, rc, "IR exec mode without %modern should fail");
+        assertTrue(output =~ /EXEC-MODE-ERROR/, "EXEC-MODE-ERROR missing");
+        assertTrue(output =~ /%modern/, "Error message should mention %modern");
     }
 
-    testAstModeNoFallbackWarning() {
+    testJitExecModeError() {
         string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
         if (!qore_bin || qore_bin == NOTHING) {
             testSkip("no qore binary path available");
@@ -55,7 +52,58 @@ class IRExecModeTest inherits QUnit::Test {
         }
 
         TmpFile script();
-        script.file.write("%new-style\n");
+        script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
+        script.file.close();
+
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=jit %s > /dev/null 2> %s",
+            qore_bin, script.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && output =~ /exec-mode/ && output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+        assertNeq(0, rc, "JIT exec mode without %modern should fail");
+        assertTrue(output =~ /EXEC-MODE-ERROR/, "EXEC-MODE-ERROR missing");
+        assertTrue(output =~ /%modern/, "Error message should mention %modern");
+    }
+
+    testTieredSilentDemotion() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("printf(\"ok\\n\");\n");  # No %modern directive
+        script.file.close();
+
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=tiered %s > /dev/null 2> %s",
+            qore_bin, script.path, err.path);
+        int rc = system(cmd);
+        string output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && output =~ /exec-mode/ && output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+        assertEq(0, rc, "Tiered mode without %modern should exit cleanly (silent demotion)");
+        # No error expected for tiered mode (it's the default and must be safe)
+    }
+
+    testAstModeExitsClean() {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");  # Use %modern to ensure valid syntax
         script.file.write("int x = 1;\n");
         script.file.write("printf(\"ok\\n\");\n");
         script.file.close();
@@ -70,7 +118,6 @@ class IRExecModeTest inherits QUnit::Test {
             testSkip("exec-mode option not supported by test qore binary");
             return;
         }
-        assertEq(0, rc, "AST exec mode process should exit cleanly");
-        assertFalse(output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+        assertEq(0, rc, "AST exec mode should exit cleanly");
     }
 }
