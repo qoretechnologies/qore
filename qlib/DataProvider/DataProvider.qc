@@ -97,6 +97,7 @@ public class DataProvider {
             "discord": "DiscordDataProvider",
             "discordws": "DiscordDataProvider",
             "elasticsearch": "ElasticSearchDataProvider",
+            "elevenlabs": "ElevenLabsDataProvider",
             "empathicbuilding": "EmpathicBuildingDataProvider",
 
             # provided by the jni module

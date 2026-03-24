@@ -1,0 +1,1040 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/ElevenLabsRestClient.qm
+%requires ../../../../qlib/ElevenLabsDataProvider
+
+%requires json
+
+%exec-class ElevenLabsDataProviderTest
+
+#! Fake RestClientIo for unit testing
+class FakeElevenLabsRestClient inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        auto response_body;
+        string response_content_type = "application/json";
+        #! Raw multipart body from doMultipartPost calls
+        *data last_multipart_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.elevenlabs.io", "data": "json"}) {
+    }
+
+    HttpClientIo::HttpClientConnectionManager getConnectionManager() {
+        return new FakeConnectionManager(self);
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": response_body,
+            "content_type": response_content_type,
+            "headers": {},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("PUT", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+}
+
+#! Fake connection manager for unit testing multipart requests
+class FakeConnectionManager inherits HttpClientIo::HttpClientConnectionManager {
+    public {
+        #! Reference to the parent fake client for recording requests
+        FakeElevenLabsRestClient fake_client;
+    }
+
+    constructor(FakeElevenLabsRestClient client) {
+        fake_client = client;
+    }
+
+    hash<auto> request(string url, string method, string path, *hash<auto> hdr, *data body) {
+        fake_client.last_method = method;
+        fake_client.last_path = path;
+        fake_client.last_multipart_body = body;
+        return {
+            "status_code": 200,
+            "body": fake_client.response_body,
+            "headers": {
+                "content-type": fake_client.response_content_type,
+            },
+        };
+    }
+}
+
+class ElevenLabsDataProviderTest inherits QUnit::Test {
+    private {
+        FakeElevenLabsRestClient fake;
+        ElevenLabsDataProvider::ElevenLabsDataProvider dp;
+    }
+
+    constructor() : Test("ElevenLabsDataProvider", "1.0") {
+        addTestCase("test provider structure", \testProviderStructure());
+        addTestCase("test data types", \testDataTypes());
+        addTestCase("test text-to-speech", \testTextToSpeech());
+        addTestCase("test speech-to-speech", \testSpeechToSpeech());
+        addTestCase("test speech-to-text", \testSpeechToText());
+        addTestCase("test text-to-sound-effects", \testTextToSoundEffects());
+        addTestCase("test audio-isolation", \testAudioIsolation());
+        addTestCase("test list voices", \testListVoices());
+        addTestCase("test get voice", \testGetVoice());
+        addTestCase("test create voice", \testCreateVoice());
+        addTestCase("test edit voice", \testEditVoice());
+        addTestCase("test delete voice", \testDeleteVoice());
+        addTestCase("test list models", \testListModels());
+        addTestCase("test list history", \testListHistory());
+        addTestCase("test get history item", \testGetHistoryItem());
+        addTestCase("test delete history item", \testDeleteHistoryItem());
+        addTestCase("test get history audio", \testGetHistoryAudio());
+        addTestCase("test create dubbing", \testCreateDubbing());
+        addTestCase("test get dubbing", \testGetDubbing());
+        addTestCase("test delete dubbing", \testDeleteDubbing());
+        addTestCase("test list dubbing", \testListDubbing());
+        addTestCase("test get dubbing audio", \testGetDubbingAudio());
+        addTestCase("test voice design", \testVoiceDesign());
+        addTestCase("test create pronunciation dictionary", \testCreatePronunciationDictionary());
+        addTestCase("test list pronunciation dictionaries", \testListPronunciationDictionaries());
+        addTestCase("test get pronunciation dictionary", \testGetPronunciationDictionary());
+        addTestCase("test add pronunciation rules", \testAddPronunciationRules());
+        addTestCase("test connection scheme", \testConnectionScheme());
+        addTestCase("integration test", \testIntegration());
+
+        set_return_value(main());
+    }
+
+    setUp() {
+        fake = new FakeElevenLabsRestClient();
+        dp = new ElevenLabsDataProvider::ElevenLabsDataProvider(fake);
+    }
+
+    testProviderStructure() {
+        # Verify root provider has expected children
+        *list<string> children = dp.getChildProviderNames();
+        assertEq(True, children.size() > 0, "provider has children");
+
+        # Check all children exist
+        list<string> expected_children = (
+            "add-pronunciation-rules", "audio-isolation", "create-dubbing",
+            "create-pronunciation-dictionary",
+            "create-voice", "delete-dubbing", "delete-history-item", "delete-voice",
+            "edit-voice", "get-dubbing", "get-dubbing-audio", "get-history-audio",
+            "get-history-item", "get-pronunciation-dictionary", "get-voice", "history",
+            "list-dubbing", "list-pronunciation-dictionaries", "models",
+            "speech-to-speech", "speech-to-text", "text-to-sound-effects",
+            "text-to-speech", "voice-design", "voices",
+        );
+        foreach string child in (expected_children) {
+            assertEq(True, children.contains(child), sprintf("has %s child", child));
+        }
+
+        # Verify provider info
+        hash<DataProviderInfo> info = dp.getInfo();
+        assertEq("elevenlabs", info.name);
+        assertEq(True, info.supports_children);
+        assertEq(True, info.children_can_support_apis);
+    }
+
+    testDataTypes() {
+        # Test VoiceSettingsType
+        auto vst = new ElevenLabsDataProvider::ElevenLabsVoiceSettingsType();
+        *hash<string, AbstractDataField> vst_fields = vst.getFields();
+        assertEq(True, vst_fields.hasKey("stability"), "VoiceSettingsType has stability");
+        assertEq(True, vst_fields.hasKey("similarity_boost"), "VoiceSettingsType has similarity_boost");
+        assertEq(True, vst_fields.hasKey("style"), "VoiceSettingsType has style");
+        assertEq(True, vst_fields.hasKey("use_speaker_boost"), "VoiceSettingsType has use_speaker_boost");
+        assertEq(True, vst_fields.hasKey("speed"), "VoiceSettingsType has speed");
+
+        # Test AudioResponseType
+        *hash<string, AbstractDataField> art_fields = ElevenLabsDataProvider::AudioResponseType.getFields();
+        assertEq(True, art_fields.hasKey("audio"), "AudioResponseType has audio");
+        assertEq(True, art_fields.hasKey("content_type"), "AudioResponseType has content_type");
+
+        # Test VoiceSummaryDataType
+        auto vsdt = new ElevenLabsDataProvider::ElevenLabsVoiceSummaryDataType();
+        *hash<string, AbstractDataField> vsdt_fields = vsdt.getFields();
+        assertEq(True, vsdt_fields.hasKey("voice_id"), "VoiceSummaryDataType has voice_id");
+        assertEq(True, vsdt_fields.hasKey("name"), "VoiceSummaryDataType has name");
+        assertEq(True, vsdt_fields.hasKey("category"), "VoiceSummaryDataType has category");
+
+        # Test ModelDataType
+        auto mdt = new ElevenLabsDataProvider::ElevenLabsModelDataType();
+        *hash<string, AbstractDataField> mdt_fields = mdt.getFields();
+        assertEq(True, mdt_fields.hasKey("model_id"), "ModelDataType has model_id");
+        assertEq(True, mdt_fields.hasKey("name"), "ModelDataType has name");
+        assertEq(True, mdt_fields.hasKey("can_do_text_to_speech"), "ModelDataType has can_do_text_to_speech");
+        assertEq(True, mdt_fields.hasKey("languages"), "ModelDataType has languages");
+
+        # Test LanguageDataType
+        auto ldt = new ElevenLabsDataProvider::ElevenLabsLanguageDataType();
+        *hash<string, AbstractDataField> ldt_fields = ldt.getFields();
+        assertEq(True, ldt_fields.hasKey("language_id"), "LanguageDataType has language_id");
+        assertEq(True, ldt_fields.hasKey("name"), "LanguageDataType has name");
+
+        # Test VoiceSampleDataType
+        auto vsampdt = new ElevenLabsDataProvider::ElevenLabsVoiceSampleDataType();
+        *hash<string, AbstractDataField> vsampdt_fields = vsampdt.getFields();
+        assertEq(True, vsampdt_fields.hasKey("sample_id"), "VoiceSampleDataType has sample_id");
+        assertEq(True, vsampdt_fields.hasKey("file_name"), "VoiceSampleDataType has file_name");
+        assertEq(True, vsampdt_fields.hasKey("mime_type"), "VoiceSampleDataType has mime_type");
+        assertEq(True, vsampdt_fields.hasKey("size_bytes"), "VoiceSampleDataType has size_bytes");
+        assertEq(True, vsampdt_fields.hasKey("duration_secs"), "VoiceSampleDataType has duration_secs");
+
+        # Test VoicePreviewDataType
+        auto vpdt = new ElevenLabsDataProvider::ElevenLabsVoicePreviewDataType();
+        *hash<string, AbstractDataField> vpdt_fields = vpdt.getFields();
+        assertEq(True, vpdt_fields.hasKey("generated_voice_id"), "VoicePreviewDataType has generated_voice_id");
+        assertEq(True, vpdt_fields.hasKey("audio_base_64"), "VoicePreviewDataType has audio_base_64");
+        assertEq(True, vpdt_fields.hasKey("media_type"), "VoicePreviewDataType has media_type");
+        assertEq(True, vpdt_fields.hasKey("duration_secs"), "VoicePreviewDataType has duration_secs");
+
+        # Test WordTimingDataType
+        auto wtdt = new ElevenLabsDataProvider::ElevenLabsWordTimingDataType();
+        *hash<string, AbstractDataField> wtdt_fields = wtdt.getFields();
+        assertEq(True, wtdt_fields.hasKey("text"), "WordTimingDataType has text");
+        assertEq(True, wtdt_fields.hasKey("start"), "WordTimingDataType has start");
+        assertEq(True, wtdt_fields.hasKey("end"), "WordTimingDataType has end");
+        assertEq(True, wtdt_fields.hasKey("speaker_id"), "WordTimingDataType has speaker_id");
+
+        # Test HistoryItemDataType
+        auto hidt = new ElevenLabsDataProvider::ElevenLabsHistoryItemDataType();
+        *hash<string, AbstractDataField> hidt_fields = hidt.getFields();
+        assertEq(True, hidt_fields.hasKey("history_item_id"), "HistoryItemDataType has history_item_id");
+        assertEq(True, hidt_fields.hasKey("voice_id"), "HistoryItemDataType has voice_id");
+        assertEq(True, hidt_fields.hasKey("voice_name"), "HistoryItemDataType has voice_name");
+        assertEq(True, hidt_fields.hasKey("text"), "HistoryItemDataType has text");
+        assertEq(True, hidt_fields.hasKey("state"), "HistoryItemDataType has state");
+
+        # Test PronunciationDictionarySummaryDataType
+        auto pdst = new ElevenLabsDataProvider::ElevenLabsPronunciationDictionarySummaryDataType();
+        *hash<string, AbstractDataField> pdst_fields = pdst.getFields();
+        assertEq(True, pdst_fields.hasKey("id"), "PronunciationDictionarySummaryDataType has id");
+        assertEq(True, pdst_fields.hasKey("name"), "PronunciationDictionarySummaryDataType has name");
+        assertEq(True, pdst_fields.hasKey("description"), "PronunciationDictionarySummaryDataType has description");
+
+        # Test PronunciationDictionaryLocatorType
+        auto pdlt = new ElevenLabsDataProvider::ElevenLabsPronunciationDictionaryLocatorType();
+        *hash<string, AbstractDataField> pdlt_fields = pdlt.getFields();
+        assertEq(True, pdlt_fields.hasKey("pronunciation_dictionary_id"),
+            "PronunciationDictionaryLocatorType has pronunciation_dictionary_id");
+        assertEq(True, pdlt_fields.hasKey("version_id"),
+            "PronunciationDictionaryLocatorType has version_id");
+
+        # Test PronunciationRuleType
+        auto prt = new ElevenLabsDataProvider::ElevenLabsPronunciationRuleType();
+        *hash<string, AbstractDataField> prt_fields = prt.getFields();
+        assertEq(True, prt_fields.hasKey("type"), "PronunciationRuleType has type");
+        assertEq(True, prt_fields.hasKey("string_to_replace"), "PronunciationRuleType has string_to_replace");
+        assertEq(True, prt_fields.hasKey("alias"), "PronunciationRuleType has alias");
+        assertEq(True, prt_fields.hasKey("phoneme"), "PronunciationRuleType has phoneme");
+        assertEq(True, prt_fields.hasKey("alphabet"), "PronunciationRuleType has alphabet");
+    }
+
+    testTextToSpeech() {
+        fake.response_body = binary("fake audio data");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider tts = dp.getChildProvider("text-to-speech");
+        assertEq(True, exists tts, "text-to-speech provider exists");
+
+        # Verify request type has expected fields
+        *AbstractDataProviderType reqType = tts.getRequestType();
+        assertEq(True, exists reqType, "request type exists");
+        *hash<string, AbstractDataField> fields = reqType.getFields();
+        assertEq(True, fields.hasKey("voice_id"), "has voice_id field");
+        assertEq(True, fields.hasKey("text"), "has text field");
+        assertEq(True, fields.hasKey("model_id"), "has model_id field");
+        assertEq(True, fields.hasKey("output_format"), "has output_format field");
+        assertEq(True, fields.hasKey("voice_settings"), "has voice_settings field");
+        assertEq(True, fields.hasKey("speed"), "has speed field");
+        assertEq(True, fields.hasKey("previous_text"), "has previous_text field");
+        assertEq(True, fields.hasKey("next_text"), "has next_text field");
+        assertEq(True, fields.hasKey("apply_text_normalization"), "has apply_text_normalization field");
+        assertEq(True, fields.hasKey("pronunciation_dictionary_locators"),
+            "has pronunciation_dictionary_locators field");
+
+        # Make a request
+        hash<auto> result = tts.doRequest({
+            "voice_id": "test-voice-id",
+            "text": "Hello, world!",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /text-to-speech\/test-voice-id/, "path contains voice_id");
+        # doRawPost sends JSON through the connection manager, so check the raw body
+        assertEq(True, exists fake.last_multipart_body, "raw body was sent");
+        hash<auto> sent = parse_json(binary_to_string(fake.last_multipart_body));
+        assertEq("Hello, world!", sent.text);
+        assertEq(True, exists result.audio, "result has audio");
+        assertEq("audio/mpeg", result.content_type, "result has correct content_type");
+    }
+
+    testSpeechToSpeech() {
+        fake.response_body = binary("fake converted audio");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider sts = dp.getChildProvider("speech-to-speech");
+        assertEq(True, exists sts, "speech-to-speech provider exists");
+
+        # Verify request type has file_format field
+        *AbstractDataProviderType stsReqType = sts.getRequestType();
+        *hash<string, AbstractDataField> stsFields = stsReqType.getFields();
+        assertEq(True, stsFields.hasKey("file_format"), "STS has file_format field");
+
+        hash<auto> result = sts.doRequest({
+            "voice_id": "test-voice-id",
+            "audio": binary("fake audio input"),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /speech-to-speech\/test-voice-id/, "path contains voice_id");
+        assertEq(True, exists result.audio, "result has audio");
+        # Verify multipart body was sent
+        assertEq(True, exists fake.last_multipart_body, "multipart body was sent");
+    }
+
+    testSpeechToText() {
+        # Response comes through connection manager as binary JSON
+        fake.response_body = binary(make_json({
+            "text": "Hello, world!",
+            "language_code": "en",
+            "language_probability": 0.99,
+        }));
+
+        AbstractDataProvider stt = dp.getChildProvider("speech-to-text");
+        assertEq(True, exists stt, "speech-to-text provider exists");
+
+        hash<auto> result = stt.doRequest({
+            "audio": binary("fake audio"),
+        });
+
+        # Verify request type has new fields
+        *AbstractDataProviderType sttReqType = stt.getRequestType();
+        *hash<string, AbstractDataField> sttFields = sttReqType.getFields();
+        assertEq(True, sttFields.hasKey("num_speakers"), "STT has num_speakers field");
+        assertEq(True, sttFields.hasKey("file_format"), "STT has file_format field");
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /speech-to-text/, "path contains speech-to-text");
+        assertEq("Hello, world!", result.text, "result has correct text");
+        assertEq("en", result.language_code, "result has correct language_code");
+        # Verify multipart body was sent (contains the 'file' field, not 'audio')
+        assertEq(True, exists fake.last_multipart_body, "multipart body was sent");
+    }
+
+    testTextToSoundEffects() {
+        fake.response_body = binary("fake sound effect");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider sfx = dp.getChildProvider("text-to-sound-effects");
+        assertEq(True, exists sfx, "text-to-sound-effects provider exists");
+
+        # Verify request type has loop field
+        *AbstractDataProviderType sfxReqType = sfx.getRequestType();
+        *hash<string, AbstractDataField> sfxFields = sfxReqType.getFields();
+        assertEq(True, sfxFields.hasKey("loop"), "SFX has loop field");
+
+        hash<auto> result = sfx.doRequest({
+            "text": "A thunderstorm with heavy rain",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /text-to-sound-effects/, "path contains text-to-sound-effects");
+        assertEq(True, exists result.audio, "result has audio");
+    }
+
+    testAudioIsolation() {
+        fake.response_body = binary("fake isolated audio");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider isolation = dp.getChildProvider("audio-isolation");
+        assertEq(True, exists isolation, "audio-isolation provider exists");
+
+        hash<auto> result = isolation.doRequest({
+            "audio": binary("noisy audio"),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /audio-isolation/, "path contains audio-isolation");
+        assertEq(True, exists result.audio, "result has audio");
+        assertEq(True, exists fake.last_multipart_body, "multipart body was sent");
+    }
+
+    testListVoices() {
+        fake.response_body = {
+            "voices": (
+                {
+                    "voice_id": "v1",
+                    "name": "Test Voice",
+                    "category": "premade",
+                },
+            ),
+            "has_more": False,
+        };
+
+        AbstractDataProvider voices = dp.getChildProvider("voices");
+        assertEq(True, exists voices, "voices provider exists");
+
+        hash<auto> result = voices.doRequest({});
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v2\/voices/, "path uses v2/voices");
+        assertEq(1, result.voices.size(), "result has one voice");
+        assertEq("v1", result.voices[0].voice_id, "voice has correct voice_id");
+    }
+
+    testGetVoice() {
+        fake.response_body = {
+            "voice_id": "test-id",
+            "name": "Test Voice",
+            "category": "premade",
+            "samples": (
+                {
+                    "sample_id": "s1",
+                    "file_name": "sample.mp3",
+                    "mime_type": "audio/mpeg",
+                    "size_bytes": 1024,
+                },
+            ),
+            "settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+            },
+        };
+
+        AbstractDataProvider getVoice = dp.getChildProvider("get-voice");
+        assertEq(True, exists getVoice, "get-voice provider exists");
+
+        # Verify response type has typed samples and settings fields
+        *AbstractDataProviderType respType = getVoice.getResponseType();
+        *hash<string, AbstractDataField> resp_fields = respType.getFields();
+        assertEq(True, resp_fields.hasKey("samples"), "response has samples field");
+        assertEq(True, resp_fields.hasKey("settings"), "response has settings field");
+
+        hash<auto> result = getVoice.doRequest({
+            "voice_id": "test-id",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/voices\/test-id/, "path contains voice_id");
+        assertEq("Test Voice", result.name, "result has correct name");
+    }
+
+    testCreateVoice() {
+        fake.response_body = binary(make_json({
+            "voice_id": "new-voice-id",
+        }));
+
+        AbstractDataProvider createVoice = dp.getChildProvider("create-voice");
+        assertEq(True, exists createVoice, "create-voice provider exists");
+
+        # Verify request type has files field
+        *AbstractDataProviderType reqType = createVoice.getRequestType();
+        *hash<string, AbstractDataField> fields = reqType.getFields();
+        assertEq(True, fields.hasKey("files"), "has files field");
+
+        hash<auto> result = createVoice.doRequest({
+            "name": "My Custom Voice",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/voices\/add/, "path contains v1/voices/add");
+        assertEq("new-voice-id", result.voice_id, "result has correct voice_id");
+        assertEq(True, exists fake.last_multipart_body, "multipart body was sent");
+    }
+
+    testEditVoice() {
+        fake.response_body = {
+            "status": "ok",
+        };
+
+        AbstractDataProvider editVoice = dp.getChildProvider("edit-voice");
+        assertEq(True, exists editVoice, "edit-voice provider exists");
+
+        hash<auto> result = editVoice.doRequest({
+            "voice_id": "test-id",
+            "name": "Updated Voice",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/voices\/test-id\/edit/, "path contains voice_id/edit");
+    }
+
+    testDeleteVoice() {
+        fake.response_body = NOTHING;
+
+        AbstractDataProvider delVoice = dp.getChildProvider("delete-voice");
+        assertEq(True, exists delVoice, "delete-voice provider exists");
+
+        hash<auto> result = delVoice.doRequest({
+            "voice_id": "test-id",
+        });
+
+        assertEq("DELETE", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/voices\/test-id/, "path contains voice_id");
+        assertEq("ok", result.status, "result has ok status");
+    }
+
+    testListModels() {
+        fake.response_body = (
+            {
+                "model_id": "eleven_multilingual_v2",
+                "name": "Eleven Multilingual v2",
+                "can_be_finetuned": True,
+                "can_do_text_to_speech": True,
+            },
+        );
+
+        AbstractDataProvider models = dp.getChildProvider("models");
+        assertEq(True, exists models, "models provider exists");
+
+        hash<auto> result = models.doRequest({});
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/models/, "path contains v1/models");
+        assertEq(1, result.models.size(), "result has one model");
+    }
+
+    testListHistory() {
+        fake.response_body = {
+            "history": (),
+            "has_more": False,
+        };
+
+        AbstractDataProvider history = dp.getChildProvider("history");
+        assertEq(True, exists history, "history provider exists");
+
+        hash<auto> result = history.doRequest({});
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/history/, "path contains v1/history");
+        assertEq(False, result.has_more, "result has_more is False");
+    }
+
+    testGetHistoryItem() {
+        fake.response_body = {
+            "history_item_id": "item-123",
+            "voice_id": "v1",
+            "voice_name": "Test Voice",
+            "text": "Hello",
+            "state": "created",
+        };
+
+        AbstractDataProvider getItem = dp.getChildProvider("get-history-item");
+        assertEq(True, exists getItem, "get-history-item provider exists");
+
+        hash<auto> result = getItem.doRequest({
+            "history_item_id": "item-123",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/history\/item-123/, "path contains history_item_id");
+        assertEq("item-123", result.history_item_id, "result has correct history_item_id");
+    }
+
+    testDeleteHistoryItem() {
+        fake.response_body = NOTHING;
+
+        AbstractDataProvider delItem = dp.getChildProvider("delete-history-item");
+        assertEq(True, exists delItem, "delete-history-item provider exists");
+
+        hash<auto> result = delItem.doRequest({
+            "history_item_id": "item-123",
+        });
+
+        assertEq("DELETE", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/history\/item-123/, "path contains history_item_id");
+    }
+
+    testGetHistoryAudio() {
+        fake.response_body = binary("fake history audio");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider getAudio = dp.getChildProvider("get-history-audio");
+        assertEq(True, exists getAudio, "get-history-audio provider exists");
+
+        hash<auto> result = getAudio.doRequest({
+            "history_item_id": "item-123",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/history\/item-123\/audio/, "path contains history_item_id/audio");
+        assertEq(True, exists result.audio, "result has audio");
+    }
+
+    testCreateDubbing() {
+        fake.response_body = binary(make_json({
+            "dubbing_id": "dub-123",
+            "expected_duration_sec": 30.0,
+        }));
+
+        AbstractDataProvider dubbing = dp.getChildProvider("create-dubbing");
+        assertEq(True, exists dubbing, "create-dubbing provider exists");
+
+        hash<auto> result = dubbing.doRequest({
+            "name": "Test Dubbing",
+            "source_lang": "en",
+            "target_lang": "es",
+        });
+
+        # Verify request type has new dubbing fields
+        *AbstractDataProviderType dubReqType = dubbing.getRequestType();
+        *hash<string, AbstractDataField> dubFields = dubReqType.getFields();
+        assertEq(True, dubFields.hasKey("start_time"), "dubbing has start_time field");
+        assertEq(True, dubFields.hasKey("end_time"), "dubbing has end_time field");
+        assertEq(True, dubFields.hasKey("use_profanity_filter"), "dubbing has use_profanity_filter field");
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/dubbing/, "path contains v1/dubbing");
+        assertEq("dub-123", result.dubbing_id, "result has correct dubbing_id");
+        assertEq(True, exists fake.last_multipart_body, "multipart body was sent");
+    }
+
+    testGetDubbing() {
+        fake.response_body = {
+            "dubbing_id": "dub-123",
+            "name": "Test Dubbing",
+            "status": "dubbed",
+            "target_languages": ("es",),
+        };
+
+        AbstractDataProvider getDubbing = dp.getChildProvider("get-dubbing");
+        assertEq(True, exists getDubbing, "get-dubbing provider exists");
+
+        hash<auto> result = getDubbing.doRequest({
+            "dubbing_id": "dub-123",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/dubbing\/dub-123/, "path contains dubbing_id");
+        assertEq("dubbed", result.status, "result has correct status");
+    }
+
+    testDeleteDubbing() {
+        fake.response_body = NOTHING;
+
+        AbstractDataProvider delDubbing = dp.getChildProvider("delete-dubbing");
+        assertEq(True, exists delDubbing, "delete-dubbing provider exists");
+
+        hash<auto> result = delDubbing.doRequest({
+            "dubbing_id": "dub-123",
+        });
+
+        assertEq("DELETE", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/dubbing\/dub-123/, "path contains dubbing_id");
+        assertEq("ok", result.status, "result has ok status");
+    }
+
+    testListDubbing() {
+        fake.response_body = {
+            "dubs": (
+                {
+                    "dubbing_id": "dub-123",
+                    "name": "Test Dubbing",
+                    "status": "dubbed",
+                    "target_languages": ("es",),
+                },
+            ),
+            "has_more": False,
+        };
+
+        AbstractDataProvider listDubbing = dp.getChildProvider("list-dubbing");
+        assertEq(True, exists listDubbing, "list-dubbing provider exists");
+
+        hash<auto> result = listDubbing.doRequest({});
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/dubbing/, "path contains v1/dubbing");
+        assertEq(1, result.dubs.size(), "result has one dubbing project");
+        assertEq("dub-123", result.dubs[0].dubbing_id, "dubbing has correct dubbing_id");
+        assertEq("dubbed", result.dubs[0].status, "dubbing has correct status");
+
+        # Test with filters
+        result = listDubbing.doRequest({"dubbing_status": "dubbed", "page_size": 10});
+        assertEq(True, fake.last_path =~ /dubbing_status=dubbed/, "path contains status filter");
+        assertEq(True, fake.last_path =~ /page_size=10/, "path contains page_size");
+    }
+
+    testGetDubbingAudio() {
+        fake.response_body = binary("fake dubbed audio");
+        fake.response_content_type = "audio/mpeg";
+
+        AbstractDataProvider getDubAudio = dp.getChildProvider("get-dubbing-audio");
+        assertEq(True, exists getDubAudio, "get-dubbing-audio provider exists");
+
+        # Verify request type has expected fields
+        *AbstractDataProviderType reqType = getDubAudio.getRequestType();
+        *hash<string, AbstractDataField> fields = reqType.getFields();
+        assertEq(True, fields.hasKey("dubbing_id"), "has dubbing_id field");
+        assertEq(True, fields.hasKey("language_code"), "has language_code field");
+
+        hash<auto> result = getDubAudio.doRequest({
+            "dubbing_id": "dub-123",
+            "language_code": "es",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/dubbing\/dub-123\/audio\/es/,
+            "path contains dubbing_id and language_code");
+        assertEq(True, exists result.audio, "result has audio");
+        assertEq("audio/mpeg", result.content_type, "result has correct content_type");
+    }
+
+    testVoiceDesign() {
+        fake.response_body = {
+            "previews": (
+                {
+                    "generated_voice_id": "preview-1",
+                    "audio_base_64": "ZmFrZWF1ZGlv",
+                    "media_type": "audio/mpeg",
+                    "duration_secs": 3.5,
+                },
+            ),
+            "text": "Hello, how are you today?",
+        };
+
+        AbstractDataProvider design = dp.getChildProvider("voice-design");
+        assertEq(True, exists design, "voice-design provider exists");
+
+        # Verify response type has typed previews and text fields
+        *AbstractDataProviderType respType = design.getResponseType();
+        *hash<string, AbstractDataField> resp_fields = respType.getFields();
+        assertEq(True, resp_fields.hasKey("previews"), "response has previews field");
+        assertEq(True, resp_fields.hasKey("text"), "response has text field");
+
+        hash<auto> result = design.doRequest({
+            "voice_description": "A warm female voice with a British accent",
+            "text": "Hello, how are you today?",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /text-to-voice/, "path contains text-to-voice");
+        assertEq("Hello, how are you today?", result.text, "result has text field");
+    }
+
+    testCreatePronunciationDictionary() {
+        fake.response_body = {
+            "id": "dict-123",
+            "name": "Test Dictionary",
+            "description": "A test dictionary",
+        };
+
+        AbstractDataProvider createDict = dp.getChildProvider("create-pronunciation-dictionary");
+        assertEq(True, exists createDict, "create-pronunciation-dictionary provider exists");
+
+        hash<auto> result = createDict.doRequest({
+            "name": "Test Dictionary",
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /pronunciation-dictionaries\/add-from-rules/,
+            "path contains pronunciation-dictionaries/add-from-rules");
+        assertEq("dict-123", result.id, "result has correct id");
+    }
+
+    testListPronunciationDictionaries() {
+        fake.response_body = {
+            "pronunciation_dictionaries": (
+                {
+                    "id": "dict-123",
+                    "name": "Test Dictionary",
+                },
+            ),
+            "has_more": False,
+        };
+
+        AbstractDataProvider listDicts = dp.getChildProvider("list-pronunciation-dictionaries");
+        assertEq(True, exists listDicts, "list-pronunciation-dictionaries provider exists");
+
+        hash<auto> result = listDicts.doRequest({});
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/pronunciation-dictionaries/,
+            "path contains v1/pronunciation-dictionaries");
+        assertEq(1, result.pronunciation_dictionaries.size(), "result has one dictionary");
+    }
+
+    testGetPronunciationDictionary() {
+        fake.response_body = {
+            "id": "dict-123",
+            "name": "Test Dictionary",
+            "description": "A test dictionary",
+        };
+
+        AbstractDataProvider getDict = dp.getChildProvider("get-pronunciation-dictionary");
+        assertEq(True, exists getDict, "get-pronunciation-dictionary provider exists");
+
+        hash<auto> result = getDict.doRequest({
+            "dictionary_id": "dict-123",
+        });
+
+        assertEq("GET", fake.last_method);
+        assertEq(True, fake.last_path =~ /v1\/pronunciation-dictionaries\/dict-123/,
+            "path contains dictionary_id");
+        assertEq("Test Dictionary", result.name, "result has correct name");
+    }
+
+    testAddPronunciationRules() {
+        fake.response_body = {
+            "id": "dict-123",
+            "version_id": "ver-456",
+            "version_rules_num": 3,
+        };
+
+        AbstractDataProvider addRules = dp.getChildProvider("add-pronunciation-rules");
+        assertEq(True, exists addRules, "add-pronunciation-rules provider exists");
+
+        # Verify request type has expected fields
+        *AbstractDataProviderType reqType = addRules.getRequestType();
+        *hash<string, AbstractDataField> fields = reqType.getFields();
+        assertEq(True, fields.hasKey("dictionary_id"), "has dictionary_id field");
+        assertEq(True, fields.hasKey("rules"), "has rules field");
+
+        hash<auto> result = addRules.doRequest({
+            "dictionary_id": "dict-123",
+            "rules": (
+                {
+                    "type": "alias",
+                    "string_to_replace": "tomato",
+                    "alias": "toh-mah-toh",
+                },
+            ),
+        });
+
+        assertEq("POST", fake.last_method);
+        assertEq(True, fake.last_path =~ /pronunciation-dictionaries\/dict-123\/add-rules/,
+            "path contains dictionary_id/add-rules");
+        assertEq("dict-123", result.id, "result has correct id");
+        assertEq("ver-456", result.version_id, "result has correct version_id");
+        assertEq(3, result.version_rules_num, "result has correct version_rules_num");
+    }
+
+    testConnectionScheme() {
+        # Verify connection scheme structure
+        hash<auto> scheme = ElevenLabsRestClient::ElevenLabsRestConnection::ConnectionScheme;
+        assertEq(True, scheme.options.hasKey("apikey"), "connection scheme has apikey option");
+        assertEq("apikey", scheme.required_options, "apikey is required");
+        assertEq(True, scheme.options.hasKey("region"), "connection scheme has region option");
+        assertEq(True, scheme.auto_url, "connection scheme has auto_url");
+        assertEq(True, scheme.schemes.hasKey("elevenlabs"), "connection scheme has elevenlabs scheme");
+
+        # Verify getConfig builds correct URL for default region (us) via hash-based constructor
+        ElevenLabsRestClient::ElevenLabsRestConnection us_conn({
+            "name": "test-us",
+            "url": "elevenlabs://api.elevenlabs.io",
+            "opts": {"apikey": "test-key"},
+        });
+        assertEq(True, us_conn.getUrl() =~ /api\.elevenlabs\.io/, "US region uses default URL");
+
+        # Verify getConfig builds correct URL for EU region via hash-based constructor
+        ElevenLabsRestClient::ElevenLabsRestConnection eu_conn({
+            "name": "test-eu",
+            "url": "elevenlabs://api.elevenlabs.io",
+            "opts": {"apikey": "test-key", "region": "eu"},
+        });
+        assertEq(True, eu_conn.getUrl() =~ /api\.eu\.residency\.elevenlabs\.io/,
+            "EU region uses EU URL");
+    }
+
+    testIntegration() {
+        # Integration tests run only when ELEVENLABS_API_KEY is set
+        *string api_key = ENV.ELEVENLABS_API_KEY;
+        if (!api_key) {
+            testSkip("set ELEVENLABS_API_KEY to run integration tests");
+        }
+
+        ElevenLabsDataProvider::ElevenLabsDataProvider real_dp({"apikey": api_key});
+
+        # Test list-models: verify real API returns model data with expected fields
+        {
+            AbstractDataProvider models = real_dp.getChildProvider("models");
+            hash<auto> result = models.doRequest({});
+            assertEq(True, result.models.size() > 0, "API returns at least one model");
+            hash<auto> model = result.models[0];
+            assertEq(True, exists model.model_id, "model has model_id");
+            assertEq(True, exists model.name, "model has name");
+        }
+
+        # Test list-voices: verify real API returns voice data with expected fields
+        {
+            AbstractDataProvider voices = real_dp.getChildProvider("voices");
+            hash<auto> result = voices.doRequest({"page_size": 5});
+            assertEq(True, result.voices.size() > 0, "API returns at least one voice");
+            hash<auto> voice = result.voices[0];
+            assertEq(True, exists voice.voice_id, "voice has voice_id");
+            assertEq(True, exists voice.name, "voice has name");
+
+            # Test get-voice with a real voice_id
+            string voice_id = voice.voice_id;
+            AbstractDataProvider getVoice = real_dp.getChildProvider("get-voice");
+            hash<auto> voice_detail = getVoice.doRequest({"voice_id": voice_id});
+            assertEq(voice_id, voice_detail.voice_id, "get-voice returns correct voice_id");
+            assertEq(True, exists voice_detail.name, "get-voice returns name");
+        }
+
+        # Test list-history: verify pagination works and field values
+        {
+            AbstractDataProvider history = real_dp.getChildProvider("history");
+            hash<auto> result = history.doRequest({"page_size": 1});
+            assertEq(True, exists result.has_more, "history response has has_more field");
+            if (result.history.size() > 0) {
+                hash<auto> item = result.history[0];
+                assertEq(True, exists item.history_item_id, "history item has history_item_id");
+                assertEq(True, exists item.state, "history item has state");
+            }
+        }
+
+        # Test list-dubbing: verify API returns dubbing projects and get-dubbing-audio
+        {
+            AbstractDataProvider listDubbing = real_dp.getChildProvider("list-dubbing");
+            hash<auto> result = listDubbing.doRequest({"page_size": 5});
+            assertEq(True, exists result.has_more, "list-dubbing response has has_more field");
+            if (result.dubs.size() > 0) {
+                hash<auto> dub = result.dubs[0];
+                assertEq(True, exists dub.dubbing_id, "dubbing project has dubbing_id");
+
+                # Test get-dubbing-audio if there's a dubbed project with target languages
+                if (dub.status == "dubbed" && dub.target_languages.size() > 0) {
+                    AbstractDataProvider getDubAudio = real_dp.getChildProvider("get-dubbing-audio");
+                    hash<auto> audio_result = getDubAudio.doRequest({
+                        "dubbing_id": dub.dubbing_id,
+                        "language_code": dub.target_languages[0],
+                    });
+                    assertEq(True, exists audio_result.audio, "get-dubbing-audio returns audio");
+                    assertEq(True, audio_result.audio.size() > 0,
+                        "get-dubbing-audio audio is not empty");
+                }
+            }
+        }
+
+        # Test speech-to-text with a simple audio sample
+        {
+            AbstractDataProvider stt = real_dp.getChildProvider("speech-to-text");
+            # Generate a small TTS audio first to use as input
+            AbstractDataProvider tts = real_dp.getChildProvider("text-to-speech");
+            *list<string> voice_ids;
+            {
+                AbstractDataProvider voices = real_dp.getChildProvider("voices");
+                hash<auto> vr = voices.doRequest({"page_size": 1});
+                if (vr.voices.size() > 0) {
+                    voice_ids = map $1.voice_id, vr.voices;
+                }
+            }
+            if (voice_ids) {
+                hash<auto> tts_result = tts.doRequest({
+                    "voice_id": voice_ids[0],
+                    "text": "Hello world",
+                });
+                assertEq(True, exists tts_result.audio, "TTS returns audio");
+                assertEq(True, tts_result.audio.size() > 0, "TTS audio is not empty");
+
+                # Now transcribe the generated audio
+                hash<auto> stt_result = stt.doRequest({
+                    "audio": tts_result.audio,
+                });
+                assertEq(True, exists stt_result.text, "STT returns text");
+                assertEq(True, stt_result.text.size() > 0, "STT text is not empty");
+            }
+        }
+
+        # Test voice CRUD round-trip: create -> get -> edit -> delete
+        {
+            AbstractDataProvider createVoice = real_dp.getChildProvider("create-voice");
+            string test_name = "QoreTest-" + string(now_us());
+            try {
+                hash<auto> create_result = createVoice.doRequest({
+                    "name": test_name,
+                    "description": "Automated test voice",
+                });
+                assertEq(True, exists create_result.voice_id, "create-voice returns voice_id");
+                string new_voice_id = create_result.voice_id;
+
+                on_exit {
+                    # Clean up: delete the test voice
+                    AbstractDataProvider delVoice = real_dp.getChildProvider("delete-voice");
+                    delVoice.doRequest({"voice_id": new_voice_id});
+                }
+
+                # Verify with get-voice
+                AbstractDataProvider getVoice = real_dp.getChildProvider("get-voice");
+                hash<auto> voice_detail = getVoice.doRequest({"voice_id": new_voice_id});
+                assertEq(new_voice_id, voice_detail.voice_id, "get-voice returns created voice_id");
+                assertEq(test_name, voice_detail.name, "get-voice returns correct name");
+
+                # Edit the voice
+                string updated_name = test_name + "-updated";
+                AbstractDataProvider editVoice = real_dp.getChildProvider("edit-voice");
+                editVoice.doRequest({
+                    "voice_id": new_voice_id,
+                    "name": updated_name,
+                });
+
+                # Verify edit persisted
+                voice_detail = getVoice.doRequest({"voice_id": new_voice_id});
+                assertEq(updated_name, voice_detail.name, "edit-voice name persisted");
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "ELEVENLABS-API-ERROR") {
+                    testSkip("voice CRUD requires paid plan: " + ex.desc);
+                } else {
+                    rethrow;
+                }
+            }
+        }
+
+        # Test pronunciation dictionary CRUD round-trip: create -> get -> delete (via list verification)
+        {
+            AbstractDataProvider createDict = real_dp.getChildProvider("create-pronunciation-dictionary");
+            string test_dict_name = "QoreTest-" + string(now_us());
+            hash<auto> create_result = createDict.doRequest({
+                "name": test_dict_name,
+                "description": "Automated test dictionary",
+            });
+            assertEq(True, exists create_result.id, "create-pronunciation-dictionary returns id");
+            assertEq(test_dict_name, create_result.name,
+                "create-pronunciation-dictionary returns correct name");
+
+            # Verify with get-pronunciation-dictionary
+            AbstractDataProvider getDict = real_dp.getChildProvider("get-pronunciation-dictionary");
+            hash<auto> dict_detail = getDict.doRequest({"dictionary_id": create_result.id});
+            assertEq(create_result.id, dict_detail.id, "get returns created dictionary id");
+            assertEq(test_dict_name, dict_detail.name, "get returns correct name");
+            assertEq("Automated test dictionary", dict_detail.description,
+                "get returns correct description");
+        }
+
+        # Test connection ping
+        {
+            ElevenLabsRestClient::ElevenLabsRestConnection conn("test", "test", NOTHING, {},
+                {"apikey": api_key});
+            hash<auto> ping_result = conn.ping(True);
+            assertEq("ok", ping_result.ok, "connection ping succeeds");
+        }
+    }
+}
