@@ -201,7 +201,14 @@ public class HttpClientConnectionManager {
     }
 
     #! Acquires a stream handle for the given URL
-    /** @param url the target URL (e.g., "https://example.com")
+    /** The \c url parameter is used only for connection pooling (host:port extraction
+        and protocol selection). The URL's path component is \b not used for requests —
+        callers must pass the full request path to
+        @ref request(), @ref acquireAndStartStreaming(), or
+        @ref HttpClientStreamHandle::request() "stream.request()".
+
+        @param url the target URL (e.g., \c "https://example.com"); only the scheme,
+        host, and port are used for connection management
 
         @return a stream handle ready for submitting requests
 
@@ -258,9 +265,10 @@ public class HttpClientConnectionManager {
         (a race inherent in pooled HTTP/1.1 connections), this method retries with a
         fresh connection up to \c MaxRequestRetries times.
 
-        @param url the target URL
+        @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
         @param method HTTP method (e.g., "POST")
-        @param path request path
+        @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body_streaming if True, enables bidirectional streaming (HTTP/2+ only)
         @param body request body (optional)
@@ -291,9 +299,10 @@ public class HttpClientConnectionManager {
     }
 
     #! Submits an async request and returns immediately
-    /** @param url the target URL
+    /** @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
         @param method HTTP method
-        @param path request path
+        @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
         @param callback callback invoked with response or error
@@ -353,9 +362,10 @@ public class HttpClientConnectionManager {
     }
 
     #! Performs a synchronous request
-    /** @param url the target URL
+    /** @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
         @param method HTTP method
-        @param path request path
+        @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
         @param timeout_ms request timeout (optional)

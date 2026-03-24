@@ -32,6 +32,7 @@
 %allow-weak-references
 
 %requires HttpServerUtil
+%requires HttpServerAsyncIo
 %requires Util
 %requires(reexport) Logger
 %requires Mime

@@ -692,8 +692,9 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 connection_close = True;
             }
 
-            log(LoggerLevel::DEBUG, "response header: status=%d chunked=%y content_length=%d close=%y",
-                response_status_code, response_chunked, response_content_length, connection_close);
+            log(LoggerLevel::DEBUG, "response header: status=%d chunked=%y content_length=%d close=%y streaming=%y",
+                response_status_code, response_chunked, response_content_length, connection_close,
+                streaming_active);
 
             # Determine if the response has a body
             # HEAD responses, 1xx, 204, and 304 have no body regardless of headers
@@ -741,6 +742,17 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             } else if (connection_close) {
                 # No Content-Length, not chunked, but Connection: close — read until EOF
                 response_body = streaming_active ? NOTHING : binary();
+                current_op = sock.startPollRecvData();
+                req_state = REQ_RECV_BODY_CLOSE;
+                return handleRecvBodyClose();
+            } else if (streaming_active) {
+                # No Content-Length, not chunked, not Connection: close, but streaming mode —
+                # treat as read-until-close (SSE servers send Connection: Keep-Alive with
+                # Content-Type: text/event-stream and no framing headers; data arrives
+                # asynchronously until the server closes the connection).
+                # Mark connection as non-reusable since the socket buffer may have
+                # unframed data after the stream ends.
+                connection_close = True;
                 current_op = sock.startPollRecvData();
                 req_state = REQ_RECV_BODY_CLOSE;
                 return handleRecvBodyClose();
@@ -882,7 +894,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         if (poll_info) {
             return poll_info;
         }
-
         if (current_op.goalReached()) {
             auto data = current_op.getOutput();
             if (data && data.size() > 0) {
@@ -895,8 +906,18 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 current_op = sock.startPollRecvData();
                 return handleRecvBodyClose();
             }
-            # Empty read — server closed connection
-            return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
+            if (streaming_active) {
+                # In streaming mode, empty read means no data available yet —
+                # NOT EOF. Re-poll for more data. Actual EOF is detected by
+                # socket close (isDataAvailable returns True but recv returns empty).
+                current_op = sock.startPollRecvData();
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": sock,
+                };
+            }
+            # Empty read in non-streaming mode — server closed connection
+            return dispatchResponse();
         }
 
         # Read operation ended (likely EOF)
