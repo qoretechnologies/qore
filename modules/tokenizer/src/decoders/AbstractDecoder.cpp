@@ -40,7 +40,7 @@ std::unique_ptr<AbstractDecoder> AbstractDecoder::fromConfig(
     } else if (type == "Metaspace") {
         return std::make_unique<MetaspaceDecoder>(config, xsink);
     } else if (type == "BPEDecoder") {
-        // Legacy alias: BPEDecoder is a sequence of Replace + ByteFallback + Fuse
+        // Legacy alias: BPEDecoder maps to ByteFallbackDecoder
         return std::make_unique<ByteFallbackDecoder>(config, xsink);
     } else if (type == "ByteFallback") {
         return std::make_unique<ByteFallbackDecoder>(config, xsink);

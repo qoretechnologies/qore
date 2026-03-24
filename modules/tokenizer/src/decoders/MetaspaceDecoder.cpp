@@ -24,7 +24,7 @@ namespace QoreTokenizer {
 static const std::string DEFAULT_METASPACE = "\xE2\x96\x81";
 
 MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xsink)
-        : replacement(DEFAULT_METASPACE), prepend_scheme("always") {
+        : replacement(DEFAULT_METASPACE) {
     assert(config);
 
     std::string repl_str = safeGetStringKey(config, "replacement");
@@ -35,10 +35,9 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
     std::string scheme_str = safeGetStringKey(config, "prepend_scheme");
     if (!scheme_str.empty()) {
         prepend_scheme = scheme_str;
-    }
-
-    // Also check legacy "add_prefix_space" boolean
-    if (prepend_scheme.empty()) {
+    } else {
+        // Fall back to legacy "add_prefix_space" boolean if prepend_scheme
+        // was not provided in config
         QoreValue add_prefix = config->getKeyValue("add_prefix_space");
         if (add_prefix.getAsBool()) {
             prepend_scheme = "always";

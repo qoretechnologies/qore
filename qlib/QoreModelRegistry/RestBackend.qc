@@ -103,6 +103,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         self.rest_client = rest_client;
         self.base_path = base_path;
         get_headers = options.get_headers;
+        artifact_cache = {};
         max_cache_entries = options.max_cache_entries ?? DefaultMaxCacheEntries;
     }
 
@@ -160,7 +161,16 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     list<hash<ModelVersionInfo>> listVersions(string name) {
         hash<auto> resp = doGet(base_path + "/" + encode_url_param(name)
             + "/versions");
-        return resp.body.versions ?? resp.body ?? ();
+        auto result = resp.body.versions ?? resp.body;
+        if (result.typeCode() == NT_LIST) {
+            return cast<list<hash<ModelVersionInfo>>>(result);
+        }
+        if (!exists result) {
+            return ();
+        }
+        throw "ML-REGISTRY-ERROR",
+            sprintf("unexpected response type '%s' listing versions for model '%s'; "
+                "expected a list", result.type(), name);
     }
 
     list<string> listModels() {

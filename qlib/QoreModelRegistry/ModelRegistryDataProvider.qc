@@ -43,14 +43,22 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
                 "display_name": "Registry Path",
                 "short_desc": "Filesystem path for the model registry",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Base directory path for the filesystem-backed model registry",
-                "required": True,
+                "desc": "Base directory path for the filesystem-backed model registry; "
+                    "either 'path' or 'backend' must be provided",
+            },
+            "backend": <DataProviderOptionInfo>{
+                "display_name": "Backend",
+                "short_desc": "Pre-constructed model registry backend",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "A pre-constructed AbstractModelRegistryBackend instance; "
+                    "when provided, 'path' and 'tenant_id' are ignored",
             },
             "tenant_id": <DataProviderOptionInfo>{
                 "display_name": "Tenant ID",
                 "short_desc": "Tenant identifier for multi-tenant registries",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Optional tenant identifier to scope registry access",
+                "desc": "Optional tenant identifier to scope registry access; "
+                    "only used with 'path' option",
             },
         };
     }
@@ -88,11 +96,22 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     }
 
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        list<string> models = registry.listModels();
-        if (!models.contains(name)) {
+        # Check if model exists by verifying it appears in the model list
+        # (avoids listing all models if the backend supports direct lookup)
+        try {
+            list<hash<auto>> versions = registry.listVersions(name);
+            # FilesystemBackend returns empty list for nonexistent models
+            # (no directory = no index), so also check listModels
+            if (!versions) {
+                list<string> models = registry.listModels();
+                if (!models.contains(name)) {
+                    return;
+                }
+            }
+            return new ModelVersionsDataProvider(registry, name);
+        } catch (hash<ExceptionInfo> ex) {
             return;
         }
-        return new ModelVersionsDataProvider(registry, name);
     }
 }
 

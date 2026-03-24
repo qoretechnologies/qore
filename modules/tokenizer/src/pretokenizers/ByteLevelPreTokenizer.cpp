@@ -33,10 +33,9 @@ ByteLevelPreTokenizer::ByteLevelPreTokenizer(const QoreHashNode* config, Excepti
         add_prefix_space = v.getAsBool();
     }
 
-    v = config->getKeyValue("trim_offsets");
-    if (!v.isNullOrNothing()) {
-        trim_offsets = v.getAsBool();
-    }
+    // NOTE: "trim_offsets" is parsed from tokenizer configs but not yet
+    // implemented — offset trimming has no effect.  The member is retained
+    // so the value is available for future implementation.
 
     v = config->getKeyValue("use_regex");
     if (!v.isNullOrNothing()) {
