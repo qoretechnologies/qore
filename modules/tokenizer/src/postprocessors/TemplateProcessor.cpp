@@ -397,4 +397,18 @@ EncodingResult SequencePostProcessor::process(
     return result;
 }
 
+int TemplateProcessor::numAddedTokens(bool has_pair) const {
+    const auto& tmpl = has_pair ? pair_template : single_template;
+    int count = 0;
+    for (const auto& piece : tmpl) {
+        if (piece.type == TemplatePiece::SPECIAL_TOKEN) {
+            auto it = special_tokens.find(piece.id);
+            if (it != special_tokens.end()) {
+                count += (int)it->second.ids.size();
+            }
+        }
+    }
+    return count;
+}
+
 } // namespace QoreTokenizer

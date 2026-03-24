@@ -61,6 +61,8 @@ public:
         const std::vector<std::string>& tokens_b,
         bool add_special) const override;
 
+    int numAddedTokens(bool has_pair) const override;
+
 protected:
     //! Constructor for subclasses that set up templates directly
     TemplateProcessor() = default;

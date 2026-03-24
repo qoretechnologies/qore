@@ -102,6 +102,15 @@ QoreHFTokenizer::QoreHFTokenizer(const QoreHashNode* config, ExceptionSink* xsin
             added_tokens.push_back(std::move(tok));
         }
     }
+
+    // Resolve pad_token_id from added tokens
+    for (const auto& at : added_tokens) {
+        if (at.content == "[PAD]" || at.content == "<pad>"
+                || at.content == "<|endoftext|>") {
+            pad_token_id = at.id;
+            break;
+        }
+    }
 }
 
 std::vector<int> QoreHFTokenizer::tokenizePreToken(const std::string& pre_token) const {
@@ -399,6 +408,284 @@ QoreHashNode* QoreHFTokenizer::getVocab(ExceptionSink* xsink) const {
         result->setKeyValue(entry.first.c_str(), entry.second, xsink);
     }
     return result.release();
+}
+
+QoreHashNode* QoreHFTokenizer::encodeAdvanced(const QoreStringNode* text,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    if (!model) {
+        xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
+        return nullptr;
+    }
+
+    // Parse options
+    const QoreStringNode* text_pair_node = options
+        ? safeGetString(options->getKeyValue("text_pair")) : nullptr;
+    int max_length = options
+        ? (int)options->getKeyValue("max_length").getAsBigInt() : 0;
+    std::string truncation = options
+        ? safeGetStringKey(options, "truncation") : "";
+    std::string padding = options
+        ? safeGetStringKey(options, "padding") : "";
+    bool add_special = options
+        ? options->getKeyValue("add_special_tokens").getAsBool() : true;
+    // Default add_special_tokens to true if not specified
+    if (options && options->getKeyValue("add_special_tokens").isNullOrNothing()) {
+        add_special = true;
+    }
+    int override_pad_id = options
+        ? (int)options->getKeyValue("pad_token_id").getAsBigInt() : -1;
+    if (options && options->getKeyValue("pad_token_id").isNullOrNothing()) {
+        override_pad_id = -1;
+    }
+
+    // Encode first text
+    InternalEncoding enc_a = encodeText(text ? text->c_str() : "");
+
+    // Encode second text (optional)
+    InternalEncoding enc_b;
+    bool has_pair = false;
+    if (text_pair_node && text_pair_node->size() > 0) {
+        enc_b = encodeText(text_pair_node->c_str());
+        has_pair = true;
+    }
+
+    // Apply truncation BEFORE post-processing
+    if (max_length > 0 && !truncation.empty()) {
+        int num_special = 0;
+        if (post_processor && add_special) {
+            num_special = post_processor->numAddedTokens(has_pair);
+        }
+        int available = max_length - num_special;
+        if (available < 0) {
+            available = 0;
+        }
+
+        int total = (int)enc_a.ids.size() + (int)enc_b.ids.size();
+        if (total > available) {
+            if (truncation == "only_first" || !has_pair) {
+                int keep_a = available - (int)enc_b.ids.size();
+                if (keep_a < 0) {
+                    keep_a = 0;
+                }
+                enc_a.ids.resize(keep_a);
+                enc_a.tokens.resize(keep_a);
+                enc_a.offsets.resize(keep_a);
+            } else if (truncation == "only_second" && has_pair) {
+                int keep_b = available - (int)enc_a.ids.size();
+                if (keep_b < 0) {
+                    keep_b = 0;
+                }
+                enc_b.ids.resize(keep_b);
+                enc_b.tokens.resize(keep_b);
+                enc_b.offsets.resize(keep_b);
+            } else {
+                // longest_first: trim the longer sequence iteratively
+                while ((int)(enc_a.ids.size() + enc_b.ids.size()) > available) {
+                    if (enc_a.ids.size() >= enc_b.ids.size() && !enc_a.ids.empty()) {
+                        enc_a.ids.pop_back();
+                        enc_a.tokens.pop_back();
+                        enc_a.offsets.pop_back();
+                    } else if (!enc_b.ids.empty()) {
+                        enc_b.ids.pop_back();
+                        enc_b.tokens.pop_back();
+                        enc_b.offsets.pop_back();
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Post-process
+    EncodingResult post_result;
+    if (post_processor && add_special) {
+        post_result = post_processor->processWithOffsets(
+            enc_a.ids,
+            has_pair ? enc_b.ids : std::vector<int>(),
+            enc_a.tokens,
+            has_pair ? enc_b.tokens : std::vector<std::string>(),
+            enc_a.offsets,
+            has_pair ? enc_b.offsets : std::vector<std::pair<size_t, size_t>>(),
+            true);
+    } else {
+        post_result.ids = std::move(enc_a.ids);
+        post_result.tokens = std::move(enc_a.tokens);
+        post_result.offsets = std::move(enc_a.offsets);
+        if (has_pair) {
+            post_result.ids.insert(post_result.ids.end(),
+                enc_b.ids.begin(), enc_b.ids.end());
+            post_result.tokens.insert(post_result.tokens.end(),
+                enc_b.tokens.begin(), enc_b.tokens.end());
+            post_result.offsets.insert(post_result.offsets.end(),
+                enc_b.offsets.begin(), enc_b.offsets.end());
+        }
+        post_result.type_ids.resize(post_result.ids.size(), 0);
+        post_result.special_tokens_mask.resize(post_result.ids.size(), 0);
+    }
+
+    // Apply padding
+    int effective_pad_id = override_pad_id >= 0 ? override_pad_id : pad_token_id;
+    if (padding == "max_length" && max_length > 0
+            && (int)post_result.ids.size() < max_length) {
+        if (effective_pad_id < 0) {
+            xsink->raiseException("TOKENIZER-ERROR",
+                "padding requested but no pad_token_id available");
+            return nullptr;
+        }
+        while ((int)post_result.ids.size() < max_length) {
+            post_result.ids.push_back(effective_pad_id);
+            post_result.type_ids.push_back(0);
+            post_result.tokens.push_back(model->idToToken(effective_pad_id));
+            post_result.offsets.push_back({0, 0});
+            post_result.special_tokens_mask.push_back(1);
+        }
+    }
+
+    // Build attention_mask (1 for real tokens, 0 for padding)
+    std::vector<int> attention_mask;
+    attention_mask.reserve(post_result.ids.size());
+    for (size_t i = 0; i < post_result.ids.size(); ++i) {
+        bool is_pad = (effective_pad_id >= 0 && post_result.ids[i] == effective_pad_id
+            && i >= (post_result.ids.size() - (max_length > 0 ? max_length : 0)));
+        // Simpler: if we padded, last N tokens are padding
+        attention_mask.push_back(1);
+    }
+    // Fix attention_mask for padded tokens
+    if (padding == "max_length" && max_length > 0 && effective_pad_id >= 0) {
+        // Walk backwards and set 0 for trailing pad tokens
+        for (int i = (int)post_result.ids.size() - 1; i >= 0; --i) {
+            if (post_result.ids[i] == effective_pad_id) {
+                attention_mask[i] = 0;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Build result hash
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+
+    ReferenceHolder<QoreListNode> id_list(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int id : post_result.ids) {
+        id_list->push(id, xsink);
+    }
+    result->setKeyValue("input_ids", id_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> type_list(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int tid : post_result.type_ids) {
+        type_list->push(tid, xsink);
+    }
+    result->setKeyValue("token_type_ids", type_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> mask_list(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int m : attention_mask) {
+        mask_list->push(m, xsink);
+    }
+    result->setKeyValue("attention_mask", mask_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> tok_list(new QoreListNode(stringTypeInfo), xsink);
+    for (const auto& t : post_result.tokens) {
+        tok_list->push(new QoreStringNode(t), xsink);
+    }
+    result->setKeyValue("tokens", tok_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> off_list(new QoreListNode(autoTypeInfo), xsink);
+    for (const auto& off : post_result.offsets) {
+        ReferenceHolder<QoreListNode> pair(new QoreListNode(bigIntTypeInfo), xsink);
+        pair->push((int64)off.first, xsink);
+        pair->push((int64)off.second, xsink);
+        off_list->push(pair.release(), xsink);
+    }
+    result->setKeyValue("offset_mapping", off_list.release(), xsink);
+
+    ReferenceHolder<QoreListNode> stm_list(new QoreListNode(bigIntTypeInfo), xsink);
+    for (int m : post_result.special_tokens_mask) {
+        stm_list->push(m, xsink);
+    }
+    result->setKeyValue("special_tokens_mask", stm_list.release(), xsink);
+
+    return result.release();
+}
+
+QoreListNode* QoreHFTokenizer::encodeBatch(const QoreListNode* texts,
+        const QoreHashNode* options, ExceptionSink* xsink) {
+    if (!texts) {
+        return new QoreListNode(autoTypeInfo);
+    }
+
+    // Encode each text individually
+    ReferenceHolder<QoreListNode> results(new QoreListNode(autoTypeInfo), xsink);
+    int max_len_in_batch = 0;
+
+    // First pass: encode all
+    std::vector<QoreHashNode*> encodings;
+    ConstListIterator li(texts);
+    while (li.next()) {
+        const QoreStringNode* t = li.getValue().get<const QoreStringNode>();
+        QoreHashNode* enc = encodeAdvanced(t, options, xsink);
+        if (*xsink) {
+            // Clean up already encoded
+            for (auto* e : encodings) {
+                e->deref(xsink);
+            }
+            return nullptr;
+        }
+        encodings.push_back(enc);
+        const QoreListNode* ids = safeGetList(enc->getKeyValue("input_ids"));
+        if (ids && (int)ids->size() > max_len_in_batch) {
+            max_len_in_batch = (int)ids->size();
+        }
+    }
+
+    // Second pass: pad to batch max if padding == "True" or "batch_longest"
+    std::string padding = options ? safeGetStringKey(options, "padding") : "";
+    int effective_pad_id = pad_token_id;
+    if (options) {
+        QoreValue pid = options->getKeyValue("pad_token_id");
+        if (!pid.isNullOrNothing()) {
+            effective_pad_id = (int)pid.getAsBigInt();
+        }
+    }
+
+    bool batch_pad = (padding == "True" || padding == "true"
+        || padding == "batch_longest");
+
+    for (auto* enc : encodings) {
+        if (batch_pad && effective_pad_id >= 0) {
+            QoreListNode* ids = const_cast<QoreListNode*>(
+                safeGetList(enc->getKeyValue("input_ids")));
+            int cur_len = ids ? (int)ids->size() : 0;
+            while (cur_len < max_len_in_batch) {
+                // Append padding to each array in the hash
+                // For simplicity, just add to input_ids and attention_mask
+                ids->push(effective_pad_id, xsink);
+
+                QoreListNode* attn = const_cast<QoreListNode*>(
+                    safeGetList(enc->getKeyValue("attention_mask")));
+                if (attn) {
+                    attn->push(0, xsink);
+                }
+
+                QoreListNode* tids = const_cast<QoreListNode*>(
+                    safeGetList(enc->getKeyValue("token_type_ids")));
+                if (tids) {
+                    tids->push(0, xsink);
+                }
+
+                QoreListNode* stm = const_cast<QoreListNode*>(
+                    safeGetList(enc->getKeyValue("special_tokens_mask")));
+                if (stm) {
+                    stm->push(1, xsink);
+                }
+
+                ++cur_len;
+            }
+        }
+        results->push(enc, xsink);
+    }
+
+    return results.release();
 }
 
 } // namespace QoreTokenizer

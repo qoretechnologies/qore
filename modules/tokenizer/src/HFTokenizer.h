@@ -68,6 +68,24 @@ public:
     //! Returns the full vocabulary as a token→id hash (includes added tokens)
     QoreHashNode* getVocab(ExceptionSink* xsink) const;
 
+    //! Advanced encoding with truncation and padding options
+    /** @param text the input text
+        @param options hash with: text_pair, max_length, truncation, padding,
+        add_special_tokens
+        @param xsink exception sink
+        @return hash with input_ids, token_type_ids, attention_mask, tokens,
+        offset_mapping, special_tokens_mask
+    */
+    QoreHashNode* encodeAdvanced(const QoreStringNode* text,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Batch encoding with truncation and padding
+    QoreListNode* encodeBatch(const QoreListNode* texts,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Returns the pad token ID (or -1 if no pad token)
+    int getPadTokenId() const { return pad_token_id; }
+
 private:
     std::unique_ptr<AbstractNormalizer> normalizer;
     std::unique_ptr<AbstractPreTokenizer> pre_tokenizer;
@@ -86,6 +104,9 @@ private:
         bool single_word;
     };
     std::vector<AddedToken> added_tokens;
+
+    //! Pad token ID (-1 if no pad token found)
+    int pad_token_id = -1;
 
     //! Internal encoding result with offsets
     struct InternalEncoding {

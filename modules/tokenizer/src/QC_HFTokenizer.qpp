@@ -107,3 +107,37 @@ int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
 hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
     return tok->getVocab(xsink);
 }
+
+//! Advanced encoding with truncation, padding, and sentence pair support
+/** @param text the input text to tokenize
+    @param options optional hash with:
+    - \c text_pair (*string): second text for sentence-pair tasks
+    - \c max_length (*int): maximum sequence length (including special tokens)
+    - \c truncation (*string): truncation strategy: "longest_first", "only_first", "only_second"
+    - \c padding (*string): padding strategy: "max_length" (to max_length) or "true" (batch)
+    - \c add_special_tokens (*bool): whether to add special tokens (default True)
+    - \c pad_token_id (*int): override pad token ID
+
+    @return encoding result hash with input_ids, token_type_ids, attention_mask,
+    tokens, offset_mapping, special_tokens_mask
+*/
+hash<auto> HFTokenizer::encodeAdvanced(string text, *hash<auto> options) {
+    return tok->encodeAdvanced(text, options, xsink);
+}
+
+//! Batch encoding with truncation and padding
+/** @param texts list of texts to encode
+    @param options same as encodeAdvanced, plus padding "true" for batch-longest
+
+    @return list of encoding result hashes
+*/
+list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> options) {
+    return tok->encodeBatch(texts, options, xsink);
+}
+
+//! Returns the pad token ID, or -1 if no pad token
+/** @return the pad token ID, or -1 if not found
+*/
+int HFTokenizer::getPadTokenId() [flags=CONSTANT] {
+    return tok->getPadTokenId();
+}
