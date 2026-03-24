@@ -201,7 +201,14 @@ public class HttpClientConnectionManager {
     }
 
     #! Acquires a stream handle for the given URL
-    /** @param url the target URL (e.g., "https://example.com")
+    /** The \c url parameter is used only for connection pooling (host:port extraction
+        and protocol selection). The URL's path component is \b not used for requests —
+        callers must pass the full request path to
+        @ref request(), @ref acquireAndStartStreaming(), or
+        @ref HttpClientStreamHandle::request() "stream.request()".
+
+        @param url the target URL (e.g., \c "https://example.com"); only the scheme,
+        host, and port are used for connection management
 
         @return a stream handle ready for submitting requests
 
@@ -253,10 +260,49 @@ public class HttpClientConnectionManager {
         return stream;
     }
 
+    #! Acquires a stream and starts streaming with automatic retry on stale connections
+    /** If the server closed the connection between acquisition and streaming start
+        (a race inherent in pooled HTTP/1.1 connections), this method retries with a
+        fresh connection up to \c MaxRequestRetries times.
+
+        @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
+        @param method HTTP method (e.g., "POST")
+        @param path the full request path to send (must include any base path from the URL)
+        @param headers request headers (optional)
+        @param body_streaming if True, enables bidirectional streaming (HTTP/2+ only)
+        @param body request body (optional)
+
+        @return the stream handle ready for reading
+
+        @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
+        @throw HTTP1-STREAMING-ERROR if body_streaming is True on HTTP/1.1
+    */
+    HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
+            *hash<auto> headers, bool body_streaming = False, *data body) {
+        int retries = 0;
+        while (True) {
+            HttpClientStreamHandle stream = acquireStream(url);
+            try {
+                stream.startStreaming(method, path, headers, body_streaming, body);
+                return stream;
+            } catch (hash<ExceptionInfo> ex) {
+                if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
+                    log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
+                        ex.err, retries, MaxRequestRetries);
+                    evictDeadConnections(url);
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
     #! Submits an async request and returns immediately
-    /** @param url the target URL
+    /** @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
         @param method HTTP method
-        @param path request path
+        @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
         @param callback callback invoked with response or error
@@ -316,9 +362,10 @@ public class HttpClientConnectionManager {
     }
 
     #! Performs a synchronous request
-    /** @param url the target URL
+    /** @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
         @param method HTTP method
-        @param path request path
+        @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
         @param timeout_ms request timeout (optional)
@@ -539,13 +586,12 @@ public class HttpClientConnectionManager {
 
         # Auto mode
         if (url_info.protocol != "https") {
-            # For plain HTTP, check cache — a previous h2c failure caches "h1"
-            if (protocol_cache.hasKey(key)) {
-                return protocol_cache{key};
-            }
-            # Try h2c (HTTP/2 prior knowledge) first; createConnection() will
-            # fall back to h1 if the server doesn't support it
-            return "h2";
+            # For plain HTTP, default to HTTP/1.1 — h2c (HTTP/2 prior knowledge)
+            # requires the server to support it, and most HTTP/1.1 servers will
+            # reject the HTTP/2 preface.  ALPN negotiation (which reliably detects
+            # HTTP/2 support) is only available over TLS.  Users who know their
+            # server supports h2c can explicitly set protocol: "h2".
+            return "h1";
         }
 
         # Check cache — "h3" is set by checkAltSvc() when an Alt-Svc response
@@ -945,6 +991,8 @@ public class HttpClientConnectionManager {
             || err == "HTTP2-ABORT"
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
+            || err == "HTTP1-CONNECTION-CLOSED"
+            || err == "HTTP1-STATE-ERROR"
             || err == "HTTP1-SSL-ERROR"
             || err == "HTTP1-ABORT"
             || err == "HTTP1-SEND-ERROR"

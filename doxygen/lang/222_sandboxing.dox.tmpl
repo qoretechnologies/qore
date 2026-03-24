@@ -26,22 +26,21 @@
 
     The following parse options restrict system access:
 
-    | Parse Option | Description |
-    |--------------|-------------|
-    | @ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM" | Disables all filesystem access |
-    | @ref Qore::PO_NO_NETWORK "PO_NO_NETWORK" | Disables all network access |
-    | @ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL" | Disables thread creation and control |
-    | @ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES" | Disables thread synchronization classes |
-    | @ref Qore::PO_NO_THREADS "PO_NO_THREADS" | Combines PO_NO_THREAD_CONTROL and PO_NO_THREAD_CLASSES |
-    | @ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL" | Disables process control (exit, fork, etc.) |
-    | @ref Qore::PO_NO_EXTERNAL_PROCESS "PO_NO_EXTERNAL_PROCESS" | Disables spawning external processes |
-    | @ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO" | Disables access to external system information |
-    | @ref Qore::PO_NO_EXTERNAL_ACCESS "PO_NO_EXTERNAL_ACCESS" | Combines multiple restrictions for external access |
-    | @ref Qore::PO_NO_DATABASE "PO_NO_DATABASE" | Disables database access |
-    | @ref Qore::PO_NO_MODULES "PO_NO_MODULES" | Disables loading modules |
-    | @ref Qore::PO_NO_IO "PO_NO_IO" | Disables all I/O operations |
-    | @ref Qore::PO_NO_GUI "PO_NO_GUI" | Disables GUI functionality |
-    | @ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS" | Disables APIs that could bypass sandboxing |
+    |!Parse Option|!Description
+    |@ref Qore::PO_NO_FILESYSTEM "PO_NO_FILESYSTEM"|Disables all filesystem access
+    |@ref Qore::PO_NO_NETWORK "PO_NO_NETWORK"|Disables all network access
+    |@ref Qore::PO_NO_THREAD_CONTROL "PO_NO_THREAD_CONTROL"|Disables thread creation and control
+    |@ref Qore::PO_NO_THREAD_CLASSES "PO_NO_THREAD_CLASSES"|Disables thread synchronization classes
+    |@ref Qore::PO_NO_THREADS "PO_NO_THREADS"|Combines PO_NO_THREAD_CONTROL and PO_NO_THREAD_CLASSES
+    |@ref Qore::PO_NO_PROCESS_CONTROL "PO_NO_PROCESS_CONTROL"|Disables process control (exit, fork, etc.)
+    |@ref Qore::PO_NO_EXTERNAL_PROCESS "PO_NO_EXTERNAL_PROCESS"|Disables spawning external processes
+    |@ref Qore::PO_NO_EXTERNAL_INFO "PO_NO_EXTERNAL_INFO"|Disables access to external system information
+    |@ref Qore::PO_NO_EXTERNAL_ACCESS "PO_NO_EXTERNAL_ACCESS"|Combines multiple restrictions for external access
+    |@ref Qore::PO_NO_DATABASE "PO_NO_DATABASE"|Disables database access
+    |@ref Qore::PO_NO_MODULES "PO_NO_MODULES"|Disables loading modules
+    |@ref Qore::PO_NO_IO "PO_NO_IO"|Disables all I/O operations
+    |@ref Qore::PO_NO_GUI "PO_NO_GUI"|Disables GUI functionality
+    |@ref Qore::PO_NO_UNCONTROLLED_APIS "PO_NO_UNCONTROLLED_APIS"|Disables APIs that could bypass sandboxing
 
     @subsection sandbox_po_usage Using Parse Options
 
@@ -165,13 +164,12 @@ auto result = p.callFunction("main");
 
     @subsection sandbox_fs_comparison Parse Options vs SandboxManager
 
-    | Feature | PO_NO_FILESYSTEM | SandboxManager |
-    |---------|------------------|----------------|
-    | Block all filesystem access | Yes | Yes (default deny policy) |
-    | Allow specific directories | No | Yes |
-    | Deny specific directories | No | Yes |
-    | Different read/write permissions | No | Yes |
-    | Sandbox root (chroot-like) | No | Yes |
+    |!Feature|!PO_NO_FILESYSTEM|!SandboxManager
+    |Block all filesystem access|Yes|Yes (default deny policy)
+    |Allow specific directories|No|Yes
+    |Deny specific directories|No|Yes
+    |Different read/write permissions|No|Yes
+    |Sandbox root (chroot-like)|No|Yes
 
     @subsection sandbox_fs_root Sandbox Root
 
@@ -213,14 +211,13 @@ sm.addFilesystemDeniedPath("/data/uploads/secrets");
 
     The following constants control filesystem access modes:
 
-    | Constant | Value | Description |
-    |----------|-------|-------------|
-    | @ref Qore::QSEC_READ "QSEC_READ" | 1 | Read access to files |
-    | @ref Qore::QSEC_WRITE "QSEC_WRITE" | 2 | Write/modify access to files |
-    | @ref Qore::QSEC_EXECUTE "QSEC_EXECUTE" | 4 | Execute access to files |
-    | @ref Qore::QSEC_DELETE "QSEC_DELETE" | 8 | Delete files |
-    | @ref Qore::QSEC_CREATE "QSEC_CREATE" | 16 | Create new files |
-    | @ref Qore::QSEC_ALL "QSEC_ALL" | 31 | All access modes combined |
+    |!Constant|!Value|!Description
+    |@ref Qore::QSEC_READ "QSEC_READ"|1|Read access to files
+    |@ref Qore::QSEC_WRITE "QSEC_WRITE"|2|Write/modify access to files
+    |@ref Qore::QSEC_EXECUTE "QSEC_EXECUTE"|4|Execute access to files
+    |@ref Qore::QSEC_DELETE "QSEC_DELETE"|8|Delete files
+    |@ref Qore::QSEC_CREATE "QSEC_CREATE"|16|Create new files
+    |@ref Qore::QSEC_ALL "QSEC_ALL"|31|All access modes combined
 
     @subsection sandbox_fs_policy Default Policy
 
@@ -241,14 +238,13 @@ sm.setFilesystemDefaultPolicy(True);
 
     @subsection sandbox_net_comparison Parse Options vs SandboxManager
 
-    | Feature | PO_NO_NETWORK | SandboxManager |
-    |---------|---------------|----------------|
-    | Block all network access | Yes | Yes (default deny policy) |
-    | Allow specific hosts | No | Yes |
-    | Allow specific IP ranges | No | Yes |
-    | Block private networks (SSRF) | No | Yes |
-    | Port restrictions | No | Yes |
-    | Protocol filtering (TCP/UDP/UNIX) | No | Yes |
+    |!Feature|!PO_NO_NETWORK|!SandboxManager
+    |Block all network access|Yes|Yes (default deny policy)
+    |Allow specific hosts|No|Yes
+    |Allow specific IP ranges|No|Yes
+    |Block private networks (SSRF)|No|Yes
+    |Port restrictions|No|Yes
+    |Protocol filtering (TCP/UDP/UNIX)|No|Yes
 
     @subsection sandbox_net_ssrf SSRF Prevention
 
@@ -319,12 +315,11 @@ sm.addNetworkAllowedPortRange(8000, 9000, QSEC_NET_TCP);  # Custom range
 
     The following constants control network protocols:
 
-    | Constant | Value | Description |
-    |----------|-------|-------------|
-    | @ref Qore::QSEC_NET_TCP "QSEC_NET_TCP" | 1 | TCP protocol |
-    | @ref Qore::QSEC_NET_UDP "QSEC_NET_UDP" | 2 | UDP protocol |
-    | @ref Qore::QSEC_NET_UNIX "QSEC_NET_UNIX" | 4 | UNIX domain sockets |
-    | @ref Qore::QSEC_NET_ALL "QSEC_NET_ALL" | 7 | All protocols |
+    |!Constant|!Value|!Description
+    |@ref Qore::QSEC_NET_TCP "QSEC_NET_TCP"|1|TCP protocol
+    |@ref Qore::QSEC_NET_UDP "QSEC_NET_UDP"|2|UDP protocol
+    |@ref Qore::QSEC_NET_UNIX "QSEC_NET_UNIX"|4|UNIX domain sockets
+    |@ref Qore::QSEC_NET_ALL "QSEC_NET_ALL"|7|All protocols
 
     @section sandbox_resources Resource Limits
 
@@ -352,12 +347,11 @@ sm.setMaxRecursionDepth(100);
 
     When limits are exceeded, appropriate exceptions are raised:
 
-    | Exception | Cause |
-    |-----------|-------|
-    | \c SANDBOX-MEMORY-LIMIT | Memory limit exceeded |
-    | \c SANDBOX-TIMEOUT | CPU or wall time limit exceeded |
-    | \c SANDBOX-THREAD-LIMIT | Thread limit exceeded |
-    | \c SANDBOX-RECURSION-LIMIT | Recursion depth exceeded |
+    |!Exception|!Cause
+    |\c SANDBOX-MEMORY-LIMIT|Memory limit exceeded
+    |\c SANDBOX-TIMEOUT|CPU or wall time limit exceeded
+    |\c SANDBOX-THREAD-LIMIT|Thread limit exceeded
+    |\c SANDBOX-RECURSION-LIMIT|Recursion depth exceeded
 
     @section sandbox_interrupt Safe Code Interruption
 
@@ -422,11 +416,10 @@ sm.clearInterrupt();
     retried if no interrupt was requested. This ensures that blocked threads can be interrupted
     even when waiting on locks or I/O operations.
 
-    | Operation Type | Polling Interval | Latency |
-    |----------------|------------------|---------|
-    | sleep(), usleep() | 100ms | Fast response for timed waits |
-    | Threading primitives | 500ms | Lower overhead for lock contention |
-    | I/O operations | 500ms | Consistent with threading primitives |
+    |!Operation Type|!Polling Interval|!Latency
+    |sleep(), usleep()|100ms|Fast response for timed waits
+    |Threading primitives|500ms|Lower overhead for lock contention
+    |I/O operations|500ms|Consistent with threading primitives
 
     @note The polling mechanism only incurs overhead when a @ref Qore::SandboxManager "SandboxManager"
     is attached to the Program. Normal programs without a SandboxManager have zero polling overhead.
@@ -508,16 +501,15 @@ hash<auto> net_config = sm.getNetworkConfiguration();
 
     The following exceptions may be raised by the sandbox system:
 
-    | Exception | Source | Description |
-    |-----------|--------|-------------|
-    | \c FILESYSTEM-ACCESS-DENIED | SandboxManager | Filesystem access blocked by security policy |
-    | \c NETWORK-ACCESS-DENIED | SandboxManager | Network connection blocked by security policy |
-    | \c PROGRAM-INTERRUPTED | SandboxManager | Execution interrupted via requestInterrupt() |
-    | \c SANDBOX-MEMORY-LIMIT | SandboxManager | Memory limit exceeded |
-    | \c SANDBOX-TIMEOUT | SandboxManager | CPU or wall time limit exceeded |
-    | \c SANDBOX-THREAD-LIMIT | SandboxManager | Thread limit exceeded |
-    | \c SANDBOX-RECURSION-LIMIT | SandboxManager | Recursion depth exceeded |
-    | Parse error | Parse Options | Code uses disabled functionality |
+    |!Exception|!Source|!Description
+    |\c FILESYSTEM-ACCESS-DENIED|SandboxManager|Filesystem access blocked by security policy
+    |\c NETWORK-ACCESS-DENIED|SandboxManager|Network connection blocked by security policy
+    |\c PROGRAM-INTERRUPTED|SandboxManager|Execution interrupted via requestInterrupt()
+    |\c SANDBOX-MEMORY-LIMIT|SandboxManager|Memory limit exceeded
+    |\c SANDBOX-TIMEOUT|SandboxManager|CPU or wall time limit exceeded
+    |\c SANDBOX-THREAD-LIMIT|SandboxManager|Thread limit exceeded
+    |\c SANDBOX-RECURSION-LIMIT|SandboxManager|Recursion depth exceeded
+    |Parse error|Parse Options|Code uses disabled functionality
 
     @section sandbox_best_practices Best Practices
 

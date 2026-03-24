@@ -321,7 +321,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode persistent error", \asyncModePersistentErrorTest());
         addTestCase("async mode persistent concurrent", \asyncModePersistentConcurrentTest());
         addTestCase("async mode non-persistent", \asyncModeNonPersistentTest());
-        addTestCase("async mode persistent with sync server", \asyncModePersistentWithSyncServerTest());
         addTestCase("async mode HTTP/2", \asyncModeHttp2Test());
         addTestCase("async mode global controller restart", \asyncModeGlobalCtrlRestartTest());
         addTestCase("async mode stop inflight", \asyncModeStopInFlightTest());
@@ -353,7 +352,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": False,  # Explicitly disable async mode to test sync path
         };
         mServer = new HttpServer(http_opts);
         mHandler = new ReqHandler();
@@ -366,8 +364,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setDefaultHandler("my-handler", mHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
         url = "http://localhost:" + port;
+        mServer.waitForAsyncIo();
 
-        # Set up async mode server
+        # Set up second server
         Logger asyncLogger("async-test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
             asyncLogger.addAppender(new StdoutAppender());
@@ -375,7 +374,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> async_opts = <HttpServerOptionInfo>{
             "logger": asyncLogger,
             "debug": True,
-            "async_mode": True,
         };
         mAsyncServer = new HttpServer(async_opts);
         mAsyncServer.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
@@ -798,9 +796,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeBasicTest() {
-        # Verify async mode is enabled
+        # Verify async mode is always enabled (deprecated methods always return True)
         assertTrue(mAsyncServer.getAsyncMode());
-        assertFalse(mServer.getAsyncMode());
+        assertTrue(mServer.getAsyncMode());
 
         # Create client with short timeout to ensure async operations don't block indefinitely
         HTTPClient client({"url": asyncUrl, "timeout": 5s});
@@ -1192,7 +1190,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         HttpServer certServer(<HttpServerOptionInfo>{
             "logger": certLogger,
             "debug": True,
-            "async_mode": True,
         });
         on_exit certServer.stop();
         certServer.setDefaultHandler("my-handler", new ReqHandler());
@@ -1267,7 +1264,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> auth_opts = <HttpServerOptionInfo>{
             "logger": authLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer authServer(auth_opts);
         on_exit authServer.stop();
@@ -1356,7 +1352,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> persist_opts = <HttpServerOptionInfo>{
             "logger": persistLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer persistServer(persist_opts);
         on_exit persistServer.stop();
@@ -1413,7 +1408,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> ep_opts = <HttpServerOptionInfo>{
             "logger": epLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer epServer(ep_opts);
         on_exit epServer.stop();
@@ -1483,7 +1477,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> trans_opts = <HttpServerOptionInfo>{
             "logger": transLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer transServer(trans_opts);
         on_exit transServer.stop();
@@ -1523,7 +1516,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> close_opts = <HttpServerOptionInfo>{
             "logger": closeLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer closeServer(close_opts);
         on_exit closeServer.stop();
@@ -1567,7 +1559,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> err_opts = <HttpServerOptionInfo>{
             "logger": errLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer errServer(err_opts);
         on_exit errServer.stop();
@@ -1615,7 +1606,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> conc_opts = <HttpServerOptionInfo>{
             "logger": concLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer concServer(conc_opts);
         on_exit concServer.stop();
@@ -1670,7 +1660,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> np_opts = <HttpServerOptionInfo>{
             "logger": npLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer npServer(np_opts);
         on_exit npServer.stop();
@@ -1692,49 +1681,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             assertEq(200, resp.status_code);
             assertEq("normal", resp.body);
         }
-    }
-
-    asyncModePersistentWithSyncServerTest() {
-        # Test that sync mode server still works with persistent handlers
-        # (This verifies we didn't break sync mode)
-        Logger syncLogger("sync-persist-test", LoggerLevel::getLevelInfo());
-        if (m_options.verbose > 2) {
-            syncLogger.addAppender(new StdoutAppender());
-        }
-        hash<HttpServerOptionInfo> sync_opts = <HttpServerOptionInfo>{
-            "logger": syncLogger,
-            "debug": True,
-            "async_mode": False,  # Sync mode
-        };
-        HttpServer syncServer(sync_opts);
-        on_exit syncServer.stop();
-
-        PersistentTestHandler handler();
-        syncServer.setHandler("persistent", "/persistent", MimeTypeHtml, handler);
-        syncServer.setDefaultHandler("persistent", handler);
-        int syncPort = syncServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        string syncUrl = "http://localhost:" + syncPort;
-
-        HTTPClient client({"url": syncUrl, "timeout": 10s});
-        client.connect();
-        on_exit client.disconnect();
-
-        # Start persistent mode
-        hash<auto> resp1 = client.send("start", "POST", "/persistent/start");
-        assertEq(200, resp1.status_code);
-        int tid1 = resp1."x-thread-id".toInt();
-
-        # Continue in persistent mode
-        hash<auto> resp2 = client.send("continue", "POST", "/persistent/continue");
-        assertEq(200, resp2.status_code);
-        int tid2 = resp2."x-thread-id".toInt();
-
-        # In sync mode, requests should also be on the same thread
-        assertEq(tid1, tid2, "Sync mode persistent requests should be on same thread");
-
-        # End persistent mode
-        hash<auto> resp3 = client.send("end", "POST", "/persistent/end");
-        assertEq(200, resp3.status_code);
     }
 
     asyncModeHttp2Test() {
@@ -1938,7 +1884,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         server.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
@@ -1965,7 +1910,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         ThrowOnceServer server(opts);
         on_exit server.stop();
@@ -1993,7 +1937,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": new Logger("async-stop-inflight", LoggerLevel::getLevelInfo()),
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         Queue started();
@@ -2028,7 +1971,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts1 = <HttpServerOptionInfo>{
             "logger": new Logger("async-restart-1", LoggerLevel::getLevelInfo()),
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server1(opts1);
         on_exit server1.stop();
@@ -2047,7 +1989,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts2 = <HttpServerOptionInfo>{
             "logger": new Logger("async-restart-2", LoggerLevel::getLevelInfo()),
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server2(opts2);
         on_exit server2.stop();
@@ -2074,7 +2015,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
             "max_handler_threads": pool_size,
         };
         HttpServer server(opts);
@@ -2191,7 +2131,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2235,7 +2174,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2298,7 +2236,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2360,7 +2297,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2431,7 +2367,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2487,7 +2422,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2524,7 +2458,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2571,7 +2504,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2628,7 +2560,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2699,7 +2630,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2866,7 +2796,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();
@@ -2926,7 +2855,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer server(opts);
         on_exit server.stop();

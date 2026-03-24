@@ -90,7 +90,7 @@ module OpenApi3 {
     To override the URI base path specified in the <a href="https://swagger.io/">OpenApi3</a> schema,
     get the <a href="https://swagger.io/">OpenApi3</a> schema object by calling
     \c RestClient::getValidator(), and then call
-    \c RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()"
+    @ref RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()"
     on the validator object.
 
     @par Client Example
@@ -190,18 +190,17 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
     - \c H: header parameter
 
     @par Type Mapping
-    | Qore Type | OpenAPI Type | Format |
-    |-----------|--------------|--------|
-    | \c int | integer | int64 |
-    | \c float | number | double |
-    | \c string | string | - |
-    | \c bool | boolean | - |
-    | \c date | string | date-time |
-    | \c binary | string | binary |
-    | \c hash | object | - |
-    | \c hash<TypeName> | \$ref: "#/components/schemas/TypeName" | - |
-    | \c list<T> | array (items: T) | - |
-    | \c *type | type + nullable: true | - |
+    |!Qore Type|!OpenAPI Type|!Format
+    |\c int|integer|int64
+    |\c float|number|double
+    |\c string|string|-
+    |\c bool|boolean|-
+    |\c date|string|date-time
+    |\c binary|string|binary
+    |\c hash|object|-
+    |\c hash<TypeName>|\$ref: "#/components/schemas/TypeName"|-
+    |\c list<T>|array (items: T)|-
+    |\c *type|type + nullable: true|-
 
     @subsection openapi3_generator_usage Generator Usage
 
@@ -471,7 +470,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with JSON module unavailable
         @throws YAML-MODULE-MISSING trying to parse a YAML %OpenApi3 specification with YAML module unavailable
@@ -497,7 +496,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
@@ -512,7 +511,7 @@ public class OpenApi3Loader {
     #! Load <a href="https://swagger.io/">OpenApi3</a> definition from a URL or file path.
     /**
         @param url URL to the <a href="https://swagger.io/">OpenApi3</a> file; uses the
-        \c filelocationhandlerintro "FileLocationHandler" to load the file
+        @ref filelocationhandlerintro "FileLocationHandler" to load the file
         @param json whether the specification is in JSON or YAML format; if not given the source encoding will be
         detected automatically
         @param opts options as per \c OpenApi3Options as follows:
@@ -522,7 +521,7 @@ public class OpenApi3Loader {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws EMPTY-SCHEMA-FILE %OpenApi3 file is empty
         @throws JSON-MODULE-MISSING trying to parse a JSON %OpenApi3 specification with the json module unavailable
@@ -786,7 +785,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
             - \c def_path: (type *string) the default path to use when retrieving external schema references
             - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
               references, must take a string argument (the resource name) and return a string (the resource data)
-            - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+            - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
             - \c utc_dates: (type *bool) send date/time values in queries in UTC format
             - \c query_date_format: (type *string) the format string for date/time values in queries
         */
@@ -853,7 +852,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws OPENAPI3-OPTION-ERROR unsuported options in constructor
         @throws INVALID-OPENAPI3-VERSION invalid or missing OpenApi3 schema version
@@ -878,7 +877,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         - \c try_import: (type *code) a call reference or closure to be passed a string name for external schema
           references, must
           take a string argument (the resource name) and return a string (the resource data)
-        - \c parse_flags: (type *int) a binary or combination of \c ParseOptionFlags
+        - \c parse_flags: (type *int) a binary or combination of @ref ParseOptionFlags
 
         @throws OPENAPI3-OPTION-ERROR unsuported options in constructor
         @throws INVALID-OPENAPI3-VERSION invalid or missing OpenApi3 schema version
@@ -2244,7 +2243,7 @@ public class LicenseObject inherits ObjectBase {
 
 #! Holds the relative paths to the individual endpoints.
 /**
-    The path is appended to the \c OpenApi3Schema::basePath "basePath" in order to construct the full URL.
+    The path is appended to the @ref OpenApi3Schema::basePath "basePath" in order to construct the full URL.
     The Paths may be empty, due to ACL constraints.
 
     This class stores a tree or a component of a path for path matching, supports wildcard matching
@@ -3395,8 +3394,8 @@ public class ParameterBase inherits ObjectBase, RestSchemaValidator::AbstractPar
 
 #! Describes a single operation parameter
 /**
-    A unique parameter is defined by a combination of a \c ParameterObject::name "name"
-    and \c ParameterObject::inLoc "location".
+    A unique parameter is defined by a combination of a @ref ParameterObject::name "name"
+    and @ref ParameterObject::inLoc "location".
 
     There are five possible parameter types:
     - Path: Used together with Path Templating, where the parameter value is
@@ -4696,7 +4695,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
 #! A metadata object that allows for more fine-tuned XML model definitions.
 /**
     When using arrays, XML element names are not inferred (for singular/plural
-    forms) and the \c XmlObject::name "name" property should be used to add that information.
+    forms) and the @ref XmlObject::name "name" property should be used to add that information.
     See examples for expected behavior.
  */
 public class XmlObject inherits ObjectBase {
@@ -4714,7 +4713,7 @@ public class XmlObject inherits ObjectBase {
         #! The URL of the namespace definition. Value SHOULD be in the form of a URL.
         *string ns;
 
-        #! The prefix to be used for the \c XmlObject::name "name".
+        #! The prefix to be used for the @ref XmlObject::name "name".
         *string prefix;
 
         #! Declares whether the property definition translates to an attribute instead of an element. Default value is \c false.
@@ -5354,9 +5353,10 @@ public class OpenApi3SchemaTokenizer {
             # Process content based on current state
             switch (state) {
                 case "desc":
-                    # Continue description with continuation character
+                    # Continue description with backslash continuation character
                     if (rv.desc =~ /\\$/) {
-                        rv.desc = rv.desc.substr(0, rv.desc.length() - 1) + " " + trimmed;
+                        rv.desc = rtrim(rv.desc.substr(0, rv.desc.length() - 1))
+                            + " " + trimmed;
                     }
                     break;
 
@@ -5367,6 +5367,15 @@ public class OpenApi3SchemaTokenizer {
                         if (param) {
                             rv.params += param;
                         }
+                    } else if (rv.params) {
+                        # Continue description with backslash continuation
+                        int last_idx = rv.params.size() - 1;
+                        if (rv.params[last_idx].description =~ /\\$/) {
+                            rv.params[last_idx].description =
+                                rtrim(rv.params[last_idx].description.substr(0,
+                                    rv.params[last_idx].description.length() - 1))
+                                + " " + trimmed;
+                        }
                     }
                     break;
 
@@ -5376,6 +5385,15 @@ public class OpenApi3SchemaTokenizer {
                         *hash<FieldInfo> field = parseFieldLine(trimmed, depth - base_depth);
                         if (field) {
                             current_fields += field;
+                        }
+                    } else if (current_fields) {
+                        # Continue description with backslash continuation
+                        int last_idx = current_fields.size() - 1;
+                        if (current_fields[last_idx].description =~ /\\$/) {
+                            current_fields[last_idx].description =
+                                rtrim(current_fields[last_idx].description.substr(0,
+                                    current_fields[last_idx].description.length() - 1))
+                                + " " + trimmed;
                         }
                     }
                     break;
@@ -5471,8 +5489,12 @@ public class OpenApi3SchemaTokenizer {
         foreach auto match in (matches) {
             string block = match;
 
-            # Extract HTTP method and optional path
-            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s*(\/\S+)?/i);
+            # Extract HTTP method and optional path (path may appear before or after action=xxx)
+            *list<string> method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\s+(?:action=\S+\s+)?(\/\S+)/i);
+            if (!method_match) {
+                # Try without path
+                method_match = (block =~ x/@REST\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)/i);
+            }
             if (!method_match) {
                 continue;
             }
@@ -5571,6 +5593,18 @@ public class OpenApi3TypeMapper {
             }
             return rv;
         }
+        # Check for UndefinedHash BEFORE named type checks (all forms)
+        if (qore_type == "UndefinedHash" || qore_type =~ /^hash[< ]UndefinedHash>?$/) {
+            hash<auto> rv = {
+                "type": "object",
+                "additionalProperties": True,
+                "nullable": nullable,
+            };
+            if (!nullable) {
+                delete rv.nullable;
+            }
+            return rv;
+        }
         # Check for hash type with named type (hash<TypeName> or hash<Namespace::TypeName>)
         *list<string> hash_match = (qore_type =~ x/^hash<([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>$/);
         if (hash_match) {
@@ -5593,18 +5627,6 @@ public class OpenApi3TypeMapper {
             string schema_name = name_parts[name_parts.size() - 1];
             hash<auto> rv = {
                 "\$ref": sprintf("#/components/schemas/%s", schema_name),
-                "nullable": nullable,
-            };
-            if (!nullable) {
-                delete rv.nullable;
-            }
-            return rv;
-        }
-        # Check for UndefinedHash
-        if (qore_type == "UndefinedHash" || qore_type =~ /hash\s+UndefinedHash/) {
-            hash<auto> rv = {
-                "type": "object",
-                "additionalProperties": True,
                 "nullable": nullable,
             };
             if (!nullable) {
@@ -5694,6 +5716,15 @@ public class OpenApi3SchemaGenerator {
         @param method_info parsed REST method info
     */
     addMethod(string path, hash<RestMethodInfo> method_info) {
+        # For actions, append as sub-path (actions are served both as
+        # ?action=xxx and /xxx in the REST framework)
+        if (method_info.action) {
+            if (path !~ /\/$/) {
+                path += "/";
+            }
+            path += method_info.action;
+        }
+
         string http_method = method_info.http_method.lwr();
 
         # Build operation object
@@ -5712,6 +5743,8 @@ public class OpenApi3SchemaGenerator {
 
         # Add request body for non-GET methods
         if (http_method != "get" && method_info.schema.params) {
+            # Auto-register component schemas from body params with named hash types
+            autoRegisterParamSchemas(method_info.schema.params);
             *hash<auto> request_body = generateRequestBody(method_info);
             if (request_body) {
                 operation.requestBody = request_body;
@@ -5731,11 +5764,8 @@ public class OpenApi3SchemaGenerator {
     #! Add multiple methods for a path
     addMethods(string base_path, list<hash<RestMethodInfo>> methods) {
         foreach hash<RestMethodInfo> method in (methods) {
-            string path = method.path ?? base_path;
-            if (method.action) {
-                # For actions, append to path
-                path += "?action=" + method.action;
-            }
+            string path = method.path.val() ? method.path : base_path;
+            # action sub-path is handled by addMethod()
             addMethod(path, method);
         }
     }
@@ -5824,15 +5854,13 @@ public class OpenApi3SchemaGenerator {
 
     #! Generate operation ID
     private string generateOperationId(string path, string method, *string action) {
+        # action is already part of the path as a sub-path segment
         string id = path;
         id =~ s/[{}\/]/_/g;
         id =~ s/__+/_/g;  # Collapse multiple underscores
         id =~ s/^_//;
         id =~ s/_$//;
         id = method + "_" + id;
-        if (action) {
-            id += "_" + action;
-        }
         return id;
     }
 
@@ -5862,10 +5890,29 @@ public class OpenApi3SchemaGenerator {
             };
         }
 
+        # Build a set of path parameter names for deduplication
+        hash<string, bool> path_param_set;
+        foreach string pn in (path_params) {
+            path_param_set{pn} = True;
+        }
+
         # Add query parameters for GET methods
         if (method_info.http_method == "GET" && method_info.schema.params) {
             foreach hash<ParamInfo> param in (method_info.schema.params) {
                 if (param.depth) {
+                    continue;
+                }
+                # Skip params that are already defined as path parameters; use the @SCHEMA
+                # description for the path param instead of the generic one
+                if (path_param_set{param.name}) {
+                    # Update the path parameter entry with the richer description from @SCHEMA
+                    for (int i = 0; i < params.size(); ++i) {
+                        if (params[i].name == param.name && params[i]."in" == "path") {
+                            params[i].description = param.description;
+                            params[i].schema = OpenApi3TypeMapper::mapType(param.type_str);
+                            break;
+                        }
+                    }
                     continue;
                 }
                 params += {
@@ -6006,6 +6053,158 @@ public class OpenApi3SchemaGenerator {
         };
     }
 
+    #! Extract a schema name from a Qore type string
+    /** @return the schema name, or NOTHING if the type is not a named hash reference */
+    static *string extractSchemaName(string type_str) {
+        # Remove leading * (nullable)
+        if (type_str.val() && type_str[0] == "*") {
+            type_str = type_str.substr(1);
+        }
+
+        # Direct named hash: hash<TypeName> or hash TypeName (exclude hash<auto>)
+        *list<string> match = (type_str =~ x/^hash[< ]([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>?$/);
+        if (match && match[0] != "auto") {
+            list<string> parts = match[0].split("::");
+            return parts[parts.size() - 1];
+        }
+
+        # List of named hash: list<hash<TypeName>>, list<hash TypeName>, list<*hash<TypeName>>, etc.
+        match = (type_str =~ x/^list<\*?hash[< ]([A-Za-z_][\w]*(?:::[A-Za-z_][\w]*)*)>?>$/);
+        if (match && match[0] != "auto") {
+            list<string> parts = match[0].split("::");
+            return parts[parts.size() - 1];
+        }
+
+        return NOTHING;
+    }
+
+    #! Auto-register component schemas from return type field descriptions
+    /** When a return type references a named hash (e.g., hash<OAuth2AppInfo>) and has field
+        descriptions, this method builds the component schema from those fields and registers
+        it so the \c $ref in the output resolves correctly.
+    */
+    private autoRegisterReturnSchemas(hash<ReturnInfo> return_info) {
+        if (!return_info.fields) {
+            return;
+        }
+
+        *string schema_name = extractSchemaName(return_info.type_str);
+        if (schema_name) {
+            registerSchemasFromFields(schema_name, return_info.fields, 0, return_info.description);
+        }
+    }
+
+    #! Auto-register component schemas from request body parameters
+    /** Scans body parameters for named hash types with child parameters and registers
+        them as component schemas.
+    */
+    private autoRegisterParamSchemas(list<hash<ParamInfo>> params) {
+        # Track current named type and its raw children
+        *string current_schema_name;
+        list<hash<ParamInfo>> current_raw_children = ();
+
+        foreach hash<ParamInfo> param in (params) {
+            if (param.depth == 0) {
+                # Flush any pending child schema registration
+                if (current_schema_name && current_raw_children) {
+                    flushParamSchema(current_schema_name, current_raw_children);
+                }
+                current_schema_name = NOTHING;
+                current_raw_children = ();
+
+                # Check if this param references a named type
+                current_schema_name = extractSchemaName(param.type_str);
+            } else if (current_schema_name) {
+                current_raw_children += param;
+            }
+        }
+
+        # Flush any remaining child schema
+        if (current_schema_name && current_raw_children) {
+            flushParamSchema(current_schema_name, current_raw_children);
+        }
+    }
+
+    #! Register a schema from raw child params, normalizing depths
+    private flushParamSchema(string schema_name, list<hash<ParamInfo>> raw_children) {
+        @assert(raw_children.size() > 0);
+        # Find the minimum depth to use as the base for normalization
+        int min_depth = raw_children[0].depth;
+        foreach hash<ParamInfo> p in (raw_children) {
+            if (p.depth < min_depth) {
+                min_depth = p.depth;
+            }
+        }
+
+        # Convert ParamInfo to FieldInfo with normalized depths (min_depth -> 0)
+        list<hash<FieldInfo>> fields = map cast<hash<FieldInfo>>({
+            "name": $1.name,
+            "type_str": $1.type_str,
+            "description": $1.description,
+            "depth": $1.depth - min_depth,
+        }), raw_children;
+
+        registerSchemasFromFields(schema_name, fields, 0);
+    }
+
+    #! Build and register a component schema from a flat field list at the given depth
+    /** Recursively registers nested named types from deeper fields.
+
+        @param schema_name the component schema name to register
+        @param fields the flat list of fields with depth values
+        @param depth the current depth level to process (0 = top-level fields)
+        @param description optional schema description
+    */
+    private registerSchemasFromFields(string schema_name, list<hash<FieldInfo>> fields, int depth,
+            *string description) {
+        # Don't re-register if already registered
+        if (schemas{schema_name}) {
+            return;
+        }
+
+        hash<auto> properties = {};
+        *string child_schema_name;
+        list<hash<FieldInfo>> child_fields = ();
+
+        foreach hash<FieldInfo> field in (fields) {
+            if (field.depth == depth) {
+                # Flush any pending child schema registration
+                if (child_schema_name && child_fields) {
+                    registerSchemasFromFields(child_schema_name, child_fields, depth + 1);
+                }
+                child_schema_name = NOTHING;
+                child_fields = ();
+
+                # Map this field's type and add to properties
+                hash<auto> field_type = OpenApi3TypeMapper::mapType(field.type_str);
+                field_type.description = field.description;
+                properties{field.name} = field_type;
+
+                # Track if this field references a named type for nested schema registration
+                child_schema_name = extractSchemaName(field.type_str);
+            } else if (field.depth > depth && child_schema_name) {
+                child_fields += field;
+            }
+        }
+
+        # Flush any remaining child schema
+        if (child_schema_name && child_fields) {
+            registerSchemasFromFields(child_schema_name, child_fields, depth + 1);
+        }
+
+        # Register the component schema
+        if (properties) {
+            hash<auto> schema = {
+                "type": "object",
+                "properties": properties,
+            };
+            if (description) {
+                schema.description = description;
+            }
+            registerSchema(schema_name, schema);
+        }
+    }
+
     #! Generate responses from method info
     private hash<auto> generateResponses(hash<RestMethodInfo> method_info) {
         # Build success response
@@ -6015,23 +6214,9 @@ public class OpenApi3SchemaGenerator {
         if (method_info.schema.return_info) {
             hash<auto> response_schema = OpenApi3TypeMapper::mapType(method_info.schema.return_info.type_str);
 
-            # Add field descriptions if available
-            if (method_info.schema.return_info.fields && response_schema."\$ref") {
-                # Create inline schema with field descriptions
-                hash<auto> props = {};
-                foreach hash<FieldInfo> field in (method_info.schema.return_info.fields) {
-                    if (field.depth == 1) {  # Top-level fields only for now
-                        hash<auto> field_type = OpenApi3TypeMapper::mapType(field.type_str);
-                        field_type.description = field.description;
-                        props{field.name} = field_type;
-                    }
-                }
-                if (props) {
-                    response_schema = {
-                        "type": "object",
-                        "properties": props,
-                    };
-                }
+            # Auto-register component schemas from field descriptions so $ref entries resolve
+            if (method_info.schema.return_info.fields) {
+                autoRegisterReturnSchemas(method_info.schema.return_info);
             }
 
             success_response = {

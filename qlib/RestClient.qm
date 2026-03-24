@@ -106,7 +106,7 @@ module RestClient {
     initialize.
 
     Runtime REST API validation against a REST schema is supported; see the \c validator, \c openapi3, and \c swagger
-    options in \c RestClient::RestClient::constructor() "RestClient::constructor()".
+    options in @ref RestClient::RestClient::constructor() "RestClient::constructor()".
 
     For maximum compatibility with other REST solutions, the \c "json" encoding method is the default when no other
     encoding method is chosen and the \c "json" module is available.
@@ -143,10 +143,10 @@ printf("%N\n", ans.body);
     - \c response-body-raw: the raw message body in the response (after any content decoding)
     - \c response-code: the HTTP response code
     - \c response-serialization: the type of message serialization in the response; see
-      \c DataSerializationOptions for possible values when used with the null REST schema validator
+      @ref DataSerializationOptions for possible values when used with the null REST schema validator
     - \c request-body: the raw message body in the request (before any content encoding)
     - \c request-serialization: the type of message serialization in the request; see
-      \c DataSerializationOptions for possible values when used with the null REST schema validator
+      @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
 
@@ -260,7 +260,7 @@ printf("%N\n", ans.body);
       (<a href="https://github.com/qoretechnologies/qore/issues/4019">issue 4019</a>)
 
     @subsection restclientv1_6_1 RestClient v1.6.1
-    - added the \c no_charset option to options
+    - added the @ref no_charset option to options
       (<a href="https://github.com/qoretechnologies/qore/issues/3328">issue 3328</a>)
 
     @subsection restclientv1_6 RestClient v1.6
@@ -269,7 +269,7 @@ printf("%N\n", ans.body);
     - all connection clases have unified constructor
 
     @subsection restclientv1_5 RestClient v1.5
-    - added the \c RestClient::RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
+    - added the \c RestConnection::getConstructorInfo() "RestConnection::getConstructorInfo()"
       method to allow connections to be created dynamically, potentially in another process from a network
       call (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
 
@@ -799,11 +799,11 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           @endcode
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can
           be a relative date-time value for clarity, ex: \c 20s)
-        - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the
+        - \c content_encoding: for possible values, see @ref EncodingSupport; this sets the send encoding (if the
           \c "send_encoding" option is not set) and the requested response encoding (note that the
           @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           \c CompressionThreshold bytes in size)
-        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to
+        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to
           \c "auto"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the
           connection URL
@@ -865,7 +865,7 @@ RestClient rest({"url": "http://localhost:8001/rest"});
           of processed
         - \c rest_body_auth_error_check: A hash to check all deserialized bodies in 200 OK server responses for
           authentication errors
-        - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means
+        - \c send_encoding: a @ref EncodingSupport "send data encoding option" or the value \c "auto" which means
           to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note
           that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over
           \c CompressionThreshold bytes in size)
@@ -884,10 +884,10 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         - \c update_options: Any update token code to use for the object; @see update_options for more information
         - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any
           \c validator option, if given by calling
-          \c RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
+          @ref RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
         - \c username: The username for authentication; only used if no username or password is set in the URL and
           if the \c password option is also used
-        - \c validator: an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+        - \c validator: an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
           object to validate request and response messages; overrides \a swagger and \a openapi3
         - \c no_charset: if True no charset will be added to the Content-Type header
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
@@ -1113,19 +1113,19 @@ RestClient rest({"url": "http://localhost:8001/rest"});
         setConnectionPath();
     }
 
-    #! change the serialization option for the object; see \c DataSerializationOptions for valid options
+    #! change the serialization option for the object; see @ref DataSerializationOptions for valid options
     /** @par Example:
         @code{.py}
 rest.setSerialization("yaml");
         @endcode
 
-        @param data the serialization option for the object; see \c DataSerializationOptions for valid options
+        @param data the serialization option for the object; see @ref DataSerializationOptions for valid options
 
         @throw RESTCLIENT-ERROR invalid or unsupported serialization option
 
         @see
         - @ref RestClient::RestClient::getSerialization() "RestClient::getSerialization()"
-        - \c DataSerializationOptions for valid options
+        - @ref DataSerializationOptions for valid options
     */
     setSerialization(string data = "auto") {
         if (!DataSerializationOptions{data})
@@ -1153,7 +1153,7 @@ rest.setSendEncoding("gzip");
 
         The default is to send requests unencoded/uncompressed.
 
-        @param enc the data content encoding (compression) option for the object; see \c EncodingSupport for valid
+        @param enc the data content encoding (compression) option for the object; see @ref EncodingSupport for valid
         options; if the value \c "auto" is passed then \c "gzip" encoding is used
 
         @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
@@ -1161,7 +1161,7 @@ rest.setSendEncoding("gzip");
         @see
         - @ref RestClient::RestClient::setContentEncoding() "RestClient::setContentEncoding()"
         - @ref RestClient::RestClient::getSendEncoding() "RestClient::getSendEncoding()"
-        - \c EncodingSupport for valid options
+        - @ref EncodingSupport for valid options
     */
     setSendEncoding(string enc = "auto") {
         if (enc == "auto") {
@@ -1175,14 +1175,14 @@ rest.setSendEncoding("gzip");
         }
     }
 
-    #! sets the request and desired response encoding for the object; see \c EncodingSupport for valid options
+    #! sets the request and desired response encoding for the object; see @ref EncodingSupport for valid options
     /** @par Example:
         @code{.py}
 rest.setContentEncoding("gzip");
         @endcode
 
         @param enc the data content encoding (compression) option for requests and the desired response content
-        encoding for the object; see \c EncodingSupport for valid options; if the value \c "auto" is passed then
+        encoding for the object; see @ref EncodingSupport for valid options; if the value \c "auto" is passed then
         \c "gzip" encoding is used for outgoing requests and requested for responses
 
         @throw RESTCLIENT-ERROR invalid or unsupported data content encoding / compression option
@@ -1243,7 +1243,7 @@ hash<auto> h = rest.getDefaultHeaders();
     }
 
     #! replaces default headers
-    /** @param hdr The headers to set; \c DefaultHeaders will be added to this hash to set the default headers for
+    /** @param hdr The headers to set; @ref DefaultHeaders will be added to this hash to set the default headers for
         the object
 
         @since %RestClient 2.0
@@ -1260,12 +1260,12 @@ hash<auto> h = rest.getDefaultHeaders();
         @endcode
 
         @return the current data content encoding (compression) object or @ref nothing if no encoding option is set;
-        see \c EncodingSupport for valid options
+        see @ref EncodingSupport for valid options
 
         @see
         - @ref RestClient::RestClient::setContentEncoding() "RestClient::setContentEncoding()"
         - @ref RestClient::RestClient::setSendEncoding() "RestClient::setSendEncoding()"
-        - \c EncodingSupport for valid options
+        - @ref EncodingSupport for valid options
 
         @since %RestClient 1.3
     */
@@ -1280,11 +1280,11 @@ string ser = rest.getSerialization();
         @endcode
 
         @return the current data serialization format currently in effect for the object (see
-        \c DataSerializationOptions for possible values)
+        @ref DataSerializationOptions for possible values)
 
         @see
         - @ref RestClient::RestClient::setSerialization() "RestClient::setSerialization()"
-        - \c DataSerializationOptions for possible values
+        - @ref DataSerializationOptions for possible values
     */
     string getSerialization() {
         return ds;
@@ -1328,11 +1328,11 @@ hash<auto> ans = rest.get("/orders/1?info=verbose");
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"; note that sending a message body with
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"; note that sending a message body with
         an HTTP \c GET request is not standards compliant; see @ref httpclient_get_with_body for more information; for
         maximum compatibility, use @ref nothing for this argument when calling this method
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1374,7 +1374,7 @@ hash<auto> ans = rest.get("/orders/1?info=verbose");
 
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1416,9 +1416,9 @@ hash<auto> ans = rest.put("/orders/1", ("action": "cancel"));
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1460,9 +1460,9 @@ hash<auto> ans = rest.patch("/orders/1", ("action": "cancel"));
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1504,9 +1504,9 @@ hash<auto> ans = rest.post("/orders", ("product": "xyz123", "options": 500));
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1548,9 +1548,9 @@ hash<auto> ans = rest.del("/orders/1");
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param hdr any headers to be sent with the request; headers here will override default headers for the object
         as well
@@ -1700,7 +1700,7 @@ hash<auto> ans = rest.del("/orders/1");
     */
     bool requiresRefresh() {
         return token.val() && (refresh_token.val() || custom_token_auth) && oauth2_token_expiry
-            && ((now_us() - Oauth2TokenRefreshWindow) > oauth2_token_expiry);
+            && ((now_us() + Oauth2TokenRefreshWindow) > oauth2_token_expiry);
     }
 
     #! Sets a token for authentication
@@ -1774,9 +1774,9 @@ hash<auto> ans = rest.doRequest("DELETE", "/orders/1");
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the
         message body
@@ -1834,9 +1834,9 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
         @param path the URI path to add (will be appended to any root path given in the constructor)
         @param body an optional message body to be included in the request; if a value for this parameter is passed to
         the method, then the body will be serialized according to the serialization rules set in
-        \c RestClient::RestClient::constructor() "RestClient::constructor()"
+        @ref RestClient::RestClient::constructor() "RestClient::constructor()"
         @param info an optional reference to a hash that will be used as an output variable giving a hash of request
-        headers and other information about the HTTP request; see \c rest-info-format for information about the
+        headers and other information about the HTTP request; see @ref rest-info-output for information about the
         structure of the hash written to the reference supplied here
         @param decode_errors decode the message body with HTTP error responses and throw an exception based on the
         message body
@@ -2230,7 +2230,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             remove h.expires_in;
         }
         setToken(h.token_type, h.access_token, h.refresh_token,
-            h.expires_in ? (now_us() + minutes(h.expires_in)) : NOTHING);
+            h.expires_in ? (now_us() + seconds(h.expires_in)) : NOTHING);
         debug("RestClient: set OAuth2 auth header: %s %s; refresh_token: %s; expires in: %s", h.token_type,
             h.access_token, h.refresh_token ?? "n/a", h.expires_in ?? "n/a");
     }
@@ -2256,7 +2256,7 @@ hash<auto> ans = rest.doSignedRequest("X-Signature", signer, "DELETE", "/orders/
             remove h.expires_in;
         }
         if (*softint expires_in = h.expires_in ?? oauth2_token_expiry_hint) {
-            new_opts.oauth2_token_expiry = now_us() + minutes(expires_in);
+            new_opts.oauth2_token_expiry = now_us() + seconds(expires_in);
         }
         if (h.url && h.url != getURL()) {
             new_opts.url = h.url;
@@ -2962,8 +2962,8 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
     - \c "connect_timeout": connection timeout to use in milliseconds
     - \c "content_encoding": this sets the send encoding (if the \c "send_encoding" option is not set) and the
       requested response encoding; for possible values, see
-      \c RestClient::RestClient::EncodingSupport "EncodingSupport"
-    - \c "data": see \c RestClient::RestClient::DataSerializationOptions for possible values when used with the
+      @ref RestClient::RestClient::EncodingSupport "EncodingSupport"
+    - \c "data": see @ref RestClient::RestClient::DataSerializationOptions for possible values when used with the
       null REST schema validator; the default is \c "auto"
     - \c "error_passthru": if @ref True "True" then HTTP status codes indicating errors will not cause a
       \c REST-RESPONSE-ERROR exception to be raised, rather such responses will be passed through to the caller
@@ -2971,7 +2971,7 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
     - \c "headers": an optional hash of headers to send with every request, these can also be overridden in
       request method calls; also a string giving headers can be given in the format:
       <tt>header1=value, header2=value</tt>; the value will be parsed with
-      \c Util::parse_to_qore_value() "parse_to_qore_value()"
+      @ref Util::parse_to_qore_value() "parse_to_qore_value()"
     - \c "http_version": HTTP version to use (\c "auto" (default), \c "1.0", \c "1.1", \c "2.0", or \c "3.0")
     - \c "max_redirects": maximum redirects to support
     - \c "oauth2_app": An OAuth2 app name for external programs handling OAuth2 calls for this client
@@ -3013,7 +3013,7 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
     - \c "proxy": proxy URL to use
     - \c "redirect_passthru": if @ref True "True" then redirect responses wil0l be passed to the caller instead of
       processed
-    - \c "send_encoding": a \c RestClient::RestClient::EncodingSupport "send data encoding option" or the value
+    - \c "send_encoding": a @ref RestClient::RestClient::EncodingSupport "send data encoding option" or the value
       \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent
       message bodies
     - \c "swagger": the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for runtime API
@@ -3027,15 +3027,15 @@ RestRequestPollOperation poller = rest.startPollPatch("/api/resource", body);
       if this option is set then any OAuth2 options are ignored
     - \c "token_api_key_header": The name of a header where to send the token as an API key
     - \c "username": The username for authentication; only used if no username or password is set in the URL
-    - \c "validator": an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
       object to validate request and response messages; conflicts with \a swagger
 
     @note additionally supports the following runtime option in getImpl():
-    - \c "validator": an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
       object for REST message validation (if present, overrides any REST schema validation option provided as a
       connection option)
 
-    @see \c RestClient::RestClient::constructor() "RestClient::constructor()" for more information on the above
+    @see @ref RestClient::RestClient::constructor() "RestClient::constructor()" for more information on the above
     options
 
     @since %RestConnection 1.4
@@ -3649,7 +3649,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         @param attributes various attributes. See below
         @param options connection options; see class documentation for information on supported options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @par Additional Attributes
         - \c error a custom error string
@@ -3860,7 +3860,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! returns @ref True, as this connection always returns a data provider with the \c getDataProvider() method
     /** @return @ref True, as this connection always returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;
@@ -4257,7 +4257,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
                 warn("Ignoring invalid 'expires_in' value with type %y; value: %y", resp.expires_in.fullType(),
                     resp.expires_in);
             } else {
-                new_opts.oauth2_token_expiry = now_us() + minutes(resp.expires_in);
+                new_opts.oauth2_token_expiry = now_us() + seconds(resp.expires_in);
             }
         }
         if (resp.refresh_token && resp.refresh_token != real_opts.oauth2_refresh_token) {
@@ -4292,7 +4292,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! returns a @ref RestClient::RestClient "RestClient" object
     /** @param connect if @ref True "True", then the connection is returned already connected
         @param rtopts supports the following runtime option in getImpl():
-        - \c "validator": an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
+        - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator"
           object for REST message validation (if present, overrides any REST schema validation option provided as a
           connection option)
 

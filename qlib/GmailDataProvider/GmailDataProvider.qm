@@ -309,7 +309,7 @@ module GmailDataProvider {
 
     @section gmaildataproviderintro Introduction to the GmailDataProvider Module
 
-    The %GmailDataProvider module provides a \c dataproviderintro "data provider" API for Google cloud REST API
+    The %GmailDataProvider module provides a @ref dataproviderintro "data provider" API for Google cloud REST API
     services.
 
     This data provider provides Google API access to the Gmail API as defined by Google's Discovery

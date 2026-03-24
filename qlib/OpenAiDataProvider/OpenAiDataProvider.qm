@@ -325,7 +325,7 @@ module OpenAiDataProvider {
 
     @section openaidataproviderintro Introduction to the OpenAiDataProvider Module
 
-    The %OpenAiDataProvider module provides a \c dataproviderintro "data provider" API for OpenAI services.
+    The %OpenAiDataProvider module provides a @ref dataproviderintro "data provider" API for OpenAI services.
 
     @section openaidataprovider_examples Examples
 

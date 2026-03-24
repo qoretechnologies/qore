@@ -52,7 +52,7 @@ module HttpClientDataProvider {
     @section httpclientdataproviderintro Introduction to the HttpClientDataProvider Module
 
     The %HttpClientDataProvider module provides a data provider API for HTTP servers through the
-    \c dataproviderintro "DataProvider" API.
+    @ref dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref HttpClientDataProvider::HttpClientCallDataProvider "HttpClientCallDataProvider"

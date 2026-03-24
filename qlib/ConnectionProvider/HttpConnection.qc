@@ -281,7 +281,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         @param options connection options
         @param logger optional logger interface for the connection
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -332,7 +332,7 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
     #! Returns @ref True, as the connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True, as the connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

@@ -262,7 +262,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         };
         mServer = new HttpServer(opts);
 
@@ -818,7 +817,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
             "logger": mLogger,
             "debug": True,
-            "async_mode": True,
         };
         HttpServer test_server(opts);
         test_server.setHandler("ws-handler", "/ws", NOTHING, ws_handler);

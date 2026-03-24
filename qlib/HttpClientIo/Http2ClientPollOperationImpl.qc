@@ -570,6 +570,18 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                     if (cb) {
                         callback_dispatched = True;
                     }
+                    # Remove stream BEFORE the callback so that
+                    # active_stream_count is already decremented by the time the
+                    # callback resolves the caller's Promise — otherwise
+                    # request() can return while getActiveStreamCount() still
+                    # reports the old value (race in cleanupIdleConnections).
+                    # cb and stream_ctx are captured above, so the callback can
+                    # still be invoked after removal.
+                    if (is_end && cb) {
+                        remove stream_callbacks{sid};
+                        remove stream_ctxs{sid};
+                        --active_stream_count;
+                    }
                 }
                 if (cb) {
                     try {
@@ -580,16 +592,6 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                     }
                 } else {
                     log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
-                }
-                # Remove stream AFTER callback completes so the stream handle's
-                # state is already Complete before the stream becomes unavailable
-                # for sends — eliminates the race where isDone() returns False
-                # but the stream is already gone from the map
-                if (is_end && cb) {
-                    AutoLock al(stream_lock);
-                    remove stream_callbacks{sid};
-                    remove stream_ctxs{sid};
-                    --active_stream_count;
                 }
             }
 

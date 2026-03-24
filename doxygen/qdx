@@ -315,7 +315,8 @@ class qdx {
 
         # Get AST nodes and process with AstProcessor
         list<auto> nodes = tree.getNodesInfo();
-        AstProcessor proc(nodes, {"no_mainpage": o.nmp, "source": code});
+        AstProcessor proc(nodes, {"no_mainpage": o.nmp, "source": code,
+            "source_dir": dirname(fn)});
         string output = proc.process();
 
         # Write output

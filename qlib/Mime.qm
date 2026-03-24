@@ -53,11 +53,11 @@ module Mime {
     All the public symbols in the module are defined in the Mime namespace
 
     The main definitions and functions are:
-    - \c MimeTypeDefinitions "MimeTypeDefinitions": constant for common MIME types
-    - \c Mime::MimeTypes "MimeTypes": a map of common file name extensions to the default MIME type
-    - \c MimeEncodingFunctions "MimeEncodingFunctions": functions for encoding MIME data
-    - \c MimeDecodingFunctions "MimeDecodingFunctions": functions for decoding MIME data
-    - \c MultiPartConstants "MultiPartConstants": constants for the MultiPartMessage classes
+    - @ref MimeTypeDefinitions "MimeTypeDefinitions": constant for common MIME types
+    - @ref Mime::MimeTypes "MimeTypes": a map of common file name extensions to the default MIME type
+    - @ref MimeEncodingFunctions "MimeEncodingFunctions": functions for encoding MIME data
+    - @ref MimeDecodingFunctions "MimeDecodingFunctions": functions for decoding MIME data
+    - @ref MultiPartConstants "MultiPartConstants": constants for the MultiPartMessage classes
     - @ref Mime::MultiPartAlternativeMessage "MultiPartAlternativeMessage": a class for handling multipart/alternative
       messages
     - @ref Mime::MultiPartByteRangesMessage "MultiPartByteRangesMessage": a class for handling HTTP 206 partial
@@ -68,7 +68,7 @@ module Mime {
     - @ref Mime::MultiPartFormDataMessage "MultiPartFormDataMessage": a class for handling multipart/form-data
       messages
     - @ref Mime::MultiPartMessage "MultiPartMessage": the base class for MultiPartMessage classes
-      - \c Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()": this static function can be used to
+      - @ref Mime::MultiPartMessage::parseBody() "MultiPartMessage::parseBody()": this static function can be used to
         parse a multipart message body (including parts with subparts if the \a decode argument is @ref True "True");
         this static method can be used for both HTTP multipart messages or text multipart messages (for example as
         sent in an email/SMTP message)
@@ -417,6 +417,8 @@ public namespace Mime {
         "application/json-patch+json": True,            # RFC 6902 JSON Patch
         "application/geo+json": True,                   # GeoJSON
         "application/manifest+json": True,              # Web App Manifest
+        "application/vnd.contentful.management.v1+json": True, # Contentful CMA
+        "application/vnd.contentful.delivery.v1+json": True,   # Contentful CDA
     };
 
     #! Returns True if the MIME type is JSON-compatible
@@ -1087,7 +1089,7 @@ public namespace Mime {
 
     #! encodes data according to the given encoding
     /** @param mime_data the data to encode
-        @param enc the encoding to use; see \c MimeContentTransferEncodingConstants for possible values (case is ignored)
+        @param enc the encoding to use; see @ref MimeContentTransferEncodingConstants for possible values (case is ignored)
 
         @throw MIME-TRANSFER-ENCODING-ERROR unknown transfer encoding
      */
@@ -1199,7 +1201,7 @@ public namespace Mime {
 
     #! decodes data according to the given encoding
     /** @param mime_data the data to decode
-        @param enc the decoding to use; see \c MimeContentTransferEncodingConstants for possible values (case is
+        @param enc the decoding to use; see @ref MimeContentTransferEncodingConstants for possible values (case is
         ignored)
         @param ct the content-type of the data; if there is a \c "charset=xxx" component and the data is decoded to a
         string, then it will be returned in the given character encoding
@@ -1459,7 +1461,7 @@ public namespace Mime {
         const MP_DEFAULT_MSG = "This is a MIME multipart message";
 
         private {
-            #! the type of multi-part message: see \c MultiPartConstants for possible values
+            #! the type of multi-part message: see @ref MultiPartConstants for possible values
             string mptype;
 
             #! the boundary to use between parts
@@ -1480,7 +1482,7 @@ public namespace Mime {
         }
 
         #! creates the object
-        /** @param mptype the type of multi-part message: see \c MultiPartConstants for possible values
+        /** @param mptype the type of multi-part message: see @ref MultiPartConstants for possible values
             @param boundary the boundary to use between parts
          */
         constructor(string mptype, string boundary = MultiPartMessage::getBoundary()) {
@@ -1936,7 +1938,7 @@ hash: (2 members)
 
         #! adds a message part to the start of the list; encodes the data according to the transfer encoding argument passed
         /** @param mime_data the unencoded data for the part
-            @param enc the transfer encoding to use for the part; see \c MimeContentTransferEncodingConstants for possible values
+            @param enc the transfer encoding to use for the part; see @ref MimeContentTransferEncodingConstants for possible values
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
             @param hdr an optional hash of headers for the part
@@ -1961,7 +1963,7 @@ hash: (2 members)
 
         #! adds a message part to the end of the list; encodes the data according to the transfer encoding argument passed
         /** @param mime_data the unencoded data for the part
-            @param enc the transfer encoding to use for the part; see \c MimeContentTransferEncodingConstants for possible values
+            @param enc the transfer encoding to use for the part; see @ref MimeContentTransferEncodingConstants for possible values
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
             @param hdr an optional hash of headers for the part
@@ -2084,7 +2086,7 @@ hash: (2 members)
 
         #! adds a message part to the start of the list; encodes the data according to the transfer encoding argument passed
         /** @param mime_data the unencoded data for the part
-            @param enc the transfer encoding to use for the part; see \c MimeContentTransferEncodingConstants for possible values
+            @param enc the transfer encoding to use for the part; see @ref MimeContentTransferEncodingConstants for possible values
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
             @param hdr an optional hash of headers for the part
@@ -2115,7 +2117,7 @@ hash: (2 members)
 
         #! adds a message part to the end of the list; encodes the data according to the transfer encoding argument passed
         /** @param mime_data the unencoded data for the part
-            @param enc the transfer encoding to use for the part; see \c MimeContentTransferEncodingConstants for possible values
+            @param enc the transfer encoding to use for the part; see @ref MimeContentTransferEncodingConstants for possible values
             @param content_type the content_type for the part
             @param disp the Content-Disposition header (ex: \c 'inline', \c 'attachment; filename="file.txt"')
             @param hdr an optional hash of headers for the part

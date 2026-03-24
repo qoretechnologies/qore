@@ -592,7 +592,7 @@ string quote = i.getQuote();
 *list l = i.getHeaders();
             @endcode
 
-            @note if headers are not saved against the object in the \c constructor(), then they are written to the object after the first call to \c next()
+            @note if headers are not saved against the object in the @ref constructor(), then they are written to the object after the first call to @ref next()
          */
         *list<string> getHeaders() {
             return getHeaders(m_specs.firstKey());  # single-type

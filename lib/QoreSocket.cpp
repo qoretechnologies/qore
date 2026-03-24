@@ -7574,39 +7574,78 @@ void SocketHttp2ClientMultiplexPollOperation::onStreamComplete(int32_t stream_id
     if (!stream->body.empty()) {
         // Check if content-type indicates text-based content
         bool is_text = false;
+        bool force_utf8 = false;
+        std::string media_type;
         auto ct_it = stream->headers.find("content-type");
         if (ct_it != stream->headers.end() && !ct_it->second.empty()) {
             // Extract media type (before any parameters like charset)
-            std::string ct = ct_it->second.back();
-            size_t semicolon = ct.find(';');
+            media_type = ct_it->second.back();
+            size_t semicolon = media_type.find(';');
             if (semicolon != std::string::npos) {
-                ct = ct.substr(0, semicolon);
+                media_type = media_type.substr(0, semicolon);
             }
             // Trim whitespace
-            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.back()))) {
-                ct.pop_back();
+            while (!media_type.empty() && isspace(static_cast<unsigned char>(media_type.back()))) {
+                media_type.pop_back();
             }
-            while (!ct.empty() && isspace(static_cast<unsigned char>(ct.front()))) {
-                ct.erase(0, 1);
+            while (!media_type.empty() && isspace(static_cast<unsigned char>(media_type.front()))) {
+                media_type.erase(0, 1);
             }
             // Convert to lowercase for comparison
-            std::transform(ct.begin(), ct.end(), ct.begin(),
+            std::transform(media_type.begin(), media_type.end(), media_type.begin(),
                 [](unsigned char c) { return std::tolower(c); });
 
             // Check for text types
-            is_text = (ct.size() >= 5 && ct.compare(0, 5, "text/") == 0) ||  // text/*
-                      ct == "application/json" ||
-                      ct == "application/xml" ||
-                      ct == "application/javascript" ||
-                      ct == "application/x-www-form-urlencoded" ||
-                      (ct.size() > 5 && ct.compare(ct.size() - 5, 5, "+json") == 0) ||  // *+json
-                      (ct.size() > 4 && ct.compare(ct.size() - 4, 4, "+xml") == 0);    // *+xml
+            is_text = (media_type.size() >= 5 && media_type.compare(0, 5, "text/") == 0)
+                || media_type == "application/json"
+                || media_type == "application/xml"
+                || media_type == "application/javascript"
+                || media_type == "application/x-www-form-urlencoded"
+                || (media_type.size() > 5 && media_type.compare(media_type.size() - 5, 5, "+json") == 0)
+                || (media_type.size() > 4 && media_type.compare(media_type.size() - 4, 4, "+xml") == 0);
+
+            // JSON and YAML are always UTF-8 per RFC 8259 / YAML spec
+            force_utf8 = media_type == "application/json"
+                || (media_type.size() > 5 && media_type.compare(media_type.size() - 5, 5, "+json") == 0)
+                || media_type == "application/x-yaml" || media_type == "text/yaml"
+                || media_type == "text/x-yaml" || media_type == "application/yaml";
         }
 
         if (is_text) {
-            response->setKeyValue("body", new QoreStringNode(
+            const QoreEncoding* enc = QCS_UTF8;
+            if (!force_utf8) {
+                // Extract charset from full content-type header (case-insensitive search)
+                std::string full_ct_lower = ct_it->second.back();
+                std::transform(full_ct_lower.begin(), full_ct_lower.end(),
+                    full_ct_lower.begin(),
+                    [](unsigned char c) { return std::tolower(c); });
+                size_t charset_pos = full_ct_lower.find("charset=");
+                if (charset_pos != std::string::npos) {
+                    // Extract value from original (non-lowercased) string
+                    std::string charset_val = ct_it->second.back().substr(charset_pos + 8);
+                    // Trim trailing whitespace, semicolons, quotes
+                    while (!charset_val.empty()
+                            && (isspace(static_cast<unsigned char>(charset_val.back()))
+                                || charset_val.back() == ';'
+                                || charset_val.back() == '"')) {
+                        charset_val.pop_back();
+                    }
+                    // Trim leading quotes
+                    if (!charset_val.empty() && charset_val.front() == '"') {
+                        charset_val.erase(0, 1);
+                    }
+                    if (!charset_val.empty()) {
+                        const QoreEncoding* found = QEM.findCreate(charset_val.c_str());
+                        if (found) {
+                            enc = found;
+                        }
+                    }
+                }
+            }
+            QoreStringNode* body_str = new QoreStringNode(
                 reinterpret_cast<const char*>(stream->body.data()),
-                stream->body.size()), xsink);
+                stream->body.size(), enc);
+            response->setKeyValue("body", body_str, xsink);
         } else {
             SimpleRefHolder<BinaryNode> body(new BinaryNode);
             body->append(stream->body.data(), stream->body.size());

@@ -109,7 +109,7 @@ public class ZeyosRestClientBase {
         const AuthPath = "/auth/v1/login";
     }
 
-    #! returns options for the \c RestClient::RestClient::constructor() "RestClient::constructor()"
+    #! returns options for the @ref RestClient::RestClient::constructor() "RestClient::constructor()"
     static hash<auto> getOptions(hash<auto> options) {
         # the "{}" is to ensure that "new_options" stays "hash<auto>"
         hash<auto> new_options = {} + options;
@@ -170,7 +170,7 @@ ZeyosRestClient zeyos(
             @endcode
         - \c connect_timeout: The timeout value in milliseconds for establishing a new socket connection (also can be a relative date-time value for clarity, ex: \c 20s)
         - \c content_encoding: for possible values, see \c EncodingSupport; this sets the send encoding (if the \c "send_encoding" option is not set) and the requested response encoding (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
-        - \c data: a \c DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
+        - \c data: a @ref DataSerializationOptions "data serialization option"; if not present defaults to \c "auto"
         - \c default_path: The default path to use for new connections if a path is not otherwise specified in the connection URL
         - \c default_port: The default port number to connect to if none is given in the URL
         - \c error_passthru: if @ref True "True" then HTTP status codes indicating errors will not cause an
@@ -185,8 +185,8 @@ ZeyosRestClient zeyos(
         - \c send_encoding: a \c EncodingSupport "send data encoding option" or the value \c "auto" which means to use automatic encoding; if not present defaults to no content-encoding on sent message bodies (note that the @ref RestClient::RestClient "RestClient" class will only compress outgoing message bodies over \c CompressionThreshold bytes in size)
         - \c swagger: the path to a <a href="https://swagger.io/">Swagger 2.0</a> REST schema file for API validation; only used if \a validator not provided (see the \c Swagger module)
         - \c timeout: The timeout value in milliseconds (also can be a relative date-time value for clarity, ex: \c 30s)
-        - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any \c validator option, if given by calling \c RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
-        - \c validator: an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" object to validate request and response messages; overrides \a swagger
+        - \c url: A string giving the URL to connect to; if not given then the target URL will be taken from any \c validator option, if given by calling @ref RestSchemaValidator::AbstractRestSchemaValidator::getTargetUrl() "AbstractRestSchemaValidator::getTargetUrl()"
+        - \c validator: an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" object to validate request and response messages; overrides \a swagger
         - \c no_charset: if True no charset will be added to the Content-Type header (should be set to True if data are sent in the body). Default is True if not passed.
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the remote server
 
@@ -263,11 +263,11 @@ ZeyosRestClient zeyos(
     - \c "instance" (mandatory): the <a href="http://www.zeyos.com">zeyos.com</a> name
 
     @note additionally supports the following runtime option in getImpl():
-    - \c "validator": an \c RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" object
+    - \c "validator": an @ref RestSchemaValidator::AbstractRestSchemaValidator "AbstractRestSchemaValidator" object
       for REST message validation (if present, overrides any REST schema validation option provided as a connection
       option)
 
-    @see \c ZeyosRestClient::ZeyosRestClient::constructor() "ZeyosRestClient::constructor()" for more information on the above options
+    @see @ref ZeyosRestClient::ZeyosRestClient::constructor() "ZeyosRestClient::constructor()" for more information on the above options
 */
 public class ZeyosRestConnection inherits RestClient::RestConnection {
     public {
@@ -315,7 +315,7 @@ public class ZeyosRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

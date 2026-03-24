@@ -56,7 +56,6 @@ public class QuicHandlerPropagationTest inherits QUnit::Test {
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         });
 
         # add a default handler that returns "default"

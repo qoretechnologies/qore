@@ -107,6 +107,8 @@ public class ConnectionSchemeCache {
             "discordws": "DiscordWebSocketClient",
             "discordwss": "DiscordWebSocketClient",
 
+            "elevenlabs": "ElevenLabsRestClient",
+
             "ds": "DataStreamClient",
             "dss": "DataStreamClient",
 
@@ -220,6 +222,7 @@ public class ConnectionSchemeCache {
 
             "apollorest": "ApolloRestClient",
 
+            "constantcontactres": "ConstantContactRestClient",
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 

@@ -47,7 +47,7 @@
 %endtry
 
 module RestClientIo {
-    version = "1.2";
+    version = "1.0";
     desc = "REST client over HTTP/1.1, HTTP/2, and HTTP/3 connections";
     author = "Qore Technologies, s.r.o.";
     url = "https://qore.org";
@@ -252,7 +252,8 @@ hash<RestResponseInfo> resp = f.get(30s);
         - \c data: data serialization format (default: \c "auto"); see
           \c DataSerializationOptions
         - \c send_encoding: send encoding (compression) format (e.g., \c "gzip")
-        - \c headers: default headers to send with each request
+        - \c headers: additional default headers to send with each request; these override the
+          built-in defaults (\c Accept and \c User-Agent)
         - \c token: authentication token
         - \c token_type: authentication token type (default: \c "Bearer")
         - \c error_passthru: if \c True, HTTP error responses are returned rather than throwing
@@ -435,6 +436,45 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             transient *code update_options;
         }
 
+        public {
+            #! Accept header list
+            const AcceptList = (
+%ifndef NoYaml
+                MimeTypeYamlApp, MimeTypeYaml, MimeTypeYamlRpc,
+%endif
+%ifndef NoXml
+                MimeTypeXml, MimeTypeXmlApp,
+%endif
+%ifndef NoJson
+                MimeTypeJsonRpc,
+%endif
+%ifndef NoCbor
+                MimeTypeCbor,
+%endif
+                MimeTypeFormUrlEncoded,
+                MimeTypeText,
+                MimeTypeOctetStream,
+            );
+
+            #! Accept header value
+            const Accept = AcceptList.join(",");
+
+            #! Map of acceptable Mime types
+            const AcceptMap = map {$1: True}, AcceptList;
+
+            #! RestClientIo Version
+            const Version = "1.0";
+
+            #! RestClientIo Version String
+            const VersionString = sprintf("Qore-RestClientIo/%s", RestClientIo::Version);
+
+            #! default HTTP headers (Content-Type is added before sending)
+            const DefaultHeaders = {
+                "Accept": Accept,
+                "User-Agent": RestClientIo::VersionString,
+            };
+        }
+
         #! Creates a new RestClientIo with the given options
         /** @param opts constructor options; see class documentation for valid keys
             @param shared_mgr an optional shared @ref HttpClientIo::HttpClientConnectionManager
@@ -463,9 +503,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 validator = new RestSchemaValidator::NullRestSchemaValidator();
             }
 
-            if (opts.headers) {
-                headers += opts.headers;
-            }
+            headers += DefaultHeaders + opts.headers;
 
             setSerialization(opts.data ?? "auto");
 
@@ -1158,7 +1196,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         replaceDefaultHeaders(*hash<auto> hdr) {
             AutoWriteLock al(config_lock);
             remove headers;
-            headers += hdr;
+            headers += DefaultHeaders + hdr;
         }
 
         #! Sets a token for authentication
@@ -1401,7 +1439,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private bool requiresRefresh() {
             AutoReadLock al(config_lock);
             return token_val.val() && refresh_token.val() && oauth2_token_expiry.val()
-                && ((now_us() - RestClient::RestClient::Oauth2TokenRefreshWindow) > oauth2_token_expiry);
+                && ((now_us() + RestClient::RestClient::Oauth2TokenRefreshWindow) > oauth2_token_expiry);
         }
 
         #! Checks if an initial OAuth2 login is needed

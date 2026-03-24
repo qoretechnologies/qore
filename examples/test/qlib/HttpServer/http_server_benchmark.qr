@@ -40,7 +40,6 @@ class HttpServerBenchmark {
 
         # Create async mode server
         asyncServer = new HttpServer(<HttpServerOptionInfo>{
-            "async_mode": True,
         });
         asyncServer.setHandler("test", "", MimeTypeHtml, handler);
         asyncServer.setDefaultHandler("test", handler);

@@ -482,7 +482,7 @@ module MewsRestDataProvider {
     </div>
     @endhtmlonly
 
-    The %MewsRestDataProvider module provides a \c dataproviderintro "data provider" API for Mews cloud
+    The %MewsRestDataProvider module provides a @ref dataproviderintro "data provider" API for Mews cloud
     instances and data.
 
     This data provider provides MewsRest API access to:

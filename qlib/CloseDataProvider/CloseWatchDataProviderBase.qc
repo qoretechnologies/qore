@@ -67,6 +67,11 @@ public class CloseWatchDataProviderBase inherits CloseDataProviderBase,
         stopEventsIntern();
     }
 
+    #! Cancels any in-flight REST request during shutdown
+    private cancelPollOperation() {
+        rest.close();
+    }
+
     #! Polls for new events once
     private pollOnce() {
         try {

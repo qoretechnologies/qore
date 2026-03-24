@@ -368,11 +368,10 @@ module Schema {
 
     Access levels control which migration actions are permitted:
 
-    | Level | Constant | Allowed Actions |
-    |-------|----------|----------------|
-    | \c untrusted | @ref Schema::AL_UNTRUSTED "AL_UNTRUSTED" | Data-driven actions only (update, insert, delete, DDL operations) |
-    | \c trusted | @ref Schema::AL_TRUSTED "AL_TRUSTED" | All data-driven actions + raw SQL (\c sql) + scripts (\c script) |
-    | \c admin | @ref Schema::AL_ADMIN "AL_ADMIN" | Everything including force operations |
+    |!Level|!Constant|!Allowed Actions
+    |\c untrusted|@ref Schema::AL_UNTRUSTED "AL_UNTRUSTED"|Data-driven actions only (update, insert, delete, DDL operations)
+    |\c trusted|@ref Schema::AL_TRUSTED "AL_TRUSTED"|All data-driven actions + raw SQL (\c sql) + scripts (\c script)
+    |\c admin|@ref Schema::AL_ADMIN "AL_ADMIN"|Everything including force operations
 
     @par Setting the access level
     @code{.py}
@@ -545,17 +544,16 @@ module Schema {
 
     @subsection schema_qschema_options Options
 
-    | Option | Description |
-    |--------|-------------|
-    | \c --data-ts \c <name> | Data tablespace name |
-    | \c --index-ts \c <name> | Index tablespace name |
-    | \c --access-level \c <level> | \c untrusted, \c trusted (default), or \c admin |
-    | \c -f, \c --force | Force operation |
-    | \c -n, \c --dry-run | Show SQL without executing (for \c align and \c drop) |
-    | \c -C, \c --no-color | Disable colorized output |
-    | \c -v, \c --verbose | Increase verbosity (repeatable) |
-    | \c -o, \c --output \c <file> | Output file (for \c export) |
-    | \c --format \c yaml\|json | Export format (default: \c yaml) |
+    |!Option|!Description
+    |\c --data-ts \c <name>|Data tablespace name
+    |\c --index-ts \c <name>|Index tablespace name
+    |\c --access-level \c <level>|\c untrusted, \c trusted (default), or \c admin
+    |\c -f, \c --force|Force operation
+    |\c -n, \c --dry-run|Show SQL without executing (for \c align and \c drop)
+    |\c -C, \c --no-color|Disable colorized output
+    |\c -v, \c --verbose|Increase verbosity (repeatable)
+    |\c -o, \c --output \c <file>|Output file (for \c export)
+    |\c --format \c yaml\|json|Export format (default: \c yaml)
 
     @subsection schema_qschema_workflow Typical Workflow
 
@@ -690,7 +688,7 @@ module Schema {
       - Schema::C_NULL
       - Schema::C_NOT_NULL
     - bug fixes:
-      - fixed \c Schema::AbstractSchema::combineOptions() "AbstractSchema::combineOptions()" to accept NOTHING as
+      - fixed @ref Schema::AbstractSchema::combineOptions() "AbstractSchema::combineOptions()" to accept NOTHING as
         well as a valid option hash
       - fixed a bug with <i>"insert-only reference data"</i> with the verbose option; the upsert strategy was changed
         to \c UpsertSelectFirst which means that insert-only reference data could also be updated

@@ -41,6 +41,9 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
         const STATE_STREAMING = "streaming";
         const STATE_DISCONNECTED = "disconnected";
         const STATE_ERROR = "error";
+
+        #! Default socket send timeout
+        const DefaultSocketSendTimeout = 30s;
     }
 
     private {
@@ -61,6 +64,7 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
 
         #! Bytes already written from pending_data
         int pending_offset = 0;
+
     }
 
     #! Creates the poll operation
@@ -117,32 +121,15 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
             return NOTHING;
         }
 
-        # Check for pending data to write
+        # Send pending data using send2() which guarantees full delivery
         if (pending_data) {
             try {
-                int sent = sock.send(pending_data.substr(pending_offset), 0ms);
-                if (sent > 0) {
-                    pending_offset += sent;
-                    if (pending_offset >= pending_data.size()) {
-                        # All data sent
-                        remove pending_data;
-                        pending_offset = 0;
-                    }
-                }
+                sock.send2(pending_data, DefaultSocketSendTimeout);
+                remove pending_data;
+                pending_offset = 0;
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err =~ /SOCKET/ || ex.err =~ /WRITE/) {
-                    state = STATE_DISCONNECTED;
-                    return NOTHING;
-                }
-                # For timeouts, we'll retry on next poll
-            }
-
-            # Still have data to send
-            if (pending_data) {
-                return <SocketPollInfo>{
-                    "events": SOCK_POLLOUT,
-                    "socket": sock,
-                };
+                state = STATE_DISCONNECTED;
+                return NOTHING;
             }
         }
 
@@ -150,7 +137,10 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
         {
             auto result = event_channel.tryRecv();
             if (exists result) {
-                pending_data = formatSseEvent(result.value);
+                # String values are pre-formatted; hash values need SSE formatting
+                pending_data = result.value.typeCode() == NT_STRING
+                    ? result.value
+                    : formatSseEvent(result.value);
                 pending_offset = 0;
                 # Request write poll
                 return <SocketPollInfo>{
@@ -187,6 +177,13 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
     */
     queueRawEvent(hash<auto> event) {
         event_channel.send(event);
+    }
+
+    #! Queues a pre-formatted SSE string for sending
+    /** @param data already-formatted SSE text (e.g., from ServerSentEventHandler::encodeMessage())
+    */
+    queueRawString(string data) {
+        event_channel.send(data);
     }
 
     #! Formats an SSE event according to the spec

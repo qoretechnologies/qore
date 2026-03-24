@@ -224,7 +224,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
 
     @subsection connectionprovider_1_5 ConnectionProvider 1.5
     - updated the @ref ConnectionProvider::AbstractConnection::getInfo() "AbstractConnection::getInfo()" method
-    - added the \c ConnectionProvider::AbstractConnection::getExtendedInfo() "AbstractConnection::getExtendedInfo()"
+    - added the @ref ConnectionProvider::AbstractConnection::getExtendedInfo() "AbstractConnection::getExtendedInfo()"
       method
 
     @subsection connectionprovider_1_4_1 ConnectionProvider 1.4.1
@@ -247,7 +247,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       (<a href="https://github.com/qoretechnologies/qore/issues/3486">issue 3486</a>)
 
     @subsection connectionprovider_1_2 ConnectionProvider 1.2
-    - the \c ConnectionProvider::AbstractConnection::constructor() "AbstractConnection::constructor()" refactoring
+    - the @ref ConnectionProvider::AbstractConnection::constructor() "AbstractConnection::constructor()" refactoring
     - all connection clases have unified constructor
     - old constructors and static make() constructors are deprecated
     - ConnectionProvider::AbstractConnection::parseUrl() is introduced
@@ -256,7 +256,7 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
       to parse strange and unexpected URLs like eg. pure json strings, or Datasource connection strings.
 
     @subsection connectionprovider_1_1 ConnectionProvider 1.1
-    - the \c ConnectionProvider::AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
+    - the \c AbstractConnection::getConstructorInfo() "AbstractConnection::getConstructorInfo()"
       method (and supporting declarations) was added to allow connections to be created dynamically,
       potentially in another process from a network call
       (<a href="https://github.com/qoretechnologies/qore/issues/2628">issue 2628</a>)
@@ -426,7 +426,7 @@ public hashdecl ConnectionInfo {
 }
 
 #! Connection information hash containing only serializable data
-/** As returned by \c ConnectionProvider::AbstractConnection::getDataInfo() "AbstractConnection::getDataInfo()"
+/** As returned by @ref ConnectionProvider::AbstractConnection::getInfoAsData() "AbstractConnection::getDataInfo()"
 
     @since ConnectionProvider 2.0
 */

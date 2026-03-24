@@ -345,7 +345,7 @@ public class MewsRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

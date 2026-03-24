@@ -237,7 +237,7 @@ public class HttpBasedConnection inherits AbstractConnectionWithInfo {
         @param options connection options
         @param logger optional logger interface for the connection
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */

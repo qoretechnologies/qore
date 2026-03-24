@@ -1452,6 +1452,8 @@ string doxygen_output = proc.process();
             int indent = 0;
             #! Source lines for doc comment association
             list<string> lines = ();
+            #! Full source text for label scanning
+            string source_text = "";
             #! Document table helper for processing tables in doc comments
             DocumentTableHelper dth();
         }
@@ -1471,7 +1473,8 @@ string doxygen_output = proc.process();
                 self.nodes = nodes;
             }
             if (self.opts.source) {
-                self.lines = self.opts.source.split("\n");
+                self.source_text = self.opts.source;
+                self.lines = self.source_text.split("\n");
             }
         }
 
@@ -1484,7 +1487,49 @@ string doxygen_output = proc.process();
                 processNode(node);
             }
 
+            # Check for trailing @mainpage/@page doc comments not attached to any declaration
+            # This handles directory modules where the @mainpage comment follows the last code block
+            if (!lines.empty()) {
+                emitTrailingDocComments();
+            }
+
             return output;
+        }
+
+        #! Emits trailing @mainpage/@page doc comments that are not attached to any declaration
+        private emitTrailingDocComments() {
+            # Find the last declaration's end line
+            int last_decl_end = 0;
+            foreach auto node in (nodes) {
+                if (node.loc) {
+                    int end_line = node.loc.end_line;
+                    if (end_line > last_decl_end) {
+                        last_decl_end = end_line;
+                    }
+                }
+            }
+
+            # Scan remaining lines for /** ... */ block comments containing @mainpage or @page
+            int i = last_decl_end;
+            while (i < lines.size()) {
+                string line = trim(lines[i]);
+                if (line =~ /^\/\*\*\s/) {
+                    # Found a block comment start — collect the entire comment
+                    string comment = lines[i];
+                    while (i < lines.size() && comment.find("*/") < 0) {
+                        i++;
+                        if (i < lines.size()) {
+                            comment += "\n" + lines[i];
+                        }
+                    }
+
+                    # Only emit if it contains @mainpage or @page
+                    if (comment =~ /@mainpage|@page/) {
+                        writeDocComment(comment);
+                    }
+                }
+                i++;
+            }
         }
 
         #! Processes a single AST node
@@ -1534,6 +1579,11 @@ string doxygen_output = proc.process();
         private processNamespace(hash<auto> ns) {
             *string doc = getDocForNode(ns);
             if (exists doc) {
+                # @mainpage content is resolved in global scope by doxygen, so
+                # unqualified @ref targets must be qualified with the namespace
+                if (doc =~ /@mainpage/) {
+                    doc = qualifyMainpageRefs(doc, ns.name.name);
+                }
                 writeDocComment(doc);
             }
 
@@ -1786,7 +1836,10 @@ string doxygen_output = proc.process();
                 writeDocComment(doc);
             }
 
-            writeLine(sprintf("const auto %s = ...;", con.name.name));
+            # Infer a C++ type from the value so doxygen indexes the constant;
+            # "auto" is not recognized by doxygen and causes the symbol to
+            # be skipped entirely (Qore constants have no type declarations)
+            writeLine(sprintf("const %s %s = ...;", inferConstType(con.value), con.name.name));
         }
 
         #! Processes a hashdecl declaration
@@ -2180,6 +2233,124 @@ string doxygen_output = proc.process();
             foreach string line in (lines) {
                 writeLine(line);
             }
+        }
+
+        #! Qualifies unqualified @ref targets in a @mainpage doc block
+        /** Doxygen resolves @ref targets in @mainpage content in global scope,
+            so references to namespace members must be fully qualified.
+
+            This method prepends the namespace prefix to every @ref target that
+            does not already contain "::" and is not a doxygen label defined in
+            the same block.
+
+            @param doc the doc comment text containing @mainpage
+            @param ns_name the namespace name to use as prefix
+
+            @return the doc text with qualified @ref targets
+        */
+        private string qualifyMainpageRefs(string doc, string ns_name) {
+            # Collect all identifiers defined in the module's source files
+            # Only qualify refs whose targets are actual declarations in this module
+            hash<string, bool> module_symbols;
+            # Scan the .qm source and any sibling .qc files for declarations
+            list<string> source_files = (source_text,);
+            if (opts.source_dir.val()) {
+                foreach string f in (glob(opts.source_dir + "/*.qc")) {
+                    source_files += ReadOnlyFile::readTextFile(f);
+                }
+            }
+            foreach string src in (source_files) {
+                foreach string line in (src.split("\n")) {
+                    *string sym;
+                    # Match class, hashdecl, const, sub/function, enum declarations
+                    if (*list<string> m0 = (line =~ x/^\s*(?:public\s+)?(?:abstract\s+)?(?:class|hashdecl|struct)\s+(?:[A-Za-z_:]+::)?([A-Za-z_][A-Za-z0-9_]*)/)) {
+                        sym = m0[0];
+                    } else if (*list<string> m1 = (line =~ x/^\s*(?:public\s+)?const\s+([A-Za-z_][A-Za-z0-9_]*)\s*=/)) {
+                        sym = m1[0];
+                    } else if (*list<string> m2 = (line =~ x/^\s*(?:public\s+)?(?:deprecated\s+)?(?:synchronized\s+)?(?:\*?[A-Za-z_][A-Za-z0-9_<>:, ]*\s+)?sub\s+([A-Za-z_][A-Za-z0-9_]*)/)) {
+                        sym = m2[0];
+                    } else if (*list<string> m3 = (line =~ x/^\s*(?:public\s+)?enum\s+([A-Za-z_][A-Za-z0-9_]*)/)) {
+                        sym = m3[0];
+                    }
+                    if (sym.val()) {
+                        module_symbols{sym} = True;
+                    }
+                }
+            }
+
+            list<string> result;
+            foreach string line in (doc.split("\n")) {
+                # Split on @ref and rebuild with qualified targets
+                list<string> parts = line.split("@ref ");
+                if (parts.size() > 1) {
+                    string out = parts[0];
+                    for (int i = 1; i < parts.size(); i++) {
+                        string part = parts[i];
+                        # Extract the ref target (identifier chars, may include ::)
+                        if (*list<string> m = (part =~ x/^([A-Za-z_][A-Za-z0-9_:.-]*)(.*)/s)) {
+                            string target = m[0];
+                            string rest = m[1];
+                            # Only qualify if the target is a known module symbol
+                            if (target.find("::") == -1 && module_symbols{target}) {
+                                target = ns_name + "::" + target;
+                            }
+                            out += "@ref " + target + rest;
+                        } else {
+                            out += "@ref " + part;
+                        }
+                    }
+                    result += out;
+                } else {
+                    result += line;
+                }
+            }
+            return result.join("\n");
+        }
+
+        #! Infers a C++-compatible type string from a constant's value AST node
+        /** @param value the value expression node from the AST
+            @return a type string suitable for doxygen (e.g., "int", "string", "hash")
+        */
+        private static string inferConstType(*hash<auto> value) {
+            if (!value) {
+                return "int";
+            }
+            switch (value.kind) {
+                case QoreCodeFormat::AEK_Literal:
+                    switch (value.literalKind) {
+                        case "string": return "string";
+                        case "int": return "int";
+                        case "float": return "double";
+                        case "number": return "number";
+                        case "bool": return "bool";
+                        case "binary": return "binary";
+                        default: return "int";
+                    }
+                case QoreCodeFormat::AEK_Hash:
+                    return "hash";
+                case QoreCodeFormat::AEK_List:
+                    # List expressions often wrap a sub-expression; check first element
+                    if (value.elements.size() == 1) {
+                        return inferConstType(value.elements[0]);
+                    }
+                    return "list";
+                default:
+                    return "int";
+            }
+        }
+
+        #! Scans text for doxygen label definitions (@section, @defgroup, @anchor, etc.)
+        /** @param text the source text to scan
+            @return a hash of label names for O(1) lookup
+        */
+        private static hash<string, bool> scanDoxygenLabels(string text) {
+            hash<string, bool> labels;
+            foreach string line in (text.split("\n")) {
+                if (*list<string> m = (line =~ x/@(?:section|subsection|anchor|defgroup|page|mainpage)\s+([A-Za-z_][A-Za-z0-9_-]*)/)) {
+                    labels{m[0]} = True;
+                }
+            }
+            return labels;
         }
 
         #! Writes a line to output with current indentation

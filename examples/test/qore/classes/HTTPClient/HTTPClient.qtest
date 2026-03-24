@@ -203,7 +203,6 @@ class RealTestHttpServer inherits HttpServer {
         return <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
     }
 }

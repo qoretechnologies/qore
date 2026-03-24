@@ -346,7 +346,7 @@ DiscordWebSocketClient ws();
         @endcode
 
         @param opts All options accepted by
-        \c WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()" with the following
+        @ref WebSocketClient::WebSocketClient::constructor() "WebSocketClient::constructor()" with the following
         differences:
         - \c token: must be a bot token and is a required option
         - \c intents: optional integer intent for the identify message
@@ -714,7 +714,7 @@ hash<auto> h = ws.getInfo();
 }
 
 #! class for Discord websocket connections; returns an object of class @ref DiscordWebSocketClient
-/** Supports all the options of the \c WebSocketClient::WebSocketConnection "WebSocketConnection" class; note that
+/** Supports all the options of the @ref WebSocketClient::WebSocketConnectionObject "WebSocketConnection" class; note that
     the \c token option is required by this class and is used as the gateway token after connecting and not as an HTTP
     authentication token
 */
@@ -750,7 +750,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -785,7 +785,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     }
 
     #! returns a @ref DiscordWebSocketClient object
-    /** @param connect if @ref True "True", then @ref WebSocketClient::connect() is called
+    /** @param connect if @ref True "True", then @ref WebSocketClient::WebSocketClient::connect() is called
         @param rtopts runtime options
 
         @return a @ref DiscordWebSocketClient object

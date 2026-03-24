@@ -86,7 +86,7 @@ on_error ds.rollback();
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "upsert_strategy": the upsert strategy to use; default SqlUtil::AbstractTable::UpsertAuto; see
-              \c upsert_options for possible values for the upsert strategy
+              @ref upsert_options for possible values for the upsert strategy
         */
         constructor(SqlUtil::Table target, *hash<auto> opts) : AbstractBulkOperation("upsert", target, opts) {
         }
@@ -98,7 +98,7 @@ on_error ds.rollback();
             - \c "info_log": an optional info logging callback; must accept a string format specifier and sprintf()-
               style arguments
             - \c "upsert_strategy": the upsert strategy to use; default SqlUtil::AbstractTable::UpsertAuto; see
-              \c upsert_options for possible values for the upsert strategy
+              @ref upsert_options for possible values for the upsert strategy
         */
         constructor(SqlUtil::AbstractTable target, *hash<auto> opts) : AbstractBulkOperation("upsert", target, opts) {
         }

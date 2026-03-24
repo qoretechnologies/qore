@@ -262,7 +262,7 @@ class RestClientIoTest inherits QUnit::Test {
         HttpServer server;
         int port;
         int h1_port;
-        #! HTTP/1.1-only server (no async_mode, no HTTP/2 support)
+        #! HTTP/1.1-only server (no HTTP/2 support)
         HttpServer h1only_server;
         int h1only_port;
         #! Token handler for OAuth2 tests
@@ -333,6 +333,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("restDoRequest", \testRestDoRequest());
         addTestCase("serialization config", \testSerializationConfig());
         addTestCase("header management", \testHeaderManagement());
+        addTestCase("default Accept header sent on wire", \testDefaultAcceptSentOnWire());
         addTestCase("token management", \testTokenManagement());
         addTestCase("error passthru", \testErrorPassthru());
         addTestCase("error without passthru", \testErrorWithoutPassthru());
@@ -362,6 +363,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("oauth2 client_credentials", \testOAuth2ClientCredentials());
         addTestCase("oauth2 password grant", \testOAuth2PasswordGrant());
         addTestCase("oauth2 proactive refresh", \testOAuth2ProactiveRefresh());
+        addTestCase("oauth2 refresh within window", \testOAuth2RefreshWithinWindow());
+        addTestCase("oauth2 no refresh outside window", \testOAuth2NoRefreshOutsideWindow());
         addTestCase("oauth2 concurrent refresh", \testOAuth2ConcurrentRefresh());
         addTestCase("oauth2 401 retry", \testOAuth2_401Retry());
         addTestCase("oauth2 setOAuth2Options/getOAuth2Options", \testOAuth2OptionsRoundTrip());
@@ -427,7 +430,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": True,
-            "async_mode": True,
         };
         token_handler = new OAuth2TokenHandler("test-client-id", "test-client-secret");
         auth401_handler = new Auth401Handler();
@@ -450,7 +452,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }).port;
         server.waitForAsyncIo();
 
-        # HTTP/1.1-only server (no async_mode → no HTTP/2 support)
+        # HTTP/1.1-only server (no HTTP/2 support)
         # Simulates servers like uvicorn, nginx default, etc. that only speak HTTP/1.1
         Logger h1_logger("h1test", LoggerLevel::getLevelInfo());
         h1only_server = new HttpServer(<HttpServerOptionInfo>{
@@ -620,12 +622,52 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         RestClientIo::RestClientIo rest = createClient();
         on_exit rest.close();
 
+        # verify default Accept and User-Agent headers are present
+        hash<auto> hdrs = rest.getDefaultHeaders();
+        assertEq(True, exists hdrs."Accept", "Accept header must be set by default");
+        assertRegex("application/yaml", hdrs."Accept", "Accept must include YAML MIME type");
+        assertRegex("Qore-RestClientIo/", hdrs."User-Agent", "User-Agent must be set");
+
+        # addDefaultHeaders preserves defaults
         rest.addDefaultHeaders({"X-Custom": "header-value"});
         assertEq("header-value", rest.getDefaultHeaders()."X-Custom");
+        assertEq(True, exists rest.getDefaultHeaders()."Accept",
+            "Accept still present after addDefaultHeaders");
 
+        # replaceDefaultHeaders preserves DefaultHeaders
         rest.replaceDefaultHeaders({"X-New": "only"});
         assertEq("only", rest.getDefaultHeaders()."X-New");
-        assertEq(True, !rest.getDefaultHeaders()."X-Custom");
+        assertEq(True, !rest.getDefaultHeaders()."X-Custom",
+            "old custom header removed after replace");
+        assertEq(True, exists rest.getDefaultHeaders()."Accept",
+            "Accept preserved by replaceDefaultHeaders");
+        assertEq(True, exists rest.getDefaultHeaders()."User-Agent",
+            "User-Agent preserved by replaceDefaultHeaders");
+
+        # user-provided headers override defaults
+        RestClientIo::RestClientIo rest2 = createClient({
+            "headers": {"Accept": "text/html", "User-Agent": "CustomAgent/1.0"},
+        });
+        on_exit rest2.close();
+        assertEq("text/html", rest2.getDefaultHeaders()."Accept",
+            "user Accept overrides default");
+        assertEq("CustomAgent/1.0", rest2.getDefaultHeaders()."User-Agent",
+            "user User-Agent overrides default");
+    }
+
+    testDefaultAcceptSentOnWire() {
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Hit the echo endpoint and verify the server received Accept and User-Agent
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo/test");
+        assertEq(200, resp.status_code);
+        assertRegex("application/yaml", resp.body.request_headers.accept,
+            "Accept header must be sent on the wire");
+        assertRegex("Qore-RestClientIo/", resp.body.request_headers."user-agent",
+            "User-Agent header must be sent on the wire");
+%endif
     }
 
     testTokenManagement() {
@@ -1108,13 +1150,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     testAutoPlainHttpFallback() {
 %ifndef NoJson
-        # Connect to HTTP/1.1-only server with auto protocol (should try h2c, fail, fall back to h1)
+        # Connect to HTTP/1.1-only server with auto protocol — for plain HTTP (non-TLS),
+        # auto mode uses HTTP/1.1 directly since ALPN is not available to negotiate H2
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
             "data": "json",
             "error_passthru": True,
             "timeout": 15s,
-            # "auto" is the default protocol — it will try h2c first
         });
         on_exit rest.close();
 
@@ -1127,7 +1169,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     testAutoPlainHttpFallbackCaching() {
 %ifndef NoJson
-        # Verify that after fallback, subsequent requests reuse h1 without failing
+        # Verify that multiple requests reuse h1 without issues
         RestClientIo::RestClientIo rest({
             "url": sprintf("http://127.0.0.1:%d", h1only_port),
             "data": "json",
@@ -1136,11 +1178,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         on_exit rest.close();
 
-        # First request triggers fallback
+        # First request uses h1 directly (auto on plain HTTP = h1)
         hash<RestClient::RestResponseInfo> resp1 = rest.restGet("/api/first");
         assertEq(200, resp1.status_code);
 
-        # Second request should use cached h1 directly (no h2c attempt)
+        # Second request reuses the same h1 connection
         hash<RestClient::RestResponseInfo> resp2 = rest.restGet("/api/second");
         assertEq(200, resp2.status_code);
         assertEq("GET", resp2.body.method);
@@ -1282,6 +1324,55 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertEq(200, resp.status_code);
         assertEq(2, token_handler.getRequestCount(), "proactive refresh");
         assertEq("refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2RefreshWithinWindow() {
+%ifndef NoJson
+        # Test that a token expiring WITHIN the 10-minute window triggers proactive refresh
+        # This was the actual bug: (now - 10m > expiry) never triggered when expiry was in the future
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set token to expire in 5 minutes (within the 10-minute refresh window)
+        rest.setToken("Bearer", "soon-expiring-token", "refresh-token-window",
+            now_us() + 5m);
+
+        token_handler.setReturnToken("preemptive-refreshed-token");
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq(2, token_handler.getRequestCount(), "proactive refresh within window");
+        assertEq("preemptive-refreshed-token", rest.getToken());
+%endif
+    }
+
+    testOAuth2NoRefreshOutsideWindow() {
+%ifndef NoJson
+        # Test that a token expiring well in the future does NOT trigger refresh
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("initial-token");
+        token_handler.setReturnRefreshToken("initial-refresh");
+
+        RestClientIo::RestClientIo rest = createOAuth2Client();
+        on_exit rest.close();
+
+        assertEq(1, token_handler.getRequestCount(), "initial login");
+
+        # Set token to expire in 30 minutes (outside the 10-minute window)
+        rest.setToken("Bearer", "long-lived-token", "refresh-token-norefresh",
+            now_us() + 30m);
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        # No extra token request — the token is still valid with plenty of time left
+        assertEq(1, token_handler.getRequestCount(), "no refresh outside window");
+        assertEq("long-lived-token", rest.getToken());
 %endif
     }
 

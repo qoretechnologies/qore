@@ -58,10 +58,10 @@ module WebSocketUtil {
     higher-level module listed above.
 
     The main functionality provided by this module:
-    - \c WebSocketUtil::ws_encode_message(): encodes messages for sending over a websocket connection
-    - \c WebSocketUtil::ws_read_message(): reads and decodes messages from a websocket connection
-    - \c closecodes
-    - \c opcodes
+    - @ref WebSocketUtil::ws_encode_message(): encodes messages for sending over a websocket connection
+    - @ref WebSocketUtil::ws_read_message(): reads and decodes messages from a websocket connection
+    - @ref closecodes
+    - @ref opcodes
 
     @section websocketutil_relnotes WebSocketUtil Module Release History
 
@@ -71,8 +71,8 @@ module WebSocketUtil {
       decompression, preserving the correct message type for \c gotMessage() dispatch
     - added pluggable WebSocket extension framework
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-      - added \c WsExtensionParamInfo hashdecl for extension parameters
-      - added \c WsExtensionInfo hashdecl for extension info
+      - added @ref WsExtensionParamInfo hashdecl for extension parameters
+      - added @ref WsExtensionInfo hashdecl for extension info
       - added @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" base class
       - added @ref WebSocketUtil::WebSocketExtensionRegistry "WebSocketExtensionRegistry" factory class
       - added @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing
@@ -81,10 +81,10 @@ module WebSocketUtil {
     @subsection wsu_v15 v1.5
     - added RSV bit support for WebSocket extensions
       (<a href="https://github.com/qoretechnologies/qore/issues/5065">issue 5065</a>)
-      - added \c WS_RSV1, \c WS_RSV2, \c WS_RSV3 constants
-      - added \c rsv1, \c rsv2, \c rsv3 fields to \c WsMsgInfo
-      - added optional \c rsv_bits parameter to \c ws_encode_message()
-      - \c ws_read_message() now extracts RSV bits
+      - added @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3 constants
+      - added \c rsv1, \c rsv2, \c rsv3 fields to @ref WsMsgInfo
+      - added optional \c rsv_bits parameter to @ref ws_encode_message()
+      - @ref ws_read_message() now extracts RSV bits
 
     @subsection wsu_v141 v1.4.1
     - added support for continuation frames
@@ -110,13 +110,13 @@ module WebSocketUtil {
 public namespace WebSocketUtil {
     #! WebSocket message info
     public hashdecl WsMsgInfo {
-        #! Frame opcode (one of \c opcodes)
+        #! Frame opcode (one of @ref opcodes)
         int op;
         #! User-defined info; can be used for debugging for example
         *hash<auto> info;
         #! True if the frame was masked
         bool masked;
-        #! Close code (one of \c closecodes); only set if op is \c WSOP_Close
+        #! Close code (one of @ref closecodes); only set if op is @ref WSOP_Close
         int close;
         #! True if this is the final frame in a message
         bool fin;
@@ -244,7 +244,7 @@ public namespace WebSocketUtil {
         @param op the opcode to use; if -1 (the default), the opcode is determined from the message type
         @param masked if True, the message is masked with a random mask
         @param fin if True (the default), the FIN bit is set
-        @param rsv_bits optional RSV bits to set (bitmask of \c WS_RSV1, \c WS_RSV2, \c WS_RSV3);
+        @param rsv_bits optional RSV bits to set (bitmask of @ref WS_RSV1, @ref WS_RSV2, @ref WS_RSV3);
                these are used by extensions like permessage-deflate
 
         @return the encoded WebSocket frame as binary data
@@ -321,10 +321,10 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         @param to an optional read timeout
 
         @return a hash with the following keys:
-        - \c op: the operation code (one of \c opcodes)
+        - \c op: the operation code (one of @ref opcodes)
         - \c masked a boolean flag indicating if the message was masked or not
-        - \c msg: the message received; if a CLOSE opcode is received (see \c WSOP_Close) then any close message is decoded and included here in text form
-        - \c close: the close code (one of \c closecodes); only included if \a op is \c WSOP_Close
+        - \c msg: the message received; if a CLOSE opcode is received (see @ref WSOP_Close) then any close message is decoded and included here in text form
+        - \c close: the close code (one of @ref closecodes); only included if \a op is @ref WSOP_Close
         - \c fin: True if this is the final frame in a message
         - \c rsv1: the RSV1 bit (used by extensions like permessage-deflate)
         - \c rsv2: the RSV2 bit (reserved for extensions)
@@ -423,7 +423,7 @@ hash<WsMsgInfo> h = ws_read_message(sock);
         @param encoding the character encoding to use for text messages
 
         @return a hash with the following keys:
-        - \c op: the operation code (one of \c ws_op_codes)
+        - \c op: the operation code (one of @ref opcodes)
         - \c msg: the message data received, if any
         - \c masked: True if the data was masked
         - \c close: for close messages, the close code

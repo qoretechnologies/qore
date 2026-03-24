@@ -148,7 +148,7 @@ HueRestClient rest(opts);
         @endcode
 
         @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
-        that the URL is set by default if not provided (see \c DefaultUrl)
+        that the URL is set by default if not provided (see @ref DefaultUrl)
         @param do_not_connect if \c False (the default), then a connection will be immediately established to the
         remote server
 
@@ -210,7 +210,7 @@ public class HueRestConnection inherits RestClient::RestConnection {
         @param attributes various attributes. See below
         @param options connection options
 
-        See \c ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
 
         @throw CONNECTION-OPTION-ERROR missing or invalid connection option
     */
@@ -249,7 +249,7 @@ public class HueRestConnection inherits RestClient::RestConnection {
     #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
     /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
 
-        @see \c getDataProvider()
+        @see @ref getDataProvider()
     */
     bool hasDataProvider() {
         return True;

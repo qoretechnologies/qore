@@ -323,6 +323,88 @@ auto Queue::pop(timeout timeout_ms = 0) {
     }
 }
 
+//! Non-blocking get: returns the first entry in the queue if available, or @ref nothing if the queue is empty
+/** @par Example:
+    @code{.py}
+auto result = queue.tryGet();
+if (exists result) {
+    printf("received: %y\n", result.value);
+} else {
+    printf("queue empty\n");
+}
+    @endcode
+
+    Unlike @ref get(), this method never blocks and never throws \c QUEUE-TIMEOUT.  The return value
+    disambiguates an empty queue (@ref nothing) from a @ref nothing value in the queue
+    (returns \c {"value": NOTHING}).
+
+    @return a hash with a \c "value" key containing the first entry on the queue, or @ref nothing if the queue
+    is empty
+
+    @throw QUEUE-ERROR The queue was deleted while at least one thread was blocked on it
+    @throw &lt;configured-error&gt; if Queue::setError() has been called, the configured error is thrown
+
+    @see get()
+    @see tryPop()
+
+    @since %Qore 2.3
+ */
+auto Queue::tryGet() {
+    bool to;
+    QoreValue rv = q->shift(xsink, self, -1, &to);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (to) {
+        // Queue is empty
+        return QoreValue();
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("value", rv, xsink);
+    return h;
+}
+
+//! Non-blocking pop: returns the last entry in the queue if available, or @ref nothing if the queue is empty
+/** @par Example:
+    @code{.py}
+auto result = queue.tryPop();
+if (exists result) {
+    printf("received: %y\n", result.value);
+} else {
+    printf("queue empty\n");
+}
+    @endcode
+
+    Unlike @ref pop(), this method never blocks and never throws \c QUEUE-TIMEOUT.  The return value
+    disambiguates an empty queue (@ref nothing) from a @ref nothing value in the queue
+    (returns \c {"value": NOTHING}).
+
+    @return a hash with a \c "value" key containing the last entry on the queue, or @ref nothing if the queue
+    is empty
+
+    @throw QUEUE-ERROR The queue was deleted while at least one thread was blocked on it
+    @throw &lt;configured-error&gt; if Queue::setError() has been called, the configured error is thrown
+
+    @see pop()
+    @see tryGet()
+
+    @since %Qore 2.3
+ */
+auto Queue::tryPop() {
+    bool to;
+    QoreValue rv = q->pop(xsink, self, -1, &to);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (to) {
+        // Queue is empty
+        return QoreValue();
+    }
+    QoreHashNode* h = new QoreHashNode(autoTypeInfo);
+    h->setKeyValue("value", rv, xsink);
+    return h;
+}
+
 //! Clears the Queue of all data
 /** @par Example:
     @code{.py} queue.clear(); @endcode

@@ -129,7 +129,7 @@ public namespace DebugHandler {
         @ref WebSocketHandler::WebSocketConnection "WebSocketConnection" which is
         instantiated via @ref WebSocketHandler::WebSocketHandler::getConnectionImpl().
 
-        The handler is registered via \c HtpServer::HttpServer::setHandler() "HttpServer::setHandler()" to receive
+        The handler is registered via @ref HttpServer::HttpServer::setHandler() "HttpServer::setHandler()" to receive
         messages.
 
         @par Receiving WebSocket Messages from Clients
@@ -141,7 +141,7 @@ public namespace DebugHandler {
         To send a message to a websocket client, call one of the following methods @ref sendData or @ref broadcastData
 
         Websocket connections are identified by their HTTP connection ID as passed in
-        \c WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
+        @ref WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
         argument when the connection is first established.
     */
     public class AbstractWebSocketDebugHandler inherits WebSocketHandler::WebSocketHandler {
@@ -183,7 +183,7 @@ public namespace DebugHandler {
         #! sends data to the given connection
         /**
             Encodes data and sends using
-            \c WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()" to send a message
+            @ref WebSocketHandler::WebSocketHandler::sendOne() "WebSocketHandler::sendOne()" to send a message
             to a single connection given its connection ID
 
             Override this method when implementing a 3rd party protocol
@@ -195,7 +195,7 @@ public namespace DebugHandler {
         #! sends data to all connections
         /**
             Encodes broadcasts data using
-            \c WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to send a message to all
+            @ref WebSocketHandler::WebSocketHandler::sendAll() "WebSocketHandler::sendAll()" to send a message to all
             connected clients
 
             Override this method when implementing a 3rd party protocol

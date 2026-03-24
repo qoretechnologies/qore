@@ -56,11 +56,8 @@ public class ServerSentEventConnection {
     }
 
     private {
-        #! the @ref Qore::Thread::Channel "Channel" object stores messages to be sent to the server
-        Qore::Thread::Channel channel(-1);
-
-        #! The TID of the I/O thread
-        int tid = gettid();
+        #! Async SSE poll operation for event delivery via the I/O controller
+        *HttpServerAsyncIo::HttpSseStreamPollOperation poll_op;
     }
 
     private:internal {
@@ -81,49 +78,28 @@ public class ServerSentEventConnection {
         self.sock = sock;
     }
 
-    #! This method is called to poll for messages from the client to send from the server
-    /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
+    #! Sets the async poll operation for event delivery
+    /** @param op the poll operation to use for sending SSE events via the async I/O controller
     */
-    *string pollData() {
-        try {
-            return channel.recv(DefaultQueuePollingInterval);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "CHANNEL-TIMEOUT") {
-                rethrow;
-            }
-        }
+    setAsyncPollOp(HttpServerAsyncIo::HttpSseStreamPollOperation op) {
+        poll_op = op;
     }
 
-    #! This method is called to poll for messages to send to the client from the server
-    /** Called by the @ref ServerSentEventHandler::ServerSentEventHandler "ServerSentEventHandler"
-    */
-    *string pollDataImmediate() {
-        auto result = channel.tryRecv();
-        return exists result ? result.value : NOTHING;
+    #! Returns the async poll operation, if set
+    *HttpServerAsyncIo::HttpSseStreamPollOperation getAsyncPollOp() {
+        return poll_op;
     }
 
-    #! Pushes an already-encoded message on the connection's message channel
+    #! Pushes an already-encoded message for sending via the async I/O controller
     sendEncoded(string msg) {
-        try {
-            channel.send(msg);
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "CHANNEL-CLOSED") {
-                rethrow;
-            }
+        if (poll_op) {
+            poll_op.queueRawString(msg);
         }
     }
 
-    #! Pushes an unencoded message on the connection's message channel
-    /** The message will be encoded with \c ServerSentEventUtil::ws_encode_message() before sending
-    */
+    #! Encodes and queues an SSE message for sending
     send(hash<SseMessageInfo> msg) {
-        try {
-            channel.send(handler.encodeMessage(msg));
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err != "CHANNEL-CLOSED") {
-                rethrow;
-            }
-        }
+        sendEncoded(handler.encodeMessage(msg));
     }
 
     #! This method is called when the connection is closed
@@ -140,22 +116,12 @@ public class ServerSentEventConnection {
     registered() {
     }
 
-    #! Flush all output data
-    flush() {
-        if (gettid() != tid) {
-            while (!stop_flag && !channel.empty()) {
-                usleep(DefaultQueuePollingInterval);
-            }
-        } else {
-            handler.flushIo(self, sock);
-        }
-    }
-
-    #! force closing socket related to connection
+    #! Stops the connection
     stop() {
         stop_flag = True;
-        # closing the channel wakes up the polling thread immediately
-        channel.close();
+        if (poll_op) {
+            poll_op.abort();
+        }
     }
 }
 }

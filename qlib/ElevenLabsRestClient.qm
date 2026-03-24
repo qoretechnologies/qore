@@ -1,0 +1,394 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ElevenLabsRestClient.qm Qore user module for calling ElevenLabs REST services
+
+/*  ElevenLabsRestClient.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module ElevenLabsRestClient {
+    version = "1.0";
+    desc = "user module for calling ElevenLabs REST API services";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("elevenlabs", ElevenLabsRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage ElevenLabsRestClient Module
+
+    @tableofcontents
+
+    @section elevenlabsrestclientintro ElevenLabsRestClient Module Introduction
+
+    The %ElevenLabsRestClient module provides an API for calling ElevenLabs REST API services.
+
+    To use this module, use \c "%requires ElevenLabsRestClient" in your code.
+
+    All the public symbols in the module are defined in the ElevenLabsRestClient namespace.
+
+    The main classes are:
+    - @ref ElevenLabsRestClient::ElevenLabsRestClient "ElevenLabsRestClient":
+      this class provides the REST client API for communication with the ElevenLabs REST
+      API; it also automates authentication and authorization to the target
+    - @ref ElevenLabsRestClient::ElevenLabsRestConnection "ElevenLabsRestConnection":
+      provides a REST connection object to ElevenLabs cloud services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires ElevenLabsRestClient
+%requires ConnectionProvider
+
+ElevenLabsRestClient rest({"apikey": api_key});
+hash<auto> ans = rest.get("v1/models");
+printf("%N\n", ans.body);
+    @endcode
+
+    @section ElevenLabsRestClientRelnotes Release Notes
+
+    @subsection ElevenLabsRestClientv1_0 ElevenLabsRestClient v1.0
+    - the initial version of the %ElevenLabsRestClient module
+*/
+
+#! the ElevenLabsRestClient namespace contains all the objects in the ElevenLabsRestClient module
+public namespace ElevenLabsRestClient {
+#! Common base class for ElevenLabsRestClient functionality
+public class ElevenLabsRestClientBase {
+    public {
+        #! Default ElevenLabs REST API URL
+        const DefaultUrl = "https://api.elevenlabs.io";
+
+        #! EU data residency URL
+        const EuUrl = "https://api.eu.residency.elevenlabs.io";
+
+        #! Default data serialization
+        const DefaultData = "json";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "data": DefaultData,
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default ping path
+        const DefaultPingPath = "v1/models";
+    }
+
+    #! Returns options for the constructor
+    /** Maps the \c apikey option to the \c xi-api-key header and builds the URL from the \c region option
+    */
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        # Map apikey to xi-api-key header
+        if (rv.apikey) {
+            hash<auto> hdr = rv.headers ?? {};
+            hdr."xi-api-key" = rv.apikey;
+            rv += {"headers": hdr};
+            delete rv.apikey;
+        }
+        # Build URL from region option if no explicit URL provided
+        if (!opts.url) {
+            rv.url = (opts.region == "eu" ? EuUrl : DefaultUrl);
+        }
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with ElevenLabs servers
+/** You must use an API key in the \c apikey option to call ElevenLabs APIs.
+
+    The API key is sent as the \c xi-api-key header.
+*/
+public class ElevenLabsRestClient inherits RestClient::RestClient, ElevenLabsRestClientBase {
+    #! Creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+ElevenLabsRestClient rest({"apikey": api_key});
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
+        that the URL is set by default if not provided (see @ref DefaultUrl).
+        Additional options:
+        - \c apikey: the ElevenLabs API key (required)
+        - \c region: \c "us" (default) or \c "eu" for EU data residency
+        @param do_not_connect if \c False (the default), then a connection will be immediately established to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(ElevenLabsRestClientBase::getOptions(opts), do_not_connect) {
+    }
+}
+
+#! REST client for ElevenLabs REST API using multiplexed HTTP connections
+/** @see ElevenLabsRestClient for more information
+*/
+public class ElevenLabsRestClientIo inherits RestClientIo::RestClientIo, ElevenLabsRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(ElevenLabsRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+
+#! Class for ElevenLabs REST connections; returns @ref ElevenLabsRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestConnection"
+
+    @see @ref ElevenLabsRestClient::ElevenLabsRestClient::constructor() for more information on the above options
+*/
+public class ElevenLabsRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default ElevenLabs REST API URL
+        const DefaultUrl = "elevenlabs://api.elevenlabs.io";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "ElevenLabs REST Connection",
+            "short_desc": "A connection to the ElevenLabs REST API",
+            "desc": "A connection to the [ElevenLabs](https://elevenlabs.io) REST API for AI voice "
+                "synthesis, text-to-speech, and audio processing services.\n\n"
+                "An API key is required for authentication. To obtain one, sign in to your ElevenLabs "
+                "account and navigate to **Profile + API Key** in the bottom-left menu at "
+                "[elevenlabs.io](https://elevenlabs.io)",
+            "cls": Class::forName("ElevenLabsRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "elevenlabs": True,
+            },
+            "base_scheme_map": {
+                "https": "elevenlabs",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "ElevenLabs API key for authentication",
+                    "type": "string",
+                    "desc": "The ElevenLabs API key used for authentication; sent as the `xi-api-key` header. "
+                        "To obtain a key, sign in at [elevenlabs.io](https://elevenlabs.io) and navigate to "
+                        "**Profile + API Key** in the bottom-left menu",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "region": <ConnectionOptionInfo>{
+                    "display_name": "Region",
+                    "short_desc": "The API region to use",
+                    "desc": "The API region to use; `us` (default) uses the global endpoint, `eu` uses the EU "
+                        "data residency endpoint",
+                    "type": "string",
+                    "default_value": "us",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "display_name": "US (Global)",
+                            "value": "us",
+                            "desc": "Use the global API endpoint (api.elevenlabs.io)",
+                        },
+                        <AllowedValueInfo>{
+                            "display_name": "EU",
+                            "value": "eu",
+                            "desc": "Use the EU data residency endpoint (api.eu.residency.elevenlabs.io)",
+                        },
+                    ),
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": ElevenLabsRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": ElevenLabsRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": ElevenLabsRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Get Your ElevenLabs API Key",
+                    "intent": "info",
+                    "content": "To connect to ElevenLabs, you need an API key:\n\n"
+                        "1. Sign in to your account at [elevenlabs.io](https://elevenlabs.io)\n"
+                        "2. Click your **profile icon** in the bottom-left corner\n"
+                        "3. Select **Profile + API Key**\n"
+                        "4. Click the **eye icon** to reveal your API key, then copy it\n\n"
+                        "Keep your API key secure and never share it publicly.",
+                },
+            ),
+        };
+    }
+
+    #! Creates the ElevenLabsRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! Creates the ElevenLabsRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(ElevenLabsRestConnection::getConfig(config), attr) {
+    }
+
+    #! Returns config for the constructor - builds URL from region option
+    private static hash<auto> getConfig(hash<auto> config) {
+        string region = config.opts.region ?? "us";
+        return config + {
+            "url": sprintf("elevenlabs://%s",
+                region == "eu"
+                    ? ElevenLabsRestClientBase::EuUrl.substr(8)
+                    : ElevenLabsRestClientBase::DefaultUrl.substr(8)),
+        };
+    }
+
+    #! Returns \c "elevenlabs"
+    string getType() {
+        return "elevenlabs";
+    }
+
+    #! Returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the ElevenLabsDataProvider and creates the data provider
+        # object dynamically
+        load_module("ElevenLabsDataProvider");
+        return create_object("ElevenLabsDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! Sets the update options code for the connection; auto-corrects URL from region
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            # Auto-correct URL based on region option
+            string region = opts.region ?? "us";
+            string expected_url = sprintf("elevenlabs://%s",
+                region == "eu"
+                    ? ElevenLabsRestClientBase::EuUrl.substr(8)
+                    : ElevenLabsRestClientBase::DefaultUrl.substr(8));
+            if (url != expected_url) {
+                update.url = expected_url;
+            }
+            # Auto-correct ping path - remove leading slash
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! Returns connection options with apikey translated to xi-api-key header
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> opts = RestConnection::getConnectionOptions(rtopts);
+        return ElevenLabsRestClientBase::getOptions(opts);
+    }
+
+    #! Returns a @ref ElevenLabsRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref ElevenLabsRestClient object
+    */
+    private ElevenLabsRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ElevenLabsRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new ElevenLabsRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+}

@@ -227,11 +227,11 @@ module ServiceNowRestDataProvider {
 
     @section servicenowrestdataproviderintro Introduction to the ServiceNowRestDataProvider Module
 
-    The %ServiceNowRestDataProvider module provides a \c dataproviderintro "data provider" API for ServiceNow REST
+    The %ServiceNowRestDataProvider module provides a @ref dataproviderintro "data provider" API for ServiceNow REST
     services.  The @ref ServiceNowRestDataProvider::ServiceNowRestDataProvider "ServiceNowRestDataProvider" class
     allows for introspecting a ServiceNow application instance, while the
     @ref ServiceNowRestDataProvider::ServiceNowTableDataProvider "ServiceNowTableDataProvider" class
-    supports the \c dataproviderintro "data provider" record-based API for querying and manipulating table data in
+    supports the @ref dataproviderintro "data provider" record-based API for querying and manipulating table data in
     the application.
 
     ServiceNow instances can be introspected with the following format:

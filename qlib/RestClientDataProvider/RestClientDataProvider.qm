@@ -92,7 +92,7 @@ module RestClientDataProvider {
     @section restclientdataproviderintro Introduction to the RestClientDataProvider Module
 
     The %RestClientDataProvider module provides a data provider API for REST servers through the
-    \c dataproviderintro "DataProvider" API.
+    @ref dataproviderintro "DataProvider" API.
 
     The following classes are provided by this module:
     - @ref RestClientDataProvider::RestClientCallDataProvider "RestClientCallDataProvider"

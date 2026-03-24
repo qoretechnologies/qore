@@ -54,7 +54,6 @@ class BenchServer {
         }
 
         int listen_port = opt.port ?? 0;
-        bool async = !opt.sync;
 
         Logger logger("bench", LoggerLevel::getLevelInfo());
         # no appender — suppress all log output during benchmarks
@@ -62,7 +61,6 @@ class BenchServer {
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
             "logger": logger,
             "debug": False,
-            "async_mode": async,
         };
         HttpServer server(http_opts);
         server.setDefaultHandler("bench", new BenchHandler());
@@ -70,9 +68,7 @@ class BenchServer {
             "service": listen_port,
             "node": "127.0.0.1",
         }).port;
-        if (async) {
-            server.waitForAsyncIo();
-        }
+        server.waitForAsyncIo();
 
         # Write port for the benchmark driver
         if (opt.port_file) {

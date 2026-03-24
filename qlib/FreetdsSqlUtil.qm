@@ -114,7 +114,7 @@ module FreetdsSqlUtil {
     @subsection freetdssqlutilv12 FreetdsSqlUtil v1.2
     - fixed a bug where @ref SqlUtil::BLOB columns were created as \c VARBINARY columns instead of \c VARBINARY(MAX)
       (<a href="https://github.com/qoretechnologies/qore/issues/1852">issue 1852</a>)
-    - implemented \c cop_trunc_date() operator
+    - implemented @ref SqlUtil::cop_trunc_date() operator
       (<a href="https://github.com/qoretechnologies/qore/issues/2032">issue 2032</a>)
 
     @subsection freetdssqlutilv11 FreetdsSqlUtil v1.1

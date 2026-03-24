@@ -1638,7 +1638,9 @@ public class HttpAsyncSocketIoController {
             case HttpConnectionState::Sse: {
                 if (!cinfo.stream_op) return;
                 op = cinfo.stream_op;
-                timeout = -1s;
+                # Use short timeout to allow periodic polling for queued SSE events
+                # (the event channel is checked on each continuePoll() call)
+                timeout = 250ms;
                 break;
             }
             case HttpConnectionState::WebSocket: {
@@ -1740,7 +1742,14 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.ex) {
-            # Handle error
+            # Handle error — but for SSE, timeouts are expected (periodic polling)
+            if (orig_state == HttpConnectionState::Sse
+                    && (result.ex.err == "SOCKET-POLL-TIMEOUT"
+                        || result.ex.err == "SOCKET-TIMEOUT")) {
+                # Resubmit for continued polling
+                submitConnectionOp(uh, cinfo);
+                return;
+            }
             log(LoggerLevel::DEBUG, "handleConnectionResult: error for %s state=%y: %s: %s",
                 uh, orig_state, result.ex.err, result.ex.desc);
             handleConnectionError(uh, cinfo, orig_state, result.ex);
@@ -1783,6 +1792,9 @@ public class HttpAsyncSocketIoController {
                 HttpSseStreamPollOperation op = result.spop;
                 if (op.isDisconnected()) {
                     handleSseDisconnect(uh, cinfo);
+                } else {
+                    # Re-submit for continued polling (picks up queued events)
+                    submitConnectionOp(uh, cinfo);
                 }
                 break;
             }
@@ -2185,6 +2197,19 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.streaming) {
+            # For H1 SSE: send HTTP response headers before entering streaming mode
+            if (result.code) {
+                try {
+                    string status_msg = result.status_message ?? HttpServer::HttpCodes{result.code} ?? "OK";
+                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
+                        result.hdr ?? {});
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error sending SSE response for %y: %s: %s",
+                        uh, ex.err, ex.desc);
+                    try { sock.close(); } catch () {}
+                    return;
+                }
+            }
             hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
@@ -2571,15 +2596,19 @@ public class HttpAsyncSocketIoController {
             request.headers.":protocol", uh, stream_id, request.path);
 
         # Create unlimited Queue for async data delivery to the handler.
-        # WebSocket CONNECT handlers have their own framing mechanism and read
-        # connect_stream_data_ directly — registering a Queue would consume
-        # the data before the WebSocket handler sees it.
-        *Queue stream_data_queue;
-        if (!is_websocket_connect) {
-            stream_data_queue = new Queue();
-            # Register the Queue with h2op so the I/O controller drains data after each poll
-            h2op.registerStreamQueue(stream_id, stream_data_queue);
-        }
+        # The I/O controller's h2op reads HTTP/2 frames from TCP, buffers
+        # per-stream data, then drains it to this Queue after each poll cycle.
+        # All CONNECT stream handlers — including WebSocket — use the Queue
+        # so only the I/O controller reads from the socket (no direct_io).
+        Queue stream_data_queue();
+        h2op.registerStreamQueue(stream_id, stream_data_queue);
+
+        # Closure for handlers to register a notification callback after the
+        # handler thread starts (e.g., after creating the WebSocketConnection).
+        # The callback is called on the I/O thread when data is drained to the Queue.
+        code<nothing(code<nothing()>)> register_stream_notify = sub (code<nothing()> notify) {
+            h2op.registerStreamQueue(stream_id, stream_data_queue, notify);
+        };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
         # with other streams on the same connection
@@ -2658,6 +2687,7 @@ public class HttpAsyncSocketIoController {
                 "accept-encoding": accept_encoding,
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
+                "register_stream_notify": register_stream_notify,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wake(); },
             },

@@ -32,13 +32,13 @@ public namespace ServerSentEventHandler {
 
     @par Sending ServerSentEvent Message to Clients
     To send a message to an HTTP client, call one of the following methods:
-    - \c ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()": send a
+    - @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()": send a
       message to single connection given its connection ID
-    - \c ServerSentEventHandler::ServerSentEventHandler::sendAll() "ServerSentEventHandler::sendAll()": send a
+    - @ref ServerSentEventHandler::ServerSentEventHandler::sendAll() "ServerSentEventHandler::sendAll()": send a
       message to all connected clients
 
     ServerSentEvent connections are identified by their HTTP connection ID as passed in
-    \c ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()" in
+    @ref ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()" in
     the \c "cx.id" argument when the connection is first established.
 */
 public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandler, Logger::LoggerWrapper {
@@ -95,8 +95,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     }
 
     private:internal {
-        #! Thread-local key for I/O check
-        string tlk = get_random_string(50);
     }
 
     #! Create the object optionally with the given @ref HttpServer::AbstractAuthenticator "AbstractAuthenticator"
@@ -159,7 +157,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
         unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
-        \c ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
+        @ref ServerSentEventHandler::ServerSentEventHandler::sendOne() "ServerSentEventHandler::sendOne()"
         @param hdr incoming header hash; all keys will be converted to lower-case, additionally the following keys
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
@@ -170,7 +168,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         @return a hash representing the response to the client as follows; to accept a dedicated connection; make sure
         the \c "code" is 101 (ie \c "Switching Protocols") or the \c Content-Type headers is set to
         \c text/event-stream, and the \c "close" key is not @ref False "False":
-        - \c "code": the HTTP return code (see \c HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
+        - \c "code": the HTTP return code (see @ref HttpServer::HttpCodes) (101 \c "Switching Protocols" to accept the
           dedicated connection, in which case the start() method will be called)
         - \c "body": the message body to return in the response
         - \c "hdr": (optional) set this key to a hash of extra header information to be returned with the response
@@ -195,25 +193,50 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return keys ch;
     }
 
-    #! Called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
-    /** This method should not return until the connection is closed or the stop() method is called
-
-        @param lid the unique HTTP listener ID
-        @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
-        unique HTTP connection ID; this ID is also used to identify the HTTP client connection in
-        @param hdr a hash of headers in the request
-        @param sock the @ref Qore::Socket "Socket" object for the dedicated connection to the client
+    #! Legacy synchronous SSE handler entry point (no longer used)
+    /** The HttpServer no longer uses synchronous dedicated handlers. SSE connections
+        are managed by the async I/O controller via @ref setupAsyncSseConnection().
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
-        logDebug("ServerSentEventHandler::startImpl() cid: %y from %s:%d", cx.id, cx."peer-info".hostname_desc,
-            cx."peer-info".port);
+        throw "SSE-SYNC-NOT-SUPPORTED", "synchronous SSE handling is no longer supported; "
+            "use setupAsyncSseConnection() instead";
+    }
 
-        softstring cid = cx.id;
+    #! Sets up an async SSE connection for the given socket
+    /** Creates the connection object, registers it, wires it to an HttpSseStreamPollOperation,
+        and calls the registered/connectionRegisteredImpl hooks.
 
-        # get new connection object
-        ServerSentEventConnection conn = doNewConnection(sock, cx, hdr, cid);
+        @param sock the socket for the SSE connection
+        @param cx call context hash
+        @param hdr incoming request headers
+        @param cid connection ID (typically cx.id)
+
+        @return the poll operation for the async I/O controller to manage
+
+        @since ServerSentEventHandler 1.1
+    */
+    HttpServerAsyncIo::HttpSseStreamPollOperation setupAsyncSseConnection(Socket sock, hash<auto> cx,
+            hash<auto> hdr, string cid) {
+        logDebug("ServerSentEventHandler::setupAsyncSseConnection() cid: %y", cid);
+
+        # Create the poll operation for the async I/O controller
+        HttpServerAsyncIo::HttpSseStreamPollOperation poll_op(sock);
+
+        # Create and register the connection
+        ServerSentEventConnection conn = getConnectionImpl(sock, cx, hdr, cid);
+        conn.setAsyncPollOp(poll_op);
+
+        {
+            rwl.writeLock();
+            on_exit rwl.writeUnlock();
+            registerNewConnectionIntern(cid, conn);
+        }
+
+        if (hdr."last-event-id".val()) {
+            replayEventsSince(conn, hdr."last-event-id");
+        }
+
         try {
-            # issue #3225: handle exceptions in ServerSentEventHandler and remove the connection
             conn.registered();
         } catch (hash<ExceptionInfo> ex) {
             logError("Exception registering ServerSentEvent connection: %s", get_exception_string(ex));
@@ -224,74 +247,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         }
         connectionRegisteredImpl(conn);
 
-        on_exit {
-            #logDebug("ServerSentEventHandler::startImpl(): close connection: cid: %y from %s:%d", cx.id,
-            #    cx."peer-info".hostname_desc, cx."peer-info".port);
-            try {
-                deregisterConnectionImpl(conn);
-                conn.connectionClosed();
-            } catch (hash<ExceptionInfo> ex) {
-                logError("Exception deregistering ServerSentEvent connection: %s", get_exception_string(ex));
-            }
-            rwl.writeLock();
-            on_exit rwl.writeUnlock();
-            removeConnectionLocked(cid);
-        }
-
-        # issue #2887 timestamp of last traffic
-        int timestamp = clock_getmillis() / 1000;
-
-        while (True) {
-            #logDebug("ServerSentEventHandler::startImpl() loop cid: %y", cx.id);
-            if (stop || lsh{lid} || conn.stop_flag) {
-                logDebug("ServerSentEventHandler::startImpl() cid: %y stopping; stop: %y lsh{%y}: %y, "
-                    "conn.stop_flag: %y", cx.id, stop, lid, lsh{lid}, conn.stop_flag);
-                break;
-            }
-
-            try {
-                bool update;
-                # send any and all messages on the channel
-                *string str = conn.pollData();
-                if (str.val()) {
-                    sock.send2(str, DefaultSocketSendTimeout);
-                    update = True;
-                    flushIoIntern(conn, sock, False);
-                }
-
-                if (conn.stop_flag) {
-                    continue;
-                }
-                int now = clock_getmillis() / 1000;
-                if (!update) {
-                    if ((now - timestamp) >= heartbeat) {
-                        sendHeartbeatMsg(conn, sock);
-                        timestamp = now;
-                    }
-                } else {
-                    timestamp = now;
-                }
-
-                if (!sock.isOpen()) {
-                    logInfo("SSE cid: %y remote end closed the connection", cx.id);
-                    break;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                # error in serversentevent handler server, log and close the connection
-                string err = sprintf("%s: %s: %s; terminating connection thread", get_ex_pos(ex), ex.err, ex.desc);
-                logError(err);
-                break;
-            }
-        }
-        #logDebug("ServerSentEventHandler::startImpl() exiting, cid: %y", cx.id);
-        return False;
-    }
-
-    #! Flushes I/O in the connection channel
-    /** @return True if any data was flushed, False if not
-    */
-    bool flushIo(ServerSentEventConnection conn, Socket sock) {
-        return flushIoIntern(conn, sock, True);
+        return poll_op;
     }
 
     #! Encode a message for sending
@@ -331,24 +287,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         return new ServerSentEventConnection(self, sock, cx, hdr, cid);
     }
 
-    #! Called when a connection is established; registers the new connection internally
-    ServerSentEventConnection doNewConnection(Socket sock, hash<auto> cx, hash<auto> hdr, string cid) {
-        ServerSentEventConnection rv = getConnectionImpl(sock, cx, hdr, cid);
-
-        # add connection object to hash
-        {
-            rwl.writeLock();
-            on_exit rwl.writeUnlock();
-            registerNewConnectionIntern(cid, rv);
-        }
-
-        if (hdr."last-event-id".val()) {
-            replayEventsSince(rv, hdr."last-event-id");
-        }
-
-        return rv;
-    }
-
     #! Called when the connection is registered; the default implementation does nothing
     connectionRegisteredImpl(ServerSentEventConnection conn) {
         # override in child classes
@@ -362,7 +300,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     #! sends a message to all connected clients
     /** @param msg the data to send
 
-        Messages are automatically encoded with \c ServerSentEventUtil::ws_encode_message() before sending
+        Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     sendAll(hash<SseMessageInfo> msg) {
         string str = encodeMessage(msg);
@@ -378,10 +316,10 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
 
     #! sends a message to the given connection ID
     /** ServerSentEvent connections are identified by their HTTP connection ID as passed in
-        \c ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()"
+        @ref ServerSentEventHandler::ServerSentEventHandler::handleRequest() "ServerSentEventHandler::handleRequest()"
         in the \c "cx.id" argument when the connection is first established.
 
-        Messages are automatically encoded with \c ServerSentEventUtil::ws_encode_message() before sending
+        Messages are automatically encoded with @ref WebSocketUtil::ws_encode_message() before sending
     */
     sendOne(softstring id, hash<SseMessageInfo> msg) {
         string str = encodeMessage(msg);
@@ -443,11 +381,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         remove ch{cid};
     }
 
-    #! Send the default heartbeat message
-    private sendHeartbeatMsg(ServerSentEventConnection conn, Socket sock) {
-        sock.send2(getHeartbeatMessage(conn), DefaultSocketSendTimeout);
-    }
-
     #! Resend all events since the given event
     private replayEventsSince(ServerSentEventConnection conn, auto id) {
         # override in child classes
@@ -494,19 +427,6 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         }
     }
 
-    private:internal bool flushIoIntern(ServerSentEventConnection conn, Socket sock, bool update_tld) {
-        bool rv;
-        while (!conn.stop_flag && exists (*string d = conn.pollDataImmediate())) {
-            #printf("TID %d: ServerSentEventHandler::flushIo() sending msg %d bytes\n", gettid(), d.size());
-            sock.send2(d, DefaultSocketSendTimeout);
-            if (d && !rv) {
-                rv = True;
-                if (update_tld) {
-                    save_thread_data(tlk, True);
-                }
-            }
-        }
-        return rv ?? False;
-    }
 }
+
 }

@@ -84,6 +84,11 @@ public class UnleashedWatchDataProviderBase inherits UnleashedDataProviderBase,
         stopEventsIntern();
     }
 
+    #! Cancels any in-flight REST request during shutdown
+    private cancelPollOperation() {
+        rest.close();
+    }
+
     #! Performs a single polling operation
     private pollOnce() {
         date poll_start = now_us();

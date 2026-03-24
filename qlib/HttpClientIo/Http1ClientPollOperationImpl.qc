@@ -692,8 +692,9 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 connection_close = True;
             }
 
-            log(LoggerLevel::DEBUG, "response header: status=%d chunked=%y content_length=%d close=%y",
-                response_status_code, response_chunked, response_content_length, connection_close);
+            log(LoggerLevel::DEBUG, "response header: status=%d chunked=%y content_length=%d close=%y streaming=%y",
+                response_status_code, response_chunked, response_content_length, connection_close,
+                streaming_active);
 
             # Determine if the response has a body
             # HEAD responses, 1xx, 204, and 304 have no body regardless of headers
@@ -741,6 +742,17 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             } else if (connection_close) {
                 # No Content-Length, not chunked, but Connection: close — read until EOF
                 response_body = streaming_active ? NOTHING : binary();
+                current_op = sock.startPollRecvData();
+                req_state = REQ_RECV_BODY_CLOSE;
+                return handleRecvBodyClose();
+            } else if (streaming_active) {
+                # No Content-Length, not chunked, not Connection: close, but streaming mode —
+                # treat as read-until-close (SSE servers send Connection: Keep-Alive with
+                # Content-Type: text/event-stream and no framing headers; data arrives
+                # asynchronously until the server closes the connection).
+                # Mark connection as non-reusable since the socket buffer may have
+                # unframed data after the stream ends.
+                connection_close = True;
                 current_op = sock.startPollRecvData();
                 req_state = REQ_RECV_BODY_CLOSE;
                 return handleRecvBodyClose();
@@ -882,7 +894,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         if (poll_info) {
             return poll_info;
         }
-
         if (current_op.goalReached()) {
             auto data = current_op.getOutput();
             if (data && data.size() > 0) {
@@ -895,8 +906,18 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 current_op = sock.startPollRecvData();
                 return handleRecvBodyClose();
             }
-            # Empty read — server closed connection
-            return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
+            if (streaming_active) {
+                # In streaming mode, empty read means no data available yet —
+                # NOT EOF. Re-poll for more data. Actual EOF is detected by
+                # socket close (isDataAvailable returns True but recv returns empty).
+                current_op = sock.startPollRecvData();
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": sock,
+                };
+            }
+            # Empty read in non-streaming mode — server closed connection
+            return dispatchResponse();
         }
 
         # Read operation ended (likely EOF)
@@ -928,9 +949,19 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         auto body = response_body;
         if (body && body.typeCode() == NT_BINARY) {
             *string ct = response_headers."content-type";
-            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html)/
-                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/)) {
-                body = body.toString();
+            if (ct && (ct =~ /^text\// || ct =~ /\/(json|xml|yaml|html|javascript)/
+                    || ct =~ /\+(json|xml)/ || ct =~ /charset=/
+                    || ct =~ /x-www-form-urlencoded/)) {
+                # JSON and YAML are always UTF-8 per RFC 8259 / YAML spec
+                bool force_utf8 = ct =~ /\/(json|x-yaml|yaml)/ || ct =~ /\+json/;
+                *string charset;
+                if (!force_utf8) {
+                    *list<*string> m = (ct =~ x/charset=["']?([^\s;,"']+)/i);
+                    if (m) {
+                        charset = m[0];
+                    }
+                }
+                body = body.toString(charset ?? "UTF-8");
             }
         }
 
@@ -947,15 +978,14 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         log(LoggerLevel::DEBUG, "dispatching response: stream_id=%d status=%d body_size=%d",
             stream_id, response_status_code, response_body ? response_body.size() : 0);
 
-        if (cb) {
-            try {
-                cb(resp + {"ctx": stream_ctx}, NOTHING);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
-            }
-        }
-
-        # Clean up stream AFTER callback (same pattern as HTTP/2)
+        # Clean up ALL per-request state BEFORE the callback so that by the
+        # time the callback resolves the caller's Promise:
+        #   1. active_stream_count is already decremented
+        #   2. req_state is IDLE (ready for the next request)
+        #   3. response accumulators are cleared
+        # Without this, a new submitRequest() racing against resetResponseState()
+        # could have its streaming_active flag clobbered.
+        bool close = connection_close;
         {
             AutoLock al(stream_lock);
             string sid = string(stream_id);
@@ -965,14 +995,17 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             remove active_sid;
             remove active_method;
         }
-
-        # Save connection_close before resetResponseState() clears it
-        bool close = connection_close;
-
-        # Reset response accumulator
         req_state = REQ_IDLE;
         remove current_op;
         resetResponseState();
+
+        if (cb) {
+            try {
+                cb(resp + {"ctx": stream_ctx}, NOTHING);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
+            }
+        }
 
         # Check if server requested connection close
         if (close) {
@@ -1035,13 +1068,23 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         int stream_id;
         *HttpResponseCallback cb;
         *hash<auto> stream_ctx;
+        # Clean up ALL per-request state BEFORE callback (same rationale as normal response path)
+        bool close = connection_close;
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
             string sid = string(stream_id);
             cb = stream_callbacks{sid};
             stream_ctx = stream_ctxs{sid};
+            remove stream_callbacks{sid};
+            remove stream_ctxs{sid};
+            --active_stream_count;
+            remove active_sid;
+            remove active_method;
         }
+        req_state = REQ_IDLE;
+        remove current_op;
+        resetResponseState();
 
         if (cb) {
             try {
@@ -1050,25 +1093,6 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
                 log(LoggerLevel::ERROR, "streaming end callback exception: %s: %s", ex.err, ex.desc);
             }
         }
-
-        # Clean up stream state
-        {
-            AutoLock al(stream_lock);
-            string sid = string(stream_id);
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
-            --active_stream_count;
-            remove active_sid;
-            remove active_method;
-        }
-
-        # Save connection_close before resetResponseState() clears it
-        bool close = connection_close;
-
-        # Reset response accumulator
-        req_state = REQ_IDLE;
-        remove current_op;
-        resetResponseState();
 
         if (close) {
             log(LoggerLevel::DEBUG, "server requested connection close after streaming");

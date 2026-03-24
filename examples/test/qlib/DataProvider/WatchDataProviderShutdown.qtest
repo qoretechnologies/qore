@@ -1,0 +1,286 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class WatchDataProviderShutdownTest
+
+#! Dummy observer for watch data providers
+class TestObserver inherits DataProvider::Observer {
+    update(string event_id, hash<auto> data_) {
+        # no-op
+    }
+}
+
+#! A concrete watch data provider that simulates a long-running poll operation
+class SlowWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    public {
+        #! Set to True when cancelPollOperation() is called
+        bool cancel_called = False;
+
+        #! Set to True when pollOnce() starts
+        bool poll_started = False;
+
+        #! Counter for pollOnce() invocations
+        Counter poll_counter(0);
+
+        #! Condition for signaling that poll has started
+        Mutex poll_m();
+        Condition poll_cond();
+    }
+
+    private {
+        #! Simulated blocking gate — pollOnce() waits on this
+        Gate poll_gate();
+    }
+
+    constructor() : AbstractWatchDataProviderBase(1) {
+        # Lock the gate so pollOnce() blocks
+        poll_gate.enter();
+    }
+
+    #! Unblocks the gate, simulating what rest.close() does for real providers
+    releasePoll() {
+        poll_gate.exit();
+    }
+
+    private pollOnce() {
+        {
+            AutoLock al(poll_m);
+            poll_started = True;
+            poll_cond.broadcast();
+        }
+        poll_counter.inc();
+        # Block here until the gate is released (simulates a blocking HTTP request)
+        poll_gate.enter();
+        poll_gate.exit();
+    }
+
+    private cancelPollOperation() {
+        cancel_called = True;
+        # Release the gate to unblock pollOnce()
+        releasePoll();
+    }
+
+    #! Waits until pollOnce() has started
+    waitForPollStart(timeout timeout_ms = 5s) {
+        AutoLock al(poll_m);
+        while (!poll_started) {
+            if (poll_cond.wait(poll_m, timeout_ms)) {
+                throw "TIMEOUT", "pollOnce() did not start in time";
+            }
+        }
+    }
+
+    #! Public wrapper for isStopping()
+    bool checkStopping() {
+        return isStopping();
+    }
+
+    # Stubs required by AbstractDataProvider
+    string getName() { return "test-slow-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
+#! A watch data provider where pollOnce() completes quickly (tests normal stop during sleep)
+class FastWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    public {
+        #! Set to True when cancelPollOperation() is called
+        bool cancel_called = False;
+
+        #! Number of times pollOnce() was called
+        int poll_count = 0;
+
+        #! Gate to signal first poll is done
+        Mutex poll_m();
+        Condition poll_cond();
+    }
+
+    constructor() : AbstractWatchDataProviderBase(60) {
+    }
+
+    private pollOnce() {
+        {
+            AutoLock al(poll_m);
+            ++poll_count;
+            poll_cond.broadcast();
+        }
+    }
+
+    private cancelPollOperation() {
+        cancel_called = True;
+    }
+
+    #! Waits until at least one poll has completed
+    waitForFirstPoll(timeout timeout_ms = 5s) {
+        AutoLock al(poll_m);
+        while (poll_count < 1) {
+            if (poll_cond.wait(poll_m, timeout_ms)) {
+                throw "TIMEOUT", "pollOnce() did not complete in time";
+            }
+        }
+    }
+
+    #! Public wrapper for isStopping()
+    bool checkStopping() {
+        return isStopping();
+    }
+
+    # Stubs required by AbstractDataProvider
+    string getName() { return "test-fast-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
+#! A watch data provider whose cancelPollOperation() throws
+class ErrorCancelWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase {
+    public {
+        #! Set to True when pollOnce() starts
+        bool poll_started = False;
+
+        Mutex poll_m();
+        Condition poll_cond();
+    }
+
+    private {
+        Gate poll_gate();
+    }
+
+    constructor() : AbstractWatchDataProviderBase(1) {
+        poll_gate.enter();
+    }
+
+    releasePoll() {
+        poll_gate.exit();
+    }
+
+    private pollOnce() {
+        {
+            AutoLock al(poll_m);
+            poll_started = True;
+            poll_cond.broadcast();
+        }
+        poll_gate.enter();
+        poll_gate.exit();
+    }
+
+    private cancelPollOperation() {
+        # Release the gate first so the poll thread can exit
+        releasePoll();
+        # Then throw — stopEventsIntern() must still complete cleanly
+        throw "CANCEL-ERROR", "simulated cancel failure";
+    }
+
+    waitForPollStart(timeout timeout_ms = 5s) {
+        AutoLock al(poll_m);
+        while (!poll_started) {
+            if (poll_cond.wait(poll_m, timeout_ms)) {
+                throw "TIMEOUT", "pollOnce() did not start in time";
+            }
+        }
+    }
+
+    # Stubs
+    string getName() { return "test-error-cancel-watch"; }
+    private hash<DataProvider::DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "supports_observable": True,
+        };
+    }
+}
+
+class WatchDataProviderShutdownTest inherits QUnit::Test {
+    constructor() : Test("WatchDataProviderShutdownTest", "1.0") {
+        addTestCase("cancel during blocked poll", \testCancelDuringBlockedPoll());
+        addTestCase("cancel during sleep", \testCancelDuringSleep());
+        addTestCase("cancel error does not break shutdown", \testCancelErrorHandling());
+        addTestCase("isStopping flag", \testIsStoppingFlag());
+        set_return_value(main());
+    }
+
+    testCancelDuringBlockedPoll() {
+        SlowWatchDataProvider prov();
+        TestObserver obs();
+
+        prov.registerObserver(obs);
+        prov.observersReady();
+
+        # Wait for the poll thread to enter pollOnce()
+        prov.waitForPollStart();
+        assertTrue(prov.poll_started, "poll thread started");
+        assertEq(1, prov.poll_counter.getCount(), "pollOnce() entered once");
+
+        # Stop should complete promptly because cancelPollOperation() unblocks the gate
+        date start = now_us();
+        prov.stopEvents();
+        date elapsed = now_us() - start;
+
+        assertTrue(prov.cancel_called, "cancelPollOperation() was called");
+        # Should complete in well under 2 seconds (not waiting for poll interval)
+        assertTrue(elapsed < 2s, sprintf("shutdown completed promptly (elapsed: %y)", elapsed));
+    }
+
+    testCancelDuringSleep() {
+        FastWatchDataProvider prov();
+        TestObserver obs();
+
+        prov.registerObserver(obs);
+        prov.observersReady();
+
+        # Wait for the poll thread to complete one pollOnce() and enter sleep
+        prov.waitForFirstPoll();
+        assertTrue(prov.poll_count >= 1, "at least one poll completed");
+
+        # Stop should complete promptly because the condition broadcast wakes the sleep
+        date start = now_us();
+        prov.stopEvents();
+        date elapsed = now_us() - start;
+
+        assertTrue(prov.cancel_called, "cancelPollOperation() was called");
+        # Should not wait for the 60s poll interval
+        assertTrue(elapsed < 2s, sprintf("shutdown completed promptly (elapsed: %y)", elapsed));
+    }
+
+    testCancelErrorHandling() {
+        ErrorCancelWatchDataProvider prov();
+        TestObserver obs();
+
+        prov.registerObserver(obs);
+        prov.observersReady();
+
+        # Wait for poll to start
+        prov.waitForPollStart();
+
+        # stopEvents() should not throw even though cancelPollOperation() throws
+        prov.stopEvents();
+        assertTrue(True, "stopEvents() completed despite cancelPollOperation() throwing");
+    }
+
+    testIsStoppingFlag() {
+        FastWatchDataProvider prov();
+        assertFalse(prov.checkStopping(), "not stopping before start");
+
+        TestObserver obs();
+        prov.registerObserver(obs);
+        prov.observersReady();
+        assertFalse(prov.checkStopping(), "not stopping after start");
+
+        prov.stopEvents();
+        assertTrue(prov.checkStopping(), "stopping after stopEvents()");
+    }
+}

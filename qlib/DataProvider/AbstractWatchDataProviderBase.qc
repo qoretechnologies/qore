@@ -97,6 +97,12 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
             stop_flag = True;
             sleep_cond.broadcast();
         }
+        # Cancel any in-flight polling operation (e.g., a blocked HTTP request)
+        try {
+            cancelPollOperation();
+        } catch (hash<ExceptionInfo> ex) {
+            # Ignore cancel errors to ensure wg.wait() always runs
+        }
         wg.wait();
     }
 
@@ -136,6 +142,19 @@ public class AbstractWatchDataProviderBase inherits DataProvider::DelayedObserva
     */
     private logPollError(hash<ExceptionInfo> ex) {
         # Default: ignore; subclasses should override for proper logging
+    }
+
+    #! Called during shutdown to cancel any in-flight polling operation
+    /** Override this method to cancel blocking I/O (e.g., close a REST client) so the
+        polling thread can exit promptly instead of waiting for the operation to complete
+        or time out.
+
+        The default implementation does nothing.
+
+        @since DataProvider 3.4
+    */
+    private cancelPollOperation() {
+        # Default: no-op; subclasses should override to cancel in-flight requests
     }
 
     #! Returns @ref True if the stop flag is set

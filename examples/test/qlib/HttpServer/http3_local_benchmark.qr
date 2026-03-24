@@ -125,7 +125,6 @@ MlNjZ7VLniPrDSAVQq1L/dPuFA8V4OG6JQg9hsdS5fIsAorZEiybG2Fj4OBlOT0e
 
         server = new HttpServer(<HttpServerOptionInfo>{
             "logger": logger,
-            "async_mode": True,
         });
 
         SSLCertificate cert(CertPem);

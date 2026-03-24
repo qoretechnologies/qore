@@ -69,6 +69,11 @@ public class GoHighLevelWatchDataProviderBase inherits GoHighLevelDataProviderBa
         stopEventsIntern();
     }
 
+    #! Cancels any in-flight REST request during shutdown
+    private cancelPollOperation() {
+        rest.close();
+    }
+
     #! Polls for new records once
     private pollOnce() {
         try {

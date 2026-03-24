@@ -189,19 +189,19 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 
     @subsection qunit_v0_3_1 Version 0.3.1
     - added the following methods:
-      - \c QUnit::Test::assertRegex()
-      - \c QUnit::Test::assertNRegex()
-      - \c QUnit::Test::assertNeq()
-      - \c QUnit::Test::assertNeqSoft()
-      - \c QUnit::Test::assertGt()
-      - \c QUnit::Test::assertGtSoft()
-      - \c QUnit::Test::assertGe()
-      - \c QUnit::Test::assertGeSoft()
-      - \c QUnit::Test::assertLt()
-      - \c QUnit::Test::assertLtSoft()
-      - \c QUnit::Test::assertLe()
-      - \c QUnit::Test::assertLeSoft()
-      - \c QUnit::Test::assertNothing()
+      - @ref QUnit::Test::assertRegex()
+      - @ref QUnit::Test::assertNRegex()
+      - @ref QUnit::Test::assertNeq()
+      - @ref QUnit::Test::assertNeqSoft()
+      - @ref QUnit::Test::assertGt()
+      - @ref QUnit::Test::assertGtSoft()
+      - @ref QUnit::Test::assertGe()
+      - @ref QUnit::Test::assertGeSoft()
+      - @ref QUnit::Test::assertLt()
+      - @ref QUnit::Test::assertLtSoft()
+      - @ref QUnit::Test::assertLe()
+      - @ref QUnit::Test::assertLeSoft()
+      - @ref QUnit::Test::assertNothing()
 
     @subsection qunit_v0_3 Version 0.3
     - updated for complex types

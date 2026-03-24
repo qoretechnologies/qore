@@ -132,6 +132,11 @@ public class GmailMessageWatchDataProviderBase inherits GoogleDataProvider::Goog
         stopEventsIntern();
     }
 
+    #! Cancels any in-flight REST request during shutdown
+    private cancelPollOperation() {
+        rest.close();
+    }
+
     #! Process constructor options
     private processOptions(*hash<auto> copts) {
         poll_secs = GmailMessageWatchDataProviderBase::getPollInterval(copts);

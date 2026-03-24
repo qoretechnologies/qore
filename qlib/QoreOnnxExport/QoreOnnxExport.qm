@@ -54,16 +54,15 @@ module QoreOnnxExport {
 
     @section qoreonnxexportalgos Supported Algorithms
 
-    | Algorithm | ONNX Graph | Notes |
-    |-----------|-----------|-------|
-    | @ref ML::StandardScaler "StandardScaler" | \c Sub → \c Div | Feature normalization |
-    | @ref ML::MinMaxScaler "MinMaxScaler" | \c Sub → \c Div → \c Mul → \c Add | Range scaling |
-    | @ref ML::Imputer "Imputer" | \c IsNaN → \c Where | Missing value replacement |
-    | @ref ML::LinearRegression "LinearRegression" | \c MatMul → \c Add | Linear prediction |
-    | @ref ML::LogisticRegression "LogisticRegression" | \c MatMul → \c Add → \c Sigmoid/\c Softmax | Classification |
-    | @ref ML::PCA "PCA" | \c Sub [→ \c Div] → \c MatMul | Dimensionality reduction |
-    | @ref ML::KMeans "KMeans" | Distance computation → \c ArgMin | Cluster assignment |
-    | @ref ML::IsolationForest "IsolationForest" | \c TreeEnsembleRegressor → score | Anomaly detection |
+    |!Algorithm|!ONNX Graph|!Notes
+    |@ref ML::StandardScaler "StandardScaler"|\c Sub → \c Div|Feature normalization
+    |@ref ML::MinMaxScaler "MinMaxScaler"|\c Sub → \c Div → \c Mul → \c Add|Range scaling
+    |@ref ML::Imputer "Imputer"|\c IsNaN → \c Where|Missing value replacement
+    |@ref ML::LinearRegression "LinearRegression"|\c MatMul → \c Add|Linear prediction
+    |@ref ML::LogisticRegression "LogisticRegression"|\c MatMul → \c Add → \c Sigmoid/\c Softmax|Classification
+    |@ref ML::PCA "PCA"|\c Sub [→ \c Div] → \c MatMul|Dimensionality reduction
+    |@ref ML::KMeans "KMeans"|Distance computation → \c ArgMin|Cluster assignment
+    |@ref ML::IsolationForest "IsolationForest"|\c TreeEnsembleRegressor → score|Anomaly detection
 
     @note All tensor data is exported as \c float (32-bit). Qore ML models use
     \c double (64-bit) internally, so there is a minor precision reduction in the

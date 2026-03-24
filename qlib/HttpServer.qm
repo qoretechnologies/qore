@@ -59,11 +59,10 @@ module HttpServer {
     other types of traffic with an appropriate handler (for example handlers requiring protocol changes such as with
     the WebSocket protocol are supported as well).
 
-    The HttpServer module supports async I/O and HTTP/2. Async I/O mode uses a non-blocking I/O controller to accept
-    connections and read headers efficiently, then dispatches request processing to the thread pool. HTTP/2 support
-    requires async I/O mode; when async I/O is disabled, the server only supports HTTP/1.x. Enable async I/O with the
-    \c "async_mode" key in @ref HttpServerOptionInfo and see the @ref httpserverasynciointro "HttpServerAsyncIo"
-    module for additional details.
+    The HttpServer module uses async I/O for all connection handling and supports HTTP/1.x, HTTP/2, and HTTP/3.
+    Async I/O uses a non-blocking I/O controller to accept connections and read headers efficiently, then dispatches
+    request processing to the thread pool. See the \c httpserverasynciointro "HttpServerAsyncIo" module for
+    additional details.
 
     To use this module, use \c "%requires HttpServer" in your code.  See examples/httpserver.qr for an example program
     using this module
@@ -73,7 +72,7 @@ module HttpServer {
     The main classes is (see @ref httpserverutilintro "HttpServerUtil" for supporting definitions; note that the
     @ref httpserverutilintro "HttpServerUtil" module's definitions are also imported into @ref Qore::Program "Program"
     objects @ref requires "requiring" this module):
-    - \c HttpServer::HttpServer "HttpServer": this class implements the main interface to the HTTP server provided
+    - @ref HttpServer::HttpServer "HttpServer": this class implements the main interface to the HTTP server provided
       by this module
 
     See also:
@@ -95,7 +94,7 @@ module HttpServer {
 
     @section httpserverhttp3 HTTP/3 (QUIC) Support
 
-    When \c async_mode is enabled and a TLS listener is added with \c enable_h3 (or when
+    When a TLS listener is added with \c enable_h3 (or when
     \c enable_h3 defaults to \c True), the server automatically creates a paired QUIC/UDP
     listener on the \b same port as the TCP listener.  This follows the standard HTTP/3
     deployment model where TCP (HTTP/1.1 and HTTP/2) and UDP (HTTP/3 over QUIC) share the
@@ -104,10 +103,10 @@ module HttpServer {
     @par Paired Listener Architecture
     - Each TCP/TLS listener with HTTP/3 enabled gets a paired QUIC listener
     - The QUIC listener binds to the same port on UDP
-    - Handlers added via @ref HttpServer::addHandlerToListenerID()
+    - Handlers added via @ref HttpServer::HttpServer::addHandlerToListenerID()
       "addHandlerToListenerID()" are automatically propagated to the paired QUIC listener
       (with a \c "-h3" suffix on the handler name)
-    - Handler removal via @ref HttpServer::removeHandlerFromListenerID()
+    - Handler removal via @ref HttpServer::HttpServer::removeHandlerFromListenerID()
       "removeHandlerFromListenerID()" also removes the propagated handler from the paired
       QUIC listener
     - Stopping a TCP listener also stops its paired QUIC listener
@@ -116,8 +115,7 @@ module HttpServer {
 
     @par Configuration
     - \c enable_h3: set to \c True in @ref HttpListenerOptionInfo to enable HTTP/3 for a
-      listener (defaults to \c True for TLS listeners in async mode when QUIC support is
-      available)
+      listener (defaults to \c True for TLS listeners when QUIC support is available)
     - \c alt_svc_max_age: the \c max-age value for the \c Alt-Svc header in seconds
       (default: 86400)
 
@@ -125,13 +123,11 @@ module HttpServer {
     @code{.py}
 %requires HttpServer
 
-HttpServer server({"async_mode": True});
+HttpServer server();
 server.setDefaultHandler("api", my_handler);
 # HTTPS listener with automatic HTTP/3 — QUIC binds to the same port on UDP
 server.addListener({"service": 8443, "cert": cert, "key": key});
     @endcode
-
-    @note HTTP/3 requires async I/O mode.  Without \c async_mode, only HTTP/1.x is supported.
 
     @par Example:
     @code{.py}
@@ -190,7 +186,7 @@ log("started listener on %s", lh.desc);
       including cookie names, cookie domains, OIDC flags, and public URLs
     - added \c enable_h3 and \c alt_svc_max_age configuration options
     - added maximum HTTP request body size enforcement (\c max_request_body_size)
-    - added \c sync option to allow non-blocking listener addition in async I/O mode
+    - added \c sync option to allow non-blocking listener addition
     - added Brotli (\c br) and Zstandard (\c zstd) Content-Encoding support
       (<a href="https://github.com/qoretechnologies/qore/issues/5071">issue 5071</a>)
       - responses can be compressed with Brotli or Zstd when clients send appropriate \c Accept-Encoding headers
@@ -206,7 +202,7 @@ log("started listener on %s", lh.desc);
       torn down while async logging was still active
 
     @subsection http1_5 HttpServer 1.5
-    - introduced async I/O mode for HttpServer (unreleased feature)
+    - introduced async I/O for HttpServer (now the only mode)
 
     @subsection http1_4 HttpServer 1.4
     - allow the listener class to be overridden and added \c "listener-name" to the context hash
@@ -238,7 +234,7 @@ log("started listener on %s", lh.desc);
       (<a href="https://github.com/qoretechnologies/qore/issues/4363">issue 4363</a>)
 
     @subsection http1_0_2 HttpServer 1.0.2
-    - \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
+    - @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" has no mechanism for returning errors
       to the caller
       (<a href="https://github.com/qoretechnologies/qore/issues/4312">issue 4312</a>)
 
@@ -285,7 +281,7 @@ log("started listener on %s", lh.desc);
     - added the \c "header-info" hash to the context argument when calling handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/3026">issue 3026</a>)
     - added support for adding new HTTP methods to the server with the
-      \c HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
+      @ref HttpServer::HttpServer::addHttpMethod() "HttpServer::addHttpMethod()" method
       (<a href="https://github.com/qoretechnologies/qore/issues/2805">issue 2805</a>)
 
     @subsection http03121 HttpServer 0.3.12.1
@@ -298,17 +294,17 @@ log("started listener on %s", lh.desc);
     - added support for the HTTP \c "PATCH" method
 
     @subsection http03111 HttpServer 0.3.11.1
-    - fixed a bug where \c HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
+    - fixed a bug where @ref HttpServer::HttpServer::addListener() would not accept port 0 meaning bind on any random open port (<a href="https://github.com/qoretechnologies/qore/issues/1284">bug 1284</a>)
 
     @subsection http0311 HttpServer 0.3.11
-    - fixed a bug setting the response encoding in \c HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
+    - fixed a bug setting the response encoding in @ref HttpServer::HttpServer::setReplyHeaders() where the Socket encoding was not set properly and therefore the encoding in the \c Content-Type in the response header did not necessarily match the encoding of the response
     - added support for private keys with passwords
     - added the @ref HttpServer::PermissiveAuthenticator "PermissiveAuthenticator" class
     - moved base code to the @ref httpserverutilintro "HttpServerUtil" module (imported with the \c reexport option) and santized APIs, made HttpListener class private/internal again
     - fixed a socket / connection performance problem with HTTPS listeners where the SSL connection was being negotiated inline with the accept instead of in the connection thread, thereby blocking new connections from being accepted
     - new methods implemented in HttpServer:
-      - \c HttpServer::HttpServer::setListenerLogOptions()
-      - \c HttpServer::HttpServer::setListenerLogOptionsID()
+      - @ref HttpServer::HttpServer::setListenerLogOptions()
+      - @ref HttpServer::HttpServer::setListenerLogOptionsID()
     - performance improvement of matching handlers to request URIs (not used for RegExp matching)
     - changed the order of path-based handler matching:
       - the old implementation selects the first (in order of their registration) handler whose path matches the request URI, regexp and path matching have the same priority
@@ -316,9 +312,9 @@ log("started listener on %s", lh.desc);
         - first, handlers without regexp are considered - if there are some handler with their path matching the request, the one with the longest path is selected
         - otherwise, the first (in order of their registration) handler with regexp that matches the request URI is chosen
       - if no path matches the request, the same logic as before applies
-    - added \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners(string, hash, *code, *code, *code, *string, int)"
-    - fixed a bug in \c HttpServer::HttpServer::addListener() with an integer argument; a UNIX socket was opened instead of a wildcard listener on the given port
-    - added the \c HttpServer::HttpServer::listenerStarted() method to allow for reporting when listeners are actually running since they are started asynchronously
+    - added @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners(string, hash, *code, *code, *code, *string, int)"
+    - fixed a bug in @ref HttpServer::HttpServer::addListener() with an integer argument; a UNIX socket was opened instead of a wildcard listener on the given port
+    - added the @ref HttpServer::HttpServer::listenerStarted() method to allow for reporting when listeners are actually running since they are started asynchronously
     - added the \c "ssl" key to the listener socket info hash
     - fixed typos causing bugs in HTTP error logging (<a href="https://github.com/qoretechnologies/qore/issues/308">bug 308</a>)
     - fixed bugs handling persistent connections
@@ -355,13 +351,13 @@ log("started listener on %s", lh.desc);
     - improved handler matching algorithm
     - implemented many performance improvements
     - implemented support for simple string path matching when finding a handler for a request
-    - added static \c HttpServer::AbstractHttpRequestHandler::redirect() to help in generating 301 Moved Permanently messages
+    - added static @ref HttpServer::AbstractHttpRequestHandler::redirect() to help in generating 301 Moved Permanently messages
 
     @subsection http036 HttpServer 0.3.6
     - fixed a race condition in tracking active requests in dynamic HTTP handlers and removing dynamic HTTP handlers
 
     @subsection http035 HttpServer 0.3.5
-    - fixed bugs in regexes in the \c HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" and
+    - fixed bugs in regexes in the @ref HttpServer::HttpServer::addListeners() "HttpServer::addListeners()" and
       \c HttpServer::addListenersWithHandler() methods
     - updated module example code in summary
     - added \c "listener-id" to request context hash
@@ -479,40 +475,22 @@ public hashdecl HttpServerOptionInfo {
 %endif
         ;
 
-    #! Enable async I/O mode for high-concurrency connection handling
-    /** When enabled, a single I/O thread handles accept and HTTP header reading
-        using non-blocking I/O, then dispatches request processing to the ThreadPool.
-        This allows handling many more concurrent connections with fewer threads.
-
-        @note HTTP/2 support requires async mode to be enabled. When \c async_mode is \c False,
-        the server only supports HTTP/1.x regardless of the \c http_version setting on listeners.
-        This is because HTTP/2 requires:
-        - ALPN (Application-Layer Protocol Negotiation) during the TLS handshake
-        - Non-blocking I/O for HTTP/2 frame processing
-        - Event-driven handling for stream multiplexing
-
-        @since HttpServer 1.5
-    */
-    bool async_mode = True;
-
     #! Maximum number of handler threads for the async I/O thread pool (0 = unlimited)
-    /** Only used when \c async_mode is enabled. Controls the maximum number of concurrent
-        threads that can be used for request processing. Set to 0 (default) for unlimited.
+    /** Controls the maximum number of concurrent threads that can be used for request processing.
+        Set to 0 (default) for unlimited.
 
         @since HttpServer 1.6
     */
     int max_handler_threads = 0;
 
     #! Minimum idle handler threads kept alive in the async I/O thread pool
-    /** Only used when \c async_mode is enabled.
-
+    /**
         @since HttpServer 1.6
     */
     int min_idle_handler_threads = 0;
 
     #! Maximum idle handler threads in the async I/O thread pool
-    /** Only used when \c async_mode is enabled.
-
+    /**
         @since HttpServer 1.6
     */
     int max_idle_handler_threads = 0;
@@ -527,8 +505,8 @@ public hashdecl HttpServerOptionInfo {
     int max_request_body_size = 0;
 
     #! Enable automatic HTTP/3 (QUIC) listener creation for TLS listeners
-    /** When \c True (the default), QUIC listeners are automatically created alongside TLS TCP listeners
-        in async mode.  The server advertises HTTP/3 availability via the \c Alt-Svc response header.
+    /** When \c True (the default), QUIC listeners are automatically created alongside TLS TCP listeners.
+        The server advertises HTTP/3 availability via the \c Alt-Svc response header.
 
         Set to \c False to disable automatic QUIC listener creation server-wide.
 
@@ -579,7 +557,6 @@ public hashdecl HttpServerOptionInfo {
         @par Example
         @code{.py}
         HttpServer server(<HttpServerOptionInfo>{
-            "async_mode": True,
             "quic_headers_only": True,
         });
         server.setHandler("upload", "/upload", NOTHING, new MyStreamingHandler());
@@ -763,9 +740,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #! Idle disconnect (TTL) for connections
         date ttl = DefaultTtl;
 
-        #! Async I/O mode enabled (default: True)
-        bool asyncMode = True;
-
         #! Maximum HTTP request body size in bytes (0 = unlimited)
         int max_request_body_size = 0;
 
@@ -797,7 +771,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         */
         hash<string, string> listener_alt_svc;
 
-        #! Async I/O controller (when async mode is enabled)
+        #! Async I/O controller
         *HttpServerAsyncIo::HttpAsyncSocketIoController asyncIo;
 
         #! Native async target for callback-based async I/O
@@ -831,7 +805,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Signals all active streaming handlers (SSE, WebSocket) to stop their polling loops
     /** Called by the async I/O controller during shutdown before waiting for the handler pool
         to complete.  This allows handler tasks to exit deterministically so that
-        @ref ThreadPool::stopWait() "stopWait()" does not block indefinitely.
+        \c ThreadPool::stopWait() "stopWait()" does not block indefinitely.
 
         @since HttpServer 1.6
     */
@@ -1087,7 +1061,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
 
         @note This method blocks until async I/O is ready to accept connections.
-        Use @ref addListener(hash<HttpListenerOptionInfo>) with \c sync: \c False to add listeners without blocking.
+        Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
      */
     hash<auto> addListener(int port) {
         hash<auto> rv = addListenerIntern(<HttpListenerOptionInfo>{
@@ -1132,14 +1106,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         @return a hash with \c port and \c name keys
 
-        @throw HTTP3-ERROR if async mode is not enabled or certificate/key missing
+        @throw HTTP3-ERROR if certificate/key missing
 
         @since Qore 2.3
     */
     hash<auto> addQuicListener(hash<HttpListenerOptionInfo> opts, int port = 0) {
-        if (!asyncMode) {
-            throw "HTTP3-ERROR", "HTTP/3 QUIC listeners require async mode (async_mode: True)";
-        }
         if (!opts.cert || !opts.key) {
             throw "HTTP3-ERROR", "QUIC requires SSL certificate and private key for TLS 1.3";
         }
@@ -1457,7 +1428,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # Stop the callback-based async I/O controller
         # The new HttpAsyncSocketIoController.stop() cancels all HTTP operations it manages
         # (accept, header reads, idle connections) on the global async I/O controller
-        @debug(log("stop: asyncMode=%y", asyncMode));
         if (asyncIo) {
             # Signal streaming handlers before stopping the controller so handler tasks
             # exit promptly (done here instead of in HttpServerNativeAsyncTarget.stopStreaming()
@@ -1466,15 +1436,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             asyncIo.stop();
         }
 
-        if (asyncMode) {
-            # Cancel any remaining operations owned by this server on the global controller
-            # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
-            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-            string ownerId = self.uniqueHash();
-            @debug(log("stop: calling cancelByOwner(%s)", ownerId));
-            int canceled = ctrl.cancelByOwner(ownerId);
-            @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
-        }
+        # Cancel any remaining operations owned by this server on the global controller
+        # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        string ownerId = self.uniqueHash();
+        @debug(log("stop: calling cancelByOwner(%s)", ownerId));
+        int canceled = ctrl.cancelByOwner(ownerId);
+        @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
 
         # Shutdown all listeners - stop accepting new connections
         {
@@ -1569,14 +1537,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     }
 
     #! gets the TID of a listener based on its listener ID
-    /** In async mode, returns 0 since the callback-based controller uses shared I/O
-        threads rather than a dedicated listener thread.
+    /** @deprecated Always returns 0; async I/O uses shared I/O threads rather than dedicated
+        listener threads.
     */
-    int getListenerTID(softint id) {
-        if (asyncMode) {
-            return 0;
-        }
-        return listeners{id}.tid;
+    deprecated int getListenerTID(softint id) {
+        return 0;
     }
 
     #! sets the default request handler when no other handler can be matched
@@ -2100,21 +2065,21 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return debug;
     }
 
-    #! Returns True if async I/O mode is enabled
-    /** @return True if async I/O mode is enabled, False otherwise
+    #! Returns True; async I/O is always enabled
+    /** @return always returns True
+
+        @deprecated Async I/O is now the only mode; this method always returns True.
 
         @since HttpServer 1.5
     */
-    bool getAsyncMode() {
-        return asyncMode;
+    deprecated bool getAsyncMode() {
+        return True;
     }
 
     #! Returns a connection to the async I/O controller for keep-alive handling
     /** @param sock the socket to return
         @param cx the connection context
         @param listener the listener for this connection
-
-        @note This method does nothing if async mode is not enabled
 
         @since HttpServer 1.5
     */
@@ -2124,9 +2089,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
-    #! Returns True if async mode is enabled
-    bool isAsyncMode() {
-        return asyncMode;
+    #! Returns True; async I/O is always enabled
+    /** @deprecated Async I/O is now the only mode; this method always returns True.
+    */
+    deprecated bool isAsyncMode() {
+        return True;
     }
 
     #! Waits for async I/O to be ready to accept connections
@@ -2136,8 +2103,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
         @param timeout maximum time to wait; use @ref NOTHING for no timeout (default: 5 seconds)
 
-        @return @ref True if async I/O is ready, @ref False if the timeout expired or async mode
-        is not enabled
+        @return @ref True if async I/O is ready, @ref False if the timeout expired
 
         @note This method is primarily useful for testing scenarios where clients connect
         immediately after server setup. In production, the async I/O typically starts fast enough
@@ -2146,7 +2112,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @since HttpServer 1.1.4
     */
     bool waitForAsyncIo(*timeout timeout) {
-        if (!asyncMode || !asyncIo) {
+        if (!asyncIo) {
             return False;
         }
         timeout = timeout ?? 5s;
@@ -2194,29 +2160,22 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (opts.ttl) {
             setTtl(opts.ttl);
         }
-        # Initialize async I/O mode (default: enabled)
-        # Note: opts.async_mode should be True by default from the hashdecl,
-        # but we use ?? True to ensure async mode is enabled even if opts is
-        # passed as a hash<auto> instead of hash<HttpServerOptionInfo>
         max_request_body_size = opts.max_request_body_size ?? 0;
         enable_h3 = opts.enable_h3 ?? True;
         alt_svc_max_age = opts.alt_svc_max_age ?? 3600;
-        asyncMode = opts.async_mode ?? True;
-        @debug(log("init: asyncMode=%y", asyncMode));
-        if (asyncMode) {
-            AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-            # Set logger on the global controller for async I/O logging
-            ctrl.setLogger(logger);
-            asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
-            asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
-                "max_handler_threads": opts.max_handler_threads,
-                "min_idle_handler_threads": opts.min_idle_handler_threads,
-                "max_idle_handler_threads": opts.max_idle_handler_threads,
-                "quic_drain_timeout": opts.quic_drain_timeout,
-                "quic_headers_only": opts.quic_headers_only,
-            });
-            asyncIo.start();
-        }
+        # Initialize async I/O
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        # Set logger on the global controller for async I/O logging
+        ctrl.setLogger(logger);
+        asyncTarget = new Priv::HttpServerNativeAsyncTarget(logger);
+        asyncIo = new HttpServerAsyncIo::HttpAsyncSocketIoController(ctrl, logger, {
+            "max_handler_threads": opts.max_handler_threads,
+            "min_idle_handler_threads": opts.min_idle_handler_threads,
+            "max_idle_handler_threads": opts.max_idle_handler_threads,
+            "quic_drain_timeout": opts.quic_drain_timeout,
+            "quic_headers_only": opts.quic_headers_only,
+        });
+        asyncIo.start();
     }
 
     #! Updates the per-listener Alt-Svc response headers based on active QUIC listeners
@@ -2341,10 +2300,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("there is already an active listener with name %y", info.name);
         }
 
-        # In async mode, don't start the listener's main thread
-        if (asyncMode) {
-            info.no_start_main_thread = True;
-        }
+        # Don't start the listener's main thread (async I/O handles connections)
+        info.no_start_main_thread = True;
 
         c.add();
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
@@ -2365,41 +2322,39 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             smap{nsock} = remove smap{sock};
         }
 
-        # In async mode, add the listener to the async I/O controller
+        # Add the listener to the async I/O controller
         # Must be done AFTER registration to avoid race condition
-        if (asyncMode) {
-            asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
-                l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
-                l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
+        asyncIo.addListener(l, asyncTarget, l.isSsl(), l.getSslCertificateObject(),
+            l.getSslPrivateKeyObject(), l.getHttpVersion(), l.getSslVerifyFlags(),
+            l.getSslAcceptAllCerts(), l.getGetRemoteCerts(), l.getMaxRequestBodySize(), l);
 
-            # Auto-create QUIC listener for TLS listeners in async mode
-            if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
-                try {
-                    # Use the actual listener socket info to get the resolved address
-                    # and family, since the original info may have AF_UNSPEC / no node
-                    hash<auto> linfo = l.getInfo();
-                    hash<HttpListenerOptionInfo> quic_opts = <HttpListenerOptionInfo>{
-                        "cert": info.cert,
-                        "key": info.key,
-                        "node": linfo.address ?? info.node,
-                        "family": linfo.family,
-                        "alt_svc_max_age": info.alt_svc_max_age,
-                    };
-                    if (info.additional_info) {
-                        quic_opts.additional_info = info.additional_info;
-                    }
-                    hash<auto> quic_info = addQuicListener(quic_opts, linfo.port);
-                    quic_port_map{id} = quic_info.port;
-                    quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
-                    quic_listener_map{id} = quic_info.id;
-                    updateAltSvcHeader();
-                    log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
-                        quic_info.port, id);
-                } catch (hash<ExceptionInfo> ex) {
-                    # QUIC auto-creation is best-effort; log and continue with TCP-only
-                    log("WARNING: Failed to auto-create QUIC listener for TCP listener %d: %s: %s",
-                        id, ex.err, ex.desc);
+        # Auto-create QUIC listener for TLS listeners
+        if (enable_h3 && info.cert && info.key && (info.enable_h3 ?? True)) {
+            try {
+                # Use the actual listener socket info to get the resolved address
+                # and family, since the original info may have AF_UNSPEC / no node
+                hash<auto> linfo = l.getInfo();
+                hash<HttpListenerOptionInfo> quic_opts = <HttpListenerOptionInfo>{
+                    "cert": info.cert,
+                    "key": info.key,
+                    "node": linfo.address ?? info.node,
+                    "family": linfo.family,
+                    "alt_svc_max_age": info.alt_svc_max_age,
+                };
+                if (info.additional_info) {
+                    quic_opts.additional_info = info.additional_info;
                 }
+                hash<auto> quic_info = addQuicListener(quic_opts, linfo.port);
+                quic_port_map{id} = quic_info.port;
+                quic_alt_svc_max_age{id} = quic_info.alt_svc_max_age;
+                quic_listener_map{id} = quic_info.id;
+                updateAltSvcHeader();
+                log("Auto-created QUIC/HTTP/3 listener on UDP port %d for TCP listener %d",
+                    quic_info.port, id);
+            } catch (hash<ExceptionInfo> ex) {
+                # QUIC auto-creation is best-effort; log and continue with TCP-only
+                log("WARNING: Failed to auto-create QUIC listener for TCP listener %d: %s: %s",
+                    id, ex.err, ex.desc);
             }
         }
 
@@ -2584,7 +2539,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     if (listener.defaultHandler) {
                         hi = listener.defaultHandler;
                     } else if (async_response_out) {
-                        # Async mode: capture the 404 response for the controller to send
+                        # Capture the 404 response for the async I/O controller to send
                         async_response_out = buildAsyncErrorResponse(404, "Not found", cx,
                             listener, s, !is_multiplexed);
                         return;
@@ -2620,8 +2575,23 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             if (handler && hdr.expect) {
                 if (hdr.expect == "100-continue") {
                     hash<HttpResponseInfo> resp = handler.handleExpectHeader(cx, hdr);
-                    # Note: 100-continue is always sent synchronously since we need to wait for body
-                    sendReply(request_helper, listener, s, handler, resp, \cx, hdr, head);
+                    # 100-continue is an intermediate response that must be sent directly on the
+                    # socket before the client sends the body.  Do NOT route through sendReply()
+                    # or doResponse() because those capture to async_response_out, which would
+                    # replace the eventual main response and never reach the client.
+                    if (resp."code" == 100) {
+                        if (cx."header-info".http2) {
+                            # HTTP/2: no 100-continue mechanism; the body is already being sent
+                            # by the client on the stream — nothing to do
+                        } else {
+                            s.send("HTTP/1.1 100 Continue\r\n\r\n");
+                        }
+                    } else {
+                        # Handler rejected the request (non-100 response)
+                        sendReply(request_helper, listener, s, handler, resp, \cx, hdr, head,
+                            \async_response_out);
+                        return;
+                    }
                 } else {
                     string etxt = sprintf("unrecognized 'Expect' header: %y", hdr.expect);
                     string str = sprintf("%s: received from %s via %s (header: %y)", etxt,
@@ -2996,9 +2966,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
             int err_code = ex.err == "HTTP-BODY-TOO-LARGE" ? 413 : 500;
             if (async_response_out) {
-                # Async mode: capture the error response for the controller to send
+                # Capture the error response for the async I/O controller to send
                 # Sending synchronously from the handler thread races with the
-                # async I/O controller on multiplexed (HTTP/2, HTTP/3) connections
+                # I/O controller on multiplexed (HTTP/2, HTTP/3) connections
                 async_response_out = buildAsyncErrorResponse(err_code, str, cx, listener, s, !is_multiplexed);
             } else {
                 sendHttpError(listener, cx, s, err_code, str, NOTHING, NOTHING, cx."response-encoding", head);
@@ -3009,7 +2979,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
     #! @endcond
 
     # Builds an async error response for the controller to send
-    # Used in async mode to avoid synchronous sends that race with the I/O controller
+    # Builds an async error response to avoid synchronous sends that race with the I/O controller
     hash<HttpAsyncResponseInfo> buildAsyncErrorResponse(int status_code, string msg,
             hash<auto> cx, HttpListener listener, Socket s, bool close) {
         *string encoding = cx."response-encoding";
@@ -3117,7 +3087,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 rv.body = sprintf("unknown error in %s handler", cx.handler_name);
             }
             if (async_response_out) {
-                # In async mode, capture the error response for the controller to send
+                # Capture the error response for the async I/O controller to send
                 # through h2op (HTTP/2) or sendHTTPResponse (HTTP/1.x), rather than
                 # sending directly on the socket which would bypass the poll operation
                 # state machine and corrupt the connection lifecycle
@@ -3219,7 +3189,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             if (ctrl) {
                                 ctrl.wake();
                             }
-                        } else if (cx.async_mode) {
+                        } else {
                             # HTTP/2 multiplexed mode: submit CONNECT response directly
                             # to the nghttp2 session.  h2op on the I/O thread will flush it.
                             s.submitHttp2ConnectResponse(stream_id, rv."code" ?? 200, resp_hdr);
@@ -3229,11 +3199,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             if (ctrl) {
                                 ctrl.wake();
                             }
-                        } else {
-                            # Sync mode: use poll operation
-                            AbstractPollOperation op = s.startPollSendHttp2ConnectResponse(
-                                stream_id, rv."code" ?? 200, resp_hdr);
-                            execAsyncPollOperation(s, op);
                         }
 
                         hash<auto> sock_cx = cx + {"listener": listener, "id": sock_id};
@@ -3267,7 +3232,35 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             return;
         }
-        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
+        if (rv.hdr."Content-Type" == MimeTypeSse) {
+            # SSE response — set up async SSE connection via the I/O controller
+            if (rv.close) {
+                listener.logError("cid %d: SSE response returned from handler %y, but the connection "
+                    "close flag is set", cx.id, cx.handler_name);
+            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+                listener.logError("cid %d: SSE response returned from handler %y, but the handler does "
+                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
+                    handler.className());
+            } else if (async_response_out) {
+                # Use call_object_method since HttpServer doesn't require ServerSentEventHandler
+                try {
+                    HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
+                        call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr,
+                            string(cx.id));
+                    # Tell the async controller to manage this socket as an SSE stream
+                    async_response_out.code = rv."code";
+                    async_response_out.hdr = rv.hdr;
+                    async_response_out.streaming = True;
+                    async_response_out.stream_type =
+                        HttpServerAsyncIo::HttpConnectionState::Sse;
+                    async_response_out.stream_operation = poll_op;
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
+                        cx.id, cx.handler_name, ex.err, ex.desc);
+                }
+            }
+        } else if (rv."code" == 101) {
+            # WebSocket upgrade — use dedicated socket handler
             if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -3280,13 +3273,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     on_exit cx.close = True;
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    # For async mode: the 101 response was captured but not sent.
-                    # We must send it BEFORE calling start() so the client knows to switch protocols.
                     if (async_response_out) {
                         s.sendHTTPResponse(async_response_out."code",
                             HttpServer::HttpCodes{async_response_out."code"}, "1.1",
                             async_response_out.hdr ?? {}, async_response_out.body);
-                        # Clear the reference so caller knows response was already sent
                         delete async_response_out;
                     }
                     try {
@@ -3406,42 +3396,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 auto cb = rv.send_callback;
                 InputStream is = new CallbackInputStream(
                     auto sub() { return cb(); }, cx.socketobject);
-                if (async_response_out) {
-                    is.unassignThread();
-                    async_response_out = <HttpAsyncResponseInfo>{
-                        "code": rv."code",
-                        "hdr": hdr,
-                        "input_stream": is,
-                        "close": cx.close ?? False,
-                        "cx": cx,
-                        "listener": listener,
-                    };
-                    listener.logResponse(cx, rv);
-                    return;
-                }
-                # Sync mode: send via HTTP/2 streaming response
-                try {
-                    int stream_id = cx."header-info".stream_id;
-                    AbstractPollOperation op = s.startPollSendHttp2StreamingResponse(
-                        stream_id, rv."code", hdr, is);
-                    execAsyncPollOperation(s, op);
-                } catch (hash<ExceptionInfo> ex) {
-                    listener.logResponseError(cx, rv, ex);
-                    rethrow;
-                }
-                listener.logResponse(cx, rv);
-                if (rv."code" >= 200) {
-                    cx."response-sent" = True;
-                }
-                return;
-            }
-            if (async_response_out) {
-                # Async mode: capture callback for the response-sending code
+                is.unassignThread();
                 async_response_out = <HttpAsyncResponseInfo>{
                     "code": rv."code",
-                    "hdr": rv.hdr ?? {},
-                    "send_callback": rv.send_callback,
-                    "send_timeout": rv.send_timeout,
+                    "hdr": hdr,
+                    "input_stream": is,
                     "close": cx.close ?? False,
                     "cx": cx,
                     "listener": listener,
@@ -3449,18 +3408,17 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 listener.logResponse(cx, rv);
                 return;
             }
-            # Sync mode: send directly using the callback (HTTP/1.x)
-            try {
-                s.sendHTTPResponseWithCallback(rv.send_callback, rv."code",
-                    HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr, rv.send_timeout ?? -1);
-            } catch (hash<ExceptionInfo> ex) {
-                listener.logResponseError(cx, rv, ex);
-                rethrow;
-            }
+            # Capture callback for the response-sending code
+            async_response_out = <HttpAsyncResponseInfo>{
+                "code": rv."code",
+                "hdr": rv.hdr ?? {},
+                "send_callback": rv.send_callback,
+                "send_timeout": rv.send_timeout,
+                "close": cx.close ?? False,
+                "cx": cx,
+                "listener": listener,
+            };
             listener.logResponse(cx, rv);
-            if (rv."code" >= 200) {
-                cx."response-sent" = True;
-            }
             return;
         }
 
@@ -3489,98 +3447,30 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             rv.hdr."Transfer-Encoding" = "chunked";
         }
 
-        # If async capture is requested, store response info instead of sending
-        if (async_response_out) {
-            # Preserve InputStream for async mode so the controller can send it
-            # with proper chunked framing; the controller handles thread reassignment
-            *InputStream is;
-            if (body instanceof InputStream) {
-                is = body;
-                # Unassign thread affinity while still on the handler thread
-                # so the I/O controller thread can access it later
-                is.unassignThread();
-                body = NOTHING;
-            }
-            listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
-                rv."code", body ? body.size() : 0, exists is);
-            async_response_out = <HttpAsyncResponseInfo>{
-                "code": rv."code",
-                "hdr": rv.hdr ?? {},
-                "body": body,
-                "input_stream": is,
-                "chunked": chunked,
-                "close": cx.close ?? False,
-                "cx": cx,
-                "listener": listener,
-            };
-            listener.logResponse(cx, rv);
-            return;
+        # Capture response info for async sending
+        # Preserve InputStream so the controller can send it
+        # with proper chunked framing; the controller handles thread reassignment
+        *InputStream is;
+        if (body instanceof InputStream) {
+            is = body;
+            # Unassign thread affinity while still on the handler thread
+            # so the I/O controller thread can access it later
+            is.unassignThread();
+            body = NOTHING;
         }
-
-        try {
-            if (cx."header-info".http2) {
-                # HTTP/2: send via HTTP/2 DATA frames
-                int stream_id = cx."header-info".stream_id;
-                # Remove Transfer-Encoding header (HTTP/2 uses DATA frames, not chunked encoding)
-                hash<auto> hdr = rv.hdr ?? {};
-                remove hdr."Transfer-Encoding";
-
-                if (body instanceof InputStream) {
-                    # HTTP/2: use streaming response to avoid buffering entire body in memory
-                    listener.log("doResponse: HTTP/2 streaming send starting stream=%d code=%d",
-                        stream_id, rv."code");
-                    AbstractPollOperation op = s.startPollSendHttp2StreamingResponse(
-                        stream_id, rv."code", hdr, body);
-                    execAsyncPollOperation(s, op);
-                } else {
-                    # HTTP/2: send pre-materialized body
-                    auto final_body = body ?? rv.body;
-                    if (final_body && !hdr."Content-Length") {
-                        hdr."Content-Length" = string(final_body.size());
-                    }
-                    listener.log("doResponse: HTTP/2 send starting stream=%d code=%d body_size=%d",
-                        stream_id, rv."code", final_body ? final_body.size() : 0);
-                    AbstractPollOperation op = s.startPollSendHttp2Response(stream_id, rv."code", hdr,
-                        final_body);
-                    execAsyncPollOperation(s, op);
-                }
-                listener.log("doResponse: HTTP/2 send complete");
-            } else if (cx."header-info".http3) {
-                # HTTP/3: send via QUIC stream
-                int session_id = cx."header-info".session_id;
-                int stream_id = cx."header-info".stream_id;
-                hash<auto> hdr = rv.hdr ?? {};
-                remove hdr."Transfer-Encoding";
-                auto final_body = body ?? rv.body;
-                if (final_body instanceof InputStream) {
-                    # HTTP/3: stream InputStream response incrementally to avoid buffering
-                    listener.log("doResponse: HTTP/3 streaming send starting session=%d "
-                        "stream=%d code=%d", session_id, stream_id, rv."code");
-                    AbstractPollOperation op = s.startPollQuicSendStreamingResponse(
-                        session_id, stream_id, rv."code", hdr, final_body);
-                    execAsyncPollOperation(s, op);
-                } else {
-                    listener.log("doResponse: HTTP/3 send session=%d stream=%d code=%d "
-                        "body_size=%d", session_id, stream_id, rv."code",
-                        final_body ? final_body.size() : 0);
-                    s.submitQuicResponse(session_id, stream_id, rv."code", hdr, final_body);
-                }
-                listener.log("doResponse: HTTP/3 send complete");
-            } else if (!chunked) {
-                # HTTP/1.x: send a normal monolithic response
-                s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, rv.body);
-            } else {
-                # HTTP/1.x: send a chunked response stream
-                s.sendHTTPResponse(rv."code", HttpServer::HttpCodes{rv."code"}, "1.1", rv.hdr ?? {}, body);
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            listener.logResponseError(cx, rv, ex);
-            rethrow;
-        }
+        listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
+            rv."code", body ? body.size() : 0, exists is);
+        async_response_out = <HttpAsyncResponseInfo>{
+            "code": rv."code",
+            "hdr": rv.hdr ?? {},
+            "body": body,
+            "input_stream": is,
+            "chunked": chunked,
+            "close": cx.close ?? False,
+            "cx": cx,
+            "listener": listener,
+        };
         listener.logResponse(cx, rv);
-        if (rv."code" >= 200) {
-            cx."response-sent" = True;
-        }
     }
     #! @endcond
 }
@@ -3625,7 +3515,7 @@ class HttpPersistentHandlerInfo {
     }
 }
 
-#! Implements listeners for the \c HttpServer::HttpServer "HttpServer" class
+#! Implements listeners for the @ref HttpServer::HttpServer "HttpServer" class
 public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterface {
     public {
         # TID of the background listener thread
@@ -3754,34 +3644,20 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # create SSL certificate and private key objects from PEM files if passed
+        # Don't configure SSL on the listener socket because async I/O uses
+        # startPollAccept() which doesn't properly handle client certificate
+        # verification. Instead, each accepted connection is manually upgraded to SSL.
         if (opts.cert) {
-            # In async mode (no_start_main_thread), don't configure SSL on the listener socket
-            # because startPollAccept() on an SSL socket doesn't properly handle client certificate
-            # verification. Instead, we'll manually upgrade each accepted connection to SSL.
-            if (!opts.no_start_main_thread) {
-                setupSslIntern();
-            }
             if (opts.get_remote_certs) {
                 # issue #3512: enable remote certificates to be retrieved by default for HTTPS listeners
-                if (!opts.no_start_main_thread) {
-                    captureRemoteCertificates();
-                }
                 # get certificates from peers
                 ssl_verify_flags = opts.ssl_verify_flags |= SSL_VERIFY_PEER;
                 get_remote_certs = True;
             }
             if (opts.ssl_verify_flags) {
-                if (!opts.no_start_main_thread) {
-                    setSslVerifyMode(ssl_verify_flags = opts.ssl_verify_flags);
-                } else {
-                    ssl_verify_flags = opts.ssl_verify_flags;
-                }
+                ssl_verify_flags = opts.ssl_verify_flags;
             }
             if (exists opts.ssl_accept_all_certs) {
-                # accept all certificates
-                if (!opts.no_start_main_thread) {
-                    acceptAllCertificates(ssl_accept_all_certs = opts.ssl_accept_all_certs);
-                }
                 ssl_accept_all_certs = opts.ssl_accept_all_certs;
             }
             ssl = True;
@@ -3833,11 +3709,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
         }
 
-        # start main listener thread (unless using async I/O mode)
-        if (!opts.no_start_main_thread) {
-            cThreads.add();
-            tid = background mainThread();
-        }
     }
 
     #! Returns a hash of extra headers to be added to all responses from this listener
@@ -4167,7 +4038,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return ssl_verify_flags;
     }
 
-    #! Returns the SSL certificate object for async mode
+    #! Returns the SSL certificate object
     /** @return the SSL certificate object, or NOTHING if not configured
 
         @since HttpServer 1.5
@@ -4176,7 +4047,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return opts.cert;
     }
 
-    #! Returns the SSL private key object for async mode
+    #! Returns the SSL private key object
     /** @return the SSL private key object, or NOTHING if not configured
 
         @since HttpServer 1.5
@@ -4185,7 +4056,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         return opts.key;
     }
 
-    #! Returns whether to accept all client certificates (including self-signed) for async mode
+    #! Returns whether to accept all client certificates (including self-signed)
     /** @return True if all client certificates should be accepted
 
         @since HttpServer 1.5
@@ -4207,8 +4078,8 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
     /** @return True if this listener uses SSL/TLS
 
         @note This returns the configured SSL status, not whether the socket has SSL configured.
-        In async mode, SSL is configured per-connection rather than on the listener socket,
-        so this method should be used instead of isSecure() for checking SSL status.
+        SSL is configured per-connection rather than on the listener socket, so this method
+        should be used instead of isSecure() for checking SSL status.
 
         @since HttpServer 1.5
     */
@@ -4275,7 +4146,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
 
         # Cancel async accept operations BEFORE closing the listener socket.
         #
-        # In async mode, the I/O controller has pending accept operations on this
+        # The I/O controller has pending accept operations on this
         # listener's fd.  If we close the fd first, the I/O thread sees errors on
         # the closed fd and fires error callbacks that attempt to replenish accept
         # ops on the dead socket.  Those replenishments fail, but the error path
@@ -4290,8 +4161,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
 
         # Close the listener socket to release the bound port.
-        # In non-async mode, mainThread() already called shutdown()/close() before
-        # cThreads reached zero, so this is a safe no-op.
         shutdown();
         close();
 
@@ -4470,270 +4339,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         }
     }
 
-    private mainThread() {
-        on_exit cThreads.done();
-
-        serv.listenerStarted(id, socket_info);
-        # DEBUG
-        #printf("HTTP DEBUG: %y: mainThread() started TID %d\n", socket, gettid());
-
-        # start listening
-        while (!exit) {
-            *Socket r;
-            try {
-                r = accept(PollInterval);
-                if (!r) {
-                    # allow another thread to grab the socket lock and do something if necessary
-                    if (lock_waiting) {
-                        thread_yield();
-                    }
-                    continue;
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                #printf("HTTP DEBUG: %s: %s: %s\n", get_ex_pos(ex), ex.err, ex.desc);
-                if (ex.err != "SOCKET-CLOSED")
-                    log("error accepting %sconnection: %s: %s", ssl ? "secure " : "", ex.err, ex.desc);
-                continue;
-            }
-
-            if (exit)
-                break;
-
-            # DEBUG
-            #printf("HTTP DEBUG: %y: accepting HTTP connection from %s\n", socket_info.address_desc,
-            #    r.getPeerInfo().address_desc);
-            #log("accepting HTTP connection from %s", r.getPeerInfo().address_desc);
-
-            cThreads.add();
-            try {
-                # use the thread pool to start the connection
-                serv.startConnection(sub () { connectionThread(r); });
-            } catch (hash<ExceptionInfo> ex) {
-                cThreads.done();
-                string err = sprintf("failed to start connection thread: %s: %s", ex.err, ex.desc);
-                serv.sendHttpError(self, {"id": -1, "close": True}, r, 500, err, NOTHING, NOTHING, NOTHING, True);
-            }
-        }
-
-        #printf("HTTP DEBUG: HttpListener::mainThread() closing socket %s\n", socket_info.address_desc);
-        shutdown();
-        close();
-        #printf("HTTP DEBUG: HttpListener::mainThread() TID %d terminating\n", gettid());
-    }
-
-    # thread for handling communication per connection
-    private connectionThread(Socket s) {
-        RequestHelper request_helper(cThreads, dThreads, s);
-
-        if (ssl) {
-            try {
-                s.upgradeServerToSSL(HttpServer::ReadTimeout);
-            } catch (hash<ExceptionInfo> ex) {
-                log("error upgrading secure connection to SSL: %s: %s", ex.err, ex.desc);
-                return;
-            }
-        }
-
-        hash<auto> info;
-        try {
-            info = s.getPeerInfo();
-        } catch (hash<ExceptionInfo> ex) {
-            log("error getting peer socket info: %s: %s", ex.err, ex.desc);
-            return;
-        }
-        # make 'desc' key for logging
-        info.desc = info.address_desc;
-        if (info.port)
-            info.desc += ":" + info.port;
-
-        # static listener context
-        hash<auto> cx_listener = getContextTemplate(info);
-
-        hash<auto> hdr;
-        auto body;
-
-        # set TCP_NODELAY on incoming socket
-        s.setNoDelay(True);
-
-        HttpPersistentHandlerInfo phi();
-
-        # per-request context
-        hash<auto> cx;
-
-        try {
-            date start;
-            bool persistent;
-            while (!exit) {
-                delete body;
-                delete hdr;
-
-                if (!s.isOpen()) {
-                    #printf("HTTP DEBUG: T%d cid %d peer closed connection\n", gettid(), cx.id);
-                    break;
-                }
-
-                if (!start) {
-                    start = now_us();
-                }
-                # Read TTL once per iteration to avoid races with setTtl() from other threads
-                date ttl = serv.getTtl();
-                date poll_interval = HttpServer::PollTimeout;
-                if (!persistent && poll_interval > ttl) {
-                    poll_interval = ttl;
-                }
-                if (!s.isDataAvailable(poll_interval)) {
-                    if (!persistent && ((now_us() - start) > ttl)) {
-                        log("Disconnecting idle connection after: %y", ttl);
-                        break;
-                    }
-                    continue;
-                }
-                remove start;
-
-                cx = cx_listener;
-
-                hash<auto> header_info;
-                try {
-                    hdr = s.readHTTPHeader(HttpServer::ReadTimeout, \header_info);
-                } catch (hash<ExceptionInfo> ex) {
-                    # according to RFC 2616 sec 8.1.2.1 (http://tools.ietf.org/html/rfc2616#section-8.1.2), clients
-                    # claiming http 1.1 protocol compatibility SHOULD only close the connection after
-                    # sending a "connection: close" header, but in
-                    # case they don't, we simply close the connection silently
-                    if (ex.err == "SOCKET-CLOSED") {
-                        #printf("HTTP DEBUG: socket closed id=%d source: %y\n", cx.id, info.address_desc);
-                        break;
-                    } else if (ex.err == "SOCKET-TIMEOUT") {
-                        # log error and close connection on timeout
-                        string err = sprintf("timed out reading HTTP header after %d ms", HttpServer::ReadTimeout);
-                        string str = sprintf("%s from %s via %s", err, info.address_desc, socket_info.address_desc);
-                        logError("%s", str);
-                        cx.close = True;
-                        serv.sendHttpError(self, cx, s, 400, err, NOTHING, NOTHING, NOTHING, False);
-                        break;
-                    }
-                    string etxt = sprintf("ERROR reading HTTP header: %s: %s", ex.err, ex.desc);
-                    if (ex.arg) {
-                        etxt += printf(" (%y)", ex.arg);
-                        binary b = ex.arg.toBinary();
-                        for (int i = 0; i < b.size(); ++i) {
-                            if (b[i] < 32 || b[i] > 126) {
-                                etxt += sprintf(" 0x%02x", b[i]);
-                            } else {
-                                etxt += sprintf(" '%s'", chr(b[i]));
-                            }
-                        }
-                    }
-                    string str = sprintf("%s: received from %s via %s", etxt, info.address_desc,
-                        socket_info.address_desc);
-                    logError("%s", str);
-                    cx.close = True;
-                    serv.sendHttpError(self, cx, s, 400, etxt, NOTHING, NOTHING, NOTHING, False);
-                    break;
-                }
-
-                if (log_recv_headers)
-                    log("RECV HEADER: %y", hdr);
-
-                # DEBUG:
-                #printf("HTTP DEBUG: id: %d, hdr: %y, header_info: %y\n", cx.id, hdr, header_info);
-
-                # process ascii encodings in url if present
-                cx.raw_path = hdr.path;
-                hdr.path = decode_url(hdr.path);
-                cx += {
-                    "orig_path": hdr.path,
-                    "masked_path": serv.maskData(hdr.path),
-                };
-
-                # remove leading / if present in path
-                if (hdr.path =~ /^\//)
-                    splice hdr.path, 0, 1;
-
-                if (hdr.authorization)
-                    cx.auth = hdr.authorization;
-
-                # save original content-type and update with body-content-type if set
-                if (hdr."content-type") {
-                    hdr."_qore_orig_content_type" = hdr."content-type";
-                }
-                # only overwrite content-type if body-content-type is set (HTTP/2 may not set it)
-                if (header_info."body-content-type".val()) {
-                    hdr."content-type" = header_info."body-content-type";
-                    if (hdr."content-type".typeCode() == NT_LIST) {
-                        hdr."content-type" = hdr."content-type"[0];
-                    }
-                }
-
-                # copy headers to the context var
-                cx.hdr = hdr;
-
-                # the Socket's encoding is set in Socket::readHTTPHeader() according to any charset declaration in the
-                # Content-Type
-                cx.char_encoding = s.getEncoding();
-                cx."response-encoding" = header_info."accept-charset";
-
-                # check if we need to close the connection
-                # RFC 2068 19.7.1: Persistent connections in HTTP/1.0 must be explicitly negotiated as they are not
-                # the default behavior
-                # RFC 1945 1.3: Except for experimental applications, current practice requires that the connection be
-                # established by the client prior to each request and closed by the server after sending the response.
-                # so we MUST close the connection when a request is received by an HTTP 1.0 client without an explicit
-                # request to keep the connection open: the above rules are followed by Socket::readHTTPHeader()
-                cx.close = header_info.close;
-
-                {
-                    # attempt to mask sensitive data in the URI path
-                    string http_ver = hdr.http_version =~ /^HTTP\// ? hdr.http_version : "HTTP/" + hdr.http_version;
-                    string lstr = sprintf("cid %d src %y: %s %s %s (agent: %y", cx.id,
-                        cx."peer-info".address_desc, hdr.method, cx.masked_path, http_ver, hdr."user-agent");
-                    if (hdr."transfer-encoding" == "chunked") {
-                        lstr += " body: chunked";
-                    }
-                    if (hdr."_qore_orig_content_type") {
-                        lstr += sprintf(" Content-Type: %y", hdr."_qore_orig_content_type");
-                    }
-                    if (ssl) {
-                        lstr += sprintf(" %s %s", s.getSSLCipherName(), s.getSSLCipherVersion());
-                    }
-                    lstr += ")";
-                    log("%s", lstr);
-                }
-
-                cx.uctx = get_thread_data("uctx");
-                cx."header-info" = header_info;
-
-                # add client certificate if requested and available
-                if (get_remote_certs) {
-                    cx."client-cert" = s.getRemoteCertificate();
-                }
-
-                handleRequest(request_helper, self, s, \cx, hdr, hdr.method == "HEAD", phi, info);
-
-                #log("DBG cid %d: cx.close: %y", cx.id, cx.close);
-
-                if (cx.close) {
-                    break;
-                } else if (!persistent && cx.persistent) {
-                    log("cid %d: set persistent connection; ignoring idle disconnect", cx.id);
-                    persistent = True;
-                } else if (persistent && !cx.persistent) {
-                    log("cid %d: removed persistent connection; resuming idle disconnect", cx.id);
-                    remove persistent;
-                }
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            string etxt = serv.getDebug()
-                ? sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc)
-                : get_exception_string(ex);
-            string str = sprintf("%s: received from %s via %s", etxt, info.address_desc, socket_info.address_desc);
-            logError("%s", str);
-            logError("hdr=%y", hdr);
-            cx.close = True;
-            serv.sendHttpError(self, cx, s, 500, etxt, NOTHING, NOTHING, cx."response-encoding", False);
-        }
-    }
-
     bool registerDedicatedSocket(RequestHelper request_helper, softstring id,
             HttpServer::AbstractHttpSocketHandlerInterface h) {
         m.lock();
@@ -4793,7 +4398,6 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         @return context hash for new connection
     */
     hash<auto> getContextTemplate(hash<auto> info) {
-        bool async_mode = serv.isAsyncMode();
         return {
             "socket": socket,
             "socket-info": socket_info,
@@ -4802,8 +4406,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             "ssl": ssl,
             "listener-id": id,
             "listener-name": name,
-            "async_mode": async_mode,
-            "async_ctrl": async_mode ? serv.getGlobalAsyncCtrl() : NOTHING,
+            "async_ctrl": serv.getGlobalAsyncCtrl(),
         };
     }
 
@@ -5010,11 +4613,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> cx, Socket s) {
         bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
 
-        # Handler already sent a streaming response (e.g., HTTP/3 SSE via QUIC APIs)
+        # Handler set up a streaming connection (SSE or WebSocket)
         if (async_response.streaming) {
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "streaming": True,
                 "stream_type": async_response.stream_type,
+                "stream_operation": async_response.stream_operation,
+                "code": async_response.code,
+                "status_message": HttpServer::HttpCodes{async_response.code},
+                "hdr": async_response.hdr,
             };
         }
 
@@ -5176,7 +4783,7 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         logResponse(response.cx, response);
     }
 
-    #! Handles a persistent connection synchronously after async mode detected persistence
+    #! Handles a persistent connection synchronously after the async I/O controller detected persistence
     /** This method is called when a handler opts into persistence via setPersistent(True).
         It handles all subsequent requests on the current thread until:
         - The handler releases persistence (isPersistent() returns False)
@@ -6274,7 +5881,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
         # Full path — build proper connection context using the listener's template
         # The controller's cx only has "peer" and "socket" keys; the listener's
         # getContextTemplate() builds the full context with "peer-info", "id",
-        # "ssl", "listener-id", "listener-name", "async_mode", "async_ctrl"
+        # "ssl", "listener-id", "listener-name", "async_ctrl"
         hash<auto> cx = listener.getContextTemplate(info.cx.peer);
         return listener.processNativeRequest(info.sock, cx, info.hdr, info.header_info);
     }
@@ -6426,6 +6033,14 @@ hashdecl HttpAsyncResponseInfo {
         @since HttpServer 1.6
     */
     *string stream_type;
+
+    #! The poll operation for the streaming connection
+    /** Only used when \c streaming is @ref True. Set to an
+        @ref HttpServerAsyncIo::HttpSseStreamPollOperation for H1 SSE connections.
+
+        @since HttpServer 1.7
+    */
+    *AbstractPollOperation stream_operation;
 }
 } # namespace Priv
 
