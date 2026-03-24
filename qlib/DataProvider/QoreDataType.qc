@@ -332,9 +332,12 @@ public class QoreDataType inherits AbstractDataProviderType {
         }
         # Reject NULL for non-optional soft types (unless broken-soft-types parse option is set for backward compatibility)
         # Use == instead of === because NULL is often treated as empty/falsy value
+        # Note: built-in soft types like 'data', 'softstring', 'softint', etc. are designed to accept NULL
+        # so we only reject NULL for other soft types (typically user-defined composite soft types like softlist<type>)
+        string name = type.getName();
         if (!has_parse_option("broken-soft-types") && value == NULL
-            && type.getName() =~ /^soft/ && type.getName() !~ /^\*soft/) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", type.getName());
+            && name =~ /^soft(list|hash|map)</ && name !~ /^\*soft/) {
+            throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", name);
         }
         # Only use default value when value is truly missing, not when NULL is explicitly passed
         if (!exists value && exists default_value) {

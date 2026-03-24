@@ -42,4 +42,115 @@ hash h = {};
 ", "test-inheritance");
         p.run();
     }
+
+    testSoftTypeNullRejectionByDefault() {
+        # By default (without %broken-soft-types), soft types should reject NULL
+        Program p = new Program();
+        p.parse("%modern
+%requires DataProvider
+
+public namespace test {
+    softlist<int> test_func(softlist<int> arg) {
+        return arg;
+    }
+}
+
+try {
+    test::test_func(NULL);
+    throw \"TEST-ERROR\", \"should have thrown exception for NULL\";
+} catch (ex) {
+    if (ex.err != \"RUNTIME-TYPE-ERROR\") {
+        rethrow;
+    }
+}
+", "test-default-rejection");
+        p.run();
+    }
+
+    testBrokenSoftTypesAcceptsNull() {
+        # With %broken-soft-types, soft types should accept NULL for backward compatibility
+        Program p = new Program();
+        p.parse("%modern
+%broken-soft-types
+%requires DataProvider
+
+public namespace test {
+    softlist<int> test_func(softlist<int> arg) {
+        return arg ?? ();
+    }
+}
+
+# Should not throw exception
+test::test_func(NULL);
+", "test-broken-accepts-null");
+        p.run();
+    }
+
+    testCorrectSoftTypesRestoresRejection() {
+        # %correct-soft-types should restore NULL rejection after %broken-soft-types
+        Program p = new Program();
+        p.parse("%modern
+%broken-soft-types
+%correct-soft-types
+%requires DataProvider
+
+public namespace test {
+    softlist<int> test_func(softlist<int> arg) {
+        return arg;
+    }
+}
+
+try {
+    test::test_func(NULL);
+    throw \"TEST-ERROR\", \"should have thrown exception for NULL\";
+} catch (ex) {
+    if (ex.err != \"RUNTIME-TYPE-ERROR\") {
+        rethrow;
+    }
+}
+", "test-correct-rejection");
+        p.run();
+    }
+
+    testSoftListTypeNullRejection() {
+        # softlist<type> should reject NULL by default
+        Program p = new Program();
+        p.parse("%modern
+%requires DataProvider
+
+public {
+    QoreDataType dtype = new QoreDataType(new Type(\"softlist<string>\"));
+}
+
+try {
+    dtype.acceptsValue(NULL);
+    throw \"TEST-ERROR\", \"softlist<string> should reject NULL\";
+} catch (ex) {
+    assertEq(\"RUNTIME-TYPE-ERROR\", ex.err);
+    assertTrue(ex.desc =~ /NULL/);
+}
+", "test-softlist-rejection");
+        p.run();
+    }
+
+    testSoftHashTypeNullRejection() {
+        # softhash<type> should reject NULL by default
+        Program p = new Program();
+        p.parse("%modern
+%requires DataProvider
+
+public {
+    QoreDataType dtype = new QoreDataType(new Type(\"softhash<string>\"));
+}
+
+try {
+    dtype.acceptsValue(NULL);
+    throw \"TEST-ERROR\", \"softhash<string> should reject NULL\";
+} catch (ex) {
+    assertEq(\"RUNTIME-TYPE-ERROR\", ex.err);
+    assertTrue(ex.desc =~ /NULL/);
+}
+", "test-softhash-rejection");
+        p.run();
+    }
 }
