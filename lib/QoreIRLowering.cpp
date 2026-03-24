@@ -1831,6 +1831,46 @@ void QoreIRLowering::emitBlockCleanups(size_t target_depth, bool is_error, unsig
     }
 }
 
+bool QoreIRLowering::shouldRunHandler(const InlineHandler& handler, bool is_error) {
+    // Determine if handler should execute based on exit type and handler type
+    switch (handler.type) {
+        case OBE_Unconditional:
+            // Always executes
+            return true;
+        case OBE_Success:
+            // Only executes on normal (non-error) exits
+            return !is_error;
+        case OBE_Error:
+            // Only executes on error/exception exits
+            return is_error;
+    }
+    return false;
+}
+
+bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error) {
+    // Lower all applicable handlers for current block in LIFO order
+    // Handlers are executed in reverse registration order (innermost to outermost)
+    if (block_handlers.empty()) {
+        return true;
+    }
+
+    // Process handlers in reverse order (LIFO)
+    for (int i = static_cast<int>(block_handlers.size()) - 1; i >= 0; --i) {
+        const InlineHandler& handler = block_handlers[i];
+        if (!shouldRunHandler(handler, is_error)) {
+            continue;
+        }
+
+        // Lower the handler code block inline using the current parse context
+        // This gives the handler natural access to parent block's scope
+        if (!lowerStatementBlock(handler.code, error)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool isIntConstant(const QoreValue& value) {
     return value.isInt();
 }

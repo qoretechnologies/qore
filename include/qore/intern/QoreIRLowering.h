@@ -40,6 +40,9 @@
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreParseAnalysis.h>
 
+// Forward declaration for obe_type_e enum
+enum obe_type_e;
+
 class QoreParseContext;
 class QoreParseListNode;
 class QoreListNode;
@@ -59,6 +62,17 @@ class QoreHashMapSelectOperatorNode;
 
 class QoreIRLowering {
 public:
+    //! Handler metadata for inline compilation at block exit points
+    /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
+     *  and location information. These are lowered inline at block exit points rather than
+     *  compiled as separate QoreIRFunction objects.
+     */
+    struct InlineHandler {
+        obe_type_e type;                     //!< handler type (OBE_Unconditional/Success/Error)
+        StatementBlock* code;                //!< handler code block
+        const QoreProgramLocation* loc;      //!< source location for error reporting
+    };
+
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr);
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
@@ -257,6 +271,21 @@ private:
      */
     void emitBlockCleanups(size_t target_depth, bool is_error = false, unsigned flags = CF_NONE);
 
+    //! Determine if a handler should execute for a given exit type
+    /** Handlers are filtered by type:
+     *  - OBE_Unconditional: always executes
+     *  - OBE_Success: executes on normal (non-error) exits
+     *  - OBE_Error: executes only on error (exception) exits
+     */
+    bool shouldRunHandler(const InlineHandler& handler, bool is_error);
+
+    //! Lower all applicable handlers for the current block at an exit point
+    /** Lowers handler code inline into the IR in LIFO order.
+     *  @param is_error true if this is an error/exception exit
+     *  @return false if lowering failed
+     */
+    bool lowerHandlersAtExit(bool is_error, std::string& error);
+
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     //! Values known to never be NOTHING (produced by typed opcodes)
@@ -289,17 +318,6 @@ private:
      *  On continue, only body inner entries above RefForeachRecord are processed.
      */
     std::vector<BlockCleanupEntry> cleanup_stack;
-
-    //! Handler metadata for inline compilation at block exit points
-    /** Stores on_exit/on_success/on_error handler StatementBlocks along with their type
-     *  and location information. These are lowered inline at block exit points rather than
-     *  compiled as separate QoreIRFunction objects.
-     */
-    struct InlineHandler {
-        obe_type_e type;                     //!< handler type (OBE_Unconditional/Success/Error)
-        StatementBlock* code;                //!< handler code block
-        const QoreProgramLocation* loc;      //!< source location for error reporting
-    };
 
     //! Handlers registered for current block, to be lowered inline at exit points
     std::vector<InlineHandler> block_handlers;
