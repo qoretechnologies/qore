@@ -1,0 +1,318 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GeminiDataProvider module definition
+
+/*  GeminiDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 1.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) GeminiRestClient
+
+module GeminiDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Google Gemini services";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GeminiDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GeminiDataProvider::AppName,
+            "display_name": "Google Gemini",
+            "short_desc": "Google Gemini AI services",
+            "desc": "Google Gemini generative AI services including text generation, embeddings, streaming, "
+                "and multimodal content",
+            "scheme": "gemini",
+            "logo": GeminiLogo,
+            "logo_file_name": "gemini-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register all supported actions
+
+        # Generate Content (multi-turn chat)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/generate-content",
+            "action": "generate-content",
+            "display_name": "Generate Content",
+            "short_desc": "Generate content with a Gemini model using multi-turn conversation",
+            "desc": "Generate content with a Gemini model by providing a conversation history with multiple "
+                "messages. Supports system instructions, generation configuration, and safety settings",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiGenerateContentDataProvider::RequestType.getFields(){"model", "contents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiGenerateContentDataProvider::RequestType.getFields() - ("model", "contents")
+            ),
+            "output_type": GeminiGenerateContentDataProvider::ResponseType,
+        });
+
+        # Simple Chat (single message)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/simple-chat",
+            "action": "simple-chat",
+            "display_name": "Simple Chat",
+            "short_desc": "Chat with a Gemini model by sending a single message and receiving a single reply",
+            "desc": "Chat with a Gemini model by sending a single message and receiving a single reply. "
+                "Simplifies the API by handling message formatting automatically",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiSimpleChatDataProvider::RequestType.getFields(){"model", "role", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiSimpleChatDataProvider::RequestType.getFields() - ("model", "role", "content")
+            ),
+            "output_type": GeminiSimpleChatDataProvider::ResponseType,
+        });
+
+        # Stream Content (SSE streaming)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/stream-content",
+            "action": "stream-content",
+            "display_name": "Stream Content",
+            "short_desc": "Stream content generation from a Gemini model via Server-Sent Events",
+            "desc": "Stream content generation from a Gemini model via Server-Sent Events (SSE). Provides "
+                "incremental responses as the model generates content",
+            "action_code": DPAT_EVENT,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiStreamContentDataProvider::RequestType.getFields(){"model", "contents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiStreamContentDataProvider::RequestType.getFields() - ("model", "contents")
+            ),
+            "output_type": GeminiStreamContentDataProvider::ResponseType,
+        });
+
+        # Embed Content
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/embed-content",
+            "action": "embed-content",
+            "display_name": "Embed Content",
+            "short_desc": "Generate an embedding vector for the given content",
+            "desc": "Generate an embedding vector for the given content using a Gemini embedding model",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiEmbedContentDataProvider::RequestType.getFields(){"model", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiEmbedContentDataProvider::RequestType.getFields() - ("model", "content")
+            ),
+            "output_type": GeminiEmbedContentDataProvider::ResponseType,
+        });
+
+        # Batch Embed Contents
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/batch-embed",
+            "action": "batch-embed",
+            "display_name": "Batch Embed",
+            "short_desc": "Generate embeddings for multiple content items in a single request",
+            "desc": "Generate embeddings for multiple content items in a single batch request",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiBatchEmbedContentsDataProvider::RequestType.getFields(){"model", "requests"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": GeminiBatchEmbedContentsDataProvider::ResponseType,
+        });
+
+        # Count Tokens
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/count-tokens",
+            "action": "count-tokens",
+            "display_name": "Count Tokens",
+            "short_desc": "Count the number of tokens in the given content",
+            "desc": "Count the number of tokens that a model would use to process the given content",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiCountTokensDataProvider::RequestType.getFields(){"model", "contents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": GeminiCountTokensDataProvider::ResponseType,
+        });
+
+        # Upload File
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/upload-file",
+            "action": "upload-file",
+            "display_name": "Upload File",
+            "short_desc": "Upload a file for use with the Gemini API",
+            "desc": "Upload a file for use with the Gemini API for multimodal content generation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiFileUploadDataProvider::RequestType.getFields(){"mime_type", "file_data"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiFileUploadDataProvider::RequestType.getFields() - ("mime_type", "file_data")
+            ),
+            "output_type": GeminiFileUploadDataProvider::ResponseType,
+        });
+
+        # Delete File
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/files/{file}/delete",
+            "action": "delete-file",
+            "display_name": "Delete File",
+            "short_desc": "Delete a file stored on Google Gemini",
+            "desc": "Delete a file stored on Google Gemini",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "file": <DataProviderPathVarInfo>{
+                    "display_name": "File",
+                    "short_desc": "The name of the file to delete",
+                    "desc": "The resource name of the file to delete (e.g., `files/abc-123`)",
+                    "example_value": "abc-123",
+                },
+            },
+        });
+
+        # Create Cached Content
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/cached-contents/create",
+            "action": "create-cached-content",
+            "display_name": "Create Cached Content",
+            "short_desc": "Create cached content for reuse across multiple requests",
+            "desc": "Create cached content that can be reused across multiple generation requests to reduce "
+                "latency and cost",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiCachedContentCreateDataProvider::RequestType.getFields(){"model", "contents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiCachedContentCreateDataProvider::RequestType.getFields() - ("model", "contents")
+            ),
+            "output_type": GeminiCachedContentCreateDataProvider::ResponseType,
+        });
+
+        # Delete Cached Content
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/cached-contents/{name}/delete",
+            "action": "delete-cached-content",
+            "display_name": "Delete Cached Content",
+            "short_desc": "Delete cached content",
+            "desc": "Delete cached content that is no longer needed",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "name": <DataProviderPathVarInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The name of the cached content to delete",
+                    "desc": "The resource name of the cached content to delete",
+                    "example_value": "abc-123",
+                },
+            },
+        });
+
+        # Create File Search Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/file-search-stores/create",
+            "action": "create-file-search-store",
+            "display_name": "Create File Search Store",
+            "short_desc": "Create an empty file search store",
+            "desc": "Create an empty file search store for organizing and searching files",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GeminiFileSearchStoreCreateDataProvider::RequestType.getFields()
+            ),
+            "output_type": GeminiFileSearchStoreCreateDataProvider::ResponseType,
+        });
+
+        # Delete File Search Store
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GeminiDataProvider::AppName,
+            "path": "/file-search-stores/{name}/delete",
+            "action": "delete-file-search-store",
+            "display_name": "Delete File Search Store",
+            "short_desc": "Delete a file search store",
+            "desc": "Delete a file search store and its contents",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "name": <DataProviderPathVarInfo>{
+                    "display_name": "Name",
+                    "short_desc": "The name of the file search store to delete",
+                    "desc": "The resource name of the file search store to delete",
+                    "example_value": "abc-123",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage GeminiDataProvider Module
+
+    @tableofcontents
+
+    @section geminidataproviderintro GeminiDataProvider Module Introduction
+
+    The %GeminiDataProvider module provides a data provider API for Google Gemini services.
+
+    To use this module, use \c "%requires GeminiDataProvider" in your code.
+
+    All the public symbols in the module are defined in the GeminiDataProvider namespace.
+
+    @section geminidataproviderRelnotes Release Notes
+
+    @subsection geminidataproviderv1_0 GeminiDataProvider v1.0
+    - the initial version of the %GeminiDataProvider module
+*/
+
+#! Contains all public definitions in the GeminiDataProvider module
+public namespace GeminiDataProvider {
+#! Gemini logo data
+const GeminiLogo = File::readTextFile(get_script_dir() + "/gemini-logo.svg");
+}

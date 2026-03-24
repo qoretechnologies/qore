@@ -1,0 +1,456 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%enable-all-warnings
+%exec-class GeminiDataProviderTest
+%requires QUnit
+
+%try-module GeminiDataProvider
+%define NoGeminiDataProvider
+%endtry
+
+%try-module GeminiRestClient
+%define NoGeminiRestClient
+%endtry
+
+%try-module RestClientIo
+%define NoRestClientIo
+%endtry
+
+%try-module HttpClientIo
+%define NoHttpClientIo
+%endtry
+
+%try-module ConnectionProvider
+%define NoConnectionProvider
+%endtry
+
+%try-module DataProvider
+%define NoDataProvider
+%endtry
+
+%requires json
+
+class FakeGeminiRestClient inherits RestClientIo::RestClientIo {
+    public {
+        *auto last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body = {};
+    }
+
+    constructor() : RestClientIo({"url": "https://generativelanguage.googleapis.com", "data": "json"}) {
+    }
+
+    hash<auto> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+            "status_code": 200,
+        };
+    }
+
+    hash<auto> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<auto> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<auto> restPut(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("PUT", path, body, hdr);
+    }
+
+    hash<auto> restPatch(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("PATCH", path, body, hdr);
+    }
+
+    hash<auto> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+}
+
+class GeminiDataProviderTest inherits QUnit::Test {
+    private {
+        FakeGeminiRestClient fake;
+        GeminiDataProvider::GeminiDataProvider dp;
+    }
+
+    constructor() : Test("GeminiDataProviderTest", "1.0") {
+%ifdef NoGeminiDataProvider
+        testSkip("GeminiDataProvider module not available");
+%endif
+        addTestCase("provider structure", \providerStructureTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("generate content", \generateContentTest());
+        addTestCase("simple chat", \simpleChatTest());
+        addTestCase("embed content", \embedContentTest());
+        addTestCase("batch embed", \batchEmbedTest());
+        addTestCase("count tokens", \countTokensTest());
+        addTestCase("models", \modelsTest());
+        addTestCase("files", \filesTest());
+        addTestCase("cached contents", \cachedContentsTest());
+        addTestCase("file search stores", \fileSearchStoresTest());
+        addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("integration", \integrationTest());
+        set_return_value(main());
+    }
+
+    setUp() {
+        fake = new FakeGeminiRestClient();
+        dp = new GeminiDataProvider::GeminiDataProvider(fake);
+    }
+
+    providerStructureTest() {
+        assertEq("gemini", dp.getName());
+        *list<string> children = dp.getChildProviderNames();
+        assertTrue(children.size() >= 10);
+        assertEq(True, (children.contains("generate-content")));
+        assertEq(True, (children.contains("simple-chat")));
+        assertEq(True, (children.contains("stream-content")));
+        assertEq(True, (children.contains("embed-content")));
+        assertEq(True, (children.contains("batch-embed")));
+        assertEq(True, (children.contains("count-tokens")));
+        assertEq(True, (children.contains("models")));
+        assertEq(True, (children.contains("files")));
+        assertEq(True, (children.contains("upload-file")));
+        assertEq(True, (children.contains("cached-contents")));
+        assertEq(True, (children.contains("file-search-stores")));
+    }
+
+    dataTypesTest() {
+        # Test all shared data types can be instantiated
+        GeminiDataProvider::GeminiContentPartDataType content_part();
+        assertEq(True, content_part.getFields().hasKey("text"));
+
+        GeminiDataProvider::GeminiContentDataType content();
+        assertEq(True, content.getFields().hasKey("role"));
+        assertEq(True, content.getFields().hasKey("parts"));
+
+        GeminiDataProvider::GeminiGenerationConfigDataType gen_config();
+        assertEq(True, gen_config.getFields().hasKey("temperature"));
+        assertEq(True, gen_config.getFields().hasKey("topP"));
+        assertEq(True, gen_config.getFields().hasKey("maxOutputTokens"));
+
+        GeminiDataProvider::GeminiSafetySettingDataType safety();
+        assertEq(True, safety.getFields().hasKey("category"));
+        assertEq(True, safety.getFields().hasKey("threshold"));
+
+        GeminiDataProvider::GeminiCandidateDataType candidate();
+        assertEq(True, candidate.getFields().hasKey("content"));
+        assertEq(True, candidate.getFields().hasKey("finishReason"));
+
+        GeminiDataProvider::GeminiUsageMetadataDataType usage();
+        assertEq(True, usage.getFields().hasKey("promptTokenCount"));
+        assertEq(True, usage.getFields().hasKey("totalTokenCount"));
+
+        GeminiDataProvider::GeminiGenerateContentRequestDataType req();
+        assertEq(True, req.getFields().hasKey("model"));
+        assertEq(True, req.getFields().hasKey("contents"));
+
+        GeminiDataProvider::GeminiGenerateContentResponseDataType resp();
+        assertEq(True, resp.getFields().hasKey("candidates"));
+        assertEq(True, resp.getFields().hasKey("usageMetadata"));
+
+        GeminiDataProvider::GeminiSimpleChatRequestDataType simple_req();
+        assertEq(True, simple_req.getFields().hasKey("model"));
+        assertEq(True, simple_req.getFields().hasKey("content"));
+        assertEq(True, simple_req.getFields().hasKey("role"));
+
+        GeminiDataProvider::GeminiSimpleChatResponseDataType simple_resp();
+        assertEq(True, simple_resp.getFields().hasKey("text"));
+        assertEq(True, simple_resp.getFields().hasKey("finishReason"));
+
+        GeminiDataProvider::GeminiEmbedContentRequestDataType embed_req();
+        assertEq(True, embed_req.getFields().hasKey("model"));
+        assertEq(True, embed_req.getFields().hasKey("content"));
+
+        GeminiDataProvider::GeminiCountTokensRequestDataType count_req();
+        assertEq(True, count_req.getFields().hasKey("model"));
+        assertEq(True, count_req.getFields().hasKey("contents"));
+
+        GeminiDataProvider::GeminiModelInfoDataType model_info();
+        assertEq(True, model_info.getFields().hasKey("name"));
+        assertEq(True, model_info.getFields().hasKey("displayName"));
+
+        GeminiDataProvider::GeminiFileInfoDataType file_info();
+        assertEq(True, file_info.getFields().hasKey("name"));
+        assertEq(True, file_info.getFields().hasKey("mimeType"));
+
+        GeminiDataProvider::GeminiStreamEventDataType stream_evt();
+        assertEq(True, stream_evt.getFields().hasKey("type"));
+        assertEq(True, stream_evt.getFields().hasKey("event"));
+    }
+
+    generateContentTest() {
+        fake.response_body = {
+            "candidates": ({
+                "content": {
+                    "parts": ({"text": "Hello! How can I help you?"},),
+                    "role": "model",
+                },
+                "finishReason": "STOP",
+            },),
+            "usageMetadata": {
+                "promptTokenCount": 5,
+                "candidatesTokenCount": 10,
+                "totalTokenCount": 15,
+            },
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("generate-content");
+        auto resp = child.doRequest({
+            "model": "gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "Hello"},),
+            },),
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/gemini-2.5-flash:generateContent") >= 0);
+        assertEq(True, resp.hasKey("candidates"));
+    }
+
+    simpleChatTest() {
+        fake.response_body = {
+            "candidates": ({
+                "content": {
+                    "parts": ({"text": "Hello! I'm Gemini."},),
+                    "role": "model",
+                },
+                "finishReason": "STOP",
+            },),
+            "usageMetadata": {
+                "promptTokenCount": 3,
+                "candidatesTokenCount": 8,
+                "totalTokenCount": 11,
+            },
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("simple-chat");
+        auto resp = child.doRequest({
+            "model": "gemini-2.5-flash",
+            "content": "Hello",
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/gemini-2.5-flash:generateContent") >= 0);
+        assertEq("Hello! I'm Gemini.", resp.text);
+        assertEq("STOP", resp.finishReason);
+        assertEq(3, resp.promptTokenCount);
+    }
+
+    embedContentTest() {
+        fake.response_body = {
+            "embedding": {
+                "values": (0.1, 0.2, 0.3, 0.4),
+            },
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("embed-content");
+        auto resp = child.doRequest({
+            "model": "text-embedding-004",
+            "content": {
+                "role": "user",
+                "parts": ({"text": "Hello world"},),
+            },
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/text-embedding-004:embedContent") >= 0);
+        assertEq(True, resp.hasKey("values"));
+    }
+
+    batchEmbedTest() {
+        fake.response_body = {
+            "embeddings": (
+                {"values": (0.1, 0.2)},
+                {"values": (0.3, 0.4)},
+            ),
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("batch-embed");
+        auto resp = child.doRequest({
+            "model": "text-embedding-004",
+            "requests": (
+                {"content": {"role": "user", "parts": ({"text": "Hello"},)}},
+                {"content": {"role": "user", "parts": ({"text": "World"},)}},
+            ),
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/text-embedding-004:batchEmbedContents") >= 0);
+        assertEq(True, resp.hasKey("embeddings"));
+    }
+
+    countTokensTest() {
+        fake.response_body = {
+            "totalTokens": 42,
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("count-tokens");
+        auto resp = child.doRequest({
+            "model": "gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "Count my tokens"},),
+            },),
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/gemini-2.5-flash:countTokens") >= 0);
+        assertEq(42, resp.totalTokens);
+    }
+
+    modelsTest() {
+        fake.response_body = {
+            "models": (
+                {"name": "models/gemini-2.5-flash", "displayName": "Gemini 2.5 Flash",
+                    "description": "Fast model"},
+                {"name": "models/gemini-2.5-pro", "displayName": "Gemini 2.5 Pro",
+                    "description": "Advanced model"},
+            ),
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("models");
+        *list<string> names = child.getChildProviderNames();
+        assertEq("GET", fake.last_method);
+        assertTrue(fake.last_path.find("models") >= 0);
+        assertEq(2, names.size());
+        assertTrue(names.contains("gemini-2.5-flash"));
+        assertTrue(names.contains("gemini-2.5-pro"));
+    }
+
+    filesTest() {
+        fake.response_body = {
+            "files": (
+                {"name": "files/abc-123", "displayName": "test.txt", "mimeType": "text/plain",
+                    "state": "ACTIVE"},
+            ),
+        };
+
+        AbstractDataProvider child = dp.getChildProviderEx("files");
+        *list<string> names = child.getChildProviderNames();
+        assertEq("GET", fake.last_method);
+        assertTrue(fake.last_path.find("files") >= 0);
+        assertEq(1, names.size());
+        assertEq("abc-123", names[0]);
+    }
+
+    cachedContentsTest() {
+        # Test create cached content
+        fake.response_body = {
+            "name": "cachedContents/test-123",
+            "model": "models/gemini-2.5-flash",
+            "displayName": "Test cache",
+        };
+
+        AbstractDataProvider cached = dp.getChildProviderEx("cached-contents");
+        AbstractDataProvider create = cached.getChildProviderEx("create");
+        auto resp = create.doRequest({
+            "model": "models/gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "Cache this"},),
+            },),
+            "displayName": "Test cache",
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("cachedContents") >= 0);
+        assertEq("cachedContents/test-123", resp.name);
+    }
+
+    fileSearchStoresTest() {
+        # Test create file search store
+        fake.response_body = {
+            "name": "fileSearchStores/store-123",
+            "displayName": "My Store",
+        };
+
+        AbstractDataProvider stores = dp.getChildProviderEx("file-search-stores");
+        AbstractDataProvider create = stores.getChildProviderEx("create");
+        auto resp = create.doRequest({
+            "displayName": "My Store",
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("fileSearchStores") >= 0);
+        assertEq("fileSearchStores/store-123", resp.name);
+    }
+
+    connectionSchemeTest() {
+%ifdef NoConnectionProvider
+        testSkip("ConnectionProvider module not available");
+%endif
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("gemini");
+        assertEq(True, scheme.hasKey("display_name"));
+        assertEq("apikey", scheme.required_options);
+        assertEq(True, scheme.auto_url);
+    }
+
+    integrationTest() {
+        *string api_key = ENV.GEMINI_API_KEY;
+        if (!api_key) {
+            testSkip("GEMINI_API_KEY not set");
+        }
+
+        GeminiDataProvider::GeminiDataProvider live_dp({"apikey": api_key});
+
+        # Test listing models
+        AbstractDataProvider models = live_dp.getChildProviderEx("models");
+        *list<string> model_names = models.getChildProviderNames();
+        assertTrue(model_names.size() > 0, "should have at least one model");
+
+        # Test simple chat
+        AbstractDataProvider chat = live_dp.getChildProviderEx("simple-chat");
+        auto resp = chat.doRequest({
+            "model": "gemini-2.5-flash",
+            "content": "Say the word 'hello' and nothing else",
+        });
+        assertTrue(resp.text.val(), "should have text response");
+
+        # Test count tokens
+        AbstractDataProvider tokens = live_dp.getChildProviderEx("count-tokens");
+        auto token_resp = tokens.doRequest({
+            "model": "gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "Hello world"},),
+            },),
+        });
+        assertTrue(token_resp.totalTokens > 0, "should have token count");
+
+        # Test generate content
+        AbstractDataProvider gen = live_dp.getChildProviderEx("generate-content");
+        auto gen_resp = gen.doRequest({
+            "model": "gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "Say 'hi' and nothing else"},),
+            },),
+        });
+        assertTrue(gen_resp.candidates.size() > 0, "should have candidates");
+
+        # Test embed content
+        AbstractDataProvider embed = live_dp.getChildProviderEx("embed-content");
+        auto embed_resp = embed.doRequest({
+            "model": "text-embedding-004",
+            "content": {
+                "role": "user",
+                "parts": ({"text": "Hello world"},),
+            },
+        });
+        assertTrue(embed_resp.values.size() > 0, "should have embedding values");
+
+        # Test connection ping
+        AbstractConnection conn = get_connection_hash({
+            "name": "test-gemini",
+            "desc": "Test Gemini connection",
+            "url": "gemini://generativelanguage.googleapis.com",
+            "opts": {
+                "apikey": api_key,
+            },
+        });
+        hash<PingInfo> ping = conn.ping();
+        assertEq(True, ping.ok, "connection ping should succeed");
+    }
+}
