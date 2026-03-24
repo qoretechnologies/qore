@@ -309,10 +309,10 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
         }
         msg += binary(sprintf("--%s--\r\n", mpboundary));
 
-        # Build headers from rest client defaults + multipart content type
-        hash<auto> hdr = rest.getDefaultHeaders() + {
-            "content-type": sprintf("%s; boundary=%s", MimeTypeMultipartFormData, mpboundary),
-        };
+        # Build headers from rest client defaults + multipart content type; normalize to lowercase
+        # for HTTP/2 compatibility (getDefaultHeaders() returns mixed-case keys)
+        hash<auto> hdr = map {$1.key.lwr(): $1.value}, rest.getDefaultHeaders().pairIterator();
+        hdr."content-type" = sprintf("%s; boundary=\"%s\"", MimeTypeMultipartFormData, mpboundary);
 
         # Normalize path
         if (path[0] != "/") {
@@ -347,10 +347,10 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
             path = "/" + path;
         }
 
-        hash<auto> hdr = rest.getDefaultHeaders() + {
-            "content-type": MimeTypeJson,
-            "accept": "*/*",
-        };
+        # Normalize header keys to lowercase for HTTP/2 compatibility
+        hash<auto> hdr = map {$1.key.lwr(): $1.value}, rest.getDefaultHeaders().pairIterator();
+        hdr."content-type" = MimeTypeJson;
+        hdr."accept" = "*/*";
 
         binary json_body = binary(make_json(body));
 
@@ -371,7 +371,7 @@ public class ElevenLabsDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Makes a REST call and returns the response; handles rate limit responses and retries
-    private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
+    private hash<auto> doRestCommand(string method, string path, auto body = NOTHING, *hash<auto> hdr) {
         int retries = 0;
         while (True) {
             try {

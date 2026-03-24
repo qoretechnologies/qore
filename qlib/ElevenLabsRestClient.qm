@@ -274,9 +274,7 @@ public class ElevenLabsRestConnection inherits RestClient::RestConnection {
     */
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description,
-                ElevenLabsRestConnection::getConfig({"url": url, "opts": options}).url,
-                attributes, options) {
+            : RestConnection(name, description, url, attributes, options) {
     }
 
     #! Creates the ElevenLabsRestConnection object

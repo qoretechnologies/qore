@@ -845,14 +845,20 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
         assertEq(True, scheme.auto_url, "connection scheme has auto_url");
         assertEq(True, scheme.schemes.hasKey("elevenlabs"), "connection scheme has elevenlabs scheme");
 
-        # Verify getConfig builds correct URL for default region (us)
-        ElevenLabsRestClient::ElevenLabsRestConnection us_conn("test-us", "test", NOTHING, {},
-            {"apikey": "test-key"});
+        # Verify getConfig builds correct URL for default region (us) via hash-based constructor
+        ElevenLabsRestClient::ElevenLabsRestConnection us_conn({
+            "name": "test-us",
+            "url": "elevenlabs://api.elevenlabs.io",
+            "opts": {"apikey": "test-key"},
+        });
         assertEq(True, us_conn.getUrl() =~ /api\.elevenlabs\.io/, "US region uses default URL");
 
-        # Verify getConfig builds correct URL for EU region
-        ElevenLabsRestClient::ElevenLabsRestConnection eu_conn("test-eu", "test", NOTHING, {},
-            {"apikey": "test-key", "region": "eu"});
+        # Verify getConfig builds correct URL for EU region via hash-based constructor
+        ElevenLabsRestClient::ElevenLabsRestConnection eu_conn({
+            "name": "test-eu",
+            "url": "elevenlabs://api.elevenlabs.io",
+            "opts": {"apikey": "test-key", "region": "eu"},
+        });
         assertEq(True, eu_conn.getUrl() =~ /api\.eu\.residency\.elevenlabs\.io/,
             "EU region uses EU URL");
     }
