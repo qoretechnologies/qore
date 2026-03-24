@@ -190,18 +190,17 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
     - \c H: header parameter
 
     @par Type Mapping
-    | Qore Type | OpenAPI Type | Format |
-    |-----------|--------------|--------|
-    | \c int | integer | int64 |
-    | \c float | number | double |
-    | \c string | string | - |
-    | \c bool | boolean | - |
-    | \c date | string | date-time |
-    | \c binary | string | binary |
-    | \c hash | object | - |
-    | \c hash<TypeName> | \$ref: "#/components/schemas/TypeName" | - |
-    | \c list<T> | array (items: T) | - |
-    | \c *type | type + nullable: true | - |
+    |!Qore Type|!OpenAPI Type|!Format
+    |\c int|integer|int64
+    |\c float|number|double
+    |\c string|string|-
+    |\c bool|boolean|-
+    |\c date|string|date-time
+    |\c binary|string|binary
+    |\c hash|object|-
+    |\c hash<TypeName>|\$ref: "#/components/schemas/TypeName"|-
+    |\c list<T>|array (items: T)|-
+    |\c *type|type + nullable: true|-
 
     @subsection openapi3_generator_usage Generator Usage
 

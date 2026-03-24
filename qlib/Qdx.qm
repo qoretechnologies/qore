@@ -1487,7 +1487,49 @@ string doxygen_output = proc.process();
                 processNode(node);
             }
 
+            # Check for trailing @mainpage/@page doc comments not attached to any declaration
+            # This handles directory modules where the @mainpage comment follows the last code block
+            if (!lines.empty()) {
+                emitTrailingDocComments();
+            }
+
             return output;
+        }
+
+        #! Emits trailing @mainpage/@page doc comments that are not attached to any declaration
+        private emitTrailingDocComments() {
+            # Find the last declaration's end line
+            int last_decl_end = 0;
+            foreach auto node in (nodes) {
+                if (node.loc) {
+                    int end_line = node.loc.end_line;
+                    if (end_line > last_decl_end) {
+                        last_decl_end = end_line;
+                    }
+                }
+            }
+
+            # Scan remaining lines for /** ... */ block comments containing @mainpage or @page
+            int i = last_decl_end;
+            while (i < lines.size()) {
+                string line = trim(lines[i]);
+                if (line =~ /^\/\*\*\s/) {
+                    # Found a block comment start — collect the entire comment
+                    string comment = lines[i];
+                    while (i < lines.size() && comment.find("*/") < 0) {
+                        i++;
+                        if (i < lines.size()) {
+                            comment += "\n" + lines[i];
+                        }
+                    }
+
+                    # Only emit if it contains @mainpage or @page
+                    if (comment =~ /@mainpage|@page/) {
+                        writeDocComment(comment);
+                    }
+                }
+                i++;
+            }
         }
 
         #! Processes a single AST node

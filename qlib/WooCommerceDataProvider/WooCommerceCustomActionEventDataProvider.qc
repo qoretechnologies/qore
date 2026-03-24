@@ -26,7 +26,7 @@
 public namespace WooCommerceDataProvider {
 
 #! Base class for WooCommerce custom action event data providers (enrichment needed)
-/** Custom action webhooks deliver payloads like \c {"action": "...", "arg": <id>}.
+/** Custom action webhooks deliver payloads like \c {"action": "...", "arg": &lt;id&gt;}.
     This class fetches the full resource data from the API using the \c arg value as the resource ID.
 */
 public class WooCommerceCustomActionEventDataProvider inherits WooCommerceBaseEventDataProvider {

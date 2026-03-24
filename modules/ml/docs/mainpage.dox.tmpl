@@ -17,28 +17,27 @@
 
     @subsection mlalgo_table Algorithm Overview
 
-    |Algorithm|Type|Use Case|
-    |---|---|---|
-    |@ref Qore::ML::IsolationForest "IsolationForest"|Anomaly Detection|Flag fraudulent transactions, sensor malfunctions, or intrusions|
-    |@ref Qore::ML::LOF "LOF"|Anomaly Detection|Find purchases unusual for a specific customer segment or region|
-    |@ref Qore::ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots|
-    |@ref Qore::ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories|
-    |@ref Qore::ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)|
-    |@ref Qore::ML::LogisticRegression "LogisticRegression"|Classification|Categorize emails as spam/not-spam, approve/deny loan applications|
-    |@ref Qore::ML::KNN "KNN"|Classification/Regression|Classify or predict based on the most similar historical records|
-    |@ref Qore::ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features|
-    |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory|
-    |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise|
-    |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis|
-    |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python|
-    |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance|
-    |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)|
-    |@ref Qore::ML::Imputer "Imputer"|Preprocessing|Fill missing values using mean, median, mode, or constant|
-    |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit|
-    |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation|
-    |\c ml_accuracy(), \c ml_classification_report()|Evaluation|Measure classification accuracy, precision, recall, F1|
-    |\c ml_mse(), \c ml_rmse(), \c ml_mae(), \c ml_r2_score()|Evaluation|Measure regression prediction quality|
-    |\c ml_silhouette_score(), \c ml_davies_bouldin_score()|Evaluation|Measure clustering quality|
+    |!Algorithm|!Type|!Use Case
+    |@ref Qore::ML::IsolationForest "IsolationForest"|Anomaly Detection|Flag fraudulent transactions, sensor malfunctions, or intrusions
+    |@ref Qore::ML::LOF "LOF"|Anomaly Detection|Find purchases unusual for a specific customer segment or region
+    |@ref Qore::ML::DBSCAN "DBSCAN"|Clustering|Discover delivery zones, support ticket themes, or traffic hotspots
+    |@ref Qore::ML::KMeans "KMeans"|Clustering|Segment customers into tiers or classify products into categories
+    |@ref Qore::ML::GMM "GMM"|Clustering|Identify overlapping segments (e.g., 70%% budget / 30%% impulse buyer)
+    |@ref Qore::ML::LogisticRegression "LogisticRegression"|Classification|Categorize emails as spam/not-spam, approve/deny loan applications
+    |@ref Qore::ML::KNN "KNN"|Classification/Regression|Classify or predict based on the most similar historical records
+    |@ref Qore::ML::LinearRegression "LinearRegression"|Regression|Predict property prices, delivery times, or demand from features
+    |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory
+    |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise
+    |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis
+    |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python
+    |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance
+    |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)
+    |@ref Qore::ML::Imputer "Imputer"|Preprocessing|Fill missing values using mean, median, mode, or constant
+    |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
+    |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
+    |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
+    |@ref Qore::ML::ml_mse() "ml_mse()", @ref Qore::ML::ml_rmse() "ml_rmse()", @ref Qore::ML::ml_mae() "ml_mae()", @ref Qore::ML::ml_r2_score() "ml_r2_score()"|Evaluation|Measure regression prediction quality
+    |@ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()"|Evaluation|Measure clustering quality
 
     @subsection mlalgo_anomaly Anomaly Detection
 
@@ -156,20 +155,20 @@
     a model is good enough for production or which of two models is better.
 
     <b>Classification metrics</b> (for models that predict categories):
-    - \c ml_accuracy() — fraction of correct predictions (e.g., 0.95 = 95%% right)
-    - \c ml_classification_report() — detailed breakdown with precision, recall, and F1 per class
-    - \c ml_confusion_matrix() — shows where the model confuses one class for another
+    - @ref Qore::ML::ml_accuracy() "ml_accuracy()" — fraction of correct predictions (e.g., 0.95 = 95%% right)
+    - @ref Qore::ML::ml_classification_report() "ml_classification_report()" — detailed breakdown with precision, recall, and F1 per class
+    - @ref Qore::ML::ml_confusion_matrix() "ml_confusion_matrix()" — shows where the model confuses one class for another
 
     <b>Regression metrics</b> (for models that predict numbers):
-    - \c ml_mse() / \c ml_rmse() — average squared/root error (lower is better)
-    - \c ml_mae() — average absolute error, in the same units as your data
-    - \c ml_r2_score() — how much of the variation your model explains (1.0 = perfect)
-    - \c ml_explained_variance() — similar to R² but accounts for bias
+    - @ref Qore::ML::ml_mse() "ml_mse()" / @ref Qore::ML::ml_rmse() "ml_rmse()" — average squared/root error (lower is better)
+    - @ref Qore::ML::ml_mae() "ml_mae()" — average absolute error, in the same units as your data
+    - @ref Qore::ML::ml_r2_score() "ml_r2_score()" — how much of the variation your model explains (1.0 = perfect)
+    - @ref Qore::ML::ml_explained_variance() "ml_explained_variance()" — similar to R² but accounts for bias
 
     <b>Clustering metrics</b> (for models that group data):
-    - \c ml_silhouette_score() — how well-separated the groups are (-1 to 1; above 0.5 is good)
-    - \c ml_davies_bouldin_score() — how compact and separated the groups are (lower is better)
-    - \c ml_calinski_harabasz_score() — ratio of between-group to within-group variance (higher is better)
+    - @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()" — how well-separated the groups are (-1 to 1; above 0.5 is good)
+    - @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()" — how compact and separated the groups are (lower is better)
+    - @ref Qore::ML::ml_calinski_harabasz_score() "ml_calinski_harabasz_score()" — ratio of between-group to within-group variance (higher is better)
 
     <b>Cross-validation</b>:
     - @ref Qore::ML::CrossValidator "CrossValidator" — splits your data into k folds for
@@ -264,11 +263,11 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
 
     <b>"I need to know how good my model is"</b>
     - Predicting categories (fraud/not fraud, customer segment)?
-      → Use \c ml_classification_report() for accuracy, precision, recall, F1
+      → Use @ref Qore::ML::ml_classification_report() "ml_classification_report()" for accuracy, precision, recall, F1
     - Predicting numbers (prices, delivery times)?
-      → Use \c ml_r2_score() and \c ml_rmse() to measure prediction quality
+      → Use @ref Qore::ML::ml_r2_score() "ml_r2_score()" and @ref Qore::ML::ml_rmse() "ml_rmse()" to measure prediction quality
     - Evaluating cluster quality?
-      → Use \c ml_silhouette_score() — above 0.5 means good separation
+      → Use @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()" — above 0.5 means good separation
     - Want to test on data the model hasn't seen?
       → Use @ref Qore::ML::CrossValidator "CrossValidator" for k-fold cross-validation
 
@@ -522,16 +521,16 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::Imputer "Imputer" — fill missing values using average, median, most common, or fixed value
       - @ref Qore::ML::MLPipeline "MLPipeline" — chain preprocessing and analysis into a single fit/predict unit
     - Model evaluation:
-      - Classification metrics: \c ml_accuracy(), \c ml_confusion_matrix(), \c ml_classification_report()
-      - Regression metrics: \c ml_mse(), \c ml_rmse(), \c ml_mae(), \c ml_r2_score(), \c ml_explained_variance()
-      - Clustering metrics: \c ml_silhouette_score(), \c ml_davies_bouldin_score(), \c ml_calinski_harabasz_score()
+      - Classification metrics: @ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_confusion_matrix() "ml_confusion_matrix()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"
+      - Regression metrics: @ref Qore::ML::ml_mse() "ml_mse()", @ref Qore::ML::ml_rmse() "ml_rmse()", @ref Qore::ML::ml_mae() "ml_mae()", @ref Qore::ML::ml_r2_score() "ml_r2_score()", @ref Qore::ML::ml_explained_variance() "ml_explained_variance()"
+      - Clustering metrics: @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()", @ref Qore::ML::ml_calinski_harabasz_score() "ml_calinski_harabasz_score()"
       - @ref Qore::ML::CrossValidator "CrossValidator" — k-fold cross-validation split utility
     - Optional @ref Qore::ML::OnnxModel "OnnxModel" for ONNX Runtime inference (requires libonnxruntime)
-    - Model persistence: \c ml_serialize() / \c ml_deserialize() for in-memory round-trip,
-      \c ml_save_model() / \c ml_load_model() for file-based persistence (.qml native format)
+    - Model persistence: @ref Qore::ML::ml_serialize() "ml_serialize()" / @ref Qore::ML::ml_deserialize() "ml_deserialize()" for in-memory round-trip,
+      @ref Qore::ML::ml_save_model() "ml_save_model()" / @ref Qore::ML::ml_load_model() "ml_load_model()" for file-based persistence (.qml native format)
     - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
     - All algorithms use Eigen3 for efficient matrix operations
     - All algorithms support cooperative cancellation for responsive interrupt handling
     - \c NOTHING values in input data are treated as missing values for Imputer compatibility
-    - \c ml_get_capabilities() function for runtime capability and ONNX support discovery
+    - @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()" function for runtime capability and ONNX support discovery
 */
