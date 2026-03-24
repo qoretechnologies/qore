@@ -271,6 +271,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             # Guard state transitions to be monotonically forward only
             if (resp.headers && state == HttpClientStreamState::Open) {
                 state = HttpClientStreamState::HeadersReceived;
+                response = resp;
             }
             if (resp.body && state < HttpClientStreamState::Complete) {
                 state = HttpClientStreamState::ReceivingBody;

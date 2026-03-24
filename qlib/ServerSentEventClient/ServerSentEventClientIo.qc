@@ -61,6 +61,9 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         #! URL for SSE connection
         string url;
 
+        #! Request path extracted from the URL
+        string url_path;
+
         #! Additional headers for the SSE request
         *hash<auto> connect_headers;
 
@@ -112,6 +115,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
     */
     constructor(hash<auto> opts) {
         url = getString(opts, "url");
+        url_path = parse_url(url).path ?? "/";
         if (!url.val()) {
             throw "SSE-ERROR", "missing 'url' option";
         }
@@ -321,7 +325,7 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             headers."Last-Event-ID" = last_event_id;
         }
 
-        stream.startStreaming("GET", "", headers);
+        stream.startStreaming("GET", url_path, headers);
 
         HttpClientStreamingIo::SseStreamReader reader(stream);
 

@@ -3232,7 +3232,35 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             return;
         }
-        if ((rv."code" == 101 || rv.hdr."Content-Type" == MimeTypeSse)) {
+        if (rv.hdr."Content-Type" == MimeTypeSse) {
+            # SSE response — set up async SSE connection via the I/O controller
+            if (rv.close) {
+                listener.logError("cid %d: SSE response returned from handler %y, but the connection "
+                    "close flag is set", cx.id, cx.handler_name);
+            } else if (!(handler instanceof HttpServer::AbstractHttpSocketHandlerInterface)) {
+                listener.logError("cid %d: SSE response returned from handler %y, but the handler does "
+                    "not inherit AbstractHttpSocketHandlerInterface (class: %y)", cx.id, cx.handler_name,
+                    handler.className());
+            } else if (async_response_out) {
+                # Use call_object_method since HttpServer doesn't require ServerSentEventHandler
+                try {
+                    HttpServerAsyncIo::HttpSseStreamPollOperation poll_op =
+                        call_object_method(handler, "setupAsyncSseConnection", s, cx, hdr,
+                            string(cx.id));
+                    # Tell the async controller to manage this socket as an SSE stream
+                    async_response_out.code = rv."code";
+                    async_response_out.hdr = rv.hdr;
+                    async_response_out.streaming = True;
+                    async_response_out.stream_type =
+                        HttpServerAsyncIo::HttpConnectionState::Sse;
+                    async_response_out.stream_operation = poll_op;
+                } catch (hash<ExceptionInfo> ex) {
+                    listener.logError("cid %d: error setting up async SSE connection for handler %y: %s: %s",
+                        cx.id, cx.handler_name, ex.err, ex.desc);
+                }
+            }
+        } else if (rv."code" == 101) {
+            # WebSocket upgrade — use dedicated socket handler
             if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -3245,13 +3273,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     on_exit cx.close = True;
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    # The 101 response was captured but not sent.
-                    # We must send it BEFORE calling start() so the client knows to switch protocols.
                     if (async_response_out) {
                         s.sendHTTPResponse(async_response_out."code",
                             HttpServer::HttpCodes{async_response_out."code"}, "1.1",
                             async_response_out.hdr ?? {}, async_response_out.body);
-                        # Clear the reference so caller knows response was already sent
                         delete async_response_out;
                     }
                     try {
@@ -4588,11 +4613,15 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             hash<auto> cx, Socket s) {
         bool is_multiplexed = (cx."header-info".http2 ?? False) || (cx."header-info".http3 ?? False);
 
-        # Handler already sent a streaming response (e.g., HTTP/3 SSE via QUIC APIs)
+        # Handler set up a streaming connection (SSE or WebSocket)
         if (async_response.streaming) {
             return <HttpServerAsyncIo::HttpRequestResultInfo>{
                 "streaming": True,
                 "stream_type": async_response.stream_type,
+                "stream_operation": async_response.stream_operation,
+                "code": async_response.code,
+                "status_message": HttpServer::HttpCodes{async_response.code},
+                "hdr": async_response.hdr,
             };
         }
 
@@ -6004,6 +6033,14 @@ hashdecl HttpAsyncResponseInfo {
         @since HttpServer 1.6
     */
     *string stream_type;
+
+    #! The poll operation for the streaming connection
+    /** Only used when \c streaming is @ref True. Set to an
+        @ref HttpServerAsyncIo::HttpSseStreamPollOperation for H1 SSE connections.
+
+        @since HttpServer 1.7
+    */
+    *AbstractPollOperation stream_operation;
 }
 } # namespace Priv
 
