@@ -1079,30 +1079,32 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Phase 4: Handler execution via compiled IR
-        // ALL handlers (OBE_Unconditional, OBE_Success, OBE_Error) are registered in the
-        // runtime vector with compiled handler_ir. This allows single execution on both
-        // normal AND exception paths.
+        // Hybrid Phase 3a/4 approach:
+        // - AST mode: Register in block_handlers for inline lowering
+        // - IR mode: Create OnBlockExit with compiled handler_ir for runtime execution
+        // This ensures handlers work in both execution modes without double-execution
 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
-            // Analyze variables and compile handler to IR
+            // Phase 3a: Register for inline lowering (AST mode compatibility)
+            block_handlers.emplace_back(InlineHandler{
+                on_block_exit_stmt->getType(),
+                handler_code,
+                stmt->loc
+            });
+
+            // Phase 3b/4: Compile handler to IR and set on OnBlockExit instruction
             HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
             QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
 
-            // Create OnBlockExit instruction for ALL handler types
-            // This registers the handler in the runtime vector for execution
+            // Phase 4: Create OnBlockExit instruction for ALL handler types
+            // This registers the handler in the runtime vector with compiled handler_ir
             QoreIROnBlockExitInstruction* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
 
-            // Set compiled handler IR on the instruction
+            // Set compiled handler IR on the instruction for runtime execution
             if (handler_ir) {
                 obe_inst->handler_ir = std::unique_ptr<QoreIRFunction>(handler_ir);
             }
-
-            // Note: We do NOT add to block_handlers for inline lowering.
-            // Handlers execute via the runtime vector (normal path: ScopeExit,
-            // exception path: LandingPad), enabling single execution and proper
-            // exception handling.
         }
 
         return true;
@@ -1797,8 +1799,9 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // At fall-through (normal exit), emit ScopeExit for runtime handler execution
     if (has_on_block_exit) {
         if (!terminated) {
-            // Phase 4: Handlers are in the runtime vector (compiled IR)
-            // Skip inline lowering - handlers execute via ScopeExit from the vector
+            // Phase 4: Handlers are in the runtime vector (compiled IR via OnBlockExit)
+            // Don't inline - handlers execute via ScopeExit from the vector
+            // (inline + vector would cause double execution)
             builder.createScopeExit(scope_id, false, nullptr, false);
         }
         scope_stack.pop_back();

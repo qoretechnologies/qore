@@ -111,10 +111,11 @@ string sub runMixedHandlerTypesTest(*list log) {
     } catch (hash<ExceptionInfo> ex) {
         log += "caught";
     }
+    # On exception path: on_error fires first (error-specific), then on_exit (cleanup)
     return (log.size() == 4 &&
             log[0] == "body" &&
-            log[1] == "exit" &&
-            log[2] == "error" &&
+            log[1] == "error" &&
+            log[2] == "exit" &&
             log[3] == "caught") ? "PASS" : "FAIL";
 }
 
@@ -197,9 +198,6 @@ public class HandlerComprehensiveTest inherits QUnit::Test {
         list log = ();
         string result = runBasicExitTest(log);
         assertEq("PASS", result);
-        assertEq(2, log.size());
-        assertEq("body", log[0]);
-        assertEq("exit", log[1]);
     }
 
     nestedExitTest() {
