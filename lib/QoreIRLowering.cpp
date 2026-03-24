@@ -1083,6 +1083,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             std::string handler_name = "on_block_exit_handler_"
                 + std::to_string(handler_counter.fetch_add(1));
             auto handler_func = std::make_unique<QoreIRFunction>(handler_name);
+            // On-exit handlers return nothing (NOTHING type) since they're cleanup code
+            handler_func->return_type_info = nothingTypeInfo;
             // Collect handler's own body locals for pre-instantiation
             collectAllStatementLocals(handler_code, handler_func->all_body_locals);
             for (LocalVar* lv : handler_func->all_body_locals) {
