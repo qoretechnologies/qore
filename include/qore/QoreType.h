@@ -216,6 +216,13 @@ DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo
 // @since %Qore 0.8.13
 DLLEXPORT const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInfo* valueTypeInfo);
 
+// @since %Qore 2.3
+DLLEXPORT const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
+    const type_vec_t& param_types, bool varargs = false, bool or_nothing = false);
+// @since %Qore 2.3
+DLLEXPORT const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
+    const type_vec_t& param_types, bool varargs = false);
+
 // @since %Qore 0.9.4
 DLLEXPORT const QoreTypeInfo* qore_get_type_from_string(const char* str, ExceptionSink& xsink);
 

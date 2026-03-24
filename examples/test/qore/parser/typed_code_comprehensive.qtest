@@ -12,6 +12,7 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         addTestCase("Function parameter with typed code", \functionParamTest());
         addTestCase("Return typed code from function", \returnTypedCodeTest());
         addTestCase("Class member with typed code", \classMemberTest());
+        addTestCase("Hashdecl with typed code", \hashdeclTypedCodeTest());
         addTestCase("Call reference assignment", \callRefTest());
         addTestCase("Nested complex types in signature", \nestedComplexTypesTest());
         addTestCase("Multiple typed code operations", \multipleOperationsTest());
@@ -75,6 +76,53 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
         holder.setOptionalTransformer(int sub (string s) { return 42; });
         assertTrue(holder.hasOptionalTransformer());
         assertEq(42, holder.transformOptional("x"));
+    }
+
+    hashdeclTypedCodeTest() {
+        # Basic typed code in hashdecl
+        hash<TypedCodeCallbackInfo> info = <TypedCodeCallbackInfo>{
+            "name": "test",
+            "callback": int sub (string s) { return s.length(); },
+        };
+        assertEq("test", info.name);
+        assertEq(5, info.callback("hello"));
+
+        # Or-nothing typed code in hashdecl
+        hash<TypedCodeOptionalCallbackInfo> opt_info = <TypedCodeOptionalCallbackInfo>{
+            "name": "opt",
+        };
+        assertEq("opt", opt_info.name);
+        assertEq(NOTHING, opt_info.callback);
+
+        # Assign callback to or-nothing field
+        opt_info.callback = sub (string entry) { /* do nothing */ };
+        assertNothing(opt_info.callback("test"));
+
+        # Multi-param typed code in hashdecl
+        hash<TypedCodeMultiParamInfo> multi = <TypedCodeMultiParamInfo>{
+            "combiner": string sub (string a, int b) { return sprintf("%s-%d", a, b); },
+        };
+        assertEq("foo-42", multi.combiner("foo", 42));
+
+        # Complex types in code signature in hashdecl
+        hash<TypedCodeComplexInfo> complex_info = <TypedCodeComplexInfo>{
+            "processor": int sub (list<int> nums) {
+                int sum = 0;
+                foreach int n in (nums) {
+                    sum += n;
+                }
+                return sum;
+            },
+            "transformer": list<string> sub (hash<string, int> h) {
+                list<string> result = ();
+                foreach string k in (keys h) {
+                    result += sprintf("%s=%d", k, h{k});
+                }
+                return result;
+            },
+        };
+        assertEq(15, complex_info.processor((1, 2, 3, 4, 5)));
+        assertEq(("a=1", "b=2"), complex_info.transformer({"a": 1, "b": 2}));
     }
 
     callRefTest() {
@@ -296,6 +344,25 @@ class TypedCodeComprehensiveTest inherits QUnit::Test {
             p.run();
         }
     }
+}
+
+hashdecl TypedCodeCallbackInfo {
+    string name;
+    code<int(string)> callback;
+}
+
+hashdecl TypedCodeOptionalCallbackInfo {
+    string name;
+    *code<nothing(string)> callback;
+}
+
+hashdecl TypedCodeMultiParamInfo {
+    code<string(string, int)> combiner;
+}
+
+hashdecl TypedCodeComplexInfo {
+    code<int(list<int>)> processor;
+    code<list<string>(hash<string, int>)> transformer;
 }
 
 class TypedCodeHolder {
