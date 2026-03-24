@@ -39,8 +39,13 @@ WordPieceModel::WordPieceModel(const QoreHashNode* config, ExceptionSink* xsink)
                 max_id = id;
             }
         }
-        if (max_id >= 0) {
+        // Reject unreasonably large vocab IDs (DoS protection)
+        if (max_id >= 0 && max_id < 1000000) {
             id_to_token.resize(max_id + 1);
+        } else if (max_id >= 1000000) {
+            xsink->raiseException("TOKENIZER-MODEL-ERROR",
+                "vocab max ID %d exceeds safety limit of 1000000", max_id);
+            return;
         }
 
         ConstHashIterator vi2(vocab_hash);

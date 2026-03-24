@@ -41,8 +41,12 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
                 max_id = id;
             }
         }
-        if (max_id >= 0) {
+        if (max_id >= 0 && max_id < 1000000) {
             id_to_token.resize(max_id + 1);
+        } else if (max_id >= 1000000) {
+            xsink->raiseException("TOKENIZER-MODEL-ERROR",
+                "vocab max ID %d exceeds safety limit of 1000000", max_id);
+            return;
         }
 
         // Populate vocab maps
@@ -86,7 +90,7 @@ BPEModel::BPEModel(const QoreHashNode* config, ExceptionSink* xsink) {
                 }
             }
 
-            if (!a.empty() || !b.empty()) {
+            if (!a.empty() && !b.empty()) {
                 int rank = (int)merges.size();
                 merges.push_back({a, b});
                 std::string key = a + " " + b;

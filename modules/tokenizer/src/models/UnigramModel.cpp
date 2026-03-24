@@ -137,8 +137,8 @@ std::vector<int> UnigramModel::tokenize(const std::string& pre_token) const {
                 char_len = 1;
             }
 
-            // Use unk_token score (typically 0 or a small negative)
-            double unk_score = 0.0;
+            // Use unk_token score; if unk_id not set, use a large penalty
+            double unk_score = -10.0;
             if (unk_id >= 0 && unk_id < (int)vocab.size()) {
                 unk_score = vocab[unk_id].second;
             }

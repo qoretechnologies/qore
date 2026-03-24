@@ -20,25 +20,30 @@ bool DartsTrie::parse(const uint8_t* data, size_t size) {
         return false;
     }
 
-    // Read trie blob size (little-endian uint32)
-    uint32_t trie_blob_size = data[0] | (data[1] << 8) | (data[2] << 16) | (data[3] << 24);
+    // Read trie blob size (little-endian uint32, cast to avoid UB on shift)
+    uint32_t trie_blob_size = (uint32_t)data[0] | ((uint32_t)data[1] << 8)
+        | ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 
     // Validate: must be at least 4 bytes and divisible by 4 (each unit is uint32)
     if (trie_blob_size < 4 || trie_blob_size % 4 != 0) {
         return false;
     }
 
-    if (4 + trie_blob_size > size) {
+    if (4 + (size_t)trie_blob_size > size) {
         return false;
     }
 
-    // Parse trie units
+    // Reject unreasonably large tries (DoS protection: max 64MB)
     size_t num_units = trie_blob_size / 4;
+    if (num_units > 16 * 1024 * 1024) {
+        return false;
+    }
+
     trie_units.resize(num_units);
     for (size_t i = 0; i < num_units; ++i) {
         size_t off = 4 + i * 4;
-        trie_units[i] = data[off] | (data[off + 1] << 8)
-            | (data[off + 2] << 16) | (data[off + 3] << 24);
+        trie_units[i] = (uint32_t)data[off] | ((uint32_t)data[off + 1] << 8)
+            | ((uint32_t)data[off + 2] << 16) | ((uint32_t)data[off + 3] << 24);
     }
 
     // Remaining data is the normalized string pool

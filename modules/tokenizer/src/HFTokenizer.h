@@ -20,7 +20,6 @@
 #include "decoders/AbstractDecoder.h"
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -84,8 +83,6 @@ private:
         bool single_word;
     };
     std::vector<AddedToken> added_tokens;
-
-    mutable std::mutex mtx;
 
     //! Internal: tokenize a single pre-token through the model
     std::vector<int> tokenizePreToken(const std::string& pre_token) const;

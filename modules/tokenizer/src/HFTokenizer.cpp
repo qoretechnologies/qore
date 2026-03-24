@@ -9,6 +9,7 @@
 */
 
 #include "HFTokenizer.h"
+#include "utils/qore_helpers.h"
 
 #include <algorithm>
 
@@ -88,16 +89,17 @@ QoreHFTokenizer::QoreHFTokenizer(const QoreHashNode* config, ExceptionSink* xsin
                 continue;
             }
             AddedToken tok;
-            tok.content = at->getKeyValue("content").get<const QoreStringNode>()
-                ? at->getKeyValue("content").get<const QoreStringNode>()->c_str() : "";
+            const QoreStringNode* content_str = safeGetString(
+                at->getKeyValue("content"));
+            tok.content = content_str ? content_str->c_str() : "";
             tok.id = (int)at->getKeyValue("id").getAsBigInt();
             tok.special = at->getKeyValue("special").getAsBool();
             tok.single_word = at->getKeyValue("single_word").getAsBool();
-            added_tokens.push_back(std::move(tok));
 
             if (tok.special) {
                 special_token_ids.insert(tok.id);
             }
+            added_tokens.push_back(std::move(tok));
         }
     }
 }
@@ -137,7 +139,7 @@ std::vector<int> QoreHFTokenizer::encodeText(const std::string& text) const {
 QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
         const QoreStringNode* text_pair, bool add_special_tokens,
         ExceptionSink* xsink) {
-    std::lock_guard<std::mutex> lock(mtx);
+    // No mutex needed: all pipeline components are immutable after construction
 
     if (!model) {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
@@ -237,7 +239,6 @@ QoreHashNode* QoreHFTokenizer::encode(const QoreStringNode* text,
 
 QoreStringNode* QoreHFTokenizer::decode(const QoreListNode* ids,
         bool skip_special_tokens, ExceptionSink* xsink) {
-    std::lock_guard<std::mutex> lock(mtx);
 
     if (!model) {
         xsink->raiseException("TOKENIZER-ERROR", "tokenizer model not initialized");
