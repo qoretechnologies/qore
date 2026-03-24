@@ -73,9 +73,9 @@ VNode::~VNode() {
     //printd(5, "VNode::~VNode() this: %p '%s' %p top_level: %d\n", this, lvar ? lvar->getName() : "n/a", lvar,
     //    top_level);
 
-    if (lvar && !refs) {
+    if (lvar && !refs && !lvar->isAssigned()) {
         const QoreTypeInfo* ti = lvar->parseGetTypeInfo();
-        if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT) || !lvar->isAssigned()) {
+        if (!QoreTypeInfo::parseAcceptsReturns(ti, NT_OBJECT)) {
             qore_program_private::makeParseWarning(getProgram(), *loc, QP_WARN_UNREFERENCED_VARIABLE,
                 "UNREFERENCED-VARIABLE", "local variable '%s' was declared in this block but not referenced; to " \
                 "disable this warning, use '%%disable-warning unreferenced-variable' in your code", lvar->getName());
