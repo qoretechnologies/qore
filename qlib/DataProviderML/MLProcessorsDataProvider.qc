@@ -67,6 +67,9 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         if (ML::ml_get_capabilities().has_onnx) {
             Children."onnx-model" = "QoreOnnxModelProcessor";
         }
+%ifndef NoModelRegistry
+        Children."registry-model" = "QoreRegistryModelProcessor";
+%endif
     }
 
     #! Returns the name of this data provider
@@ -134,6 +137,10 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                     return new QoreOnnxModelProcessor();
                 }
                 break;
+%ifndef NoModelRegistry
+            case "registry-model":
+                return new QoreRegistryModelProcessor();
+%endif
         }
     }
 }

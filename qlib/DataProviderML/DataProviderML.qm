@@ -29,6 +29,10 @@
 %requires(reexport) DataProvider
 %requires ml
 
+%try-module QoreModelRegistry
+%define NoModelRegistry
+%endtry
+
 module DataProviderML {
     version = "1.1.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
@@ -376,6 +380,42 @@ module DataProviderML {
                 ),
             });
         }
+
+        # register registry-model action (only when QoreModelRegistry is available)
+%ifndef NoModelRegistry
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/registry-model",
+            "action": "registry-model",
+            "display_name": "Run Registered Model",
+            "short_desc": "Runs a pre-trained model loaded from the model registry",
+            "desc": "Loads a trained ML model from the model registry by name and runs "
+                "inference on each batch of records. Supports any model type registered "
+                "in the registry (KMeans, LinearRegression, IsolationForest, etc.). "
+                "The model is loaded once and reused for all subsequent batches. "
+                "Specify `tag` to load a specific tagged version (e.g., 'production') "
+                "or `version` for a specific version ID.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRegistryModelProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRegistryModelProcessor::ConstructorOptions{
+                    "registry_path", "model_name", "fields", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRegistryModelProcessor::ConstructorOptions{
+                    "version", "tag", "tenant_id",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+%endif
 
         # register seasonal-decomposition action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -1024,6 +1064,22 @@ public namespace DataProviderML {
         #! values are the corresponding results (e.g., predicted classes, probabilities,
         #! or regression values)
         hash<auto> model_output;
+    }
+
+    #! Registry model inference event hashdecl
+    /** @since DataProviderML 1.2
+    */
+    public hashdecl RegistryModelEventInfo {
+        #! The type of analysis (always "registry-model")
+        string event_type = "registry-model";
+        #! The model name from the registry
+        string model_name;
+        #! The version ID of the loaded model
+        string version_id;
+        #! The input field values passed to the model
+        hash<auto> record_values;
+        #! The model's prediction result
+        auto prediction;
     }
 
     #! Seasonal decomposition event hashdecl
