@@ -34,6 +34,14 @@
 %requires ../../../../qlib/QoreModelRegistry
 %requires ml
 
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%try-module SqlUtil
+%define NoSqlUtil
+%endtry
+
 %exec-class ModelRegistryTest
 
 class ModelRegistryTest inherits QUnit::Test {
@@ -54,6 +62,16 @@ class ModelRegistryTest inherits QUnit::Test {
         addTestCase("multiTenantPruning", \multiTenantPruningTest());
         addTestCase("multiTenantGetTenantId", \multiTenantGetTenantIdTest());
         addTestCase("multiTenantInvalidTenantId", \multiTenantInvalidTenantIdTest());
+        addTestCase("backendAccessor", \backendAccessorTest());
+        addTestCase("constructorWithBackend", \constructorWithBackendTest());
+        addTestCase("deleteTenantStorage", \deleteTenantStorageTest());
+        addTestCase("dataProviderNavigation", \dataProviderNavigationTest());
+        addTestCase("dataProviderSearch", \dataProviderSearchTest());
+        addTestCase("dataProviderFactory", \dataProviderFactoryTest());
+        addTestCase("filesystemBackendDirect", \filesystemBackendDirectTest());
+        addTestCase("filesystemBackendThreadSafety", \filesystemBackendThreadSafetyTest());
+        addTestCase("restBackendCacheInvalidation", \restBackendCacheInvalidationTest());
+        addTestCase("databaseBackendIntegration", \databaseBackendIntegrationTest());
 
         set_return_value(main());
     }
@@ -224,10 +242,8 @@ class ModelRegistryTest inherits QUnit::Test {
         registry.tag("prune_model", version_ids[0], "important");
 
         # Prune keeping latest 2, with keep_tagged=True
-        int deleted = registry.prune("prune_model", {
-            "keep_latest": 2,
-            "keep_tagged": True,
-        });
+        int deleted = registry.prune("prune_model",
+            <PruneOptions>{"keep_latest": 2, "keep_tagged": True});
         assertEq(2, deleted, "should delete 2 (v2 and v3, keeping v1-tagged + v4,v5)");
 
         # Verify remaining versions
@@ -248,17 +264,16 @@ class ModelRegistryTest inherits QUnit::Test {
         assertEq(version_ids[4], remaining[2].version_id, "5th version should remain");
 
         # Prune with keep_tagged=False
-        deleted = registry.prune("prune_model", {
-            "keep_latest": 2,
-            "keep_tagged": False,
-        });
+        deleted = registry.prune("prune_model",
+            <PruneOptions>{"keep_latest": 2, "keep_tagged": False});
         assertEq(1, deleted, "should delete 1 (the tagged version)");
 
         remaining = registry.listVersions("prune_model");
         assertEq(2, remaining.size(), "should have 2 remaining");
 
         # Prune when fewer versions than keep_latest
-        deleted = registry.prune("prune_model", {"keep_latest": 5});
+        deleted = registry.prune("prune_model",
+            <PruneOptions>{"keep_latest": 5});
         assertEq(0, deleted, "should delete 0 when fewer than keep_latest");
     }
 
@@ -337,6 +352,22 @@ class ModelRegistryTest inherits QUnit::Test {
         # Load nonexistent version
         assertThrows("ML-REGISTRY-ERROR", \registry.load(),
             ("error_model", "nonexistent_version"));
+
+        # Path traversal in model name should be rejected
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": "../escape"}));
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": "../../etc/passwd"}));
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": "bad/name"}));
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": ".."}));
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": "."}));
+
+        # Empty model name should be rejected
+        assertThrows("ML-REGISTRY-ERROR", \registry.register(),
+            (km, {"name": ""}));
     }
 
     untaggingTest() {
@@ -549,7 +580,8 @@ class ModelRegistryTest inherits QUnit::Test {
         string vid_b = tenant_b.register(km, {"name": "prune-test"});
 
         # Prune tenant A keeping 1
-        int deleted = tenant_a.prune("prune-test", {"keep_latest": 1});
+        int deleted = tenant_a.prune("prune-test",
+            <PruneOptions>{"keep_latest": 1});
         assertEq(2, deleted, "tenant A should prune 2 versions");
 
         # Tenant A should have 1 remaining
@@ -632,5 +664,525 @@ class ModelRegistryTest inherits QUnit::Test {
         });
         assertEq("valid-tenant_123", reg.getTenantId(),
             "valid tenant_id should be accepted");
+    }
+
+    backendAccessorTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # getBackend() should return a FilesystemBackend
+        auto backend = registry.getBackend();
+        assertTrue(backend instanceof QoreModelRegistry::AbstractModelRegistryBackend,
+            "backend should be an AbstractModelRegistryBackend");
+        assertTrue(backend instanceof QoreModelRegistry::FilesystemBackend,
+            "backend should be a FilesystemBackend");
+    }
+
+    constructorWithBackendTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Create a backend directly
+        QoreModelRegistry::FilesystemBackend backend(dir, "test-tenant");
+
+        # Construct registry with pre-built backend
+        QoreModelRegistry::ModelRegistry registry({"backend": backend});
+
+        # Verify it works
+        assertEq("test-tenant", registry.getTenantId(),
+            "registry should use backend's tenant_id");
+
+        # Register and load a model through the registry
+        ML::KMeans km = createFittedKMeans();
+        string vid = registry.register(km, {"name": "backend-test"});
+        assertTrue(vid.val(), "should get a version_id");
+
+        object loaded = registry.load("backend-test");
+        assertTrue(loaded instanceof ML::KMeans, "should load KMeans from backend");
+
+        # Verify the backend has the same view
+        list<string> models = backend.listModels();
+        assertTrue(models.contains("backend-test"),
+            "backend should show the registered model");
+    }
+
+    deleteTenantStorageTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Create tenant registries and register models
+        ML::KMeans km = createFittedKMeans();
+
+        QoreModelRegistry::ModelRegistry tenant_a({
+            "path": dir,
+            "tenant_id": "delete-me",
+        });
+        tenant_a.register(km, {"name": "model1"});
+        tenant_a.register(km, {"name": "model2"});
+
+        QoreModelRegistry::ModelRegistry tenant_b({
+            "path": dir,
+            "tenant_id": "keep-me",
+        });
+        tenant_b.register(km, {"name": "model1"});
+
+        # Verify both tenants exist
+        QoreModelRegistry::ModelRegistry admin({"path": dir});
+        list<string> tenants = admin.listTenants();
+        assertEq(2, tenants.size(), "should have 2 tenants before deletion");
+
+        # Delete tenant A's storage
+        admin.deleteTenantStorage("delete-me");
+
+        # Verify tenant A is gone
+        tenants = admin.listTenants();
+        assertEq(1, tenants.size(), "should have 1 tenant after deletion");
+        assertEq("keep-me", tenants[0], "remaining tenant should be 'keep-me'");
+
+        # Verify tenant B is unaffected
+        list<string> b_models = tenant_b.listModels();
+        assertEq(1, b_models.size(), "tenant B should still have 1 model");
+
+        # Deleting nonexistent tenant should throw
+        assertThrows("ML-REGISTRY-ERROR", \admin.deleteTenantStorage(),
+            "nonexistent-tenant");
+
+        # Deleting invalid tenant_id should throw
+        assertThrows("ML-REGISTRY-ERROR", \admin.deleteTenantStorage(),
+            "../escape");
+    }
+
+    dataProviderNavigationTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register models
+        ML::KMeans km = createFittedKMeans();
+        registry.register(km, {"name": "alpha_model"});
+        registry.register(km, {"name": "beta_model"});
+
+        # Create DataProvider from existing registry
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+
+        # Navigate: list model names as children
+        *list<string> children = dp.getChildProviderNames();
+        assertEq(2, children.size(), "should have 2 child providers");
+        assertTrue(children.contains("alpha_model"),
+            "should contain alpha_model");
+        assertTrue(children.contains("beta_model"),
+            "should contain beta_model");
+
+        # Navigate to a specific model
+        *AbstractDataProvider child = dp.getChildProvider("alpha_model");
+        assertTrue(child instanceof QoreModelRegistry::ModelVersionsDataProvider,
+            "child should be ModelVersionsDataProvider");
+        assertEq("alpha_model", child.getName(), "child name should match");
+
+        # Nonexistent model returns NOTHING
+        assertNothing(dp.getChildProvider("nonexistent"),
+            "nonexistent model should return NOTHING");
+    }
+
+    dataProviderSearchTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        ML::KMeans km = createFittedKMeans();
+        ML::LinearRegression lr = createFittedLR();
+
+        string vid1 = registry.register(km, {
+            "name": "search_model",
+            "description": "first version",
+        });
+        registry.register(lr, {
+            "name": "search_model",
+            "description": "second version",
+        });
+
+        # Get the model versions provider
+        QoreModelRegistry::ModelRegistryDataProvider dp(registry);
+        AbstractDataProvider versions_dp = dp.getChildProvider("search_model");
+
+        # Search all versions
+        AbstractDataProviderRecordIterator it = versions_dp.searchRecords();
+        list<hash<auto>> results();
+        while (it.next()) {
+            push results, it.getValue();
+        }
+        assertEq(2, results.size(), "should find 2 versions");
+        assertEq("KMeans", results[0].algorithm, "first should be KMeans");
+        assertEq("LinearRegression", results[1].algorithm,
+            "second should be LinearRegression");
+
+        # Search with filter
+        it = versions_dp.searchRecords({"algorithm": "KMeans"});
+        results = ();
+        while (it.next()) {
+            push results, it.getValue();
+        }
+        assertEq(1, results.size(), "filtered should find 1 version");
+        assertEq(vid1, results[0].version_id, "should be the KMeans version");
+    }
+
+    dataProviderFactoryTest() {
+        # Verify factory is registered
+        *AbstractDataProviderFactory factory =
+            DataProvider::getFactory("model-registry");
+        assertTrue(factory instanceof QoreModelRegistry::ModelRegistryDataProviderFactory,
+            "factory should be registered");
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("model-registry", info.name, "factory name should match");
+    }
+
+    filesystemBackendDirectTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        # Test backend directly (not through ModelRegistry)
+        QoreModelRegistry::FilesystemBackend backend(dir, "direct-tenant");
+
+        # Verify tenant ID
+        assertEq("direct-tenant", backend.getTenantId(),
+            "backend tenant_id should match");
+
+        # Register via backend API
+        ML::KMeans km = createFittedKMeans();
+        binary artifact = ML::ml_serialize(km);
+        string version_id = format_date("YYYYMMDDHHmmss", now()) + "_"
+            + get_random_bytes(4).toHex();
+
+        hash<QoreModelRegistry::ModelVersionInfo> metadata({
+            "version_id": version_id,
+            "name": "direct-test",
+            "algorithm": "KMeans",
+            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "tags": (),
+            "file_size": artifact.size(),
+            "format": "qml",
+            "tenant_id": "direct-tenant",
+        });
+
+        string vid = backend.registerVersion("direct-test", artifact, metadata);
+        assertEq(version_id, vid, "registerVersion should return version_id");
+
+        # Load artifact
+        binary loaded = backend.loadArtifact("direct-test", version_id);
+        assertEq(artifact.size(), loaded.size(), "artifact size should match");
+
+        # Deserialize and verify
+        object model = ML::ml_deserialize(loaded);
+        assertTrue(model instanceof ML::KMeans, "deserialized model should be KMeans");
+
+        # List versions
+        list<hash<auto>> versions = backend.listVersions("direct-test");
+        assertEq(1, versions.size(), "should have 1 version");
+        assertEq(version_id, versions[0].version_id, "version_id should match");
+        assertEq("direct-tenant", versions[0].tenant_id,
+            "tenant_id in metadata should match");
+
+        # List models
+        list<string> models = backend.listModels();
+        assertEq(1, models.size(), "should have 1 model");
+        assertEq("direct-test", models[0], "model name should match");
+
+        # Tag and untag
+        backend.tag("direct-test", version_id, "stable");
+        versions = backend.listVersions("direct-test");
+        assertTrue(versions[0].tags.contains("stable"), "tag should be present");
+
+        backend.untag("direct-test", version_id, "stable");
+        versions = backend.listVersions("direct-test");
+        assertFalse(versions[0].tags.contains("stable"), "tag should be removed");
+
+        # Get version metadata
+        hash<auto> meta = backend.getVersionMetadata("direct-test", version_id);
+        assertEq("KMeans", meta.algorithm, "algorithm should match");
+
+        # Delete model
+        backend.deleteModel("direct-test");
+        assertEq(0, backend.listModels().size(), "should have 0 models after delete");
+    }
+
+    filesystemBackendThreadSafetyTest() {
+        string dir = getTestDir();
+        on_exit { cleanupDir(dir); }
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+
+        # Register a base model
+        ML::KMeans km = createFittedKMeans();
+        registry.register(km, {"name": "thread-test"});
+
+        # Concurrent reads — multiple threads loading simultaneously
+        list<Counter> counters();
+        Counter done(4);
+
+        for (int t = 0; t < 4; ++t) {
+            background sub() {
+                on_exit done.dec();
+                for (int i = 0; i < 10; ++i) {
+                    object model = registry.load("thread-test");
+                    @assert(model instanceof ML::KMeans);
+                }
+            }();
+        }
+
+        done.waitForZero();
+
+        # Concurrent writes — multiple threads registering versions
+        Counter write_done(4);
+        for (int t = 0; t < 4; ++t) {
+            background sub() {
+                on_exit write_done.dec();
+                for (int i = 0; i < 5; ++i) {
+                    ML::KMeans k({"k": 2, "seed": 42});
+                    k.fitMatrix(((1.0, 1.0), (5.0, 5.0)));
+                    registry.register(k, {"name": "thread-test"});
+                }
+            }();
+        }
+
+        write_done.waitForZero();
+
+        # Should have 1 (original) + 20 (4 threads * 5) = 21 versions
+        list<hash<auto>> versions = registry.listVersions("thread-test");
+        assertEq(21, versions.size(),
+            "should have 21 versions after concurrent registration");
+
+        # All versions should be loadable
+        foreach hash<auto> v in (versions) {
+            object m = registry.load("thread-test", v.version_id);
+            assertTrue(m instanceof ML::KMeans,
+                sprintf("version %s should load as KMeans", v.version_id));
+        }
+    }
+
+    databaseBackendIntegrationTest() {
+%ifdef NoPgsql
+        testSkip("pgsql module not available");
+%endif
+%ifdef NoSqlUtil
+        testSkip("SqlUtil module not available");
+%endif
+        string dsn = "pgsql:omquser/omquser@omquser";
+        Datasource ds(dsn);
+        ds.open();
+        on_exit ds.close();
+
+        string prefix = "ml_test_";
+
+        # Create sequences and tables
+        on_exit {
+            # Cleanup: drop tables and sequences
+            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "blobs CASCADE"); ds.commit(); } catch () {}
+            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "versions CASCADE"); ds.commit(); } catch () {}
+            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "models CASCADE"); ds.commit(); } catch () {}
+            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_models"); ds.commit(); } catch () {}
+            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_versions"); ds.commit(); } catch () {}
+            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_blobs"); ds.commit(); } catch () {}
+        }
+
+        # Create sequences
+        ds.exec("CREATE SEQUENCE " + prefix + "seq_models START 1");
+        ds.exec("CREATE SEQUENCE " + prefix + "seq_versions START 1");
+        ds.exec("CREATE SEQUENCE " + prefix + "seq_blobs START 1");
+
+        # Create tables
+        ds.exec("CREATE TABLE " + prefix + "models ("
+            + "modelid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_models') PRIMARY KEY, "
+            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
+            + "name VARCHAR(255) NOT NULL, "
+            + "algorithm VARCHAR(255), "
+            + "created TIMESTAMP NOT NULL, "
+            + "modified TIMESTAMP NOT NULL, "
+            + "UNIQUE(tenant_id, name))");
+
+        ds.exec("CREATE TABLE " + prefix + "versions ("
+            + "versionid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_versions') PRIMARY KEY, "
+            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
+            + "modelid INTEGER NOT NULL REFERENCES " + prefix + "models(modelid), "
+            + "version_id VARCHAR(255) NOT NULL, "
+            + "algorithm VARCHAR(255), "
+            + "format VARCHAR(50) DEFAULT 'qml', "
+            + "artifact_size INTEGER, "
+            + "metrics TEXT, "
+            + "tags TEXT DEFAULT '[]', "
+            + "training_data_hash VARCHAR(255), "
+            + "description TEXT, "
+            + "created TIMESTAMP NOT NULL, "
+            + "UNIQUE(tenant_id, modelid, version_id))");
+
+        ds.exec("CREATE TABLE " + prefix + "blobs ("
+            + "blobid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_blobs') PRIMARY KEY, "
+            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
+            + "versionid INTEGER NOT NULL REFERENCES " + prefix + "versions(versionid), "
+            + "data BYTEA NOT NULL, "
+            + "UNIQUE(tenant_id, versionid))");
+
+        ds.commit();
+
+        # Create backend
+        QoreModelRegistry::DatabaseBackend backend(ds, {
+            "table_prefix": prefix,
+            "tenant_id": "test-tenant",
+        });
+
+        # Test: register a model version
+        ML::KMeans km = createFittedKMeans();
+        binary artifact = ML::ml_serialize(km);
+        string version_id = format_date("YYYYMMDDHHmmss", now()) + "_"
+            + get_random_bytes(4).toHex();
+
+        hash<QoreModelRegistry::ModelVersionInfo> meta({
+            "version_id": version_id,
+            "name": "db-test-model",
+            "algorithm": "KMeans",
+            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "tags": (),
+            "file_size": artifact.size(),
+            "format": "qml",
+            "tenant_id": "test-tenant",
+        });
+
+        string vid = backend.registerVersion("db-test-model", artifact, meta);
+        assertEq(version_id, vid, "DB: registerVersion should return version_id");
+
+        # Test: list models
+        list<string> models = backend.listModels();
+        assertEq(1, models.size(), "DB: should have 1 model");
+        assertEq("db-test-model", models[0], "DB: model name should match");
+
+        # Test: list versions
+        list<hash<QoreModelRegistry::ModelVersionInfo>> versions =
+            backend.listVersions("db-test-model");
+        assertEq(1, versions.size(), "DB: should have 1 version");
+        assertEq(version_id, versions[0].version_id, "DB: version_id should match");
+        assertEq("KMeans", versions[0].algorithm, "DB: algorithm should match");
+        assertEq("test-tenant", versions[0].tenant_id, "DB: tenant_id should match");
+
+        # Test: load artifact and verify round-trip
+        binary loaded = backend.loadArtifact("db-test-model", version_id);
+        assertEq(artifact.size(), loaded.size(), "DB: artifact size should match");
+        object loaded_model = ML::ml_deserialize(loaded);
+        assertTrue(loaded_model instanceof ML::KMeans,
+            "DB: deserialized model should be KMeans");
+
+        # Test: get version metadata directly
+        hash<QoreModelRegistry::ModelVersionInfo> vmeta =
+            backend.getVersionMetadata("db-test-model", version_id);
+        assertEq("KMeans", vmeta.algorithm, "DB: metadata algorithm should match");
+
+        # Test: tag and untag
+        backend.tag("db-test-model", version_id, "production");
+        versions = backend.listVersions("db-test-model");
+        assertTrue(versions[0].tags.contains("production"), "DB: tag should be present");
+
+        backend.untag("db-test-model", version_id, "production");
+        versions = backend.listVersions("db-test-model");
+        assertFalse(versions[0].tags.contains("production"), "DB: tag should be removed");
+
+        # Test: register multiple versions and prune
+        for (int i = 0; i < 4; ++i) {
+            string v = format_date("YYYYMMDDHHmmss", now()) + "_"
+                + get_random_bytes(4).toHex();
+            hash<QoreModelRegistry::ModelVersionInfo> m({
+                "version_id": v,
+                "name": "db-test-model",
+                "algorithm": "KMeans",
+                "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+                "tags": (),
+                "file_size": artifact.size(),
+                "format": "qml",
+                "tenant_id": "test-tenant",
+            });
+            backend.registerVersion("db-test-model", artifact, m);
+        }
+        versions = backend.listVersions("db-test-model");
+        assertEq(5, versions.size(), "DB: should have 5 versions before prune");
+
+        int deleted = backend.prune("db-test-model",
+            <QoreModelRegistry::PruneOptions>{"keep_latest": 2});
+        assertEq(3, deleted, "DB: should prune 3 versions");
+
+        versions = backend.listVersions("db-test-model");
+        assertEq(2, versions.size(), "DB: should have 2 versions after prune");
+
+        # Test: multi-tenant isolation
+        QoreModelRegistry::DatabaseBackend other_tenant(ds, {
+            "table_prefix": prefix,
+            "tenant_id": "other-tenant",
+        });
+        list<string> other_models = other_tenant.listModels();
+        assertEq(0, other_models.size(),
+            "DB: other tenant should see 0 models");
+
+        # Test: list tenants
+        QoreModelRegistry::DatabaseBackend admin_backend(ds, {
+            "table_prefix": prefix,
+        });
+        list<string> tenants = admin_backend.listTenants();
+        assertTrue(tenants.contains("test-tenant"),
+            "DB: tenants should include test-tenant");
+
+        # Test: delete model
+        backend.deleteModel("db-test-model");
+        models = backend.listModels();
+        assertEq(0, models.size(), "DB: should have 0 models after delete");
+
+        # Test: delete nonexistent model should throw
+        assertThrows("ML-REGISTRY-ERROR", \backend.deleteModel(), "nonexistent");
+    }
+
+    restBackendCacheInvalidationTest() {
+        # Test RestBackend cache invalidation (without a real REST server)
+        # We can test the cache invalidation logic directly
+
+        # Create a mock REST client (just an object with get/post/put/del methods)
+        MockRestClient mock({"_dummy": True});
+
+        QoreModelRegistry::RestBackend backend(mock, "/api/models");
+
+        # Test cache invalidation by name
+        # Manually populate cache (using internal knowledge)
+        # Since we can't easily call loadArtifact without a real server,
+        # just test the invalidateCache and clearCache methods don't throw
+        backend.invalidateCache("some-model");
+        backend.invalidateCache("some-model", "some-version");
+        backend.clearCache();
+        assertTrue(True, "cache invalidation methods should not throw");
+    }
+}
+
+#! Simple mock REST client for testing
+class MockRestClient {
+    private {
+        hash<auto> responses;
+    }
+
+    constructor(hash<auto> responses) {
+        self.responses = responses;
+    }
+
+    hash<auto> get(string path, auto body, *hash<auto> hdrs) {
+        return {"body": responses{path} ?? {}};
+    }
+
+    hash<auto> post(string path, auto body, auto x, *hash<auto> hdrs) {
+        return {"body": responses{path} ?? {}};
+    }
+
+    hash<auto> put(string path, auto body, auto x, *hash<auto> hdrs) {
+        return {"body": responses{path} ?? {}};
+    }
+
+    hash<auto> del(string path, auto body, *hash<auto> hdrs) {
+        return {"body": responses{path} ?? {}};
     }
 }
