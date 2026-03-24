@@ -1,0 +1,101 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HFTokenizer.qpp
+
+    Qore HFTokenizer class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "HFTokenizer.h"
+
+using namespace QoreTokenizer;
+
+//! HuggingFace-compatible text tokenizer
+/** Implements the full tokenization pipeline from tokenizer.json:
+    normalize → pre-tokenize → model tokenize → post-process
+
+    Supports BPE (GPT-2, RoBERTa, Llama), WordPiece (BERT), and
+    Unigram (T5, XLM-RoBERTa) tokenization models.
+
+    @par Example:
+    @code{.py}
+    %requires json
+    %requires tokenizer
+
+    hash<auto> config = parse_json(ReadOnlyFile::readTextFile("tokenizer.json"));
+    Tokenizer::HFTokenizer tok(config);
+
+    hash<auto> enc = tok.encode("Hello, world!");
+    printf("Token IDs: %y\n", enc.input_ids);
+
+    string text = tok.decode(enc.input_ids);
+    printf("Decoded: %s\n", text);
+    @endcode
+
+    @since tokenizer 1.0
+*/
+qclass HFTokenizer [arg=QoreHFTokenizer* tok; ns=Qore::Tokenizer; flags=final];
+
+//! Creates a new HFTokenizer from a parsed tokenizer.json configuration hash
+/** @param config the parsed tokenizer.json hash (from parse_json())
+
+    @throw TOKENIZER-ERROR if the configuration is invalid or missing required fields
+*/
+HFTokenizer::constructor(hash<auto> config) {
+    self->setPrivate(CID_HFTOKENIZER, new QoreHFTokenizer(config, xsink));
+}
+
+//! Encodes text to token IDs
+/** @param text the input text to tokenize
+
+    @return a hash with input_ids, token_type_ids, attention_mask, tokens
+*/
+hash<auto> HFTokenizer::encode(string text) {
+    return tok->encode(text, nullptr, true, xsink);
+}
+
+//! Encodes text with options for sentence pairs
+/** @param text the input text to tokenize
+    @param text_pair optional second text for sentence-pair tasks
+    @param add_special_tokens whether to add special tokens (default True)
+
+    @return encoding result hash
+*/
+hash<auto> HFTokenizer::encodeWithOptions(string text, *string text_pair, softbool add_special_tokens = True) {
+    return tok->encode(text, text_pair, (bool)add_special_tokens, xsink);
+}
+
+//! Decodes token IDs back to text
+/** @param ids a list of token IDs to decode
+    @param skip_special_tokens whether to skip special tokens (default False)
+
+    @return the decoded text string
+*/
+string HFTokenizer::decode(list<softint> ids, softbool skip_special_tokens = False) {
+    return tok->decode(ids, (bool)skip_special_tokens, xsink);
+}
+
+//! Returns the vocabulary size
+/** @return the number of tokens in the vocabulary
+*/
+int HFTokenizer::getVocabSize() [flags=CONSTANT] {
+    return tok->getVocabSize();
+}
+
+//! Converts a token ID to its string representation
+/** @param id the token ID
+    @return the token string
+*/
+string HFTokenizer::idToToken(int id) [flags=CONSTANT] {
+    return tok->idToToken(id, xsink);
+}
+
+//! Converts a token string to its ID
+/** @param token the token string
+    @return the token ID, or -1 if not found
+*/
+int HFTokenizer::tokenToId(string token) [flags=CONSTANT] {
+    return tok->tokenToId(token);
+}

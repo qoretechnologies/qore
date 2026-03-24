@@ -1,0 +1,27 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_tokenizer.qpp
+
+    Qore tokenizer module hashdecls
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+
+//! Tokenizer encoding result
+/** Returned by @ref HFTokenizer::encode()
+
+    @since tokenizer 1.0
+*/
+hashdecl Qore::Tokenizer::TokenizerEncoding {
+    //! Token IDs
+    list<int> input_ids;
+    //! Segment IDs (0 for first text, 1 for second)
+    *list<int> token_type_ids;
+    //! Attention mask (1 for real tokens, 0 for padding)
+    *list<int> attention_mask;
+    //! String tokens
+    *list<string> tokens;
+}
