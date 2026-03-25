@@ -50,6 +50,18 @@ public class Http3StreamContext inherits AbstractStreamContext {
         int stream_id;
         #! Optional callback to wake the I/O controller after queuing data
         *code<nothing()> wake_callback;
+        #! Optional Queue for receiving data from the QUIC receive callback
+        /** When set, @ref readData() reads from this Queue instead of calling
+            @ref Qore::Socket::readQuicConnectStreamData().  Data is pushed by
+            h3RecvDataCallback() in the C++ QUIC session.
+
+            @since AsyncSocketIo 1.2
+        */
+        *Queue data_queue;
+        #! Set to True when a NOTHING sentinel is received from the Queue (stream closed)
+        /** @since AsyncSocketIo 1.2
+        */
+        bool closed = False;
     }
 
     #! Creates an HTTP/3 stream context
@@ -57,9 +69,10 @@ public class Http3StreamContext inherits AbstractStreamContext {
         @param session_id the QUIC session ID
         @param stream_id the HTTP/3 stream ID (must be non-negative)
         @param wake_callback optional callback to wake the I/O controller after writes
+        @param data_queue optional Queue for receiving data from the QUIC receive callback
     */
     constructor(Socket sock, int session_id, int stream_id,
-            *code<nothing()> wake_callback) {
+            *code<nothing()> wake_callback, *Queue data_queue) {
         @assert(sock, "socket cannot be null");
         @assert(session_id > 0, "session_id must be positive");
         @assert(stream_id >= 0, "stream_id must be non-negative");
@@ -67,6 +80,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
         self.session_id = session_id;
         self.stream_id = stream_id;
         self.wake_callback = wake_callback;
+        self.data_queue = data_queue;
     }
 
     string getProtocol() {
@@ -86,7 +100,7 @@ public class Http3StreamContext inherits AbstractStreamContext {
     }
 
     bool isOpen() {
-        return sock.isOpen();
+        return !closed && sock.isOpen();
     }
 
     #! Send data on the QUIC stream with backpressure handling
@@ -116,11 +130,33 @@ public class Http3StreamContext inherits AbstractStreamContext {
     }
 
     #! Read data from the extended CONNECT tunnel
-    /** @param max_bytes ignored for HTTP/3 — all buffered data is returned
+    /** When a data Queue is registered, reads non-blockingly from the Queue
+        (data is pushed by h3RecvDataCallback in the C++ QUIC session).
+        Falls back to @ref Qore::Socket::readQuicConnectStreamData() when no
+        Queue is available.
+
+        @param max_bytes ignored for HTTP/3 — all buffered data is returned
 
         @return binary data if available, or @ref nothing if no data is buffered
+
+        @since AsyncSocketIo 1.2 Queue-based reading
     */
     *binary readData(int max_bytes = 0) {
+        if (data_queue) {
+            # Read from Queue populated by h3RecvDataCallback.
+            # tryGet() returns {"value": data} or NOTHING if queue is empty,
+            # disambiguating empty queue from a NOTHING sentinel value.
+            auto result = data_queue.tryGet();
+            if (!exists result) {
+                return NOTHING;
+            }
+            # NOTHING sentinel means stream closed
+            if (exists result && !(result.value instanceof binary)) {
+                closed = True;
+                return NOTHING;
+            }
+            return result.value;
+        }
         return sock.readQuicConnectStreamData(session_id, stream_id);
     }
 
