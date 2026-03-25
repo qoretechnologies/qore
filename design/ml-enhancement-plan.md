@@ -10,8 +10,8 @@ integration, DataProvider wrapper). Phase 9 is **core complete** (DecisionTree,
 RandomForest, GradientBoostedTrees — DataProvider processors and GBT multiclass
 softmax remaining). Phase 10 is **complete** (SVM, NaiveBayes).
 Phase 11 is **complete** (statistical functions with Cephes incbet).
-Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold —
-remaining: PolynomialFeatures, DateTimeFeatures, TextFeatures, SelectKBest,
+Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
+PolynomialFeatures, SelectKBest — remaining: DateTimeFeatures, TextFeatures,
 RecursiveFeatureElimination). Phases 13–14 are planned.
 
 ## Current State (after Phases 1–9)

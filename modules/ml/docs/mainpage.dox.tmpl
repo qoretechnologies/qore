@@ -41,6 +41,8 @@
     |@ref Qore::ML::OneHotEncoder "OneHotEncoder"|Feature Engineering|Convert integer-encoded categoricals to binary columns
     |@ref Qore::ML::LabelEncoder "LabelEncoder"|Feature Engineering|Map string/integer categories to consecutive integers
     |@ref Qore::ML::VarianceThreshold "VarianceThreshold"|Feature Selection|Remove low-variance features from datasets
+    |@ref Qore::ML::PolynomialFeatures "PolynomialFeatures"|Feature Engineering|Generate polynomial and interaction terms from input features
+    |@ref Qore::ML::SelectKBest "SelectKBest"|Feature Selection|Select top-k features by ANOVA F-test or mutual information
     |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
     |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
     |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
@@ -214,6 +216,15 @@
       variance (population variance). Features with variance at or below the threshold are
       removed during transform(). Default threshold 0.0 removes only constant (zero-variance)
       features. Use to eliminate uninformative columns before feeding data into algorithms.
+    - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — Generates polynomial and
+      interaction terms from input features. For example, with degree=2 and features [a, b],
+      produces [a, b, a^2, a*b, b^2]. Enables linear models to capture non-linear
+      relationships (polynomial regression). Supports \c interaction_only mode (no powers)
+      and optional bias column.
+    - @ref Qore::ML::SelectKBest "SelectKBest" — Selects the top-k most informative features
+      based on a scoring function. Supports ANOVA F-statistic (\c "f_classif") for
+      classification tasks and discretized mutual information (\c "mutual_info") for any
+      target type. Reports per-feature scores and a boolean support mask.
 
     @subsection mlalgo_stats Statistical Functions
 
@@ -375,6 +386,10 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::LabelEncoder "LabelEncoder"
     - Do you want to remove uninformative (near-constant) columns?
       → Use @ref Qore::ML::VarianceThreshold "VarianceThreshold"
+    - Do you need polynomial or interaction features for a linear model?
+      → Use @ref Qore::ML::PolynomialFeatures "PolynomialFeatures"
+    - Do you want to select the most informative features automatically?
+      → Use @ref Qore::ML::SelectKBest "SelectKBest" with \c "f_classif" or \c "mutual_info"
 
     <b>"I need to test a statistical hypothesis"</b>
     - Are two groups' means significantly different?
@@ -663,4 +678,6 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — categorical-to-binary column encoding with drop_first option
       - @ref Qore::ML::LabelEncoder "LabelEncoder" — string/integer-to-consecutive-integer mapping with inverse transform
       - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — feature selector removing low-variance features (population variance)
+      - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
+      - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
 */
