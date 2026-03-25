@@ -37,6 +37,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
         addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
+        addTestCase("parquetTest", \parquetTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -628,6 +629,48 @@ class DataFrameTest inherits QUnit::Test {
         list<string> cols = conflict.columnNames();
         assertTrue(cols.contains("val"), "conflict: left val");
         assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
+    }
+
+    parquetTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Test Parquet read/write round-trip
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5},
+             {"id": 2, "name": "Bob",   "score": 88.0},
+             {"id": 3, "name": "Carol", "score": NOTHING}));
+
+        string tmp_path = tmp_location() + "/df_parquet_test_" + string(getpid()) + ".parquet";
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        # Write — may throw MISSING-FEATURE-ERROR if Arrow not available
+        try {
+            df.writeParquet(tmp_path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "MISSING-FEATURE-ERROR") {
+                testSkip("Apache Arrow not available");
+            }
+            rethrow;
+        }
+
+        # Read back
+        auto df2 = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(3, df2.numRows(), "Parquet round-trip rows");
+        assertEq(3, df2.numCols(), "Parquet round-trip cols");
+
+        # Verify values
+        assertEq((1, 2, 3), df2.getColumn("id"), "Parquet int column");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "Parquet string column");
+
+        # Score column: 95.5, 88.0, NULL
+        list<auto> scores = df2.getColumn("score");
+        assertEq(95.5, scores[0], "Parquet float value");
+        assertEq(88.0, scores[1], "Parquet float value 2");
+        assertEq(NOTHING, scores[2], "Parquet null preserved");
     }
 
     mlIntegrationTest() {

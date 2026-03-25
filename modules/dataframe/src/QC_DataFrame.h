@@ -165,6 +165,16 @@ public:
         const QoreListNode* on_columns, const std::string& how,
         ExceptionSink* xsink) const;
 
+    // --- Parquet I/O (optional — requires Apache Arrow) ---
+
+    //! Read a Parquet file into a DataFrame
+    DLLLOCAL static QoreDataFrame* readParquet(const std::string& path,
+        ExceptionSink* xsink);
+
+    //! Write this DataFrame to a Parquet file
+    DLLLOCAL void writeParquet(const std::string& path,
+        ExceptionSink* xsink) const;
+
     // --- ML Integration ---
 
     //! Extract numeric columns as a matrix (list of row lists)

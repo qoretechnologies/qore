@@ -596,6 +596,51 @@ static auto DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [
     return obj.release();
 }
 
+//! Reads a Parquet file into a new DataFrame
+/** @param path the Parquet file path
+
+    Requires Apache Arrow to be installed. If Arrow is not available, throws
+    \c MISSING-FEATURE-ERROR.
+
+    @return new DataFrame object with Parquet data
+
+    @par Example:
+    @code{.py}
+    auto df = DataFrame::readParquet("/data/sales.parquet");
+    printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
+    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
+*/
+static auto DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Writes the DataFrame to a Parquet file
+/** @param path the Parquet file path
+
+    Requires Apache Arrow to be installed. If Arrow is not available, throws
+    \c MISSING-FEATURE-ERROR.
+
+    @par Example:
+    @code{.py}
+    df.writeParquet("/data/output.parquet");
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
+*/
+nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
+    df->writeParquet(path->c_str(), xsink);
+}
+
 //! Returns a new DataFrame with an added or replaced column
 /** @param name column name (replaces if already exists)
     @param data list of values (must match row count)
