@@ -141,6 +141,29 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("ewma - capabilities", \ewmaCapabilities());
         addTestCase("ewma - constructor validation", \ewmaConstructorValidation());
 
+        # DataProfile tests
+        addTestCase("data-profile - basic profiling", \dataProfileBasicProfiling());
+        addTestCase("data-profile - missing values", \dataProfileMissingValues());
+        addTestCase("data-profile - numeric stats", \dataProfileNumericStats());
+        addTestCase("data-profile - outlier detection", \dataProfileOutlierDetection());
+        addTestCase("data-profile - flush partial", \dataProfileFlushPartial());
+        addTestCase("data-profile - not configured", \dataProfileNotConfigured());
+        addTestCase("data-profile - capabilities", \dataProfileCapabilities());
+        addTestCase("data-profile - constructor validation", \dataProfileConstructorValidation());
+
+        # SchemaValidation tests
+        addTestCase("schema-validation - type check", \schemaValidTypeCheck());
+        addTestCase("schema-validation - required fields", \schemaValidRequiredFields());
+        addTestCase("schema-validation - range check", \schemaValidRangeCheck());
+        addTestCase("schema-validation - allowed values", \schemaValidAllowedValues());
+        addTestCase("schema-validation - string length", \schemaValidStringLength());
+        addTestCase("schema-validation - enrich mode", \schemaValidEnrichMode());
+        addTestCase("schema-validation - drop mode", \schemaValidDropMode());
+        addTestCase("schema-validation - throw mode", \schemaValidThrowMode());
+        addTestCase("schema-validation - not configured", \schemaValidNotConfigured());
+        addTestCase("schema-validation - capabilities", \schemaValidCapabilities());
+        addTestCase("schema-validation - constructor validation", \schemaValidConstructorValidation());
+
         # RegistryModel tests
         addTestCase("registry-model - field parsing", \registryModelFieldParsing());
 
@@ -1824,9 +1847,11 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(children.contains("gbt-regression"));
         assertTrue(children.contains("rolling-stats"));
         assertTrue(children.contains("ewma"));
+        assertTrue(children.contains("data-profile"));
+        assertTrue(children.contains("schema-validation"));
 
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
-        int expected_count = 26;
+        int expected_count = 28;
         if (caps.has_onnx) {
             assertTrue(children.contains("onnx-model"));
             ++expected_count;
@@ -1911,6 +1936,16 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             {"fields": "x,y", "alpha": 0.3});
         assertFalse(exists ewma.getPipelineProcessorOutputType());
 
+        DataProviderML::QoreDataProfileProcessor dprof(
+            {"fields": "x,y", "window_size": 10});
+        assertTrue(exists dprof.getPipelineProcessorOutputType());
+
+        # schema-validation returns NOTHING for output type (dynamic output)
+        DataProviderML::QoreSchemaValidationProcessor sval({
+            "schema": {"x": {"type": "int"}},
+        });
+        assertFalse(exists sval.getPipelineProcessorOutputType());
+
         if (ML::ml_get_capabilities().has_onnx) {
             DataProviderML::QoreOnnxModelProcessor onnx({
                 "model_path": getTestModelPath(),
@@ -1919,6 +1954,402 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
             });
             assertTrue(exists onnx.getPipelineProcessorOutputType());
         }
+    }
+
+    # ===================== DataProfile Tests =====================
+
+    dataProfileBasicProfiling() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": "name,age",
+            "window_size": 5,
+        });
+
+        list<auto> results;
+        list<hash<auto>> data = (
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25},
+            {"name": "Charlie", "age": 35},
+            {"name": "Diana", "age": 28},
+            {"name": "Eve", "age": 32},
+        );
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        # should emit 2 events (one per field) when window fills
+        assertEq(2, results.lsize());
+
+        # find name profile
+        hash<auto> name_profile;
+        hash<auto> age_profile;
+        foreach auto event in (results) {
+            if (event.field_name == "name") {
+                name_profile = event;
+            } else if (event.field_name == "age") {
+                age_profile = event;
+            }
+        }
+
+        assertEq("data-profile", name_profile.event_type);
+        assertEq(5, name_profile.count);
+        assertEq(0, name_profile.missing_count);
+        assertEq(0.0, name_profile.missing_rate);
+        assertEq("string", name_profile.type);
+        assertEq(5, name_profile.cardinality);
+
+        assertEq("data-profile", age_profile.event_type);
+        assertEq(5, age_profile.count);
+        assertEq("integer", age_profile.type);
+        assertTrue(exists age_profile.min);
+        assertTrue(exists age_profile.max);
+        assertTrue(exists age_profile.mean);
+        assertTrue(exists age_profile.std);
+    }
+
+    dataProfileMissingValues() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": "value",
+            "window_size": 4,
+        });
+
+        list<auto> results;
+        list<hash<auto>> data = (
+            {"value": 10},
+            {"value": NOTHING},
+            {"value": 30},
+            {"value": NOTHING},
+        );
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(1, results.lsize());
+        assertEq(2, results[0].missing_count);
+        assertFloat(0.5, results[0].missing_rate, 0.001);
+    }
+
+    dataProfileNumericStats() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": "value",
+            "window_size": 5,
+        });
+
+        list<auto> results;
+        # values: 10, 20, 30, 40, 50 => mean=30, min=10, max=50
+        list<hash<auto>> data = (
+            {"value": 10.0},
+            {"value": 20.0},
+            {"value": 30.0},
+            {"value": 40.0},
+            {"value": 50.0},
+        );
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(1, results.lsize());
+        hash<auto> profile = results[0];
+        assertFloat(10.0, profile.min, 0.001);
+        assertFloat(50.0, profile.max, 0.001);
+        assertFloat(30.0, profile.mean, 0.001);
+        # std dev of (10,20,30,40,50) = sqrt(200) ~= 14.142
+        assertFloat(14.142, profile.std, 0.1);
+        assertEq(5, profile.cardinality);
+        assertEq(0, profile.missing_count);
+    }
+
+    dataProfileOutlierDetection() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": "value",
+            "window_size": 12,
+        });
+
+        list<auto> results;
+        # 10 normal values around 100, then 2 extreme outliers
+        list<hash<auto>> data = (
+            {"value": 100.0},
+            {"value": 101.0},
+            {"value": 99.0},
+            {"value": 102.0},
+            {"value": 98.0},
+            {"value": 100.5},
+            {"value": 99.5},
+            {"value": 101.5},
+            {"value": 98.5},
+            {"value": 100.0},
+            {"value": 500.0},   # outlier
+            {"value": -200.0},  # outlier
+        );
+        foreach hash<auto> rec in (data) {
+            *auto r = proc.processRecord(rec);
+            DataProviderMLProcessorsTest::collectResult(\results, r);
+        }
+
+        assertEq(1, results.lsize());
+        hash<auto> profile = results[0];
+        assertTrue(exists profile.outlier_count);
+        assertTrue(profile.outlier_count >= 2,
+            sprintf("expected at least 2 outliers, got %d", profile.outlier_count));
+    }
+
+    dataProfileFlushPartial() {
+        DataProviderML::QoreDataProfileProcessor proc({
+            "fields": "x",
+            "window_size": 10,
+        });
+
+        # send 3 records (less than window)
+        for (int i = 0; i < 3; ++i) {
+            proc.processRecord({"x": i * 1.0});
+        }
+
+        # flush should emit events for the 3 buffered records
+        *list<auto> flushed = proc.flushRecords();
+        assertTrue(exists flushed);
+        assertEq(1, flushed.lsize());  # one event per field
+        assertEq(3, flushed[0].count);
+    }
+
+    dataProfileNotConfigured() {
+        DataProviderML::QoreDataProfileProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub() {
+            proc.processRecord({"x": 1.0});
+        });
+    }
+
+    dataProfileCapabilities() {
+        DataProviderML::QoreDataProfileProcessor proc();
+        assertEq(DPC_AGGREGATE, proc.getProcessorCapabilities());
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreDataProfileProcessor", info{"type"});
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    dataProfileConstructorValidation() {
+        # missing required field
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDataProfileProcessor({
+                "fields": "x",
+            });
+        });
+        # invalid window_size
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDataProfileProcessor({
+                "fields": "x",
+                "window_size": 0,
+            });
+        });
+        # empty fields
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreDataProfileProcessor({
+                "fields": " , ",
+                "window_size": 10,
+            });
+        });
+    }
+
+    # ===================== SchemaValidation Tests =====================
+
+    schemaValidTypeCheck() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "age": {"type": "int"},
+                "name": {"type": "string"},
+            },
+            "on_violation": "enrich",
+        });
+
+        # valid record
+        auto r1 = proc.processRecord({"age": 25, "name": "Alice"});
+        assertTrue(r1._is_valid);
+        assertEq(0, r1._validation_errors.lsize());
+
+        # invalid type
+        auto r2 = proc.processRecord({"age": "not a number", "name": "Bob"});
+        assertFalse(r2._is_valid);
+        assertTrue(r2._validation_errors.lsize() > 0);
+        assertTrue(r2._validation_errors[0].find("expected type int") >= 0);
+    }
+
+    schemaValidRequiredFields() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "name": {"type": "string", "required": True},
+                "email": {"type": "string", "required": True},
+            },
+            "on_violation": "enrich",
+        });
+
+        # missing required field
+        auto r1 = proc.processRecord({"name": "Alice"});
+        assertFalse(r1._is_valid);
+        assertTrue(r1._validation_errors.lsize() > 0);
+        assertTrue(r1._validation_errors[0].find("required but missing") >= 0);
+
+        # null required field
+        auto r2 = proc.processRecord({"name": "Bob", "email": NOTHING});
+        assertFalse(r2._is_valid);
+
+        # all present
+        auto r3 = proc.processRecord({"name": "Charlie", "email": "charlie@test.com"});
+        assertTrue(r3._is_valid);
+    }
+
+    schemaValidRangeCheck() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "score": {"type": "float", "min": 0.0, "max": 100.0},
+            },
+            "on_violation": "enrich",
+        });
+
+        # within range
+        auto r1 = proc.processRecord({"score": 50.0});
+        assertTrue(r1._is_valid);
+
+        # below minimum
+        auto r2 = proc.processRecord({"score": -5.0});
+        assertFalse(r2._is_valid);
+        assertTrue(r2._validation_errors[0].find("below minimum") >= 0);
+
+        # above maximum
+        auto r3 = proc.processRecord({"score": 150.0});
+        assertFalse(r3._is_valid);
+        assertTrue(r3._validation_errors[0].find("exceeds maximum") >= 0);
+    }
+
+    schemaValidAllowedValues() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "status": {"type": "string", "allowed_values": ("active", "inactive", "pending")},
+            },
+            "on_violation": "enrich",
+        });
+
+        # allowed value
+        auto r1 = proc.processRecord({"status": "active"});
+        assertTrue(r1._is_valid);
+
+        # disallowed value
+        auto r2 = proc.processRecord({"status": "deleted"});
+        assertFalse(r2._is_valid);
+        assertTrue(r2._validation_errors[0].find("not in allowed values") >= 0);
+    }
+
+    schemaValidStringLength() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "code": {"type": "string", "min_length": 2, "max_length": 5},
+            },
+            "on_violation": "enrich",
+        });
+
+        # valid length
+        auto r1 = proc.processRecord({"code": "ABC"});
+        assertTrue(r1._is_valid);
+
+        # too short
+        auto r2 = proc.processRecord({"code": "A"});
+        assertFalse(r2._is_valid);
+        assertTrue(r2._validation_errors[0].find("below minimum length") >= 0);
+
+        # too long
+        auto r3 = proc.processRecord({"code": "ABCDEF"});
+        assertFalse(r3._is_valid);
+        assertTrue(r3._validation_errors[0].find("exceeds maximum length") >= 0);
+    }
+
+    schemaValidEnrichMode() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "value": {"type": "int", "required": True},
+            },
+            "on_violation": "enrich",
+        });
+
+        # valid record gets enriched with _is_valid=True
+        auto r1 = proc.processRecord({"value": 42});
+        assertTrue(r1._is_valid);
+        assertTrue(r1.hasKey("_validation_errors"));
+        assertEq(0, r1._validation_errors.lsize());
+        assertEq(42, r1.value);
+
+        # invalid record also passes through but with errors
+        auto r2 = proc.processRecord({"value": "not an int"});
+        assertFalse(r2._is_valid);
+        assertTrue(r2._validation_errors.lsize() > 0);
+        assertEq("not an int", r2.value);
+    }
+
+    schemaValidDropMode() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "value": {"type": "int", "required": True},
+            },
+            "on_violation": "drop",
+        });
+
+        # valid record passes through
+        auto r1 = proc.processRecord({"value": 42});
+        assertTrue(exists r1);
+
+        # invalid record is dropped (returns NOTHING)
+        auto r2 = proc.processRecord({"value": "not an int"});
+        assertFalse(exists r2);
+
+        # missing required field is dropped
+        auto r3 = proc.processRecord({});
+        assertFalse(exists r3);
+    }
+
+    schemaValidThrowMode() {
+        DataProviderML::QoreSchemaValidationProcessor proc({
+            "schema": {
+                "value": {"type": "int", "required": True},
+            },
+            "on_violation": "throw",
+        });
+
+        # valid record passes through without exception
+        auto r1 = proc.processRecord({"value": 42});
+        assertTrue(exists r1);
+
+        # invalid record throws exception
+        assertThrows("VALIDATION-ERROR", sub() {
+            proc.processRecord({"value": "not an int"});
+        });
+
+        # missing required field throws exception
+        assertThrows("VALIDATION-ERROR", sub() {
+            proc.processRecord({});
+        });
+    }
+
+    schemaValidNotConfigured() {
+        DataProviderML::QoreSchemaValidationProcessor proc();
+        assertThrows("PROCESSOR-ERROR", sub() {
+            proc.processRecord({"x": 1});
+        });
+    }
+
+    schemaValidCapabilities() {
+        DataProviderML::QoreSchemaValidationProcessor proc();
+        assertEq(DPC_TRANSFORM, proc.getProcessorCapabilities());
+        hash<DataProviderInfo> info = proc.getInfo();
+        assertEq("QoreSchemaValidationProcessor", info{"type"});
+        assertTrue(info.supports_pipeline_processor);
+    }
+
+    schemaValidConstructorValidation() {
+        # missing required schema
+        assertThrows("CONSTRUCTOR-ERROR", sub() {
+            new DataProviderML::QoreSchemaValidationProcessor({
+                "schema": {},
+            });
+        });
     }
 
     private assertFloat(float expected, auto actual, float tolerance) {

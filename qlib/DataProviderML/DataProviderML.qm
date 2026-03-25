@@ -1062,6 +1062,76 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register data-profile action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/data-profile",
+            "action": "data-profile",
+            "display_name": "Profile Data Quality",
+            "short_desc": "Profiles data quality for specified fields in a batch of records",
+            "desc": "Computes a data quality profile for each specified field: missing rates, "
+                "type distribution, value ranges, cardinality, and outlier detection. Use this "
+                "to understand your data before building models or to monitor data quality in "
+                "production pipelines.\n\n"
+                "**What you get per field**:\n"
+                "- `missing_rate` — fraction of records with null/missing values\n"
+                "- `type` — most common Qore type seen (string, int, float, etc.)\n"
+                "- `cardinality` — number of unique values\n"
+                "- For numeric fields: `min`, `max`, `mean`, `std` (standard deviation)\n"
+                "- `outlier_count` — values beyond 1.5*IQR from Q1/Q3 (numeric fields with "
+                ">= 10 values)\n\n"
+                "Records accumulate in a batch; when full, one profile event per field is "
+                "emitted.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDataProfileProcessor",
+            "groups": ("Data Governance",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDataProfileProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register schema-validation action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/schema-validation",
+            "action": "schema-validation",
+            "display_name": "Validate Record Schema",
+            "short_desc": "Validates each record against a defined schema with configurable "
+                "violation handling",
+            "desc": "Validates each record against a user-defined schema specifying type "
+                "constraints, required fields, value ranges, string length limits, and allowed "
+                "values. Invalid records can be enriched with error details (default), silently "
+                "dropped, or cause an exception.\n\n"
+                "**Validation rules per field**:\n"
+                "- `type` — expected type (string, int, float, bool, date)\n"
+                "- `required` — field must be present and non-null\n"
+                "- `min` / `max` — numeric value bounds\n"
+                "- `min_length` / `max_length` — string length bounds\n"
+                "- `allowed_values` — enumeration of valid values\n\n"
+                "Each record passes through individually. In **enrich** mode, every record "
+                "gets `_is_valid` (bool) and `_validation_errors` (list of strings).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreSchemaValidationProcessor",
+            "groups": ("Data Governance",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSchemaValidationProcessor::ConstructorOptions{"schema",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSchemaValidationProcessor::ConstructorOptions{"on_violation",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
@@ -1601,5 +1671,36 @@ public namespace DataProviderML {
         float prediction;
         #! The original input values for the fields that were analyzed
         hash<auto> record_values;
+    }
+
+    #! Data profile field info hashdecl
+    /** @since DataProviderML 1.3
+    */
+    public hashdecl DataProfileFieldInfo {
+        #! The type of analysis that produced this result (always "data-profile")
+        string event_type = "data-profile";
+        #! The field name that was profiled
+        string field_name;
+        #! Total number of records in the batch
+        int count;
+        #! Number of records where the field value was null/NOTHING
+        int missing_count;
+        #! Fraction of records with missing values (missing_count / count)
+        float missing_rate;
+        #! Most common Qore type seen for this field (e.g., "string", "integer", "float")
+        string type;
+        #! Number of unique non-null values
+        int cardinality;
+        #! Minimum value (numeric fields only; NOTHING for non-numeric)
+        *float min;
+        #! Maximum value (numeric fields only; NOTHING for non-numeric)
+        *float max;
+        #! Mean value (numeric fields only; NOTHING for non-numeric)
+        *float mean;
+        #! Standard deviation (numeric fields only; NOTHING for non-numeric)
+        *float std;
+        #! Number of outliers beyond 1.5*IQR (numeric fields with >= 10 values only;
+        #! NOTHING otherwise)
+        *int outlier_count;
     }
 }

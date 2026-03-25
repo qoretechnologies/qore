@@ -62,6 +62,8 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "clustering-metrics": "QoreClusteringMetricsProcessor",
             "rolling-stats": "QoreRollingStatsProcessor",
             "ewma": "QoreEWMAProcessor",
+            "data-profile": "QoreDataProfileProcessor",
+            "schema-validation": "QoreSchemaValidationProcessor",
         };
 
         #! Full child processor names including optional ones
@@ -156,6 +158,10 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreRollingStatsProcessor();
             case "ewma":
                 return new QoreEWMAProcessor();
+            case "data-profile":
+                return new QoreDataProfileProcessor();
+            case "schema-validation":
+                return new QoreSchemaValidationProcessor();
             case "onnx-model":
                 if (ML::ml_get_capabilities().has_onnx) {
                     return new QoreOnnxModelProcessor();
