@@ -1461,12 +1461,15 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(children.contains("knn-regression"));
 
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
+        int expected_count = 18;
         if (caps.has_onnx) {
             assertTrue(children.contains("onnx-model"));
-            assertEq(19, children.lsize());
-        } else {
-            assertEq(18, children.lsize());
+            ++expected_count;
         }
+        if (children.contains("registry-model")) {
+            ++expected_count;
+        }
+        assertEq(expected_count, children.lsize());
 
         # check that each child can be retrieved
         foreach string name in (children) {
