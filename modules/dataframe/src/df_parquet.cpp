@@ -105,6 +105,42 @@ static std::shared_ptr<ColumnData> arrowColumnToDF(
                 ++idx;
             }
         }
+    } else if (arrow_type->id() == arrow::Type::TIMESTAMP) {
+        cd->type = ColumnType::DATE;
+        cd->date_data.resize(n);
+        int64_t idx = 0;
+        for (int c = 0; c < arr->num_chunks(); ++c) {
+            auto chunk = arr->chunk(c);
+            for (int64_t i = 0; i < chunk->length(); ++i) {
+                if (chunk->IsNull(i)) {
+                    cd->null_mask[idx] = 1;
+                    cd->date_data[idx] = 0;
+                } else {
+                    auto scalar = chunk->GetScalar(i).ValueOrDie();
+                    // Convert to microseconds
+                    auto ts = std::static_pointer_cast<arrow::TimestampScalar>(scalar);
+                    auto ts_type = std::static_pointer_cast<arrow::TimestampType>(
+                        ts->type);
+                    int64_t val = ts->value;
+                    // Normalize to microseconds
+                    switch (ts_type->unit()) {
+                        case arrow::TimeUnit::SECOND:
+                            val *= 1000000;
+                            break;
+                        case arrow::TimeUnit::MILLI:
+                            val *= 1000;
+                            break;
+                        case arrow::TimeUnit::MICRO:
+                            break;
+                        case arrow::TimeUnit::NANO:
+                            val /= 1000;
+                            break;
+                    }
+                    cd->date_data[idx] = val;
+                }
+                ++idx;
+            }
+        }
     } else {
         // Fallback: convert everything to string
         cd->type = ColumnType::STRING;
@@ -214,69 +250,118 @@ void QoreDataFrame::writeParquet(const std::string& path,
             case ColumnType::INT64: {
                 fields.push_back(arrow::field(col.name, arrow::int64()));
                 arrow::Int64Builder builder;
-                auto st = builder.Reserve(cd.n_rows);
+                ARROW_UNUSED(builder.Reserve(cd.n_rows));
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
                     if (cd.isNull(i)) {
-                        st = builder.AppendNull();
+                        ARROW_UNUSED(builder.AppendNull());
                     } else {
-                        st = builder.Append(cd.int_data[i]);
+                        ARROW_UNUSED(builder.Append(cd.int_data[i]));
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
-                st = builder.Finish(&arr);
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow int64 array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return;
+                }
                 arrays.push_back(arr);
                 break;
             }
             case ColumnType::FLOAT64: {
                 fields.push_back(arrow::field(col.name, arrow::float64()));
                 arrow::DoubleBuilder builder;
-                auto st = builder.Reserve(cd.n_rows);
+                ARROW_UNUSED(builder.Reserve(cd.n_rows));
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
                     if (cd.isNull(i)) {
-                        st = builder.AppendNull();
+                        ARROW_UNUSED(builder.AppendNull());
                     } else {
-                        st = builder.Append(cd.float_data(i));
+                        ARROW_UNUSED(builder.Append(cd.float_data(i)));
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
-                st = builder.Finish(&arr);
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow float64 array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return;
+                }
                 arrays.push_back(arr);
                 break;
             }
             case ColumnType::STRING: {
                 fields.push_back(arrow::field(col.name, arrow::utf8()));
                 arrow::StringBuilder builder;
-                auto st = builder.Reserve(cd.n_rows);
+                ARROW_UNUSED(builder.Reserve(cd.n_rows));
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
                     if (cd.isNull(i)) {
-                        st = builder.AppendNull();
+                        ARROW_UNUSED(builder.AppendNull());
                     } else {
-                        st = builder.Append(cd.str_data[i]);
+                        ARROW_UNUSED(builder.Append(cd.str_data[i]));
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
-                st = builder.Finish(&arr);
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow string array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return;
+                }
                 arrays.push_back(arr);
                 break;
             }
             case ColumnType::BOOL: {
                 fields.push_back(arrow::field(col.name, arrow::boolean()));
                 arrow::BooleanBuilder builder;
-                auto st = builder.Reserve(cd.n_rows);
+                ARROW_UNUSED(builder.Reserve(cd.n_rows));
                 for (int64_t i = 0; i < cd.n_rows; ++i) {
                     if (cd.isNull(i)) {
-                        st = builder.AppendNull();
+                        ARROW_UNUSED(builder.AppendNull());
                     } else {
-                        st = builder.Append(cd.bool_data[i] != 0);
+                        ARROW_UNUSED(builder.Append(cd.bool_data[i] != 0));
                     }
                 }
                 std::shared_ptr<arrow::Array> arr;
-                st = builder.Finish(&arr);
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow boolean array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return;
+                }
+                arrays.push_back(arr);
+                break;
+            }
+            case ColumnType::DATE: {
+                // Store dates as int64 microseconds (Arrow TIMESTAMP)
+                auto ts_type = arrow::timestamp(arrow::TimeUnit::MICRO, "UTC");
+                fields.push_back(arrow::field(col.name, ts_type));
+                arrow::TimestampBuilder builder(ts_type,
+                    arrow::default_memory_pool());
+                ARROW_UNUSED(builder.Reserve(cd.n_rows));
+                for (int64_t i = 0; i < cd.n_rows; ++i) {
+                    if (cd.isNull(i)) {
+                        ARROW_UNUSED(builder.AppendNull());
+                    } else {
+                        ARROW_UNUSED(builder.Append(cd.date_data[i]));
+                    }
+                }
+                std::shared_ptr<arrow::Array> arr;
+                auto st = builder.Finish(&arr);
+                if (!st.ok()) {
+                    xsink->raiseException("DATAFRAME-IO-ERROR",
+                        "error building Arrow timestamp array for column '%s': %s",
+                        col.name.c_str(), st.ToString().c_str());
+                    return;
+                }
                 arrays.push_back(arr);
                 break;
             }
             default:
-                // Skip unsupported types
+                // Skip AUTO columns (unsupported in Parquet)
                 break;
         }
     }
