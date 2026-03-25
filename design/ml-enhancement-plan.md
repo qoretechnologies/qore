@@ -1691,6 +1691,32 @@ Build on the tokenizer module:
   → output in a DataProvider processor
 - **Prompt templating**: structured prompt construction for LLM API calls
 
+#### 14.4 Tokenizer Module C API for Cross-Module Integration
+
+The tokenizer binary module (`QoreTokenizer::QoreHFTokenizer` in `modules/tokenizer/src/`)
+currently has no `extern "C"` API. To allow the ml module's `TextFeatures` (and future
+NLP classes) to use BPE/WordPiece/Unigram tokenization via `dlsym()`, add a C-linkage
+API to the tokenizer module:
+
+```c
+extern "C" {
+    // Create a tokenizer from a JSON config string; returns opaque handle
+    void* qore_tokenizer_create(const char* json_config, int json_len, char** error);
+    // Tokenize text; returns array of token strings
+    char** qore_tokenizer_tokenize(void* handle, const char* text, int text_len, int* count);
+    // Free token array
+    void qore_tokenizer_free_tokens(char** tokens, int count);
+    // Destroy tokenizer
+    void qore_tokenizer_destroy(void* handle);
+}
+```
+
+The ml module would `dlsym()` these symbols at runtime from the loaded tokenizer module
+(similar to how optional ONNX Runtime support works). When available, `TextFeatures`
+would use the tokenizer module for subword tokenization instead of the built-in
+whitespace splitter. This enables multilingual text, subword vocabulary, and
+HuggingFace-compatible tokenization in ML feature pipelines.
+
 ---
 
 ## Implementation Schedule — Phases 8–14
