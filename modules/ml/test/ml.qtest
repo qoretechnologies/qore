@@ -220,6 +220,10 @@ public class MlTest inherits QUnit::Test {
         addTestCase("NaiveBayes error cases", \nbErrorTest());
         addTestCase("NaiveBayes copy error", \nbCopyTest());
         addTestCase("serialize NaiveBayes round-trip", \serializeNaiveBayesTest());
+        addTestCase("descriptive statistics", \descriptiveStatsTest());
+        addTestCase("hypothesis testing", \hypothesisTestingTest());
+        addTestCase("normal distribution", \normalDistributionTest());
+        addTestCase("correlation and covariance", \correlationTest());
         set_return_value(main());
     }
 
@@ -4463,5 +4467,86 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> res = restored.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
         assertEq(orig[0].predicted_class, res[0].predicted_class, "NB serialize class 0");
         assertEq(orig[1].predicted_class, res[1].predicted_class, "NB serialize class 1");
+    }
+
+    # --- Statistical Functions Tests ---
+
+    descriptiveStatsTest() {
+        list<float> data = (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0);
+
+        # Percentile
+        assertFloat(5.5, ML::ml_percentile(data, 50.0), 0.01);   # median
+        assertFloat(1.0, ML::ml_percentile(data, 0.0), 0.01);    # min
+        assertFloat(10.0, ML::ml_percentile(data, 100.0), 0.01); # max
+
+        # IQR
+        float iqr = ML::ml_iqr(data);
+        assertTrue(iqr > 4.0 && iqr < 5.0, sprintf("IQR %.2f in range", iqr));
+
+        # Skewness: symmetric data → ~0
+        assertFloat(0.0, ML::ml_skewness(data), 0.01);
+
+        # Kurtosis: uniform-like → negative excess kurtosis
+        float kurt = ML::ml_kurtosis(data);
+        assertTrue(kurt < 0, sprintf("Kurtosis %.3f < 0 for uniform-like", kurt));
+
+        # Skewness of right-skewed data
+        list<float> skewed = (1.0, 1.0, 1.0, 1.0, 1.0, 10.0);
+        float skew = ML::ml_skewness(skewed);
+        assertTrue(skew > 0, sprintf("Skewness %.3f > 0 for right-skewed", skew));
+    }
+
+    hypothesisTestingTest() {
+        # T-test: clearly different groups
+        list<float> a = (1.0, 2.0, 3.0, 4.0, 5.0);
+        list<float> b = (6.0, 7.0, 8.0, 9.0, 10.0);
+        hash<auto> t = ML::ml_t_test(a, b);
+        assertTrue(t.p_value < 0.01, sprintf("t-test p=%.4f < 0.01", t.p_value));
+        assertTrue(t.statistic < 0, "t-stat negative (a < b)");
+        assertTrue(t.df > 0, "degrees of freedom > 0");
+
+        # T-test: same distribution
+        list<float> c = (5.0, 5.1, 4.9, 5.0, 5.1);
+        list<float> d = (5.0, 4.9, 5.1, 5.0, 4.9);
+        hash<auto> t2 = ML::ml_t_test(c, d);
+        assertTrue(t2.p_value > 0.3, sprintf("same-dist p=%.2f > 0.3 (not significant)", t2.p_value));
+
+        # Chi-squared: 2x2 contingency table
+        hash<auto> chi = ML::ml_chi_squared_test(((10, 20), (30, 40)));
+        assertTrue(chi.statistic >= 0, "chi-squared stat >= 0");
+        assertFloat(1.0, chi.df, 0.01);  # (2-1)*(2-1) = 1
+    }
+
+    normalDistributionTest() {
+        # Standard normal
+        assertFloat(0.3989, ML::ml_normal_pdf(0.0), 0.001);
+        assertFloat(0.5, ML::ml_normal_cdf(0.0), 0.001);
+        assertFloat(1.96, ML::ml_normal_ppf(0.975), 0.01);
+
+        # CDF properties
+        assertTrue(ML::ml_normal_cdf(-3.0) < 0.01, "CDF(-3) < 0.01");
+        assertTrue(ML::ml_normal_cdf(3.0) > 0.99, "CDF(3) > 0.99");
+
+        # Custom mean/std
+        assertFloat(0.5, ML::ml_normal_cdf(10.0, 10.0, 1.0), 0.001);
+
+        # PPF is inverse of CDF
+        float x = 1.5;
+        float p = ML::ml_normal_cdf(x);
+        assertFloat(x, ML::ml_normal_ppf(p), 0.001);
+    }
+
+    correlationTest() {
+        # Perfect positive correlation: y = 2x
+        list<auto> data = ((1.0, 2.0), (2.0, 4.0), (3.0, 6.0), (4.0, 8.0));
+        list<auto> corr = ML::ml_correlation_matrix(data);
+        assertFloat(1.0, corr[0][0], 0.01);  # self-correlation
+        assertFloat(1.0, corr[0][1], 0.01);  # perfect positive
+        assertFloat(1.0, corr[1][0], 0.01);  # symmetric
+
+        # Covariance matrix
+        list<auto> cov = ML::ml_covariance_matrix(data);
+        assertTrue(cov[0][0] > 0, "variance > 0");
+        assertTrue(cov[0][1] > 0, "positive covariance");
     }
 }

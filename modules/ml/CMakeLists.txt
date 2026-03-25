@@ -122,6 +122,7 @@ set(ML_CPP_SRC
     src/GradientBoostedTrees.cpp
     src/SVM.cpp
     src/NaiveBayes.cpp
+    src/ml_stats.cpp
 )
 
 # Conditional ONNX Runtime support

@@ -107,6 +107,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_GBTClassificationResult(QoreNamespace& ns)
 DLLLOCAL TypedHashDecl* init_hashdecl_GBTRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SVMResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_NaiveBayesResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_HypothesisTestResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -143,6 +144,7 @@ const TypedHashDecl* hashdeclGBTClassificationResult;
 const TypedHashDecl* hashdeclGBTRegressionResult;
 const TypedHashDecl* hashdeclSVMResult;
 const TypedHashDecl* hashdeclNaiveBayesResult;
+const TypedHashDecl* hashdeclHypothesisTestResult;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -207,6 +209,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclGBTRegressionResult = init_hashdecl_GBTRegressionResult(MLNS);
     hashdeclSVMResult = init_hashdecl_SVMResult(MLNS);
     hashdeclNaiveBayesResult = init_hashdecl_NaiveBayesResult(MLNS);
+    hashdeclHypothesisTestResult = init_hashdecl_HypothesisTestResult(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)

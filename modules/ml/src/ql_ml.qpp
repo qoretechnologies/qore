@@ -46,6 +46,7 @@
 #include "QC_GradientBoostedTrees.h"
 #include "QC_SVM.h"
 #include "QC_NaiveBayes.h"
+#include "ml_stats.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -78,6 +79,7 @@ extern const TypedHashDecl* hashdeclConfusionMatrixResult;
 extern const TypedHashDecl* hashdeclClassMetrics;
 extern const TypedHashDecl* hashdeclClassificationReport;
 extern const TypedHashDecl* hashdeclCrossValidationFold;
+extern const TypedHashDecl* hashdeclHypothesisTestResult;
 
 //! Result of Isolation Forest anomaly scoring
 /** Result of Isolation Forest anomaly scoring
@@ -560,6 +562,18 @@ hashdecl Qore::ML::NaiveBayesResult {
     list<float> probabilities;
     //! class labels
     list<float> classes;
+}
+
+//! Hypothesis test result
+/** Returned by @ref ml_t_test() and @ref ml_chi_squared_test().
+*/
+hashdecl Qore::ML::HypothesisTestResult {
+    //! test statistic value
+    float statistic;
+    //! p-value (probability of observing this statistic under the null hypothesis)
+    float p_value;
+    //! degrees of freedom
+    float df;
 }
 
 /** @defgroup ml_functions ML Functions
@@ -1485,6 +1499,191 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     }
 
     return obj;
+}
+
+//! Computes the p-th percentile of a list of values
+/** @param data list of numeric values
+    @param p percentile (0-100)
+    @return the interpolated percentile value
+
+    @par Example:
+    @code{.py}
+    float median = ml_percentile(values, 50.0);
+    float q1 = ml_percentile(values, 25.0);
+    @endcode
+*/
+float ml_percentile(list<auto> data, float p) [dom=DEFAULT] {
+    VectorXd vec = qoreListToVector(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    return ::ml_percentile(vec, p);
+}
+
+//! Computes the interquartile range (Q3 - Q1)
+/** @param data list of numeric values
+    @return IQR value
+*/
+float ml_iqr(list<auto> data) [dom=DEFAULT] {
+    VectorXd vec = qoreListToVector(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    return ::ml_iqr(vec);
+}
+
+//! Computes the skewness of a distribution (Fisher's definition)
+/** @param data list of numeric values
+    @return skewness (0 = symmetric, positive = right-skewed, negative = left-skewed)
+*/
+float ml_skewness(list<auto> data) [dom=DEFAULT] {
+    VectorXd vec = qoreListToVector(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    return ::ml_skewness(vec);
+}
+
+//! Computes the excess kurtosis (Fisher's definition, normal = 0)
+/** @param data list of numeric values
+    @return kurtosis (0 = normal-like tails, positive = heavy tails)
+*/
+float ml_kurtosis(list<auto> data) [dom=DEFAULT] {
+    VectorXd vec = qoreListToVector(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    return ::ml_kurtosis(vec);
+}
+
+//! Computes the Pearson correlation matrix
+/** @param data matrix as list of row lists
+    @return correlation matrix as list of row lists (values -1 to 1)
+*/
+list<auto> ml_correlation_matrix(list<auto> data) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd corr = ::ml_correlation_matrix(mat);
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < corr.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < corr.cols(); ++j) {
+            row->push(corr(i, j), xsink);
+        }
+        result->push(row.release(), xsink);
+    }
+    return result.release();
+}
+
+//! Computes the covariance matrix
+/** @param data matrix as list of row lists
+    @return covariance matrix as list of row lists
+*/
+list<auto> ml_covariance_matrix(list<auto> data) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(data, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd cov = ::ml_covariance_matrix(mat);
+    ReferenceHolder<QoreListNode> result(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < cov.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < cov.cols(); ++j) {
+            row->push(cov(i, j), xsink);
+        }
+        result->push(row.release(), xsink);
+    }
+    return result.release();
+}
+
+//! Performs a two-sample Welch's t-test
+/** @param a first sample (list of numeric values)
+    @param b second sample
+    @return HypothesisTestResult with statistic, p_value, df
+
+    Tests whether the means of two samples differ significantly.
+    Uses Welch's t-test (does not assume equal variances).
+
+    @par Example:
+    @code{.py}
+    hash<ML::HypothesisTestResult> r = ml_t_test(sample_a, sample_b);
+    if (r.p_value < 0.05) { printf("Significant difference!\n"); }
+    @endcode
+*/
+hash<HypothesisTestResult> ml_t_test(list<auto> a, list<auto> b) [dom=DEFAULT] {
+    VectorXd va = qoreListToVector(a, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd vb = qoreListToVector(b, xsink);
+    if (*xsink) { return QoreValue(); }
+    if (va.size() < 2 || vb.size() < 2) {
+        xsink->raiseException("ML-STATS-ERROR",
+            "t-test requires at least 2 samples per group");
+        return QoreValue();
+    }
+    double statistic, p_value, df;
+    ::ml_t_test(va, vb, statistic, p_value, df);
+    ReferenceHolder<QoreHashNode> rv(
+        new QoreHashNode(hashdeclHypothesisTestResult, xsink), xsink);
+    rv->setKeyValue("statistic", statistic, xsink);
+    rv->setKeyValue("p_value", p_value, xsink);
+    rv->setKeyValue("df", df, xsink);
+    return rv.release();
+}
+
+//! Performs a chi-squared test on a contingency table
+/** @param table contingency table as list of row lists (observed counts)
+    @return HypothesisTestResult with statistic, p_value, df
+
+    Tests whether two categorical variables are independent.
+
+    @par Example:
+    @code{.py}
+    # 2x2 contingency table
+    hash<ML::HypothesisTestResult> r = ml_chi_squared_test(((10, 20), (30, 40)));
+    @endcode
+*/
+hash<HypothesisTestResult> ml_chi_squared_test(list<auto> table) [dom=DEFAULT] {
+    MatrixXd mat = qoreListOfListsToMatrix(table, xsink);
+    if (*xsink) { return QoreValue(); }
+    double statistic, p_value, df;
+    ::ml_chi_squared_test(mat, statistic, p_value, df);
+    ReferenceHolder<QoreHashNode> rv(
+        new QoreHashNode(hashdeclHypothesisTestResult, xsink), xsink);
+    rv->setKeyValue("statistic", statistic, xsink);
+    rv->setKeyValue("p_value", p_value, xsink);
+    rv->setKeyValue("df", df, xsink);
+    return rv.release();
+}
+
+//! Computes the normal distribution PDF
+/** @param x the point to evaluate
+    @param mean distribution mean (default 0)
+    @param std_dev distribution standard deviation (default 1)
+    @return probability density
+*/
+float ml_normal_pdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
+    double m = mean ? (double)mean : 0.0;
+    double s = std_dev ? (double)std_dev : 1.0;
+    return ::ml_normal_pdf(x, m, s);
+}
+
+//! Computes the normal distribution CDF
+/** @param x the point to evaluate
+    @param mean distribution mean (default 0)
+    @param std_dev distribution standard deviation (default 1)
+    @return cumulative probability P(X <= x)
+*/
+float ml_normal_cdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
+    double m = mean ? (double)mean : 0.0;
+    double s = std_dev ? (double)std_dev : 1.0;
+    return ::ml_normal_cdf(x, m, s);
+}
+
+//! Computes the normal distribution inverse CDF (percent point function)
+/** @param p probability (0 to 1)
+    @param mean distribution mean (default 0)
+    @param std_dev distribution standard deviation (default 1)
+    @return the value x such that P(X <= x) = p
+
+    @par Example:
+    @code{.py}
+    float z_95 = ml_normal_ppf(0.975);  # ≈ 1.96 for 95% CI
+    @endcode
+*/
+float ml_normal_ppf(float p, *float mean, *float std_dev) [dom=DEFAULT] {
+    double m = mean ? (double)mean : 0.0;
+    double s = std_dev ? (double)std_dev : 1.0;
+    return ::ml_normal_ppf(p, m, s);
 }
 
 ///@}
