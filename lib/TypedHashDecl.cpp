@@ -293,6 +293,7 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
             if (!phn->hasParseError()) {
                 const QoreParseHashNode::nvec_t& keys = phn->getKeys();
                 const QoreParseHashNode::tvec_t& vtypes = phn->getValueTypes();
+                const QoreParseHashNode::nvec_t& vals = phn->getValues();
                 assert(keys.size() == vtypes.size());
 
                 for (unsigned i = 0; i < keys.size(); ++i) {
@@ -317,6 +318,30 @@ int typed_hash_decl_private::parseCheckHashDeclAssignment(const QoreProgramLocat
                             runtime_check = true;
                         if (res && (res == QTI_IDENT || (!strict_check || !may_not_match)))
                             continue;
+
+                        // When the type is definitively incompatible (res == 0) but we're in a
+                        // cast<> context (strict_check=false), check if the value is a narrowed
+                        // auto variable. If so, the narrowed type may not reflect the actual
+                        // runtime type (e.g., inside switch(rv.typeCode()) where rv was assigned
+                        // a complex type but is constrained to simpler types by the switch).
+                        // Defer to runtime check rather than emitting a false parse error.
+                        if (!strict_check && !res && i < vals.size()) {
+                            const QoreValue& val = vals[i];
+                            if (val.getType() == NT_VARREF) {
+                                const VarRefNode* vrn = val.get<const VarRefNode>();
+                                if (vrn) {
+                                    qore_var_t vtype = vrn->getType();
+                                    if ((vtype == VT_LOCAL || vtype == VT_CLOSURE
+                                            || vtype == VT_LOCAL_TS) && vrn->ref.id
+                                            && vrn->ref.id->isAutoType()) {
+                                        if (!runtime_check) {
+                                            runtime_check = true;
+                                        }
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
 
                         if ((res == QTI_WILDCARD || res == QTI_AMBIGUOUS || res == QTI_NEAR) && may_not_match) {
                             parse_error(*loc, "hashdecl '%s' initializer value for key '%s' from %s has incompatible " \
