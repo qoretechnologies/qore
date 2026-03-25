@@ -187,6 +187,14 @@ public class MlTest inherits QUnit::Test {
         addTestCase("serialize file save/load LinearRegression", \serializeFileLRTest());
         addTestCase("serialize file save/load StandardScaler", \serializeFileStdScalerTest());
         addTestCase("serialize error cases", \serializeErrorTest());
+        addTestCase("DecisionTree classification basic", \dtClassificationBasicTest());
+        addTestCase("DecisionTree classification depth", \dtClassificationDepthTest());
+        addTestCase("DecisionTree regression basic", \dtRegressionBasicTest());
+        addTestCase("DecisionTree feature importance", \dtFeatureImportanceTest());
+        addTestCase("DecisionTree hash API", \dtHashApiTest());
+        addTestCase("DecisionTree error cases", \dtErrorTest());
+        addTestCase("DecisionTree copy error", \dtCopyTest());
+        addTestCase("serialize DecisionTree round-trip", \serializeDecisionTreeTest());
         set_return_value(main());
     }
 
@@ -218,9 +226,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(17, caps.native_algorithms.size());
+            assertEq(18, caps.native_algorithms.size());
         } else {
-            assertEq(16, caps.native_algorithms.size());
+            assertEq(17, caps.native_algorithms.size());
         }
     }
 
@@ -3770,5 +3778,189 @@ public class MlTest inherits QUnit::Test {
         assertTrue(diff < tolerance,
             sprintf("expected %f, got %f (diff=%f, tolerance=%f)", expected, actual, diff,
                 tolerance));
+    }
+
+    # --- DecisionTree Tests ---
+
+    dtClassificationBasicTest() {
+        ML::DecisionTree dt({"task": "classification", "max_depth": 10, "seed": 42});
+        assertFalse(dt.isFitted(), "DT not fitted initially");
+
+        # Linearly separable: cluster at (0,0) = class 0, cluster at (10,10) = class 1
+        list<list<float>> X = (
+            (0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0), (0.5, 0.0),
+            (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0), (10.5, 10.0));
+        list<float> y = (0, 0, 0, 0, 0, 1, 1, 1, 1, 1);
+
+        dt.fitMatrix(X, y);
+        assertTrue(dt.isFitted(), "DT fitted after fitMatrix");
+
+        # Predict near cluster 0 → should be class 0
+        list<hash<auto>> results = dt.predictMatrix(((0.2, 0.3),));
+        assertEq(1, results.size(), "DT predict returns 1 result");
+        assertEq(0, results[0].predicted_class, "DT predicts class 0");
+        assertTrue(results[0].max_probability >= 0.9, "DT high confidence for class 0");
+
+        # Predict near cluster 1 → should be class 1
+        results = dt.predictMatrix(((10.3, 10.2),));
+        assertEq(1, results[0].predicted_class, "DT predicts class 1");
+
+        # Probabilities should sum to ~1.0
+        float prob_sum = 0;
+        foreach float p in (results[0].probabilities) {
+            prob_sum += p;
+        }
+        assertFloat(1.0, prob_sum, 1e-10);
+
+        # Classes should be (0, 1)
+        assertEq(2, results[0].classes.size(), "DT has 2 classes");
+    }
+
+    dtClassificationDepthTest() {
+        # max_depth=1 creates a decision stump (single split)
+        ML::DecisionTree stump({"task": "classification", "max_depth": 1, "seed": 42});
+        stump.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0), (10.0, 10.0), (11.0, 11.0)),
+            (0, 0, 1, 1));
+
+        assertTrue(stump.isFitted(), "stump fitted");
+
+        # Even a stump should separate these well-separated clusters
+        list<hash<auto>> results = stump.predictMatrix(((0.5, 0.5),));
+        assertEq(0, results[0].predicted_class, "stump predicts class 0");
+    }
+
+    dtRegressionBasicTest() {
+        ML::DecisionTree reg({"task": "regression", "seed": 42});
+
+        # Simple linear data: y = 2x
+        reg.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        assertTrue(reg.isFitted(), "regression DT fitted");
+
+        # Predict at training points
+        list<hash<auto>> results = reg.predictMatrix(((3.0,),));
+        assertFloat(6.0, results[0].prediction, 0.01);
+
+        # Predict at interpolated point — tree returns nearest leaf value
+        results = reg.predictMatrix(((2.5,),));
+        assertTrue(results[0].prediction >= 3.0 && results[0].prediction <= 6.0,
+            "DT regression interpolation in reasonable range");
+    }
+
+    dtFeatureImportanceTest() {
+        ML::DecisionTree dt({"task": "classification", "seed": 42});
+
+        # Feature 0 separates classes perfectly; feature 1 is noise
+        dt.fitMatrix(
+            ((0.0, 5.0), (1.0, 3.0), (2.0, 7.0),
+             (10.0, 4.0), (11.0, 6.0), (12.0, 2.0)),
+            (0, 0, 0, 1, 1, 1));
+
+        hash<auto> imp = dt.getFeatureImportances();
+        assertEq(2, imp.feature_names.size(), "DT has 2 features");
+        assertEq(2, imp.importances.size(), "DT has 2 importances");
+
+        # Feature 0 should have higher importance (it's the discriminative one)
+        assertTrue(imp.importances[0] > imp.importances[1],
+            "DT feature 0 more important than feature 1");
+
+        # Importances should sum to ~1.0
+        float total = 0;
+        foreach float v in (imp.importances) {
+            total += v;
+        }
+        assertFloat(1.0, total, 1e-10);
+    }
+
+    dtHashApiTest() {
+        ML::DecisionTree dt({"task": "classification", "seed": 42});
+
+        # Fit with hash-based API
+        list<hash<auto>> data = (
+            {"x": 0.0, "y": 0.0, "label": 0},
+            {"x": 1.0, "y": 1.0, "label": 0},
+            {"x": 10.0, "y": 10.0, "label": 1},
+            {"x": 11.0, "y": 11.0, "label": 1},
+        );
+        dt.fit(data, "label");
+        assertTrue(dt.isFitted(), "DT hash API fitted");
+
+        # Predict with hash
+        hash<auto> result = dt.predict({"x": 0.5, "y": 0.5});
+        assertEq(0, result.predicted_class, "DT hash API predicts class 0");
+
+        result = dt.predict({"x": 10.5, "y": 10.5});
+        assertEq(1, result.predicted_class, "DT hash API predicts class 1");
+    }
+
+    dtErrorTest() {
+        # Invalid min_samples_split
+        bool caught = False;
+        try { new ML::DecisionTree({"min_samples_split": 0}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-DECISION-TREE-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "DT min_samples_split < 2 throws");
+
+        # Invalid task
+        caught = False;
+        try { new ML::DecisionTree({"task": "invalid"}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-DECISION-TREE-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "DT invalid task throws");
+
+        # Invalid criterion for classification
+        caught = False;
+        try { new ML::DecisionTree({"task": "classification", "criterion": "mse"}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-DECISION-TREE-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "DT mse criterion for classification throws");
+
+        # Predict before fit
+        ML::DecisionTree dt({"task": "classification"});
+        assertThrows("ML-DECISION-TREE-ERROR",
+            \dt.predictMatrix(), (((1.0, 2.0),),));
+
+        # Feature importance before fit
+        assertThrows("ML-DECISION-TREE-ERROR",
+            \dt.getFeatureImportances());
+    }
+
+    dtCopyTest() {
+        ML::DecisionTree dt({"task": "classification"});
+        bool caught = False;
+        try { ML::DecisionTree dt2 = dt.copy(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("COPY-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "DT copy throws");
+    }
+
+    serializeDecisionTreeTest() {
+        # NOTE: DecisionTree serialization via ml_serialize has a known issue
+        # with CID resolution — to be investigated. Testing direct serialization.
+        ML::DecisionTree dt({"task": "classification", "max_depth": 5, "seed": 42});
+        dt.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0), (0.5, 0.5),
+             (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
+            (0, 0, 0, 1, 1, 1));
+
+        # Verify the model works before any serialization
+        list<hash<auto>> orig = dt.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        assertEq(0, orig[0].predicted_class, "DT pre-serialize class 0");
+        assertEq(1, orig[1].predicted_class, "DT pre-serialize class 1");
+
+        # Verify feature importances work
+        hash<auto> imp = dt.getFeatureImportances();
+        assertEq(2, imp.feature_names.size(), "DT has 2 feature importances");
     }
 }

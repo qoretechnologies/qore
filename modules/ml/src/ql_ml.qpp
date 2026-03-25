@@ -41,6 +41,7 @@
 #include "QC_StandardScaler.h"
 #include "QC_MinMaxScaler.h"
 #include "QC_Imputer.h"
+#include "QC_DecisionTree.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -527,6 +528,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("Imputer"), xsink);
     algos->push(new QoreStringNode("MLPipeline"), xsink);
     algos->push(new QoreStringNode("CrossValidator"), xsink);
+    algos->push(new QoreStringNode("DecisionTree"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1161,6 +1163,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_STANDARDSCALER, QoreStandardScaler, "StandardScaler")
     TRY_SERIALIZE_ALGO(CID_MINMAXSCALER, QoreMinMaxScaler, "MinMaxScaler")
     TRY_SERIALIZE_ALGO(CID_IMPUTER, QoreImputer, "Imputer")
+    TRY_SERIALIZE_ALGO(CID_DECISIONTREE, QoreDecisionTree, "DecisionTree")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
