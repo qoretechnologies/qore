@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <set>
 
 QoreRFE::QoreRFE(int n_features_to_select, int step)
     : n_features_to_select(n_features_to_select), step(step) {
