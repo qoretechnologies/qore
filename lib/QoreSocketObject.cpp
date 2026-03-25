@@ -1577,6 +1577,46 @@ void QoreSocketObject::deregisterQuicConnectStreamQueue(int64_t session_id, int6
     session->deregisterConnectStreamQueue(stream_id);
 }
 
+int QoreSocketObject::registerQuicConnectStreamNotifier(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
+    if (!session) {
+        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
+            (long long)session_id);
+        return -1;
+    }
+    session->registerConnectStreamNotifier(stream_id);
+    return 0;
+}
+
+int QoreSocketObject::waitForQuicConnectStreamNotify(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink) {
+    // Get session and notifier WITHOUT holding the socket lock — we'll block on the CV
+    std::shared_ptr<QuicSession> session;
+    {
+        AutoLocker al(priv->m);
+        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+        session = sp->getQuicSession(session_id);
+    }
+    if (!session) {
+        return -1;  // session gone — treat as closed
+    }
+    auto notifier = session->getConnectStreamNotifier(stream_id);
+    if (!notifier) {
+        return -1;  // no notifier — treat as closed
+    }
+    if (notifier->closed.load(std::memory_order_acquire)) {
+        return -1;
+    }
+    notifier->wait(timeout_ms);
+    if (notifier->closed.load(std::memory_order_acquire)) {
+        return -1;
+    }
+    return 0;
+}
+
 BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
     // Get the session WITHOUT holding the socket lock — the session is reference-counted

@@ -809,6 +809,39 @@ public:
     DLLEXPORT void deregisterQuicConnectStreamQueue(int64_t session_id, int64_t stream_id,
         ExceptionSink* xsink);
 
+    //! Create and register a StreamNotifier for a CONNECT stream
+    /** The notifier is signaled from h3RecvDataCallback() (pure C++) when data
+        arrives.  A handler-side watcher thread blocks on
+        waitForQuicConnectStreamNotify() and calls wsc.notifyIo() when signaled.
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int registerQuicConnectStreamNotifier(int64_t session_id, int64_t stream_id,
+        ExceptionSink* xsink);
+
+    //! Wait for data notification on a CONNECT stream
+    /** Blocks until the notifier is signaled or the timeout expires.  If the
+        notifier has been closed (stream ended or cleaned up), returns -1
+        immediately.  A timeout without signal returns 0 (not distinguishable
+        from a signal); the caller should treat both as "check for data now".
+
+        @param session_id the QUIC session ID
+        @param stream_id the HTTP/3 stream ID
+        @param timeout_ms maximum wait time in milliseconds
+        @param xsink exception sink
+        @return 0 if signaled or timed out (data may be available),
+                -1 if closed or error (caller should exit)
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int waitForQuicConnectStreamNotify(int64_t session_id, int64_t stream_id,
+        int timeout_ms, ExceptionSink* xsink);
+
     //! Read body data from a dispatched HTTP/3 stream (headers-only mode)
     /** Blocks until body data is available, the stream completes, or the timeout expires.
         @param session_id the QUIC session ID
