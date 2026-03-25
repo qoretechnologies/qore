@@ -1572,7 +1572,8 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
 
 // Execute on_block_exit handlers in reverse order (LIFO), matching the AST's
 // StatementBlock::execIntern() semantics.  Returns the last non-zero return code, if any.
-static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink) {
+static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handlers, ExceptionSink* xsink,
+        std::vector<QoreValue>* parent_slot_cache = nullptr) {
     if (handlers.empty()) {
         return 0;
     }
@@ -1597,7 +1598,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    executeHandlerBody(handlers[i], &obe_xsink);
+                    executeHandlerBody(handlers[i], &obe_xsink, parent_slot_cache);
                     // Restore td->catchException BEFORE clearing xsink to avoid
                     // a use-after-free window where td->catchException points to
                     // the freed exception chain
