@@ -373,5 +373,9 @@ class DataFrameTest inherits QUnit::Test {
         # addColumn row count mismatch
         assertThrows("DATAFRAME-COLUMN-ERROR", \df.addColumn(), ("b", (1, 2, 3)),
             "addColumn row mismatch");
+
+        # Invalid filter operator
+        assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("a", "LIKE", 1),
+            "invalid filter operator");
     }
 }

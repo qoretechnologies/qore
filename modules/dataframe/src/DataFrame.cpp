@@ -560,6 +560,9 @@ QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
 
 QoreDataFrame* QoreDataFrame::select(const QoreListNode* col_list,
         ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "selecting DataFrame columns")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     auto* df = new QoreDataFrame();
@@ -592,6 +595,9 @@ QoreDataFrame* QoreDataFrame::select(const QoreListNode* col_list,
 
 QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::string& op,
         QoreValue value, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "filtering DataFrame")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     int col_idx = getColIdx(column, xsink);
@@ -600,6 +606,20 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
     }
 
     const ColumnData& cd = *columns[col_idx].data;
+
+    // Validate operator
+    static const std::unordered_set<std::string> valid_ops = {
+        "==", "!=", "<", "<=", ">", ">=",
+        "contains", "startswith", "endswith",
+        "is_null", "not_null",
+    };
+    if (!valid_ops.count(op)) {
+        xsink->raiseException("DATAFRAME-FILTER-ERROR",
+            "unknown filter operator '%s'; valid operators: ==, !=, <, <=, >, >=, "
+            "contains, startswith, endswith, is_null, not_null", op.c_str());
+        return nullptr;
+    }
+
     std::vector<int64_t> matching_rows;
 
     for (int64_t i = 0; i < n_rows; ++i) {
@@ -677,6 +697,9 @@ QoreDataFrame* QoreDataFrame::filter(const std::string& column, const std::strin
 
 QoreDataFrame* QoreDataFrame::sortBy(const QoreListNode* col_list,
         const QoreListNode* asc_list, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "sorting DataFrame")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     if (n_rows == 0) {
@@ -880,14 +903,27 @@ QoreDataFrame* QoreDataFrame::concat(const QoreListNode* dataframes, int axis,
 }
 
 QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "filling DataFrame nulls")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     auto* df = new QoreDataFrame();
     df->n_rows = n_rows;
 
     for (const auto& src_col : columns) {
+        // If column has no nulls, share data (COW)
+        if (src_col.data->countNull() == 0) {
+            Column col;
+            col.name = src_col.name;
+            col.data = src_col.data;
+            df->col_index[col.name] = df->columns.size();
+            df->columns.push_back(std::move(col));
+            continue;
+        }
+
         auto new_data = std::make_shared<ColumnData>();
-        *new_data = *src_col.data;  // copy all data
+        *new_data = *src_col.data;  // copy column with nulls
         // Clear null_mask and fill with the replacement value
         for (int64_t i = 0; i < n_rows; ++i) {
             if (new_data->null_mask[i]) {
@@ -924,6 +960,9 @@ QoreDataFrame* QoreDataFrame::fillna(QoreValue value, ExceptionSink* xsink) cons
 }
 
 QoreDataFrame* QoreDataFrame::dropna(ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "dropping DataFrame null rows")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     std::vector<int64_t> keep_rows;
