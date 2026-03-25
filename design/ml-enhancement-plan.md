@@ -8,12 +8,13 @@ metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
 **complete** (DataFrame module with SQL-like operations, CSV/Parquet/DB I/O, ML
 integration, DataProvider wrapper). Phase 9 is **core complete** (DecisionTree,
 RandomForest, GradientBoostedTrees — DataProvider processors and GBT multiclass
-softmax remaining). Phases 10–14 are planned.
+softmax remaining). Phase 10 is **complete** (SVM, NaiveBayes).
+Phases 11–14 are planned.
 
 ## Current State (after Phases 1–9)
 
-- **ml module**: 20 native algorithms (added DecisionTree, RandomForest,
-  GradientBoostedTrees in Phase 9) with shared FlatTree CART engine (IsolationForest, LOF, DBSCAN, KMeans, GMM,
+- **ml module**: 22 native algorithms (Phase 9: DecisionTree, RandomForest,
+  GradientBoostedTrees with shared FlatTree CART engine; Phase 10: SVM, NaiveBayes) (IsolationForest, LOF, DBSCAN, KMeans, GMM,
   LinearRegression, LogisticRegression, KNN, HoltWinters, SeasonalDecomposition, PCA,
   StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator) + OnnxModel +
   classification/regression/clustering metrics + native serialization + online learning
@@ -1474,7 +1475,7 @@ class QoreGBT : public AbstractPrivateData {
 
 ---
 
-## Phase 10: Additional Classifiers — SVM and Naive Bayes
+## Phase 10: Additional Classifiers — SVM and Naive Bayes ✅ COMPLETE
 
 ### Motivation
 

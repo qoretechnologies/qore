@@ -221,12 +221,9 @@ void QoreSVM::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
     n_features = (int)X.cols();
 
     // Auto-compute gamma if 0
-    double effective_gamma = gamma;
-    if (effective_gamma <= 0) {
-        effective_gamma = 1.0 / n_features;
+    if (gamma <= 0) {
+        gamma = 1.0 / n_features;
     }
-    // Store for kernel computation (ugly but simple)
-    const_cast<QoreSVM*>(this)->gamma = effective_gamma;
 
     // Determine unique classes
     std::set<double> unique_classes;
@@ -246,6 +243,10 @@ void QoreSVM::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
         // Multiclass: one-vs-one
         for (int i = 0; i < n_classes; ++i) {
             for (int j = i + 1; j < n_classes; ++j) {
+                if (qore_check_cancel(xsink, "training SVM multiclass")) {
+                    models.clear();
+                    return;
+                }
                 // Extract samples for these two classes
                 std::vector<int> indices;
                 for (int64_t k = 0; k < y.size(); ++k) {
@@ -308,7 +309,7 @@ QoreHashNode* QoreSVM::predictInternal(const RowVectorXd& point,
         new QoreHashNode(hashdeclSVMResult, xsink), xsink);
     rv->setKeyValue("predicted_class", (int64_t)classes[best], xsink);
     rv->setKeyValue("decision_value", 0.0, xsink);
-    rv->setKeyValue("confidence", (double)votes[best] / (n_classes * (n_classes - 1) / 2),
+    rv->setKeyValue("confidence", (double)votes[best] / ((double)n_classes * (n_classes - 1) / 2.0),
         xsink);
     return rv.release();
 }

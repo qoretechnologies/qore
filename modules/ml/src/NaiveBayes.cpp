@@ -52,39 +52,43 @@ void QoreNaiveBayes::fit(const MatrixXd& X, const VectorXd& y,
     classes.assign(unique_classes.begin(), unique_classes.end());
     n_classes = (int)classes.size();
 
-    // Compute per-class statistics
+    // Compute per-class statistics using Welford's online algorithm (single pass)
     class_stats.resize(n_classes);
     for (int c = 0; c < n_classes; ++c) {
-        // Collect samples for this class
-        std::vector<int> indices;
-        for (int64_t i = 0; i < y.size(); ++i) {
-            if (y(i) == classes[c]) {
-                indices.push_back(i);
-            }
+        ClassStats& cs = class_stats[c];
+        cs.count = 0;
+        cs.mean = VectorXd::Zero(n_features);
+        cs.var = VectorXd::Zero(n_features);  // accumulates M2 (sum of squared diffs)
+    }
+
+    // Single pass: accumulate mean and M2 per class using Welford's method
+    for (int64_t i = 0; i < y.size(); ++i) {
+        // Find class index
+        int c = -1;
+        for (int k = 0; k < n_classes; ++k) {
+            if (y(i) == classes[k]) { c = k; break; }
         }
+        if (c < 0) { continue; }
 
         ClassStats& cs = class_stats[c];
-        cs.count = (int)indices.size();
-        cs.prior = std::log((double)cs.count / total_samples);
+        cs.count++;
+        VectorXd x = X.row(i).transpose();
+        VectorXd delta = x - cs.mean;
+        cs.mean += delta / cs.count;
+        VectorXd delta2 = x - cs.mean;
+        cs.var += (delta.array() * delta2.array()).matrix();  // M2 accumulator
+    }
 
-        // Compute mean
-        cs.mean = VectorXd::Zero(n_features);
-        for (int i : indices) {
-            cs.mean += X.row(i).transpose();
-        }
-        cs.mean /= cs.count;
-
-        // Compute variance
-        cs.var = VectorXd::Zero(n_features);
-        for (int i : indices) {
-            VectorXd diff = X.row(i).transpose() - cs.mean;
-            cs.var += diff.array().square().matrix();
-        }
+    // Finalize: convert M2 to population variance, add smoothing, compute priors
+    for (int c = 0; c < n_classes; ++c) {
+        ClassStats& cs = class_stats[c];
         if (cs.count > 1) {
             cs.var /= cs.count;  // population variance (matches sklearn)
+        } else {
+            cs.var = VectorXd::Zero(n_features);
         }
-        // Add smoothing to prevent zero variance
         cs.var.array() += var_smoothing;
+        cs.prior = std::log((double)cs.count / total_samples);
     }
 
     fitted = true;
