@@ -78,6 +78,11 @@ public:
     */
     SequenceDecoder(const QoreHashNode* config, ExceptionSink* xsink);
 
+    //! Constructor: takes ownership of pre-built child decoders
+    /** @param decoders the child decoders to apply in sequence
+    */
+    explicit SequenceDecoder(std::vector<std::unique_ptr<AbstractDecoder>> decoders);
+
     std::string decode(const std::vector<std::string>& tokens) const override;
 
 private:

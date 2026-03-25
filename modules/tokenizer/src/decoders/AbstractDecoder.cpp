@@ -40,8 +40,22 @@ std::unique_ptr<AbstractDecoder> AbstractDecoder::fromConfig(
     } else if (type == "Metaspace") {
         return std::make_unique<MetaspaceDecoder>(config, xsink);
     } else if (type == "BPEDecoder") {
-        // Legacy alias: BPEDecoder maps to ByteFallbackDecoder
-        return std::make_unique<ByteFallbackDecoder>(config, xsink);
+        // BPEDecoder is a sequence of Replace + ByteFallback + Fuse decoders,
+        // matching the HuggingFace tokenizers behavior for SentencePiece BPE
+        // models: first replace the SentencePiece space marker with a space,
+        // then convert <0xHH> byte-fallback tokens back to bytes, and finally
+        // fuse all token fragments into a single string.
+        std::vector<std::unique_ptr<AbstractDecoder>> steps;
+        steps.push_back(std::make_unique<ReplaceDecoder>(config, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        steps.push_back(std::make_unique<ByteFallbackDecoder>(config, xsink));
+        if (*xsink) {
+            return nullptr;
+        }
+        steps.push_back(std::make_unique<FuseDecoder>());
+        return std::make_unique<SequenceDecoder>(std::move(steps));
     } else if (type == "ByteFallback") {
         return std::make_unique<ByteFallbackDecoder>(config, xsink);
     } else if (type == "Fuse") {

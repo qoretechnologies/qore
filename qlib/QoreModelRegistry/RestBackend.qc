@@ -72,10 +72,10 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         string base_path;
 
         #! Local artifact cache: key "{name}/{version_id}" → binary
-        hash<string, binary> artifact_cache;
+        hash<string, binary> artifact_cache = {};
 
         #! Cache access order for LRU eviction (most recent at end)
-        list<string> cache_order();
+        list<string> cache_order = ();
 
         #! Maximum number of cached artifacts
         int max_cache_entries;
@@ -103,7 +103,6 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         self.rest_client = rest_client;
         self.base_path = base_path;
         get_headers = options.get_headers;
-        artifact_cache = {};
         max_cache_entries = options.max_cache_entries ?? DefaultMaxCacheEntries;
     }
 
@@ -159,9 +158,15 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     }
 
     list<hash<ModelVersionInfo>> listVersions(string name) {
-        hash<auto> resp = doGet(base_path + "/" + encode_url_param(name)
+        hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions");
-        auto result = resp.body.versions ?? resp.body;
+        auto result = resp.body.versions;
+        if (!exists result) {
+            # Fall back to resp.body only if it is a list
+            if (resp.body.typeCode() == NT_LIST) {
+                result = resp.body;
+            }
+        }
         if (result.typeCode() == NT_LIST) {
             return cast<list<hash<ModelVersionInfo>>>(result);
         }
@@ -170,7 +175,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         }
         throw "ML-REGISTRY-ERROR",
             sprintf("unexpected response type '%s' listing versions for model '%s'; "
-                "expected a list", result.type(), name);
+                "expected a list of version info hashes", result.fullType(), name);
     }
 
     list<string> listModels() {

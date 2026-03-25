@@ -32,18 +32,22 @@ MetaspaceDecoder::MetaspaceDecoder(const QoreHashNode* config, ExceptionSink* xs
         replacement = repl_str;
     }
 
-    std::string scheme_str = safeGetStringKey(config, "prepend_scheme");
-    if (!scheme_str.empty()) {
-        prepend_scheme = scheme_str;
-    } else {
-        // Fall back to legacy "add_prefix_space" boolean if prepend_scheme
-        // was not provided in config
-        QoreValue add_prefix = config->getKeyValue("add_prefix_space");
-        if (add_prefix.getAsBool()) {
-            prepend_scheme = "always";
+    // Check if prepend_scheme was explicitly provided in the config
+    QoreValue scheme_val = config->getKeyValue("prepend_scheme");
+    if (!scheme_val.isNullOrNothing() && scheme_val.getType() == NT_STRING) {
+        const QoreStringNode* scheme_str = scheme_val.get<const QoreStringNode>();
+        if (scheme_str && scheme_str->size() > 0) {
+            prepend_scheme = scheme_str->c_str();
         } else {
-            prepend_scheme = "never";
+            // Explicit but empty: fall back to add_prefix_space
+            QoreValue add_prefix = config->getKeyValue("add_prefix_space");
+            prepend_scheme = add_prefix.getAsBool() ? "always" : "never";
         }
+    } else {
+        // prepend_scheme not present in config: use legacy add_prefix_space
+        // boolean to determine behavior
+        QoreValue add_prefix = config->getKeyValue("add_prefix_space");
+        prepend_scheme = add_prefix.getAsBool() ? "always" : "never";
     }
 }
 

@@ -38,27 +38,75 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
             "constructor_options": ConstructorOptions,
         };
 
+        #! Supported backend type values for the \c backend_type option
+        const BackendTypes = ("filesystem", "database", "rest");
+
         const ConstructorOptions = {
+            "backend_type": <DataProviderOptionInfo>{
+                "display_name": "Backend Type",
+                "short_desc": "Storage backend type for the model registry",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The type of storage backend to use: 'filesystem' (default), "
+                    "'database', or 'rest'; backend-specific options must also be provided",
+                "allowed_values": BackendTypes,
+                "default_value": "filesystem",
+            },
             "path": <DataProviderOptionInfo>{
                 "display_name": "Registry Path",
                 "short_desc": "Filesystem path for the model registry",
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "Base directory path for the filesystem-backed model registry; "
-                    "either 'path' or 'backend' must be provided",
+                    "required when backend_type is 'filesystem'",
+            },
+            "datasource": <DataProviderOptionInfo>{
+                "display_name": "Datasource",
+                "short_desc": "Database datasource for database backend",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "An AbstractDatasource object for database storage; "
+                    "required when backend_type is 'database'",
+            },
+            "table_prefix": <DataProviderOptionInfo>{
+                "display_name": "Table Prefix",
+                "short_desc": "Table name prefix for database backend",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Prefix for database table names (default 'ml_'); "
+                    "only used with backend_type 'database'",
+            },
+            "rest_client": <DataProviderOptionInfo>{
+                "display_name": "REST Client",
+                "short_desc": "REST client object for REST backend",
+                "type": AbstractDataProviderTypeMap."any",
+                "desc": "A REST client object with get/post/put/del methods; "
+                    "required when backend_type is 'rest'",
+            },
+            "rest_base_path": <DataProviderOptionInfo>{
+                "display_name": "REST Base Path",
+                "short_desc": "Base path for REST API endpoints",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "Base URL path for model registry REST endpoints (e.g., '/models'); "
+                    "required when backend_type is 'rest'",
+            },
+            "rest_options": <DataProviderOptionInfo>{
+                "display_name": "REST Options",
+                "short_desc": "Additional REST backend options",
+                "type": AbstractDataProviderTypeMap."hash",
+                "desc": "Optional hash with REST backend options: "
+                    "'get_headers' (callback returning extra request headers), "
+                    "'max_cache_entries' (max cached artifacts, default 100); "
+                    "only used with backend_type 'rest'",
             },
             "backend": <DataProviderOptionInfo>{
                 "display_name": "Backend",
                 "short_desc": "Pre-constructed model registry backend",
                 "type": AbstractDataProviderTypeMap."any",
                 "desc": "A pre-constructed AbstractModelRegistryBackend instance; "
-                    "when provided, 'path' and 'tenant_id' are ignored",
+                    "when provided, all other options except 'tenant_id' are ignored",
             },
             "tenant_id": <DataProviderOptionInfo>{
                 "display_name": "Tenant ID",
                 "short_desc": "Tenant identifier for multi-tenant registries",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "Optional tenant identifier to scope registry access; "
-                    "only used with 'path' option",
+                "desc": "Optional tenant identifier to scope registry access",
             },
         };
     }
@@ -66,17 +114,92 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     private {
         #! The model registry instance
         ModelRegistry registry;
+
+        #! Cached model list from the backend (avoids redundant round trips)
+        *list<string> cached_models;
+
+        #! Timestamp when the model list cache was populated
+        *date cache_time;
+
+        #! Cache TTL in seconds; model list is refreshed after this interval
+        const CacheTtlSeconds = 5;
     }
 
     #! Creates from constructor options
+    /** Supports the following construction modes:
+        - \c backend: a pre-constructed AbstractModelRegistryBackend instance
+        - \c backend_type = "filesystem" (default): requires \c path
+        - \c backend_type = "database": requires \c datasource
+        - \c backend_type = "rest": requires \c rest_client and \c rest_base_path
+
+        @param options constructor option hash; see @ref ConstructorOptions
+
+        @throw CONSTRUCTOR-ERROR if required backend-specific options are missing
+    */
     constructor(*hash<auto> options) {
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        registry = new ModelRegistry(copts);
+        AbstractModelRegistryBackend backend = createBackend(copts);
+        registry = new ModelRegistry({"backend": backend});
     }
 
     #! Creates from an existing registry
     constructor(ModelRegistry registry) {
         self.registry = registry;
+    }
+
+    #! Private: creates a backend from validated constructor options
+    private static AbstractModelRegistryBackend createBackend(hash<auto> copts) {
+        # Pre-constructed backend takes priority
+        if (copts.backend instanceof AbstractModelRegistryBackend) {
+            return copts.backend;
+        }
+
+        string backend_type = copts.backend_type ?? "filesystem";
+
+        switch (backend_type) {
+            case "filesystem": {
+                if (!copts.path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "option 'path' is required when backend_type is 'filesystem'";
+                }
+                return new FilesystemBackend(copts.path, copts.tenant_id);
+            }
+
+%ifndef NoSqlUtil
+            case "database": {
+                if (!exists copts.datasource) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "option 'datasource' is required when backend_type is 'database'";
+                }
+                hash<auto> db_opts;
+                if (copts.table_prefix.val()) {
+                    db_opts.table_prefix = copts.table_prefix;
+                }
+                if (copts.tenant_id.val()) {
+                    db_opts.tenant_id = copts.tenant_id;
+                }
+                return new DatabaseBackend(copts.datasource, db_opts);
+            }
+%endif
+
+            case "rest": {
+                if (!exists copts.rest_client) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "option 'rest_client' is required when backend_type is 'rest'";
+                }
+                if (!copts.rest_base_path.val()) {
+                    throw "CONSTRUCTOR-ERROR",
+                        "option 'rest_base_path' is required when backend_type is 'rest'";
+                }
+                return new RestBackend(copts.rest_client, copts.rest_base_path,
+                    copts.tenant_id, copts.rest_options);
+            }
+
+            default:
+                throw "CONSTRUCTOR-ERROR",
+                    sprintf("unsupported backend_type '%s'; valid values: %y",
+                        backend_type, BackendTypes);
+        }
     }
 
     string getName() {
@@ -92,26 +215,26 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
     }
 
     private *list<string> getChildProviderNamesImpl() {
-        return registry.listModels();
+        return getModelListCached();
     }
 
     private *AbstractDataProvider getChildProviderImpl(string name) {
-        # Check if model exists by verifying it appears in the model list
-        # (avoids listing all models if the backend supports direct lookup)
-        try {
-            list<hash<auto>> versions = registry.listVersions(name);
-            # FilesystemBackend returns empty list for nonexistent models
-            # (no directory = no index), so also check listModels
-            if (!versions) {
-                list<string> models = registry.listModels();
-                if (!models.contains(name)) {
-                    return;
-                }
-            }
-            return new ModelVersionsDataProvider(registry, name);
-        } catch (hash<ExceptionInfo> ex) {
+        *list<string> models = getModelListCached();
+        if (!models || !models.contains(name)) {
             return;
         }
+        return new ModelVersionsDataProvider(registry, name);
+    }
+
+    #! Returns the cached model list, refreshing from the backend when stale
+    private *list<string> getModelListCached() {
+        if (cached_models && cache_time
+                && (now_us() - cache_time).durationSecondsFloat() < CacheTtlSeconds) {
+            return cached_models;
+        }
+        cached_models = registry.listModels();
+        cache_time = now_us();
+        return cached_models;
     }
 }
 

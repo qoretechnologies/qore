@@ -33,9 +33,10 @@ ByteLevelPreTokenizer::ByteLevelPreTokenizer(const QoreHashNode* config, Excepti
         add_prefix_space = v.getAsBool();
     }
 
-    // NOTE: "trim_offsets" is parsed from tokenizer configs but not yet
-    // implemented — offset trimming has no effect.  The member is retained
-    // so the value is available for future implementation.
+    v = config->getKeyValue("trim_offsets");
+    if (!v.isNullOrNothing()) {
+        trim_offsets = v.getAsBool();
+    }
 
     v = config->getKeyValue("use_regex");
     if (!v.isNullOrNothing()) {
@@ -361,6 +362,25 @@ std::vector<PreToken> ByteLevelPreTokenizer::pretokenize(const std::string& inpu
         }
 
         if (!converted.empty()) {
+            // When trim_offsets is enabled, adjust start/end to skip leading
+            // and trailing whitespace in the original piece so that offsets
+            // point only at the meaningful content (HuggingFace compatible).
+            if (trim_offsets && end > start) {
+                size_t trim_start = start;
+                size_t trim_end = end;
+                // Trim leading whitespace (in the original input)
+                while (trim_start < trim_end && trim_start < input.size()
+                        && isSpace(input[trim_start])) {
+                    ++trim_start;
+                }
+                // Trim trailing whitespace
+                while (trim_end > trim_start && trim_end <= input.size()
+                        && isSpace(input[trim_end - 1])) {
+                    --trim_end;
+                }
+                start = trim_start;
+                end = trim_end;
+            }
             result.push_back({converted, start, end});
         }
 
