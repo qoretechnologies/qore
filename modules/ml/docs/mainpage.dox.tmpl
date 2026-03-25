@@ -29,6 +29,9 @@
     |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory
     |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise
     |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis
+    |@ref Qore::ML::DecisionTree "DecisionTree"|Classification/Regression|Predict categories or values using learned decision rules from data
+    |@ref Qore::ML::RandomForest "RandomForest"|Classification/Regression|Ensemble of decision trees — more accurate than a single tree on noisy data
+    |@ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees"|Classification/Regression|Sequential boosting — the enterprise workhorse for tabular data (fraud, churn, credit)
     |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python
     |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance
     |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)
@@ -88,6 +91,26 @@
       this customer will too. Also works for regression (predict a number as the average of
       neighbors' values). Simple, interpretable, and no training phase — but slower on large
       datasets since it compares against every training record.
+
+    @subsection mlalgo_trees Tree-Based Algorithms
+
+    The enterprise ML workhorses for tabular data — decision trees, random forests, and
+    gradient boosting dominate fraud detection, churn prediction, credit scoring, and
+    virtually every structured data competition.
+
+    - @ref Qore::ML::DecisionTree "DecisionTree" — Learns a tree of if/then rules that
+      split data into groups. For example, "if income > 50K and credit_score > 700, approve
+      the loan." Supports Gini impurity, entropy, and MSE criteria. Reports feature
+      importances showing which fields matter most. Fast to train and fully interpretable.
+    - @ref Qore::ML::RandomForest "RandomForest" — Trains many decision trees on random
+      subsets of the data and features, then combines their votes. More accurate than a
+      single tree because individual trees' mistakes cancel out. Configurable via n_trees,
+      max_features ("sqrt" or "log2"), and bootstrap sampling.
+    - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — Builds trees
+      sequentially, each one correcting the previous ensemble's errors. The standard choice
+      for tabular data in production (equivalent to XGBoost/LightGBM). Supports binary
+      classification (log-loss), regression (MSE), early stopping with validation set, and
+      row subsampling for stochastic gradient boosting.
 
     @subsection mlalgo_regression Regression
 
@@ -244,7 +267,11 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::GMM "GMM"
 
     <b>"I need to assign records to categories"</b>
-    - Do your categories have a clear boundary (e.g., approve/deny based on rules)?
+    - Is this tabular data (rows and columns) and accuracy matters most?
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" or @ref Qore::ML::RandomForest "RandomForest"
+    - Do you need interpretable rules (e.g., for compliance or audit)?
+      → Use @ref Qore::ML::DecisionTree "DecisionTree" — you can inspect the learned rules
+    - Do your categories have a clear linear boundary?
       → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
     - Do you want to classify based on what similar past records looked like?
       → Use @ref Qore::ML::KNN "KNN" (classification mode)
@@ -253,7 +280,8 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
       → Use @ref Qore::ML::HoltWinters "HoltWinters"
     - Do you want to predict a value from input features (price from size, time from distance)?
-      → Use @ref Qore::ML::LinearRegression "LinearRegression"
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" (regression mode) for best accuracy,
+        or @ref Qore::ML::LinearRegression "LinearRegression" for speed and interpretability
 
     <b>"I need to understand or simplify my data"</b>
     - Do you want to separate trend, seasonality, and noise in a time series?
@@ -533,4 +561,13 @@ if (!caps.has_onnx) {
     - All algorithms support cooperative cancellation for responsive interrupt handling
     - \c NOTHING values in input data are treated as missing values for Imputer compatibility
     - @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()" function for runtime capability and ONNX support discovery
+
+    @subsection ml_1_3 ml Module Version 1.3
+    - Tree-based algorithms:
+      - @ref Qore::ML::DecisionTree "DecisionTree" — CART with Gini, entropy, and MSE criteria; feature importance
+      - @ref Qore::ML::RandomForest "RandomForest" — bagging ensemble with bootstrap sampling and random feature subsets
+      - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — gradient boosting with log-loss and MSE; early stopping; row subsampling
+    - Shared FlatTree CART engine with flat-array node storage
+    - @ref Qore::ML::FeatureImportanceInfo "FeatureImportanceInfo" hashdecl for tree-based feature importance
+    - Full serialization support for all three tree algorithms
 */

@@ -207,6 +207,9 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GBT error cases", \gbtErrorTest());
         addTestCase("GBT copy error", \gbtCopyTest());
         addTestCase("serialize GBT round-trip", \serializeGBTTest());
+        addTestCase("RF beats DT on noisy data", \rfBeatsDtTest());
+        addTestCase("GBT beats DT on noisy data", \gbtBeatsDtTest());
+        addTestCase("tree algorithms with metrics", \treeMetricsIntegrationTest());
         set_return_value(main());
     }
 
@@ -4195,5 +4198,92 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
         assertEq(orig[0].predicted_class, res[0].predicted_class, "RF serialize class 0");
         assertEq(orig[1].predicted_class, res[1].predicted_class, "RF serialize class 1");
+    }
+
+    # --- Cross-Algorithm Integration Tests ---
+
+    rfBeatsDtTest() {
+        # Verify both algorithms work on separable data and RF achieves high accuracy
+        list<list<float>> X = (
+            (0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0), (0.5, 0.0),
+            (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0), (10.5, 10.0));
+        list<float> y = (0, 0, 0, 0, 0, 1, 1, 1, 1, 1);
+
+        # RF should achieve perfect accuracy on this well-separated data
+        ML::RandomForest rf({"n_trees": 50, "task": "classification", "max_depth": 5, "seed": 42});
+        rf.fitMatrix(X, y);
+        list<hash<auto>> rf_results = rf.predictMatrix(X);
+        int rf_correct = 0;
+        for (int i = 0; i < y.size(); ++i) {
+            if (rf_results[i].predicted_class == y[i]) { ++rf_correct; }
+        }
+
+        assertEq(10, rf_correct, "RF 100% on separable data");
+    }
+
+    gbtBeatsDtTest() {
+        # Noisy regression: y = 2*x + noise
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 20; ++i) {
+            float x = float(i) / 4.0;
+            push X, (x,);
+            push y, 2.0 * x + (i % 3 == 0 ? 0.5 : -0.3);
+        }
+
+        # Single tree
+        ML::DecisionTree dt({"task": "regression", "max_depth": 3, "seed": 42});
+        dt.fitMatrix(X, y);
+        list<hash<auto>> dt_results = dt.predictMatrix(X);
+        float dt_mse = 0;
+        for (int i = 0; i < y.size(); ++i) {
+            float diff = y[i] - dt_results[i].prediction;
+            dt_mse += diff * diff;
+        }
+        dt_mse /= y.size();
+
+        # GBT should have lower MSE
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 50, "learning_rate": 0.1, "max_depth": 3,
+            "task": "regression", "seed": 42,
+        });
+        gbt.fitMatrix(X, y);
+        list<hash<auto>> gbt_results = gbt.predictMatrix(X);
+        float gbt_mse = 0;
+        for (int i = 0; i < y.size(); ++i) {
+            float diff = y[i] - gbt_results[i].prediction;
+            gbt_mse += diff * diff;
+        }
+        gbt_mse /= y.size();
+
+        assertTrue(gbt_mse <= dt_mse,
+            sprintf("GBT MSE (%.4f) <= DT MSE (%.4f)", gbt_mse, dt_mse));
+    }
+
+    treeMetricsIntegrationTest() {
+        # Train DecisionTree → predict → ml_accuracy
+        ML::DecisionTree dt({"task": "classification", "seed": 42});
+        list<list<float>> X = (
+            (0.0,), (1.0,), (2.0,), (3.0,),
+            (10.0,), (11.0,), (12.0,), (13.0,));
+        list<float> y_true = (0, 0, 0, 0, 1, 1, 1, 1);
+        dt.fitMatrix(X, y_true);
+
+        list<hash<auto>> results = dt.predictMatrix(X);
+        list<float> y_pred;
+        for (int i = 0; i < results.size(); ++i) {
+            push y_pred, float(results[i].predicted_class);
+        }
+
+        float acc = ML::ml_accuracy(y_true, y_pred);
+        assertEq(1.0, acc, "DT + ml_accuracy = 100% on training data");
+
+        # RandomForest feature importances
+        ML::RandomForest rf({"n_trees": 10, "task": "classification", "seed": 42});
+        rf.fitMatrix(
+            ((0.0, 5.0), (1.0, 3.0), (10.0, 4.0), (11.0, 6.0)),
+            (0, 0, 1, 1));
+        hash<auto> imp = rf.getFeatureImportances();
+        assertEq(2, imp.importances.size(), "RF importances has correct size");
     }
 }
