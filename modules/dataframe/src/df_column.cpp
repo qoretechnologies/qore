@@ -61,7 +61,9 @@ QoreValue ColumnData::getValueAt(int64_t i, ExceptionSink* xsink) const {
             return QoreValue(DateTimeNode::makeAbsolute(currentTZ(),
                 date_data[i] / 1000000, (int)(date_data[i] % 1000000)));
         case ColumnType::AUTO:
-            return QoreValue();  // TODO: implement for auto columns
+            // AUTO columns are not yet supported; inferColumnType() never
+            // returns AUTO — it resolves to a concrete type or STRING
+            return QoreValue();
         default:
             return QoreValue();
     }
@@ -208,7 +210,9 @@ std::shared_ptr<ColumnData> buildColumnData(const QoreListNode* values,
                     const DateTimeNode* dt = v.get<const DateTimeNode>();
                     col->date_data[i] = dt->getEpochMicrosecondsUTC();
                 } else {
-                    // Try to convert to date
+                    // Non-date value in a date column → treat as null
+                    // (type inference should prevent this; if it happens,
+                    // the column would have been inferred as STRING instead)
                     col->null_mask[i] = 1;
                     col->date_data[i] = 0;
                 }

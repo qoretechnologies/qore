@@ -196,6 +196,11 @@ QoreListNode* QoreDataFrame::getColumn(const std::string& name,
 
 QoreHashNode* QoreDataFrame::getRow(int64_t index, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+    if (n_rows == 0) {
+        xsink->raiseException("DATAFRAME-INDEX-ERROR",
+            "row index " QLLD " out of range: DataFrame is empty", index);
+        return nullptr;
+    }
     if (index < 0 || index >= n_rows) {
         xsink->raiseException("DATAFRAME-INDEX-ERROR",
             "row index " QLLD " out of range (0.." QLLD ")", index, n_rows - 1);
@@ -267,8 +272,8 @@ QoreDataFrame* QoreDataFrame::sliceRows(int64_t start, int64_t count,
 
 QoreDataFrame* QoreDataFrame::head(int64_t n, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
-    if (n <= 0) {
-        n = 5;  // default like Pandas
+    if (n < 0) {
+        n = 0;
     }
     if (n > n_rows) {
         n = n_rows;
@@ -278,8 +283,8 @@ QoreDataFrame* QoreDataFrame::head(int64_t n, ExceptionSink* xsink) const {
 
 QoreDataFrame* QoreDataFrame::tail(int64_t n, ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
-    if (n <= 0) {
-        n = 5;
+    if (n < 0) {
+        n = 0;
     }
     if (n > n_rows) {
         n = n_rows;

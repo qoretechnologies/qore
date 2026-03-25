@@ -130,9 +130,15 @@ hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
 
 //! Returns the first n rows as a new DataFrame (default 5)
 /** @param n number of rows (default 5)
-    @return new DataFrame with the first n rows
+    @return new DataFrame object with the first n rows
+
+    @par Example:
+    @code{.py}
+    auto top3 = df.head(3);
+    printf("Top 3: %d rows\n", top3.numRows());
+    @endcode
 */
-hash<auto> DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
+auto DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
     int64_t rows = n ? (int64_t)n : 5;
     QoreDataFrame* result = df->head(rows, xsink);
     if (!result) {
@@ -146,9 +152,9 @@ hash<auto> DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
 
 //! Returns the last n rows as a new DataFrame (default 5)
 /** @param n number of rows (default 5)
-    @return new DataFrame with the last n rows
+    @return new DataFrame object with the last n rows
 */
-hash<auto> DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
+auto DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
     int64_t rows = n ? (int64_t)n : 5;
     QoreDataFrame* result = df->tail(rows, xsink);
     if (!result) {
@@ -162,8 +168,9 @@ hash<auto> DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
 //! Returns a row slice [start, end) as a new DataFrame
 /** @param start the starting row index (inclusive)
     @param end the ending row index (exclusive)
+    @return new DataFrame object with the specified row range
 */
-hash<auto> DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
+auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->slice(start, end, xsink);
     if (!result) {
         return QoreValue();
