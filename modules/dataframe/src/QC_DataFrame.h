@@ -165,6 +165,20 @@ public:
         const QoreListNode* on_columns, const std::string& how,
         ExceptionSink* xsink) const;
 
+    // --- ML Integration ---
+
+    //! Extract numeric columns as a matrix (list of row lists)
+    DLLLOCAL QoreListNode* toMatrix(const QoreListNode* columns,
+        ExceptionSink* xsink) const;
+
+    //! Extract a single numeric column as a flat list
+    DLLLOCAL QoreListNode* toVector(const std::string& column,
+        ExceptionSink* xsink) const;
+
+    //! Create a DataFrame from a matrix (list of row lists) + column names
+    DLLLOCAL static QoreDataFrame* fromMatrix(const QoreListNode* matrix,
+        const QoreListNode* column_names, ExceptionSink* xsink);
+
     //! Access to internal columns for GroupedDataFrame (friend access)
     DLLLOCAL const std::vector<Column>& getColumns() const { return columns; }
     DLLLOCAL const std::unordered_map<std::string, size_t>& getColIndex() const {

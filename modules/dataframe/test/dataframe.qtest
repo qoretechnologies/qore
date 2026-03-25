@@ -36,6 +36,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
         addTestCase("dbQueryTest", \dbQueryTest());
+        addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -627,6 +628,57 @@ class DataFrameTest inherits QUnit::Test {
         list<string> cols = conflict.columnNames();
         assertTrue(cols.contains("val"), "conflict: left val");
         assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
+    }
+
+    mlIntegrationTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"x1": 1.0, "x2": 2.0, "y": 10.0, "label": "a"},
+             {"x1": 3.0, "x2": 4.0, "y": 20.0, "label": "b"},
+             {"x1": 5.0, "x2": 6.0, "y": 30.0, "label": "c"}));
+
+        # toMatrix — specified columns
+        list<auto> mat = df.toMatrix(("x1", "x2"));
+        assertEq(3, mat.size(), "toMatrix row count");
+        assertEq(2, mat[0].size(), "toMatrix col count");
+        assertEq(1.0, mat[0][0], "toMatrix first value");
+        assertEq(6.0, mat[2][1], "toMatrix last value");
+
+        # toMatrix — all numeric (skips string column)
+        list<auto> mat_all = df.toMatrix();
+        assertEq(3, mat_all.size(), "toMatrix all rows");
+        assertEq(3, mat_all[0].size(), "toMatrix all numeric cols (x1, x2, y)");
+
+        # toVector
+        list<auto> target = df.toVector("y");
+        assertEq((10.0, 20.0, 30.0), target, "toVector values");
+
+        # toVector error on non-numeric
+        assertThrows("DATAFRAME-ERROR", \df.toVector(), ("label",),
+            "toVector on string column throws");
+
+        # fromMatrix round-trip
+        auto df2 = DataFrame::DataFrame::fromMatrix(mat, ("a", "b"));
+        assertEq(3, df2.numRows(), "fromMatrix rows");
+        assertEq(2, df2.numCols(), "fromMatrix cols");
+        assertEq(("a", "b"), df2.columnNames(), "fromMatrix column names");
+        assertEq(1.0, df2.getColumn("a")[0], "fromMatrix first value");
+
+        # toMatrix → fromMatrix round-trip
+        auto df3 = DataFrame::DataFrame::fromMatrix(df.toMatrix(("x1", "x2")), ("x1", "x2"));
+        assertEq(df.getColumn("x1"), df3.getColumn("x1"), "round-trip x1");
+        assertEq(df.getColumn("x2"), df3.getColumn("x2"), "round-trip x2");
+
+        # Test with null values → NaN
+        DataFrame::DataFrame df_null(
+            ({"v": 1.0}, {"v": NOTHING}, {"v": 3.0}));
+        list<auto> vec_null = df_null.toVector("v");
+        assertEq(1.0, vec_null[0], "toVector null: first");
+        # NaN check: NaN != NaN
+        assertTrue(vec_null[1] != vec_null[1], "toVector null: NaN for NOTHING");
+        assertEq(3.0, vec_null[2], "toVector null: third");
     }
 
     dbQueryTest() {

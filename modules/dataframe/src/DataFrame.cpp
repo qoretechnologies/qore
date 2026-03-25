@@ -488,6 +488,167 @@ QoreStringNode* QoreDataFrame::toString(int64_t max_rows, ExceptionSink* xsink) 
     return new QoreStringNode(oss.str());
 }
 
+// --- ML Integration ---
+
+QoreListNode* QoreDataFrame::toMatrix(const QoreListNode* col_list,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    // Resolve columns — if null, use all numeric columns
+    std::vector<size_t> col_indices;
+    if (col_list && col_list->size() > 0) {
+        for (size_t i = 0; i < col_list->size(); ++i) {
+            const QoreStringNode* name = col_list->retrieveEntry(i)
+                .get<const QoreStringNode>();
+            if (!name) {
+                xsink->raiseException("DATAFRAME-ERROR",
+                    "toMatrix column list element %zu is not a string", i);
+                return nullptr;
+            }
+            int idx = getColIdx(name->c_str(), xsink);
+            if (idx < 0) {
+                return nullptr;
+            }
+            ColumnType t = columns[idx].data->type;
+            if (t != ColumnType::FLOAT64 && t != ColumnType::INT64) {
+                xsink->raiseException("DATAFRAME-ERROR",
+                    "toMatrix: column '%s' is %s, not numeric",
+                    name->c_str(), columnTypeName(t));
+                return nullptr;
+            }
+            col_indices.push_back(idx);
+        }
+    } else {
+        // All numeric columns
+        for (size_t i = 0; i < columns.size(); ++i) {
+            ColumnType t = columns[i].data->type;
+            if (t == ColumnType::FLOAT64 || t == ColumnType::INT64) {
+                col_indices.push_back(i);
+            }
+        }
+    }
+
+    if (col_indices.empty()) {
+        return new QoreListNode(autoTypeInfo);
+    }
+
+    // Build matrix: list of row lists
+    ReferenceHolder<QoreListNode> matrix(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t r = 0; r < n_rows; ++r) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (size_t ci : col_indices) {
+            const ColumnData& cd = *columns[ci].data;
+            if (cd.isNull(r)) {
+                row->push(std::numeric_limits<double>::quiet_NaN(), xsink);
+            } else if (cd.type == ColumnType::FLOAT64) {
+                row->push(cd.float_data(r), xsink);
+            } else {
+                row->push((double)cd.int_data[r], xsink);
+            }
+        }
+        matrix->push(row.release(), xsink);
+    }
+
+    return matrix.release();
+}
+
+QoreListNode* QoreDataFrame::toVector(const std::string& column,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    int idx = getColIdx(column, xsink);
+    if (idx < 0) {
+        return nullptr;
+    }
+
+    const ColumnData& cd = *columns[idx].data;
+    if (cd.type != ColumnType::FLOAT64 && cd.type != ColumnType::INT64) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "toVector: column '%s' is %s, not numeric",
+            column.c_str(), columnTypeName(cd.type));
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> list(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < n_rows; ++i) {
+        if (cd.isNull(i)) {
+            list->push(std::numeric_limits<double>::quiet_NaN(), xsink);
+        } else if (cd.type == ColumnType::FLOAT64) {
+            list->push(cd.float_data(i), xsink);
+        } else {
+            list->push((double)cd.int_data[i], xsink);
+        }
+    }
+
+    return list.release();
+}
+
+QoreDataFrame* QoreDataFrame::fromMatrix(const QoreListNode* matrix,
+        const QoreListNode* column_names, ExceptionSink* xsink) {
+    if (!matrix || matrix->empty()) {
+        return new QoreDataFrame();
+    }
+
+    // Determine dimensions from first row
+    const QoreListNode* first_row = matrix->retrieveEntry(0).get<const QoreListNode>();
+    if (!first_row) {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "fromMatrix: first element is not a list");
+        return nullptr;
+    }
+    size_t num_cols = first_row->size();
+    int64_t num_rows = (int64_t)matrix->size();
+
+    // Generate column names if not provided
+    std::vector<std::string> names;
+    if (column_names && column_names->size() > 0) {
+        for (size_t i = 0; i < column_names->size() && i < num_cols; ++i) {
+            const QoreStringNode* s = column_names->retrieveEntry(i)
+                .get<const QoreStringNode>();
+            names.push_back(s ? s->c_str() : ("col_" + std::to_string(i)));
+        }
+    }
+    while (names.size() < num_cols) {
+        names.push_back("col_" + std::to_string(names.size()));
+    }
+
+    // Build float64 columns
+    auto* df = new QoreDataFrame();
+    df->n_rows = num_rows;
+
+    for (size_t c = 0; c < num_cols; ++c) {
+        auto cd = std::make_shared<ColumnData>();
+        cd->type = ColumnType::FLOAT64;
+        cd->n_rows = num_rows;
+        cd->null_mask.resize(num_rows, 0);
+        cd->float_data.resize(num_rows);
+
+        for (int64_t r = 0; r < num_rows; ++r) {
+            const QoreListNode* row = matrix->retrieveEntry(r).get<const QoreListNode>();
+            if (!row || c >= row->size()) {
+                cd->null_mask[r] = 1;
+                cd->float_data(r) = std::numeric_limits<double>::quiet_NaN();
+            } else {
+                QoreValue v = row->retrieveEntry(c);
+                if (v.isNullOrNothing()) {
+                    cd->null_mask[r] = 1;
+                    cd->float_data(r) = std::numeric_limits<double>::quiet_NaN();
+                } else {
+                    cd->float_data(r) = v.getAsFloat();
+                }
+            }
+        }
+
+        Column col;
+        col.name = names[c];
+        col.data = std::move(cd);
+        df->col_index[col.name] = df->columns.size();
+        df->columns.push_back(std::move(col));
+    }
+
+    return df;
+}
+
 // --- Query Operations ---
 
 QoreDataFrame* QoreDataFrame::selectRows(const std::vector<int64_t>& indices,
