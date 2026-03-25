@@ -166,6 +166,29 @@ public class ModelRegistry {
         return ML::ml_deserialize(artifact);
     }
 
+    #! Loads a model artifact as raw binary data (without deserializing)
+    /** @param name the model name
+        @param version_id the version ID to load, or NOTHING/"latest" for the most recent
+
+        @return the raw serialized model binary data
+
+        @throw ML-REGISTRY-ERROR if the model or version is not found
+
+        @since QoreModelRegistry 2.0
+    */
+    binary loadArtifact(string name, *string version_id) {
+        if (!version_id.val() || version_id == "latest") {
+            list<hash<ModelVersionInfo>> versions = backend.listVersions(name);
+            if (!versions) {
+                throw "ML-REGISTRY-ERROR",
+                    sprintf("no versions found for model '%s'", name);
+            }
+            version_id = versions.last().version_id;
+        }
+
+        return backend.loadArtifact(name, version_id);
+    }
+
     #! Tags a specific version of a model
     /** @param name the model name
         @param version_id the version ID to tag
