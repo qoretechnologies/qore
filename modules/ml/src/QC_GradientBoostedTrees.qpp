@@ -1,0 +1,225 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_GradientBoostedTrees.qpp
+
+    Qore GradientBoostedTrees class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_GradientBoostedTrees.h"
+#include "ml_common.h"
+
+extern const TypedHashDecl* hashdeclGBTClassificationResult;
+extern const TypedHashDecl* hashdeclGBTRegressionResult;
+extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
+
+//! Gradient Boosted Trees for classification and regression
+/** Sequential ensemble that fits trees to the negative gradient of a loss function.
+    Supports binary classification (log-loss) and regression (MSE) with optional
+    early stopping.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::GradientBoostedTrees gbt({
+        "n_estimators": 100, "learning_rate": 0.1, "max_depth": 3,
+        "task": "classification",
+    });
+    gbt.fitMatrix(X_train, y_train);
+    auto results = gbt.predictMatrix(X_test);
+    @endcode
+
+    @since ml 1.3
+*/
+qclass GradientBoostedTrees [arg=QoreGradientBoostedTrees* gbt; ns=Qore::ML; flags=final];
+
+//! Creates a GradientBoostedTrees with the given options
+/** @param options a hash with:
+    - \c n_estimators (*int): number of boosting rounds (default 100)
+    - \c learning_rate (*float): shrinkage factor per tree (default 0.1)
+    - \c max_depth (*int): maximum tree depth (default 3)
+    - \c min_samples_split (*int): minimum samples to split (default 2)
+    - \c min_samples_leaf (*int): minimum samples per leaf (default 1)
+    - \c subsample (*float): fraction of rows per round (default 1.0)
+    - \c task (*string): "classification" (default) or "regression"
+    - \c validation_fraction (*float): fraction of data for early stopping (default 0.0 = disabled)
+    - \c n_iter_no_change (*int): patience for early stopping (default 5)
+    - \c seed (*int): random seed (default 0 = random)
+
+    @throw ML-GBT-ERROR if options are invalid
+*/
+GradientBoostedTrees::constructor(hash<auto> options) {
+    int n_estimators = 100;
+    double learning_rate = 0.1;
+    int max_depth = 3;
+    int min_samples_split = 2;
+    int min_samples_leaf = 1;
+    double subsample = 1.0;
+    std::string task = "classification";
+    double validation_fraction = 0.0;
+    int n_iter_no_change = 5;
+    int64_t seed = 0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("n_estimators");
+        if (!v.isNullOrNothing()) {
+            n_estimators = (int)v.getAsBigInt();
+            if (n_estimators < 1) {
+                xsink->raiseException("ML-GBT-ERROR",
+                    "n_estimators must be >= 1; got %d", n_estimators);
+                return;
+            }
+        }
+        v = options->getKeyValue("learning_rate");
+        if (!v.isNullOrNothing()) {
+            learning_rate = v.getAsFloat();
+            if (learning_rate <= 0) {
+                xsink->raiseException("ML-GBT-ERROR",
+                    "learning_rate must be > 0; got %f", learning_rate);
+                return;
+            }
+        }
+        v = options->getKeyValue("max_depth");
+        if (!v.isNullOrNothing()) { max_depth = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("min_samples_split");
+        if (!v.isNullOrNothing()) { min_samples_split = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("min_samples_leaf");
+        if (!v.isNullOrNothing()) { min_samples_leaf = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("subsample");
+        if (!v.isNullOrNothing()) {
+            subsample = v.getAsFloat();
+            if (subsample <= 0 || subsample > 1.0) {
+                xsink->raiseException("ML-GBT-ERROR",
+                    "subsample must be in (0, 1.0]; got %f", subsample);
+                return;
+            }
+        }
+        v = options->getKeyValue("task");
+        if (v.getType() == NT_STRING) {
+            task = v.get<const QoreStringNode>()->c_str();
+            if (task != "classification" && task != "regression") {
+                xsink->raiseException("ML-GBT-ERROR",
+                    "task must be 'classification' or 'regression'");
+                return;
+            }
+        }
+        v = options->getKeyValue("validation_fraction");
+        if (!v.isNullOrNothing()) { validation_fraction = v.getAsFloat(); }
+        v = options->getKeyValue("n_iter_no_change");
+        if (!v.isNullOrNothing()) { n_iter_no_change = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) { seed = v.getAsBigInt(); }
+    }
+
+    self->setPrivate(CID_GRADIENTBOOSTEDTREES,
+        new QoreGradientBoostedTrees(n_estimators, learning_rate, max_depth,
+            min_samples_split, min_samples_leaf, subsample, task,
+            validation_fraction, n_iter_no_change, seed));
+}
+
+//! GradientBoostedTrees objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+GradientBoostedTrees::copy() {
+    xsink->raiseException("COPY-ERROR", "GradientBoostedTrees objects cannot be copied");
+}
+
+//! Trains on hash records with a target field
+/** @param data list of hash records
+    @param target_field the target column name
+*/
+nothing GradientBoostedTrees::fit(list<auto> data, string target_field) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+
+    std::string target = target_field->c_str();
+    int target_idx = -1;
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (field_names[i] == target) { target_idx = (int)i; break; }
+    }
+    if (target_idx < 0) {
+        xsink->raiseException("ML-GBT-ERROR",
+            "target field '%s' not found", target.c_str());
+        return QoreValue();
+    }
+
+    VectorXd y = matrix.col(target_idx);
+    MatrixXd X(matrix.rows(), matrix.cols() - 1);
+    std::vector<std::string> feature_names;
+    int col = 0;
+    for (int i = 0; i < (int)matrix.cols(); ++i) {
+        if (i != target_idx) {
+            X.col(col) = matrix.col(i);
+            feature_names.push_back(field_names[i]);
+            ++col;
+        }
+    }
+
+    gbt->setFieldNames(feature_names);
+    gbt->setTargetField(target);
+    gbt->fit(X, y, xsink);
+}
+
+//! Trains on a numeric feature matrix and target vector
+/** @param matrix list of row lists
+    @param target list of target values
+*/
+nothing GradientBoostedTrees::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    gbt->fit(X, y, xsink);
+}
+
+//! Predicts for a single record hash
+/** @param record a hash with feature fields
+    @return GBTClassificationResult or GBTRegressionResult
+*/
+hash<auto> GradientBoostedTrees::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = gbt->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-GBT-ERROR",
+            "model was trained with matrix API; use predictMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return gbt->predict(point, xsink);
+}
+
+//! Predicts for multiple rows
+/** @param matrix list of row lists
+    @return list of result hashes
+*/
+list<hash<auto>> GradientBoostedTrees::predictMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return gbt->predictMatrix(X, xsink);
+}
+
+//! Returns whether the model has been fitted
+/** @return True if fit() or fitMatrix() has been called
+*/
+bool GradientBoostedTrees::isFitted() [flags=CONSTANT] {
+    return gbt->isFitted();
+}
+
+//! Returns the actual number of estimators used (may be less if early stopping)
+/** @return the number of boosting rounds actually performed
+*/
+int GradientBoostedTrees::getActualEstimators() [flags=CONSTANT] {
+    return gbt->getActualEstimators();
+}
+
+//! Returns feature importances averaged across boosting rounds
+/** @return FeatureImportanceInfo hash
+*/
+hash<auto> GradientBoostedTrees::getFeatureImportances() {
+    return gbt->getFeatureImportances(xsink);
+}

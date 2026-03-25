@@ -43,6 +43,7 @@
 #include "QC_Imputer.h"
 #include "QC_DecisionTree.h"
 #include "QC_RandomForest.h"
+#include "QC_GradientBoostedTrees.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -509,6 +510,30 @@ hashdecl Qore::ML::RandomForestRegressionResult {
     float prediction;
 }
 
+//! GBT classification prediction result
+/** Returned by @ref GradientBoostedTrees::predict() and
+    @ref GradientBoostedTrees::predictMatrix() when configured for classification.
+*/
+hashdecl Qore::ML::GBTClassificationResult {
+    //! predicted class label
+    int predicted_class;
+    //! probability of the predicted class
+    float max_probability;
+    //! probability for each class
+    list<float> probabilities;
+    //! class labels
+    list<float> classes;
+}
+
+//! GBT regression prediction result
+/** Returned by @ref GradientBoostedTrees::predict() and
+    @ref GradientBoostedTrees::predictMatrix() when configured for regression.
+*/
+hashdecl Qore::ML::GBTRegressionResult {
+    //! predicted target value
+    float prediction;
+}
+
 /** @defgroup ml_functions ML Functions
     ML utility functions
 */
@@ -555,6 +580,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("CrossValidator"), xsink);
     algos->push(new QoreStringNode("DecisionTree"), xsink);
     algos->push(new QoreStringNode("RandomForest"), xsink);
+    algos->push(new QoreStringNode("GradientBoostedTrees"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1083,6 +1109,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreGradientBoostedTrees* gbtp = dynamic_cast<QoreGradientBoostedTrees*>(
+        model->getReferencedPrivateData(CID_GRADIENTBOOSTEDTREES, xsink));
+    if (gbtp) {
+        if (!gbtp->isFitted()) {
+            gbtp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "GradientBoostedTrees";
+        model_data = gbtp->serializeState();
+        field_names = gbtp->getFieldNames();
+        gbtp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     xsink->raiseException("ML-SERIALIZE-ERROR",
         "unknown model type: object is not a supported ML algorithm");
     return QoreValue();
@@ -1165,6 +1208,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "RandomForest") {
         obj = new QoreObject(QC_RANDOMFOREST, getProgram());
         obj->setPrivate(CID_RANDOMFOREST, priv);
+    } else if (header.algorithm == "GradientBoostedTrees") {
+        obj = new QoreObject(QC_GRADIENTBOOSTEDTREES, getProgram());
+        obj->setPrivate(CID_GRADIENTBOOSTEDTREES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1231,6 +1277,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_IMPUTER, QoreImputer, "Imputer")
     TRY_SERIALIZE_ALGO(CID_DECISIONTREE, QoreDecisionTree, "DecisionTree")
     TRY_SERIALIZE_ALGO(CID_RANDOMFOREST, QoreRandomForest, "RandomForest")
+    TRY_SERIALIZE_ALGO(CID_GRADIENTBOOSTEDTREES, QoreGradientBoostedTrees, "GradientBoostedTrees")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {

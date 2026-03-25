@@ -201,6 +201,12 @@ public class MlTest inherits QUnit::Test {
         addTestCase("RandomForest error cases", \rfErrorTest());
         addTestCase("RandomForest copy error", \rfCopyTest());
         addTestCase("serialize RandomForest round-trip", \serializeRandomForestTest());
+        addTestCase("GBT classification basic", \gbtClassificationBasicTest());
+        addTestCase("GBT regression basic", \gbtRegressionBasicTest());
+        addTestCase("GBT early stopping", \gbtEarlyStoppingTest());
+        addTestCase("GBT error cases", \gbtErrorTest());
+        addTestCase("GBT copy error", \gbtCopyTest());
+        addTestCase("serialize GBT round-trip", \serializeGBTTest());
         set_return_value(main());
     }
 
@@ -232,9 +238,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(19, caps.native_algorithms.size());
+            assertEq(20, caps.native_algorithms.size());
         } else {
-            assertEq(18, caps.native_algorithms.size());
+            assertEq(19, caps.native_algorithms.size());
         }
     }
 
@@ -4052,6 +4058,123 @@ public class MlTest inherits QUnit::Test {
             caught = True;
         }
         assertTrue(caught, "RF copy throws");
+    }
+
+    # --- GradientBoostedTrees Tests ---
+
+    gbtClassificationBasicTest() {
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 50, "learning_rate": 0.1, "max_depth": 3,
+            "task": "classification", "seed": 42,
+        });
+        assertFalse(gbt.isFitted(), "GBT not fitted initially");
+
+        gbt.fitMatrix(
+            ((0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0),
+             (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0)),
+            (0, 0, 0, 0, 1, 1, 1, 1));
+        assertTrue(gbt.isFitted(), "GBT fitted");
+        assertEq(50, gbt.getActualEstimators(), "GBT used all estimators (no early stop)");
+
+        list<hash<auto>> results = gbt.predictMatrix(((0.2, 0.3),));
+        assertEq(0, results[0].predicted_class, "GBT predicts class 0");
+        assertTrue(results[0].max_probability >= 0.7, "GBT reasonable confidence");
+
+        results = gbt.predictMatrix(((10.3, 10.2),));
+        assertEq(1, results[0].predicted_class, "GBT predicts class 1");
+
+        # Probabilities should sum to ~1.0
+        float prob_sum = 0;
+        foreach auto p in (results[0].probabilities) { prob_sum += p; }
+        assertFloat(1.0, prob_sum, 1e-10);
+    }
+
+    gbtRegressionBasicTest() {
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 100, "learning_rate": 0.1, "task": "regression", "seed": 42,
+        });
+
+        gbt.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+        assertTrue(gbt.isFitted(), "GBT regression fitted");
+
+        list<hash<auto>> results = gbt.predictMatrix(((3.0,),));
+        # GBT should get close to 6.0 at x=3
+        assertFloat(6.0, results[0].prediction, 0.5);
+    }
+
+    gbtEarlyStoppingTest() {
+        # With early stopping, should use fewer estimators
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 1000, "learning_rate": 0.5, "max_depth": 3,
+            "task": "regression", "seed": 42,
+            "validation_fraction": 0.3, "n_iter_no_change": 5,
+        });
+
+        gbt.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,), (6.0,), (7.0,), (8.0,), (9.0,), (10.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0, 20.0));
+
+        assertTrue(gbt.isFitted(), "GBT early stop fitted");
+        # With high learning rate and simple data, should converge fast
+        assertTrue(gbt.getActualEstimators() < 1000,
+            sprintf("GBT early stopped at %d < 1000", gbt.getActualEstimators()));
+    }
+
+    gbtErrorTest() {
+        bool caught = False;
+        try { new ML::GradientBoostedTrees({"n_estimators": 0}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-GBT-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "GBT n_estimators=0 throws");
+
+        caught = False;
+        try { new ML::GradientBoostedTrees({"learning_rate": -0.1}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-GBT-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "GBT negative learning_rate throws");
+
+        ML::GradientBoostedTrees gbt({"n_estimators": 5});
+        assertThrows("ML-GBT-ERROR",
+            \gbt.predictMatrix(), (((1.0, 2.0),),));
+    }
+
+    gbtCopyTest() {
+        ML::GradientBoostedTrees gbt({"n_estimators": 5});
+        bool caught = False;
+        try { ML::GradientBoostedTrees gbt2 = gbt.copy(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("COPY-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "GBT copy throws");
+    }
+
+    serializeGBTTest() {
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 20, "learning_rate": 0.1, "task": "classification", "seed": 42,
+        });
+        gbt.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0), (0.5, 0.5),
+             (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
+            (0, 0, 0, 1, 1, 1));
+
+        list<hash<auto>> orig = gbt.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+
+        binary blob = ML::ml_serialize(gbt);
+        assertTrue(blob.size() > 0, "GBT serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::GradientBoostedTrees, "GBT deserialized type");
+
+        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        assertEq(orig[0].predicted_class, res[0].predicted_class, "GBT serialize class 0");
+        assertEq(orig[1].predicted_class, res[1].predicted_class, "GBT serialize class 1");
     }
 
     serializeRandomForestTest() {
