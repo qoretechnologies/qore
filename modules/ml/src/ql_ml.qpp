@@ -1023,6 +1023,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreDecisionTree* dtp = dynamic_cast<QoreDecisionTree*>(
+        model->getReferencedPrivateData(CID_DECISIONTREE, xsink));
+    if (dtp) {
+        if (!dtp->isFitted()) {
+            dtp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "DecisionTree";
+        model_data = dtp->serializeState();
+        field_names = dtp->getFieldNames();
+        dtp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     xsink->raiseException("ML-SERIALIZE-ERROR",
         "unknown model type: object is not a supported ML algorithm");
     return QoreValue();
@@ -1099,6 +1116,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "Imputer") {
         obj = new QoreObject(QC_IMPUTER, getProgram());
         obj->setPrivate(CID_IMPUTER, priv);
+    } else if (header.algorithm == "DecisionTree") {
+        obj = new QoreObject(QC_DECISIONTREE, getProgram());
+        obj->setPrivate(CID_DECISIONTREE, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",

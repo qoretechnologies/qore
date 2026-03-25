@@ -3946,21 +3946,28 @@ public class MlTest inherits QUnit::Test {
     }
 
     serializeDecisionTreeTest() {
-        # NOTE: DecisionTree serialization via ml_serialize has a known issue
-        # with CID resolution — to be investigated. Testing direct serialization.
         ML::DecisionTree dt({"task": "classification", "max_depth": 5, "seed": 42});
         dt.fitMatrix(
             ((0.0, 0.0), (1.0, 1.0), (0.5, 0.5),
              (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
             (0, 0, 0, 1, 1, 1));
 
-        # Verify the model works before any serialization
+        # Get predictions before serialization
         list<hash<auto>> orig = dt.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
-        assertEq(0, orig[0].predicted_class, "DT pre-serialize class 0");
-        assertEq(1, orig[1].predicted_class, "DT pre-serialize class 1");
 
-        # Verify feature importances work
-        hash<auto> imp = dt.getFeatureImportances();
-        assertEq(2, imp.feature_names.size(), "DT has 2 feature importances");
+        # Serialize and deserialize
+        binary blob = ML::ml_serialize(dt);
+        assertTrue(blob.size() > 0, "DT serialized to non-empty blob");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::DecisionTree, "DT deserialized to correct type");
+
+        # Predictions should match exactly
+        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        assertEq(orig[0].predicted_class, res[0].predicted_class,
+            "DT serialized prediction class 0 matches");
+        assertFloat(orig[0].max_probability, res[0].max_probability, 1e-10);
+        assertEq(orig[1].predicted_class, res[1].predicted_class,
+            "DT serialized prediction class 1 matches");
     }
 }
