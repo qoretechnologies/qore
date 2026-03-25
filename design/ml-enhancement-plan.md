@@ -6,9 +6,9 @@ This document describes the phased plan to build Qore into an enterprise data sc
 platform. Phases 1–7 are **complete** (ML foundation: 17 algorithms, preprocessing,
 metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
 **complete** (DataFrame module with SQL-like operations, CSV/Parquet/DB I/O, ML
-integration, DataProvider wrapper). Phase 9 is **core complete** (DecisionTree,
-RandomForest, GradientBoostedTrees with 6 DataProvider processors —
-GBT multiclass softmax remaining). Phase 10 is **complete** (SVM, NaiveBayes).
+integration, DataProvider wrapper). Phase 9 is **complete** (DecisionTree, RandomForest, GradientBoostedTrees with
+6 DataProvider processors, GBT multiclass softmax, typed predict API).
+Phase 10 is **complete** (SVM, NaiveBayes).
 Phase 11 is **complete** (statistical functions with Cephes incbet).
 Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
 PolynomialFeatures, SelectKBest, RFE — remaining: DateTimeFeatures, TextFeatures).
