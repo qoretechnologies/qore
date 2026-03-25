@@ -91,6 +91,8 @@ set(ML_QPP_SRC
     src/QC_GradientBoostedTrees.qpp
     src/QC_SVM.qpp
     src/QC_NaiveBayes.qpp
+    src/QC_OneHotEncoder.qpp
+    src/QC_LabelEncoder.qpp
     src/ql_ml.qpp
 )
 
@@ -123,6 +125,8 @@ set(ML_CPP_SRC
     src/SVM.cpp
     src/NaiveBayes.cpp
     src/ml_stats.cpp
+    src/OneHotEncoder.cpp
+    src/LabelEncoder.cpp
 )
 
 # Conditional ONNX Runtime support

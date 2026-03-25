@@ -47,6 +47,8 @@
 #include "QC_SVM.h"
 #include "QC_NaiveBayes.h"
 #include "ml_stats.h"
+#include "QC_OneHotEncoder.h"
+#include "QC_LabelEncoder.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -625,6 +627,8 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("GradientBoostedTrees"), xsink);
     algos->push(new QoreStringNode("SVM"), xsink);
     algos->push(new QoreStringNode("NaiveBayes"), xsink);
+    algos->push(new QoreStringNode("OneHotEncoder"), xsink);
+    algos->push(new QoreStringNode("LabelEncoder"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1153,6 +1157,40 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreOneHotEncoder* ohep = dynamic_cast<QoreOneHotEncoder*>(
+        model->getReferencedPrivateData(CID_ONEHOTENCODER, xsink));
+    if (ohep) {
+        if (!ohep->isFitted()) {
+            ohep->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "OneHotEncoder";
+        model_data = ohep->serializeState();
+        field_names = ohep->getFieldNames();
+        ohep->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreLabelEncoder* lep = dynamic_cast<QoreLabelEncoder*>(
+        model->getReferencedPrivateData(CID_LABELENCODER, xsink));
+    if (lep) {
+        if (!lep->isFitted()) {
+            lep->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "LabelEncoder";
+        model_data = lep->serializeState();
+        field_names = lep->getFieldNames();
+        lep->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
         model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
     if (nbp) {
@@ -1295,6 +1333,12 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "NaiveBayes") {
         obj = new QoreObject(QC_NAIVEBAYES, getProgram());
         obj->setPrivate(CID_NAIVEBAYES, priv);
+    } else if (header.algorithm == "OneHotEncoder") {
+        obj = new QoreObject(QC_ONEHOTENCODER, getProgram());
+        obj->setPrivate(CID_ONEHOTENCODER, priv);
+    } else if (header.algorithm == "LabelEncoder") {
+        obj = new QoreObject(QC_LABELENCODER, getProgram());
+        obj->setPrivate(CID_LABELENCODER, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1364,6 +1408,8 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_GRADIENTBOOSTEDTREES, QoreGradientBoostedTrees, "GradientBoostedTrees")
     TRY_SERIALIZE_ALGO(CID_SVM, QoreSVM, "SVM")
     TRY_SERIALIZE_ALGO(CID_NAIVEBAYES, QoreNaiveBayes, "NaiveBayes")
+    TRY_SERIALIZE_ALGO(CID_ONEHOTENCODER, QoreOneHotEncoder, "OneHotEncoder")
+    TRY_SERIALIZE_ALGO(CID_LABELENCODER, QoreLabelEncoder, "LabelEncoder")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {

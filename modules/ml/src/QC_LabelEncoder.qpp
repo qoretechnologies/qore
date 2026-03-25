@@ -1,0 +1,90 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_LabelEncoder.qpp
+
+    Qore LabelEncoder class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_LabelEncoder.h"
+
+//! Label encoder: maps string/integer categories to consecutive integers
+/** Learns the mapping from unique values to 0, 1, 2, ..., n_classes-1.
+    Supports inverse transformation back to original values.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::LabelEncoder le();
+    list<int> encoded = le.fitTransform(("red", "green", "blue", "red"));
+    # encoded = (2, 1, 0, 2) — alphabetical order
+    list<auto> decoded = le.inverseTransform(encoded);
+    # decoded = ("red", "green", "blue", "red")
+    @endcode
+
+    @since ml 1.3
+*/
+qclass LabelEncoder [arg=QoreLabelEncoder* le; ns=Qore::ML; flags=final];
+
+//! Creates a LabelEncoder
+/** Creates an empty encoder. Call fit() to learn the category mapping.
+*/
+LabelEncoder::constructor() {
+    self->setPrivate(CID_LABELENCODER, new QoreLabelEncoder());
+}
+
+//! LabelEncoder objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+LabelEncoder::copy() {
+    xsink->raiseException("COPY-ERROR", "LabelEncoder objects cannot be copied");
+}
+
+//! Fits the encoder on a list of category values
+/** @param values list of string or integer category values
+*/
+nothing LabelEncoder::fit(list<auto> values) {
+    le->fit(values, xsink);
+}
+
+//! Transforms category values to integer labels
+/** @param values list of category values
+    @return list of integer labels (0-based; -1 for unknown/null values)
+*/
+list<int> LabelEncoder::transform(list<auto> values) {
+    return le->transform(values, xsink);
+}
+
+//! Transforms integer labels back to original category values
+/** @param labels list of integer labels
+    @return list of original category values (NOTHING for invalid labels)
+*/
+list<auto> LabelEncoder::inverseTransform(list<auto> labels) {
+    return le->inverseTransform(labels, xsink);
+}
+
+//! Fits and transforms in one step
+/** @param values list of category values
+    @return list of integer labels
+*/
+list<int> LabelEncoder::fitTransform(list<auto> values) {
+    return le->fitTransform(values, xsink);
+}
+
+//! Returns whether the encoder has been fitted
+/** @return True if fit() has been called
+*/
+bool LabelEncoder::isFitted() [flags=CONSTANT] {
+    return le->isFitted();
+}
+
+//! Returns the learned classes in label order
+/** @return list of string class values where index = label
+*/
+list<string> LabelEncoder::getClasses() {
+    return le->getClasses(xsink);
+}

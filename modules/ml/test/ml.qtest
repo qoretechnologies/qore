@@ -224,6 +224,11 @@ public class MlTest inherits QUnit::Test {
         addTestCase("hypothesis testing", \hypothesisTestingTest());
         addTestCase("normal distribution", \normalDistributionTest());
         addTestCase("correlation and covariance", \correlationTest());
+        addTestCase("LabelEncoder basic", \labelEncoderTest());
+        addTestCase("OneHotEncoder basic", \oneHotEncoderTest());
+        addTestCase("OneHotEncoder drop_first", \oneHotDropFirstTest());
+        addTestCase("serialize LabelEncoder round-trip", \serializeLabelEncoderTest());
+        addTestCase("serialize OneHotEncoder round-trip", \serializeOneHotEncoderTest());
         set_return_value(main());
     }
 
@@ -255,9 +260,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(22, caps.native_algorithms.size());
+            assertEq(24, caps.native_algorithms.size());
         } else {
-            assertEq(21, caps.native_algorithms.size());
+            assertEq(23, caps.native_algorithms.size());
         }
     }
 
@@ -4548,5 +4553,95 @@ public class MlTest inherits QUnit::Test {
         list<auto> cov = ML::ml_covariance_matrix(data);
         assertTrue(cov[0][0] > 0, "variance > 0");
         assertTrue(cov[0][1] > 0, "positive covariance");
+    }
+
+    # --- Feature Engineering Tests ---
+
+    labelEncoderTest() {
+        ML::LabelEncoder le();
+        assertFalse(le.isFitted(), "LE not fitted");
+
+        list<int> encoded = le.fitTransform(("red", "green", "blue", "red"));
+        assertTrue(le.isFitted(), "LE fitted");
+
+        # Alphabetical: blue=0, green=1, red=2
+        assertEq((2, 1, 0, 2), encoded, "LE encoding");
+        assertEq(("blue", "green", "red"), le.getClasses(), "LE classes");
+
+        # Inverse transform
+        list<auto> decoded = le.inverseTransform(encoded);
+        assertEq(("red", "green", "blue", "red"), decoded, "LE inverse");
+
+        # Unknown value → -1
+        list<int> with_unknown = le.transform(("red", "purple"));
+        assertEq(2, with_unknown[0], "LE known value");
+        assertEq(-1, with_unknown[1], "LE unknown → -1");
+    }
+
+    oneHotEncoderTest() {
+        ML::OneHotEncoder ohe();
+        assertFalse(ohe.isFitted(), "OHE not fitted");
+
+        # Single feature with 3 categories: 0, 1, 2
+        ohe.fitMatrix(((0,), (1,), (2,), (0,)));
+        assertTrue(ohe.isFitted(), "OHE fitted");
+
+        list<auto> result = ohe.transformMatrix(((0,), (1,), (2,)));
+        assertEq(3, result.size(), "OHE 3 rows");
+        assertEq(3, result[0].size(), "OHE 3 columns");
+        # (0,) → (1, 0, 0)
+        assertEq(1.0, result[0][0], "OHE cat 0 is hot");
+        assertEq(0.0, result[0][1], "OHE cat 1 is cold");
+        # (1,) → (0, 1, 0)
+        assertEq(1.0, result[1][1], "OHE cat 1 is hot");
+        # (2,) → (0, 0, 1)
+        assertEq(1.0, result[2][2], "OHE cat 2 is hot");
+    }
+
+    oneHotDropFirstTest() {
+        ML::OneHotEncoder ohe({"drop_first": True});
+        list<auto> result = ohe.fitTransformMatrix(((0,), (1,), (2,)));
+        assertEq(3, result.size(), "OHE drop 3 rows");
+        assertEq(2, result[0].size(), "OHE drop 2 columns (3 cats - 1)");
+        # (0,) → (0, 0) — first category dropped
+        assertEq(0.0, result[0][0], "OHE drop cat 0 all zeros");
+        assertEq(0.0, result[0][1], "OHE drop cat 0 all zeros 2");
+        # (1,) → (1, 0)
+        assertEq(1.0, result[1][0], "OHE drop cat 1");
+        # (2,) → (0, 1)
+        assertEq(1.0, result[2][1], "OHE drop cat 2");
+    }
+
+    serializeLabelEncoderTest() {
+        ML::LabelEncoder le();
+        le.fit(("cat", "dog", "fish"));
+
+        list<int> orig = le.transform(("dog", "cat", "fish"));
+
+        binary blob = ML::ml_serialize(le);
+        assertTrue(blob.size() > 0, "LE serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::LabelEncoder, "LE deserialized type");
+
+        list<int> res = restored.transform(("dog", "cat", "fish"));
+        assertEq(orig, res, "LE serialize round-trip");
+    }
+
+    serializeOneHotEncoderTest() {
+        ML::OneHotEncoder ohe();
+        ohe.fitMatrix(((0,), (1,), (2,)));
+
+        list<list<float>> test_input = ((1.0,),);
+        list<auto> orig = ohe.transformMatrix(test_input);
+
+        binary blob = ML::ml_serialize(ohe);
+        assertTrue(blob.size() > 0, "OHE serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::OneHotEncoder, "OHE deserialized type");
+
+        list<auto> res = restored.transformMatrix(test_input);
+        assertEq(orig[0], res[0], "OHE serialize round-trip");
     }
 }
