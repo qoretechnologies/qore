@@ -87,15 +87,45 @@ public class QoreGBTRegressionProcessor inherits DataProvider::AbstractDataProvi
                 "type": AbstractDataProviderTypeMap."*int",
             },
             "learning_rate": <DataProviderOptionInfo>{
-                "display_name": "Learning Rate",
-                "short_desc": "How much each tree contributes to the final prediction",
-                "desc": "Controls how much each new tree contributes to the overall model. "
-                    "Smaller values mean each tree makes a smaller correction, requiring more "
-                    "trees but often producing better results. Larger values learn faster "
-                    "but may overshoot.\n\n"
-                    "**Tip**: use `0.01`\u2013`0.3`; lower values need more estimators\n\n"
-                    "Default: `0.1`",
+                "display_name": "Step Size",
+                "short_desc": "How aggressively each tree corrects the previous ones",
+                "desc": "Controls how much each new tree corrects the errors of the previous "
+                    "trees. Think of it as a \"caution dial\" — lower values are more cautious "
+                    "(slower but more accurate), higher values are more aggressive (faster but "
+                    "may overshoot)",
                 "type": AbstractDataProviderTypeMap."*float",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": 0.01,
+                        "display_name": "Very Cautious (0.01)",
+                        "desc": "Each tree makes a tiny correction. Needs many trees (500+) "
+                            "but often gives the best accuracy. Best when you have plenty of data",
+                    },
+                    <AllowedValueInfo>{
+                        "value": 0.05,
+                        "display_name": "Cautious (0.05)",
+                        "desc": "Small corrections per tree. Good balance for most datasets "
+                            "with 200+ trees",
+                    },
+                    <AllowedValueInfo>{
+                        "value": 0.1,
+                        "display_name": "Balanced (0.1, default)",
+                        "desc": "The standard starting point. Works well with 100 trees for "
+                            "most problems",
+                    },
+                    <AllowedValueInfo>{
+                        "value": 0.2,
+                        "display_name": "Aggressive (0.2)",
+                        "desc": "Larger corrections per tree. Trains faster but may overfit "
+                            "on small datasets. Try with 50\u2013100 trees",
+                    },
+                    <AllowedValueInfo>{
+                        "value": 0.3,
+                        "display_name": "Very Aggressive (0.3)",
+                        "desc": "Each tree makes a big correction. Risk of overfitting — use "
+                            "only with large datasets or few trees",
+                    },
+                ),
             },
             "max_depth": <DataProviderOptionInfo>{
                 "display_name": "Maximum Tree Depth",

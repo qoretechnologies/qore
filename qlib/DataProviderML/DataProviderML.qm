@@ -783,6 +783,219 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register decision-tree-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/decision-tree-classification",
+            "action": "decision-tree-classification",
+            "display_name": "Classify with Decision Rules",
+            "short_desc": "Learns if/then rules from data to categorize records",
+            "desc": "Classifies records by learning a tree of if/then rules — for example, "
+                "\"if income > 50,000 and credit score > 700 then approve the loan.\" The "
+                "model is fully interpretable: you can see exactly which rules led to each "
+                "decision.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category the rules assign\n"
+                "- `confidence` — how pure the matching group is (e.g., `0.95` means 95%% "
+                "of similar records had this label)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDecisionTreeClassificationProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeClassificationProcessor::ConstructorOptions{
+                    "max_depth", "criterion",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register decision-tree-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/decision-tree-regression",
+            "action": "decision-tree-regression",
+            "display_name": "Predict Numbers with Decision Rules",
+            "short_desc": "Learns if/then rules from data to estimate numeric values",
+            "desc": "Predicts numeric values by learning a tree of decision rules — for "
+                "example, \"if square footage > 2000 and bedrooms >= 3 then estimate price "
+                "around $450,000.\" Simple, fast, and fully interpretable.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value from the matching leaf node",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDecisionTreeRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeRegressionProcessor::ConstructorOptions{
+                    "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register random-forest-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/random-forest-classification",
+            "action": "random-forest-classification",
+            "display_name": "Classify with Multiple Decision Trees",
+            "short_desc": "Combines many decision trees for more accurate categorization",
+            "desc": "Classifies records by growing many decision trees on random subsets of "
+                "the data and combining their votes. More accurate than a single tree because "
+                "individual trees' mistakes cancel out — like asking a panel of experts "
+                "instead of one.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category most trees voted for\n"
+                "- `confidence` — proportion of trees that agree (e.g., `0.85` means 85%% "
+                "of trees voted the same way)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRandomForestClassificationProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestClassificationProcessor::ConstructorOptions{
+                    "n_trees", "max_depth", "max_features",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register random-forest-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/random-forest-regression",
+            "action": "random-forest-regression",
+            "display_name": "Predict Numbers with Multiple Trees",
+            "short_desc": "Combines many decision trees for more accurate numeric predictions",
+            "desc": "Predicts numeric values by growing many decision trees on random subsets "
+                "of the data and averaging their predictions. More accurate than a single tree "
+                "— like getting estimates from multiple appraisers and averaging them.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the average prediction across all trees",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRandomForestRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestRegressionProcessor::ConstructorOptions{
+                    "n_trees", "max_depth", "max_features",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register gbt-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/gbt-classification",
+            "action": "gbt-classification",
+            "display_name": "Classify with Gradient Boosting",
+            "short_desc": "Sequentially builds trees that correct each other's mistakes",
+            "desc": "Classifies records using gradient boosting — the enterprise standard for "
+                "tabular data (fraud detection, churn prediction, credit scoring). Each tree "
+                "focuses on correcting the errors of the previous trees, producing highly "
+                "accurate predictions.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the predicted category\n"
+                "- `confidence` — the model's probability estimate for the predicted class",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreGBTClassificationProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTClassificationProcessor::ConstructorOptions{
+                    "n_estimators", "learning_rate", "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register gbt-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/gbt-regression",
+            "action": "gbt-regression",
+            "display_name": "Predict Numbers with Gradient Boosting",
+            "short_desc": "Sequentially builds trees for accurate numeric predictions",
+            "desc": "Predicts numeric values using gradient boosting — the enterprise standard "
+                "for tabular data. Each tree corrects the residual errors of the previous "
+                "trees, producing highly accurate estimates. Ideal for price prediction, "
+                "demand forecasting, and risk scoring.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreGBTRegressionProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTRegressionProcessor::ConstructorOptions{
+                    "n_estimators", "learning_rate", "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 

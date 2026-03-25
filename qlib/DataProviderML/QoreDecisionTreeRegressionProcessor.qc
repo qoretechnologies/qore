@@ -85,22 +85,6 @@ public class QoreDecisionTreeRegressionProcessor inherits DataProvider::Abstract
                     "Default: `10`",
                 "type": AbstractDataProviderTypeMap."*int",
             },
-            "criterion": <DataProviderOptionInfo>{
-                "display_name": "Split Quality Measure",
-                "short_desc": "How to evaluate the quality of each split",
-                "desc": "The function used to measure the quality of a split at each node in "
-                    "the tree. For regression, MSE (Mean Squared Error) is the standard "
-                    "choice",
-                "type": AbstractDataProviderTypeMap."*string",
-                "allowed_values": (
-                    <AllowedValueInfo>{
-                        "value": "mse",
-                        "display_name": "Mean Squared Error (default)",
-                        "desc": "Measures the average squared difference between actual and "
-                            "predicted values. The standard choice for regression trees",
-                    },
-                ),
-            },
         };
     }
 
@@ -116,9 +100,6 @@ public class QoreDecisionTreeRegressionProcessor inherits DataProvider::Abstract
 
         #! Maximum tree depth
         *int max_depth;
-
-        #! Split criterion
-        *string criterion;
 
         #! Retained DecisionTree model instance
         *ML::DecisionTree model;
@@ -151,7 +132,6 @@ public class QoreDecisionTreeRegressionProcessor inherits DataProvider::Abstract
                 sprintf("window_size must be >= 2; got %d", window_size);
         }
         max_depth = copts.max_depth;
-        criterion = copts.criterion;
         buffer = ();
         configured = True;
     }
@@ -223,9 +203,7 @@ public class QoreDecisionTreeRegressionProcessor inherits DataProvider::Abstract
         if (exists max_depth) {
             model_opts.max_depth = max_depth;
         }
-        if (exists criterion) {
-            model_opts.criterion = criterion;
-        }
+        model_opts.criterion = "mse";
 
         # fit the model
         if (!model) {
