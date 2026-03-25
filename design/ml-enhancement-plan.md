@@ -16,8 +16,7 @@ Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley
 13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
 DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
 Phase 14 is **in progress** (14.3 vector similarity functions complete —
-remaining: Arrow/Parquet, ONNX export, LLM embedding pipeline).
-Phase 14 is planned.
+remaining: Arrow/Parquet, ONNX export, LLM embedding pipeline, tokenizer C API).
 
 ## Current State (after Phases 1–9)
 

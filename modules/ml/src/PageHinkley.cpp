@@ -66,7 +66,7 @@ std::vector<uint8_t> QorePageHinkley::serializeState() const {
     MLSerialization::writeScalar(buf, running_mean);
     MLSerialization::writeScalar(buf, cumulative_sum);
     MLSerialization::writeScalar(buf, min_sum);
-    MLSerialization::writeScalar(buf, (double)n_observations);
+    MLSerialization::writeInt64(buf, n_observations);
     MLSerialization::writeBool(buf, drift);
     return buf;
 }
@@ -88,7 +88,7 @@ QorePageHinkley* QorePageHinkley::deserializeState(const uint8_t* data, size_t l
     if (*xsink) { return nullptr; }
     double ms = MLSerialization::readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
-    double no = MLSerialization::readScalar(ptr, remaining, xsink);
+    int64_t no = MLSerialization::readInt64(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     bool dr = MLSerialization::readBool(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
@@ -97,7 +97,7 @@ QorePageHinkley* QorePageHinkley::deserializeState(const uint8_t* data, size_t l
     ph->running_mean = rm;
     ph->cumulative_sum = cs;
     ph->min_sum = ms;
-    ph->n_observations = (int64_t)no;
+    ph->n_observations = no;
     ph->drift = dr;
     return ph;
 }
