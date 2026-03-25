@@ -15,8 +15,10 @@ PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
 Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley, DDM;
 13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
 DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
-Phase 14 is **in progress** (14.3 vector similarity functions complete —
-remaining: Arrow/Parquet, ONNX export, LLM embedding pipeline, tokenizer C API).
+Phase 14 is **in progress** (14.1 removed — covered by gRPC module; 14.3 vector
+similarity + TextFeatures subword integration complete; 14.4 tokenizer C API
+complete — remaining: ONNX export (low priority), AI Gateway chunker integration
+(Qorus repo)).
 
 ## Current State (after Phases 1–9)
 
@@ -1666,14 +1668,17 @@ search enable RAG and semantic search pipelines.
 
 ### Components
 
-#### 14.1 Apache Arrow / Parquet Support (C++ module, optional)
+#### 14.1 Apache Arrow / Parquet Support — REMOVED
 
-- Read/write Parquet files (the standard format for data lake storage)
-- Zero-copy Arrow ↔ DataFrame conversion
-- Arrow IPC for cross-process data sharing
-- Optional dependency: `libarrow` / `libparquet`
+~~Originally planned: Parquet I/O, Arrow IPC, Arrow↔DataFrame conversion.~~
 
-#### 14.2 ONNX Export (extend ml module)
+**Superseded**: Parquet I/O already exists in the DataFrame module. Full Arrow
+support (IPC, streaming, cross-process sharing) is provided by the gRPC module
+(`module-grpc`). The only remaining gap would be an Arrow↔DataFrame bridge for
+in-process conversion, but this is a small utility if needed — not a phase-level
+effort. Defer to customer demand.
+
+#### 14.2 ONNX Export (extend ml module) — LOW PRIORITY
 
 Complete Phase 5's ONNX export plan — export native Qore models to ONNX format for
 deployment in any ONNX Runtime environment. Requires optional `libprotobuf` dependency.
