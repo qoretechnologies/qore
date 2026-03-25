@@ -9,7 +9,8 @@ metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
 integration, DataProvider wrapper). Phase 9 is **core complete** (DecisionTree,
 RandomForest, GradientBoostedTrees — DataProvider processors and GBT multiclass
 softmax remaining). Phase 10 is **complete** (SVM, NaiveBayes).
-Phases 11–14 are planned.
+Phase 11 is **complete** (statistical functions with Cephes incbet).
+Phases 12–14 are planned.
 
 ## Current State (after Phases 1–9)
 
@@ -1516,7 +1517,7 @@ class QoreNaiveBayes : public AbstractPrivateData {
 
 ---
 
-## Phase 11: Statistical Functions
+## Phase 11: Statistical Functions ✅ COMPLETE
 
 ### Motivation
 

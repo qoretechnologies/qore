@@ -1651,10 +1651,8 @@ hash<HypothesisTestResult> ml_chi_squared_test(list<auto> table) [dom=DEFAULT] {
     @param std_dev distribution standard deviation (default 1)
     @return probability density
 */
-float ml_normal_pdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
-    double m = mean ? (double)mean : 0.0;
-    double s = std_dev ? (double)std_dev : 1.0;
-    return ::ml_normal_pdf(x, m, s);
+float ml_normal_pdf(float x, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT] {
+    return ::ml_normal_pdf(x, mean, std_dev);
 }
 
 //! Computes the normal distribution CDF
@@ -1663,10 +1661,8 @@ float ml_normal_pdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
     @param std_dev distribution standard deviation (default 1)
     @return cumulative probability P(X <= x)
 */
-float ml_normal_cdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
-    double m = mean ? (double)mean : 0.0;
-    double s = std_dev ? (double)std_dev : 1.0;
-    return ::ml_normal_cdf(x, m, s);
+float ml_normal_cdf(float x, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT] {
+    return ::ml_normal_cdf(x, mean, std_dev);
 }
 
 //! Computes the normal distribution inverse CDF (percent point function)
@@ -1680,10 +1676,8 @@ float ml_normal_cdf(float x, *float mean, *float std_dev) [dom=DEFAULT] {
     float z_95 = ml_normal_ppf(0.975);  # ≈ 1.96 for 95% CI
     @endcode
 */
-float ml_normal_ppf(float p, *float mean, *float std_dev) [dom=DEFAULT] {
-    double m = mean ? (double)mean : 0.0;
-    double s = std_dev ? (double)std_dev : 1.0;
-    return ::ml_normal_ppf(p, m, s);
+float ml_normal_ppf(float p, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT] {
+    return ::ml_normal_ppf(p, mean, std_dev);
 }
 
 ///@}

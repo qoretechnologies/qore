@@ -279,7 +279,7 @@ static double cephes_incbet(double a, double b, double x) {
     }
 
     // Use symmetry relation if needed for numerical stability
-    double flag = 0;
+    bool flag = false;
     if ((b * x) <= 1.0 && x <= 0.95) {
         return incbps(a, b, x);
     }
@@ -289,7 +289,7 @@ static double cephes_incbet(double a, double b, double x) {
     // Reverse a and b if x > a/(a+b)
     double xc, aa, bb, xx;
     if (x > (a / (a + b))) {
-        flag = 1;
+        flag = true;
         aa = b;
         bb = a;
         xc = x;
@@ -301,21 +301,16 @@ static double cephes_incbet(double a, double b, double x) {
         xx = x;
     }
 
-    if (flag == 1 && (bb * xx) <= 1.0 && xx <= 0.95) {
+    if (flag && (bb * xx) <= 1.0 && xx <= 0.95) {
         double t = incbps(aa, bb, xx);
         return (t <= MACHEP) ? 1.0 - MACHEP : 1.0 - t;
     }
 
     // Use continued fraction expansion
-    double y = xx * (aa + bb - 2.0) - (aa - 1.0);
-    if (y < 0.0) {
-        w = incbcf(aa, bb, xx);
-    } else {
-        w = incbcf(aa, bb, xx) / xc;  // not used; just use incbcf directly
-        w = incbcf(aa, bb, xx);
-    }
+    // Continued fraction evaluation
+    w = incbcf(aa, bb, xx);
 
-    y = aa * std::log(xx);
+    double y = aa * std::log(xx);
     double t = bb * std::log(xc);
     if ((aa + bb) < MAXLOG && std::abs(y) < MAXLOG && std::abs(t) < MAXLOG) {
         t = std::pow(xc, bb) * std::pow(xx, aa) / aa;
@@ -331,7 +326,7 @@ static double cephes_incbet(double a, double b, double x) {
         }
     }
 
-    if (flag == 1) {
+    if (flag) {
         if (t <= MACHEP) {
             t = 1.0 - MACHEP;
         } else {
