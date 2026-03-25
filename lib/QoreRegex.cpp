@@ -41,7 +41,7 @@ QoreRegex::QoreRegex(const QoreString& s, int64 opts, ExceptionSink* xsink) : Qo
         xsink->raiseException("REGEX-OPTION-ERROR", QLLD " contains invalid option bits", opts);
         options = 0;
     }
-
+    pattern_cache = s.c_str();  // preserve pattern for AOT serialization
     parseRT(&s, xsink);
 }
 
@@ -51,7 +51,9 @@ QoreRegex::QoreRegex(const char* s, int64 opts, ExceptionSink* xsink) : QoreRege
         xsink->raiseException("REGEX-OPTION-ERROR", QLLD " contains invalid option bits", opts);
         options = 0;
     }
-
+    if (s) {
+        pattern_cache = s;  // preserve pattern for AOT serialization
+    }
     parseRT(s, xsink);
 }
 
