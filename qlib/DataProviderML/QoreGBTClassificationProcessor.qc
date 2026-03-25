@@ -281,7 +281,7 @@ public class QoreGBTClassificationProcessor inherits DataProvider::AbstractDataP
         }
 
         # predict all records
-        list<hash<ML::GBTClassificationResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::GBTClassificationResult>> predictions = model.predictClassificationMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

@@ -342,7 +342,8 @@ QoreListNode* QoreSVM::predictMatrix(const MatrixXd& X,
         return nullptr;
     }
 
-    ReferenceHolder<QoreListNode> results(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> results(
+        new QoreListNode(hashdeclSVMResult->getTypeInfo()), xsink);
     for (int64_t i = 0; i < X.rows(); ++i) {
         if ((i % 100) == 0 && i > 0) {
             if (qore_check_cancel(xsink, "predicting with SVM")) {

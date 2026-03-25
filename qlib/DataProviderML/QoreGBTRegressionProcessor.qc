@@ -279,7 +279,7 @@ public class QoreGBTRegressionProcessor inherits DataProvider::AbstractDataProvi
         }
 
         # predict all records
-        list<hash<ML::GBTRegressionResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::GBTRegressionResult>> predictions = model.predictRegressionMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

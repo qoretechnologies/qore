@@ -214,7 +214,7 @@ public class QoreDecisionTreeRegressionProcessor inherits DataProvider::Abstract
         }
 
         # predict all records
-        list<hash<ML::DecisionTreeRegressionResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::DecisionTreeRegressionResult>> predictions = model.predictRegressionMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

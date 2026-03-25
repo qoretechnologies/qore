@@ -32,8 +32,22 @@ public:
         const std::string& task, int64_t seed);
 
     DLLLOCAL void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
-    DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
-    DLLLOCAL QoreListNode* predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
+
+    //! Classify a single row (task must be "classification")
+    DLLLOCAL QoreHashNode* predictClassification(const RowVectorXd& point, ExceptionSink* xsink) const;
+
+    //! Predict regression for a single row (task must be "regression")
+    DLLLOCAL QoreHashNode* predictRegression(const RowVectorXd& point, ExceptionSink* xsink) const;
+
+    //! Classify multiple rows
+    DLLLOCAL QoreListNode* predictClassificationMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
+
+    //! Predict regression for multiple rows
+    DLLLOCAL QoreListNode* predictRegressionMatrix(const MatrixXd& X, ExceptionSink* xsink) const;
+
+    //! Get the task type
+    DLLLOCAL const std::string& getTask() const { return task; }
+
     DLLLOCAL QoreHashNode* getFeatureImportances(ExceptionSink* xsink) const;
 
     DLLLOCAL bool isFitted() const { return fitted; }

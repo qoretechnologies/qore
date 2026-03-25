@@ -208,6 +208,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("GBT copy error", \gbtCopyTest());
         addTestCase("serialize GBT round-trip", \serializeGBTTest());
         addTestCase("RF beats DT on noisy data", \rfBeatsDtTest());
+        addTestCase("GBT multiclass softmax", \gbtMulticlassTest());
+        addTestCase("GBT multiclass serialization", \gbtMulticlassSerializeTest());
         addTestCase("GBT beats DT on noisy data", \gbtBeatsDtTest());
         addTestCase("tree algorithms with metrics", \treeMetricsIntegrationTest());
         addTestCase("SVM classification basic", \svmClassificationBasicTest());
@@ -3358,13 +3360,13 @@ public class MlTest inherits QUnit::Test {
         knn.fitMatrix(X, y);
         assertTrue(knn.isFitted());
 
-        list<hash<auto>> results = knn.predictMatrix(((0.2, 0.3),));
+        list<hash<ML::KNNClassificationResult>> results = knn.predictClassificationMatrix(((0.2, 0.3),));
         assertEq(1, results.size());
         assertEq(0, results[0].predicted_class);
         assertTrue(results[0].confidence > 0.9);
         assertEq(3, results[0].neighbors.size());
 
-        results = knn.predictMatrix(((10.2, 10.3),));
+        results = knn.predictClassificationMatrix(((10.2, 10.3),));
         assertEq(1, results[0].predicted_class);
         assertTrue(results[0].confidence > 0.9);
     }
@@ -3379,13 +3381,13 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (0, 0, 0, 1, 1, 1);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix(((0.1, 0.1),));
+        list<hash<ML::KNNClassificationResult>> results = knn.predictClassificationMatrix(((0.1, 0.1),));
         assertEq(1, results.size());
         assertEq(0, results[0].predicted_class);
         assertTrue(results[0].confidence > 0.5);
         assertEq(3, results[0].neighbors.size());
 
-        results = knn.predictMatrix(((10.1, 10.1),));
+        results = knn.predictClassificationMatrix(((10.1, 10.1),));
         assertEq(1, results[0].predicted_class);
         assertTrue(results[0].confidence > 0.5);
     }
@@ -3399,7 +3401,7 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (2.0, 4.0, 6.0, 8.0, 10.0);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix(((3.0, 3.0),));
+        list<hash<ML::KNNRegressionResult>> results = knn.predictRegressionMatrix(((3.0, 3.0),));
         assertEq(1, results.size());
         assertFloat(6.0, results[0].prediction, 0.01);
         assertEq(3, results[0].neighbors.size());
@@ -3414,7 +3416,7 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (0.0, 10.0, 20.0, 30.0, 40.0);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix(((1.0,),));
+        list<hash<ML::KNNRegressionResult>> results = knn.predictRegressionMatrix(((1.0,),));
         assertFloat(10.0, results[0].prediction, 0.01);
     }
 
@@ -3434,11 +3436,11 @@ public class MlTest inherits QUnit::Test {
         knn.fit(data, "class");
         assertTrue(knn.isFitted());
 
-        hash<auto> r = knn.predict({"x": 0.2, "y": 0.3});
+        hash<ML::KNNClassificationResult> r = knn.predictClassification({"x": 0.2, "y": 0.3});
         assertEq(0, r.predicted_class);
         assertTrue(r.confidence > 0.5);
 
-        r = knn.predict({"x": 10.2, "y": 10.3});
+        r = knn.predictClassification({"x": 10.2, "y": 10.3});
         assertEq(1, r.predicted_class);
         assertTrue(r.confidence > 0.5);
     }
@@ -3453,10 +3455,10 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (0, 0, 0, 0, 1, 1, 1, 1);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix(((0.3, 0.3),));
+        list<hash<ML::KNNClassificationResult>> results = knn.predictClassificationMatrix(((0.3, 0.3),));
         assertEq(0, results[0].predicted_class);
 
-        results = knn.predictMatrix(((10.3, 10.3),));
+        results = knn.predictClassificationMatrix(((10.3, 10.3),));
         assertEq(1, results[0].predicted_class);
     }
 
@@ -3470,10 +3472,10 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (0, 0, 0, 1, 1, 1);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix(((5.0, 0.1),));
+        list<hash<ML::KNNClassificationResult>> results = knn.predictClassificationMatrix(((5.0, 0.1),));
         assertEq(0, results[0].predicted_class);
 
-        results = knn.predictMatrix(((0.1, 5.0),));
+        results = knn.predictClassificationMatrix(((0.1, 5.0),));
         assertEq(1, results[0].predicted_class);
     }
 
@@ -3487,7 +3489,7 @@ public class MlTest inherits QUnit::Test {
         list<float> y = (0, 0, 0, 1, 1, 1);
         knn.fitMatrix(X, y);
 
-        list<hash<auto>> results = knn.predictMatrix((
+        list<hash<ML::KNNClassificationResult>> results = knn.predictClassificationMatrix((
             (0.5, 0.5),
             (10.5, 10.5),
             (0.1, 0.1),
@@ -3517,7 +3519,7 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-KNN-ERROR", sub() { new ML::KNN({"k": 3, "weight_func": "invalid"}); });
 
         ML::KNN knn({"k": 3});
-        assertThrows("ML-KNN-ERROR", sub() { knn.predictMatrix(((1.0, 2.0),)); });
+        assertThrows("ML-KNN-ERROR", sub() { knn.predictClassificationMatrix(((1.0, 2.0),)); });
 
         assertThrows("ML-KNN-ERROR", sub() {
             ML::KNN knn2({"k": 10});
@@ -3526,7 +3528,7 @@ public class MlTest inherits QUnit::Test {
 
         ML::KNN knn3({"k": 2});
         knn3.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (0, 1, 0));
-        assertThrows("ML-KNN-ERROR", sub() { knn3.predictMatrix(((1.0, 2.0, 3.0),)); });
+        assertThrows("ML-KNN-ERROR", sub() { knn3.predictClassificationMatrix(((1.0, 2.0, 3.0),)); });
 
         assertThrows("ML-DATA-ERROR", sub() {
             ML::KNN knn4({"k": 3});
@@ -3535,7 +3537,7 @@ public class MlTest inherits QUnit::Test {
 
         ML::KNN knn5({"k": 2});
         knn5.fitMatrix(((1.0, 2.0), (3.0, 4.0), (5.0, 6.0)), (0, 1, 0));
-        assertThrows("ML-KNN-ERROR", sub() { knn5.predict({"x": 1.0, "y": 2.0}); });
+        assertThrows("ML-KNN-ERROR", sub() { knn5.predictClassification({"x": 1.0, "y": 2.0}); });
     }
 
     knnCopyTest() {
@@ -3693,13 +3695,13 @@ public class MlTest inherits QUnit::Test {
             (0, 0, 0, 1, 1, 1)
         );
 
-        list<hash<auto>> orig = knn.predictMatrix(((1.05, 1.05),));
+        list<hash<ML::KNNClassificationResult>> orig = knn.predictClassificationMatrix(((1.05, 1.05),));
 
         binary blob = ML::ml_serialize(knn);
         auto restored = ML::ml_deserialize(blob);
         assertTrue(restored instanceof ML::KNN);
 
-        list<hash<auto>> res = restored.predictMatrix(((1.05, 1.05),));
+        list<hash<ML::KNNClassificationResult>> res = cast<ML::KNN>(restored).predictClassificationMatrix(((1.05, 1.05),));
         assertEq(orig[0].predicted_class, res[0].predicted_class);
         assertFloat(orig[0].confidence, res[0].confidence, 1e-10);
     }
@@ -3847,13 +3849,13 @@ public class MlTest inherits QUnit::Test {
         assertTrue(dt.isFitted(), "DT fitted after fitMatrix");
 
         # Predict near cluster 0 → should be class 0
-        list<hash<auto>> results = dt.predictMatrix(((0.2, 0.3),));
+        list<hash<ML::DecisionTreeClassificationResult>> results = dt.predictClassificationMatrix(((0.2, 0.3),));
         assertEq(1, results.size(), "DT predict returns 1 result");
         assertEq(0, results[0].predicted_class, "DT predicts class 0");
         assertTrue(results[0].max_probability >= 0.9, "DT high confidence for class 0");
 
         # Predict near cluster 1 → should be class 1
-        results = dt.predictMatrix(((10.3, 10.2),));
+        results = dt.predictClassificationMatrix(((10.3, 10.2),));
         assertEq(1, results[0].predicted_class, "DT predicts class 1");
 
         # Probabilities should sum to ~1.0
@@ -3877,7 +3879,7 @@ public class MlTest inherits QUnit::Test {
         assertTrue(stump.isFitted(), "stump fitted");
 
         # Even a stump should separate these well-separated clusters
-        list<hash<auto>> results = stump.predictMatrix(((0.5, 0.5),));
+        list<hash<ML::DecisionTreeClassificationResult>> results = stump.predictClassificationMatrix(((0.5, 0.5),));
         assertEq(0, results[0].predicted_class, "stump predicts class 0");
     }
 
@@ -3892,11 +3894,11 @@ public class MlTest inherits QUnit::Test {
         assertTrue(reg.isFitted(), "regression DT fitted");
 
         # Predict at training points
-        list<hash<auto>> results = reg.predictMatrix(((3.0,),));
+        list<hash<ML::DecisionTreeRegressionResult>> results = reg.predictRegressionMatrix(((3.0,),));
         assertFloat(6.0, results[0].prediction, 0.01);
 
         # Predict at interpolated point — tree returns nearest leaf value
-        results = reg.predictMatrix(((2.5,),));
+        results = reg.predictRegressionMatrix(((2.5,),));
         assertTrue(results[0].prediction >= 3.0 && results[0].prediction <= 6.0,
             "DT regression interpolation in reasonable range");
     }
@@ -3940,10 +3942,10 @@ public class MlTest inherits QUnit::Test {
         assertTrue(dt.isFitted(), "DT hash API fitted");
 
         # Predict with hash
-        hash<auto> result = dt.predict({"x": 0.5, "y": 0.5});
+        hash<ML::DecisionTreeClassificationResult> result = dt.predictClassification({"x": 0.5, "y": 0.5});
         assertEq(0, result.predicted_class, "DT hash API predicts class 0");
 
-        result = dt.predict({"x": 10.5, "y": 10.5});
+        result = dt.predictClassification({"x": 10.5, "y": 10.5});
         assertEq(1, result.predicted_class, "DT hash API predicts class 1");
     }
 
@@ -3978,7 +3980,7 @@ public class MlTest inherits QUnit::Test {
         # Predict before fit
         ML::DecisionTree dt({"task": "classification"});
         assertThrows("ML-DECISION-TREE-ERROR",
-            \dt.predictMatrix(), (((1.0, 2.0),),));
+            \dt.predictClassificationMatrix(), (((1.0, 2.0),),));
 
         # Feature importance before fit
         assertThrows("ML-DECISION-TREE-ERROR",
@@ -4004,7 +4006,7 @@ public class MlTest inherits QUnit::Test {
             (0, 0, 0, 1, 1, 1));
 
         # Get predictions before serialization
-        list<hash<auto>> orig = dt.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::DecisionTreeClassificationResult>> orig = dt.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
 
         # Serialize and deserialize
         binary blob = ML::ml_serialize(dt);
@@ -4014,7 +4016,7 @@ public class MlTest inherits QUnit::Test {
         assertTrue(restored instanceof ML::DecisionTree, "DT deserialized to correct type");
 
         # Predictions should match exactly
-        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::DecisionTreeClassificationResult>> res = restored.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
         assertEq(orig[0].predicted_class, res[0].predicted_class,
             "DT serialized prediction class 0 matches");
         assertFloat(orig[0].max_probability, res[0].max_probability, 1e-10);
@@ -4036,11 +4038,11 @@ public class MlTest inherits QUnit::Test {
         rf.fitMatrix(X, y);
         assertTrue(rf.isFitted(), "RF fitted");
 
-        list<hash<auto>> results = rf.predictMatrix(((0.2, 0.3),));
+        list<hash<ML::RandomForestClassificationResult>> results = rf.predictClassificationMatrix(((0.2, 0.3),));
         assertEq(0, results[0].predicted_class, "RF predicts class 0");
         assertTrue(results[0].max_probability >= 0.8, "RF high confidence");
 
-        results = rf.predictMatrix(((10.3, 10.2),));
+        results = rf.predictClassificationMatrix(((10.3, 10.2),));
         assertEq(1, results[0].predicted_class, "RF predicts class 1");
     }
 
@@ -4053,7 +4055,7 @@ public class MlTest inherits QUnit::Test {
 
         assertTrue(rf.isFitted(), "RF regression fitted");
 
-        list<hash<auto>> results = rf.predictMatrix(((3.0,),));
+        list<hash<ML::RandomForestRegressionResult>> results = rf.predictRegressionMatrix(((3.0,),));
         # RF regression averages predictions — should be close to 6.0
         assertTrue(results[0].prediction >= 4.0 && results[0].prediction <= 8.0,
             "RF regression in reasonable range");
@@ -4085,7 +4087,7 @@ public class MlTest inherits QUnit::Test {
 
         ML::RandomForest rf({"n_trees": 5, "task": "classification"});
         assertThrows("ML-RANDOM-FOREST-ERROR",
-            \rf.predictMatrix(), (((1.0, 2.0),),));
+            \rf.predictClassificationMatrix(), (((1.0, 2.0),),));
     }
 
     rfCopyTest() {
@@ -4115,11 +4117,11 @@ public class MlTest inherits QUnit::Test {
         assertTrue(gbt.isFitted(), "GBT fitted");
         assertEq(50, gbt.getActualEstimators(), "GBT used all estimators (no early stop)");
 
-        list<hash<auto>> results = gbt.predictMatrix(((0.2, 0.3),));
+        list<hash<ML::GBTClassificationResult>> results = gbt.predictClassificationMatrix(((0.2, 0.3),));
         assertEq(0, results[0].predicted_class, "GBT predicts class 0");
         assertTrue(results[0].max_probability >= 0.7, "GBT reasonable confidence");
 
-        results = gbt.predictMatrix(((10.3, 10.2),));
+        results = gbt.predictClassificationMatrix(((10.3, 10.2),));
         assertEq(1, results[0].predicted_class, "GBT predicts class 1");
 
         # Probabilities should sum to ~1.0
@@ -4138,7 +4140,7 @@ public class MlTest inherits QUnit::Test {
             (2.0, 4.0, 6.0, 8.0, 10.0));
         assertTrue(gbt.isFitted(), "GBT regression fitted");
 
-        list<hash<auto>> results = gbt.predictMatrix(((3.0,),));
+        list<hash<ML::GBTRegressionResult>> results = gbt.predictRegressionMatrix(((3.0,),));
         # GBT should get close to 6.0 at x=3
         assertFloat(6.0, results[0].prediction, 0.5);
     }
@@ -4180,7 +4182,7 @@ public class MlTest inherits QUnit::Test {
 
         ML::GradientBoostedTrees gbt({"n_estimators": 5});
         assertThrows("ML-GBT-ERROR",
-            \gbt.predictMatrix(), (((1.0, 2.0),),));
+            \gbt.predictClassificationMatrix(), (((1.0, 2.0),),));
     }
 
     gbtCopyTest() {
@@ -4203,7 +4205,7 @@ public class MlTest inherits QUnit::Test {
              (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
             (0, 0, 0, 1, 1, 1));
 
-        list<hash<auto>> orig = gbt.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::GBTClassificationResult>> orig = gbt.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
 
         binary blob = ML::ml_serialize(gbt);
         assertTrue(blob.size() > 0, "GBT serialized");
@@ -4211,7 +4213,7 @@ public class MlTest inherits QUnit::Test {
         auto restored = ML::ml_deserialize(blob);
         assertTrue(restored instanceof ML::GradientBoostedTrees, "GBT deserialized type");
 
-        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::GBTClassificationResult>> res = restored.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
         assertEq(orig[0].predicted_class, res[0].predicted_class, "GBT serialize class 0");
         assertEq(orig[1].predicted_class, res[1].predicted_class, "GBT serialize class 1");
     }
@@ -4223,7 +4225,7 @@ public class MlTest inherits QUnit::Test {
              (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
             (0, 0, 0, 1, 1, 1));
 
-        list<hash<auto>> orig = rf.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::RandomForestClassificationResult>> orig = rf.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
 
         binary blob = ML::ml_serialize(rf);
         assertTrue(blob.size() > 0, "RF serialized");
@@ -4231,7 +4233,7 @@ public class MlTest inherits QUnit::Test {
         auto restored = ML::ml_deserialize(blob);
         assertTrue(restored instanceof ML::RandomForest, "RF deserialized type");
 
-        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        list<hash<ML::RandomForestClassificationResult>> res = restored.predictClassificationMatrix(((0.3, 0.3), (10.3, 10.3)));
         assertEq(orig[0].predicted_class, res[0].predicted_class, "RF serialize class 0");
         assertEq(orig[1].predicted_class, res[1].predicted_class, "RF serialize class 1");
     }
@@ -4248,13 +4250,112 @@ public class MlTest inherits QUnit::Test {
         # RF should achieve perfect accuracy on this well-separated data
         ML::RandomForest rf({"n_trees": 50, "task": "classification", "max_depth": 5, "seed": 42});
         rf.fitMatrix(X, y);
-        list<hash<auto>> rf_results = rf.predictMatrix(X);
+        list<hash<ML::RandomForestClassificationResult>> rf_results = rf.predictClassificationMatrix(X);
         int rf_correct = 0;
         for (int i = 0; i < y.size(); ++i) {
             if (rf_results[i].predicted_class == y[i]) { ++rf_correct; }
         }
 
         assertEq(10, rf_correct, "RF 100% on separable data");
+    }
+
+    gbtMulticlassTest() {
+        # 3-class classification with well-separated clusters
+        list<list<float>> X = (
+            # class 0: low values
+            (1.0, 1.0), (1.5, 1.2), (2.0, 0.8), (1.2, 1.5),
+            # class 1: medium values
+            (5.0, 5.0), (5.5, 5.2), (6.0, 4.8), (5.2, 5.5),
+            # class 2: high values
+            (10.0, 10.0), (10.5, 10.2), (11.0, 9.8), (10.2, 10.5),
+        );
+        list<float> y = (0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2);
+
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 50,
+            "max_depth": 3,
+            "learning_rate": 0.1,
+            "task": "classification",
+            "seed": 42,
+        });
+        gbt.fitMatrix(X, y);
+
+        # Predict: should get correct classes with calibrated probabilities
+        list<hash<ML::GBTClassificationResult>> results = gbt.predictClassificationMatrix(X);
+        assertEq(12, results.size(), "GBT multiclass 12 predictions");
+
+        # Check class 0 samples
+        for (int i = 0; i < 4; ++i) {
+            assertEq(0, results[i].predicted_class, sprintf("GBT multiclass sample %d class 0", i));
+        }
+        # Check class 1 samples
+        for (int i = 4; i < 8; ++i) {
+            assertEq(1, results[i].predicted_class, sprintf("GBT multiclass sample %d class 1", i));
+        }
+        # Check class 2 samples
+        for (int i = 8; i < 12; ++i) {
+            assertEq(2, results[i].predicted_class, sprintf("GBT multiclass sample %d class 2", i));
+        }
+
+        # Verify probabilities are calibrated (sum to 1, all >= 0)
+        hash<ML::GBTClassificationResult> r = results[0];
+        assertTrue(r.probabilities.size() == 3, "GBT multiclass 3 probabilities");
+        float prob_sum = 0.0;
+        for (int k = 0; k < r.probabilities.size(); ++k) {
+            assertTrue(r.probabilities[k] >= 0.0, sprintf("GBT multiclass prob[%d] >= 0", k));
+            prob_sum += r.probabilities[k];
+        }
+        assertTrue(abs(prob_sum - 1.0) < 0.01, "GBT multiclass probs sum to 1");
+
+        # max_probability should match the highest probability
+        assertTrue(r.max_probability > 0.5, "GBT multiclass confidence > 0.5");
+
+        # Verify classes list
+        assertEq(3, r.classes.size(), "GBT multiclass 3 classes");
+    }
+
+    gbtMulticlassSerializeTest() {
+        list<list<float>> X = (
+            (1.0, 1.0), (1.5, 1.2), (2.0, 0.8),
+            (5.0, 5.0), (5.5, 5.2), (6.0, 4.8),
+            (10.0, 10.0), (10.5, 10.2), (11.0, 9.8),
+        );
+        list<float> y = (0, 0, 0, 1, 1, 1, 2, 2, 2);
+
+        ML::GradientBoostedTrees gbt({
+            "n_estimators": 30,
+            "max_depth": 3,
+            "task": "classification",
+            "seed": 42,
+        });
+        gbt.fitMatrix(X, y);
+
+        list<hash<ML::GBTClassificationResult>> orig = gbt.predictClassificationMatrix(X);
+
+        # In-memory round-trip
+        binary blob = ML::ml_serialize(gbt);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::GradientBoostedTrees, "GBT multiclass deserialized type");
+
+        list<hash<ML::GBTClassificationResult>> res = restored.predictClassificationMatrix(X);
+        assertEq(orig.size(), res.size(), "GBT multiclass serialize row count");
+        for (int i = 0; i < orig.size(); ++i) {
+            assertEq(orig[i].predicted_class, res[i].predicted_class,
+                sprintf("GBT multiclass serialize class %d", i));
+            assertTrue(abs(orig[i].max_probability - res[i].max_probability) < 1e-6,
+                sprintf("GBT multiclass serialize prob %d", i));
+        }
+
+        # File round-trip
+        string tmpfile = "/tmp/test_ml_gbt_multi.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(gbt, tmpfile);
+        auto loaded = ML::ml_load_model(tmpfile);
+        list<hash<ML::GBTClassificationResult>> res2 = loaded.predictClassificationMatrix(X);
+        for (int i = 0; i < orig.size(); ++i) {
+            assertEq(orig[i].predicted_class, res2[i].predicted_class,
+                sprintf("GBT multiclass file class %d", i));
+        }
     }
 
     gbtBeatsDtTest() {
@@ -4270,7 +4371,7 @@ public class MlTest inherits QUnit::Test {
         # Single tree
         ML::DecisionTree dt({"task": "regression", "max_depth": 3, "seed": 42});
         dt.fitMatrix(X, y);
-        list<hash<auto>> dt_results = dt.predictMatrix(X);
+        list<hash<ML::DecisionTreeRegressionResult>> dt_results = dt.predictRegressionMatrix(X);
         float dt_mse = 0;
         for (int i = 0; i < y.size(); ++i) {
             float diff = y[i] - dt_results[i].prediction;
@@ -4284,7 +4385,7 @@ public class MlTest inherits QUnit::Test {
             "task": "regression", "seed": 42,
         });
         gbt.fitMatrix(X, y);
-        list<hash<auto>> gbt_results = gbt.predictMatrix(X);
+        list<hash<ML::GBTRegressionResult>> gbt_results = gbt.predictRegressionMatrix(X);
         float gbt_mse = 0;
         for (int i = 0; i < y.size(); ++i) {
             float diff = y[i] - gbt_results[i].prediction;
@@ -4305,7 +4406,7 @@ public class MlTest inherits QUnit::Test {
         list<float> y_true = (0, 0, 0, 0, 1, 1, 1, 1);
         dt.fitMatrix(X, y_true);
 
-        list<hash<auto>> results = dt.predictMatrix(X);
+        list<hash<ML::DecisionTreeClassificationResult>> results = dt.predictClassificationMatrix(X);
         list<float> y_pred;
         for (int i = 0; i < results.size(); ++i) {
             push y_pred, float(results[i].predicted_class);

@@ -27,7 +27,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
 
     ML::RandomForest rf({"n_trees": 100, "task": "classification", "max_features": "sqrt"});
     rf.fitMatrix(X_train, y_train);
-    auto results = rf.predictMatrix(X_test);
+    auto results = rf.predictClassificationMatrix(X_test);
     printf("Predicted: %d\n", results[0].predicted_class);
     @endcode
 
@@ -177,30 +177,64 @@ nothing RandomForest::fitMatrix(list<auto> matrix, list<auto> target) {
     rf->fit(X, y, xsink);
 }
 
-//! Predicts for a single record hash
-/** @param record a hash with feature fields
-    @return RandomForestClassificationResult or RandomForestRegressionResult
+//! Classifies a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return RandomForestClassificationResult hash
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a classification model, or features don't match
 */
-hash<auto> RandomForest::predict(hash<auto> record) {
+hash<RandomForestClassificationResult> RandomForest::predictClassification(hash<auto> record) {
     const std::vector<std::string>& field_names = rf->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-RANDOM-FOREST-ERROR",
-            "model was trained with matrix API; use predictMatrix() instead");
+            "model was trained with matrix API; use predictClassificationMatrix()");
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
     if (*xsink) { return QoreValue(); }
-    return rf->predict(point, xsink);
+    return rf->predictClassification(point, xsink);
 }
 
-//! Predicts for multiple rows
-/** @param matrix list of row lists
-    @return list of result hashes
+//! Predicts a regression value for a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return RandomForestRegressionResult hash
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a regression model, or features don't match
 */
-list<hash<auto>> RandomForest::predictMatrix(list<auto> matrix) {
+hash<RandomForestRegressionResult> RandomForest::predictRegression(hash<auto> record) {
+    const std::vector<std::string>& field_names = rf->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "model was trained with matrix API; use predictRegressionMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictRegression(point, xsink);
+}
+
+//! Classifies multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of RandomForestClassificationResult hashes
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a classification model, or features don't match
+*/
+list<hash<RandomForestClassificationResult>> RandomForest::predictClassificationMatrix(list<auto> matrix) {
     MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
     if (*xsink) { return QoreValue(); }
-    return rf->predictMatrix(X, xsink);
+    return rf->predictClassificationMatrix(X, xsink);
+}
+
+//! Predicts regression values for multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of RandomForestRegressionResult hashes
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a regression model, or features don't match
+*/
+list<hash<RandomForestRegressionResult>> RandomForest::predictRegressionMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictRegressionMatrix(X, xsink);
 }
 
 //! Returns whether the model has been fitted

@@ -243,7 +243,7 @@ public class QoreDecisionTreeClassificationProcessor inherits DataProvider::Abst
         }
 
         # predict all records
-        list<hash<ML::DecisionTreeClassificationResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::DecisionTreeClassificationResult>> predictions = model.predictClassificationMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

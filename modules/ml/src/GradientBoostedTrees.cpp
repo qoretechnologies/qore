@@ -161,10 +161,30 @@ void QoreGradientBoostedTrees::fit(const MatrixXd& X, const VectorXd& y,
                 }
             }
         } else {
-            // Multiclass: simplified — treat as regression on class labels
-            // (full softmax multiclass deferred to v2)
-            initial_prediction = 0;
-            VectorXd F = VectorXd::Zero(n_samples);
+            // Multiclass: one-vs-rest with softmax (K trees per round)
+            // F_k(x) = log(prior_k) for each class k
+            initial_predictions.resize(n_classes);
+            for (int k = 0; k < n_classes; ++k) {
+                int count = 0;
+                for (int i : train_idx) {
+                    if (y(i) == classes[k]) {
+                        ++count;
+                    }
+                }
+                double p = std::max(1e-7, (double)count / n_train);
+                initial_predictions[k] = std::log(p);
+            }
+
+            // F[i][k] = raw score for sample i, class k
+            MatrixXd F(n_samples, n_classes);
+            for (int i = 0; i < n_samples; ++i) {
+                for (int k = 0; k < n_classes; ++k) {
+                    F(i, k) = initial_predictions[k];
+                }
+            }
+
+            double best_val_loss = std::numeric_limits<double>::max();
+            int no_improve_count = 0;
 
             for (int m = 0; m < n_estimators; ++m) {
                 if ((m % 10) == 0 && m > 0) {
@@ -173,17 +193,88 @@ void QoreGradientBoostedTrees::fit(const MatrixXd& X, const VectorXd& y,
                         return;
                     }
                 }
-                VectorXd residuals = y - F.head(n_samples);
-                // Use training indices only
-                FlatTree tree;
-                tree.fit(X, residuals, max_depth, min_samples_split,
-                    min_samples_leaf, "mse", "regression", rng,
-                    nullptr, &train_idx);
-                trees.push_back(std::move(tree));
+
+                // Compute softmax probabilities for training samples
+                MatrixXd probs(n_samples, n_classes);
+                for (int i : train_idx) {
+                    double max_f = F.row(i).maxCoeff();
+                    double sum_exp = 0;
+                    for (int k = 0; k < n_classes; ++k) {
+                        probs(i, k) = std::exp(F(i, k) - max_f);
+                        sum_exp += probs(i, k);
+                    }
+                    for (int k = 0; k < n_classes; ++k) {
+                        probs(i, k) /= sum_exp;
+                    }
+                }
+
+                // Subsample (shared across all K trees in this round)
+                std::vector<int> sample_idx;
+                if (subsample < 1.0) {
+                    int n_sub = std::max(1, (int)(n_train * subsample));
+                    sample_idx.resize(n_sub);
+                    std::uniform_int_distribution<int> dist(0, n_train - 1);
+                    for (int i = 0; i < n_sub; ++i) {
+                        sample_idx[i] = train_idx[dist(rng)];
+                    }
+                } else {
+                    sample_idx = train_idx;
+                }
+
+                // Fit one tree per class: residual_k = y_one_hot_k - prob_k
+                for (int k = 0; k < n_classes; ++k) {
+                    VectorXd residuals(n_samples);
+                    for (int i : train_idx) {
+                        double y_k = (y(i) == classes[k]) ? 1.0 : 0.0;
+                        residuals(i) = y_k - probs(i, k);
+                    }
+
+                    FlatTree tree;
+                    tree.fit(X, residuals, max_depth, min_samples_split,
+                        min_samples_leaf, "mse", "regression", rng,
+                        nullptr, &sample_idx);
+                    trees.push_back(std::move(tree));
+                }
                 ++actual_n_estimators;
 
+                // Update F for all samples
+                int tree_base = (int)trees.size() - n_classes;
                 for (int i = 0; i < n_samples; ++i) {
-                    F(i) += learning_rate * trees.back().predict(X.row(i));
+                    for (int k = 0; k < n_classes; ++k) {
+                        F(i, k) += learning_rate * trees[tree_base + k].predict(X.row(i));
+                    }
+                }
+
+                // Early stopping on validation set
+                if (n_val > 0) {
+                    double val_loss = 0;
+                    for (int i : val_idx) {
+                        // Compute softmax for validation sample
+                        double max_f = F.row(i).maxCoeff();
+                        double sum_exp = 0;
+                        for (int k = 0; k < n_classes; ++k) {
+                            sum_exp += std::exp(F(i, k) - max_f);
+                        }
+                        // Cross-entropy loss
+                        for (int k = 0; k < n_classes; ++k) {
+                            if (y(i) == classes[k]) {
+                                double p = std::exp(F(i, k) - max_f) / sum_exp;
+                                p = std::max(1e-7, p);
+                                val_loss -= std::log(p);
+                                break;
+                            }
+                        }
+                    }
+                    val_loss /= n_val;
+                    if (val_loss < best_val_loss - 1e-7) {
+                        best_val_loss = val_loss;
+                        no_improve_count = 0;
+                    } else {
+                        ++no_improve_count;
+                        if (no_improve_count >= n_iter_no_change) {
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -297,23 +388,44 @@ QoreHashNode* QoreGradientBoostedTrees::predictInternal(const RowVectorXd& point
     }
 
     if (task == "classification") {
-        // Multiclass fallback: nearest class to raw prediction
-        double raw = predictRaw(point);
-        int best_class = (int)classes[0];
-        double best_dist = std::abs(raw - classes[0]);
-        for (int c = 1; c < n_classes; ++c) {
-            double dist = std::abs(raw - classes[c]);
-            if (dist < best_dist) {
-                best_dist = dist;
-                best_class = (int)classes[c];
+        // Multiclass: softmax over K raw scores
+        std::vector<double> raw_scores(n_classes);
+        for (int k = 0; k < n_classes; ++k) {
+            raw_scores[k] = initial_predictions[k];
+        }
+        // Each round has n_classes trees
+        for (int m = 0; m < actual_n_estimators; ++m) {
+            for (int k = 0; k < n_classes; ++k) {
+                raw_scores[k] += learning_rate * trees[m * n_classes + k].predict(point);
+            }
+        }
+
+        // Apply softmax
+        double max_score = *std::max_element(raw_scores.begin(), raw_scores.end());
+        std::vector<double> probs(n_classes);
+        double sum_exp = 0;
+        for (int k = 0; k < n_classes; ++k) {
+            probs[k] = std::exp(raw_scores[k] - max_score);
+            sum_exp += probs[k];
+        }
+        int best_class_idx = 0;
+        double max_prob = 0;
+        for (int k = 0; k < n_classes; ++k) {
+            probs[k] /= sum_exp;
+            if (probs[k] > max_prob) {
+                max_prob = probs[k];
+                best_class_idx = k;
             }
         }
 
         ReferenceHolder<QoreHashNode> rv(
             new QoreHashNode(hashdeclGBTClassificationResult, xsink), xsink);
-        rv->setKeyValue("predicted_class", (int64_t)best_class, xsink);
-        rv->setKeyValue("max_probability", 0.0, xsink);
+        rv->setKeyValue("predicted_class", (int64_t)(int)classes[best_class_idx], xsink);
+        rv->setKeyValue("max_probability", max_prob, xsink);
         ReferenceHolder<QoreListNode> prob_list(new QoreListNode(autoTypeInfo), xsink);
+        for (int k = 0; k < n_classes; ++k) {
+            prob_list->push(probs[k], xsink);
+        }
         rv->setKeyValue("probabilities", prob_list.release(), xsink);
         ReferenceHolder<QoreListNode> cls_list(new QoreListNode(autoTypeInfo), xsink);
         for (double c : classes) {
@@ -331,11 +443,17 @@ QoreHashNode* QoreGradientBoostedTrees::predictInternal(const RowVectorXd& point
     return rv.release();
 }
 
-QoreHashNode* QoreGradientBoostedTrees::predict(const RowVectorXd& point,
+QoreHashNode* QoreGradientBoostedTrees::predictClassification(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+
     if (!fitted) {
         xsink->raiseException("ML-GBT-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
+        xsink->raiseException("ML-GBT-ERROR",
+            "model was configured for '%s', not classification", task.c_str());
         return nullptr;
     }
     if (point.size() != n_features) {
@@ -346,11 +464,38 @@ QoreHashNode* QoreGradientBoostedTrees::predict(const RowVectorXd& point,
     return predictInternal(point, xsink);
 }
 
-QoreListNode* QoreGradientBoostedTrees::predictMatrix(const MatrixXd& X,
+QoreHashNode* QoreGradientBoostedTrees::predictRegression(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+
     if (!fitted) {
         xsink->raiseException("ML-GBT-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
+        xsink->raiseException("ML-GBT-ERROR",
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if (point.size() != n_features) {
+        xsink->raiseException("ML-GBT-ERROR",
+            "input has %d features, expected %d", (int)point.size(), n_features);
+        return nullptr;
+    }
+    return predictInternal(point, xsink);
+}
+
+QoreListNode* QoreGradientBoostedTrees::predictClassificationMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-GBT-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
+        xsink->raiseException("ML-GBT-ERROR",
+            "model was configured for '%s', not classification", task.c_str());
         return nullptr;
     }
     if ((int)X.cols() != n_features) {
@@ -359,7 +504,42 @@ QoreListNode* QoreGradientBoostedTrees::predictMatrix(const MatrixXd& X,
         return nullptr;
     }
 
-    ReferenceHolder<QoreListNode> results(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> results(
+        new QoreListNode(hashdeclGBTClassificationResult->getTypeInfo()), xsink);
+    for (int64_t i = 0; i < X.rows(); ++i) {
+        if ((i % 100) == 0 && i > 0) {
+            if (qore_check_cancel(xsink, "predicting with GBT")) {
+                return nullptr;
+            }
+        }
+        QoreHashNode* result = predictInternal(X.row(i), xsink);
+        if (*xsink) { return nullptr; }
+        results->push(result, xsink);
+    }
+    return results.release();
+}
+
+QoreListNode* QoreGradientBoostedTrees::predictRegressionMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-GBT-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
+        xsink->raiseException("ML-GBT-ERROR",
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if ((int)X.cols() != n_features) {
+        xsink->raiseException("ML-GBT-ERROR",
+            "input has %d features, expected %d", (int)X.cols(), n_features);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> results(
+        new QoreListNode(hashdeclGBTRegressionResult->getTypeInfo()), xsink);
     for (int64_t i = 0; i < X.rows(); ++i) {
         if ((i % 100) == 0 && i > 0) {
             if (qore_check_cancel(xsink, "predicting with GBT")) {
@@ -422,6 +602,10 @@ std::vector<uint8_t> QoreGradientBoostedTrees::serializeState() const {
     MLSerialization::writeScalar(buf, validation_fraction);
     MLSerialization::writeInt32(buf, n_iter_no_change);
     MLSerialization::writeScalar(buf, initial_prediction);
+    MLSerialization::writeInt32(buf, (int32_t)initial_predictions.size());
+    for (double ip : initial_predictions) {
+        MLSerialization::writeScalar(buf, ip);
+    }
     MLSerialization::writeInt32(buf, actual_n_estimators);
     MLSerialization::writeInt32(buf, n_features);
     MLSerialization::writeInt32(buf, n_classes);
@@ -463,6 +647,13 @@ QoreGradientBoostedTrees* QoreGradientBoostedTrees::deserializeState(
     if (*xsink) { return nullptr; }
     double init_pred = MLSerialization::readScalar(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
+    int nip = MLSerialization::readInt32(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::vector<double> init_preds(nip);
+    for (int i = 0; i < nip; ++i) {
+        init_preds[i] = MLSerialization::readScalar(ptr, remaining, xsink);
+        if (*xsink) { return nullptr; }
+    }
     int actual = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     int nf = MLSerialization::readInt32(ptr, remaining, xsink);
@@ -490,6 +681,7 @@ QoreGradientBoostedTrees* QoreGradientBoostedTrees::deserializeState(
 
     auto* gbt = new QoreGradientBoostedTrees(n_est, lr, md, mss, msl, ss, task, vf, ninc, 42);
     gbt->initial_prediction = init_pred;
+    gbt->initial_predictions = std::move(init_preds);
     gbt->actual_n_estimators = actual;
     gbt->n_features = nf;
     gbt->n_classes = nc;

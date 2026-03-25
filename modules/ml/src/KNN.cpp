@@ -181,41 +181,111 @@ QoreHashNode* QoreKNN::predictInternal(const RowVectorXd& point, ExceptionSink* 
     return rv.release();
 }
 
-QoreHashNode* QoreKNN::predict(const RowVectorXd& point, ExceptionSink* xsink) const {
+QoreHashNode* QoreKNN::predictClassification(const RowVectorXd& point,
+        ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+
     if (!fitted) {
+        xsink->raiseException("ML-KNN-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
         xsink->raiseException("ML-KNN-ERROR",
-            "model has not been fitted: call fit() or fitMatrix() before predict()");
+            "model was configured for '%s', not classification", task.c_str());
+        return nullptr;
+    }
+    if (point.size() != n_features) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "input has %d features, expected %d", (int)point.size(), n_features);
         return nullptr;
     }
     return predictInternal(point, xsink);
 }
 
-QoreListNode* QoreKNN::predictMatrix(const MatrixXd& X, ExceptionSink* xsink) const {
+QoreHashNode* QoreKNN::predictRegression(const RowVectorXd& point,
+        ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
+
     if (!fitted) {
+        xsink->raiseException("ML-KNN-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
         xsink->raiseException("ML-KNN-ERROR",
-            "model has not been fitted: call fit() or fitMatrix() before predictMatrix()");
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if (point.size() != n_features) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "input has %d features, expected %d", (int)point.size(), n_features);
+        return nullptr;
+    }
+    return predictInternal(point, xsink);
+}
+
+QoreListNode* QoreKNN::predictClassificationMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-KNN-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
+        xsink->raiseException("ML-KNN-ERROR",
+            "model was configured for '%s', not classification", task.c_str());
+        return nullptr;
+    }
+    if ((int)X.cols() != n_features) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "input has %d features, expected %d", (int)X.cols(), n_features);
         return nullptr;
     }
 
-    if (X.cols() != n_features) {
+    ReferenceHolder<QoreListNode> rv(
+        new QoreListNode(hashdeclKNNClassificationResult->getTypeInfo()), xsink);
+    for (int64_t i = 0; i < X.rows(); ++i) {
+        if ((i % 100) == 0 && i > 0) {
+            if (qore_check_cancel(xsink, "KNN predictClassificationMatrix")) {
+                return nullptr;
+            }
+        }
+        QoreHashNode* result = predictInternal(X.row(i), xsink);
+        if (*xsink) { return nullptr; }
+        rv->push(result, xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreKNN::predictRegressionMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-KNN-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
         xsink->raiseException("ML-KNN-ERROR",
-            "input has %d features but model was trained with %d features",
-            static_cast<int>(X.cols()), n_features);
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if ((int)X.cols() != n_features) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "input has %d features, expected %d", (int)X.cols(), n_features);
         return nullptr;
     }
 
-    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
-    for (Eigen::Index i = 0; i < X.rows(); ++i) {
-        if (i % 100 == 0 && qore_check_cancel(xsink, "KNN predictMatrix")) {
-            return nullptr;
+    ReferenceHolder<QoreListNode> rv(
+        new QoreListNode(hashdeclKNNRegressionResult->getTypeInfo()), xsink);
+    for (int64_t i = 0; i < X.rows(); ++i) {
+        if ((i % 100) == 0 && i > 0) {
+            if (qore_check_cancel(xsink, "KNN predictRegressionMatrix")) {
+                return nullptr;
+            }
         }
-        RowVectorXd row = X.row(i);
-        QoreHashNode* result = predictInternal(row, xsink);
-        if (*xsink) {
-            return nullptr;
-        }
+        QoreHashNode* result = predictInternal(X.row(i), xsink);
+        if (*xsink) { return nullptr; }
         rv->push(result, xsink);
     }
     return rv.release();

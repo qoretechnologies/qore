@@ -205,36 +205,64 @@ nothing DecisionTree::fitMatrix(list<auto> matrix, list<auto> target) {
     dt->fit(X, y, xsink);
 }
 
-//! Predicts for a single record hash
+//! Classifies a single record hash
 /** @param record a hash with the same feature fields used in training
-    @return DecisionTreeClassificationResult or DecisionTreeRegressionResult hash
+    @return DecisionTreeClassificationResult hash
 
-    @throw ML-DECISION-TREE-ERROR if the model is not fitted or features don't match
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted, not a classification model, or features don't match
 */
-hash<auto> DecisionTree::predict(hash<auto> record) {
+hash<DecisionTreeClassificationResult> DecisionTree::predictClassification(hash<auto> record) {
     const std::vector<std::string>& field_names = dt->getFieldNames();
     if (field_names.empty()) {
         xsink->raiseException("ML-DECISION-TREE-ERROR",
-            "model was trained with matrix API; use predictMatrix() instead");
+            "model was trained with matrix API; use predictClassificationMatrix()");
         return QoreValue();
     }
     RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    return dt->predict(point, xsink);
+    if (*xsink) { return QoreValue(); }
+    return dt->predictClassification(point, xsink);
 }
 
-//! Predicts for multiple rows in matrix form
-/** @param matrix list of row lists
-    @return list of result hashes
+//! Predicts a regression value for a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return DecisionTreeRegressionResult hash
+
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted, not a regression model, or features don't match
 */
-list<hash<auto>> DecisionTree::predictMatrix(list<auto> matrix) {
-    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
-    if (*xsink) {
+hash<DecisionTreeRegressionResult> DecisionTree::predictRegression(hash<auto> record) {
+    const std::vector<std::string>& field_names = dt->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model was trained with matrix API; use predictRegressionMatrix()");
         return QoreValue();
     }
-    return dt->predictMatrix(X, xsink);
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return dt->predictRegression(point, xsink);
+}
+
+//! Classifies multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of DecisionTreeClassificationResult hashes
+
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted, not a classification model, or features don't match
+*/
+list<hash<DecisionTreeClassificationResult>> DecisionTree::predictClassificationMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return dt->predictClassificationMatrix(X, xsink);
+}
+
+//! Predicts regression values for multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of DecisionTreeRegressionResult hashes
+
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted, not a regression model, or features don't match
+*/
+list<hash<DecisionTreeRegressionResult>> DecisionTree::predictRegressionMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return dt->predictRegressionMatrix(X, xsink);
 }
 
 //! Returns whether the model has been fitted

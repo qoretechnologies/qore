@@ -45,13 +45,13 @@ extern const TypedHashDecl* hashdeclKNNRegressionResult;
 # Classification
 KNN knn({"k": 5, "task": "classification", "weight_func": "distance"});
 knn.fit(training_data, "species");
-hash<auto> result = knn.predict({"sepal_length": 5.1, "sepal_width": 3.5});
+hash<KNNClassificationResult> result = knn.predictClassification({"sepal_length": 5.1, "sepal_width": 3.5});
 printf("Predicted class: %d, Confidence: %.2f\n", result.predicted_class, result.confidence);
 
 # Regression
 KNN knn_reg({"k": 3, "task": "regression", "metric": "manhattan"});
 knn_reg.fit(training_data, "price");
-hash<auto> result = knn_reg.predict({"sqft": 1500, "bedrooms": 3});
+hash<KNNRegressionResult> result = knn_reg.predictRegression({"sqft": 1500, "bedrooms": 3});
 printf("Predicted price: %.2f\n", result.prediction);
     @endcode
 
@@ -237,54 +237,86 @@ nothing KNN::fitMatrix(list<auto> matrix, list<auto> target) {
     knn->fit(mat, y, xsink);
 }
 
-//! Predicts the class or target value for a single record
-/** @param record a hash with the same numeric fields used during training
-
-    @return a hash with prediction results; the concrete type depends on the \c task option:
-    - for \c "classification": a @ref KNNClassificationResult hash with \c predicted_class,
-      \c confidence, and \c neighbors
-    - for \c "regression": a @ref KNNRegressionResult hash with \c prediction and \c neighbors
+//! Classifies a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return KNNClassificationResult hash with \c predicted_class, \c confidence, and \c neighbors
 
     @par Example:
     @code{.py}
-hash<auto> result = knn.predict({"sepal_length": 5.1, "sepal_width": 3.5});
+hash<KNNClassificationResult> result = knn.predictClassification({"sepal_length": 5.1, "sepal_width": 3.5});
+printf("Predicted class: %d, Confidence: %.2f\n", result.predicted_class, result.confidence);
     @endcode
 
-    @throw ML-KNN-ERROR if the model has not been fitted or input dimensions mismatch
+    @throw ML-KNN-ERROR if the model is not fitted, not a classification model, or features don't match
 */
-hash<auto> KNN::predict(hash<auto> record) {
-    const std::vector<std::string>& feat_names = knn->getFieldNames();
-    if (feat_names.empty()) {
+hash<KNNClassificationResult> KNN::predictClassification(hash<auto> record) {
+    const std::vector<std::string>& field_names = knn->getFieldNames();
+    if (field_names.empty()) {
         xsink->raiseException("ML-KNN-ERROR",
-            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+            "model was trained with matrix API; use predictClassificationMatrix()");
         return QoreValue();
     }
-    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    return knn->predict(point, xsink);
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return knn->predictClassification(point, xsink);
 }
 
-//! Predicts class or target values for multiple rows in matrix form
-/** @param matrix a list of lists where each inner list is a row of feature values
-
-    @return a list of result hashes (see predict() for the hash structure)
+//! Predicts a regression value for a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return KNNRegressionResult hash with \c prediction and \c neighbors
 
     @par Example:
     @code{.py}
-list<hash<auto>> results = knn.predictMatrix(((5.1, 3.5), (6.2, 2.8)));
+hash<KNNRegressionResult> result = knn.predictRegression({"sqft": 1500, "bedrooms": 3});
+printf("Predicted price: %.2f\n", result.prediction);
     @endcode
 
-    @throw ML-KNN-ERROR if the model has not been fitted or input dimensions mismatch
-    @throw ML-DATA-ERROR data format errors
+    @throw ML-KNN-ERROR if the model is not fitted, not a regression model, or features don't match
 */
-list<hash<auto>> KNN::predictMatrix(list<auto> matrix) {
-    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
-    if (*xsink) {
+hash<KNNRegressionResult> KNN::predictRegression(hash<auto> record) {
+    const std::vector<std::string>& field_names = knn->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-KNN-ERROR",
+            "model was trained with matrix API; use predictRegressionMatrix()");
         return QoreValue();
     }
-    return knn->predictMatrix(mat, xsink);
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return knn->predictRegression(point, xsink);
+}
+
+//! Classifies multiple rows in matrix form
+/** @param matrix list of row lists where each inner list is a row of feature values
+    @return list of KNNClassificationResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<KNNClassificationResult>> results = knn.predictClassificationMatrix(((5.1, 3.5), (6.2, 2.8)));
+    @endcode
+
+    @throw ML-KNN-ERROR if the model is not fitted, not a classification model, or features don't match
+*/
+list<hash<KNNClassificationResult>> KNN::predictClassificationMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return knn->predictClassificationMatrix(mat, xsink);
+}
+
+//! Predicts regression values for multiple rows in matrix form
+/** @param matrix list of row lists where each inner list is a row of feature values
+    @return list of KNNRegressionResult hashes
+
+    @par Example:
+    @code{.py}
+list<hash<KNNRegressionResult>> results = knn.predictRegressionMatrix(((1500.0, 3.0), (2000.0, 4.0)));
+    @endcode
+
+    @throw ML-KNN-ERROR if the model is not fitted, not a regression model, or features don't match
+*/
+list<hash<KNNRegressionResult>> KNN::predictRegressionMatrix(list<auto> matrix) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return knn->predictRegressionMatrix(mat, xsink);
 }
 
 //! Returns True if the model has been fitted

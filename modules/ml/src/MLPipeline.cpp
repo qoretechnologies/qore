@@ -438,7 +438,7 @@ QoreHashNode* QoreMLPipeline::predict(const RowVectorXd& point, ExceptionSink* x
             if (*xsink) {
                 return nullptr;
             }
-            QoreHashNode* result = knn->predict(transformed, xsink);
+            QoreHashNode* result = knn->predictClassification(transformed, xsink);
             knn->deref(xsink);
             return result;
         }
@@ -541,7 +541,7 @@ QoreListNode* QoreMLPipeline::predictMatrix(const MatrixXd& X, ExceptionSink* xs
             if (*xsink) {
                 return nullptr;
             }
-            QoreListNode* result = knn->predictMatrix(current, xsink);
+            QoreListNode* result = knn->predictClassificationMatrix(current, xsink);
             knn->deref(xsink);
             return result;
         }

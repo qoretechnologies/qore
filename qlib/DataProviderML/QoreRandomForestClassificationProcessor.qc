@@ -259,7 +259,7 @@ public class QoreRandomForestClassificationProcessor inherits DataProvider::Abst
         }
 
         # predict all records
-        list<hash<ML::RandomForestClassificationResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::RandomForestClassificationResult>> predictions = model.predictClassificationMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

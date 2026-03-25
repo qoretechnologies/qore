@@ -85,42 +85,69 @@ QoreHashNode* QoreDecisionTree::predictInternal(const RowVectorXd& point,
     return rv.release();
 }
 
-QoreHashNode* QoreDecisionTree::predict(const RowVectorXd& point,
+QoreHashNode* QoreDecisionTree::predictClassification(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
 
     if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
         xsink->raiseException("ML-DECISION-TREE-ERROR",
-            "model has not been fitted");
+            "model was configured for '%s', not classification", task.c_str());
         return nullptr;
     }
     if (point.size() != n_features) {
         xsink->raiseException("ML-DECISION-TREE-ERROR",
-            "input has %d features, expected %d",
-            (int)point.size(), n_features);
+            "input has %d features, expected %d", (int)point.size(), n_features);
         return nullptr;
     }
-
     return predictInternal(point, xsink);
 }
 
-QoreListNode* QoreDecisionTree::predictMatrix(const MatrixXd& X,
+QoreHashNode* QoreDecisionTree::predictRegression(const RowVectorXd& point,
         ExceptionSink* xsink) const {
     std::lock_guard<std::mutex> lk(mtx);
 
     if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
         xsink->raiseException("ML-DECISION-TREE-ERROR",
-            "model has not been fitted");
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if (point.size() != n_features) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "input has %d features, expected %d", (int)point.size(), n_features);
+        return nullptr;
+    }
+    return predictInternal(point, xsink);
+}
+
+QoreListNode* QoreDecisionTree::predictClassificationMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "classification") {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model was configured for '%s', not classification", task.c_str());
         return nullptr;
     }
     if ((int)X.cols() != n_features) {
         xsink->raiseException("ML-DECISION-TREE-ERROR",
-            "input has %d features, expected %d",
-            (int)X.cols(), n_features);
+            "input has %d features, expected %d", (int)X.cols(), n_features);
         return nullptr;
     }
 
-    ReferenceHolder<QoreListNode> results(new QoreListNode(autoTypeInfo), xsink);
+    ReferenceHolder<QoreListNode> results(
+        new QoreListNode(hashdeclDecisionTreeClassificationResult->getTypeInfo()), xsink);
     for (int64_t i = 0; i < X.rows(); ++i) {
         if ((i % 100) == 0 && i > 0) {
             if (qore_check_cancel(xsink, "predicting with decision tree")) {
@@ -128,9 +155,41 @@ QoreListNode* QoreDecisionTree::predictMatrix(const MatrixXd& X,
             }
         }
         QoreHashNode* result = predictInternal(X.row(i), xsink);
-        if (*xsink) {
-            return nullptr;
+        if (*xsink) { return nullptr; }
+        results->push(result, xsink);
+    }
+    return results.release();
+}
+
+QoreListNode* QoreDecisionTree::predictRegressionMatrix(const MatrixXd& X,
+        ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR", "model has not been fitted");
+        return nullptr;
+    }
+    if (task != "regression") {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model was configured for '%s', not regression", task.c_str());
+        return nullptr;
+    }
+    if ((int)X.cols() != n_features) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "input has %d features, expected %d", (int)X.cols(), n_features);
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreListNode> results(
+        new QoreListNode(hashdeclDecisionTreeRegressionResult->getTypeInfo()), xsink);
+    for (int64_t i = 0; i < X.rows(); ++i) {
+        if ((i % 100) == 0 && i > 0) {
+            if (qore_check_cancel(xsink, "predicting with decision tree")) {
+                return nullptr;
+            }
         }
+        QoreHashNode* result = predictInternal(X.row(i), xsink);
+        if (*xsink) { return nullptr; }
         results->push(result, xsink);
     }
     return results.release();

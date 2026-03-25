@@ -283,7 +283,7 @@ public class QoreKNNRegressionProcessor inherits DataProvider::AbstractDataProvi
         }
 
         # predict all records
-        list<hash<ML::KNNRegressionResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::KNNRegressionResult>> predictions = model.predictRegressionMatrix(matrix);
 
         # emit one event per record
         list<auto> events;

@@ -289,7 +289,7 @@ public class QoreKNNClassificationProcessor inherits DataProvider::AbstractDataP
         }
 
         # predict all records
-        list<hash<ML::KNNClassificationResult>> predictions = model.predictMatrix(matrix);
+        list<hash<ML::KNNClassificationResult>> predictions = model.predictClassificationMatrix(matrix);
 
         # emit one event per record
         list<auto> events;
