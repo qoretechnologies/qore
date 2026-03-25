@@ -1222,6 +1222,63 @@ Phase 1 ──────────────> Phase 2 ──────�
 | Backward-compatible format evolution | Version field in header; reader checks version and dispatches accordingly |
 | Thread safety in registry | Filesystem: atomic rename + advisory locks; Database: SQL transactions |
 
+## Phase 7: Tokenizer Module Future Enhancements
+
+The `tokenizer` binary module (C++/utf8proc) provides HuggingFace-compatible text
+tokenization with BPE, WordPiece, and Unigram models. It loads `tokenizer.json` files
+and produces token IDs matching the Python `tokenizers` library exactly.
+
+### Current Capabilities (v1.0)
+- **Models**: BPE (GPT-2, Llama), WordPiece (BERT), Unigram/Viterbi (T5)
+- **Normalizers**: BertNormalizer, Unicode NFC/NFD/NFKC/NFKD, Precompiled (SentencePiece
+  Darts DoubleArray trie), Sequence, Replace, Prepend, Lowercase, StripAccents
+- **Pre-tokenizers**: BertPreTokenizer, ByteLevel (GPT-2), Metaspace (SentencePiece),
+  Whitespace, Sequence
+- **Post-processors**: TemplateProcessing, BertProcessing, RobertaProcessing, ByteLevel
+- **Decoders**: WordPiece, ByteLevel, Metaspace, ByteFallback, Fuse, Strip, Sequence
+- **Features**: truncation (3 strategies), padding, batch encoding, offset mapping,
+  special tokens mask, added token matching, sentence pair encoding, getVocab()
+- **Performance**: O(n log n) BPE merge via priority queue + doubly linked list
+- **Verified**: BERT, GPT-2, T5, Llama/TinyLlama — exact match vs Python `tokenizers`
+
+### Future Enhancements
+
+#### 7.1 `word_ids` Mapping
+Maps each output token to its pre-token word index. Required for NER span alignment
+and token-to-word grouping. Implementation: track the pre-token index through the
+pipeline alongside byte offsets.
+
+#### 7.2 Overflowing Tokens (Sliding Window)
+When truncation discards tokens, return the overflow as a separate `EncodingResult`.
+Enables sliding-window processing of long documents (e.g., 512-token chunks with
+overlap). Add `stride` parameter to `encodeAdvanced()`.
+
+#### 7.3 Pre-tokenized Input (`is_pretokenized`)
+Accept already-split word lists instead of raw strings. Useful when the caller has
+domain-specific tokenization (e.g., code tokenizers, chemical formulas). Skip the
+normalize and pre-tokenize stages; apply model tokenization to each word directly.
+
+#### 7.4 Dynamic Vocabulary Extension (`add_tokens()`)
+Allow adding tokens to the vocabulary after construction. Required for chat templates
+with custom special tokens. Implementation: mutable vocab with thread-safe locking
+(reader-writer lock since reads vastly outnumber writes).
+
+#### 7.5 Decoder Output Cleanup
+Improve BERT WordPiece decoder spacing around punctuation when `skip_special_tokens`
+is enabled. Current decoder includes [CLS]/[SEP] literal strings in edge cases.
+
+#### 7.6 Full Unicode `\p{N}` Digit Support in GPT-2 Pattern
+The ByteLevel pre-tokenizer's `isDigit()` now uses utf8proc `UTF8PROC_CATEGORY_ND`,
+but the GPT-2 regex `\p{N}` also includes `UTF8PROC_CATEGORY_NL` (letter number)
+and `UTF8PROC_CATEGORY_NO` (other number). Expand to match the full `\p{N}` class.
+
+#### 7.7 ONNX Inference Pipeline Integration
+Create a `QorusModelProcessor` that chains: load tokenizer.json → tokenize input →
+run ONNX model → decode output. This provides end-to-end text-in/result-out inference
+for NLP models in Qorus data pipelines.
+
+---
+
 ## Conventions
 
 All new code follows the existing patterns documented in `design/ml-architecture.md`:

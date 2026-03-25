@@ -250,6 +250,9 @@ ModuleName/
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
         processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
         learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
+    |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
+        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with full tokenizer.json support, \
+        truncation, padding, batch encoding, offset mapping, and special tokens mask
     |binary|<a href="../../modules/mongodb/html/index.html#mongodbintro">mongodb</a>|Provides MongoDB client connectivity using \
         libmongoc with full CRUD, aggregation, and automatic BSON conversion
     |user|<a href="../../modules/MongoDbDataProvider/html/index.html#mongodbdataproviderintro">MongoDbDataProvider</a>|Provides a \
@@ -337,7 +340,8 @@ ModuleName/
     |user|<a href="../../modules/QoreHistory/html/index.html#qorehistoryintro">QoreHistory</a>|Provides \
         shared history management with timestamps, deduplication, search, expansion, and persistence
     |user|<a href="../../modules/QoreModelRegistry/html/index.html#qoremodelregistryintro">QoreModelRegistry</a>|Provides \
-        a filesystem-backed ML model registry for versioning, tagging, and deployment management
+        an ML model registry with pluggable storage backends (filesystem, database, REST) for versioning, \
+        tagging, pruning, and deployment management with multi-tenant support and DataProvider integration
     |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
         ONNX model export for 8 trained ML algorithms (StandardScaler, MinMaxScaler, Imputer, \
         LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)

@@ -763,6 +763,17 @@ cargo install tree-sitter-cli@0.26.5
         from files, strings, serialized descriptors, or programmatic hash definitions
       - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
         schema introspection, and file descriptor serialization
+    - @ref tokenizerintro "tokenizer" module
+      - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
+      - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)
+      - loads standard \c tokenizer.json files and produces token IDs matching the Python \c tokenizers library
+      - truncation with \c longest_first, \c only_first, \c only_second strategies
+      - padding to \c max_length or batch-longest for uniform-length output
+      - batch encoding for efficient multi-text processing
+      - byte-level offset mapping and special tokens mask
+      - O(n log n) BPE merge algorithm using priority queue + doubly linked list
+      - Precompiled normalizer supporting SentencePiece Darts DoubleArray trie format
+      - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
     - @ref apollorestclientintro "ApolloRestClient" module
