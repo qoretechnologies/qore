@@ -256,6 +256,10 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // exec_on_block_exit: (i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_exec_on_block_exit",
             llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    // exec_on_block_exit_impl: (i64, ptr, i1) -> void  [with inline_lowered flag]
+    module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type,
+                llvm::Type::getInt1Ty(ctx)}, false));
 
     // Guard type helper: (i64, ptr) -> i64
     module.getOrInsertFunction("qore_rt_guard_type",

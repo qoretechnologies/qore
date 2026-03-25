@@ -1088,13 +1088,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
             // Phase 2a: Emit OnBlockExit instruction so handlers are registered for exception-path execution
-            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+            auto* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
 
-            // Register for inline lowering at exit points
+            // Register for inline lowering at exit points and handler IR compilation
             block_handlers.emplace_back(InlineHandler{
                 on_block_exit_stmt->getType(),
                 handler_code,
-                stmt->loc
+                stmt->loc,
+                obe_inst  // enable compileAllHandlerIRs() to compile this handler
             });
         }
 
@@ -2303,6 +2304,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         // Update function metadata
         handler_func->max_value_id = handler_builder.getFunction()->max_value_id;
         handler_func->max_local_slot_id = handler_builder.getFunction()->max_local_slot_id;
+
+        // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
+        handler_func->computeSlotIdsAndEmbed();
 
         // Attach compiled handler IR to instruction
         handler.obe_inst->handler_ir = std::move(handler_func);
