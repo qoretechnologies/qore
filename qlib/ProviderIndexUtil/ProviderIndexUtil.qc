@@ -619,10 +619,13 @@ public class ProviderIndexUtil {
         logArgs(level, fmt, argv);
     }
 
-    #! Log a message to the global logger if possible
+    #! Log a message to the global logger if possible; falls back to stderr for errors
     static logArgs(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
         if (logger) {
             logger.logArgs(level, fmt, args);
+        } else if (level.getValue() >= LoggerLevel::LevelError.getValue()) {
+            # ensure errors are never silently dropped when the logger is not yet configured
+            stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
         }
     }
 }
