@@ -274,6 +274,23 @@ public class MlTest inherits QUnit::Test {
         addTestCase("DDM warning detection", \ddmWarningTest());
         addTestCase("vector similarity functions", \vectorSimilarityTest());
         addTestCase("vector similarity errors", \vectorSimilarityErrorTest());
+        addTestCase("DateTimeFeatures basic extraction", \dtfBasicTest());
+        addTestCase("DateTimeFeatures default features", \dtfDefaultFeaturesTest());
+        addTestCase("DateTimeFeatures custom selection", \dtfCustomSelectionTest());
+        addTestCase("DateTimeFeatures is_weekend detection", \dtfIsWeekendTest());
+        addTestCase("DateTimeFeatures quarter extraction", \dtfQuarterTest());
+        addTestCase("DateTimeFeatures null handling", \dtfNullHandlingTest());
+        addTestCase("DateTimeFeatures errors", \dtfErrorTest());
+        addTestCase("DateTimeFeatures serialization round-trip", \dtfSerializeTest());
+        addTestCase("TextFeatures TF-IDF basic", \textFeaturesTfidfTest());
+        addTestCase("TextFeatures count mode", \textFeaturesCountTest());
+        addTestCase("TextFeatures vocabulary", \textFeaturesVocabularyTest());
+        addTestCase("TextFeatures max_features", \textFeaturesMaxFeaturesTest());
+        addTestCase("TextFeatures min_df", \textFeaturesMinDfTest());
+        addTestCase("TextFeatures fitTransform", \textFeaturesFitTransformTest());
+        addTestCase("TextFeatures transform before fit error", \textFeaturesNotFittedTest());
+        addTestCase("TextFeatures copy error", \textFeaturesCopyErrorTest());
+        addTestCase("TextFeatures serialization round-trip", \textFeaturesSerializeTest());
         set_return_value(main());
     }
 
@@ -305,9 +322,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(31, caps.native_algorithms.size());
+            assertEq(33, caps.native_algorithms.size());
         } else {
-            assertEq(30, caps.native_algorithms.size());
+            assertEq(32, caps.native_algorithms.size());
         }
     }
 
@@ -5842,5 +5859,398 @@ public class MlTest inherits QUnit::Test {
             \ML::ml_euclidean_distance(), ((1.0, 2.0), (1.0,)));
         assertThrows("ML-VECTOR-ERROR",
             \ML::ml_manhattan_distance(), ((1.0, 2.0, 3.0), (1.0, 2.0)));
+    }
+
+    dtfBasicTest() {
+        # Extract all features from a known date: 2026-03-25T09:30:45 (Wednesday)
+        ML::DateTimeFeatures dtf({"features": ("year", "month", "day", "hour", "minute",
+            "second", "day_of_week", "day_of_year", "quarter", "is_weekend", "week_of_year")});
+
+        assertEq(11, dtf.getNumOutputFeatures(), "DTF num output features");
+        assertTrue(dtf.isFitted(), "DTF always fitted");
+
+        list<auto> result = dtf.transform((2026-03-25T09:30:45,));
+        assertEq(1, result.size(), "DTF 1 row");
+        assertEq(11, result[0].size(), "DTF 11 cols");
+
+        assertEq(2026.0, result[0][0], "DTF year");
+        assertEq(3.0, result[0][1], "DTF month");
+        assertEq(25.0, result[0][2], "DTF day");
+        assertEq(9.0, result[0][3], "DTF hour");
+        assertEq(30.0, result[0][4], "DTF minute");
+        assertEq(45.0, result[0][5], "DTF second");
+        assertEq(3.0, result[0][6], "DTF day_of_week (Wednesday=3)");
+        # day_of_year for March 25: Jan=31 + Feb=28 + 25 = 84
+        assertEq(84.0, result[0][7], "DTF day_of_year");
+        assertEq(1.0, result[0][8], "DTF quarter (Q1)");
+        assertEq(0.0, result[0][9], "DTF is_weekend (Wednesday=no)");
+        # week_of_year: 84/7 + 1 = 13
+        assertEq(13.0, result[0][10], "DTF week_of_year");
+    }
+
+    dtfDefaultFeaturesTest() {
+        # Default features: month, day, hour, day_of_week, quarter, is_weekend
+        ML::DateTimeFeatures dtf();
+        assertEq(6, dtf.getNumOutputFeatures(), "DTF default 6 features");
+
+        list<string> names = dtf.getOutputFeatureNames();
+        assertEq(6, names.size(), "DTF default 6 feature names");
+        assertEq("month", names[0], "DTF default feature 0");
+        assertEq("day", names[1], "DTF default feature 1");
+        assertEq("hour", names[2], "DTF default feature 2");
+        assertEq("day_of_week", names[3], "DTF default feature 3");
+        assertEq("quarter", names[4], "DTF default feature 4");
+        assertEq("is_weekend", names[5], "DTF default feature 5");
+
+        list<auto> result = dtf.transform((2026-07-04T15:00:00,));
+        assertEq(1, result.size(), "DTF default 1 row");
+        assertEq(6, result[0].size(), "DTF default 6 cols");
+        assertEq(7.0, result[0][0], "DTF default month=July");
+        assertEq(4.0, result[0][1], "DTF default day=4");
+        assertEq(15.0, result[0][2], "DTF default hour=15");
+        # 2026-07-04 is a Saturday (day_of_week=6)
+        assertEq(6.0, result[0][3], "DTF default day_of_week=Saturday");
+        assertEq(3.0, result[0][4], "DTF default quarter=Q3");
+        assertEq(1.0, result[0][5], "DTF default is_weekend=yes");
+    }
+
+    dtfCustomSelectionTest() {
+        ML::DateTimeFeatures dtf({"features": ("hour", "minute")});
+        assertEq(2, dtf.getNumOutputFeatures(), "DTF custom 2 features");
+
+        list<string> names = dtf.getOutputFeatureNames();
+        assertEq("hour", names[0], "DTF custom name 0");
+        assertEq("minute", names[1], "DTF custom name 1");
+
+        # Multiple dates
+        list<auto> result = dtf.transform((2026-01-01T08:15:00, 2026-06-15T22:45:00));
+        assertEq(2, result.size(), "DTF custom 2 rows");
+        assertEq(8.0, result[0][0], "DTF custom row 0 hour");
+        assertEq(15.0, result[0][1], "DTF custom row 0 minute");
+        assertEq(22.0, result[1][0], "DTF custom row 1 hour");
+        assertEq(45.0, result[1][1], "DTF custom row 1 minute");
+    }
+
+    dtfIsWeekendTest() {
+        ML::DateTimeFeatures dtf({"features": ("day_of_week", "is_weekend")});
+
+        # Test a full week starting from 2026-03-23 (Monday)
+        # Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6, Sun=0
+        list<auto> dates = (
+            2026-03-23,  # Monday
+            2026-03-24,  # Tuesday
+            2026-03-25,  # Wednesday
+            2026-03-26,  # Thursday
+            2026-03-27,  # Friday
+            2026-03-28,  # Saturday
+            2026-03-29,  # Sunday
+        );
+
+        list<auto> result = dtf.transform(dates);
+        assertEq(7, result.size(), "DTF weekend 7 rows");
+
+        # Weekdays (Mon-Fri)
+        assertEq(1.0, result[0][0], "DTF Monday=1");
+        assertEq(0.0, result[0][1], "DTF Monday not weekend");
+        assertEq(2.0, result[1][0], "DTF Tuesday=2");
+        assertEq(0.0, result[1][1], "DTF Tuesday not weekend");
+        assertEq(3.0, result[2][0], "DTF Wednesday=3");
+        assertEq(0.0, result[2][1], "DTF Wednesday not weekend");
+        assertEq(4.0, result[3][0], "DTF Thursday=4");
+        assertEq(0.0, result[3][1], "DTF Thursday not weekend");
+        assertEq(5.0, result[4][0], "DTF Friday=5");
+        assertEq(0.0, result[4][1], "DTF Friday not weekend");
+
+        # Weekend (Sat-Sun)
+        assertEq(6.0, result[5][0], "DTF Saturday=6");
+        assertEq(1.0, result[5][1], "DTF Saturday is weekend");
+        assertEq(0.0, result[6][0], "DTF Sunday=0");
+        assertEq(1.0, result[6][1], "DTF Sunday is weekend");
+    }
+
+    dtfQuarterTest() {
+        ML::DateTimeFeatures dtf({"features": ("month", "quarter")});
+
+        list<auto> dates = (
+            2026-01-15,  # Q1
+            2026-04-15,  # Q2
+            2026-07-15,  # Q3
+            2026-10-15,  # Q4
+            2026-03-31,  # Q1 (boundary)
+            2026-04-01,  # Q2 (boundary)
+            2026-12-31,  # Q4 (boundary)
+        );
+
+        list<auto> result = dtf.transform(dates);
+        assertEq(7, result.size(), "DTF quarter 7 rows");
+
+        assertEq(1.0, result[0][0], "DTF Jan month");
+        assertEq(1.0, result[0][1], "DTF Jan Q1");
+        assertEq(4.0, result[1][0], "DTF Apr month");
+        assertEq(2.0, result[1][1], "DTF Apr Q2");
+        assertEq(7.0, result[2][0], "DTF Jul month");
+        assertEq(3.0, result[2][1], "DTF Jul Q3");
+        assertEq(10.0, result[3][0], "DTF Oct month");
+        assertEq(4.0, result[3][1], "DTF Oct Q4");
+        assertEq(3.0, result[4][0], "DTF Mar month");
+        assertEq(1.0, result[4][1], "DTF Mar Q1");
+        assertEq(4.0, result[5][0], "DTF Apr boundary month");
+        assertEq(2.0, result[5][1], "DTF Apr boundary Q2");
+        assertEq(12.0, result[6][0], "DTF Dec month");
+        assertEq(4.0, result[6][1], "DTF Dec Q4");
+    }
+
+    dtfNullHandlingTest() {
+        ML::DateTimeFeatures dtf({"features": ("year", "month", "day")});
+
+        # NOTHING values should produce 0.0 for all features
+        list<auto> result = dtf.transform((2026-01-15, NOTHING, 2026-12-25));
+        assertEq(3, result.size(), "DTF null handling 3 rows");
+
+        # Valid date
+        assertEq(2026.0, result[0][0], "DTF null row 0 year");
+        assertEq(1.0, result[0][1], "DTF null row 0 month");
+        assertEq(15.0, result[0][2], "DTF null row 0 day");
+
+        # NOTHING date: all zeros
+        assertEq(0.0, result[1][0], "DTF null row 1 year");
+        assertEq(0.0, result[1][1], "DTF null row 1 month");
+        assertEq(0.0, result[1][2], "DTF null row 1 day");
+
+        # Valid date
+        assertEq(2026.0, result[2][0], "DTF null row 2 year");
+        assertEq(12.0, result[2][1], "DTF null row 2 month");
+        assertEq(25.0, result[2][2], "DTF null row 2 day");
+    }
+
+    dtfErrorTest() {
+        # Invalid feature name
+        assertThrows("ML-DATETIMEFEATURES-ERROR",
+            sub () { new ML::DateTimeFeatures({"features": ("invalid_feature",)}); });
+
+        # Copy error
+        ML::DateTimeFeatures dtf({"features": ("month",)});
+        assertThrows("COPY-ERROR", sub () { ML::DateTimeFeatures cp = dtf.copy(); });
+
+        # Empty input list
+        list<auto> empty_list = ();
+        assertThrows("ML-DATETIMEFEATURES-ERROR",
+            \dtf.transform(), (empty_list,));
+    }
+
+    dtfSerializeTest() {
+        ML::DateTimeFeatures dtf({"features": ("month", "day_of_week", "is_weekend", "quarter")});
+
+        list<auto> dates = (2026-03-25T09:30:00, 2026-07-04T15:00:00);
+        list<auto> orig = dtf.transform(dates);
+
+        binary blob = ML::ml_serialize(dtf);
+        assertTrue(blob.size() > 0, "DTF serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::DateTimeFeatures, "DTF deserialized type");
+
+        list<auto> res = restored.transform(dates);
+        assertEq(orig.size(), res.size(), "DTF serialize round-trip row count");
+        for (int i = 0; i < orig.size(); ++i) {
+            assertEq(orig[i].size(), res[i].size(),
+                sprintf("DTF serialize round-trip row %d col count", i));
+            for (int j = 0; j < orig[i].size(); ++j) {
+                assertEq(orig[i][j], res[i][j],
+                    sprintf("DTF serialize round-trip [%d][%d]", i, j));
+            }
+        }
+
+        # Check feature names preserved
+        assertEq(4, restored.getNumOutputFeatures(), "DTF deserialized num features");
+        list<string> names = restored.getOutputFeatureNames();
+        assertEq("month", names[0], "DTF deserialized feature 0");
+        assertEq("day_of_week", names[1], "DTF deserialized feature 1");
+        assertEq("is_weekend", names[2], "DTF deserialized feature 2");
+        assertEq("quarter", names[3], "DTF deserialized feature 3");
+    }
+
+    # --- TextFeatures Tests ---
+
+    textFeaturesTfidfTest() {
+        ML::TextFeatures tf({"mode": "tfidf"});
+        assertFalse(tf.isFitted(), "TF not fitted initially");
+
+        list<string> docs = (
+            "the cat sat on the mat",
+            "the dog played in the park",
+            "the cat played with the dog",
+        );
+        tf.fit(docs);
+        assertTrue(tf.isFitted(), "TF fitted after fit()");
+
+        list<list<float>> result = tf.transform(docs);
+        assertEq(3, result.size(), "TF-IDF 3 output rows");
+
+        # All rows should have the same number of columns (vocabulary size)
+        int n_features = result[0].size();
+        assertTrue(n_features > 0, "TF-IDF non-zero features");
+        assertEq(n_features, result[1].size(), "TF-IDF consistent columns row 1");
+        assertEq(n_features, result[2].size(), "TF-IDF consistent columns row 2");
+
+        # At least some values should be non-zero
+        bool has_nonzero = False;
+        for (int j = 0; j < n_features; ++j) {
+            if (result[0][j] != 0.0) {
+                has_nonzero = True;
+                break;
+            }
+        }
+        assertTrue(has_nonzero, "TF-IDF has non-zero values");
+    }
+
+    textFeaturesCountTest() {
+        ML::TextFeatures tf({"mode": "count"});
+
+        list<string> docs = (
+            "hello world hello",
+            "world foo bar",
+        );
+        tf.fit(docs);
+
+        list<list<float>> result = tf.transform(docs);
+        assertEq(2, result.size(), "count mode 2 rows");
+
+        list<string> vocab = tf.getVocabulary();
+
+        # Find the index of "hello" in vocabulary
+        int hello_idx = -1;
+        int world_idx = -1;
+        for (int i = 0; i < vocab.size(); ++i) {
+            if (vocab[i] == "hello") {
+                hello_idx = i;
+            }
+            if (vocab[i] == "world") {
+                world_idx = i;
+            }
+        }
+        assertTrue(hello_idx >= 0, "count mode 'hello' in vocab");
+        assertTrue(world_idx >= 0, "count mode 'world' in vocab");
+
+        # "hello" appears 2 times in doc 0
+        assertEq(2.0, result[0][hello_idx], "count mode hello=2 in doc 0");
+        # "world" appears 1 time in doc 0
+        assertEq(1.0, result[0][world_idx], "count mode world=1 in doc 0");
+        # "hello" appears 0 times in doc 1
+        assertEq(0.0, result[1][hello_idx], "count mode hello=0 in doc 1");
+        # "world" appears 1 time in doc 1
+        assertEq(1.0, result[1][world_idx], "count mode world=1 in doc 1");
+    }
+
+    textFeaturesVocabularyTest() {
+        ML::TextFeatures tf();
+        tf.fit(("apple banana cherry", "banana date"));
+
+        list<string> vocab = tf.getVocabulary();
+        assertTrue(vocab.size() > 0, "vocab non-empty");
+
+        # Vocabulary should be alphabetically sorted
+        for (int i = 1; i < vocab.size(); ++i) {
+            assertTrue(vocab[i - 1] < vocab[i],
+                sprintf("vocab sorted: '%s' < '%s'", vocab[i - 1], vocab[i]));
+        }
+
+        # All expected terms should be present
+        assertTrue(vocab.contains("apple"), "vocab contains apple");
+        assertTrue(vocab.contains("banana"), "vocab contains banana");
+        assertTrue(vocab.contains("cherry"), "vocab contains cherry");
+        assertTrue(vocab.contains("date"), "vocab contains date");
+    }
+
+    textFeaturesMaxFeaturesTest() {
+        ML::TextFeatures tf({"mode": "count", "max_features": 2});
+        tf.fit(("a b c d", "a b c", "a b"));
+
+        list<string> vocab = tf.getVocabulary();
+        assertEq(2, vocab.size(), "max_features limits to 2");
+
+        # The top 2 by document frequency should be "a" and "b" (appear in all 3 docs)
+        assertTrue(vocab.contains("a"), "max_features keeps 'a'");
+        assertTrue(vocab.contains("b"), "max_features keeps 'b'");
+    }
+
+    textFeaturesMinDfTest() {
+        ML::TextFeatures tf({"mode": "count", "min_df": 2});
+        tf.fit(("common rare1", "common rare2", "common rare3"));
+
+        list<string> vocab = tf.getVocabulary();
+        # "common" appears in 3 docs, "rare1", "rare2", "rare3" each in 1 doc
+        assertEq(1, vocab.size(), "min_df=2 keeps only 'common'");
+        assertEq("common", vocab[0], "min_df kept 'common'");
+    }
+
+    textFeaturesFitTransformTest() {
+        ML::TextFeatures tf1({"mode": "tfidf"});
+        ML::TextFeatures tf2({"mode": "tfidf"});
+
+        list<string> docs = ("hello world", "foo bar baz");
+
+        tf1.fit(docs);
+        list<list<float>> r1 = tf1.transform(docs);
+
+        list<list<float>> r2 = tf2.fitTransform(docs);
+
+        assertEq(r1.size(), r2.size(), "fitTransform same rows");
+        for (int i = 0; i < r1.size(); ++i) {
+            assertEq(r1[i].size(), r2[i].size(),
+                sprintf("fitTransform same cols row %d", i));
+            for (int j = 0; j < r1[i].size(); ++j) {
+                assertEq(r1[i][j], r2[i][j],
+                    sprintf("fitTransform same value [%d][%d]", i, j));
+            }
+        }
+    }
+
+    textFeaturesNotFittedTest() {
+        ML::TextFeatures tf();
+        assertFalse(tf.isFitted(), "TF not fitted");
+
+        assertThrows("ML-TEXT-FEATURES-ERROR", sub() {
+            tf.transform(("test",));
+        });
+
+        assertThrows("ML-TEXT-FEATURES-ERROR", sub() {
+            tf.getVocabulary();
+        });
+    }
+
+    textFeaturesCopyErrorTest() {
+        ML::TextFeatures tf();
+        assertThrows("COPY-ERROR", sub() {
+            ML::TextFeatures tf2 = tf.copy();
+        });
+    }
+
+    textFeaturesSerializeTest() {
+        ML::TextFeatures tf({"mode": "tfidf", "max_features": 5});
+        tf.fit(("the cat sat", "the dog ran", "the bird flew"));
+
+        list<list<float>> orig = tf.transform(("the cat ran",));
+        list<string> orig_vocab = tf.getVocabulary();
+
+        binary blob = ML::ml_serialize(tf);
+        assertTrue(blob.size() > 0, "TF serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::TextFeatures, "TF deserialized type");
+
+        list<list<float>> res = restored.transform(("the cat ran",));
+        assertEq(orig.size(), res.size(), "TF serialize round-trip rows");
+        for (int j = 0; j < orig[0].size(); ++j) {
+            assertEq(orig[0][j], res[0][j],
+                sprintf("TF serialize round-trip [0][%d]", j));
+        }
+
+        list<string> res_vocab = restored.getVocabulary();
+        assertEq(orig_vocab.size(), res_vocab.size(), "TF vocab size after deserialize");
+        for (int i = 0; i < orig_vocab.size(); ++i) {
+            assertEq(orig_vocab[i], res_vocab[i],
+                sprintf("TF vocab[%d] after deserialize", i));
+        }
     }
 }

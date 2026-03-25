@@ -53,6 +53,8 @@
 #include "QC_PolynomialFeatures.h"
 #include "QC_SelectKBest.h"
 #include "QC_RFE.h"
+#include "QC_DateTimeFeatures.h"
+#include "QC_TextFeatures.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -640,6 +642,8 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("ADWIN"), xsink);
     algos->push(new QoreStringNode("PageHinkley"), xsink);
     algos->push(new QoreStringNode("DDM"), xsink);
+    algos->push(new QoreStringNode("DateTimeFeatures"), xsink);
+    algos->push(new QoreStringNode("TextFeatures"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1270,6 +1274,34 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreDateTimeFeatures* dtfp = dynamic_cast<QoreDateTimeFeatures*>(
+        model->getReferencedPrivateData(CID_DATETIMEFEATURES, xsink));
+    if (dtfp) {
+        // DateTimeFeatures is stateless (always fitted)
+        algorithm = "DateTimeFeatures";
+        model_data = dtfp->serializeState();
+        dtfp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreTextFeatures* tfp = dynamic_cast<QoreTextFeatures*>(
+        model->getReferencedPrivateData(CID_TEXTFEATURES, xsink));
+    if (tfp) {
+        if (!tfp->isFitted()) {
+            tfp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "TextFeatures";
+        model_data = tfp->serializeState();
+        field_names = tfp->getFieldNames();
+        tfp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
         model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
     if (nbp) {
@@ -1430,6 +1462,12 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "RFE") {
         obj = new QoreObject(QC_RFE, getProgram());
         obj->setPrivate(CID_RFE, priv);
+    } else if (header.algorithm == "DateTimeFeatures") {
+        obj = new QoreObject(QC_DATETIMEFEATURES, getProgram());
+        obj->setPrivate(CID_DATETIMEFEATURES, priv);
+    } else if (header.algorithm == "TextFeatures") {
+        obj = new QoreObject(QC_TEXTFEATURES, getProgram());
+        obj->setPrivate(CID_TEXTFEATURES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1505,6 +1543,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_POLYNOMIALFEATURES, QorePolynomialFeatures, "PolynomialFeatures")
     TRY_SERIALIZE_ALGO(CID_SELECTKBEST, QoreSelectKBest, "SelectKBest")
     TRY_SERIALIZE_ALGO(CID_RFE, QoreRFE, "RFE")
+    TRY_SERIALIZE_ALGO(CID_TEXTFEATURES, QoreTextFeatures, "TextFeatures")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
@@ -1520,6 +1559,18 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
             algorithm = "HoltWinters";
             model_data = hw->serializeState();
             hw->deref(xsink);
+            found = true;
+        } else if (*xsink) { xsink->clear(); }
+    }
+
+    // DateTimeFeatures is stateless (no field_names, always fitted)
+    if (!found) {
+        QoreDateTimeFeatures* dtfp = dynamic_cast<QoreDateTimeFeatures*>(
+            model->getReferencedPrivateData(CID_DATETIMEFEATURES, xsink));
+        if (dtfp) {
+            algorithm = "DateTimeFeatures";
+            model_data = dtfp->serializeState();
+            dtfp->deref(xsink);
             found = true;
         } else if (*xsink) { xsink->clear(); }
     }
@@ -1665,6 +1716,12 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "RFE") {
         obj = new QoreObject(QC_RFE, getProgram());
         obj->setPrivate(CID_RFE, priv);
+    } else if (header.algorithm == "DateTimeFeatures") {
+        obj = new QoreObject(QC_DATETIMEFEATURES, getProgram());
+        obj->setPrivate(CID_DATETIMEFEATURES, priv);
+    } else if (header.algorithm == "TextFeatures") {
+        obj = new QoreObject(QC_TEXTFEATURES, getProgram());
+        obj->setPrivate(CID_TEXTFEATURES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",

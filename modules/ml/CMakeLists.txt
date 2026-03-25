@@ -100,6 +100,8 @@ set(ML_QPP_SRC
     src/QC_ADWIN.qpp
     src/QC_PageHinkley.qpp
     src/QC_DDM.qpp
+    src/QC_TextFeatures.qpp
+    src/QC_DateTimeFeatures.qpp
     src/ql_ml.qpp
 )
 
@@ -141,6 +143,8 @@ set(ML_CPP_SRC
     src/ADWIN.cpp
     src/PageHinkley.cpp
     src/DDM.cpp
+    src/TextFeatures.cpp
+    src/DateTimeFeatures.cpp
 )
 
 # Conditional ONNX Runtime support
