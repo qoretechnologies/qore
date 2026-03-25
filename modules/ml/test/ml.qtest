@@ -210,6 +210,11 @@ public class MlTest inherits QUnit::Test {
         addTestCase("RF beats DT on noisy data", \rfBeatsDtTest());
         addTestCase("GBT beats DT on noisy data", \gbtBeatsDtTest());
         addTestCase("tree algorithms with metrics", \treeMetricsIntegrationTest());
+        addTestCase("SVM classification basic", \svmClassificationBasicTest());
+        addTestCase("SVM linear kernel", \svmLinearKernelTest());
+        addTestCase("SVM error cases", \svmErrorTest());
+        addTestCase("SVM copy error", \svmCopyTest());
+        addTestCase("serialize SVM round-trip", \serializeSVMTest());
         set_return_value(main());
     }
 
@@ -241,9 +246,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(20, caps.native_algorithms.size());
+            assertEq(21, caps.native_algorithms.size());
         } else {
-            assertEq(19, caps.native_algorithms.size());
+            assertEq(20, caps.native_algorithms.size());
         }
     }
 
@@ -4285,5 +4290,90 @@ public class MlTest inherits QUnit::Test {
             (0, 0, 1, 1));
         hash<auto> imp = rf.getFeatureImportances();
         assertEq(2, imp.importances.size(), "RF importances has correct size");
+    }
+
+    # --- SVM Tests ---
+
+    svmClassificationBasicTest() {
+        ML::SVM svm({"C": 1.0, "kernel": "rbf", "seed": 42});
+        assertFalse(svm.isFitted(), "SVM not fitted initially");
+
+        svm.fitMatrix(
+            ((0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0),
+             (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0)),
+            (0, 0, 0, 0, 1, 1, 1, 1));
+        assertTrue(svm.isFitted(), "SVM fitted");
+
+        list<hash<auto>> results = svm.predictMatrix(((0.2, 0.3),));
+        assertEq(0, results[0].predicted_class, "SVM predicts class 0");
+        assertTrue(results[0].confidence >= 0.5, "SVM reasonable confidence");
+
+        results = svm.predictMatrix(((10.3, 10.2),));
+        assertEq(1, results[0].predicted_class, "SVM predicts class 1");
+    }
+
+    svmLinearKernelTest() {
+        ML::SVM svm({"C": 10.0, "kernel": "linear", "seed": 42});
+
+        svm.fitMatrix(
+            ((0.0,), (1.0,), (2.0,), (10.0,), (11.0,), (12.0,)),
+            (0, 0, 0, 1, 1, 1));
+
+        list<hash<auto>> results = svm.predictMatrix(((1.5,), (10.5,)));
+        assertEq(0, results[0].predicted_class, "SVM linear class 0");
+        assertEq(1, results[1].predicted_class, "SVM linear class 1");
+    }
+
+    svmErrorTest() {
+        bool caught = False;
+        try { new ML::SVM({"C": -1.0}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-SVM-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "SVM negative C throws");
+
+        caught = False;
+        try { new ML::SVM({"kernel": "poly"}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-SVM-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "SVM invalid kernel throws");
+
+        ML::SVM svm({"kernel": "linear"});
+        assertThrows("ML-SVM-ERROR",
+            \svm.predictMatrix(), (((1.0, 2.0),),));
+    }
+
+    svmCopyTest() {
+        ML::SVM svm({"kernel": "linear"});
+        bool caught = False;
+        try { ML::SVM svm2 = svm.copy(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("COPY-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "SVM copy throws");
+    }
+
+    serializeSVMTest() {
+        ML::SVM svm({"C": 1.0, "kernel": "rbf", "seed": 42});
+        svm.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0),
+             (10.0, 10.0), (11.0, 11.0)),
+            (0, 0, 1, 1));
+
+        list<hash<auto>> orig = svm.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
+
+        binary blob = ML::ml_serialize(svm);
+        assertTrue(blob.size() > 0, "SVM serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::SVM, "SVM deserialized type");
+
+        list<hash<auto>> res = restored.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
+        assertEq(orig[0].predicted_class, res[0].predicted_class, "SVM serialize class 0");
+        assertEq(orig[1].predicted_class, res[1].predicted_class, "SVM serialize class 1");
     }
 }

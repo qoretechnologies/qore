@@ -89,6 +89,7 @@ set(ML_QPP_SRC
     src/QC_DecisionTree.qpp
     src/QC_RandomForest.qpp
     src/QC_GradientBoostedTrees.qpp
+    src/QC_SVM.qpp
     src/ql_ml.qpp
 )
 
@@ -118,6 +119,7 @@ set(ML_CPP_SRC
     src/DecisionTree.cpp
     src/RandomForest.cpp
     src/GradientBoostedTrees.cpp
+    src/SVM.cpp
 )
 
 # Conditional ONNX Runtime support

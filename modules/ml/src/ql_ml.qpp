@@ -44,6 +44,7 @@
 #include "QC_DecisionTree.h"
 #include "QC_RandomForest.h"
 #include "QC_GradientBoostedTrees.h"
+#include "QC_SVM.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -534,6 +535,18 @@ hashdecl Qore::ML::GBTRegressionResult {
     float prediction;
 }
 
+//! SVM prediction result
+/** Returned by @ref SVM::predict() and @ref SVM::predictMatrix().
+*/
+hashdecl Qore::ML::SVMResult {
+    //! predicted class label
+    int predicted_class;
+    //! decision function value (distance from hyperplane)
+    float decision_value;
+    //! confidence (sigmoid of |decision_value| for binary; vote fraction for multiclass)
+    float confidence;
+}
+
 /** @defgroup ml_functions ML Functions
     ML utility functions
 */
@@ -581,6 +594,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("DecisionTree"), xsink);
     algos->push(new QoreStringNode("RandomForest"), xsink);
     algos->push(new QoreStringNode("GradientBoostedTrees"), xsink);
+    algos->push(new QoreStringNode("SVM"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1109,6 +1123,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreSVM* svmp = dynamic_cast<QoreSVM*>(
+        model->getReferencedPrivateData(CID_SVM, xsink));
+    if (svmp) {
+        if (!svmp->isFitted()) {
+            svmp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "SVM";
+        model_data = svmp->serializeState();
+        field_names = svmp->getFieldNames();
+        svmp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreGradientBoostedTrees* gbtp = dynamic_cast<QoreGradientBoostedTrees*>(
         model->getReferencedPrivateData(CID_GRADIENTBOOSTEDTREES, xsink));
     if (gbtp) {
@@ -1211,6 +1242,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "GradientBoostedTrees") {
         obj = new QoreObject(QC_GRADIENTBOOSTEDTREES, getProgram());
         obj->setPrivate(CID_GRADIENTBOOSTEDTREES, priv);
+    } else if (header.algorithm == "SVM") {
+        obj = new QoreObject(QC_SVM, getProgram());
+        obj->setPrivate(CID_SVM, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1278,6 +1312,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_DECISIONTREE, QoreDecisionTree, "DecisionTree")
     TRY_SERIALIZE_ALGO(CID_RANDOMFOREST, QoreRandomForest, "RandomForest")
     TRY_SERIALIZE_ALGO(CID_GRADIENTBOOSTEDTREES, QoreGradientBoostedTrees, "GradientBoostedTrees")
+    TRY_SERIALIZE_ALGO(CID_SVM, QoreSVM, "SVM")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
