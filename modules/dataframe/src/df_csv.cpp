@@ -140,6 +140,61 @@ static ColumnType inferCsvColumnType(const std::vector<std::string>& values,
     return ColumnType::STRING;
 }
 
+// Helper: append a parsed field value to column storage
+static void appendFieldToColumn(ColumnData& cd, const std::string& field,
+        const std::string& null_string) {
+    int64_t idx = cd.n_rows;
+    ++cd.n_rows;
+    cd.null_mask.push_back(0);
+
+    if (isNullString(field, null_string)) {
+        cd.null_mask[idx] = 1;
+        switch (cd.type) {
+            case ColumnType::INT64:
+                cd.int_data.push_back(0);
+                break;
+            case ColumnType::FLOAT64:
+                cd.float_data.conservativeResize(cd.n_rows);
+                cd.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
+                break;
+            case ColumnType::STRING:
+                cd.str_data.emplace_back();
+                break;
+            case ColumnType::BOOL:
+                cd.bool_data.push_back(0);
+                break;
+            default:
+                break;
+        }
+        return;
+    }
+
+    switch (cd.type) {
+        case ColumnType::INT64: {
+            int64_t val = 0;
+            tryParseInt(field, val);
+            cd.int_data.push_back(val);
+            break;
+        }
+        case ColumnType::FLOAT64: {
+            double val = 0.0;
+            tryParseFloat(field, val);
+            cd.float_data.conservativeResize(cd.n_rows);
+            cd.float_data(idx) = val;
+            break;
+        }
+        case ColumnType::STRING:
+            cd.str_data.push_back(field);
+            break;
+        case ColumnType::BOOL:
+            cd.bool_data.push_back(
+                (field == "true" || field == "True" || field == "1") ? 1 : 0);
+            break;
+        default:
+            break;
+    }
+}
+
 QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNode* options,
         ExceptionSink* xsink) {
     if (qore_check_cancel(xsink, "reading CSV file")) {
@@ -216,37 +271,32 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         col_names = parseCsvLine(line, sep, quote_char);
     }
 
-    // Read all data rows as strings
-    std::vector<std::vector<std::string>> all_rows;
+    // --- Streaming two-phase approach ---
+    // Phase 1: Read a sample (first 100 rows) for type inference
+    static const int SAMPLE_SIZE = 100;
+    std::vector<std::vector<std::string>> sample_rows;
     int64_t rows_read = 0;
-    while (std::getline(file, line)) {
+
+    while (std::getline(file, line) && (int64_t)sample_rows.size() < SAMPLE_SIZE) {
         if (max_rows >= 0 && rows_read >= max_rows) {
             break;
-        }
-        // Periodic cancellation check every 10K rows
-        if ((rows_read % 10000) == 0 && rows_read > 0) {
-            if (qore_check_cancel(xsink, "reading CSV file")) {
-                return nullptr;
-            }
         }
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
         if (line.empty()) {
-            continue;  // skip blank lines
+            continue;
         }
-        auto fields = parseCsvLine(line, sep, quote_char);
-        all_rows.push_back(std::move(fields));
+        sample_rows.push_back(parseCsvLine(line, sep, quote_char));
         ++rows_read;
     }
-    file.close();
 
-    if (all_rows.empty()) {
+    if (sample_rows.empty()) {
         return new QoreDataFrame();
     }
 
-    // If no header, generate column names: col_0, col_1, ...
-    size_t num_cols = all_rows[0].size();
+    // Determine column count and names
+    size_t num_cols = sample_rows[0].size();
     if (col_names.empty()) {
         for (size_t c = 0; c < num_cols; ++c) {
             col_names.push_back("col_" + std::to_string(c));
@@ -256,78 +306,37 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         num_cols = col_names.size();
     }
 
-    // Transpose: collect per-column string values
-    std::vector<std::vector<std::string>> col_values(num_cols);
-    for (const auto& row : all_rows) {
-        for (size_t c = 0; c < num_cols; ++c) {
-            if (c < row.size()) {
-                col_values[c].push_back(row[c]);
-            } else {
-                col_values[c].push_back("");
-            }
-        }
-    }
-
-    // Infer types per column
+    // Infer types from sample (transposed per-column view)
     std::vector<ColumnType> types(num_cols);
     for (size_t c = 0; c < num_cols; ++c) {
-        types[c] = inferCsvColumnType(col_values[c], null_string);
+        std::vector<std::string> sample_col;
+        sample_col.reserve(sample_rows.size());
+        for (const auto& row : sample_rows) {
+            sample_col.push_back(c < row.size() ? row[c] : "");
+        }
+        types[c] = inferCsvColumnType(sample_col, null_string);
     }
 
-    // Build DataFrame columns
-    int64_t n_rows = (int64_t)all_rows.size();
+    // Phase 2: Create column storage and populate from sample + stream remaining
     auto* df = new QoreDataFrame();
-
     for (size_t c = 0; c < num_cols; ++c) {
         auto cd = std::make_shared<ColumnData>();
         cd->type = types[c];
-        cd->n_rows = n_rows;
-        cd->null_mask.resize(n_rows, 0);
-
+        cd->n_rows = 0;
+        // Reserve for sample rows; columns grow dynamically after
         switch (types[c]) {
-            case ColumnType::INT64: {
-                cd->int_data.resize(n_rows);
-                for (int64_t i = 0; i < n_rows; ++i) {
-                    if (isNullString(col_values[c][i], null_string)) {
-                        cd->null_mask[i] = 1;
-                        cd->int_data[i] = 0;
-                    } else {
-                        int64_t val;
-                        tryParseInt(col_values[c][i], val);
-                        cd->int_data[i] = val;
-                    }
-                }
+            case ColumnType::INT64:
+                cd->int_data.reserve(sample_rows.size());
                 break;
-            }
-            case ColumnType::FLOAT64: {
-                cd->float_data.resize(n_rows);
-                for (int64_t i = 0; i < n_rows; ++i) {
-                    if (isNullString(col_values[c][i], null_string)) {
-                        cd->null_mask[i] = 1;
-                        cd->float_data(i) = std::numeric_limits<double>::quiet_NaN();
-                    } else {
-                        double val;
-                        tryParseFloat(col_values[c][i], val);
-                        cd->float_data(i) = val;
-                    }
-                }
+            case ColumnType::STRING:
+                cd->str_data.reserve(sample_rows.size());
                 break;
-            }
-            case ColumnType::STRING: {
-                cd->str_data.resize(n_rows);
-                for (int64_t i = 0; i < n_rows; ++i) {
-                    if (isNullString(col_values[c][i], null_string)) {
-                        cd->null_mask[i] = 1;
-                    } else {
-                        cd->str_data[i] = col_values[c][i];
-                    }
-                }
+            case ColumnType::BOOL:
+                cd->bool_data.reserve(sample_rows.size());
                 break;
-            }
             default:
                 break;
         }
-
         Column col;
         col.name = col_names[c];
         col.data = std::move(cd);
@@ -335,7 +344,47 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         df->columns.push_back(std::move(col));
     }
 
-    df->n_rows = n_rows;
+    // Populate from sample rows
+    for (const auto& row : sample_rows) {
+        for (size_t c = 0; c < num_cols; ++c) {
+            const std::string& field = (c < row.size()) ? row[c] : "";
+            appendFieldToColumn(*df->columns[c].data, field, null_string);
+        }
+    }
+    // Free sample memory
+    sample_rows.clear();
+    sample_rows.shrink_to_fit();
+
+    // Stream remaining rows directly into columns
+    while (std::getline(file, line)) {
+        if (max_rows >= 0 && rows_read >= max_rows) {
+            break;
+        }
+        // Periodic cancellation check every 10K rows
+        if ((rows_read % 10000) == 0 && rows_read > 0) {
+            if (qore_check_cancel(xsink, "reading CSV file")) {
+                delete df;
+                return nullptr;
+            }
+        }
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty()) {
+            continue;
+        }
+
+        auto fields = parseCsvLine(line, sep, quote_char);
+        for (size_t c = 0; c < num_cols; ++c) {
+            const std::string& field = (c < fields.size()) ? fields[c] : "";
+            appendFieldToColumn(*df->columns[c].data, field, null_string);
+        }
+        ++rows_read;
+    }
+    file.close();
+
+    // Set final row count from first column
+    df->n_rows = df->columns.empty() ? 0 : df->columns[0].data->n_rows;
     return df;
 }
 
