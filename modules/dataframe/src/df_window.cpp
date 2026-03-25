@@ -24,10 +24,11 @@ struct WindowSpec {
     std::vector<bool> ascending;
 };
 
-static WindowSpec parseWindowSpec(const QoreHashNode* spec) {
-    WindowSpec ws;
+static bool parseWindowSpec(const QoreHashNode* spec, WindowSpec& ws,
+        const std::unordered_map<std::string, size_t>& col_index,
+        ExceptionSink* xsink) {
     if (!spec) {
-        return ws;
+        return true;
     }
     QoreValue v = spec->getKeyValue("partition_by");
     if (v.getType() == NT_LIST) {
@@ -35,7 +36,13 @@ static WindowSpec parseWindowSpec(const QoreHashNode* spec) {
         for (size_t i = 0; i < list->size(); ++i) {
             const QoreStringNode* s = list->retrieveEntry(i).get<const QoreStringNode>();
             if (s) {
-                ws.partition_by.push_back(s->c_str());
+                std::string name = s->c_str();
+                if (!col_index.count(name)) {
+                    xsink->raiseException("DATAFRAME-COLUMN-ERROR",
+                        "window partition_by column '%s' not found", name.c_str());
+                    return false;
+                }
+                ws.partition_by.push_back(name);
             }
         }
     }
@@ -45,7 +52,13 @@ static WindowSpec parseWindowSpec(const QoreHashNode* spec) {
         for (size_t i = 0; i < list->size(); ++i) {
             const QoreStringNode* s = list->retrieveEntry(i).get<const QoreStringNode>();
             if (s) {
-                ws.order_by.push_back(s->c_str());
+                std::string name = s->c_str();
+                if (!col_index.count(name)) {
+                    xsink->raiseException("DATAFRAME-COLUMN-ERROR",
+                        "window order_by column '%s' not found", name.c_str());
+                    return false;
+                }
+                ws.order_by.push_back(name);
             }
         }
     }
@@ -56,7 +69,7 @@ static WindowSpec parseWindowSpec(const QoreHashNode* spec) {
             ws.ascending.push_back(list->retrieveEntry(i).getAsBool());
         }
     }
-    return ws;
+    return true;
 }
 
 // Helper: partition rows by the partition_by columns, then sort within each partition
@@ -223,6 +236,12 @@ QoreDataFrame* QoreDataFrame::pivot(const std::string& index_col,
         return nullptr;
     }
     std::lock_guard<std::mutex> lk(mtx);
+
+    if (agg_func != "sum" && agg_func != "mean") {
+        xsink->raiseException("DATAFRAME-ERROR",
+            "pivot agg_func must be 'sum' or 'mean', got '%s'", agg_func.c_str());
+        return nullptr;
+    }
 
     int idx_ci = getColIdx(index_col, xsink);
     if (idx_ci < 0) { return nullptr; }
@@ -499,9 +518,15 @@ QoreDataFrame* QoreDataFrame::melt(const QoreListNode* id_vars,
 
 QoreListNode* QoreDataFrame::rowNumber(const QoreHashNode* spec,
         ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "computing row numbers")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
-    WindowSpec ws = parseWindowSpec(spec);
+    WindowSpec ws;
+    if (!parseWindowSpec(spec, ws, col_index, xsink)) {
+        return nullptr;
+    }
     std::vector<int64_t> orig_to_out;
     auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
 
@@ -533,12 +558,18 @@ QoreListNode* QoreDataFrame::rowNumber(const QoreHashNode* spec,
 
 QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
         const QoreHashNode* spec, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "computing lag")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     int col_idx = getColIdx(column, xsink);
     if (col_idx < 0) { return nullptr; }
 
-    WindowSpec ws = parseWindowSpec(spec);
+    WindowSpec ws;
+    if (!parseWindowSpec(spec, ws, col_index, xsink)) {
+        return nullptr;
+    }
     std::vector<int64_t> orig_to_out;
     auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
 
@@ -572,12 +603,18 @@ QoreListNode* QoreDataFrame::lag(const std::string& column, int64_t offset,
 
 QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
         const QoreHashNode* spec, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "computing lead")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     int col_idx = getColIdx(column, xsink);
     if (col_idx < 0) { return nullptr; }
 
-    WindowSpec ws = parseWindowSpec(spec);
+    WindowSpec ws;
+    if (!parseWindowSpec(spec, ws, col_index, xsink)) {
+        return nullptr;
+    }
     std::vector<int64_t> orig_to_out;
     auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
 
@@ -609,12 +646,18 @@ QoreListNode* QoreDataFrame::lead(const std::string& column, int64_t offset,
 
 QoreListNode* QoreDataFrame::cumSum(const std::string& column,
         const QoreHashNode* spec, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "computing cumulative sum")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     int col_idx = getColIdx(column, xsink);
     if (col_idx < 0) { return nullptr; }
 
-    WindowSpec ws = parseWindowSpec(spec);
+    WindowSpec ws;
+    if (!parseWindowSpec(spec, ws, col_index, xsink)) {
+        return nullptr;
+    }
     std::vector<int64_t> orig_to_out;
     auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
 
@@ -651,12 +694,18 @@ QoreListNode* QoreDataFrame::cumSum(const std::string& column,
 
 QoreListNode* QoreDataFrame::rollingMean(const std::string& column,
         int64_t window_size, const QoreHashNode* spec, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "computing rolling mean")) {
+        return nullptr;
+    }
     std::lock_guard<std::mutex> lk(mtx);
 
     int col_idx = getColIdx(column, xsink);
     if (col_idx < 0) { return nullptr; }
 
-    WindowSpec ws = parseWindowSpec(spec);
+    WindowSpec ws;
+    if (!parseWindowSpec(spec, ws, col_index, xsink)) {
+        return nullptr;
+    }
     std::vector<int64_t> orig_to_out;
     auto indices = computeWindowOrder(columns, col_index, n_rows, ws, orig_to_out);
 
