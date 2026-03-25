@@ -1733,7 +1733,24 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
     // AND compute local variable slot IDs for flat array access in interpreter
     uint32_t max_vid = 0;
     std::unordered_map<const LocalVar*, uint32_t> slot_map;
+
+    // Phase B2: Handle parent slot pre-seeding for handler IR functions
+    // If this function has pre-seeded parent slots, initialize slot_map with them
+    // and start assigning new slots from parent_slot_count onward
     uint32_t next_local_slot = 0;
+    if (parent_slot_count > 0) {
+        // Pre-seeded parent slots: copy their mappings to slot_map
+        // These slots keep their pre-seeded IDs (0..parent_slot_count-1)
+        for (const auto& [lvar, slot_id] : local_var_slots) {
+            if (lvar && slot_id < parent_slot_count) {
+                slot_map[lvar] = slot_id;
+                // Update next_local_slot to account for pre-seeded slots
+                if (slot_id >= next_local_slot) {
+                    next_local_slot = slot_id + 1;
+                }
+            }
+        }
+    }
 
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {

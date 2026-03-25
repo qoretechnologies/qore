@@ -2232,23 +2232,9 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
-    // Phase B1: Handler IR compilation with parent slot inheritance
-    // DISABLED: Requires QoreIRVerifier::computeSlotIdsAndEmbed() modification
-    //
-    // Current issue: Handler's local_var_slots are pre-seeded with parent's entries,
-    // but computeSlotIdsAndEmbed() doesn't know to skip these pre-seeded slots.
-    // It tries to assign new slot IDs to all locals, overwriting parent slot mapping.
-    //
-    // TODO: Modify QoreIRVerifier::computeSlotIdsAndEmbed() to:
-    // 1. Check if func.parent_slot_count > 0
-    // 2. If yes, skip assigning slots 0..parent_slot_count-1 (already pre-seeded)
-    // 3. Start assigning new slot IDs from parent_slot_count onward
-    //
-    // Once QoreIRVerifier is fixed, uncomment the handler compilation logic below
-
-    return 0;  // Handlers use AST fallback until QoreIRVerifier is updated
-
-    /* DISABLED HANDLER COMPILATION - SEE TODO ABOVE
+    // Phase B2: Handler IR compilation with parent slot inheritance
+    // QoreIRVerifier has been updated to handle pre-seeded parent slots
+    // Handler functions can now be compiled with parent scope access
     int compiled_count = 0;
     QoreIRFunction* parent_func = builder.getFunction();
 
@@ -2324,7 +2310,6 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
     }
 
     return compiled_count;
-    */
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
