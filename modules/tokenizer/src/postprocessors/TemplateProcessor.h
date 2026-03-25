@@ -61,6 +61,15 @@ public:
         const std::vector<std::string>& tokens_b,
         bool add_special) const override;
 
+    EncodingResult processWithOffsets(
+        const std::vector<int>& ids_a,
+        const std::vector<int>& ids_b,
+        const std::vector<std::string>& tokens_a,
+        const std::vector<std::string>& tokens_b,
+        const std::vector<std::pair<size_t, size_t>>& offsets_a,
+        const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        bool add_special) const override;
+
     int numAddedTokens(bool has_pair) const override;
 
 protected:

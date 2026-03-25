@@ -296,11 +296,13 @@ std::vector<TokenWithOffset> BPEModel::symbolsToIdsWithOffsets(
             prev_was_unk = false;
             for (size_t j = 0; j < sym.size(); ++j) {
                 std::string bt = byteToken((uint8_t)sym[j]);
+                size_t byte_start = start + j;
+                size_t byte_end = byte_start + 1;
                 auto bt_it = vocab.find(bt);
                 if (bt_it != vocab.end()) {
-                    result.push_back({bt_it->second, start, end});
+                    result.push_back({bt_it->second, byte_start, byte_end});
                 } else if (unk_id >= 0) {
-                    result.push_back({unk_id, start, end});
+                    result.push_back({unk_id, byte_start, byte_end});
                 }
             }
         } else {

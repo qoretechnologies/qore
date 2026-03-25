@@ -202,6 +202,98 @@ EncodingResult TemplateProcessor::process(
     return result;
 }
 
+EncodingResult TemplateProcessor::processWithOffsets(
+        const std::vector<int>& ids_a,
+        const std::vector<int>& ids_b,
+        const std::vector<std::string>& tokens_a,
+        const std::vector<std::string>& tokens_b,
+        const std::vector<std::pair<size_t, size_t>>& offsets_a,
+        const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        bool add_special) const {
+    EncodingResult result;
+
+    if (!add_special) {
+        // No special tokens: concatenate A and B with their offsets
+        result.ids = ids_a;
+        result.type_ids.assign(ids_a.size(), 0);
+        result.tokens = tokens_a;
+        result.offsets.insert(result.offsets.end(), offsets_a.begin(), offsets_a.end());
+        result.special_tokens_mask.assign(ids_a.size(), 0);
+
+        if (!ids_b.empty()) {
+            result.ids.insert(result.ids.end(), ids_b.begin(), ids_b.end());
+            std::vector<int> b_types(ids_b.size(), 1);
+            result.type_ids.insert(result.type_ids.end(), b_types.begin(), b_types.end());
+            result.tokens.insert(result.tokens.end(), tokens_b.begin(), tokens_b.end());
+            result.offsets.insert(result.offsets.end(), offsets_b.begin(), offsets_b.end());
+            result.special_tokens_mask.resize(result.ids.size(), 0);
+        }
+        return result;
+    }
+
+    // Choose the appropriate template
+    const std::vector<TemplatePiece>& tmpl =
+        (!ids_b.empty() && !pair_template.empty()) ? pair_template : single_template;
+
+    // Walk the template: SEQUENCE pieces get input offsets, SPECIAL_TOKEN pieces get (0,0)
+    size_t a_pos = 0;
+    size_t b_pos = 0;
+
+    for (const auto& piece : tmpl) {
+        if (piece.type == TemplatePiece::SEQUENCE) {
+            const std::vector<int>* ids_ptr = nullptr;
+            const std::vector<std::string>* tokens_ptr = nullptr;
+            const std::vector<std::pair<size_t, size_t>>* offsets_ptr = nullptr;
+            size_t* pos_ptr = nullptr;
+
+            if (piece.id == "A") {
+                ids_ptr = &ids_a;
+                tokens_ptr = &tokens_a;
+                offsets_ptr = &offsets_a;
+                pos_ptr = &a_pos;
+            } else if (piece.id == "B") {
+                ids_ptr = &ids_b;
+                tokens_ptr = &tokens_b;
+                offsets_ptr = &offsets_b;
+                pos_ptr = &b_pos;
+            }
+
+            if (ids_ptr) {
+                for (size_t i = 0; i < ids_ptr->size(); ++i) {
+                    result.ids.push_back((*ids_ptr)[i]);
+                    result.type_ids.push_back(piece.type_id);
+                    if (i < tokens_ptr->size()) {
+                        result.tokens.push_back((*tokens_ptr)[i]);
+                    }
+                    if (*pos_ptr < offsets_ptr->size()) {
+                        result.offsets.push_back((*offsets_ptr)[*pos_ptr]);
+                    } else {
+                        result.offsets.push_back({0, 0});
+                    }
+                    result.special_tokens_mask.push_back(0);
+                    ++(*pos_ptr);
+                }
+            }
+        } else if (piece.type == TemplatePiece::SPECIAL_TOKEN) {
+            auto it = special_tokens.find(piece.id);
+            if (it != special_tokens.end()) {
+                const SpecialTokenInfo& st = it->second;
+                for (size_t i = 0; i < st.ids.size(); ++i) {
+                    result.ids.push_back(st.ids[i]);
+                    result.type_ids.push_back(piece.type_id);
+                    if (i < st.tokens.size()) {
+                        result.tokens.push_back(st.tokens[i]);
+                    }
+                    result.offsets.push_back({0, 0});
+                    result.special_tokens_mask.push_back(1);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
 // --- BertProcessor ---
 
 static void readSpecialToken(const QoreHashNode* config, const char* key,

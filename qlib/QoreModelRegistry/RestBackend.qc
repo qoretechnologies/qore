@@ -115,7 +115,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
             "artifact_base64": make_base64_string(artifact),
         };
 
-        doPost(base_path + "/" + encode_url_param(name) + "/versions", body);
+        doPost(getTenantPath() + "/" + encode_url_param(name) + "/versions", body);
 
         return version_id;
     }
@@ -133,7 +133,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         }
 
         # Cache miss — download from REST API
-        hash<auto> resp = doGet(base_path + "/" + encode_url_param(name)
+        hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions/" + encode_url_param(version_id) + "/artifact");
 
         binary artifact;
@@ -179,40 +179,41 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     }
 
     list<string> listModels() {
-        hash<auto> resp = doGet(base_path);
+        hash<auto> resp = doGet(getTenantPath());
         return resp.body.models ?? resp.body ?? ();
     }
 
     nothing tag(string name, string version_id, string tag_name) {
-        doPut(base_path + "/" + encode_url_param(name) + "/versions/"
+        doPut(getTenantPath() + "/" + encode_url_param(name) + "/versions/"
             + encode_url_param(version_id) + "/tags/"
             + encode_url_param(tag_name));
     }
 
     nothing untag(string name, string version_id, string tag_name) {
-        doDel(base_path + "/" + encode_url_param(name) + "/versions/"
+        doDel(getTenantPath() + "/" + encode_url_param(name) + "/versions/"
             + encode_url_param(version_id) + "/tags/"
             + encode_url_param(tag_name));
     }
 
     int prune(string name, *hash<PruneOptions> options) {
-        hash<auto> resp = doPost(base_path + "/" + encode_url_param(name)
+        hash<auto> resp = doPost(getTenantPath() + "/" + encode_url_param(name)
             + "/prune", options);
         return resp.body.deleted ?? 0;
     }
 
     nothing deleteModel(string name) {
-        doDel(base_path + "/" + encode_url_param(name));
+        doDel(getTenantPath() + "/" + encode_url_param(name));
         evictModelFromCache(name);
     }
 
     hash<ModelVersionInfo> getVersionMetadata(string name, string version_id) {
-        hash<auto> resp = doGet(base_path + "/" + encode_url_param(name)
+        hash<auto> resp = doGet(getTenantPath() + "/" + encode_url_param(name)
             + "/versions/" + encode_url_param(version_id));
         return cast<hash<ModelVersionInfo>>(resp.body);
     }
 
     list<string> listTenants() {
+        # listTenants is an admin operation — always uses base_path, not tenant-scoped
         hash<auto> resp = doGet(base_path + "/tenants");
         return resp.body.tenants ?? resp.body ?? ();
     }
@@ -222,6 +223,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
             throw "ML-REGISTRY-ERROR",
                 sprintf("invalid tenant_id '%s' for deletion", tid);
         }
+        # deleteTenantStorage is an admin operation — always uses base_path
         doDel(base_path + "/tenants/" + encode_url_param(tid));
     }
 
@@ -254,9 +256,26 @@ public class RestBackend inherits AbstractModelRegistryBackend {
         cache_order = ();
     }
 
-    #! Private: URL-encodes a path parameter
+    #! Private: returns the tenant-scoped base path
+    /** When tenant_id is set, returns \c {base_path}/tenants/{tenant_id};
+        otherwise returns \c base_path.
+    */
+    private string getTenantPath() {
+        if (tenant_id) {
+            return base_path + "/tenants/" + encode_url_param(tenant_id);
+        }
+        return base_path;
+    }
+
+    #! Private: URL-encodes a path segment parameter
+    /** Percent-encodes all characters that are not unreserved (RFC 3986),
+        including '/' which encode_uri_request() leaves unencoded.
+    */
     private static string encode_url_param(string param) {
-        return encode_uri_request(param);
+        # encode_uri_request() doesn't encode '/', which is unsafe for path segments
+        string encoded = encode_uri_request(param);
+        encoded = replace(encoded, "/", "%2F");
+        return encoded;
     }
 
     #! Private: adds an entry to the cache with LRU eviction
@@ -309,36 +328,55 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     #! Private: performs a GET request with error checking
     private hash<auto> doGet(string path) {
         *hash<auto> hdrs = get_headers ? get_headers() : NOTHING;
-        hash<auto> resp = rest_client.get(path, NOTHING, hdrs);
-        checkResponse(resp, "GET", path);
-        return resp;
+        try {
+            hash<auto> resp = rest_client.get(path, NOTHING, hdrs);
+            checkResponse(resp, "GET", path);
+            return resp;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrowRestError(ex, "GET", path);
+        }
     }
 
     #! Private: performs a POST request with error checking
     private hash<auto> doPost(string path, *hash<auto> body) {
         *hash<auto> hdrs = get_headers ? get_headers() : NOTHING;
-        hash<auto> resp = rest_client.post(path, body, NOTHING, hdrs);
-        checkResponse(resp, "POST", path);
-        return resp;
+        try {
+            hash<auto> resp = rest_client.post(path, body, NOTHING, hdrs);
+            checkResponse(resp, "POST", path);
+            return resp;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrowRestError(ex, "POST", path);
+        }
     }
 
     #! Private: performs a PUT request with error checking
     private hash<auto> doPut(string path, *hash<auto> body) {
         *hash<auto> hdrs = get_headers ? get_headers() : NOTHING;
-        hash<auto> resp = rest_client.put(path, body, NOTHING, hdrs);
-        checkResponse(resp, "PUT", path);
-        return resp;
+        try {
+            hash<auto> resp = rest_client.put(path, body, NOTHING, hdrs);
+            checkResponse(resp, "PUT", path);
+            return resp;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrowRestError(ex, "PUT", path);
+        }
     }
 
     #! Private: performs a DELETE request with error checking
     private hash<auto> doDel(string path) {
         *hash<auto> hdrs = get_headers ? get_headers() : NOTHING;
-        hash<auto> resp = rest_client.del(path, NOTHING, hdrs);
-        checkResponse(resp, "DELETE", path);
-        return resp;
+        try {
+            hash<auto> resp = rest_client.del(path, NOTHING, hdrs);
+            checkResponse(resp, "DELETE", path);
+            return resp;
+        } catch (hash<ExceptionInfo> ex) {
+            rethrowRestError(ex, "DELETE", path);
+        }
     }
 
     #! Private: checks a REST response for HTTP errors
+    /** Handles the case where RestClient has error_passthru enabled,
+        so HTTP errors come back as response hashes rather than exceptions.
+    */
     private static nothing checkResponse(hash<auto> resp, string method,
             string path) {
         int status_code = resp.status_code ?? 0;
@@ -349,6 +387,21 @@ public class RestBackend inherits AbstractModelRegistryBackend {
                 sprintf("%s %s failed: %s (status %d)", method, path,
                     msg, status_code);
         }
+    }
+
+    #! Private: translates RestClient exceptions to ML-REGISTRY-REST-ERROR
+    /** RestClient raises REST-RESPONSE-ERROR by default for HTTP error status
+        codes. This method catches those and normalizes them to
+        ML-REGISTRY-REST-ERROR for consistent error handling.
+    */
+    private static nothing rethrowRestError(hash<ExceptionInfo> ex, string method,
+            string path) {
+        if (ex.err == "REST-RESPONSE-ERROR") {
+            throw "ML-REGISTRY-REST-ERROR",
+                sprintf("%s %s failed: %s (status %s)", method, path,
+                    ex.desc, ex.arg.status_code ?? "unknown");
+        }
+        rethrow;
     }
 }
 
