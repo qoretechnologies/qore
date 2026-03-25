@@ -1285,6 +1285,22 @@ ws.connect();
             if (tid == -1 && async_shutdown_tid == gettid()) {
                 return;
             }
+            if (async_io && tid == -1) {
+                # Async mode: handle cleanup directly instead of calling waitTidCleared().
+                # The delivery threads that normally call clearTid() via handleAsyncShutdown()
+                # may be blocked in cancelByOwner() waiting for the I/O thread — and this
+                # destructor may BE the I/O thread (triggered from a continuePoll ->
+                # notifyPollComplete callback that dropped the last reference). Waiting for
+                # clearTid() in that scenario deadlocks the I/O thread and all threads
+                # waiting on cancelByOwner().
+                stopAsyncIo();
+                {
+                    AutoLock dal(delivery_mutex);
+                    delivery_active = False;
+                }
+                clearTid();
+                return;
+            }
             # wait for reconnect thread to stop if deleting when disconnected and reconnecting
             stop = cmd;
             # wake up any sleeping threads
