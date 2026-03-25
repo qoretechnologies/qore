@@ -55,6 +55,7 @@
     |@ref Qore::ML::ml_t_test() "ml_t_test()", @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"|Statistics|Hypothesis testing (Welch's t-test, chi-squared test)
     |@ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"|Statistics|Descriptive statistics and distribution shape metrics
     |@ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"|Statistics|Normal distribution probability functions
+    |@ref Qore::ML::ml_cosine_similarity() "ml_cosine_similarity()", @ref Qore::ML::ml_euclidean_distance() "ml_euclidean_distance()"|Vector Similarity|Distance and similarity metrics for embeddings and RAG
 
     @subsection mlalgo_anomaly Anomaly Detection
 
@@ -722,4 +723,9 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::ADWIN "ADWIN" — adaptive windowing with O(log N) memory
       - @ref Qore::ML::PageHinkley "PageHinkley" — cumulative sum test for mean shifts
       - @ref Qore::ML::DDM "DDM" — error rate monitoring with warning and drift levels
+    - Vector similarity functions for embedding/RAG pipelines:
+      - @ref Qore::ML::ml_cosine_similarity() "ml_cosine_similarity()" — direction similarity (-1 to 1)
+      - @ref Qore::ML::ml_dot_product() "ml_dot_product()" — element-wise product sum
+      - @ref Qore::ML::ml_euclidean_distance() "ml_euclidean_distance()" — straight-line distance
+      - @ref Qore::ML::ml_manhattan_distance() "ml_manhattan_distance()" — city-block distance
 */
