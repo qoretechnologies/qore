@@ -13,7 +13,8 @@ Phase 11 is **complete** (statistical functions with Cephes incbet).
 Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
 PolynomialFeatures, SelectKBest, RFE — remaining: DateTimeFeatures, TextFeatures).
 Phase 13 is **in progress** (13.1 concept drift detection complete: ADWIN, Page-Hinkley,
-DDM — remaining: streaming feature computation, data validation, experiment tracking).
+DDM; 13.2 streaming feature computation complete: RollingStats, EWMA processors —
+remaining: data validation, experiment tracking).
 Phase 14 is planned.
 
 ## Current State (after Phases 1–9)
