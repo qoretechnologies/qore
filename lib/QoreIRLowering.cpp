@@ -1079,34 +1079,27 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Hybrid Phase 3a/4 approach:
-        // - AST mode: Register in block_handlers for inline lowering
-        // - IR mode: Create OnBlockExit with compiled handler_ir for runtime execution
-        // This ensures handlers work in both execution modes without double-execution
+        // Phase 3a/4 Refactor: Inline handler lowering on normal paths
+        //
+        // For now (Phase 1): Register handler in block_handlers for future inline lowering,
+        // and create OnBlockExit instruction for runtime handler vector on exception paths.
+        // Handler code uses AST fallback (handler.code->exec()) instead of compiled IR,
+        // which correctly accesses outer-scope variables via TLS.
 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
-            // Phase 3a: Register for inline lowering (AST mode compatibility)
+            // Register for inline lowering at exit points (normal paths) — Phase 1 doesn't use this yet
+            // But we keep it registered for Phase 2 implementation
             block_handlers.emplace_back(InlineHandler{
                 on_block_exit_stmt->getType(),
                 handler_code,
                 stmt->loc
             });
 
-            // Phase 3b/4: Compile handler to IR and set on OnBlockExit instruction
-            // NOTE: Handler IR compilation disabled for now - handlers need access to enclosing
-            // function's local variables, which IR functions don't have without significant refactoring
-            // HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
-            // QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
-
-            // Phase 4: Create OnBlockExit instruction for ALL handler types
-            // This registers the handler in the runtime vector with compiled handler_ir
+            // Create OnBlockExit instruction for runtime handler vector (exception paths)
+            // handler_ir is NOT compiled to IR; runtime uses AST fallback via handler.code->exec()
             QoreIROnBlockExitInstruction* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
-
-            // Set compiled handler IR on the instruction for runtime execution
-            // if (handler_ir) {
-            //     obe_inst->handler_ir = std::unique_ptr<QoreIRFunction>(handler_ir);
-            // }
+            // handler_ir left as nullptr — AST execution correctly accesses outer-scope vars
         }
 
         return true;
@@ -1801,9 +1794,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // At fall-through (normal exit), emit ScopeExit for runtime handler execution
     if (has_on_block_exit) {
         if (!terminated) {
-            // Phase 4: Handlers are in the runtime vector (compiled IR via OnBlockExit)
-            // Don't inline - handlers execute via ScopeExit from the vector
-            // (inline + vector would cause double execution)
+            // Runtime handler vector execution — Phase 1: handlers use AST fallback (no IR)
             builder.createScopeExit(scope_id, false, nullptr, false);
         }
         scope_stack.pop_back();
@@ -1840,9 +1831,7 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry& entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
-                // Phase 4: Handlers are now in the runtime vector (compiled IR)
-                // Skip inline lowering since handlers execute via runtime vector
-                // on both normal paths (ScopeExit) and exception paths (LandingPad)
+                // Runtime handler vector execution — Phase 1: handlers use AST fallback (no IR)
                 builder.createScopeExit(entry.scope_id, is_error, entry.loc, false);
                 break;
             }
