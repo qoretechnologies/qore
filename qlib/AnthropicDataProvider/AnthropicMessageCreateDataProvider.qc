@@ -115,6 +115,8 @@ public class AnthropicMessageCreateDataProvider inherits AnthropicDataProviderCo
         # extract and remove the conversation_key (not part of the API)
         *string ctx_key = remove req.conversation_key;
         ctx_info.ctx_key = ctx_key;
+        # convert message content + files into API content blocks
+        req.messages = convertMessages(req.messages);
         # load conversation context if available
         if (ctx_key && ctx_store) {
             *hash<auto> ctx = ctx_store.loadContext(ctx_key);
@@ -132,6 +134,92 @@ public class AnthropicMessageCreateDataProvider inherits AnthropicDataProviderCo
             }
         }
         return req;
+    }
+
+    #! Converts messages with split content/files fields into API format
+    /** Transforms the user-friendly message format (separate \c content string and \c files list)
+        into the Anthropic API content block format.
+
+        Messages that already have \c content as a list (from conversation context) are passed through unchanged.
+    */
+    static list<auto> convertMessages(list<auto> messages) {
+        list<auto> result = ();
+        foreach hash<auto> msg in (messages) {
+            # skip messages that already have content as a list (from context store)
+            if (msg.content.typeCode() == NT_LIST) {
+                result += msg;
+                continue;
+            }
+            # extract and remove file (not part of the API)
+            *hash<auto> file = remove msg.file;
+            if (!file) {
+                # simple text message — pass through as string (API accepts this)
+                result += msg;
+                continue;
+            }
+            # build content blocks for multi-part message
+            list<auto> blocks = ();
+            if (msg.content.val()) {
+                blocks += {"type": "text", "text": msg.content};
+            }
+            blocks += convertFileToContentBlock(file);
+            msg.content = blocks;
+            result += msg;
+        }
+        return result;
+    }
+
+    #! Converts a FileDataType value to an Anthropic content block
+    /** Maps file MIME types to the appropriate Anthropic content block type:
+        - \c image/* -> \c image content block with base64 source
+        - \c application/pdf -> \c document content block with base64 source
+    */
+    public {
+        #! Supported image MIME types for the Anthropic API
+        const SupportedImageTypes = {
+            "image/jpeg": True,
+            "image/png": True,
+            "image/gif": True,
+            "image/webp": True,
+        };
+    }
+
+    static hash<auto> convertFileToContentBlock(hash<auto> file) {
+        string mime_type = file.mime_type ?? "application/octet-stream";
+        string content = file.content;
+        if (mime_type =~ /^image\//) {
+            if (!SupportedImageTypes{mime_type}) {
+                throw "ANTHROPIC-FILE-ERROR", sprintf("Unsupported image type %y; supported types: %y",
+                    mime_type, keys SupportedImageTypes);
+            }
+            return {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": content,
+                },
+            };
+        }
+        if (mime_type == "application/pdf") {
+            return {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": content,
+                },
+            };
+        }
+        # fallback: treat as document
+        return {
+            "type": "document",
+            "source": {
+                "type": "base64",
+                "media_type": mime_type,
+                "data": content,
+            },
+        };
     }
 
     #! Extracts text from content blocks

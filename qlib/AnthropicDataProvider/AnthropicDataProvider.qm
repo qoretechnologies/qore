@@ -266,13 +266,9 @@ module AnthropicDataProvider {
             "action_code": DPAT_API,
             "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AnthropicUploadFileRequestDataType::Fields{"file_data", "filename"}, {
+                AnthropicUploadFileRequestDataType::Fields, {
                     "preselected": True,
                     "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AnthropicUploadFileRequestDataType::Fields{"mime_type",}, {
-                    "preselected": True,
                 }
             ),
             "output_type": AnthropicFileUploadDataProvider::ResponseType,

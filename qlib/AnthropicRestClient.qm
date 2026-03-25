@@ -130,6 +130,7 @@ public class AnthropicRestClientBase {
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
+            "data": "json",
         };
 
         #! Default ping method
@@ -147,6 +148,14 @@ public class AnthropicRestClientBase {
     #! returns options for the constructor
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
+        # set default_path for RestClientIo (uses this instead of setConnectionPath)
+        if (!rv.default_path) {
+            rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
+        }
+        # ensure Accept header is JSON (RestClientIo ignores the "data" option)
+        if (!rv.headers."Accept") {
+            rv.headers."Accept" = MimeTypeJson;
+        }
         # ensure anthropic-version header is set in default headers
         if (!rv.headers."anthropic-version") {
             rv.headers."anthropic-version" = opts.anthropic_version ?? DefaultAnthropicVersion;
@@ -182,7 +191,7 @@ AnthropicRestClient rest(opts);
     constructor(hash<auto> opts, *softbool do_not_connect)
             : RestClient(AnthropicRestClientBase::getOptions(opts), True) {
         if (validator instanceof NullRestSchemaValidator) {
-            setConnectionPath(getString(opts, "api") ?? DefaultApiVersion);
+            setConnectionPath(opts.api.val() ? string(opts.api) : DefaultApiVersion);
         }
     }
 

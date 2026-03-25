@@ -77,6 +77,7 @@ public class AnthropicCountTokensDataProvider inherits AnthropicDataProviderComm
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        req.messages = AnthropicMessageCreateDataProvider::convertMessages(req.messages);
         return doRestCommand("POST", "messages/count_tokens", req).body;
     }
 }

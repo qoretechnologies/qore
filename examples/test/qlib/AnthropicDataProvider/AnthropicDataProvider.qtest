@@ -197,6 +197,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         addTestCase("child providers", \childProvidersTest());
         addTestCase("create message", \createMessageTest());
         addTestCase("create message with tools", \createMessageWithToolsTest());
+        addTestCase("create message with file", \createMessageWithFileTest());
         addTestCase("conversation context save", \conversationContextSaveTest());
         addTestCase("conversation callback store", \conversationCallbackStoreTest());
         addTestCase("stream events", \streamEventsTest());
@@ -437,6 +438,100 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(1, resp.tool_calls.lsize());
         assertEq("get_weather", resp.tool_calls[0].name);
         assertEq("San Francisco", resp.tool_calls[0].input.location);
+%endif
+    }
+
+    createMessageWithFileTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider create = prov.getChildProvider("messages").getChildProvider("create");
+
+        # test with image file + text
+        hash<auto> req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "What's in this image?",
+                    "file": {
+                        "name": "test.png",
+                        "content": "iVBORw0KGgo=",
+                        "mime_type": "image/png",
+                    },
+                },
+            ),
+        };
+        hash<auto> resp = create.doRequest(req);
+        # verify the message was converted to content blocks
+        auto sent_content = rest.last_request.messages[0].content;
+        assertEq(NT_LIST, sent_content.typeCode(), "content should be a list");
+        assertEq(2, sent_content.lsize(), "should have text + image blocks");
+        assertEq("text", sent_content[0].type);
+        assertEq("What's in this image?", sent_content[0].text);
+        assertEq("image", sent_content[1].type);
+        assertEq("base64", sent_content[1].source.type);
+        assertEq("image/png", sent_content[1].source.media_type);
+        assertEq("iVBORw0KGgo=", sent_content[1].source.data);
+        # file should be stripped from the sent message
+        assertNothing(rest.last_request.messages[0].file);
+
+        # test with PDF file
+        rest.last_request = {};
+        req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "Summarize this document",
+                    "file": {
+                        "name": "doc.pdf",
+                        "content": "JVBERi0=",
+                        "mime_type": "application/pdf",
+                    },
+                },
+            ),
+        };
+        resp = create.doRequest(req);
+        sent_content = rest.last_request.messages[0].content;
+        assertEq("document", sent_content[1].type);
+        assertEq("application/pdf", sent_content[1].source.media_type);
+
+        # test with file only — no text content
+        rest.last_request = {};
+        req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": (
+                {
+                    "role": "user",
+                    "file": {
+                        "name": "photo.jpg",
+                        "content": "/9j/4AAQ=",
+                        "mime_type": "image/jpeg",
+                    },
+                },
+            ),
+        };
+        resp = create.doRequest(req);
+        sent_content = rest.last_request.messages[0].content;
+        assertEq(NT_LIST, sent_content.typeCode(), "file-only should be a list");
+        assertEq(1, sent_content.lsize(), "should have only image block");
+        assertEq("image", sent_content[0].type);
+
+        # test without file — content stays as string
+        rest.last_request = {};
+        req = {
+            "model": "claude-sonnet-4-6-20250514",
+            "max_tokens": 1024,
+            "messages": ({"role": "user", "content": "Hello!"},),
+        };
+        resp = create.doRequest(req);
+        assertEq(NT_STRING, rest.last_request.messages[0].content.typeCode(),
+            "plain text message should stay as string");
 %endif
     }
 
@@ -731,7 +826,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
             "filename": "test.pdf",
         };
         AbstractDataProvider file_upload = prov.getChildProvider("files").getChildProvider("upload");
-        file_upload.doRequest({"file_data": "dGVzdA==", "filename": "test.pdf"});
+        file_upload.doRequest({"file": {"name": "test.pdf", "content": "dGVzdA==", "mime_type": "application/pdf"}});
         assertEq("POST", rest.last_method);
         assertEq("files", rest.last_path);
         assertEq("files-api-2025-04-14", rest.last_headers."anthropic-beta");
@@ -893,8 +988,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         # verify file content response type
         AnthropicFileContentResponseDataType content_type();
         hash<string, AbstractDataField> content_fields = content_type.getFields();
-        assertEq(True, content_fields.hasKey("content"));
-        assertEq(True, content_fields.hasKey("mime_type"));
+        assertEq(True, content_fields.hasKey("file"));
 
         # verify model list request type has pagination
         AnthropicModelListRequestDataType model_list_req();

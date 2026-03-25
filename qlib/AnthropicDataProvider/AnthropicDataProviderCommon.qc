@@ -251,14 +251,18 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
     #! Returns available models
     private *list<hash<AllowedValueInfo>> getReferenceModels() {
         list<hash<AllowedValueInfo>> rv;
-        foreach hash<auto> model in (doRestCommand("GET", "models").body."data") {
-            string desc = model.display_name ?? model.id;
-            rv += <AllowedValueInfo>{
-                "display_name": model.display_name ?? model.id,
-                "short_desc": desc,
-                "desc": desc,
-                "value": model.id,
-            };
+        try {
+            foreach hash<auto> model in (doRestCommand("GET", "models").body."data") {
+                string desc = model.display_name ?? model.id;
+                rv += <AllowedValueInfo>{
+                    "display_name": model.display_name ?? model.id,
+                    "short_desc": desc,
+                    "desc": desc,
+                    "value": model.id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "getReferenceModels: %s: %s", ex.err, ex.desc);
         }
         return rv;
     }

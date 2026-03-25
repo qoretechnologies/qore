@@ -43,12 +43,21 @@ public class AnthropicMessageItemDataType inherits HashDataType {
             },
             "content": {
                 "display_name": "Content",
-                "short_desc": "The content of the message",
-                "desc": "The content of the message. Can be a string for simple text messages, or a list of "
-                    "content blocks for multi-part messages (text, images, tool results)",
-                "type": AbstractDataProviderTypeMap."auto",
-                "required": True,
+                "short_desc": "The text content of the message",
+                "desc": "The text content of the message. Required unless a file is provided",
+                "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "Hello, how can I help you?",
+                "required_groups": ("message_content",),
+            },
+            "file": {
+                "display_name": "File",
+                "short_desc": "An image or document to include with the message",
+                "desc": "An optional image or PDF to include with the message. "
+                    "Images are sent as `image` content blocks and PDFs as `document` content blocks. "
+                    "Supported image types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`. "
+                    "Supported document types: `application/pdf`",
+                "type": FileDataType.getOrNothingType(),
+                "required_groups": ("message_content",),
             },
         };
     }

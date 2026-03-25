@@ -106,26 +106,13 @@ public const AnthropicFileIdRequestDataType = new AnthropicFileIdRequestDataType
 public class AnthropicUploadFileRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "file_data": {
-                "display_name": "File Data",
-                "short_desc": "Base64-encoded file content",
-                "desc": "The file content as base64-encoded data",
-                "type": AbstractDataProviderTypeMap."string",
+            "file": {
+                "display_name": "File",
+                "short_desc": "The file to upload",
+                "desc": "The file to upload to Anthropic for reuse across API calls. "
+                    "Supports PDF, text, and image files up to 500 MB",
+                "type": FileDataType,
                 "required": True,
-            },
-            "filename": {
-                "display_name": "Filename",
-                "short_desc": "The name of the file",
-                "desc": "The name of the file to upload",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
-                "example_value": "document.pdf",
-            },
-            "mime_type": {
-                "display_name": "MIME Type",
-                "short_desc": "The MIME type of the file",
-                "desc": "The MIME type of the file being uploaded (e.g. `application/pdf`, `image/jpeg`)",
-                "type": AbstractDataProviderTypeMap."*string",
             },
         };
     }
@@ -161,17 +148,11 @@ public const AnthropicDeleteResponseDataType = new AnthropicDeleteResponseDataTy
 public class AnthropicFileContentResponseDataType inherits HashDataType {
     public {
         const Fields = {
-            "content": {
-                "display_name": "File Content",
-                "short_desc": "The raw file content",
-                "desc": "The raw binary content of the file. The format depends on the file's MIME type",
-                "type": AbstractDataProviderTypeMap."auto",
-            },
-            "mime_type": {
-                "display_name": "MIME Type",
-                "short_desc": "The MIME type of the content",
-                "desc": "The MIME type of the returned content",
-                "type": AbstractDataProviderTypeMap."*string",
+            "file": {
+                "display_name": "File",
+                "short_desc": "The downloaded file",
+                "desc": "The downloaded file content with filename and MIME type",
+                "type": FileDataType,
             },
         };
     }
@@ -273,12 +254,13 @@ public class AnthropicFileUploadDataProvider inherits AnthropicDataProviderCommo
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        hash<auto> file = req.file;
         hash<auto> body = {
-            "file": req.file_data,
-            "filename": req.filename,
+            "file": file.content,
+            "filename": file.name,
         };
-        if (req.mime_type) {
-            body.mime_type = req.mime_type;
+        if (file.mime_type && file.mime_type != "auto") {
+            body.mime_type = file.mime_type;
         }
         return doRestCommand("POST", "files", body, FilesBetaHeader).body;
     }
@@ -395,10 +377,20 @@ public class AnthropicFileGetContentDataProvider inherits AnthropicDataProviderC
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # fetch metadata first to get filename and mime_type
+        hash<auto> meta = doRestCommand("GET", "files/" + req.file_id, NOTHING, FilesBetaHeader).body;
         hash<auto> resp = doRestCommand("GET", "files/" + req.file_id + "/content", NOTHING, FilesBetaHeader);
+        # convert binary content to base64 for FileDataType
+        auto content = resp.body;
+        if (content.typeCode() == NT_BINARY) {
+            content = make_base64_string(content);
+        }
         return {
-            "content": resp.body,
-            "mime_type": resp."content-type",
+            "file": {
+                "name": meta.filename ?? req.file_id,
+                "content": content,
+                "mime_type": meta.mime_type ?? resp.headers."content-type",
+            },
         };
     }
 }
