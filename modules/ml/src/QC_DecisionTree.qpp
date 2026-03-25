@@ -1,0 +1,254 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DecisionTree.qpp
+
+    Qore DecisionTree class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_DecisionTree.h"
+#include "ml_common.h"
+
+extern const TypedHashDecl* hashdeclDecisionTreeClassificationResult;
+extern const TypedHashDecl* hashdeclDecisionTreeRegressionResult;
+extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
+
+//! CART Decision Tree for classification and regression
+/** Implements the Classification and Regression Tree (CART) algorithm with
+    Gini impurity, entropy, or MSE split criteria. Supports both hash-based
+    and matrix-based APIs.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    # Classification
+    ML::DecisionTree dt({"task": "classification", "max_depth": 5});
+    dt.fit(training_data, "label");
+    hash<auto> result = dt.predict(new_record);
+    printf("Predicted: %d (prob: %.2f)\n", result.predicted_class, result.max_probability);
+
+    # Regression
+    ML::DecisionTree reg({"task": "regression"});
+    reg.fitMatrix(X_train, y_train);
+    auto results = reg.predictMatrix(X_test);
+
+    # Feature importance
+    hash<auto> imp = dt.getFeatureImportances();
+    printf("Importances: %y\n", imp.importances);
+    @endcode
+
+    @since ml 1.3
+*/
+qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; flags=final];
+
+//! Creates a DecisionTree with the given options
+/** @param options a hash with:
+    - \c max_depth (*int): maximum tree depth (default 10; 0 = unlimited)
+    - \c min_samples_split (*int): minimum samples to split a node (default 2)
+    - \c min_samples_leaf (*int): minimum samples in each leaf (default 1)
+    - \c criterion (*string): split criterion — "gini" (default for classification),
+      "entropy" (classification), or "mse" (default for regression)
+    - \c task (*string): "classification" (default) or "regression"
+    - \c seed (*int): random seed for reproducibility (default 0 = random)
+
+    @throw ML-DECISION-TREE-ERROR if options are invalid
+*/
+DecisionTree::constructor(hash<auto> options) {
+    int max_depth = 10;
+    int min_samples_split = 2;
+    int min_samples_leaf = 1;
+    std::string criterion;
+    std::string task = "classification";
+    int64_t seed = 0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("max_depth");
+        if (!v.isNullOrNothing()) {
+            max_depth = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("min_samples_split");
+        if (!v.isNullOrNothing()) {
+            min_samples_split = (int)v.getAsBigInt();
+            if (min_samples_split < 2) {
+                xsink->raiseException("ML-DECISION-TREE-ERROR",
+                    "min_samples_split must be >= 2; got %d", min_samples_split);
+                return;
+            }
+        }
+        v = options->getKeyValue("min_samples_leaf");
+        if (!v.isNullOrNothing()) {
+            min_samples_leaf = (int)v.getAsBigInt();
+            if (min_samples_leaf < 1) {
+                xsink->raiseException("ML-DECISION-TREE-ERROR",
+                    "min_samples_leaf must be >= 1; got %d", min_samples_leaf);
+                return;
+            }
+        }
+        v = options->getKeyValue("task");
+        if (v.getType() == NT_STRING) {
+            task = v.get<const QoreStringNode>()->c_str();
+            if (task != "classification" && task != "regression") {
+                xsink->raiseException("ML-DECISION-TREE-ERROR",
+                    "task must be 'classification' or 'regression'; got '%s'",
+                    task.c_str());
+                return;
+            }
+        }
+        v = options->getKeyValue("criterion");
+        if (v.getType() == NT_STRING) {
+            criterion = v.get<const QoreStringNode>()->c_str();
+        }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) {
+            seed = v.getAsBigInt();
+        }
+    }
+
+    // Default criterion based on task
+    if (criterion.empty()) {
+        criterion = (task == "classification") ? "gini" : "mse";
+    }
+
+    // Validate criterion matches task
+    if (task == "classification" && criterion != "gini" && criterion != "entropy") {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "criterion for classification must be 'gini' or 'entropy'; got '%s'",
+            criterion.c_str());
+        return;
+    }
+    if (task == "regression" && criterion != "mse") {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "criterion for regression must be 'mse'; got '%s'",
+            criterion.c_str());
+        return;
+    }
+
+    self->setPrivate(CID_DECISIONTREE,
+        new QoreDecisionTree(max_depth, min_samples_split, min_samples_leaf,
+            criterion, task, seed));
+}
+
+//! DecisionTree objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+DecisionTree::copy() {
+    xsink->raiseException("COPY-ERROR", "DecisionTree objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** @param data list of hash records with numeric feature fields
+    @param target_field the name of the target column
+
+    @throw ML-DECISION-TREE-ERROR if data is invalid
+    @throw ML-DATA-ERROR if data cannot be converted to a matrix
+*/
+nothing DecisionTree::fit(list<auto> data, string target_field) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Extract target column
+    std::string target = target_field->c_str();
+    int target_idx = -1;
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (field_names[i] == target) {
+            target_idx = (int)i;
+            break;
+        }
+    }
+    if (target_idx < 0) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "target field '%s' not found in data", target.c_str());
+        return QoreValue();
+    }
+
+    // Split into X and y
+    VectorXd y = matrix.col(target_idx);
+    MatrixXd X(matrix.rows(), matrix.cols() - 1);
+    std::vector<std::string> feature_names;
+    int col = 0;
+    for (int i = 0; i < (int)matrix.cols(); ++i) {
+        if (i != target_idx) {
+            X.col(col) = matrix.col(i);
+            feature_names.push_back(field_names[i]);
+            ++col;
+        }
+    }
+
+    dt->setFieldNames(feature_names);
+    dt->setTargetField(target);
+    dt->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param matrix list of row lists (list<list<float>>)
+    @param target list of target values
+
+    @throw ML-DECISION-TREE-ERROR if data dimensions are invalid
+    @throw ML-DATA-ERROR if data cannot be converted
+*/
+nothing DecisionTree::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    dt->fit(X, y, xsink);
+}
+
+//! Predicts for a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return DecisionTreeClassificationResult or DecisionTreeRegressionResult hash
+
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted or features don't match
+*/
+hash<auto> DecisionTree::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = dt->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model was trained with matrix API; use predictMatrix() instead");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dt->predict(point, xsink);
+}
+
+//! Predicts for multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of result hashes
+*/
+list<hash<auto>> DecisionTree::predictMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return dt->predictMatrix(X, xsink);
+}
+
+//! Returns whether the model has been fitted
+/** @return True if fit() or fitMatrix() has been called
+*/
+bool DecisionTree::isFitted() [flags=CONSTANT] {
+    return dt->isFitted();
+}
+
+//! Returns feature importances (normalized impurity reduction per feature)
+/** @return FeatureImportanceInfo hash with feature_names and importances lists
+
+    @throw ML-DECISION-TREE-ERROR if the model is not fitted
+*/
+hash<auto> DecisionTree::getFeatureImportances() {
+    return dt->getFeatureImportances(xsink);
+}

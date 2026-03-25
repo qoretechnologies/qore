@@ -45,6 +45,7 @@
 #include "QC_Imputer.h"
 #include "QC_MLPipeline.h"
 #include "QC_CrossValidator.h"
+#include "QC_DecisionTree.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -93,6 +94,9 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ConfusionMatrixResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ClassMetrics(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ClassificationReport(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_CrossValidationFold(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeRegressionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_FeatureImportanceInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -120,6 +124,9 @@ const TypedHashDecl* hashdeclConfusionMatrixResult;
 const TypedHashDecl* hashdeclClassMetrics;
 const TypedHashDecl* hashdeclClassificationReport;
 const TypedHashDecl* hashdeclCrossValidationFold;
+const TypedHashDecl* hashdeclDecisionTreeClassificationResult;
+const TypedHashDecl* hashdeclDecisionTreeRegressionResult;
+const TypedHashDecl* hashdeclFeatureImportanceInfo;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -144,6 +151,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitImputerClass();
     preinitMLPipelineClass();
     preinitCrossValidatorClass();
+    preinitDecisionTreeClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -170,6 +178,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclClassMetrics = init_hashdecl_ClassMetrics(MLNS);
     hashdeclClassificationReport = init_hashdecl_ClassificationReport(MLNS);
     hashdeclCrossValidationFold = init_hashdecl_CrossValidationFold(MLNS);
+    hashdeclDecisionTreeClassificationResult = init_hashdecl_DecisionTreeClassificationResult(MLNS);
+    hashdeclDecisionTreeRegressionResult = init_hashdecl_DecisionTreeRegressionResult(MLNS);
+    hashdeclFeatureImportanceInfo = init_hashdecl_FeatureImportanceInfo(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -190,6 +201,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initImputerClass(MLNS));
     MLNS.addSystemClass(initMLPipelineClass(MLNS));
     MLNS.addSystemClass(initCrossValidatorClass(MLNS));
+    MLNS.addSystemClass(initDecisionTreeClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -242,6 +254,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("Imputer", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreImputer::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("DecisionTree", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreDecisionTree::deserializeState(data, len, xsink);
     });
 }
 

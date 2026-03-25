@@ -448,6 +448,41 @@ hashdecl Qore::ML::MLCapabilities {
     list<string> onnx_providers;
 }
 
+//! Decision tree classification prediction result
+/** Returned by @ref DecisionTree::predict() and @ref DecisionTree::predictMatrix()
+    when the tree is configured for classification.
+*/
+hashdecl Qore::ML::DecisionTreeClassificationResult {
+    //! predicted class label
+    int predicted_class;
+    //! probability of the predicted class
+    float max_probability;
+    //! probability for each class
+    list<float> probabilities;
+    //! class labels (same order as probabilities)
+    list<float> classes;
+}
+
+//! Decision tree regression prediction result
+/** Returned by @ref DecisionTree::predict() and @ref DecisionTree::predictMatrix()
+    when the tree is configured for regression.
+*/
+hashdecl Qore::ML::DecisionTreeRegressionResult {
+    //! predicted target value
+    float prediction;
+}
+
+//! Feature importance information (shared by all tree-based algorithms)
+/** Returned by @ref DecisionTree::getFeatureImportances() and similar methods.
+    Importances are normalized to sum to 1.0.
+*/
+hashdecl Qore::ML::FeatureImportanceInfo {
+    //! feature names
+    list<string> feature_names;
+    //! normalized importance values (sum to 1.0)
+    list<float> importances;
+}
+
 /** @defgroup ml_functions ML Functions
     ML utility functions
 */

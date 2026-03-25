@@ -86,6 +86,7 @@ set(ML_QPP_SRC
     src/QC_Imputer.qpp
     src/QC_MLPipeline.qpp
     src/QC_CrossValidator.qpp
+    src/QC_DecisionTree.qpp
     src/ql_ml.qpp
 )
 
@@ -112,6 +113,7 @@ set(ML_CPP_SRC
     src/ml_metrics.cpp
     src/CrossValidator.cpp
     src/FlatTree.cpp
+    src/DecisionTree.cpp
 )
 
 # Conditional ONNX Runtime support
