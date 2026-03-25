@@ -33,7 +33,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
     auto results = gbt.predictMatrix(X_test);
     @endcode
 
-    @since ml 1.3
+    @since ml 1.0
 */
 qclass GradientBoostedTrees [arg=QoreGradientBoostedTrees* gbt; ns=Qore::ML; flags=final];
 

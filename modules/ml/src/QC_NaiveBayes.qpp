@@ -33,7 +33,7 @@ extern const TypedHashDecl* hashdeclNaiveBayesResult;
     nb.update(X_new, y_new);
     @endcode
 
-    @since ml 1.3
+    @since ml 1.0
 */
 qclass NaiveBayes [arg=QoreNaiveBayes* nb; ns=Qore::ML; flags=final];
 

@@ -41,7 +41,7 @@ extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
     printf("Importances: %y\n", imp.importances);
     @endcode
 
-    @since ml 1.3
+    @since ml 1.0
 */
 qclass DecisionTree [arg=QoreDecisionTree* dt; ns=Qore::ML; flags=final];
 

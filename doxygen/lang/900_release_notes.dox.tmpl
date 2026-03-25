@@ -759,6 +759,10 @@ cargo install tree-sitter-cli@0.26.5
       - Statistical functions: ml_percentile, ml_iqr, ml_skewness, ml_kurtosis,
         ml_correlation_matrix, ml_covariance_matrix, ml_t_test (Welch's, Cephes incbet),
         ml_chi_squared_test, ml_normal_pdf/cdf/ppf (Acklam's rational approximation)
+      - Feature engineering:
+        OneHotEncoder for categorical-to-binary column encoding (with drop_first option),
+        LabelEncoder for string/integer-to-consecutive-integer mapping (with inverse transform),
+        VarianceThreshold for removing low-variance features (population variance)
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation

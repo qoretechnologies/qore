@@ -29,7 +29,7 @@ extern const TypedHashDecl* hashdeclSVMResult;
         result[0].predicted_class, result[0].confidence);
     @endcode
 
-    @since ml 1.3
+    @since ml 1.0
 */
 qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; flags=final];
 

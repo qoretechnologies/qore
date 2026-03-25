@@ -27,7 +27,7 @@
     # Output: ((0, 1, 0)) — green column is 1
     @endcode
 
-    @since ml 1.3
+    @since ml 1.0
 */
 qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; flags=final];
 

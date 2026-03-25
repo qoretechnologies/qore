@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <set>
+#include <unordered_map>
 
 QoreOneHotEncoder::QoreOneHotEncoder(bool drop_first)
     : drop_first(drop_first) {
@@ -63,13 +64,16 @@ MatrixXd QoreOneHotEncoder::transform(const MatrixXd& X, ExceptionSink* xsink) c
     for (int f = 0; f < n_features; ++f) {
         const auto& cats = categories[f];
         int start = drop_first ? 1 : 0;
+        // Build lookup map for O(1) category->column mapping
+        std::unordered_map<int, int> cat_to_col;
+        for (int c = start; c < (int)cats.size(); ++c) {
+            cat_to_col[cats[c]] = col_offset + c - start;
+        }
         for (int64_t i = 0; i < n; ++i) {
             int val = (int)X(i, f);
-            for (int c = start; c < (int)cats.size(); ++c) {
-                if (val == cats[c]) {
-                    result(i, col_offset + c - start) = 1.0;
-                    break;
-                }
+            auto it = cat_to_col.find(val);
+            if (it != cat_to_col.end()) {
+                result(i, it->second) = 1.0;
             }
         }
         col_offset += (int)cats.size() - start;

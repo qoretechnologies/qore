@@ -32,15 +32,23 @@
     |@ref Qore::ML::DecisionTree "DecisionTree"|Classification/Regression|Predict categories or values using learned decision rules from data
     |@ref Qore::ML::RandomForest "RandomForest"|Classification/Regression|Ensemble of decision trees — more accurate than a single tree on noisy data
     |@ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees"|Classification/Regression|Sequential boosting — the enterprise workhorse for tabular data (fraud, churn, credit)
+    |@ref Qore::ML::SVM "SVM"|Classification|Support vector machine with linear and RBF kernels, multiclass via one-vs-one
+    |@ref Qore::ML::NaiveBayes "NaiveBayes"|Classification|Gaussian Naive Bayes with online learning (incremental updates)
     |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python
     |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance
     |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)
     |@ref Qore::ML::Imputer "Imputer"|Preprocessing|Fill missing values using mean, median, mode, or constant
+    |@ref Qore::ML::OneHotEncoder "OneHotEncoder"|Feature Engineering|Convert integer-encoded categoricals to binary columns
+    |@ref Qore::ML::LabelEncoder "LabelEncoder"|Feature Engineering|Map string/integer categories to consecutive integers
+    |@ref Qore::ML::VarianceThreshold "VarianceThreshold"|Feature Selection|Remove low-variance features from datasets
     |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
     |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
     |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
     |@ref Qore::ML::ml_mse() "ml_mse()", @ref Qore::ML::ml_rmse() "ml_rmse()", @ref Qore::ML::ml_mae() "ml_mae()", @ref Qore::ML::ml_r2_score() "ml_r2_score()"|Evaluation|Measure regression prediction quality
     |@ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()"|Evaluation|Measure clustering quality
+    |@ref Qore::ML::ml_t_test() "ml_t_test()", @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"|Statistics|Hypothesis testing (Welch's t-test, chi-squared test)
+    |@ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"|Statistics|Descriptive statistics and distribution shape metrics
+    |@ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"|Statistics|Normal distribution probability functions
 
     @subsection mlalgo_anomaly Anomaly Detection
 
@@ -112,6 +120,22 @@
       classification (log-loss), regression (MSE), early stopping with validation set, and
       row subsampling for stochastic gradient boosting.
 
+    @subsection mlalgo_svm_nb SVM and Naive Bayes
+
+    Classic statistical classifiers — SVM for maximum-margin linear and non-linear
+    classification, Naive Bayes for fast probabilistic classification.
+
+    - @ref Qore::ML::SVM "SVM" — Finds the decision boundary that maximizes the margin
+      between classes. For example, separate legitimate from fraudulent transactions by
+      finding the widest gap in feature space. Supports linear and RBF (Gaussian) kernels.
+      Multiclass via one-vs-one voting with confidence probabilities. Regularization via C
+      parameter prevents overfitting.
+    - @ref Qore::ML::NaiveBayes "NaiveBayes" — Assumes features are independent given the
+      class label, then uses Bayes' theorem to compute class probabilities. Despite the
+      "naive" independence assumption, often competitive for text classification, spam
+      filtering, and medical diagnosis. Extremely fast to train and supports online learning
+      (incremental updates) via Welford's algorithm for streaming variance computation.
+
     @subsection mlalgo_regression Regression
 
     Predict prices, estimate delivery times, and forecast demand by learning relationships
@@ -171,6 +195,47 @@
       example, chain a StandardScaler with KMeans so that new data is always scaled the same
       way before being assigned to a cluster. Prevents inconsistencies between training and
       production.
+
+    @subsection mlalgo_feature_eng Feature Engineering
+
+    Transform raw data into forms suitable for ML algorithms. Encode categorical variables,
+    select informative features, and ensure consistency between training and production.
+
+    - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — Converts integer-encoded categorical
+      features into binary columns. Each unique value becomes its own column with 0/1 values.
+      For example, a "color" column with values 0 (red), 1 (green), 2 (blue) becomes three
+      columns: \c color_0, \c color_1, \c color_2. Use \c drop_first to avoid multicollinearity
+      in linear models by dropping the first category (the reference level).
+    - @ref Qore::ML::LabelEncoder "LabelEncoder" — Maps string or integer category values
+      to consecutive integers 0, 1, 2, ..., n_classes-1. For example, ("red", "green", "blue")
+      becomes (2, 1, 0) in alphabetical order. Supports inverse transformation back to original
+      values. Unknown/null values are encoded as -1.
+    - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — Removes features with low
+      variance (population variance). Features with variance at or below the threshold are
+      removed during transform(). Default threshold 0.0 removes only constant (zero-variance)
+      features. Use to eliminate uninformative columns before feeding data into algorithms.
+
+    @subsection mlalgo_stats Statistical Functions
+
+    Descriptive statistics, hypothesis testing, and probability distribution functions
+    for data exploration and validation.
+
+    <b>Descriptive statistics</b>:
+    - @ref Qore::ML::ml_percentile() "ml_percentile()" — compute any percentile (e.g., median = 50th percentile)
+    - @ref Qore::ML::ml_iqr() "ml_iqr()" — interquartile range (75th - 25th percentile) for outlier detection
+    - @ref Qore::ML::ml_skewness() "ml_skewness()" — measure distribution asymmetry (0 = symmetric)
+    - @ref Qore::ML::ml_kurtosis() "ml_kurtosis()" — measure tail heaviness (excess kurtosis; 0 = normal)
+    - @ref Qore::ML::ml_correlation_matrix() "ml_correlation_matrix()" — Pearson correlation between all feature pairs
+    - @ref Qore::ML::ml_covariance_matrix() "ml_covariance_matrix()" — covariance between all feature pairs
+
+    <b>Hypothesis testing</b>:
+    - @ref Qore::ML::ml_t_test() "ml_t_test()" — Welch's two-sample t-test with exact p-values via Cephes incbet (regularized incomplete beta function, same as scipy)
+    - @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()" — chi-squared test of independence for contingency tables
+
+    <b>Normal distribution</b>:
+    - @ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()" — probability density function
+    - @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()" — cumulative distribution function
+    - @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()" — percent point function (inverse CDF, quantile function)
 
     @subsection mlalgo_evaluation Model Evaluation
 
@@ -249,7 +314,7 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     @endcode
 
     The native \c .qml format is a compact binary format with CRC-32 integrity checking.
-    All 12 algorithm types are supported.
+    All algorithm types are supported.
 
     @section mlchoosing Choosing the Right Algorithm
 
@@ -275,6 +340,10 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
     - Do you want to classify based on what similar past records looked like?
       → Use @ref Qore::ML::KNN "KNN" (classification mode)
+    - Do you need a maximum-margin classifier with kernel support?
+      → Use @ref Qore::ML::SVM "SVM" with linear or RBF kernel
+    - Do you need fast probabilistic classification (e.g., text, spam filtering)?
+      → Use @ref Qore::ML::NaiveBayes "NaiveBayes"
 
     <b>"I need to predict or forecast values"</b>
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
@@ -298,6 +367,20 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()" — above 0.5 means good separation
     - Want to test on data the model hasn't seen?
       → Use @ref Qore::ML::CrossValidator "CrossValidator" for k-fold cross-validation
+
+    <b>"My data has categorical columns (strings, labels)"</b>
+    - Do you need binary indicator columns for each category (for linear models, neural nets)?
+      → Use @ref Qore::ML::OneHotEncoder "OneHotEncoder"
+    - Do you need simple integer encoding (for tree-based models)?
+      → Use @ref Qore::ML::LabelEncoder "LabelEncoder"
+    - Do you want to remove uninformative (near-constant) columns?
+      → Use @ref Qore::ML::VarianceThreshold "VarianceThreshold"
+
+    <b>"I need to test a statistical hypothesis"</b>
+    - Are two groups' means significantly different?
+      → Use @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's two-sample t-test)
+    - Are two categorical variables related?
+      → Use @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
 
     <b>"My data has different scales or missing values"</b>
     - Do your fields have very different ranges (e.g., age 18–65 vs income 20,000–200,000)?
@@ -531,7 +614,8 @@ if (!caps.has_onnx) {
     @section mlreleasenotes ml Module Release Notes
 
     @subsection ml_1_0 ml Module Version 1.0
-    - Initial release with 11 native ML algorithms and 4 preprocessing tools:
+    - Initial release with native ML algorithms, preprocessing tools, feature engineering,
+      and statistical functions:
       - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
       - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
       - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
@@ -561,13 +645,22 @@ if (!caps.has_onnx) {
     - All algorithms support cooperative cancellation for responsive interrupt handling
     - \c NOTHING values in input data are treated as missing values for Imputer compatibility
     - @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()" function for runtime capability and ONNX support discovery
-
-    @subsection ml_1_3 ml Module Version 1.3
     - Tree-based algorithms:
       - @ref Qore::ML::DecisionTree "DecisionTree" — CART with Gini, entropy, and MSE criteria; feature importance
       - @ref Qore::ML::RandomForest "RandomForest" — bagging ensemble with bootstrap sampling and random feature subsets
       - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — gradient boosting with log-loss and MSE; early stopping; row subsampling
-    - Shared FlatTree CART engine with flat-array node storage
-    - @ref Qore::ML::FeatureImportanceInfo "FeatureImportanceInfo" hashdecl for tree-based feature importance
-    - Full serialization support for all three tree algorithms
+      - Shared FlatTree CART engine with flat-array node storage
+      - @ref Qore::ML::FeatureImportanceInfo "FeatureImportanceInfo" hashdecl for tree-based feature importance
+    - Additional classifiers:
+      - @ref Qore::ML::SVM "SVM" — support vector machine with simplified SMO, linear and RBF kernels, multiclass via one-vs-one voting
+      - @ref Qore::ML::NaiveBayes "NaiveBayes" — Gaussian Naive Bayes with online learning (incremental mean/variance updates via Welford's algorithm)
+    - Statistical functions:
+      - Descriptive: @ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_iqr() "ml_iqr()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"
+      - Correlation: @ref Qore::ML::ml_correlation_matrix() "ml_correlation_matrix()", @ref Qore::ML::ml_covariance_matrix() "ml_covariance_matrix()"
+      - Hypothesis testing: @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's, exact p-values via Cephes incbet), @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
+      - Normal distribution: @ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"
+    - Feature engineering:
+      - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — categorical-to-binary column encoding with drop_first option
+      - @ref Qore::ML::LabelEncoder "LabelEncoder" — string/integer-to-consecutive-integer mapping with inverse transform
+      - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — feature selector removing low-variance features (population variance)
 */
