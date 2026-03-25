@@ -231,6 +231,15 @@ public class MlTest inherits QUnit::Test {
         addTestCase("serialize OneHotEncoder round-trip", \serializeOneHotEncoderTest());
         addTestCase("VarianceThreshold basic", \varianceThresholdTest());
         addTestCase("serialize VarianceThreshold round-trip", \serializeVarianceThresholdTest());
+        addTestCase("PolynomialFeatures basic", \polynomialFeaturesTest());
+        addTestCase("PolynomialFeatures interaction only", \polynomialFeaturesInteractionTest());
+        addTestCase("PolynomialFeatures with bias", \polynomialFeaturesBiasTest());
+        addTestCase("PolynomialFeatures degree 3", \polynomialFeaturesDegree3Test());
+        addTestCase("PolynomialFeatures errors", \polynomialFeaturesErrorTest());
+        addTestCase("PolynomialFeatures feature names", \polynomialFeaturesNamesTest());
+        addTestCase("PolynomialFeatures single feature", \polynomialFeaturesSingleTest());
+        addTestCase("serialize PolynomialFeatures round-trip", \serializePolynomialFeaturesTest());
+        addTestCase("save/load PolynomialFeatures", \saveLoadPolynomialFeaturesTest());
         set_return_value(main());
     }
 
@@ -262,9 +271,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(25, caps.native_algorithms.size());
+            assertEq(26, caps.native_algorithms.size());
         } else {
-            assertEq(24, caps.native_algorithms.size());
+            assertEq(25, caps.native_algorithms.size());
         }
     }
 
@@ -4675,5 +4684,193 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> res = restored.transformMatrix(((10.0, 5.0),));
         assertEq(orig[0], res[0], "VT serialize round-trip");
+    }
+
+    polynomialFeaturesTest() {
+        # degree=2, 2 features: output should be [a, b, a^2, a*b, b^2]
+        ML::PolynomialFeatures pf({"degree": 2});
+        assertFalse(pf.isFitted(), "PF not fitted initially");
+
+        pf.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+        assertTrue(pf.isFitted(), "PF fitted");
+        assertEq(5, pf.getNumOutputFeatures(), "PF 2-feature degree-2 = 5 output cols");
+
+        # Transform [1, 2]: expect [1, 2, 1, 2, 4]
+        list<auto> result = pf.transformMatrix(((1.0, 2.0),));
+        assertEq(1, result.size(), "PF 1 row");
+        assertEq(5, result[0].size(), "PF 5 cols");
+        assertEq(1.0, result[0][0], "PF a=1");
+        assertEq(2.0, result[0][1], "PF b=2");
+        assertEq(1.0, result[0][2], "PF a^2=1");
+        assertEq(2.0, result[0][3], "PF a*b=2");
+        assertEq(4.0, result[0][4], "PF b^2=4");
+
+        # Transform [3, 4]: expect [3, 4, 9, 12, 16]
+        result = pf.transformMatrix(((3.0, 4.0),));
+        assertEq(3.0, result[0][0], "PF a=3");
+        assertEq(4.0, result[0][1], "PF b=4");
+        assertEq(9.0, result[0][2], "PF a^2=9");
+        assertEq(12.0, result[0][3], "PF a*b=12");
+        assertEq(16.0, result[0][4], "PF b^2=16");
+    }
+
+    polynomialFeaturesInteractionTest() {
+        # interaction_only=True, degree=2: output should be [a, b, a*b] (no powers)
+        ML::PolynomialFeatures pf({"degree": 2, "interaction_only": True});
+        pf.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+        assertEq(3, pf.getNumOutputFeatures(), "PF interaction_only = 3 cols");
+
+        list<auto> result = pf.transformMatrix(((2.0, 3.0),));
+        assertEq(3, result[0].size(), "PF interaction 3 cols");
+        assertEq(2.0, result[0][0], "PF a=2");
+        assertEq(3.0, result[0][1], "PF b=3");
+        assertEq(6.0, result[0][2], "PF a*b=6");
+
+        # 3 features: [a, b, c, a*b, a*c, b*c]
+        ML::PolynomialFeatures pf3({"degree": 2, "interaction_only": True});
+        pf3.fitMatrix(((1.0, 2.0, 3.0),));
+        assertEq(6, pf3.getNumOutputFeatures(), "PF 3-feature interaction = 6 cols");
+
+        result = pf3.transformMatrix(((2.0, 3.0, 4.0),));
+        assertEq(2.0, result[0][0], "PF3 a");
+        assertEq(3.0, result[0][1], "PF3 b");
+        assertEq(4.0, result[0][2], "PF3 c");
+        assertEq(6.0, result[0][3], "PF3 a*b");
+        assertEq(8.0, result[0][4], "PF3 a*c");
+        assertEq(12.0, result[0][5], "PF3 b*c");
+    }
+
+    polynomialFeaturesBiasTest() {
+        # include_bias: adds 1 column at the start
+        ML::PolynomialFeatures pf({"degree": 2, "include_bias": True});
+        pf.fitMatrix(((1.0, 2.0),));
+        assertEq(6, pf.getNumOutputFeatures(), "PF bias = 6 cols (1 + 2 + 3)");
+
+        list<auto> result = pf.transformMatrix(((3.0, 4.0),));
+        assertEq(1.0, result[0][0], "PF bias term = 1");
+        assertEq(3.0, result[0][1], "PF a=3");
+        assertEq(4.0, result[0][2], "PF b=4");
+        assertEq(9.0, result[0][3], "PF a^2=9");
+        assertEq(12.0, result[0][4], "PF a*b=12");
+        assertEq(16.0, result[0][5], "PF b^2=16");
+    }
+
+    polynomialFeaturesDegree3Test() {
+        # degree=3 with 2 features: [a, b, a^2, ab, b^2, a^3, a^2b, ab^2, b^3]
+        ML::PolynomialFeatures pf({"degree": 3});
+        pf.fitMatrix(((1.0, 2.0),));
+        assertEq(9, pf.getNumOutputFeatures(), "PF degree-3 2-feature = 9 cols");
+
+        list<auto> result = pf.transformMatrix(((2.0, 3.0),));
+        assertEq(2.0, result[0][0], "PF3 a=2");
+        assertEq(3.0, result[0][1], "PF3 b=3");
+        assertEq(4.0, result[0][2], "PF3 a^2=4");
+        assertEq(6.0, result[0][3], "PF3 ab=6");
+        assertEq(9.0, result[0][4], "PF3 b^2=9");
+        assertEq(8.0, result[0][5], "PF3 a^3=8");
+        assertEq(12.0, result[0][6], "PF3 a^2*b=12");
+        assertEq(18.0, result[0][7], "PF3 a*b^2=18");
+        assertEq(27.0, result[0][8], "PF3 b^3=27");
+    }
+
+    polynomialFeaturesErrorTest() {
+        ML::PolynomialFeatures pf({"degree": 2});
+
+        # Transform before fit
+        assertThrows("ML-POLYNOMIAL-FEATURES-ERROR",
+            \pf.transformMatrix(), (((1.0, 2.0),),));
+
+        # Feature names before fit
+        assertThrows("ML-POLYNOMIAL-FEATURES-ERROR",
+            \pf.getOutputFeatureNames());
+
+        # Fit with empty data
+        assertThrows("ML-DATA-ERROR",
+            \pf.fitMatrix(), (((),),));
+
+        # Invalid degree
+        assertThrows("ML-POLYNOMIAL-FEATURES-ERROR",
+            sub () { new ML::PolynomialFeatures({"degree": 0}); });
+
+        # Copy error
+        ML::PolynomialFeatures pfcopy({"degree": 2});
+        assertThrows("COPY-ERROR", sub () {
+            ML::PolynomialFeatures cp = pfcopy.copy();
+        });
+
+        # Wrong feature count
+        pf.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+        assertThrows("ML-POLYNOMIAL-FEATURES-ERROR",
+            \pf.transformMatrix(), (((1.0, 2.0, 3.0),),));
+    }
+
+    polynomialFeaturesNamesTest() {
+        ML::PolynomialFeatures pf({"degree": 2, "include_bias": True});
+        pf.fitMatrix(((1.0, 2.0),));
+
+        list<string> names = pf.getOutputFeatureNames();
+        assertEq(6, names.size(), "PF names count");
+        assertEq("1", names[0], "PF name bias");
+        assertEq("x0", names[1], "PF name x0");
+        assertEq("x1", names[2], "PF name x1");
+        assertEq("x0^2", names[3], "PF name x0^2");
+        assertEq("x0 x1", names[4], "PF name x0*x1");
+        assertEq("x1^2", names[5], "PF name x1^2");
+    }
+
+    polynomialFeaturesSingleTest() {
+        # Single feature, degree=3: [x, x^2, x^3]
+        ML::PolynomialFeatures pf({"degree": 3});
+        pf.fitMatrix(((2.0,), (3.0,)));
+        assertEq(3, pf.getNumOutputFeatures(), "PF single 3 cols");
+
+        list<auto> result = pf.transformMatrix(((5.0,),));
+        assertEq(5.0, result[0][0], "PF single x=5");
+        assertEq(25.0, result[0][1], "PF single x^2=25");
+        assertEq(125.0, result[0][2], "PF single x^3=125");
+    }
+
+    serializePolynomialFeaturesTest() {
+        ML::PolynomialFeatures pf({"degree": 2, "include_bias": True});
+        pf.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+
+        list<auto> orig = pf.transformMatrix(((5.0, 6.0),));
+
+        binary blob = ML::ml_serialize(pf);
+        assertTrue(blob.size() > 0, "PF serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::PolynomialFeatures, "PF deserialized type");
+
+        list<auto> res = restored.transformMatrix(((5.0, 6.0),));
+        assertEq(orig[0].size(), res[0].size(), "PF round-trip col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("PF round-trip col %d", i));
+        }
+
+        # Verify feature names survive round-trip
+        list<string> orig_names = pf.getOutputFeatureNames();
+        list<string> res_names = restored.getOutputFeatureNames();
+        assertEq(orig_names, res_names, "PF names round-trip");
+    }
+
+    saveLoadPolynomialFeaturesTest() {
+        ML::PolynomialFeatures pf({"degree": 2, "interaction_only": True});
+        pf.fitMatrix(((1.0, 2.0, 3.0),));
+
+        list<auto> orig = pf.transformMatrix(((2.0, 3.0, 4.0),));
+
+        string tmpfile = "/tmp/test_ml_pf.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(pf, tmpfile);
+
+        auto loaded = ML::ml_load_model(tmpfile);
+        assertTrue(loaded instanceof ML::PolynomialFeatures, "PF loaded type");
+
+        list<auto> res = loaded.transformMatrix(((2.0, 3.0, 4.0),));
+        assertEq(orig[0].size(), res[0].size(), "PF save/load col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("PF save/load col %d", i));
+        }
     }
 }

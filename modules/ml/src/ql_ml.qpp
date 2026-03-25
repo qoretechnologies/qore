@@ -50,6 +50,7 @@
 #include "QC_OneHotEncoder.h"
 #include "QC_LabelEncoder.h"
 #include "QC_VarianceThreshold.h"
+#include "QC_PolynomialFeatures.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -631,6 +632,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("OneHotEncoder"), xsink);
     algos->push(new QoreStringNode("LabelEncoder"), xsink);
     algos->push(new QoreStringNode("VarianceThreshold"), xsink);
+    algos->push(new QoreStringNode("PolynomialFeatures"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1210,6 +1212,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QorePolynomialFeatures* pfp = dynamic_cast<QorePolynomialFeatures*>(
+        model->getReferencedPrivateData(CID_POLYNOMIALFEATURES, xsink));
+    if (pfp) {
+        if (!pfp->isFitted()) {
+            pfp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "PolynomialFeatures";
+        model_data = pfp->serializeState();
+        field_names = pfp->getFieldNames();
+        pfp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
         model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
     if (nbp) {
@@ -1361,6 +1380,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "VarianceThreshold") {
         obj = new QoreObject(QC_VARIANCETHRESHOLD, getProgram());
         obj->setPrivate(CID_VARIANCETHRESHOLD, priv);
+    } else if (header.algorithm == "PolynomialFeatures") {
+        obj = new QoreObject(QC_POLYNOMIALFEATURES, getProgram());
+        obj->setPrivate(CID_POLYNOMIALFEATURES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1433,6 +1455,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_ONEHOTENCODER, QoreOneHotEncoder, "OneHotEncoder")
     TRY_SERIALIZE_ALGO(CID_LABELENCODER, QoreLabelEncoder, "LabelEncoder")
     TRY_SERIALIZE_ALGO(CID_VARIANCETHRESHOLD, QoreVarianceThreshold, "VarianceThreshold")
+    TRY_SERIALIZE_ALGO(CID_POLYNOMIALFEATURES, QorePolynomialFeatures, "PolynomialFeatures")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
@@ -1560,6 +1583,33 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "Imputer") {
         obj = new QoreObject(QC_IMPUTER, getProgram());
         obj->setPrivate(CID_IMPUTER, priv);
+    } else if (header.algorithm == "DecisionTree") {
+        obj = new QoreObject(QC_DECISIONTREE, getProgram());
+        obj->setPrivate(CID_DECISIONTREE, priv);
+    } else if (header.algorithm == "RandomForest") {
+        obj = new QoreObject(QC_RANDOMFOREST, getProgram());
+        obj->setPrivate(CID_RANDOMFOREST, priv);
+    } else if (header.algorithm == "GradientBoostedTrees") {
+        obj = new QoreObject(QC_GRADIENTBOOSTEDTREES, getProgram());
+        obj->setPrivate(CID_GRADIENTBOOSTEDTREES, priv);
+    } else if (header.algorithm == "SVM") {
+        obj = new QoreObject(QC_SVM, getProgram());
+        obj->setPrivate(CID_SVM, priv);
+    } else if (header.algorithm == "NaiveBayes") {
+        obj = new QoreObject(QC_NAIVEBAYES, getProgram());
+        obj->setPrivate(CID_NAIVEBAYES, priv);
+    } else if (header.algorithm == "OneHotEncoder") {
+        obj = new QoreObject(QC_ONEHOTENCODER, getProgram());
+        obj->setPrivate(CID_ONEHOTENCODER, priv);
+    } else if (header.algorithm == "LabelEncoder") {
+        obj = new QoreObject(QC_LABELENCODER, getProgram());
+        obj->setPrivate(CID_LABELENCODER, priv);
+    } else if (header.algorithm == "VarianceThreshold") {
+        obj = new QoreObject(QC_VARIANCETHRESHOLD, getProgram());
+        obj->setPrivate(CID_VARIANCETHRESHOLD, priv);
+    } else if (header.algorithm == "PolynomialFeatures") {
+        obj = new QoreObject(QC_POLYNOMIALFEATURES, getProgram());
+        obj->setPrivate(CID_POLYNOMIALFEATURES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
