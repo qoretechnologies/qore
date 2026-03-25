@@ -140,6 +140,21 @@ static ColumnType inferCsvColumnType(const std::vector<std::string>& values,
     return ColumnType::STRING;
 }
 
+// Ensure Eigen VectorXd has capacity for at least n elements (doubling strategy)
+static void ensureFloatCapacity(Eigen::VectorXd& vec, int64_t needed) {
+    if (needed <= vec.size()) {
+        return;
+    }
+    int64_t new_cap = vec.size() * 2;
+    if (new_cap < needed) {
+        new_cap = needed;
+    }
+    if (new_cap < 64) {
+        new_cap = 64;
+    }
+    vec.conservativeResize(new_cap);
+}
+
 // Helper: append a parsed field value to column storage
 static void appendFieldToColumn(ColumnData& cd, const std::string& field,
         const std::string& null_string) {
@@ -154,7 +169,7 @@ static void appendFieldToColumn(ColumnData& cd, const std::string& field,
                 cd.int_data.push_back(0);
                 break;
             case ColumnType::FLOAT64:
-                cd.float_data.conservativeResize(cd.n_rows);
+                ensureFloatCapacity(cd.float_data, cd.n_rows);
                 cd.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
                 break;
             case ColumnType::STRING:
@@ -179,7 +194,7 @@ static void appendFieldToColumn(ColumnData& cd, const std::string& field,
         case ColumnType::FLOAT64: {
             double val = 0.0;
             tryParseFloat(field, val);
-            cd.float_data.conservativeResize(cd.n_rows);
+            ensureFloatCapacity(cd.float_data, cd.n_rows);
             cd.float_data(idx) = val;
             break;
         }
@@ -382,6 +397,14 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
         ++rows_read;
     }
     file.close();
+
+    // Trim over-allocated Eigen float vectors to actual size
+    for (auto& col : df->columns) {
+        if (col.data->type == ColumnType::FLOAT64
+                && col.data->float_data.size() > col.data->n_rows) {
+            col.data->float_data.conservativeResize(col.data->n_rows);
+        }
+    }
 
     // Set final row count from first column
     df->n_rows = df->columns.empty() ? 0 : df->columns[0].data->n_rows;

@@ -13,6 +13,21 @@
 #include <unordered_map>
 #include <unordered_set>
 
+// Ensure Eigen VectorXd has capacity (doubling strategy to avoid O(N²) resize)
+static void ensureFloatCapacity(Eigen::VectorXd& vec, int64_t needed) {
+    if (needed <= vec.size()) {
+        return;
+    }
+    int64_t new_cap = vec.size() * 2;
+    if (new_cap < needed) {
+        new_cap = needed;
+    }
+    if (new_cap < 64) {
+        new_cap = 64;
+    }
+    vec.conservativeResize(new_cap);
+}
+
 namespace QoreDataFrameNS {
 
 // Build a string key from column values at a given row index
@@ -68,7 +83,7 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                     dest.int_data.push_back(0);
                     break;
                 case ColumnType::FLOAT64:
-                    dest.float_data.conservativeResize(dest.n_rows);
+                    ensureFloatCapacity(dest.float_data, dest.n_rows);
                     dest.float_data(idx) = std::numeric_limits<double>::quiet_NaN();
                     break;
                 case ColumnType::STRING:
@@ -90,7 +105,7 @@ static void appendRow(std::vector<std::shared_ptr<ColumnData>>& dest_cols,
                     dest.int_data.push_back(src.int_data[row_idx]);
                     break;
                 case ColumnType::FLOAT64:
-                    dest.float_data.conservativeResize(dest.n_rows);
+                    ensureFloatCapacity(dest.float_data, dest.n_rows);
                     dest.float_data(idx) = src.float_data(row_idx);
                     break;
                 case ColumnType::STRING:
@@ -344,6 +359,14 @@ QoreDataFrame* QoreDataFrame::join(const QoreDataFrame* other,
                 appendRow(right_dest, other->columns, right_nonkey_src, r);
                 ++result_rows;
             }
+        }
+    }
+
+    // Trim over-allocated Eigen float vectors
+    for (auto& col : df->columns) {
+        if (col.data->type == ColumnType::FLOAT64
+                && col.data->float_data.size() > col.data->n_rows) {
+            col.data->float_data.conservativeResize(col.data->n_rows);
         }
     }
 
