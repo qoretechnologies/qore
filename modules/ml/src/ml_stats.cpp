@@ -131,23 +131,229 @@ MatrixXd ml_covariance_matrix(const MatrixXd& data) {
     return (centered.transpose() * centered) / (n - 1);
 }
 
+// --- Cephes Special Functions (public domain) ---
+// Adapted from the Cephes Mathematical Library by Stephen L. Moshier.
+// These are the same functions used by Python's scipy.special.
+// Original: http://www.netlib.org/cephes/
+// License: public domain / freely redistributable
+
+static const double MACHEP = 1.11022302462515654042e-16;   // 2^-53
+static const double MAXLOG = 7.09782712893383996843e+02;    // log(DBL_MAX)
+
+// Continued fraction expansion for the incomplete beta function.
+// Evaluates I_x(a,b) using the modified Lentz continued fraction.
+static double incbcf(double a, double b, double x) {
+    double xk, pk, pkm1, pkm2, qk, qkm1, qkm2;
+    double k1, k2, k3, k4, k5, k6, k7, k8;
+    double r, t, ans, thresh;
+    int n;
+
+    k1 = a;
+    k2 = a + b;
+    k3 = a;
+    k4 = a + 1.0;
+    k5 = 1.0;
+    k6 = b - 1.0;
+    k7 = k4;
+    k8 = a + 2.0;
+
+    pkm2 = 0.0;
+    qkm2 = 1.0;
+    pkm1 = 1.0;
+    qkm1 = 1.0;
+    ans = 1.0;
+    r = 1.0;
+    n = 0;
+    thresh = 3.0 * MACHEP;
+
+    do {
+        xk = -(x * k1 * k2) / (k3 * k4);
+        pk = pkm1 + pkm2 * xk;
+        qk = qkm1 + qkm2 * xk;
+        pkm2 = pkm1;
+        pkm1 = pk;
+        qkm2 = qkm1;
+        qkm1 = qk;
+
+        xk = (x * k5 * k6) / (k7 * k8);
+        pk = pkm1 + pkm2 * xk;
+        qk = qkm1 + qkm2 * xk;
+        pkm2 = pkm1;
+        pkm1 = pk;
+        qkm2 = qkm1;
+        qkm1 = qk;
+
+        if (qk != 0) {
+            r = pk / qk;
+        }
+        if (r != 0) {
+            t = std::abs((ans - r) / r);
+            ans = r;
+        } else {
+            t = 1.0;
+        }
+
+        if (t < thresh) {
+            break;
+        }
+
+        k1 += 1.0;
+        k2 += 1.0;
+        k3 += 2.0;
+        k4 += 2.0;
+        k5 += 1.0;
+        k6 -= 1.0;
+        k7 += 2.0;
+        k8 += 2.0;
+
+        if ((std::abs(qk) + std::abs(pk)) > 1e37) {
+            pkm2 *= MACHEP;
+            pkm1 *= MACHEP;
+            qkm2 *= MACHEP;
+            qkm1 *= MACHEP;
+        }
+        if ((std::abs(qk) < MACHEP) || (std::abs(pk) < MACHEP)) {
+            pkm2 *= 1e37;
+            pkm1 *= 1e37;
+            qkm2 *= 1e37;
+            qkm1 *= 1e37;
+        }
+    } while (++n < 300);
+
+    return ans;
+}
+
+// Power series for incomplete beta integral.
+// Use when b*x is small and x is not much larger than 1.
+static double incbps(double a, double b, double x) {
+    double s, t, u, v, n, t1, z, ai;
+
+    ai = 1.0 / a;
+    u = (1.0 - b) * x;
+    v = u / (a + 1.0);
+    t1 = v;
+    t = u;
+    n = 2.0;
+    s = 0.0;
+    z = MACHEP * ai;
+    while (std::abs(v) > z) {
+        u = (n - b) * x / n;
+        t *= u;
+        v = t / (a + n);
+        s += v;
+        n += 1.0;
+        if (n > 300) {
+            break;
+        }
+    }
+    s += t1;
+    s += ai;
+
+    u = a * std::log(x);
+    if ((a + b) < MAXLOG && std::abs(u) < MAXLOG) {
+        t = std::tgamma(a + b) / (std::tgamma(a) * std::tgamma(b));
+        s = s * t * std::pow(x, a);
+    } else {
+        t = std::lgamma(a + b) - std::lgamma(a) - std::lgamma(b) + u + std::log(s);
+        if (t < -MAXLOG) {
+            s = 0.0;
+        } else {
+            s = std::exp(t);
+        }
+    }
+    return s;
+}
+
+// Regularized incomplete beta function I_x(a,b) — Cephes incbet()
+// Returns the incomplete beta integral: integral from 0 to x of
+// t^(a-1) * (1-t)^(b-1) dt / B(a,b)
+static double cephes_incbet(double a, double b, double x) {
+    if (a <= 0.0 || b <= 0.0) {
+        return 0.0;
+    }
+    if (x <= 0.0) {
+        return 0.0;
+    }
+    if (x >= 1.0) {
+        return 1.0;
+    }
+
+    // Use symmetry relation if needed for numerical stability
+    double flag = 0;
+    if ((b * x) <= 1.0 && x <= 0.95) {
+        return incbps(a, b, x);
+    }
+
+    double w = 1.0 - x;
+
+    // Reverse a and b if x > a/(a+b)
+    double xc, aa, bb, xx;
+    if (x > (a / (a + b))) {
+        flag = 1;
+        aa = b;
+        bb = a;
+        xc = x;
+        xx = w;
+    } else {
+        aa = a;
+        bb = b;
+        xc = w;
+        xx = x;
+    }
+
+    if (flag == 1 && (bb * xx) <= 1.0 && xx <= 0.95) {
+        double t = incbps(aa, bb, xx);
+        return (t <= MACHEP) ? 1.0 - MACHEP : 1.0 - t;
+    }
+
+    // Use continued fraction expansion
+    double y = xx * (aa + bb - 2.0) - (aa - 1.0);
+    if (y < 0.0) {
+        w = incbcf(aa, bb, xx);
+    } else {
+        w = incbcf(aa, bb, xx) / xc;  // not used; just use incbcf directly
+        w = incbcf(aa, bb, xx);
+    }
+
+    y = aa * std::log(xx);
+    double t = bb * std::log(xc);
+    if ((aa + bb) < MAXLOG && std::abs(y) < MAXLOG && std::abs(t) < MAXLOG) {
+        t = std::pow(xc, bb) * std::pow(xx, aa) / aa;
+        t *= w;
+        t *= std::tgamma(aa + bb) / (std::tgamma(aa) * std::tgamma(bb));
+    } else {
+        y += t + std::lgamma(aa + bb) - std::lgamma(aa) - std::lgamma(bb);
+        y += std::log(w / aa);
+        if (y < -MAXLOG) {
+            t = 0.0;
+        } else {
+            t = std::exp(y);
+        }
+    }
+
+    if (flag == 1) {
+        if (t <= MACHEP) {
+            t = 1.0 - MACHEP;
+        } else {
+            t = 1.0 - t;
+        }
+    }
+    return t;
+}
+
 // --- Hypothesis Testing ---
 
-// Approximation of the two-tailed Student's t CDF using the regularized
-// incomplete beta function. For simplicity, use a normal approximation
-// for large df (df > 30).
+// Two-tailed p-value for Student's t-distribution (Cephes stdtr)
+// P(|T| > |t|) = I_{v/(v+t²)}(v/2, 1/2) where I is the regularized incomplete beta
 static double t_cdf_two_tail(double t_stat, double df) {
-    // For large df, t-distribution ≈ normal
-    double x = std::abs(t_stat);
-    // Approximation: p ≈ 2 * (1 - Φ(x * sqrt(df/(df-2))))
-    // For df > 30, this is quite accurate
-    double z = x;
-    if (df > 2) {
-        z = x * std::sqrt(df / (df - 2));
+    if (df <= 0) {
+        return 1.0;
     }
-    // Normal CDF approximation (Abramowitz and Stegun 26.2.17)
-    double p_one_tail = 0.5 * std::erfc(z / std::sqrt(2.0));
-    return 2.0 * p_one_tail;
+    double t2 = t_stat * t_stat;
+    double x = df / (df + t2);
+    // I_{df/(df+t²)}(df/2, 1/2) gives the two-tailed p-value directly:
+    // P(|T| > |t_stat|) = I_{df/(df+t²)}(df/2, 1/2)
+    return cephes_incbet(df / 2.0, 0.5, x);
 }
 
 void ml_t_test(const VectorXd& a, const VectorXd& b,
@@ -222,13 +428,26 @@ void ml_chi_squared_test(const MatrixXd& contingency,
 
     df = (r - 1) * (c - 1);
 
-    // p-value approximation using Wilson-Hilferty normal approximation
-    // for chi-squared with df degrees of freedom
-    if (df > 0) {
-        double z = std::pow(statistic / df, 1.0 / 3.0)
-            - (1.0 - 2.0 / (9.0 * df));
-        z /= std::sqrt(2.0 / (9.0 * df));
+    // p-value: P(X² > statistic) using the relation between chi-squared and
+    // the regularized incomplete beta function:
+    // P(X² > x | df=k) = 1 - I_{x/2 / (x/2 + k/2)}(?, ?) ... complex.
+    // Simpler: for chi-squared, P(X > x | k) = I_{k/(k+x)}(k/2, 1/2) when
+    // we can express it via a related F-distribution.
+    // Actually: chi²(k) = Gamma(k/2, 2), and
+    // P(chi² > x) = Q(k/2, x/2) = upper incomplete gamma.
+    // Relation to beta: Q(a, x) = I_{x/(x+a)}(?, ?) — not straightforward.
+    //
+    // Use Wilson-Hilferty cube-root approximation (accurate for df >= 1):
+    // Z = ((X/k)^(1/3) - (1 - 2/(9k))) / sqrt(2/(9k)) ~ N(0,1)
+    if (df > 0 && statistic > 0) {
+        double k = df;
+        double z = std::pow(statistic / k, 1.0 / 3.0)
+            - (1.0 - 2.0 / (9.0 * k));
+        z /= std::sqrt(2.0 / (9.0 * k));
         p_value = 0.5 * std::erfc(z / std::sqrt(2.0));
+        // Clamp to [0, 1]
+        if (p_value < 0) { p_value = 0; }
+        if (p_value > 1) { p_value = 1; }
     } else {
         p_value = 1.0;
     }
