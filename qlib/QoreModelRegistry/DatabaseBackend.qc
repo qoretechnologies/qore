@@ -137,6 +137,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
             "tags": metadata.tags ? make_json(metadata.tags) : "[]",
             "training_data_hash": metadata.training_data_hash,
             "description": metadata.description,
+            "config": metadata.config ? make_json(metadata.config) : NOTHING,
             "created": now_us(),
         };
         versions_table.insert(version_insert);
@@ -241,6 +242,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                 "training_data_hash": row.training_data_hash
                     ? string(row.training_data_hash) : NOTHING,
                 "tenant_id": tenant_id,
+                "config": row.config ? parse_json(row.config) : NOTHING,
             });
         }
         return result;
@@ -431,6 +433,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
             "training_data_hash": row.training_data_hash
                 ? string(row.training_data_hash) : NOTHING,
             "tenant_id": tenant_id,
+            "config": row.config ? parse_json(row.config) : NOTHING,
         });
     }
 
@@ -542,6 +545,8 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "comment": "Training data identifier"},
                     "description": {"qore_type": "clob",
                         "comment": "Version description"},
+                    "config": {"qore_type": "clob",
+                        "comment": "Version configuration JSON (e.g., tokenizer config)"},
                     "created": {"qore_type": Type::Date, "notnull": True,
                         "comment": "Creation timestamp"},
                 },

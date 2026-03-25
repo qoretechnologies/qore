@@ -1020,6 +1020,7 @@ class ModelRegistryTest inherits QUnit::Test {
             + "tags TEXT DEFAULT '[]', "
             + "training_data_hash VARCHAR(255), "
             + "description TEXT, "
+            + "config TEXT, "
             + "created TIMESTAMP NOT NULL, "
             + "UNIQUE(tenant_id, modelid, version_id))");
 

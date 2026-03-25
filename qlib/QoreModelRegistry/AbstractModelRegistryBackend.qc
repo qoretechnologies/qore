@@ -71,6 +71,10 @@ public hashdecl ModelVersionInfo {
     *string tenant_id;
     #! Artifact storage reference
     *hash<ArtifactRef> artifact_ref;
+    #! Optional version-level configuration (e.g., tokenizer config for ONNX models)
+    /** @since QoreModelRegistry 2.1
+    */
+    *hash<auto> config;
 }
 
 #! Options for pruning model versions
