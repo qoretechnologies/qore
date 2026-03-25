@@ -2232,17 +2232,99 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
-    // Phase A4: Handler IR compilation infrastructure
-    // Currently disabled: handlers use AST fallback (handler_ir = nullptr)
-    // Future: Compile handlers to separate QoreIRFunction objects with parent slot inheritance
+    // Phase B1: Handler IR compilation with parent slot inheritance
+    // DISABLED: Requires QoreIRVerifier::computeSlotIdsAndEmbed() modification
     //
-    // TODO: Implement parent slot inheritance mechanism
-    // - Pre-seed handler's local_var_slots with parent function's entries
-    // - Set parent_slot_count to track inherited slots
-    // - Copy parent's local values into handler frame at runtime
-    // - Update deserializer to pass enclosing_locals for parent scope variables
+    // Current issue: Handler's local_var_slots are pre-seeded with parent's entries,
+    // but computeSlotIdsAndEmbed() doesn't know to skip these pre-seeded slots.
+    // It tries to assign new slot IDs to all locals, overwriting parent slot mapping.
+    //
+    // TODO: Modify QoreIRVerifier::computeSlotIdsAndEmbed() to:
+    // 1. Check if func.parent_slot_count > 0
+    // 2. If yes, skip assigning slots 0..parent_slot_count-1 (already pre-seeded)
+    // 3. Start assigning new slot IDs from parent_slot_count onward
+    //
+    // Once QoreIRVerifier is fixed, uncomment the handler compilation logic below
 
-    return 0;  // No handlers compiled yet (all use AST fallback)
+    return 0;  // Handlers use AST fallback until QoreIRVerifier is updated
+
+    /* DISABLED HANDLER COMPILATION - SEE TODO ABOVE
+    int compiled_count = 0;
+    QoreIRFunction* parent_func = builder.getFunction();
+
+    if (!parent_func) {
+        error = "no parent function available for handler compilation";
+        return 0;
+    }
+
+    // Iterate through all registered handlers for this lowering context
+    for (InlineHandler& handler : block_handlers) {
+        // Skip if already compiled or invalid
+        if (!handler.obe_inst || !handler.code) {
+            continue;
+        }
+
+        // Skip if handler already has IR attached (already compiled)
+        if (handler.obe_inst->handler_ir) {
+            continue;
+        }
+
+        // Create handler IR function
+        auto handler_func = std::make_unique<QoreIRFunction>("handler");
+
+        // Phase B1: Pre-seed handler's local_var_slots with parent's entries
+        // This allows handler code to reference parent-scope variables by their parent slot IDs
+        uint32_t parent_slot_count = parent_func->local_var_slots.size();
+        handler_func->local_var_slots = parent_func->local_var_slots;
+        handler_func->parent_slot_count = parent_slot_count;
+
+        // Mark parent locals as pre-instantiated in the handler
+        for (auto& [lvar, slot_id] : handler_func->local_var_slots) {
+            if (lvar && slot_id < parent_slot_count) {
+                handler_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lvar));
+            }
+        }
+
+        // Create entry block for handler
+        QoreIRBasicBlock* entry = handler_func->createBlock("entry");
+
+        // Create a builder for the handler function
+        QoreIRBuilder handler_builder(handler_func.get());
+        handler_builder.setBlock(entry);
+
+        // Create temporary lowering context for the handler body
+        // This will use the pre-seeded local_var_slots for scope access
+        QoreIRLowering handler_lowering(handler_builder, parse_context);
+
+        // Lower the handler body into the handler IR function
+        std::string handler_error;
+        if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
+            // Log failure but continue (non-fatal) - handler will use AST fallback
+            if (!error.empty()) {
+                error += "; ";
+            }
+            error += "handler body lowering failed: " + handler_error;
+            continue;
+        }
+
+        // If handler doesn't end with a terminator, add return nothing
+        QoreIRBasicBlock* final_block = handler_builder.getBlock();
+        if (!final_block || final_block->instructions.empty() ||
+                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+            handler_builder.createReturnNothing();
+        }
+
+        // Update function metadata
+        handler_func->max_value_id = handler_builder.getFunction()->max_value_id;
+        handler_func->max_local_slot_id = handler_builder.getFunction()->max_local_slot_id;
+
+        // Attach compiled handler IR to instruction
+        handler.obe_inst->handler_ir = std::move(handler_func);
+        compiled_count++;
+    }
+
+    return compiled_count;
+    */
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
