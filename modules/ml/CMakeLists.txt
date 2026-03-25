@@ -87,6 +87,7 @@ set(ML_QPP_SRC
     src/QC_MLPipeline.qpp
     src/QC_CrossValidator.qpp
     src/QC_DecisionTree.qpp
+    src/QC_RandomForest.qpp
     src/ql_ml.qpp
 )
 
@@ -114,6 +115,7 @@ set(ML_CPP_SRC
     src/CrossValidator.cpp
     src/FlatTree.cpp
     src/DecisionTree.cpp
+    src/RandomForest.cpp
 )
 
 # Conditional ONNX Runtime support

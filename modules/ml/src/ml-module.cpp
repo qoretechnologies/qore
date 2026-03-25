@@ -46,6 +46,7 @@
 #include "QC_MLPipeline.h"
 #include "QC_CrossValidator.h"
 #include "QC_DecisionTree.h"
+#include "QC_RandomForest.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -97,6 +98,8 @@ DLLLOCAL TypedHashDecl* init_hashdecl_CrossValidationFold(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeClassificationResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_FeatureImportanceInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RandomForestClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RandomForestRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -127,6 +130,8 @@ const TypedHashDecl* hashdeclCrossValidationFold;
 const TypedHashDecl* hashdeclDecisionTreeClassificationResult;
 const TypedHashDecl* hashdeclDecisionTreeRegressionResult;
 const TypedHashDecl* hashdeclFeatureImportanceInfo;
+const TypedHashDecl* hashdeclRandomForestClassificationResult;
+const TypedHashDecl* hashdeclRandomForestRegressionResult;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -152,6 +157,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitMLPipelineClass();
     preinitCrossValidatorClass();
     preinitDecisionTreeClass();
+    preinitRandomForestClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -181,6 +187,8 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclDecisionTreeClassificationResult = init_hashdecl_DecisionTreeClassificationResult(MLNS);
     hashdeclDecisionTreeRegressionResult = init_hashdecl_DecisionTreeRegressionResult(MLNS);
     hashdeclFeatureImportanceInfo = init_hashdecl_FeatureImportanceInfo(MLNS);
+    hashdeclRandomForestClassificationResult = init_hashdecl_RandomForestClassificationResult(MLNS);
+    hashdeclRandomForestRegressionResult = init_hashdecl_RandomForestRegressionResult(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -202,6 +210,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initMLPipelineClass(MLNS));
     MLNS.addSystemClass(initCrossValidatorClass(MLNS));
     MLNS.addSystemClass(initDecisionTreeClass(MLNS));
+    MLNS.addSystemClass(initRandomForestClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -258,6 +267,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("DecisionTree", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreDecisionTree::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("RandomForest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreRandomForest::deserializeState(data, len, xsink);
     });
 }
 

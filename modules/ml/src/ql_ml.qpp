@@ -42,6 +42,7 @@
 #include "QC_MinMaxScaler.h"
 #include "QC_Imputer.h"
 #include "QC_DecisionTree.h"
+#include "QC_RandomForest.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -484,6 +485,30 @@ hashdecl Qore::ML::FeatureImportanceInfo {
     list<float> importances;
 }
 
+//! Random forest classification prediction result
+/** Returned by @ref RandomForest::predict() and @ref RandomForest::predictMatrix()
+    when configured for classification.
+*/
+hashdecl Qore::ML::RandomForestClassificationResult {
+    //! predicted class label
+    int predicted_class;
+    //! probability of the predicted class
+    float max_probability;
+    //! probability for each class
+    list<float> probabilities;
+    //! class labels
+    list<float> classes;
+}
+
+//! Random forest regression prediction result
+/** Returned by @ref RandomForest::predict() and @ref RandomForest::predictMatrix()
+    when configured for regression.
+*/
+hashdecl Qore::ML::RandomForestRegressionResult {
+    //! predicted target value
+    float prediction;
+}
+
 /** @defgroup ml_functions ML Functions
     ML utility functions
 */
@@ -529,6 +554,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("MLPipeline"), xsink);
     algos->push(new QoreStringNode("CrossValidator"), xsink);
     algos->push(new QoreStringNode("DecisionTree"), xsink);
+    algos->push(new QoreStringNode("RandomForest"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1040,6 +1066,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreRandomForest* rfp = dynamic_cast<QoreRandomForest*>(
+        model->getReferencedPrivateData(CID_RANDOMFOREST, xsink));
+    if (rfp) {
+        if (!rfp->isFitted()) {
+            rfp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "RandomForest";
+        model_data = rfp->serializeState();
+        field_names = rfp->getFieldNames();
+        rfp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     xsink->raiseException("ML-SERIALIZE-ERROR",
         "unknown model type: object is not a supported ML algorithm");
     return QoreValue();
@@ -1119,6 +1162,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "DecisionTree") {
         obj = new QoreObject(QC_DECISIONTREE, getProgram());
         obj->setPrivate(CID_DECISIONTREE, priv);
+    } else if (header.algorithm == "RandomForest") {
+        obj = new QoreObject(QC_RANDOMFOREST, getProgram());
+        obj->setPrivate(CID_RANDOMFOREST, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1184,6 +1230,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_MINMAXSCALER, QoreMinMaxScaler, "MinMaxScaler")
     TRY_SERIALIZE_ALGO(CID_IMPUTER, QoreImputer, "Imputer")
     TRY_SERIALIZE_ALGO(CID_DECISIONTREE, QoreDecisionTree, "DecisionTree")
+    TRY_SERIALIZE_ALGO(CID_RANDOMFOREST, QoreRandomForest, "RandomForest")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {

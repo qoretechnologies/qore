@@ -195,6 +195,12 @@ public class MlTest inherits QUnit::Test {
         addTestCase("DecisionTree error cases", \dtErrorTest());
         addTestCase("DecisionTree copy error", \dtCopyTest());
         addTestCase("serialize DecisionTree round-trip", \serializeDecisionTreeTest());
+        addTestCase("RandomForest classification basic", \rfClassificationBasicTest());
+        addTestCase("RandomForest regression basic", \rfRegressionBasicTest());
+        addTestCase("RandomForest feature importance", \rfFeatureImportanceTest());
+        addTestCase("RandomForest error cases", \rfErrorTest());
+        addTestCase("RandomForest copy error", \rfCopyTest());
+        addTestCase("serialize RandomForest round-trip", \serializeRandomForestTest());
         set_return_value(main());
     }
 
@@ -226,9 +232,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(18, caps.native_algorithms.size());
+            assertEq(19, caps.native_algorithms.size());
         } else {
-            assertEq(17, caps.native_algorithms.size());
+            assertEq(18, caps.native_algorithms.size());
         }
     }
 
@@ -3969,5 +3975,102 @@ public class MlTest inherits QUnit::Test {
         assertFloat(orig[0].max_probability, res[0].max_probability, 1e-10);
         assertEq(orig[1].predicted_class, res[1].predicted_class,
             "DT serialized prediction class 1 matches");
+    }
+
+    # --- RandomForest Tests ---
+
+    rfClassificationBasicTest() {
+        ML::RandomForest rf({"n_trees": 20, "task": "classification", "seed": 42});
+        assertFalse(rf.isFitted(), "RF not fitted initially");
+
+        list<list<float>> X = (
+            (0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0), (0.5, 0.0),
+            (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0), (10.5, 10.0));
+        list<float> y = (0, 0, 0, 0, 0, 1, 1, 1, 1, 1);
+
+        rf.fitMatrix(X, y);
+        assertTrue(rf.isFitted(), "RF fitted");
+
+        list<hash<auto>> results = rf.predictMatrix(((0.2, 0.3),));
+        assertEq(0, results[0].predicted_class, "RF predicts class 0");
+        assertTrue(results[0].max_probability >= 0.8, "RF high confidence");
+
+        results = rf.predictMatrix(((10.3, 10.2),));
+        assertEq(1, results[0].predicted_class, "RF predicts class 1");
+    }
+
+    rfRegressionBasicTest() {
+        ML::RandomForest rf({"n_trees": 20, "task": "regression", "seed": 42});
+
+        rf.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        assertTrue(rf.isFitted(), "RF regression fitted");
+
+        list<hash<auto>> results = rf.predictMatrix(((3.0,),));
+        # RF regression averages predictions — should be close to 6.0
+        assertTrue(results[0].prediction >= 4.0 && results[0].prediction <= 8.0,
+            "RF regression in reasonable range");
+    }
+
+    rfFeatureImportanceTest() {
+        ML::RandomForest rf({"n_trees": 20, "task": "classification", "seed": 42});
+        rf.fitMatrix(
+            ((0.0, 5.0), (1.0, 3.0), (2.0, 7.0),
+             (10.0, 4.0), (11.0, 6.0), (12.0, 2.0)),
+            (0, 0, 0, 1, 1, 1));
+
+        hash<auto> imp = rf.getFeatureImportances();
+        assertEq(2, imp.importances.size(), "RF has 2 importances");
+
+        float total = 0;
+        foreach auto v in (imp.importances) { total += v; }
+        assertFloat(1.0, total, 0.01);
+    }
+
+    rfErrorTest() {
+        bool caught = False;
+        try { new ML::RandomForest({"n_trees": 0}); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("ML-RANDOM-FOREST-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "RF n_trees=0 throws");
+
+        ML::RandomForest rf({"n_trees": 5, "task": "classification"});
+        assertThrows("ML-RANDOM-FOREST-ERROR",
+            \rf.predictMatrix(), (((1.0, 2.0),),));
+    }
+
+    rfCopyTest() {
+        ML::RandomForest rf({"n_trees": 5});
+        bool caught = False;
+        try { ML::RandomForest rf2 = rf.copy(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("COPY-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "RF copy throws");
+    }
+
+    serializeRandomForestTest() {
+        ML::RandomForest rf({"n_trees": 10, "task": "classification", "seed": 42});
+        rf.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0), (0.5, 0.5),
+             (10.0, 10.0), (11.0, 11.0), (10.5, 10.5)),
+            (0, 0, 0, 1, 1, 1));
+
+        list<hash<auto>> orig = rf.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+
+        binary blob = ML::ml_serialize(rf);
+        assertTrue(blob.size() > 0, "RF serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::RandomForest, "RF deserialized type");
+
+        list<hash<auto>> res = restored.predictMatrix(((0.3, 0.3), (10.3, 10.3)));
+        assertEq(orig[0].predicted_class, res[0].predicted_class, "RF serialize class 0");
+        assertEq(orig[1].predicted_class, res[1].predicted_class, "RF serialize class 1");
     }
 }
