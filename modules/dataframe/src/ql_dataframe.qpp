@@ -51,3 +51,21 @@ hashdecl Qore::DataFrame::ColumnStats {
     //! Count of unique non-null values (string columns only)
     *int unique_count;
 }
+
+//! CSV read/write options
+/** @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::CsvOptions {
+    //! Field separator (default ",")
+    *string separator;
+    //! Quote character (default '"')
+    *string quote_char;
+    //! Whether the first row is a header (default True)
+    *bool header;
+    //! String representing null/missing values (also recognizes "NA", "NULL", "None")
+    *string null_string;
+    //! Number of rows to skip before the header
+    *int skip_rows;
+    //! Maximum number of data rows to read
+    *int max_rows;
+}

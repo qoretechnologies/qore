@@ -87,6 +87,16 @@ public:
     //! String representation for display
     DLLLOCAL QoreStringNode* toString(int64_t max_rows, ExceptionSink* xsink) const;
 
+    // --- CSV I/O ---
+
+    //! Read a CSV file into a DataFrame
+    DLLLOCAL static QoreDataFrame* readCSV(const std::string& path,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Write this DataFrame to a CSV file
+    DLLLOCAL void writeCSV(const std::string& path, const QoreHashNode* options,
+        ExceptionSink* xsink) const;
+
     // --- Query Operations (return new DataFrames) ---
 
     //! Select a subset of columns

@@ -9,6 +9,7 @@
 */
 
 #include "QC_DataFrame.h"
+#include "df_csv.h"
 
 using namespace QoreDataFrameNS;
 
@@ -353,4 +354,52 @@ nothing DataFrame::dropColumn(string name) {
 */
 nothing DataFrame::renameColumn(string old_name, string new_name) {
     df->renameColumn(old_name->c_str(), new_name->c_str(), xsink);
+}
+
+//! Reads a CSV file into a new DataFrame
+/** @param path the file path to read
+    @param options optional CsvOptions hash controlling separator, quoting, headers, etc.
+
+    @return new DataFrame object with inferred column types
+
+    Column types are inferred from the data: integers → int64, decimals → float64,
+    otherwise → string. Empty cells and recognized null strings ("NA", "NULL", "None")
+    are treated as null values.
+
+    @par Example:
+    @code{.py}
+    auto df = DataFrame::readCSV("/path/to/data.csv");
+    auto tsv = DataFrame::readCSV("data.tsv", {"separator": "\t"});
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened
+
+    @since dataframe 1.0
+*/
+static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::readCSV(path->c_str(), options, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Writes the DataFrame to a CSV file
+/** @param path the file path to write
+    @param options optional CsvOptions hash controlling separator
+
+    @par Example:
+    @code{.py}
+    df.writeCSV("/path/to/output.csv");
+    df.writeCSV("output.tsv", {"separator": "\t"});
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+
+    @since dataframe 1.0
+*/
+nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
+    df->writeCSV(path->c_str(), options, xsink);
 }

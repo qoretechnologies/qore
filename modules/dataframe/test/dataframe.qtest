@@ -32,6 +32,9 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("filterTest", \filterTest());
         addTestCase("sortByTest", \sortByTest());
         addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
+        addTestCase("csvReadTest", \csvReadTest());
+        addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
+        addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
 
         set_return_value(main());
     }
@@ -377,5 +380,70 @@ class DataFrameTest inherits QUnit::Test {
         # Invalid filter operator
         assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("a", "LIKE", 1),
             "invalid filter operator");
+    }
+
+    csvReadTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        string csv_path = get_script_dir() + "/data/test_basic.csv";
+        auto df = DataFrame::DataFrame::readCSV(csv_path);
+
+        assertEq(3, df.numRows(), "CSV read row count");
+        assertEq(3, df.numCols(), "CSV read col count");
+        assertEq(("name", "age", "score"), df.columnNames(), "CSV column names");
+
+        # Type inference
+        list<string> types = df.dtypes();
+        assertEq("string", types[0], "CSV name is string");
+        assertEq("int64", types[1], "CSV age is int64");
+        assertEq("float64", types[2], "CSV score is float64");
+
+        # Values
+        assertEq(("Alice", "Bob", "Carol"), df.getColumn("name"), "CSV name values");
+        assertEq((30, 25, 35), df.getColumn("age"), "CSV age values");
+    }
+
+    csvWriteRoundTripTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"x": 1, "y": "hello"},
+             {"x": 2, "y": "world"}));
+
+        string tmp_path = tmp_location() + "/df_test_" + string(getpid()) + ".csv";
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        df.writeCSV(tmp_path);
+
+        auto df2 = DataFrame::DataFrame::readCSV(tmp_path);
+        assertEq(2, df2.numRows(), "CSV round-trip rows");
+        assertEq((1, 2), df2.getColumn("x"), "CSV round-trip int values");
+        assertEq(("hello", "world"), df2.getColumn("y"), "CSV round-trip string values");
+    }
+
+    csvMissingValuesTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        string csv_path = get_script_dir() + "/data/test_missing.csv";
+        auto df = DataFrame::DataFrame::readCSV(csv_path);
+
+        assertEq(4, df.numRows(), "CSV missing rows");
+
+        # Row 2 (index 1): value is empty → null
+        list<auto> vals = df.getColumn("value");
+        assertEq(10.5, vals[0], "CSV first value present");
+        assertEq(NOTHING, vals[1], "CSV empty cell is null");
+        assertEq(30.0, vals[2], "CSV third value present");
+        assertEq(NOTHING, vals[3], "CSV 'NA' is null");
+
+        # Row 3 (index 2): label is empty → null
+        list<auto> labels = df.getColumn("label");
+        assertEq("A", labels[0], "CSV first label");
+        assertEq(NOTHING, labels[2], "CSV empty label is null");
     }
 }

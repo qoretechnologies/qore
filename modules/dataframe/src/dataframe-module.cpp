@@ -38,10 +38,12 @@ QoreNamespace DFNS("Qore::DataFrame");
 // Forward declarations for hashdecl init functions (generated from ql_dataframe.qpp)
 DLLLOCAL TypedHashDecl* init_hashdecl_DataFrameShape(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ColumnStats(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_CsvOptions(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced via extern in QPP files)
 const TypedHashDecl* hashdeclDataFrameShape;
 const TypedHashDecl* hashdeclColumnStats;
+const TypedHashDecl* hashdeclCsvOptions;
 
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Phase 1: Pre-init classes
@@ -50,6 +52,7 @@ static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
     // Phase 2: Init hashdecls
     hashdeclDataFrameShape = init_hashdecl_DataFrameShape(DFNS);
     hashdeclColumnStats = init_hashdecl_ColumnStats(DFNS);
+    hashdeclCsvOptions = init_hashdecl_CsvOptions(DFNS);
 
     // Phase 3: Add classes with methods
     DFNS.addSystemClass(initDataFrameClass(DFNS));

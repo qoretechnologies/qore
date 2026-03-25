@@ -69,6 +69,7 @@ set(DF_CPP_SRC
     src/dataframe-module.cpp
     src/df_column.cpp
     src/DataFrame.cpp
+    src/df_csv.cpp
 )
 
 # Conditional Arrow/Parquet support

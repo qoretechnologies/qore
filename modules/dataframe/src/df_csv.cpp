@@ -1,0 +1,426 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    df_csv.cpp
+
+    CSV reader/writer implementation
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "df_csv.h"
+
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+
+namespace QoreDataFrameNS {
+
+//! Parse a single CSV line into fields, handling quoted fields
+static std::vector<std::string> parseCsvLine(const std::string& line, char sep,
+        char quote) {
+    std::vector<std::string> fields;
+    std::string field;
+    bool in_quote = false;
+
+    for (size_t i = 0; i < line.size(); ++i) {
+        char c = line[i];
+        if (in_quote) {
+            if (c == quote) {
+                // Check for escaped quote (doubled)
+                if (i + 1 < line.size() && line[i + 1] == quote) {
+                    field += quote;
+                    ++i;
+                } else {
+                    in_quote = false;
+                }
+            } else {
+                field += c;
+            }
+        } else {
+            if (c == quote) {
+                in_quote = true;
+            } else if (c == sep) {
+                fields.push_back(field);
+                field.clear();
+            } else {
+                field += c;
+            }
+        }
+    }
+    fields.push_back(field);
+
+    return fields;
+}
+
+//! Try to parse a string as int64; returns true on success
+static bool tryParseInt(const std::string& s, int64_t& out) {
+    if (s.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    long long val = strtoll(s.c_str(), &end, 10);
+    if (errno != 0 || end != s.c_str() + s.size() || end == s.c_str()) {
+        return false;
+    }
+    out = (int64_t)val;
+    return true;
+}
+
+//! Try to parse a string as double; returns true on success
+static bool tryParseFloat(const std::string& s, double& out) {
+    if (s.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    errno = 0;
+    double val = strtod(s.c_str(), &end);
+    if (errno != 0 || end != s.c_str() + s.size() || end == s.c_str()) {
+        return false;
+    }
+    out = val;
+    return true;
+}
+
+//! Check if a string represents a null/missing value
+static bool isNullString(const std::string& s, const std::string& null_string) {
+    if (s.empty()) {
+        return true;
+    }
+    if (!null_string.empty() && s == null_string) {
+        return true;
+    }
+    if (s == "NA" || s == "N/A" || s == "null" || s == "NULL" || s == "None") {
+        return true;
+    }
+    return false;
+}
+
+//! Infer column type from a sample of string values
+static ColumnType inferCsvColumnType(const std::vector<std::string>& values,
+        const std::string& null_string) {
+    bool all_int = true;
+    bool all_float = true;
+    bool has_non_null = false;
+
+    for (const auto& v : values) {
+        if (isNullString(v, null_string)) {
+            continue;
+        }
+        has_non_null = true;
+
+        int64_t ival;
+        if (!tryParseInt(v, ival)) {
+            all_int = false;
+        }
+        double fval;
+        if (!tryParseFloat(v, fval)) {
+            all_float = false;
+        }
+
+        if (!all_int && !all_float) {
+            return ColumnType::STRING;
+        }
+    }
+
+    if (!has_non_null) {
+        return ColumnType::FLOAT64;  // all null → default to float
+    }
+    if (all_int) {
+        return ColumnType::INT64;
+    }
+    if (all_float) {
+        return ColumnType::FLOAT64;
+    }
+    return ColumnType::STRING;
+}
+
+QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNode* options,
+        ExceptionSink* xsink) {
+    if (qore_check_cancel(xsink, "reading CSV file")) {
+        return nullptr;
+    }
+
+    // Parse options
+    char sep = ',';
+    char quote_char = '"';
+    bool has_header = true;
+    std::string null_string;
+    int skip_rows = 0;
+    int64_t max_rows = -1;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("separator");
+        if (v.getType() == NT_STRING) {
+            const char* s = v.get<const QoreStringNode>()->c_str();
+            if (s[0]) {
+                sep = s[0];
+            }
+        }
+        v = options->getKeyValue("quote_char");
+        if (v.getType() == NT_STRING) {
+            const char* s = v.get<const QoreStringNode>()->c_str();
+            if (s[0]) {
+                quote_char = s[0];
+            }
+        }
+        v = options->getKeyValue("header");
+        if (!v.isNullOrNothing()) {
+            has_header = v.getAsBool();
+        }
+        v = options->getKeyValue("null_string");
+        if (v.getType() == NT_STRING) {
+            null_string = v.get<const QoreStringNode>()->c_str();
+        }
+        v = options->getKeyValue("skip_rows");
+        if (!v.isNullOrNothing()) {
+            skip_rows = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("max_rows");
+        if (!v.isNullOrNothing()) {
+            max_rows = v.getAsBigInt();
+        }
+    }
+
+    // Open file
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "cannot open file '%s': %s", path.c_str(), strerror(errno));
+        return nullptr;
+    }
+
+    // Skip rows
+    std::string line;
+    for (int i = 0; i < skip_rows; ++i) {
+        if (!std::getline(file, line)) {
+            break;
+        }
+    }
+
+    // Read header
+    std::vector<std::string> col_names;
+    if (has_header) {
+        if (!std::getline(file, line)) {
+            return new QoreDataFrame();  // empty file
+        }
+        // Strip trailing \r if present (Windows line endings)
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        col_names = parseCsvLine(line, sep, quote_char);
+    }
+
+    // Read all data rows as strings
+    std::vector<std::vector<std::string>> all_rows;
+    int64_t rows_read = 0;
+    while (std::getline(file, line)) {
+        if (max_rows >= 0 && rows_read >= max_rows) {
+            break;
+        }
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty()) {
+            continue;  // skip blank lines
+        }
+        auto fields = parseCsvLine(line, sep, quote_char);
+        all_rows.push_back(std::move(fields));
+        ++rows_read;
+    }
+    file.close();
+
+    if (all_rows.empty()) {
+        return new QoreDataFrame();
+    }
+
+    // If no header, generate column names: col_0, col_1, ...
+    size_t num_cols = all_rows[0].size();
+    if (col_names.empty()) {
+        for (size_t c = 0; c < num_cols; ++c) {
+            col_names.push_back("col_" + std::to_string(c));
+        }
+    }
+    if (num_cols > col_names.size()) {
+        num_cols = col_names.size();
+    }
+
+    // Transpose: collect per-column string values
+    std::vector<std::vector<std::string>> col_values(num_cols);
+    for (const auto& row : all_rows) {
+        for (size_t c = 0; c < num_cols; ++c) {
+            if (c < row.size()) {
+                col_values[c].push_back(row[c]);
+            } else {
+                col_values[c].push_back("");
+            }
+        }
+    }
+
+    // Infer types per column
+    std::vector<ColumnType> types(num_cols);
+    for (size_t c = 0; c < num_cols; ++c) {
+        types[c] = inferCsvColumnType(col_values[c], null_string);
+    }
+
+    // Build DataFrame columns
+    int64_t n_rows = (int64_t)all_rows.size();
+    auto* df = new QoreDataFrame();
+
+    for (size_t c = 0; c < num_cols; ++c) {
+        auto cd = std::make_shared<ColumnData>();
+        cd->type = types[c];
+        cd->n_rows = n_rows;
+        cd->null_mask.resize(n_rows, 0);
+
+        switch (types[c]) {
+            case ColumnType::INT64: {
+                cd->int_data.resize(n_rows);
+                for (int64_t i = 0; i < n_rows; ++i) {
+                    if (isNullString(col_values[c][i], null_string)) {
+                        cd->null_mask[i] = 1;
+                        cd->int_data[i] = 0;
+                    } else {
+                        int64_t val;
+                        tryParseInt(col_values[c][i], val);
+                        cd->int_data[i] = val;
+                    }
+                }
+                break;
+            }
+            case ColumnType::FLOAT64: {
+                cd->float_data.resize(n_rows);
+                for (int64_t i = 0; i < n_rows; ++i) {
+                    if (isNullString(col_values[c][i], null_string)) {
+                        cd->null_mask[i] = 1;
+                        cd->float_data(i) = std::numeric_limits<double>::quiet_NaN();
+                    } else {
+                        double val;
+                        tryParseFloat(col_values[c][i], val);
+                        cd->float_data(i) = val;
+                    }
+                }
+                break;
+            }
+            case ColumnType::STRING: {
+                cd->str_data.resize(n_rows);
+                for (int64_t i = 0; i < n_rows; ++i) {
+                    if (isNullString(col_values[c][i], null_string)) {
+                        cd->null_mask[i] = 1;
+                    } else {
+                        cd->str_data[i] = col_values[c][i];
+                    }
+                }
+                break;
+            }
+            default:
+                break;
+        }
+
+        Column col;
+        col.name = col_names[c];
+        col.data = std::move(cd);
+        df->col_index[col.name] = df->columns.size();
+        df->columns.push_back(std::move(col));
+    }
+
+    df->n_rows = n_rows;
+    return df;
+}
+
+void QoreDataFrame::writeCSV(const std::string& path,
+        const QoreHashNode* options, ExceptionSink* xsink) const {
+    if (qore_check_cancel(xsink, "writing CSV file")) {
+        return;
+    }
+
+    // Parse options
+    char sep = ',';
+    if (options) {
+        QoreValue v = options->getKeyValue("separator");
+        if (v.getType() == NT_STRING) {
+            const char* s = v.get<const QoreStringNode>()->c_str();
+            if (s[0]) {
+                sep = s[0];
+            }
+        }
+    }
+
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        xsink->raiseException("DATAFRAME-IO-ERROR",
+            "cannot open file '%s' for writing: %s", path.c_str(), strerror(errno));
+        return;
+    }
+
+    std::lock_guard<std::mutex> lk(mtx);
+
+    // Write header
+    for (size_t c = 0; c < columns.size(); ++c) {
+        if (c > 0) {
+            file << sep;
+        }
+        file << columns[c].name;
+    }
+    file << "\n";
+
+    // Write rows
+    for (int64_t r = 0; r < n_rows; ++r) {
+        for (size_t c = 0; c < columns.size(); ++c) {
+            if (c > 0) {
+                file << sep;
+            }
+            const ColumnData& cd = *columns[c].data;
+            if (cd.isNull(r)) {
+                // empty for null
+                continue;
+            }
+            switch (cd.type) {
+                case ColumnType::INT64:
+                    file << cd.int_data[r];
+                    break;
+                case ColumnType::FLOAT64:
+                    file << cd.float_data(r);
+                    break;
+                case ColumnType::STRING: {
+                    const std::string& s = cd.str_data[r];
+                    if (s.find(sep) != std::string::npos
+                            || s.find('"') != std::string::npos
+                            || s.find('\n') != std::string::npos) {
+                        file << '"';
+                        for (char ch : s) {
+                            if (ch == '"') {
+                                file << "\"\"";
+                            } else {
+                                file << ch;
+                            }
+                        }
+                        file << '"';
+                    } else {
+                        file << s;
+                    }
+                    break;
+                }
+                case ColumnType::BOOL:
+                    file << (cd.bool_data[r] ? "true" : "false");
+                    break;
+                case ColumnType::DATE:
+                    file << cd.date_data[r];
+                    break;
+                default:
+                    break;
+            }
+        }
+        file << "\n";
+    }
+
+    file.close();
+}
+
+} // namespace QoreDataFrameNS
