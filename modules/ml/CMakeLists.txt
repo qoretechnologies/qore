@@ -140,6 +140,7 @@ set(ML_CPP_SRC
     src/PolynomialFeatures.cpp
     src/SelectKBest.cpp
     src/RFE.cpp
+    src/ml_tokenizer_bridge.cpp
     src/ADWIN.cpp
     src/PageHinkley.cpp
     src/DDM.cpp

@@ -10,15 +10,25 @@
 
 #include "QC_TextFeatures.h"
 #include "ml_serialization.h"
+#include "ml_tokenizer_bridge.h"
 
 #include <algorithm>
 #include <unordered_map>
 
-QoreTextFeatures::QoreTextFeatures(const std::string& mode, int max_features, int min_df)
-    : mode(mode), max_features(max_features), min_df(min_df) {
+QoreTextFeatures::QoreTextFeatures(const std::string& mode, int max_features, int min_df,
+    const std::string& tokenizer_mode, void* tokenizer_handle)
+    : mode(mode), tokenizer_mode(tokenizer_mode), tokenizer_handle(tokenizer_handle),
+      max_features(max_features), min_df(min_df) {
 }
 
-std::vector<std::string> QoreTextFeatures::tokenize(const std::string& text) {
+QoreTextFeatures::~QoreTextFeatures() {
+    if (tokenizer_handle) {
+        ml_tokenizer_destroy(tokenizer_handle);
+        tokenizer_handle = nullptr;
+    }
+}
+
+std::vector<std::string> QoreTextFeatures::tokenizeWhitespace(const std::string& text) {
     std::vector<std::string> tokens;
     std::string token;
     for (char c : text) {
@@ -33,6 +43,24 @@ std::vector<std::string> QoreTextFeatures::tokenize(const std::string& text) {
         tokens.push_back(token);
     }
     return tokens;
+}
+
+std::vector<std::string> QoreTextFeatures::tokenize(const std::string& text) const {
+    if (tokenizer_mode == "subword" && tokenizer_handle) {
+        int32_t count = 0;
+        char** tok_result = ml_tokenizer_tokenize(tokenizer_handle,
+            text.c_str(), text.size(), &count);
+        if (tok_result && count > 0) {
+            std::vector<std::string> tokens;
+            tokens.reserve(count);
+            for (int32_t i = 0; i < count; ++i) {
+                tokens.push_back(tok_result[i]);
+            }
+            ml_tokenizer_free_tokens(tok_result, count);
+            return tokens;
+        }
+    }
+    return tokenizeWhitespace(text);
 }
 
 void QoreTextFeatures::fit(const QoreListNode* documents, ExceptionSink* xsink) {
@@ -232,6 +260,7 @@ QoreListNode* QoreTextFeatures::getVocabulary(ExceptionSink* xsink) const {
 std::vector<uint8_t> QoreTextFeatures::serializeState() const {
     std::vector<uint8_t> buf;
     MLSerialization::writeString(buf, mode);
+    MLSerialization::writeString(buf, tokenizer_mode);
     MLSerialization::writeInt32(buf, max_features);
     MLSerialization::writeInt32(buf, min_df);
     MLSerialization::writeInt32(buf, n_docs);
@@ -259,6 +288,8 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     size_t remaining = len;
 
     std::string mode = MLSerialization::readString(ptr, remaining, xsink);
+    if (*xsink) { return nullptr; }
+    std::string tok_mode = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
     int max_features = MLSerialization::readInt32(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
@@ -289,7 +320,7 @@ QoreTextFeatures* QoreTextFeatures::deserializeState(const uint8_t* data,
     std::vector<std::string> fnames = MLSerialization::readStringVector(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
-    auto* tf = new QoreTextFeatures(mode, max_features, min_df);
+    auto* tf = new QoreTextFeatures(mode, max_features, min_df, tok_mode);
     tf->n_docs = n_docs;
     tf->n_features = n_features;
     tf->vocabulary = std::move(vocab);

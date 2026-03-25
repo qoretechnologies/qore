@@ -10,6 +10,7 @@
 
 #include "qore/Qore.h"
 #include "QC_TextFeatures.h"
+#include "ml_tokenizer_bridge.h"
 
 //! Converts text documents into numeric feature vectors using bag-of-words or TF-IDF weighting
 /** Use this to turn customer reviews, support tickets, or log messages into numbers
@@ -42,11 +43,19 @@ qclass TextFeatures [arg=QoreTextFeatures* tf; ns=Qore::ML; flags=final];
       by document frequency (0 = no limit, default 0)
     - \c min_df (*int): minimum document frequency; minimum number of documents a word
       must appear in to be included in the vocabulary (default 1)
+    - \c tokenizer_mode (*string): tokenization method:
+      - \c "whitespace" (default): built-in alphanumeric tokenizer (no external dependencies)
+      - \c "subword": use HuggingFace BPE/WordPiece/Unigram tokenization via the tokenizer
+        module (must be loaded and tokenizer_config provided)
+    - \c tokenizer_config (*hash): parsed tokenizer.json config hash for subword mode
+      (required when tokenizer_mode is "subword")
 */
 TextFeatures::constructor(*hash<auto> options) {
     std::string mode = "tfidf";
     int max_features = 0;
     int min_df = 1;
+    std::string tokenizer_mode = "whitespace";
+    void* tok_handle = nullptr;
 
     if (options) {
         QoreValue v = options->getKeyValue("mode");
@@ -84,9 +93,44 @@ TextFeatures::constructor(*hash<auto> options) {
                 return;
             }
         }
+
+        v = options->getKeyValue("tokenizer_mode");
+        if (!v.isNullOrNothing()) {
+            if (v.getType() != NT_STRING) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "'tokenizer_mode' option must be a string");
+                return;
+            }
+            const char* tm = v.get<const QoreStringNode>()->c_str();
+            if (strcmp(tm, "whitespace") != 0 && strcmp(tm, "subword") != 0) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "invalid tokenizer_mode '%s': must be 'whitespace' or 'subword'", tm);
+                return;
+            }
+            tokenizer_mode = tm;
+        }
+
+        if (tokenizer_mode == "subword") {
+            v = options->getKeyValue("tokenizer_config");
+            if (v.isNullOrNothing() || v.getType() != NT_HASH) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "tokenizer_config (parsed tokenizer.json hash) is required "
+                    "when tokenizer_mode is 'subword'");
+                return;
+            }
+            char error_buf[256];
+            tok_handle = ml_tokenizer_create(v.get<const QoreHashNode>(),
+                error_buf, sizeof(error_buf));
+            if (!tok_handle) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "failed to create tokenizer: %s", error_buf);
+                return;
+            }
+        }
     }
 
-    self->setPrivate(CID_TEXTFEATURES, new QoreTextFeatures(mode, max_features, min_df));
+    self->setPrivate(CID_TEXTFEATURES,
+        new QoreTextFeatures(mode, max_features, min_df, tokenizer_mode, tok_handle));
 }
 
 //! TextFeatures objects cannot be copied

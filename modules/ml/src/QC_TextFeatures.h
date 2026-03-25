@@ -31,7 +31,9 @@ DLLLOCAL QoreClass* initTextFeaturesClass(QoreNamespace& ns);
 */
 class QoreTextFeatures : public AbstractPrivateData {
 public:
-    DLLLOCAL QoreTextFeatures(const std::string& mode, int max_features, int min_df);
+    DLLLOCAL QoreTextFeatures(const std::string& mode, int max_features, int min_df,
+        const std::string& tokenizer_mode = "whitespace", void* tokenizer_handle = nullptr);
+    DLLLOCAL ~QoreTextFeatures();
 
     //! Learn vocabulary from a list of text documents
     DLLLOCAL void fit(const QoreListNode* documents, ExceptionSink* xsink);
@@ -56,10 +58,15 @@ public:
         size_t len, ExceptionSink* xsink);
 
 private:
-    //! Tokenize a text string into lowercase alphanumeric tokens
-    DLLLOCAL static std::vector<std::string> tokenize(const std::string& text);
+    //! Tokenize a text string (whitespace or subword depending on mode)
+    DLLLOCAL std::vector<std::string> tokenize(const std::string& text) const;
+
+    //! Whitespace tokenizer (built-in, no external dependency)
+    DLLLOCAL static std::vector<std::string> tokenizeWhitespace(const std::string& text);
 
     std::string mode;       //!< "tfidf" or "count"
+    std::string tokenizer_mode;  //!< "whitespace" or "subword"
+    void* tokenizer_handle = nullptr;  //!< opaque handle to tokenizer C API (if subword)
     int max_features;       //!< maximum vocabulary size (0 = unlimited)
     int min_df;             //!< minimum document frequency
     std::map<std::string, int> vocabulary;  //!< word -> index (sorted for determinism)
