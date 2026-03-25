@@ -52,6 +52,7 @@
 #include "QC_VarianceThreshold.h"
 #include "QC_PolynomialFeatures.h"
 #include "QC_SelectKBest.h"
+#include "QC_RFE.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -635,6 +636,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("VarianceThreshold"), xsink);
     algos->push(new QoreStringNode("PolynomialFeatures"), xsink);
     algos->push(new QoreStringNode("SelectKBest"), xsink);
+    algos->push(new QoreStringNode("RFE"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1248,6 +1250,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreRFE* rfep = dynamic_cast<QoreRFE*>(
+        model->getReferencedPrivateData(CID_RFE, xsink));
+    if (rfep) {
+        if (!rfep->isFitted()) {
+            rfep->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "RFE";
+        model_data = rfep->serializeState();
+        field_names = rfep->getFieldNames();
+        rfep->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
         model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
     if (nbp) {
@@ -1405,6 +1424,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "SelectKBest") {
         obj = new QoreObject(QC_SELECTKBEST, getProgram());
         obj->setPrivate(CID_SELECTKBEST, priv);
+    } else if (header.algorithm == "RFE") {
+        obj = new QoreObject(QC_RFE, getProgram());
+        obj->setPrivate(CID_RFE, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1479,6 +1501,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_VARIANCETHRESHOLD, QoreVarianceThreshold, "VarianceThreshold")
     TRY_SERIALIZE_ALGO(CID_POLYNOMIALFEATURES, QorePolynomialFeatures, "PolynomialFeatures")
     TRY_SERIALIZE_ALGO(CID_SELECTKBEST, QoreSelectKBest, "SelectKBest")
+    TRY_SERIALIZE_ALGO(CID_RFE, QoreRFE, "RFE")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
@@ -1636,6 +1659,9 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "SelectKBest") {
         obj = new QoreObject(QC_SELECTKBEST, getProgram());
         obj->setPrivate(CID_SELECTKBEST, priv);
+    } else if (header.algorithm == "RFE") {
+        obj = new QoreObject(QC_RFE, getProgram());
+        obj->setPrivate(CID_RFE, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",

@@ -246,6 +246,12 @@ public class MlTest inherits QUnit::Test {
         addTestCase("SelectKBest fitTransform", \selectKBestFitTransformTest());
         addTestCase("serialize SelectKBest round-trip", \serializeSelectKBestTest());
         addTestCase("save/load SelectKBest", \saveLoadSelectKBestTest());
+        addTestCase("RFE basic classification", \rfeClassificationTest());
+        addTestCase("RFE regression", \rfeRegressionTest());
+        addTestCase("RFE errors", \rfeErrorTest());
+        addTestCase("RFE step > 1", \rfeStepTest());
+        addTestCase("serialize RFE round-trip", \serializeRFETest());
+        addTestCase("save/load RFE", \saveLoadRFETest());
         set_return_value(main());
     }
 
@@ -277,9 +283,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(27, caps.native_algorithms.size());
+            assertEq(28, caps.native_algorithms.size());
         } else {
-            assertEq(26, caps.native_algorithms.size());
+            assertEq(27, caps.native_algorithms.size());
         }
     }
 
@@ -5036,6 +5042,196 @@ public class MlTest inherits QUnit::Test {
         assertEq(orig[0].size(), res[0].size(), "SKB save/load col count");
         for (int i = 0; i < orig[0].size(); ++i) {
             assertEq(orig[0][i], res[0][i], sprintf("SKB save/load col %d", i));
+        }
+    }
+
+    rfeClassificationTest() {
+        # 4 features: 0 and 2 are informative, 1 and 3 are noise
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0, 0.1),
+            (1.5, 0.3, 12.0, 0.9),
+            (2.0, 0.7, 11.0, 0.4),
+            (10.0, 0.4, 100.0, 0.6),
+            (11.0, 0.6, 110.0, 0.2),
+            (12.0, 0.8, 105.0, 0.7),
+        );
+        list<float> y = (0, 0, 0, 1, 1, 1);
+
+        ML::RFE rfe({"n_features_to_select": 2});
+        assertFalse(rfe.isFitted(), "RFE not fitted");
+
+        rfe.fitMatrix(X, y);
+        assertTrue(rfe.isFitted(), "RFE fitted");
+
+        # Should select 2 features
+        list<auto> support = rfe.getSupport();
+        assertEq(4, support.size(), "RFE support length");
+        int n_selected = 0;
+        for (int i = 0; i < support.size(); ++i) {
+            if (support[i]) {
+                ++n_selected;
+            }
+        }
+        assertEq(2, n_selected, "RFE selected 2 features");
+
+        # Ranking: selected features get rank 1
+        list<int> ranking = rfe.getRanking();
+        assertEq(4, ranking.size(), "RFE ranking length");
+        for (int i = 0; i < ranking.size(); ++i) {
+            if (support[i]) {
+                assertEq(1, ranking[i], sprintf("RFE selected feature %d has rank 1", i));
+            } else {
+                assertTrue(ranking[i] > 1, sprintf("RFE eliminated feature %d has rank > 1", i));
+            }
+        }
+
+        # Transform produces 2-column output
+        list<auto> result = rfe.transformMatrix(((5.0, 0.5, 50.0, 0.3),));
+        assertEq(1, result.size(), "RFE 1 row");
+        assertEq(2, result[0].size(), "RFE 2 cols");
+    }
+
+    rfeRegressionTest() {
+        # Regression: feature 0 correlates with target, feature 1 is noise
+        list<list<float>> X = (
+            (1.0, 0.5), (2.0, 0.6), (3.0, 0.4),
+            (4.0, 0.7), (5.0, 0.3), (6.0, 0.8));
+        list<float> y = (1.1, 2.2, 3.1, 4.3, 4.9, 6.1);
+
+        ML::RFE rfe({"n_features_to_select": 1});
+        rfe.fitMatrix(X, y);
+        assertTrue(rfe.isFitted(), "RFE regression fitted");
+
+        list<auto> support = rfe.getSupport();
+        assertEq(2, support.size(), "RFE reg support length");
+
+        # Should select exactly 1 feature
+        int n_selected = 0;
+        for (int i = 0; i < support.size(); ++i) {
+            if (support[i]) {
+                ++n_selected;
+            }
+        }
+        assertEq(1, n_selected, "RFE reg selected 1");
+
+        list<auto> result = rfe.transformMatrix(((3.5, 0.5),));
+        assertEq(1, result[0].size(), "RFE reg 1 output col");
+    }
+
+    rfeErrorTest() {
+        ML::RFE rfe({"n_features_to_select": 2});
+
+        # Transform before fit
+        assertThrows("ML-RFE-ERROR",
+            \rfe.transformMatrix(), (((1.0, 2.0),),));
+
+        # Support before fit
+        assertThrows("ML-RFE-ERROR", \rfe.getSupport());
+
+        # Ranking before fit
+        assertThrows("ML-RFE-ERROR", \rfe.getRanking());
+
+        # Invalid n_features_to_select
+        assertThrows("ML-RFE-ERROR",
+            sub () { new ML::RFE({"n_features_to_select": 0}); });
+
+        # Invalid step
+        assertThrows("ML-RFE-ERROR",
+            sub () { new ML::RFE({"step": 0}); });
+
+        # Copy error
+        assertThrows("COPY-ERROR", sub () {
+            ML::RFE cp = rfe.copy();
+        });
+
+        # Wrong feature count after fit
+        rfe.fitMatrix(((1.0, 2.0), (3.0, 4.0)), (0, 1));
+        assertThrows("ML-RFE-ERROR",
+            \rfe.transformMatrix(), (((1.0, 2.0, 3.0),),));
+
+        # X/y size mismatch
+        ML::RFE rfe2({"n_features_to_select": 1});
+        assertThrows("ML-RFE-ERROR",
+            \rfe2.fitMatrix(), (((1.0,), (2.0,), (3.0,)), (0, 1)));
+    }
+
+    rfeStepTest() {
+        # Test with step=2 (remove 2 features per iteration)
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0, 0.1, 100.0),
+            (2.0, 0.3, 12.0, 0.9, 200.0),
+            (10.0, 0.4, 100.0, 0.6, 1000.0),
+            (11.0, 0.6, 110.0, 0.2, 1100.0),
+        );
+        list<float> y = (0, 0, 1, 1);
+
+        ML::RFE rfe({"n_features_to_select": 2, "step": 2});
+        rfe.fitMatrix(X, y);
+
+        list<auto> support = rfe.getSupport();
+        int n_selected = 0;
+        for (int i = 0; i < support.size(); ++i) {
+            if (support[i]) {
+                ++n_selected;
+            }
+        }
+        assertEq(2, n_selected, "RFE step=2 selected 2");
+
+        list<auto> result = rfe.transformMatrix(((5.0, 0.5, 50.0, 0.3, 500.0),));
+        assertEq(2, result[0].size(), "RFE step=2 output 2 cols");
+    }
+
+    serializeRFETest() {
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0), (2.0, 0.6, 12.0),
+            (10.0, 0.4, 100.0), (11.0, 0.5, 110.0));
+        list<float> y = (0, 0, 1, 1);
+
+        ML::RFE rfe({"n_features_to_select": 2});
+        rfe.fitMatrix(X, y);
+
+        list<auto> orig = rfe.transformMatrix(((5.0, 0.5, 50.0),));
+
+        binary blob = ML::ml_serialize(rfe);
+        assertTrue(blob.size() > 0, "RFE serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::RFE, "RFE deserialized type");
+
+        list<auto> res = restored.transformMatrix(((5.0, 0.5, 50.0),));
+        assertEq(orig[0].size(), res[0].size(), "RFE round-trip col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("RFE round-trip col %d", i));
+        }
+
+        # Rankings should survive round-trip
+        list<int> orig_ranking = rfe.getRanking();
+        list<int> res_ranking = restored.getRanking();
+        assertEq(orig_ranking, res_ranking, "RFE ranking round-trip");
+    }
+
+    saveLoadRFETest() {
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0), (2.0, 0.6, 12.0),
+            (10.0, 0.4, 100.0), (11.0, 0.5, 110.0));
+        list<float> y = (0, 0, 1, 1);
+
+        ML::RFE rfe({"n_features_to_select": 2});
+        rfe.fitMatrix(X, y);
+
+        list<auto> orig = rfe.transformMatrix(((5.0, 0.5, 50.0),));
+
+        string tmpfile = "/tmp/test_ml_rfe.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(rfe, tmpfile);
+
+        auto loaded = ML::ml_load_model(tmpfile);
+        assertTrue(loaded instanceof ML::RFE, "RFE loaded type");
+
+        list<auto> res = loaded.transformMatrix(((5.0, 0.5, 50.0),));
+        assertEq(orig[0].size(), res[0].size(), "RFE save/load col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("RFE save/load col %d", i));
         }
     }
 }

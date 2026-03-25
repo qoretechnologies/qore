@@ -11,8 +11,8 @@ RandomForest, GradientBoostedTrees — DataProvider processors and GBT multiclas
 softmax remaining). Phase 10 is **complete** (SVM, NaiveBayes).
 Phase 11 is **complete** (statistical functions with Cephes incbet).
 Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
-PolynomialFeatures, SelectKBest — remaining: DateTimeFeatures, TextFeatures,
-RecursiveFeatureElimination). Phases 13–14 are planned.
+PolynomialFeatures, SelectKBest, RFE — remaining: DateTimeFeatures, TextFeatures).
+Phases 13–14 are planned.
 
 ## Current State (after Phases 1–9)
 

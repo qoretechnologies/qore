@@ -43,6 +43,7 @@
     |@ref Qore::ML::VarianceThreshold "VarianceThreshold"|Feature Selection|Remove low-variance features from datasets
     |@ref Qore::ML::PolynomialFeatures "PolynomialFeatures"|Feature Engineering|Generate polynomial and interaction terms from input features
     |@ref Qore::ML::SelectKBest "SelectKBest"|Feature Selection|Select top-k features by ANOVA F-test or mutual information
+    |@ref Qore::ML::RFE "RFE"|Feature Selection|Recursive feature elimination using decision tree importances
     |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
     |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
     |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
@@ -225,6 +226,11 @@
       based on a scoring function. Supports ANOVA F-statistic (\c "f_classif") for
       classification tasks and discretized mutual information (\c "mutual_info") for any
       target type. Reports per-feature scores and a boolean support mask.
+    - @ref Qore::ML::RFE "RFE" — Recursive Feature Elimination: iteratively fits a decision
+      tree, ranks features by importance (Gini/MSE reduction), removes the least important
+      feature(s), and repeats until the desired number remain. A wrapper-based method that
+      often produces better results than filter methods. Reports per-feature ranking
+      (1 = selected, 2+ = elimination round).
 
     @subsection mlalgo_stats Statistical Functions
 
@@ -389,7 +395,7 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     - Do you need polynomial or interaction features for a linear model?
       → Use @ref Qore::ML::PolynomialFeatures "PolynomialFeatures"
     - Do you want to select the most informative features automatically?
-      → Use @ref Qore::ML::SelectKBest "SelectKBest" with \c "f_classif" or \c "mutual_info"
+      → Use @ref Qore::ML::SelectKBest "SelectKBest" (filter) or @ref Qore::ML::RFE "RFE" (wrapper, more accurate)
 
     <b>"I need to test a statistical hypothesis"</b>
     - Are two groups' means significantly different?
@@ -680,4 +686,5 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — feature selector removing low-variance features (population variance)
       - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
       - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
+      - @ref Qore::ML::RFE "RFE" — recursive feature elimination using decision tree importances
 */

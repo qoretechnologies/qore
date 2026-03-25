@@ -96,6 +96,7 @@ set(ML_QPP_SRC
     src/QC_VarianceThreshold.qpp
     src/QC_PolynomialFeatures.qpp
     src/QC_SelectKBest.qpp
+    src/QC_RFE.qpp
     src/ql_ml.qpp
 )
 
@@ -133,6 +134,7 @@ set(ML_CPP_SRC
     src/VarianceThreshold.cpp
     src/PolynomialFeatures.cpp
     src/SelectKBest.cpp
+    src/RFE.cpp
 )
 
 # Conditional ONNX Runtime support
