@@ -1877,6 +1877,9 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             case NT_NOTHING:
                 writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NOTHING));
                 return true;
+            case NT_NULL:
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NULL));
+                return true;
             default:
                 break;
         }
@@ -1996,6 +1999,12 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* str = dynamic_cast<const QoreStringNode*>(node)) {
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_STRING));
         writer.writeStringRef(str->c_str());
+        return true;
+    }
+
+    // QoreNullNode: NULL constant
+    if (dynamic_cast<const QoreNullNode*>(node)) {
+        writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_NULL));
         return true;
     }
 

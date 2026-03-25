@@ -146,6 +146,12 @@ static bool write_slot_CONST_NOTHING(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! CONST_NULL: NULL constant — no payload
+static bool write_slot_CONST_NULL(AOTExprSlotWriteCtx& ctx) {
+    (void)ctx;  // Unused
+    return true;
+}
+
 //! SELF_METHOD_CALL: ref1 = class path, ref2 = method name
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());

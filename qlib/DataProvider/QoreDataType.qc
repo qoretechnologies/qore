@@ -335,7 +335,7 @@ public class QoreDataType inherits AbstractDataProviderType {
         # Note: built-in soft types like 'data', 'softstring', 'softint', etc. are designed to accept NULL
         # so we only reject NULL for other soft types (typically user-defined composite soft types like softlist<type>)
         string name = type.getName();
-        if (!Program::hasParseOption("broken-soft-types") && value == NULL
+        if (!Program::hasParseOption("broken-soft-types") && value === NULL
             && name =~ /^soft(list|hash|map)</ && name !~ /^\*soft/) {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", name);
         }

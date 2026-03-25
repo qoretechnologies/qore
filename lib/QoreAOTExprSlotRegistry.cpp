@@ -156,8 +156,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 33: LIST_LITERAL (unsupported in slot metadata)
     {nullptr, 33, false, nullptr, "List literal"},
 
-    // 34-253: Unused
-    {nullptr, 34, false, nullptr, nullptr},
+    // 34: CONST_NULL
+    {"CONST_NULL", 34, true, write_slot_CONST_NULL, "NULL constant"},
+
+    // 35-253: Unused
     {nullptr, 35, false, nullptr, nullptr},
     {nullptr, 36, false, nullptr, nullptr},
     {nullptr, 37, false, nullptr, nullptr},

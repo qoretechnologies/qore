@@ -636,6 +636,7 @@ enum class AOTExprKind : uint8_t {
     CONST_BOOL         = 31,  //!< Boolean constant: u8 value (0 or 1)
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
+    CONST_NULL         = 34,  //!< NULL constant: no data
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
