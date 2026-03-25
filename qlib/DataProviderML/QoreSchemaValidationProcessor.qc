@@ -43,22 +43,29 @@ public class QoreSchemaValidationProcessor inherits DataProvider::AbstractDataPr
         #! Constructor options
         const ConstructorOptions = {
             "schema": <DataProviderOptionInfo>{
-                "display_name": "Validation Schema",
+                "display_name": "Validation Rules",
                 "short_desc": "Schema defining validation rules for each field",
-                "desc": "A hash where each key is a field name and the value is a hash with "
-                    "optional validation rules:\n"
-                    "- `type` (*string): expected type (\"string\", \"int\", \"float\", \"bool\", "
-                    "\"date\")\n"
-                    "- `required` (*bool): whether the field must be present and non-null "
-                    "(default False)\n"
-                    "- `min` (*float): minimum numeric value\n"
-                    "- `max` (*float): maximum numeric value\n"
-                    "- `min_length` (*int): minimum string length\n"
-                    "- `max_length` (*int): maximum string length\n"
-                    "- `allowed_values` (*list<auto>): list of allowed values (enum check)\n\n"
-                    "Example: `{\"age\": {\"type\": \"int\", \"required\": True, \"min\": 0, "
+                "desc": "A hash where each key is a field name and the value is a hash of "
+                    "validation rules to enforce on that field:\n\n"
+                    "- **`type`** (*string*): expected data type — use `\"int\"` for quantities "
+                    "and counts, `\"float\"` for prices and measurements, `\"string\"` for names "
+                    "and codes, `\"bool\"` for flags, `\"date\"` for timestamps\n"
+                    "- **`required`** (*bool*): use `required: True` for fields that must always "
+                    "be present — e.g., `customer_id`, `order_date`\n"
+                    "- **`min`** / **`max`** (*float*): numeric bounds — use `min: 0, max: 150` "
+                    "for age to catch data entry errors, or `min: 0` for prices to reject "
+                    "negative amounts\n"
+                    "- **`min_length`** / **`max_length`** (*int*): string length limits — use "
+                    "`min_length: 1` to reject empty strings, or `max_length: 255` to enforce "
+                    "database column limits\n"
+                    "- **`allowed_values`** (*list\\<auto>*): enumeration check — use "
+                    "`allowed_values: (\"active\", \"inactive\")` for status codes, or "
+                    "`allowed_values: (1, 2, 3, 4, 5)` for rating fields\n\n"
+                    "**Example**:\n"
+                    "`{\"age\": {\"type\": \"int\", \"required\": True, \"min\": 0, "
                     "\"max\": 150}, \"name\": {\"type\": \"string\", \"required\": True, "
-                    "\"min_length\": 1}}`",
+                    "\"min_length\": 1}, \"status\": {\"allowed_values\": "
+                    "(\"active\", \"inactive\")}}`",
                 "type": AbstractDataProviderTypeMap."hash",
                 "required": True,
             },

@@ -78,7 +78,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreIsolationForestProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreIsolationForestProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -113,7 +113,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDBSCANClusteringProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreDBSCANClusteringProcessor::ConstructorOptions{
                     "fields", "window_size", "epsilon",
@@ -150,7 +150,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKMeansProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKMeansProcessor::ConstructorOptions{"fields", "window_size", "k"}, {
                     "preselected": True,
@@ -183,7 +183,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QorePCAProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QorePCAProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -217,7 +217,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreHoltWintersProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreHoltWintersProcessor::ConstructorOptions{"fields", "window_size", "period"}, {
                     "preselected": True,
@@ -254,7 +254,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLinearRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLinearRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -291,7 +291,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLOFProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLOFProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -325,7 +325,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreGMMProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreGMMProcessor::ConstructorOptions{
                     "fields", "window_size", "n_components",
@@ -359,7 +359,7 @@ module DataProviderML {
                 "action_code": DPAT_PIPELINE_PROCESSOR,
                 "processor_capabilities": DPC_AGGREGATE,
                 "cls": "DataProviderML::QoreOnnxModelProcessor",
-                "groups": ("ML Analytics",),
+                "groups": (AppGroup::Analytics,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     QoreOnnxModelProcessor::ConstructorOptions{
                         "model_path", "fields", "window_size",
@@ -398,7 +398,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegistryModelProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
                     "registry_path", "model_name", "fields", "window_size",
@@ -436,7 +436,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreSeasonalDecompositionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSeasonalDecompositionProcessor::ConstructorOptions{
                     "fields", "window_size", "period",
@@ -476,7 +476,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreStandardScalerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreStandardScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -510,7 +510,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreMinMaxScalerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreMinMaxScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -553,7 +553,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreImputerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreImputerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -592,7 +592,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreClassificationMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreClassificationMetricsProcessor::ConstructorOptions{
                     "predicted_field", "true_field", "window_size",
@@ -627,7 +627,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegressionMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegressionMetricsProcessor::ConstructorOptions{
                     "predicted_field", "true_field", "window_size",
@@ -661,7 +661,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreClusteringMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreClusteringMetricsProcessor::ConstructorOptions{
                     "fields", "cluster_field", "window_size",
@@ -693,7 +693,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLogisticRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLogisticRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -731,7 +731,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKNNClassificationProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKNNClassificationProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size", "k",
@@ -766,7 +766,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKNNRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKNNRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size", "k",
@@ -803,7 +803,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDecisionTreeClassificationProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreDecisionTreeClassificationProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -837,7 +837,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDecisionTreeRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreDecisionTreeRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -874,7 +874,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRandomForestClassificationProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRandomForestClassificationProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -908,7 +908,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRandomForestRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRandomForestRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -944,7 +944,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreGBTClassificationProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreGBTClassificationProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -979,7 +979,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreGBTRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreGBTRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -1018,7 +1018,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
             "cls": "DataProviderML::QoreRollingStatsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRollingStatsProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -1053,7 +1053,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
             "cls": "DataProviderML::QoreEWMAProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreEWMAProcessor::ConstructorOptions{"fields", "alpha"}, {
                     "preselected": True,
@@ -1086,7 +1086,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDataProfileProcessor",
-            "groups": ("Data Governance",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreDataProfileProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -1104,22 +1104,28 @@ module DataProviderML {
             "display_name": "Validate Record Schema",
             "short_desc": "Validates each record against a defined schema with configurable "
                 "violation handling",
-            "desc": "Validates each record against a user-defined schema specifying type "
-                "constraints, required fields, value ranges, string length limits, and allowed "
-                "values. Invalid records can be enriched with error details (default), silently "
-                "dropped, or cause an exception.\n\n"
+            "desc": "Enforce data quality rules before processing — reject orders with "
+                "negative prices, ensure `customer_id` is always present, or restrict status "
+                "codes to known values. Each record is validated against a user-defined schema "
+                "and either enriched with error details (default), silently dropped, or causes "
+                "an exception.\n\n"
                 "**Validation rules per field**:\n"
-                "- `type` — expected type (string, int, float, bool, date)\n"
-                "- `required` — field must be present and non-null\n"
-                "- `min` / `max` — numeric value bounds\n"
-                "- `min_length` / `max_length` — string length bounds\n"
-                "- `allowed_values` — enumeration of valid values\n\n"
+                "- `type` — expected type (e.g., `\"int\"` for order quantities, `\"string\"` "
+                "for names)\n"
+                "- `required` — field must be present and non-null (e.g., every order needs a "
+                "`customer_id`)\n"
+                "- `min` / `max` — numeric value bounds (e.g., `min: 0` to reject negative "
+                "prices)\n"
+                "- `min_length` / `max_length` — string length bounds (e.g., `min_length: 1` "
+                "to reject empty names)\n"
+                "- `allowed_values` — enumeration of valid values (e.g., "
+                "`(\"active\", \"inactive\", \"suspended\")` for account status)\n\n"
                 "Each record passes through individually. In **enrich** mode, every record "
                 "gets `_is_valid` (bool) and `_validation_errors` (list of strings).",
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_TRANSFORM,
             "cls": "DataProviderML::QoreSchemaValidationProcessor",
-            "groups": ("Data Governance",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSchemaValidationProcessor::ConstructorOptions{"schema",}, {
                     "preselected": True,
