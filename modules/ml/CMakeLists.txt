@@ -111,6 +111,7 @@ set(ML_CPP_SRC
     src/MLPipeline.cpp
     src/ml_metrics.cpp
     src/CrossValidator.cpp
+    src/FlatTree.cpp
 )
 
 # Conditional ONNX Runtime support
