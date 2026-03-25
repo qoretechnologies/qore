@@ -2728,6 +2728,8 @@ bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func
     writer.writeU32(func.max_local_slot_id);
     writer.writeU32(func.num_guards);
     writer.writeStringRef(func.return_type_info ? QoreTypeInfo::getPath(func.return_type_info) : "");
+    // Phase C: Serialize parent_slot_count for handler IR functions
+    writer.writeU32(func.parent_slot_count);
     writer.writeU16(static_cast<uint16_t>(func.blocks.size()));
     writer.writeU16(static_cast<uint16_t>(func.local_var_slots.size()));
     writer.writeU16(static_cast<uint16_t>(func.all_body_locals.size()));

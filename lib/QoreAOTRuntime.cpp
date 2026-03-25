@@ -2840,6 +2840,8 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     uint32_t max_local_slot_id = QoreAOTBinaryReader::readU32(ptr);
     uint32_t num_guards = QoreAOTBinaryReader::readU32(ptr);
     const char* return_type_path = reader.readStringRef(ptr);
+    // Phase C: Deserialize parent_slot_count for handler IR functions
+    uint32_t parent_slot_count = QoreAOTBinaryReader::readU32(ptr);
     uint16_t num_blocks = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_local_slots = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
@@ -2848,6 +2850,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     func->max_value_id = max_value_id;
     func->max_local_slot_id = max_local_slot_id;
     func->num_guards = num_guards;
+    func->parent_slot_count = parent_slot_count;
 
     // Resolve return type
     if (return_type_path && *return_type_path) {
