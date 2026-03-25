@@ -330,15 +330,6 @@ public class QoreDataType inherits AbstractDataProviderType {
             throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept values of type %y", getName(),
                 value.type());
         }
-        # Reject NULL for non-optional soft types (unless broken-soft-types parse option is set for backward compatibility)
-        # Use == instead of === because NULL is often treated as empty/falsy value
-        # Note: built-in soft types like 'data', 'softstring', 'softint', etc. are designed to accept NULL
-        # so we only reject NULL for other soft types (typically user-defined composite soft types like softlist<type>)
-        string name = type.getName();
-        if (!Program::hasParseOption("broken-soft-types") && value == NULL
-            && name =~ /^soft(list|hash|map)</ && name !~ /^\*soft/) {
-            throw "RUNTIME-TYPE-ERROR", sprintf("type %y does not accept NULL", name);
-        }
         # Only use default value when value is truly missing, not when NULL is explicitly passed
         if (!exists value && exists default_value) {
             return default_value;
@@ -347,14 +338,14 @@ public class QoreDataType inherits AbstractDataProviderType {
         if (allowed_values && !allowed_values_creatable) {
             if (!allowed_values_map{value}) {
                 throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed values: %y",
-                    name, value, (map $1.value, allowed_values));
+                    getName(), value, (map $1.value, allowed_values));
             }
         }
         if (element_allowed_values_map) {
             foreach auto v in (value) {
                 if (!element_allowed_values_map{v}) {
                     throw "TYPE-VALUE-ERROR", sprintf("Type %y does not accept value %y; allowed "
-                        "values for elements: %y", name, v, (map $1.value, element_allowed_values));
+                        "values for elements: %y", getName(), v, (map $1.value, element_allowed_values));
                 }
             }
         } else if (element_allowed_values && !element_allowed_values_creatable) {
