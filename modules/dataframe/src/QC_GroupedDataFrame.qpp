@@ -59,7 +59,6 @@ GroupedDataFrame::copy() {
 
     @throw DATAFRAME-COLUMN-ERROR if a column is not found
 
-    @since dataframe 1.0
 */
 auto GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->agg(agg_spec, xsink);
@@ -79,7 +78,6 @@ auto GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
     auto counts = gdf.count();
     @endcode
 
-    @since dataframe 1.0
 */
 auto GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->count(xsink);
@@ -94,7 +92,6 @@ auto GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
 //! Returns the sum of numeric columns per group
 /** @return new DataFrame with group key columns plus summed numeric columns
 
-    @since dataframe 1.0
 */
 auto GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->sum(xsink);
@@ -109,7 +106,6 @@ auto GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
 //! Returns the mean of numeric columns per group
 /** @return new DataFrame with group key columns plus averaged numeric columns
 
-    @since dataframe 1.0
 */
 auto GroupedDataFrame::mean() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = gdf->mean(xsink);

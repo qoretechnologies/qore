@@ -120,6 +120,40 @@ public:
     //! Drop rows containing any null values
     DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
 
+    //! Return a new DataFrame with an additional or replaced column
+    DLLLOCAL QoreDataFrame* withColumn(const std::string& name,
+        const QoreListNode* data, ExceptionSink* xsink) const;
+
+    //! Pivot: long to wide format
+    DLLLOCAL QoreDataFrame* pivot(const std::string& index_col,
+        const std::string& columns_col, const std::string& values_col,
+        const std::string& agg_func, ExceptionSink* xsink) const;
+
+    //! Melt: wide to long format (unpivot)
+    DLLLOCAL QoreDataFrame* melt(const QoreListNode* id_vars,
+        const QoreListNode* value_vars, const std::string& var_name,
+        const std::string& value_name, ExceptionSink* xsink) const;
+
+    //! Row number within optional partition/order (window function)
+    DLLLOCAL QoreListNode* rowNumber(const QoreHashNode* spec,
+        ExceptionSink* xsink) const;
+
+    //! Lag: access previous row's value (window function)
+    DLLLOCAL QoreListNode* lag(const std::string& column, int64_t offset,
+        const QoreHashNode* spec, ExceptionSink* xsink) const;
+
+    //! Lead: access next row's value (window function)
+    DLLLOCAL QoreListNode* lead(const std::string& column, int64_t offset,
+        const QoreHashNode* spec, ExceptionSink* xsink) const;
+
+    //! Cumulative sum (window function)
+    DLLLOCAL QoreListNode* cumSum(const std::string& column,
+        const QoreHashNode* spec, ExceptionSink* xsink) const;
+
+    //! Rolling mean (window function)
+    DLLLOCAL QoreListNode* rollingMean(const std::string& column,
+        int64_t window_size, const QoreHashNode* spec, ExceptionSink* xsink) const;
+
     //! Join with another DataFrame
     /** @param other the right-side DataFrame
         @param on_columns join key column names (must exist in both DataFrames)

@@ -23,7 +23,6 @@ hashdecl Qore::DataFrame::DataFrameShape {
 //! Per-column descriptive statistics
 /** Returned by @ref DataFrame::describe()
 
-    @since dataframe 1.0
 */
 hashdecl Qore::DataFrame::ColumnStats {
     //! Column name

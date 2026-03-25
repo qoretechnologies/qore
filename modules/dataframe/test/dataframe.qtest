@@ -38,6 +38,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
+        addTestCase("pivotMeltTest", \pivotMeltTest());
+        addTestCase("windowFunctionsTest", \windowFunctionsTest());
 
         set_return_value(main());
     }
@@ -489,6 +491,86 @@ class DataFrameTest inherits QUnit::Test {
         assertEq((30.0, 30.0), sorted.getColumn("val_sum"), "agg val_sum");
         assertEq((15.0, 30.0), sorted.getColumn("val_mean"), "agg val_mean");
         assertEq((2.0, 3.0), sorted.getColumn("score"), "agg score max");
+    }
+
+    pivotMeltTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Pivot: long → wide
+        DataFrame::DataFrame long_df(
+            ({"name": "Alice", "metric": "score", "value": 95},
+             {"name": "Alice", "metric": "age",   "value": 30},
+             {"name": "Bob",   "metric": "score", "value": 88},
+             {"name": "Bob",   "metric": "age",   "value": 25}));
+
+        auto wide = long_df.pivot("name", "metric", "value");
+        assertEq(2, wide.numRows(), "pivot row count");
+        assertTrue(wide.columnNames().contains("score"), "pivot has score column");
+        assertTrue(wide.columnNames().contains("age"), "pivot has age column");
+
+        # Melt: wide → long
+        DataFrame::DataFrame wide_df(
+            ({"name": "Alice", "score": 95, "age": 30},
+             {"name": "Bob",   "score": 88, "age": 25}));
+
+        auto melted = wide_df.melt(("name",), ("score", "age"), "metric", "value");
+        assertEq(4, melted.numRows(), "melt row count (2 rows × 2 value cols)");
+        assertEq(("name", "metric", "value"), melted.columnNames(), "melt column names");
+
+        # withColumn
+        DataFrame::DataFrame df(({"a": 1, "b": 2}, {"a": 3, "b": 4}));
+        auto df2 = df.withColumn("c", (10, 20));
+        assertEq(3, df2.numCols(), "withColumn adds column");
+        assertEq((10, 20), df2.getColumn("c"), "withColumn values");
+        # Original unchanged
+        assertEq(2, df.numCols(), "original not modified");
+    }
+
+    windowFunctionsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"dept": "A", "name": "Alice", "salary": 50000},
+             {"dept": "A", "name": "Bob",   "salary": 60000},
+             {"dept": "A", "name": "Carol", "salary": 55000},
+             {"dept": "B", "name": "Dave",  "salary": 80000},
+             {"dept": "B", "name": "Eve",   "salary": 90000}));
+
+        # rowNumber without partition (global)
+        list<int> rn_global = df.rowNumber({"order_by": ("salary",)});
+        assertEq(5, rn_global.size(), "rowNumber global length");
+        # Salary order: 50000(1), 55000(2), 60000(3), 80000(4), 90000(5)
+        assertEq(1, rn_global[0], "rowNumber salary=50000 is 1");
+
+        # rowNumber with partition
+        list<int> rn_part = df.rowNumber({
+            "partition_by": ("dept",),
+            "order_by": ("salary",),
+        });
+        # Dept A: 50000(1), 55000(2), 60000(3); Dept B: 80000(1), 90000(2)
+        assertEq(5, rn_part.size(), "rowNumber partitioned length");
+
+        # cumSum
+        list<auto> cs = df.cumSum("salary", {"order_by": ("salary",)});
+        assertEq(5, cs.size(), "cumSum length");
+        # Cumulative: 50000, 105000, 165000, 245000, 335000
+        assertEq(50000.0, cs[0], "cumSum first");
+
+        # lag
+        list<auto> lagged = df.lag("salary", 1, {"order_by": ("salary",)});
+        assertEq(NOTHING, lagged[0], "lag first row is NOTHING");
+
+        # lead
+        list<auto> led = df.lead("salary", 1, {"order_by": ("salary",)});
+        assertEq(NOTHING, led[4], "lead last row is NOTHING");
+
+        # rollingMean
+        list<auto> rm = df.rollingMean("salary", 2, {"order_by": ("salary",)});
+        assertEq(5, rm.size(), "rollingMean length");
+        # Window=2: [50000], [50000,55000], [55000,60000], ...
+        assertEq(50000.0, rm[0], "rollingMean first (window of 1)");
     }
 
     joinTest() {

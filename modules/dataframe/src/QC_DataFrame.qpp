@@ -207,7 +207,6 @@ auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
 
     @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
 
-    @since dataframe 1.0
 */
 auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* other = static_cast<QoreDataFrame*>(
@@ -241,7 +240,6 @@ auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
-    @since dataframe 1.0
 */
 auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
     // Convert column name list to std::vector
@@ -274,7 +272,6 @@ auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
 
     @throw DATAFRAME-COLUMN-ERROR if a column name is not found
 
-    @since dataframe 1.0
 */
 auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->select(columns, xsink);
@@ -303,7 +300,6 @@ auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
 
     @throw DATAFRAME-COLUMN-ERROR if column not found
 
-    @since dataframe 1.0
 */
 auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
@@ -330,7 +326,6 @@ auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ON
 
     @throw DATAFRAME-COLUMN-ERROR if column not found
 
-    @since dataframe 1.0
 */
 auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->sortBy(columns, ascending, xsink);
@@ -351,7 +346,6 @@ auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_V
     auto filled = df.fillna(0);
     @endcode
 
-    @since dataframe 1.0
 */
 auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->fillna(value, xsink);
@@ -371,7 +365,6 @@ auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
     auto clean = df.dropna();
     @endcode
 
-    @since dataframe 1.0
 */
 auto DataFrame::dropna() [flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = df->dropna(xsink);
@@ -456,7 +449,6 @@ nothing DataFrame::renameColumn(string old_name, string new_name) {
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened
 
-    @since dataframe 1.0
 */
 static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
     QoreDataFrame* result = QoreDataFrame::readCSV(path->c_str(), options, xsink);
@@ -480,8 +472,139 @@ static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM
 
     @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
 
-    @since dataframe 1.0
 */
 nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
     df->writeCSV(path->c_str(), options, xsink);
+}
+
+//! Returns a new DataFrame with an added or replaced column
+/** @param name column name (replaces if already exists)
+    @param data list of values (must match row count)
+    @return new DataFrame object
+
+    @par Example:
+    @code{.py}
+    auto df2 = df.withColumn("rank", df.rowNumber({"order_by": ("score",)}));
+    @endcode
+
+*/
+auto DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->withColumn(name->c_str(), data, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Pivots from long to wide format
+/** @param index_col column to use as row index
+    @param columns_col column whose unique values become output columns
+    @param values_col column with values to aggregate
+    @param agg_func aggregation function: "sum" (default) or "mean"
+    @return new DataFrame in wide format
+
+    @par Example:
+    @code{.py}
+    # Long: name, metric, value → Wide: name, metric1, metric2
+    auto wide = df.pivot("name", "metric", "value");
+    @endcode
+
+*/
+auto DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
+    std::string func = agg_func ? agg_func->c_str() : "sum";
+    QoreDataFrame* result = df->pivot(index_col->c_str(), columns_col->c_str(),
+        values_col->c_str(), func, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Melts from wide to long format (unpivot)
+/** @param id_vars columns to keep as identifier variables
+    @param value_vars columns to unpivot (default: all non-id columns)
+    @param var_name name for the variable column (default "variable")
+    @param value_name name for the value column (default "value")
+    @return new DataFrame in long format
+
+    @par Example:
+    @code{.py}
+    auto long_df = df.melt(("name",), ("score", "age"), "metric", "value");
+    @endcode
+
+*/
+auto DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var_name, *string value_name) [flags=RET_VALUE_ONLY] {
+    std::string vn = var_name ? var_name->c_str() : "variable";
+    std::string val_n = value_name ? value_name->c_str() : "value";
+    QoreDataFrame* result = df->melt(id_vars, value_vars, vn, val_n, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns row numbers within optional partitions (window function)
+/** @param spec optional WindowSpec hash with partition_by, order_by, ascending
+    @return list of integers (1-based row numbers)
+
+    @par Example:
+    @code{.py}
+    list<int> rn = df.rowNumber({"partition_by": ("dept",), "order_by": ("salary",)});
+    auto df2 = df.withColumn("row_num", rn);
+    @endcode
+
+*/
+list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->rowNumber(spec, xsink);
+}
+
+//! Returns previous row's value within partitions (window function)
+/** @param column column to access
+    @param offset number of rows to look back (default 1)
+    @param spec optional WindowSpec hash
+    @return list of values (NOTHING at partition boundaries)
+
+*/
+list<auto> DataFrame::lag(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    int64_t off = offset ? (int64_t)offset : 1;
+    return df->lag(column->c_str(), off, spec, xsink);
+}
+
+//! Returns next row's value within partitions (window function)
+/** @param column column to access
+    @param offset number of rows to look ahead (default 1)
+    @param spec optional WindowSpec hash
+    @return list of values (NOTHING at partition boundaries)
+
+*/
+list<auto> DataFrame::lead(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    int64_t off = offset ? (int64_t)offset : 1;
+    return df->lead(column->c_str(), off, spec, xsink);
+}
+
+//! Returns cumulative sum within partitions (window function)
+/** @param column numeric column to sum
+    @param spec optional WindowSpec hash
+    @return list of cumulative sums
+
+*/
+list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->cumSum(column->c_str(), spec, xsink);
+}
+
+//! Returns rolling mean within partitions (window function)
+/** @param column numeric column to average
+    @param window_size number of rows in the rolling window
+    @param spec optional WindowSpec hash
+    @return list of rolling mean values (NOTHING when window has no data)
+
+*/
+list<auto> DataFrame::rollingMean(string column, int window_size, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->rollingMean(column->c_str(), (int64_t)window_size, spec, xsink);
 }
