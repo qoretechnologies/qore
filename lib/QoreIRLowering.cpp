@@ -1094,17 +1094,19 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             });
 
             // Phase 3b/4: Compile handler to IR and set on OnBlockExit instruction
-            HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
-            QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
+            // NOTE: Handler IR compilation disabled for now - handlers need access to enclosing
+            // function's local variables, which IR functions don't have without significant refactoring
+            // HandlerVariableCapture capture = analyzeHandlerVariables(handler_code);
+            // QoreIRFunction* handler_ir = compileHandlerToIR(handler_code, capture, error);
 
             // Phase 4: Create OnBlockExit instruction for ALL handler types
             // This registers the handler in the runtime vector with compiled handler_ir
             QoreIROnBlockExitInstruction* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
 
             // Set compiled handler IR on the instruction for runtime execution
-            if (handler_ir) {
-                obe_inst->handler_ir = std::unique_ptr<QoreIRFunction>(handler_ir);
-            }
+            // if (handler_ir) {
+            //     obe_inst->handler_ir = std::unique_ptr<QoreIRFunction>(handler_ir);
+            // }
         }
 
         return true;
@@ -2219,7 +2221,11 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     }
 
     // If handler doesn't end with a terminator (return, throw, branch), add return nothing
-    if (entry->instructions.empty() || !isTerminator(entry->instructions.back()->opcode)) {
+    // Note: the current block might be different from entry (e.g., after switch lowering),
+    // so we check the actual current block
+    QoreIRBasicBlock* final_block = handler_builder.getBlock();
+    if (!final_block || final_block->instructions.empty() ||
+            !isTerminator(final_block->instructions.back()->opcode)) {
         handler_builder.createReturnNothing();
     }
 
