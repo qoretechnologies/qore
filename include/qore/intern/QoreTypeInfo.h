@@ -3024,9 +3024,8 @@ public:
                 }
             },
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-                    // Treat NULL like NOTHING: convert to empty list
-                    QoreListNode* l = new QoreListNode;
-                    n.assign(l);
+                    // Treat NULL like NOTHING: convert to NOTHING
+                    n.assignNothing();
                 }
             },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
@@ -3101,9 +3100,8 @@ public:
                 }
             },
             {NT_NULL, [] (QoreValue& n, ExceptionSink* xsink) {
-                    // Treat NULL like NOTHING: convert to empty list
-                    QoreListNode* l = new QoreListNode(autoTypeInfo);
-                    n.assign(l);
+                    // Treat NULL like NOTHING: convert to NOTHING
+                    n.assignNothing();
                 }
             },
             {NT_ALL, [] (QoreValue& n, ExceptionSink* xsink) {
