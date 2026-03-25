@@ -44,6 +44,9 @@
     |@ref Qore::ML::PolynomialFeatures "PolynomialFeatures"|Feature Engineering|Generate polynomial and interaction terms from input features
     |@ref Qore::ML::SelectKBest "SelectKBest"|Feature Selection|Select top-k features by ANOVA F-test or mutual information
     |@ref Qore::ML::RFE "RFE"|Feature Selection|Recursive feature elimination using decision tree importances
+    |@ref Qore::ML::ADWIN "ADWIN"|Drift Detection|Detect distribution changes in streaming data with adaptive windowing
+    |@ref Qore::ML::PageHinkley "PageHinkley"|Drift Detection|Detect mean shifts in sequential observations
+    |@ref Qore::ML::DDM "DDM"|Drift Detection|Monitor classifier error rate for statistically significant increases
     |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
     |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
     |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
@@ -254,6 +257,26 @@
     - @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()" — cumulative distribution function
     - @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()" — percent point function (inverse CDF, quantile function)
 
+    @subsection mlalgo_drift Concept Drift Detection
+
+    Monitor deployed models for performance degradation. When the data distribution
+    changes (concept drift), a model trained on historical data may give incorrect
+    predictions. These detectors tell you when to retrain.
+
+    - @ref Qore::ML::ADWIN "ADWIN" — Maintains an adaptive window of observations and
+      detects distribution changes by comparing sub-window means. Automatically drops
+      outdated data when drift is detected. O(log N) memory via exponential histogram
+      compression. Best for general-purpose monitoring of any numeric metric (prediction
+      error, latency, accuracy, revenue).
+    - @ref Qore::ML::PageHinkley "PageHinkley" — Detects mean shifts by tracking the
+      cumulative deviation from the running mean. When the deviation exceeds a threshold
+      (lambda), drift is signaled. Simple and efficient — good for monitoring a single
+      metric like average prediction error or transaction amount.
+    - @ref Qore::ML::DDM "DDM" — Monitors a classifier's error rate using binomial
+      statistics. Provides two levels: \c warning (possible drift, collect more data)
+      and \c drift (confirmed, retrain now). Feed 0 for correct predictions, 1 for
+      errors. Best for directly monitoring classification model accuracy.
+
     @subsection mlalgo_evaluation Model Evaluation
 
     Measure how well your models perform — without objective metrics you can't know whether
@@ -412,6 +435,14 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::Imputer "Imputer" to fill them in automatically
     - Do you want to preprocess <i>and</i> analyze in one step?
       → Use @ref Qore::ML::MLPipeline "MLPipeline" to chain preprocessing with analysis
+
+    <b>"My deployed model might be getting stale"</b>
+    - Monitor any numeric metric (error, latency, revenue) for distribution shifts?
+      → Use @ref Qore::ML::ADWIN "ADWIN" — the most general-purpose drift detector
+    - Monitor a single metric for mean shifts?
+      → Use @ref Qore::ML::PageHinkley "PageHinkley" — simple and efficient
+    - Monitor a classifier's error rate directly?
+      → Use @ref Qore::ML::DDM "DDM" — provides warning and drift levels
 
     <b>"I have a pre-trained model from Python or R"</b>
     - Export it to ONNX format and use @ref Qore::ML::OnnxModel "OnnxModel"
@@ -687,4 +718,8 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
       - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
       - @ref Qore::ML::RFE "RFE" — recursive feature elimination using decision tree importances
+    - Concept drift detection for monitoring deployed models:
+      - @ref Qore::ML::ADWIN "ADWIN" — adaptive windowing with O(log N) memory
+      - @ref Qore::ML::PageHinkley "PageHinkley" — cumulative sum test for mean shifts
+      - @ref Qore::ML::DDM "DDM" — error rate monitoring with warning and drift levels
 */
