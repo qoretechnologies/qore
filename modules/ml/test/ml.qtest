@@ -229,6 +229,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("OneHotEncoder drop_first", \oneHotDropFirstTest());
         addTestCase("serialize LabelEncoder round-trip", \serializeLabelEncoderTest());
         addTestCase("serialize OneHotEncoder round-trip", \serializeOneHotEncoderTest());
+        addTestCase("VarianceThreshold basic", \varianceThresholdTest());
+        addTestCase("serialize VarianceThreshold round-trip", \serializeVarianceThresholdTest());
         set_return_value(main());
     }
 
@@ -260,9 +262,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(24, caps.native_algorithms.size());
+            assertEq(25, caps.native_algorithms.size());
         } else {
-            assertEq(23, caps.native_algorithms.size());
+            assertEq(24, caps.native_algorithms.size());
         }
     }
 
@@ -4643,5 +4645,44 @@ public class MlTest inherits QUnit::Test {
 
         list<auto> res = restored.transformMatrix(test_input);
         assertEq(orig[0], res[0], "OHE serialize round-trip");
+    }
+
+    varianceThresholdTest() {
+        ML::VarianceThreshold vt({"threshold": 0.1});
+        assertFalse(vt.isFitted(), "VT not fitted");
+
+        # Feature 0: high variance, Feature 1: high variance, Feature 2: near-constant
+        vt.fitMatrix(((1.0, 5.0, 0.01), (2.0, 6.0, 0.01), (3.0, 7.0, 0.02)));
+        assertTrue(vt.isFitted(), "VT fitted");
+
+        # Feature 2 has variance < 0.1, should be removed
+        list<auto> support = vt.getSupport();
+        assertTrue(support[0], "VT keeps feature 0");
+        assertTrue(support[1], "VT keeps feature 1");
+        assertFalse(support[2], "VT removes feature 2");
+
+        # Transform removes feature 2
+        list<auto> result = vt.transformMatrix(((10.0, 20.0, 0.01),));
+        assertEq(1, result.size(), "VT transform 1 row");
+        assertEq(2, result[0].size(), "VT transform 2 cols (was 3)");
+        assertEq(10.0, result[0][0], "VT kept value 0");
+        assertEq(20.0, result[0][1], "VT kept value 1");
+    }
+
+    serializeVarianceThresholdTest() {
+        ML::VarianceThreshold vt({"threshold": 0.0});
+        # Feature 1 is constant (zero variance)
+        vt.fitMatrix(((1.0, 5.0), (2.0, 5.0), (3.0, 5.0)));
+
+        list<auto> orig = vt.transformMatrix(((10.0, 5.0),));
+
+        binary blob = ML::ml_serialize(vt);
+        assertTrue(blob.size() > 0, "VT serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::VarianceThreshold, "VT deserialized type");
+
+        list<auto> res = restored.transformMatrix(((10.0, 5.0),));
+        assertEq(orig[0], res[0], "VT serialize round-trip");
     }
 }

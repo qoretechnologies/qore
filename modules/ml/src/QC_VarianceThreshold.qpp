@@ -1,0 +1,125 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_VarianceThreshold.qpp
+
+    Qore VarianceThreshold class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_VarianceThreshold.h"
+#include "ml_common.h"
+
+//! Feature selector that removes low-variance features
+/** Computes per-feature variance during fit(). Features with variance at or
+    below the threshold are removed during transform(). Default threshold 0.0
+    removes only constant (zero-variance) features.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::VarianceThreshold vt({"threshold": 0.1});
+    # Column 2 has variance < 0.1 (nearly constant)
+    list<auto> filtered = vt.fitTransformMatrix(
+        ((1.0, 5.0, 0.01), (2.0, 6.0, 0.01), (3.0, 7.0, 0.02)));
+    # Column 2 removed: ((1.0, 5.0), (2.0, 6.0), (3.0, 7.0))
+    @endcode
+
+    @since ml 1.3
+*/
+qclass VarianceThreshold [arg=QoreVarianceThreshold* vt; ns=Qore::ML; flags=final];
+
+//! Creates a VarianceThreshold selector
+/** @param options optional hash with:
+    - \c threshold (*float): minimum variance to keep a feature (default 0.0)
+*/
+VarianceThreshold::constructor(*hash<auto> options) {
+    double threshold = 0.0;
+    if (options) {
+        QoreValue v = options->getKeyValue("threshold");
+        if (!v.isNullOrNothing()) {
+            threshold = v.getAsFloat();
+        }
+    }
+    self->setPrivate(CID_VARIANCETHRESHOLD, new QoreVarianceThreshold(threshold));
+}
+
+//! VarianceThreshold objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+VarianceThreshold::copy() {
+    xsink->raiseException("COPY-ERROR", "VarianceThreshold objects cannot be copied");
+}
+
+//! Fits on a numeric matrix (computes per-feature variance)
+/** @param matrix list of row lists
+*/
+nothing VarianceThreshold::fitMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    vt->fit(X, xsink);
+}
+
+//! Transforms by removing low-variance features
+/** @param matrix list of row lists
+    @return list of row lists with low-variance features removed
+*/
+list<auto> VarianceThreshold::transformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = vt->transform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in one step
+/** @param matrix list of row lists
+    @return list of row lists with low-variance features removed
+*/
+list<auto> VarianceThreshold::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = vt->fitTransform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns whether the selector has been fitted
+/** @return True if fitMatrix() has been called
+*/
+bool VarianceThreshold::isFitted() [flags=CONSTANT] {
+    return vt->isFitted();
+}
+
+//! Returns per-feature variances computed during fit
+/** @return list of variance values
+*/
+list<auto> VarianceThreshold::getVariances() {
+    return vt->getVariances(xsink);
+}
+
+//! Returns the support mask (True = feature kept, False = removed)
+/** @return list of boolean values
+*/
+list<auto> VarianceThreshold::getSupport() {
+    return vt->getSupport(xsink);
+}

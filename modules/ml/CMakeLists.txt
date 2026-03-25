@@ -93,6 +93,7 @@ set(ML_QPP_SRC
     src/QC_NaiveBayes.qpp
     src/QC_OneHotEncoder.qpp
     src/QC_LabelEncoder.qpp
+    src/QC_VarianceThreshold.qpp
     src/ql_ml.qpp
 )
 
@@ -127,6 +128,7 @@ set(ML_CPP_SRC
     src/ml_stats.cpp
     src/OneHotEncoder.cpp
     src/LabelEncoder.cpp
+    src/VarianceThreshold.cpp
 )
 
 # Conditional ONNX Runtime support

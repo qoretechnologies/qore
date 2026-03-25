@@ -52,6 +52,7 @@
 #include "QC_NaiveBayes.h"
 #include "QC_OneHotEncoder.h"
 #include "QC_LabelEncoder.h"
+#include "QC_VarianceThreshold.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -178,6 +179,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitNaiveBayesClass();
     preinitOneHotEncoderClass();
     preinitLabelEncoderClass();
+    preinitVarianceThresholdClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -241,6 +243,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initNaiveBayesClass(MLNS));
     MLNS.addSystemClass(initOneHotEncoderClass(MLNS));
     MLNS.addSystemClass(initLabelEncoderClass(MLNS));
+    MLNS.addSystemClass(initVarianceThresholdClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -321,6 +324,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("LabelEncoder", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreLabelEncoder::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("VarianceThreshold", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreVarianceThreshold::deserializeState(data, len, xsink);
     });
 }
 
