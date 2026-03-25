@@ -54,6 +54,7 @@
 #include "QC_LabelEncoder.h"
 #include "QC_VarianceThreshold.h"
 #include "QC_PolynomialFeatures.h"
+#include "QC_SelectKBest.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -182,6 +183,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitLabelEncoderClass();
     preinitVarianceThresholdClass();
     preinitPolynomialFeaturesClass();
+    preinitSelectKBestClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -247,6 +249,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initLabelEncoderClass(MLNS));
     MLNS.addSystemClass(initVarianceThresholdClass(MLNS));
     MLNS.addSystemClass(initPolynomialFeaturesClass(MLNS));
+    MLNS.addSystemClass(initSelectKBestClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -335,6 +338,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("PolynomialFeatures", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QorePolynomialFeatures::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("SelectKBest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreSelectKBest::deserializeState(data, len, xsink);
     });
 }
 

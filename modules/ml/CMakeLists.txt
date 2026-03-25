@@ -95,6 +95,7 @@ set(ML_QPP_SRC
     src/QC_LabelEncoder.qpp
     src/QC_VarianceThreshold.qpp
     src/QC_PolynomialFeatures.qpp
+    src/QC_SelectKBest.qpp
     src/ql_ml.qpp
 )
 
@@ -131,6 +132,7 @@ set(ML_CPP_SRC
     src/LabelEncoder.cpp
     src/VarianceThreshold.cpp
     src/PolynomialFeatures.cpp
+    src/SelectKBest.cpp
 )
 
 # Conditional ONNX Runtime support

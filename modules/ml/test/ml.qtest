@@ -240,6 +240,12 @@ public class MlTest inherits QUnit::Test {
         addTestCase("PolynomialFeatures single feature", \polynomialFeaturesSingleTest());
         addTestCase("serialize PolynomialFeatures round-trip", \serializePolynomialFeaturesTest());
         addTestCase("save/load PolynomialFeatures", \saveLoadPolynomialFeaturesTest());
+        addTestCase("SelectKBest f_classif basic", \selectKBestFClassifTest());
+        addTestCase("SelectKBest mutual_info", \selectKBestMutualInfoTest());
+        addTestCase("SelectKBest errors", \selectKBestErrorTest());
+        addTestCase("SelectKBest fitTransform", \selectKBestFitTransformTest());
+        addTestCase("serialize SelectKBest round-trip", \serializeSelectKBestTest());
+        addTestCase("save/load SelectKBest", \saveLoadSelectKBestTest());
         set_return_value(main());
     }
 
@@ -271,9 +277,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(26, caps.native_algorithms.size());
+            assertEq(27, caps.native_algorithms.size());
         } else {
-            assertEq(25, caps.native_algorithms.size());
+            assertEq(26, caps.native_algorithms.size());
         }
     }
 
@@ -4871,6 +4877,165 @@ public class MlTest inherits QUnit::Test {
         assertEq(orig[0].size(), res[0].size(), "PF save/load col count");
         for (int i = 0; i < orig[0].size(); ++i) {
             assertEq(orig[0][i], res[0][i], sprintf("PF save/load col %d", i));
+        }
+    }
+
+    selectKBestFClassifTest() {
+        # 4 features, 2 classes: features 0 and 2 are discriminative, 1 and 3 are noise
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0, 0.1),
+            (1.5, 0.3, 12.0, 0.9),
+            (2.0, 0.7, 11.0, 0.4),
+            (10.0, 0.4, 100.0, 0.6),
+            (11.0, 0.6, 110.0, 0.2),
+            (12.0, 0.8, 105.0, 0.7),
+        );
+        list<float> y = (0, 0, 0, 1, 1, 1);
+
+        ML::SelectKBest skb({"k": 2, "score_func": "f_classif"});
+        assertFalse(skb.isFitted(), "SKB not fitted");
+
+        skb.fitMatrix(X, y);
+        assertTrue(skb.isFitted(), "SKB fitted");
+
+        # Features 0 and 2 should be selected (highest F-scores)
+        list<auto> support = skb.getSupport();
+        assertEq(4, support.size(), "SKB support length");
+        assertTrue(support[0], "SKB keeps feature 0");
+        assertTrue(support[2], "SKB keeps feature 2");
+
+        list<int> indices = skb.getSelectedIndices();
+        assertEq(2, indices.size(), "SKB selected 2");
+
+        # Transform should produce 2-column output
+        list<auto> result = skb.transformMatrix(((5.0, 0.5, 50.0, 0.3),));
+        assertEq(1, result.size(), "SKB 1 row");
+        assertEq(2, result[0].size(), "SKB 2 cols");
+
+        # Scores should be available
+        list<auto> scores = skb.getScores();
+        assertEq(4, scores.size(), "SKB 4 scores");
+        assertTrue(scores[0] > scores[1], "SKB feature 0 > feature 1 score");
+        assertTrue(scores[2] > scores[3], "SKB feature 2 > feature 3 score");
+    }
+
+    selectKBestMutualInfoTest() {
+        # Same data, using mutual_info
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0),
+            (1.5, 0.3, 12.0),
+            (2.0, 0.7, 11.0),
+            (10.0, 0.4, 100.0),
+            (11.0, 0.6, 110.0),
+            (12.0, 0.8, 105.0),
+        );
+        list<float> y = (0, 0, 0, 1, 1, 1);
+
+        ML::SelectKBest skb({"k": 1, "score_func": "mutual_info"});
+        skb.fitMatrix(X, y);
+
+        list<auto> support = skb.getSupport();
+        # Should select exactly 1 feature
+        int n_selected = 0;
+        for (int i = 0; i < support.size(); ++i) {
+            if (support[i]) {
+                ++n_selected;
+            }
+        }
+        assertEq(1, n_selected, "SKB MI selects 1");
+
+        list<auto> result = skb.transformMatrix(((5.0, 0.5, 50.0),));
+        assertEq(1, result[0].size(), "SKB MI 1 output col");
+    }
+
+    selectKBestErrorTest() {
+        ML::SelectKBest skb({"k": 2});
+
+        # Transform before fit
+        assertThrows("ML-SELECT-K-BEST-ERROR",
+            \skb.transformMatrix(), (((1.0, 2.0),),));
+
+        # Scores before fit
+        assertThrows("ML-SELECT-K-BEST-ERROR", \skb.getScores());
+
+        # Invalid k
+        assertThrows("ML-SELECT-K-BEST-ERROR",
+            sub () { new ML::SelectKBest({"k": 0}); });
+
+        # Copy error
+        assertThrows("COPY-ERROR", sub () {
+            ML::SelectKBest cp = skb.copy();
+        });
+
+        # Wrong feature count after fit
+        skb.fitMatrix(((1.0, 2.0), (3.0, 4.0)), (0, 1));
+        assertThrows("ML-SELECT-K-BEST-ERROR",
+            \skb.transformMatrix(), (((1.0, 2.0, 3.0),),));
+
+        # X/y size mismatch
+        ML::SelectKBest skb2({"k": 1});
+        assertThrows("ML-SELECT-K-BEST-ERROR",
+            \skb2.fitMatrix(), (((1.0,), (2.0,), (3.0,)), (0, 1)));
+    }
+
+    selectKBestFitTransformTest() {
+        list<list<float>> X = (
+            (1.0, 0.5), (2.0, 0.6), (10.0, 0.4), (11.0, 0.5));
+        list<float> y = (0, 0, 1, 1);
+
+        ML::SelectKBest skb({"k": 1});
+        list<auto> result = skb.fitTransformMatrix(X, y);
+        assertTrue(skb.isFitted(), "SKB fitTransform fitted");
+        assertEq(4, result.size(), "SKB fitTransform 4 rows");
+        assertEq(1, result[0].size(), "SKB fitTransform 1 col");
+    }
+
+    serializeSelectKBestTest() {
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0), (2.0, 0.6, 12.0),
+            (10.0, 0.4, 100.0), (11.0, 0.5, 110.0));
+        list<float> y = (0, 0, 1, 1);
+
+        ML::SelectKBest skb({"k": 2, "score_func": "f_classif"});
+        skb.fitMatrix(X, y);
+
+        list<auto> orig = skb.transformMatrix(((5.0, 0.5, 50.0),));
+
+        binary blob = ML::ml_serialize(skb);
+        assertTrue(blob.size() > 0, "SKB serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::SelectKBest, "SKB deserialized type");
+
+        list<auto> res = restored.transformMatrix(((5.0, 0.5, 50.0),));
+        assertEq(orig[0].size(), res[0].size(), "SKB round-trip col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("SKB round-trip col %d", i));
+        }
+    }
+
+    saveLoadSelectKBestTest() {
+        list<list<float>> X = (
+            (1.0, 0.5, 10.0), (2.0, 0.6, 12.0),
+            (10.0, 0.4, 100.0), (11.0, 0.5, 110.0));
+        list<float> y = (0, 0, 1, 1);
+
+        ML::SelectKBest skb({"k": 2});
+        skb.fitMatrix(X, y);
+
+        list<auto> orig = skb.transformMatrix(((5.0, 0.5, 50.0),));
+
+        string tmpfile = "/tmp/test_ml_skb.qml";
+        on_exit { unlink(tmpfile); }
+        ML::ml_save_model(skb, tmpfile);
+
+        auto loaded = ML::ml_load_model(tmpfile);
+        assertTrue(loaded instanceof ML::SelectKBest, "SKB loaded type");
+
+        list<auto> res = loaded.transformMatrix(((5.0, 0.5, 50.0),));
+        assertEq(orig[0].size(), res[0].size(), "SKB save/load col count");
+        for (int i = 0; i < orig[0].size(); ++i) {
+            assertEq(orig[0][i], res[0][i], sprintf("SKB save/load col %d", i));
         }
     }
 }
