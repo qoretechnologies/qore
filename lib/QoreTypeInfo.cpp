@@ -750,7 +750,7 @@ const QoreTypeInfo* qore_get_union_type(const type_vec_t& member_types, bool or_
     if (member_types.size() == 1) {
         const QoreTypeInfo* ti = member_types[0];
         if (or_nothing) {
-            const QoreTypeInfo* orn = get_or_nothing_type(ti);
+            const QoreTypeInfo* orn = qore_get_or_nothing_type(ti);
             return orn ? orn : ti;
         }
         return ti;
@@ -3510,7 +3510,8 @@ bool QoreTypeInfo::matchCommonType(const QoreTypeInfo*& ctype, const QoreTypeInf
     }
 
     // ctype |* NOTHING -> *type
-    if (!QoreTypeInfo::parseReturns(ctype, NT_NOTHING) && QoreTypeInfo::isType(ntype, NT_NOTHING)) {
+    // only call get_or_nothing_type() if ctype doesn't already accept NOTHING
+    if (!QoreTypeInfo::parseAcceptsReturns(ctype, NT_NOTHING) && QoreTypeInfo::isType(ntype, NT_NOTHING)) {
         const QoreTypeInfo* ti = get_or_nothing_type(ctype);
         ctype = ti;
         return ctype != autoTypeInfo ? true : false;

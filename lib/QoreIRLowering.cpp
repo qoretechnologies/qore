@@ -2059,6 +2059,149 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     // Create a new IR function for the handler
     auto handler_func = std::make_unique<QoreIRFunction>("handler");
 
+    // Populate pre_instantiated_locals with handler body locals
+    // so the IR interpreter knows which variables need instantiation
+    // (rather than treating all variables as outer-scope)
+    std::vector<LocalVar*> handler_locals;
+
+    // Collect locals from handler's block and all nested statements
+    if (handler_code->getLVList()) {
+        const LVList* lvars = handler_code->getLVList();
+        for (unsigned i = 0; i < lvars->size(); ++i) {
+            handler_locals.push_back(lvars->lv[i]);
+        }
+    }
+
+    // Helper lambda to recursively collect locals from statements
+    std::function<void(const AbstractStatement*)> collectStmtLocals =
+        [&](const AbstractStatement* stmt) {
+            if (!stmt) return;
+
+            // Dispatch based on statement type
+            // (Only recurse into types that are fully lowered to IR)
+            if (auto* block = dynamic_cast<const StatementBlock*>(stmt)) {
+                if (block->getLVList()) {
+                    const LVList* lvars = block->getLVList();
+                    for (unsigned i = 0; i < lvars->size(); ++i) {
+                        handler_locals.push_back(lvars->lv[i]);
+                    }
+                }
+                const auto& stmts = block->getStatements();
+                for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                    collectStmtLocals(*it);
+                }
+            } else if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {
+                if (if_stmt->getLVList()) {
+                    const LVList* lvars = if_stmt->getLVList();
+                    for (unsigned i = 0; i < lvars->size(); ++i) {
+                        handler_locals.push_back(lvars->lv[i]);
+                    }
+                }
+                // Recurse into if/else code
+                if (auto* if_code = if_stmt->getIfCode()) {
+                    if (if_code->getLVList()) {
+                        const LVList* lvars = if_code->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = if_code->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+                if (auto* else_code = if_stmt->getElseCode()) {
+                    if (else_code->getLVList()) {
+                        const LVList* lvars = else_code->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = else_code->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+            } else if (auto* for_stmt = dynamic_cast<const ForStatement*>(stmt)) {
+                if (for_stmt->getLVList()) {
+                    const LVList* lvars = for_stmt->getLVList();
+                    for (unsigned i = 0; i < lvars->size(); ++i) {
+                        handler_locals.push_back(lvars->lv[i]);
+                    }
+                }
+                if (auto* code = for_stmt->getCode()) {
+                    if (code->getLVList()) {
+                        const LVList* lvars = code->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = code->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+            } else if (auto* while_stmt = dynamic_cast<const WhileStatement*>(stmt)) {
+                if (while_stmt->getLVList()) {
+                    const LVList* lvars = while_stmt->getLVList();
+                    for (unsigned i = 0; i < lvars->size(); ++i) {
+                        handler_locals.push_back(lvars->lv[i]);
+                    }
+                }
+                if (auto* code = while_stmt->getCode()) {
+                    if (code->getLVList()) {
+                        const LVList* lvars = code->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = code->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+            } else if (auto* try_stmt = dynamic_cast<const TryStatement*>(stmt)) {
+                if (auto* catch_var = try_stmt->getCatchVar()) {
+                    handler_locals.push_back(catch_var);
+                }
+                if (auto* try_block = try_stmt->getTryBlock()) {
+                    if (try_block->getLVList()) {
+                        const LVList* lvars = try_block->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = try_block->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+                if (auto* catch_block = try_stmt->getCatchBlock()) {
+                    if (catch_block->getLVList()) {
+                        const LVList* lvars = catch_block->getLVList();
+                        for (unsigned i = 0; i < lvars->size(); ++i) {
+                            handler_locals.push_back(lvars->lv[i]);
+                        }
+                    }
+                    const auto& stmts = catch_block->getStatements();
+                    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+                        collectStmtLocals(*it);
+                    }
+                }
+            }
+        };
+
+    // Recurse into all handler statements
+    const auto& stmts = handler_code->getStatements();
+    for (auto it = stmts.begin(); it != stmts.end(); ++it) {
+        collectStmtLocals(*it);
+    }
+
+    // Insert all collected locals into pre_instantiated_locals
+    for (LocalVar* lv : handler_locals) {
+        handler_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
+    }
+
     // Create entry block
     QoreIRBasicBlock* entry = handler_func->createBlock("entry");
 
