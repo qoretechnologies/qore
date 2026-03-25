@@ -78,7 +78,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreIsolationForestProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreIsolationForestProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -113,7 +113,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreDBSCANClusteringProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreDBSCANClusteringProcessor::ConstructorOptions{
                     "fields", "window_size", "epsilon",
@@ -150,7 +150,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKMeansProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKMeansProcessor::ConstructorOptions{"fields", "window_size", "k"}, {
                     "preselected": True,
@@ -183,7 +183,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QorePCAProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QorePCAProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -217,7 +217,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreHoltWintersProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreHoltWintersProcessor::ConstructorOptions{"fields", "window_size", "period"}, {
                     "preselected": True,
@@ -254,7 +254,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLinearRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLinearRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -291,7 +291,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLOFProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLOFProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -325,7 +325,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreGMMProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreGMMProcessor::ConstructorOptions{
                     "fields", "window_size", "n_components",
@@ -359,7 +359,7 @@ module DataProviderML {
                 "action_code": DPAT_PIPELINE_PROCESSOR,
                 "processor_capabilities": DPC_AGGREGATE,
                 "cls": "DataProviderML::QoreOnnxModelProcessor",
-                "groups": ("ML Analytics",),
+                "groups": (AppGroup::Analytics,),
                 "options": DataProviderActionCatalog::getActionOptionFromFields(
                     QoreOnnxModelProcessor::ConstructorOptions{
                         "model_path", "fields", "window_size",
@@ -398,7 +398,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegistryModelProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegistryModelProcessor::ConstructorOptions{
                     "registry_path", "model_name", "fields", "window_size",
@@ -436,7 +436,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_ANALYTICS,
             "cls": "DataProviderML::QoreSeasonalDecompositionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSeasonalDecompositionProcessor::ConstructorOptions{
                     "fields", "window_size", "period",
@@ -476,7 +476,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreStandardScalerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreStandardScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -510,7 +510,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreMinMaxScalerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreMinMaxScalerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -553,7 +553,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreImputerProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreImputerProcessor::ConstructorOptions{"fields", "window_size"}, {
                     "preselected": True,
@@ -592,7 +592,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreClassificationMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreClassificationMetricsProcessor::ConstructorOptions{
                     "predicted_field", "true_field", "window_size",
@@ -627,7 +627,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreRegressionMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreRegressionMetricsProcessor::ConstructorOptions{
                     "predicted_field", "true_field", "window_size",
@@ -661,7 +661,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreClusteringMetricsProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreClusteringMetricsProcessor::ConstructorOptions{
                     "fields", "cluster_field", "window_size",
@@ -693,7 +693,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreLogisticRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreLogisticRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size",
@@ -731,7 +731,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKNNClassificationProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKNNClassificationProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size", "k",
@@ -766,7 +766,7 @@ module DataProviderML {
             "action_code": DPAT_PIPELINE_PROCESSOR,
             "processor_capabilities": DPC_AGGREGATE,
             "cls": "DataProviderML::QoreKNNRegressionProcessor",
-            "groups": ("ML Analytics",),
+            "groups": (AppGroup::Analytics,),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 QoreKNNRegressionProcessor::ConstructorOptions{
                     "fields", "target_field", "window_size", "k",
@@ -779,6 +779,361 @@ module DataProviderML {
                 QoreKNNRegressionProcessor::ConstructorOptions{
                     "metric", "weight_func",
                 }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register decision-tree-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/decision-tree-classification",
+            "action": "decision-tree-classification",
+            "display_name": "Classify with Decision Rules",
+            "short_desc": "Learns if/then rules from data to categorize records",
+            "desc": "Classifies records by learning a tree of if/then rules — for example, "
+                "\"if income > 50,000 and credit score > 700 then approve the loan.\" The "
+                "model is fully interpretable: you can see exactly which rules led to each "
+                "decision.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category the rules assign\n"
+                "- `confidence` — how pure the matching group is (e.g., `0.95` means 95%% "
+                "of similar records had this label)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDecisionTreeClassificationProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeClassificationProcessor::ConstructorOptions{
+                    "max_depth", "criterion",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register decision-tree-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/decision-tree-regression",
+            "action": "decision-tree-regression",
+            "display_name": "Predict Numbers with Decision Rules",
+            "short_desc": "Learns if/then rules from data to estimate numeric values",
+            "desc": "Predicts numeric values by learning a tree of decision rules — for "
+                "example, \"if square footage > 2000 and bedrooms >= 3 then estimate price "
+                "around $450,000.\" Simple, fast, and fully interpretable.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value from the matching leaf node",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDecisionTreeRegressionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDecisionTreeRegressionProcessor::ConstructorOptions{
+                    "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register random-forest-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/random-forest-classification",
+            "action": "random-forest-classification",
+            "display_name": "Classify with Multiple Decision Trees",
+            "short_desc": "Combines many decision trees for more accurate categorization",
+            "desc": "Classifies records by growing many decision trees on random subsets of "
+                "the data and combining their votes. More accurate than a single tree because "
+                "individual trees' mistakes cancel out — like asking a panel of experts "
+                "instead of one.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the category most trees voted for\n"
+                "- `confidence` — proportion of trees that agree (e.g., `0.85` means 85%% "
+                "of trees voted the same way)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRandomForestClassificationProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestClassificationProcessor::ConstructorOptions{
+                    "n_trees", "max_depth", "max_features",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register random-forest-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/random-forest-regression",
+            "action": "random-forest-regression",
+            "display_name": "Predict Numbers with Multiple Trees",
+            "short_desc": "Combines many decision trees for more accurate numeric predictions",
+            "desc": "Predicts numeric values by growing many decision trees on random subsets "
+                "of the data and averaging their predictions. More accurate than a single tree "
+                "— like getting estimates from multiple appraisers and averaging them.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the average prediction across all trees",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRandomForestRegressionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRandomForestRegressionProcessor::ConstructorOptions{
+                    "n_trees", "max_depth", "max_features",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register gbt-classification action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/gbt-classification",
+            "action": "gbt-classification",
+            "display_name": "Classify with Gradient Boosting",
+            "short_desc": "Sequentially builds trees that correct each other's mistakes",
+            "desc": "Classifies records using gradient boosting — the enterprise standard for "
+                "tabular data (fraud detection, churn prediction, credit scoring). Each tree "
+                "focuses on correcting the errors of the previous trees, producing highly "
+                "accurate predictions.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `predicted_class` — the predicted category\n"
+                "- `confidence` — the model's probability estimate for the predicted class",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreGBTClassificationProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTClassificationProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTClassificationProcessor::ConstructorOptions{
+                    "n_estimators", "learning_rate", "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register gbt-regression action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/gbt-regression",
+            "action": "gbt-regression",
+            "display_name": "Predict Numbers with Gradient Boosting",
+            "short_desc": "Sequentially builds trees for accurate numeric predictions",
+            "desc": "Predicts numeric values using gradient boosting — the enterprise standard "
+                "for tabular data. Each tree corrects the residual errors of the previous "
+                "trees, producing highly accurate estimates. Ideal for price prediction, "
+                "demand forecasting, and risk scoring.\n\n"
+                "Records accumulate in a window; when full, the model learns and produces "
+                "predictions. Each record receives:\n"
+                "- `prediction` — the estimated numeric value",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreGBTRegressionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTRegressionProcessor::ConstructorOptions{
+                    "fields", "target_field", "window_size",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGBTRegressionProcessor::ConstructorOptions{
+                    "n_estimators", "learning_rate", "max_depth",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register rolling-stats action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/rolling-stats",
+            "action": "rolling-stats",
+            "display_name": "Compute Rolling Statistics",
+            "short_desc": "Enriches each record with rolling window statistics for numeric fields",
+            "desc": "Monitors trends, detects anomalies, and tracks volatility in time series "
+                "data by computing rolling statistics over a sliding window of recent records. "
+                "For example, with `window_size=20`, each record gets the average, standard "
+                "deviation, min, max, or sum of the last 20 values for each monitored field.\n\n"
+                "**Use cases**:\n"
+                "- Track a 20-period moving average of sensor temperature to smooth out noise\n"
+                "- Detect volatility spikes by watching rolling standard deviation of stock "
+                "prices\n"
+                "- Monitor rolling min/max to detect new highs or lows in streaming data\n\n"
+                "Each record passes through enriched with computed fields named "
+                "`{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreRollingStatsProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRollingStatsProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRollingStatsProcessor::ConstructorOptions{"statistics",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register ewma action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/ewma",
+            "action": "ewma",
+            "display_name": "Smooth with Moving Average",
+            "short_desc": "Enriches each record with an exponential weighted moving average",
+            "desc": "Smooths noisy signals and tracks trends by computing exponential weighted "
+                "moving averages (EWMA) for specified numeric fields. Unlike a simple moving "
+                "average, EWMA gives more weight to recent values, making it more responsive "
+                "to changes while still filtering out noise.\n\n"
+                "**Use cases**:\n"
+                "- Smooth CPU usage readings to distinguish real load spikes from noise\n"
+                "- Track the trend in response times to detect gradual degradation\n"
+                "- Create a baseline for anomaly detection by comparing raw values to their "
+                "EWMA\n\n"
+                "Each record passes through enriched with `{field}_ewma` fields (e.g., "
+                "`temperature_ewma`, `cpu_usage_ewma`)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreEWMAProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEWMAProcessor::ConstructorOptions{"fields", "alpha"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register data-profile action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/data-profile",
+            "action": "data-profile",
+            "display_name": "Profile Data Quality",
+            "short_desc": "Profiles data quality for specified fields in a batch of records",
+            "desc": "Computes a data quality profile for each specified field: missing rates, "
+                "type distribution, value ranges, cardinality, and outlier detection. Use this "
+                "to understand your data before building models or to monitor data quality in "
+                "production pipelines.\n\n"
+                "**What you get per field**:\n"
+                "- `missing_rate` — fraction of records with null/missing values\n"
+                "- `type` — most common Qore type seen (string, int, float, etc.)\n"
+                "- `cardinality` — number of unique values\n"
+                "- For numeric fields: `min`, `max`, `mean`, `std` (standard deviation)\n"
+                "- `outlier_count` — values beyond 1.5*IQR from Q1/Q3 (numeric fields with "
+                ">= 10 values)\n\n"
+                "Records accumulate in a batch; when full, one profile event per field is "
+                "emitted.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreDataProfileProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDataProfileProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register schema-validation action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/schema-validation",
+            "action": "schema-validation",
+            "display_name": "Validate Record Schema",
+            "short_desc": "Validates each record against a defined schema with configurable "
+                "violation handling",
+            "desc": "Enforce data quality rules before processing — reject orders with "
+                "negative prices, ensure `customer_id` is always present, or restrict status "
+                "codes to known values. Each record is validated against a user-defined schema "
+                "and either enriched with error details (default), silently dropped, or causes "
+                "an exception.\n\n"
+                "**Validation rules per field**:\n"
+                "- `type` — expected type (e.g., `\"int\"` for order quantities, `\"string\"` "
+                "for names)\n"
+                "- `required` — field must be present and non-null (e.g., every order needs a "
+                "`customer_id`)\n"
+                "- `min` / `max` — numeric value bounds (e.g., `min: 0` to reject negative "
+                "prices)\n"
+                "- `min_length` / `max_length` — string length bounds (e.g., `min_length: 1` "
+                "to reject empty names)\n"
+                "- `allowed_values` — enumeration of valid values (e.g., "
+                "`(\"active\", \"inactive\", \"suspended\")` for account status)\n\n"
+                "Each record passes through individually. In **enrich** mode, every record "
+                "gets `_is_valid` (bool) and `_validation_errors` (list of strings).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreSchemaValidationProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSchemaValidationProcessor::ConstructorOptions{"schema",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSchemaValidationProcessor::ConstructorOptions{"on_violation",}, {
                     "loc": "constructor",
                 }
             ),
@@ -1249,5 +1604,109 @@ public namespace DataProviderML {
         float prediction;
         #! The original input values for the fields that were analyzed
         hash<auto> record_values;
+    }
+
+    #! Decision Tree classification event hashdecl
+    public hashdecl DecisionTreeClassificationEventInfo {
+        #! The type of analysis that produced this result (always "decision-tree-classification")
+        string event_type = "decision-tree-classification";
+        #! The class label predicted by the decision tree
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (uncertain) to 1.0 (very confident);
+        #! represents the proportion of training samples in the leaf node belonging to
+        #! the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Decision Tree regression event hashdecl
+    public hashdecl DecisionTreeRegressionEventInfo {
+        #! The type of analysis that produced this result (always "decision-tree-regression")
+        string event_type = "decision-tree-regression";
+        #! The predicted numeric value, computed as the mean of target values in the
+        #! leaf node reached by this record
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Random Forest classification event hashdecl
+    public hashdecl RandomForestClassificationEventInfo {
+        #! The type of analysis that produced this result (always "random-forest-classification")
+        string event_type = "random-forest-classification";
+        #! The class label predicted by majority vote across all trees in the forest
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (no consensus) to 1.0 (all trees
+        #! agree); represents the proportion of trees voting for the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Random Forest regression event hashdecl
+    public hashdecl RandomForestRegressionEventInfo {
+        #! The type of analysis that produced this result (always "random-forest-regression")
+        string event_type = "random-forest-regression";
+        #! The predicted numeric value, computed as the average prediction across all
+        #! trees in the forest
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Gradient Boosted Trees classification event hashdecl
+    public hashdecl GBTClassificationEventInfo {
+        #! The type of analysis that produced this result (always "gbt-classification")
+        string event_type = "gbt-classification";
+        #! The class label predicted by the gradient boosted ensemble
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (uncertain) to 1.0 (very confident);
+        #! derived from the boosted model's probability estimate for the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Gradient Boosted Trees regression event hashdecl
+    public hashdecl GBTRegressionEventInfo {
+        #! The type of analysis that produced this result (always "gbt-regression")
+        string event_type = "gbt-regression";
+        #! The predicted numeric value, computed by summing the contributions of all
+        #! sequentially built trees
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Data profile field info hashdecl
+    /** @since DataProviderML 1.3
+    */
+    public hashdecl DataProfileFieldInfo {
+        #! The type of analysis that produced this result (always "data-profile")
+        string event_type = "data-profile";
+        #! The field name that was profiled
+        string field_name;
+        #! Total number of records in the batch
+        int count;
+        #! Number of records where the field value was null/NOTHING
+        int missing_count;
+        #! Fraction of records with missing values (missing_count / count)
+        float missing_rate;
+        #! Most common Qore type seen for this field (e.g., "string", "integer", "float")
+        string type;
+        #! Number of unique non-null values
+        int cardinality;
+        #! Minimum value (numeric fields only; NOTHING for non-numeric)
+        *float min;
+        #! Maximum value (numeric fields only; NOTHING for non-numeric)
+        *float max;
+        #! Mean value (numeric fields only; NOTHING for non-numeric)
+        *float mean;
+        #! Standard deviation (numeric fields only; NOTHING for non-numeric)
+        *float std;
+        #! Number of outliers beyond 1.5*IQR (numeric fields with >= 10 values only;
+        #! NOTHING otherwise)
+        *int outlier_count;
     }
 }

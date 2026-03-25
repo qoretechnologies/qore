@@ -137,6 +137,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
             "tags": metadata.tags ? make_json(metadata.tags) : "[]",
             "training_data_hash": metadata.training_data_hash,
             "description": metadata.description,
+            "config": metadata.config ? make_json(metadata.config) : NOTHING,
             "created": now_us(),
         };
         versions_table.insert(version_insert);
@@ -241,6 +242,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                 "training_data_hash": row.training_data_hash
                     ? string(row.training_data_hash) : NOTHING,
                 "tenant_id": tenant_id,
+                "config": row.config ? parse_json(row.config) : NOTHING,
             });
         }
         return result;
@@ -431,6 +433,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
             "training_data_hash": row.training_data_hash
                 ? string(row.training_data_hash) : NOTHING,
             "tenant_id": tenant_id,
+            "config": row.config ? parse_json(row.config) : NOTHING,
         });
     }
 
@@ -494,18 +497,18 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         return {
             (prefix + "models"): {
                 "columns": {
-                    "modelid": {"qore_type": Type::Int, "notnull": True,
+                    "modelid": {"type": "int", "notnull": True,
                         "comment": "Model primary key"},
-                    "tenant_id": {"qore_type": Type::String, "size": 255,
+                    "tenant_id": {"type": "varchar", "size": 255,
                         "notnull": True, "default_value": "",
                         "comment": "Tenant identifier"},
-                    "name": {"qore_type": Type::String, "size": 255, "notnull": True,
+                    "name": {"type": "varchar", "size": 255, "notnull": True,
                         "comment": "Model name"},
-                    "algorithm": {"qore_type": Type::String, "size": 255,
+                    "algorithm": {"type": "varchar", "size": 255,
                         "comment": "Algorithm class name"},
-                    "created": {"qore_type": Type::Date, "notnull": True,
+                    "created": {"type": "timestamp", "notnull": True,
                         "comment": "Creation timestamp"},
-                    "modified": {"qore_type": Type::Date, "notnull": True,
+                    "modified": {"type": "timestamp",
                         "comment": "Last modification timestamp"},
                 },
                 "primary_key": {"name": "pk_" + prefix + "models",
@@ -516,33 +519,42 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "unique": True,
                     },
                 },
+                "auto_triggers": {
+                    "created": True,
+                    "modified": True,
+                    "sequence_columns": {
+                        "modelid": prefix + "seq_models",
+                    },
+                },
             },
             (prefix + "versions"): {
                 "columns": {
-                    "versionid": {"qore_type": Type::Int, "notnull": True,
+                    "versionid": {"type": "int", "notnull": True,
                         "comment": "Version primary key"},
-                    "tenant_id": {"qore_type": Type::String, "size": 255,
+                    "tenant_id": {"type": "varchar", "size": 255,
                         "notnull": True, "default_value": "",
                         "comment": "Tenant identifier"},
-                    "modelid": {"qore_type": Type::Int, "notnull": True,
+                    "modelid": {"type": "int", "notnull": True,
                         "comment": "FK to models table"},
-                    "version_id": {"qore_type": Type::String, "size": 255,
+                    "version_id": {"type": "varchar", "size": 255,
                         "notnull": True, "comment": "User-facing version identifier"},
-                    "algorithm": {"qore_type": Type::String, "size": 255,
+                    "algorithm": {"type": "varchar", "size": 255,
                         "comment": "Algorithm class name"},
-                    "format": {"qore_type": Type::String, "size": 50,
+                    "format": {"type": "varchar", "size": 50,
                         "default_value": "qml", "comment": "Serialization format"},
-                    "artifact_size": {"qore_type": Type::Int,
+                    "artifact_size": {"type": "int",
                         "comment": "Artifact size in bytes"},
-                    "metrics": {"qore_type": "clob",
+                    "metrics": {"type": "clob",
                         "comment": "Performance metrics JSON"},
-                    "tags": {"qore_type": "clob", "default_value": "[]",
+                    "tags": {"type": "clob", "default_value": "[]",
                         "comment": "Tags JSON array"},
-                    "training_data_hash": {"qore_type": Type::String, "size": 255,
+                    "training_data_hash": {"type": "varchar", "size": 255,
                         "comment": "Training data identifier"},
-                    "description": {"qore_type": "clob",
+                    "description": {"type": "clob",
                         "comment": "Version description"},
-                    "created": {"qore_type": Type::Date, "notnull": True,
+                    "config": {"type": "clob",
+                        "comment": "Version configuration JSON (e.g., tokenizer config)"},
+                    "created": {"type": "timestamp", "notnull": True,
                         "comment": "Creation timestamp"},
                 },
                 "primary_key": {"name": "pk_" + prefix + "versions",
@@ -553,25 +565,30 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "unique": True,
                     },
                 },
-                "foreign_keys": {
+                "foreign_constraints": {
                     ("fk_" + prefix + "versions_model"): {
                         "columns": ("modelid",),
                         "table": prefix + "models",
-                        "columns_ref": ("modelid",),
+                        "target_columns": ("modelid",),
+                    },
+                },
+                "auto_triggers": {
+                    "sequence_columns": {
+                        "versionid": prefix + "seq_versions",
                     },
                 },
             },
             (prefix + "blobs"): {
                 "columns": {
-                    "blobid": {"qore_type": Type::Int, "notnull": True,
+                    "blobid": {"type": "int", "notnull": True,
                         "comment": "Blob primary key"},
-                    "tenant_id": {"qore_type": Type::String, "size": 255,
+                    "tenant_id": {"type": "varchar", "size": 255,
                         "notnull": True, "default_value": "",
                         "comment": "Tenant identifier"},
-                    "versionid": {"qore_type": Type::Int, "notnull": True,
+                    "versionid": {"type": "int", "notnull": True,
                         "comment": "FK to versions table"},
-                    "data": {"qore_type": "blob", "notnull": True,
-                        "comment": "Serialized model artifact"},
+                    "data": {"type": "blob",
+                        "comment": "Serialized model artifact; NULL for remote models"},
                 },
                 "primary_key": {"name": "pk_" + prefix + "blobs",
                     "columns": ("blobid",)},
@@ -581,11 +598,16 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
                         "unique": True,
                     },
                 },
-                "foreign_keys": {
+                "foreign_constraints": {
                     ("fk_" + prefix + "blobs_version"): {
                         "columns": ("versionid",),
                         "table": prefix + "versions",
-                        "columns_ref": ("versionid",),
+                        "target_columns": ("versionid",),
+                    },
+                },
+                "auto_triggers": {
+                    "sequence_columns": {
+                        "blobid": prefix + "seq_blobs",
                     },
                 },
             },

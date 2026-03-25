@@ -1,0 +1,838 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../qlib/Util.qm
+%requires ../../../qlib/QUnit.qm
+
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
+%try-module DataProviderDataFrame
+%define NoDataProviderDataFrame
+%endtry
+
+%exec-class DataFrameTest
+
+class DataFrameTest inherits QUnit::Test {
+    constructor() : Test("DataFrameTest", "1.0") {
+        addTestCase("constructionTest", \constructionTest());
+        addTestCase("typeInferenceTest", \typeInferenceTest());
+        addTestCase("metadataTest", \metadataTest());
+        addTestCase("accessTest", \accessTest());
+        addTestCase("roundTripTest", \roundTripTest());
+        addTestCase("mutationTest", \mutationTest());
+        addTestCase("describeTest", \describeTest());
+        addTestCase("headTailSliceTest", \headTailSliceTest());
+        addTestCase("nullHandlingTest", \nullHandlingTest());
+        addTestCase("errorCasesTest", \errorCasesTest());
+        addTestCase("selectTest", \selectTest());
+        addTestCase("filterTest", \filterTest());
+        addTestCase("sortByTest", \sortByTest());
+        addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
+        addTestCase("csvReadTest", \csvReadTest());
+        addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
+        addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
+        addTestCase("dbQueryTest", \dbQueryTest());
+        addTestCase("mlIntegrationTest", \mlIntegrationTest());
+        addTestCase("parquetTest", \parquetTest());
+        addTestCase("dataProviderTest", \dataProviderTest());
+        addTestCase("groupByTest", \groupByTest());
+        addTestCase("groupByAggTest", \groupByAggTest());
+        addTestCase("joinTest", \joinTest());
+        addTestCase("pivotMeltTest", \pivotMeltTest());
+        addTestCase("windowFunctionsTest", \windowFunctionsTest());
+
+        set_return_value(main());
+    }
+
+    constructionTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Empty constructor
+        DataFrame::DataFrame empty();
+        assertEq(0, empty.numRows(), "empty DataFrame has 0 rows");
+        assertEq(0, empty.numCols(), "empty DataFrame has 0 cols");
+
+        # Construct from list<hash>
+        DataFrame::DataFrame df(
+            ({"x": 1, "y": 2.0},
+             {"x": 3, "y": 4.0}));
+        assertEq(2, df.numRows(), "from records: 2 rows");
+        assertEq(2, df.numCols(), "from records: 2 cols");
+
+        # Construct from hash of lists (column-oriented)
+        DataFrame::DataFrame df2({"a": (1, 2, 3), "b": ("x", "y", "z")});
+        assertEq(3, df2.numRows(), "from columns: 3 rows");
+        assertEq(2, df2.numCols(), "from columns: 2 cols");
+    }
+
+    typeInferenceTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"int_col": 42, "float_col": 3.14, "str_col": "hello",
+              "bool_col": True},));
+
+        list<string> types = df.dtypes();
+        assertEq("int64", types[0], "int column detected as int64");
+        assertEq("float64", types[1], "float column detected as float64");
+        assertEq("string", types[2], "string column detected as string");
+        assertEq("bool", types[3], "bool column detected as bool");
+
+        # Mixed int+float → float64
+        DataFrame::DataFrame df2({"mixed": (1, 2.5, 3)});
+        assertEq("float64", df2.dtypes()[0], "mixed int+float → float64");
+    }
+
+    metadataTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30},
+             {"name": "Bob",   "age": 25}));
+
+        assertEq(("name", "age"), df.columnNames(), "column names");
+        assertEq(("string", "int64"), df.dtypes(), "dtypes");
+
+        hash<auto> s = df.shape();
+        assertEq(2, s.rows, "shape rows");
+        assertEq(2, s.cols, "shape cols");
+    }
+
+    accessTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 10, "b": "x"},
+             {"a": 20, "b": "y"},
+             {"a": 30, "b": "z"}));
+
+        # getColumn
+        assertEq((10, 20, 30), df.getColumn("a"), "getColumn int");
+        assertEq(("x", "y", "z"), df.getColumn("b"), "getColumn string");
+
+        # getRow
+        hash<auto> row = df.getRow(1);
+        assertEq(20, row.a, "getRow a");
+        assertEq("y", row.b, "getRow b");
+    }
+
+    roundTripTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        list<hash<auto>> original = (
+            {"x": 1, "y": "a"},
+            {"x": 2, "y": "b"},
+            {"x": 3, "y": "c"},
+        );
+
+        DataFrame::DataFrame df(original);
+        list<hash<auto>> result = df.toRecords();
+
+        assertEq(3, result.size(), "round-trip preserves row count");
+        assertEq(1, result[0].x, "round-trip preserves int value");
+        assertEq("b", result[1].y, "round-trip preserves string value");
+
+        # Column hash round-trip
+        hash<auto> cols = df.toColumnHash();
+        assertEq((1, 2, 3), cols.x, "toColumnHash x");
+        assertEq(("a", "b", "c"), cols.y, "toColumnHash y");
+    }
+
+    mutationTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(({"a": 1}, {"a": 2}));
+
+        # addColumn
+        df.addColumn("b", (10, 20));
+        assertEq(("a", "b"), df.columnNames(), "addColumn adds column");
+        assertEq((10, 20), df.getColumn("b"), "addColumn values correct");
+
+        # renameColumn
+        df.renameColumn("b", "c");
+        assertEq(("a", "c"), df.columnNames(), "renameColumn works");
+
+        # dropColumn
+        df.dropColumn("c");
+        assertEq(("a",), df.columnNames(), "dropColumn removes column");
+
+        # Error: duplicate column
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.addColumn(), ("a", (1, 2)),
+            "addColumn duplicate throws");
+
+        # Error: drop non-existent
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.dropColumn(), ("nonexistent",),
+            "dropColumn missing throws");
+    }
+
+    describeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"val": 10.0, "name": "a"},
+             {"val": 20.0, "name": "b"},
+             {"val": 30.0, "name": "c"},
+             {"val": 40.0, "name": "a"}));
+
+        list<auto> stats = df.describe();
+        assertEq(2, stats.size(), "describe returns stats for all columns");
+
+        # Numeric column stats
+        hash<auto> val_stats = stats[0];
+        assertEq("val", val_stats.name, "describe name");
+        assertEq(4, val_stats.count, "describe count");
+        assertEq(0, val_stats.null_count, "describe null_count");
+        # mean of 10, 20, 30, 40 = 25
+        float delta = abs(val_stats.mean - 25.0);
+        assertTrue(delta < 0.01, "describe mean ≈ 25");
+        assertEq(10.0, val_stats.min, "describe min");
+        assertEq(40.0, val_stats.max, "describe max");
+
+        # String column stats
+        hash<auto> name_stats = stats[1];
+        assertEq("name", name_stats.name, "describe string name");
+        assertEq(3, name_stats.unique_count, "describe unique_count");
+    }
+
+    headTailSliceTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"v": 1}, {"v": 2}, {"v": 3}, {"v": 4}, {"v": 5}));
+
+        auto h = df.head(2);
+        assertEq(2, h.numRows(), "head(2) rows");
+        assertEq((1, 2), h.getColumn("v"), "head(2) values");
+
+        auto t = df.tail(2);
+        assertEq(2, t.numRows(), "tail(2) rows");
+        assertEq((4, 5), t.getColumn("v"), "tail(2) values");
+
+        auto s = df.slice(1, 4);
+        assertEq(3, s.numRows(), "slice(1,4) rows");
+        assertEq((2, 3, 4), s.getColumn("v"), "slice(1,4) values");
+
+        # Default head/tail (5 rows, but only 5 available)
+        auto h5 = df.head();
+        assertEq(5, h5.numRows(), "head() default 5");
+    }
+
+    nullHandlingTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1, "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3, "b": NOTHING}));
+
+        # Nulls in getColumn
+        list<auto> a_vals = df.getColumn("a");
+        assertEq(1, a_vals[0], "null handling: first value present");
+        assertEq(NOTHING, a_vals[1], "null handling: NOTHING preserved");
+        assertEq(3, a_vals[2], "null handling: third value present");
+
+        # Nulls in getRow
+        hash<auto> row = df.getRow(1);
+        assertEq(NOTHING, row.a, "null in row hash");
+        assertEq("y", row.b, "non-null in row hash");
+
+        # Describe with nulls
+        list<auto> stats = df.describe();
+        hash<auto> a_stats = stats[0];
+        assertEq(2, a_stats.count, "describe count excludes nulls");
+        assertEq(1, a_stats.null_count, "describe null_count");
+    }
+
+    selectTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1, "b": "x", "c": 10.0},
+             {"a": 2, "b": "y", "c": 20.0},
+             {"a": 3, "b": "z", "c": 30.0}));
+
+        auto sel = df.select(("a", "c"));
+        assertEq(3, sel.numRows(), "select preserves rows");
+        assertEq(2, sel.numCols(), "select reduces columns");
+        assertEq(("a", "c"), sel.columnNames(), "select column names");
+        assertEq((1, 2, 3), sel.getColumn("a"), "select values preserved");
+    }
+
+    filterTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30, "score": 95.5},
+             {"name": "Bob",   "age": 25, "score": 88.0},
+             {"name": "Carol", "age": 35, "score": 92.0},
+             {"name": "Dave",  "age": 28, "score": 78.0}));
+
+        # Numeric comparison
+        auto older = df.filter("age", ">=", 30);
+        assertEq(2, older.numRows(), "filter >= 30 returns 2 rows");
+        assertEq(("Alice", "Carol"), older.getColumn("name"), "filter >= values");
+
+        # String equality
+        auto bob = df.filter("name", "==", "Bob");
+        assertEq(1, bob.numRows(), "filter string ==");
+        assertEq(25, bob.getColumn("age")[0], "filter string == value");
+
+        # String contains
+        auto has_a = df.filter("name", "contains", "a");
+        # "Carol" and "Dave" contain lowercase 'a'
+        assertEq(2, has_a.numRows(), "filter contains");
+
+        # No matches
+        auto none = df.filter("age", ">", 100);
+        assertEq(0, none.numRows(), "filter no matches");
+
+        # Null filter
+        DataFrame::DataFrame df2(
+            ({"a": 1, "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3, "b": NOTHING}));
+        auto nulls = df2.filter("a", "is_null", 0);
+        assertEq(1, nulls.numRows(), "filter is_null");
+        auto non_nulls = df2.filter("a", "not_null", 0);
+        assertEq(2, non_nulls.numRows(), "filter not_null");
+    }
+
+    sortByTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Carol", "age": 35},
+             {"name": "Alice", "age": 30},
+             {"name": "Bob",   "age": 25}));
+
+        # Sort ascending
+        auto sorted = df.sortBy(("age",));
+        assertEq((25, 30, 35), sorted.getColumn("age"), "sort ascending");
+        assertEq(("Bob", "Alice", "Carol"), sorted.getColumn("name"),
+            "sort carries other columns");
+
+        # Sort descending
+        auto desc = df.sortBy(("age",), (False,));
+        assertEq((35, 30, 25), desc.getColumn("age"), "sort descending");
+
+        # Sort by string
+        auto alpha = df.sortBy(("name",));
+        assertEq(("Alice", "Bob", "Carol"), alpha.getColumn("name"), "sort string");
+    }
+
+    fillnaDropnaTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1,       "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3,       "b": NOTHING}));
+
+        # fillna
+        auto filled = df.fillna(0);
+        assertEq(3, filled.numRows(), "fillna preserves rows");
+        assertEq((1, 0, 3), filled.getColumn("a"), "fillna replaces int nulls");
+        assertEq(("x", "y", "0"), filled.getColumn("b"), "fillna replaces string nulls");
+
+        # dropna
+        auto dropped = df.dropna();
+        assertEq(1, dropped.numRows(), "dropna keeps only complete rows");
+        assertEq(1, dropped.getColumn("a")[0], "dropna correct row");
+        assertEq("x", dropped.getColumn("b")[0], "dropna correct row value");
+    }
+
+    errorCasesTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(({"a": 1}, {"a": 2}));
+
+        # Column not found
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumn(), ("nonexistent",),
+            "getColumn missing column");
+
+        # Row index out of range
+        assertThrows("DATAFRAME-INDEX-ERROR", \df.getRow(), (99,),
+            "getRow out of range");
+
+        # Mismatched column lengths
+        bool caught = False;
+        try {
+            new DataFrame::DataFrame({"a": (1, 2), "b": (1, 2, 3)});
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATAFRAME-ERROR", ex.err, "mismatched column lengths");
+            caught = True;
+        }
+        assertTrue(caught, "mismatched column lengths throws");
+
+        # addColumn row count mismatch
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.addColumn(), ("b", (1, 2, 3)),
+            "addColumn row mismatch");
+
+        # Invalid filter operator
+        assertThrows("DATAFRAME-FILTER-ERROR", \df.filter(), ("a", "LIKE", 1),
+            "invalid filter operator");
+    }
+
+    csvReadTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        string csv_path = get_script_dir() + "/data/test_basic.csv";
+        auto df = DataFrame::DataFrame::readCSV(csv_path);
+
+        assertEq(3, df.numRows(), "CSV read row count");
+        assertEq(3, df.numCols(), "CSV read col count");
+        assertEq(("name", "age", "score"), df.columnNames(), "CSV column names");
+
+        # Type inference
+        list<string> types = df.dtypes();
+        assertEq("string", types[0], "CSV name is string");
+        assertEq("int64", types[1], "CSV age is int64");
+        assertEq("float64", types[2], "CSV score is float64");
+
+        # Values
+        assertEq(("Alice", "Bob", "Carol"), df.getColumn("name"), "CSV name values");
+        assertEq((30, 25, 35), df.getColumn("age"), "CSV age values");
+    }
+
+    csvWriteRoundTripTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"x": 1, "y": "hello"},
+             {"x": 2, "y": "world"}));
+
+        string tmp_path = tmp_location() + "/df_test_" + string(getpid()) + ".csv";
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        df.writeCSV(tmp_path);
+
+        auto df2 = DataFrame::DataFrame::readCSV(tmp_path);
+        assertEq(2, df2.numRows(), "CSV round-trip rows");
+        assertEq((1, 2), df2.getColumn("x"), "CSV round-trip int values");
+        assertEq(("hello", "world"), df2.getColumn("y"), "CSV round-trip string values");
+    }
+
+    groupByTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"dept": "sales",  "name": "Alice", "salary": 50000},
+             {"dept": "sales",  "name": "Bob",   "salary": 60000},
+             {"dept": "eng",    "name": "Carol", "salary": 80000},
+             {"dept": "eng",    "name": "Dave",  "salary": 90000},
+             {"dept": "eng",    "name": "Eve",   "salary": 85000}));
+
+        auto gdf = df.groupBy(("dept",));
+        assertEq(2, gdf.numGroups(), "groupBy creates 2 groups");
+
+        # count()
+        auto counts = gdf.count();
+        assertEq(2, counts.numRows(), "count has 2 rows");
+        # Sort by dept to get deterministic order
+        auto sorted_counts = counts.sortBy(("dept",));
+        assertEq(("eng", "sales"), sorted_counts.getColumn("dept"), "count dept values");
+        assertEq((3, 2), sorted_counts.getColumn("count"), "count values");
+
+        # sum()
+        auto sums = gdf.sum();
+        auto sorted_sums = sums.sortBy(("dept",));
+        # eng: 80000+90000+85000=255000, sales: 50000+60000=110000
+        assertEq((255000.0, 110000.0), sorted_sums.getColumn("salary"), "sum values");
+
+        # mean()
+        auto means = gdf.mean();
+        auto sorted_means = means.sortBy(("dept",));
+        # eng: 255000/3=85000, sales: 110000/2=55000
+        assertEq((85000.0, 55000.0), sorted_means.getColumn("salary"), "mean values");
+    }
+
+    groupByAggTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"cat": "A", "val": 10, "score": 1.0},
+             {"cat": "A", "val": 20, "score": 2.0},
+             {"cat": "B", "val": 30, "score": 3.0}));
+
+        auto gdf = df.groupBy(("cat",));
+
+        # Multi-function aggregation
+        auto result = gdf.agg({"val": ("sum", "mean"), "score": "max"});
+        auto sorted = result.sortBy(("cat",));
+        assertEq(2, sorted.numRows(), "agg row count");
+        # Check column names: cat, val_sum, val_mean, score
+        list<string> cols = sorted.columnNames();
+        assertTrue(cols.contains("val_sum"), "agg has val_sum column");
+        assertTrue(cols.contains("val_mean"), "agg has val_mean column");
+        assertTrue(cols.contains("score"), "agg has score column");
+
+        # A: val_sum=30, val_mean=15, score_max=2.0
+        # B: val_sum=30, val_mean=30, score_max=3.0
+        assertEq((30.0, 30.0), sorted.getColumn("val_sum"), "agg val_sum");
+        assertEq((15.0, 30.0), sorted.getColumn("val_mean"), "agg val_mean");
+        assertEq((2.0, 3.0), sorted.getColumn("score"), "agg score max");
+    }
+
+    pivotMeltTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Pivot: long → wide
+        DataFrame::DataFrame long_df(
+            ({"name": "Alice", "metric": "score", "value": 95},
+             {"name": "Alice", "metric": "age",   "value": 30},
+             {"name": "Bob",   "metric": "score", "value": 88},
+             {"name": "Bob",   "metric": "age",   "value": 25}));
+
+        auto wide = long_df.pivot("name", "metric", "value");
+        assertEq(2, wide.numRows(), "pivot row count");
+        assertTrue(wide.columnNames().contains("score"), "pivot has score column");
+        assertTrue(wide.columnNames().contains("age"), "pivot has age column");
+
+        # Melt: wide → long
+        DataFrame::DataFrame wide_df(
+            ({"name": "Alice", "score": 95, "age": 30},
+             {"name": "Bob",   "score": 88, "age": 25}));
+
+        auto melted = wide_df.melt(("name",), ("score", "age"), "metric", "value");
+        assertEq(4, melted.numRows(), "melt row count (2 rows × 2 value cols)");
+        assertEq(("name", "metric", "value"), melted.columnNames(), "melt column names");
+
+        # withColumn
+        DataFrame::DataFrame df(({"a": 1, "b": 2}, {"a": 3, "b": 4}));
+        auto df2 = df.withColumn("c", (10, 20));
+        assertEq(3, df2.numCols(), "withColumn adds column");
+        assertEq((10, 20), df2.getColumn("c"), "withColumn values");
+        # Original unchanged
+        assertEq(2, df.numCols(), "original not modified");
+    }
+
+    windowFunctionsTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"dept": "A", "name": "Alice", "salary": 50000},
+             {"dept": "A", "name": "Bob",   "salary": 60000},
+             {"dept": "A", "name": "Carol", "salary": 55000},
+             {"dept": "B", "name": "Dave",  "salary": 80000},
+             {"dept": "B", "name": "Eve",   "salary": 90000}));
+
+        # rowNumber without partition (global)
+        list<int> rn_global = df.rowNumber({"order_by": ("salary",)});
+        assertEq(5, rn_global.size(), "rowNumber global length");
+        # Salary order: 50000(1), 55000(2), 60000(3), 80000(4), 90000(5)
+        assertEq(1, rn_global[0], "rowNumber salary=50000 is 1");
+
+        # rowNumber with partition
+        list<int> rn_part = df.rowNumber({
+            "partition_by": ("dept",),
+            "order_by": ("salary",),
+        });
+        # Dept A: 50000(1), 55000(2), 60000(3); Dept B: 80000(1), 90000(2)
+        assertEq(5, rn_part.size(), "rowNumber partitioned length");
+
+        # cumSum
+        list<auto> cs = df.cumSum("salary", {"order_by": ("salary",)});
+        assertEq(5, cs.size(), "cumSum length");
+        # Cumulative: 50000, 105000, 165000, 245000, 335000
+        assertEq(50000.0, cs[0], "cumSum first");
+
+        # lag
+        list<auto> lagged = df.lag("salary", 1, {"order_by": ("salary",)});
+        assertEq(NOTHING, lagged[0], "lag first row is NOTHING");
+
+        # lead
+        list<auto> led = df.lead("salary", 1, {"order_by": ("salary",)});
+        assertEq(NOTHING, led[4], "lead last row is NOTHING");
+
+        # rollingMean
+        list<auto> rm = df.rollingMean("salary", 2, {"order_by": ("salary",)});
+        assertEq(5, rm.size(), "rollingMean length");
+        # Window=2: [50000], [50000,55000], [55000,60000], ...
+        assertEq(50000.0, rm[0], "rollingMean first (window of 1)");
+    }
+
+    joinTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame orders(
+            ({"order_id": 1, "cust_id": 10, "amount": 99.0},
+             {"order_id": 2, "cust_id": 20, "amount": 50.0},
+             {"order_id": 3, "cust_id": 30, "amount": 75.0}));
+        DataFrame::DataFrame customers(
+            ({"cust_id": 10, "name": "Alice"},
+             {"cust_id": 20, "name": "Bob"},
+             {"cust_id": 40, "name": "Dave"}));
+
+        # Inner join: only matching keys
+        auto inner = orders.join(customers, ("cust_id",));
+        assertEq(2, inner.numRows(), "inner join row count");
+        auto sorted_inner = inner.sortBy(("cust_id",));
+        assertEq((10, 20), sorted_inner.getColumn("cust_id"), "inner join keys");
+        assertEq(("Alice", "Bob"), sorted_inner.getColumn("name"), "inner join names");
+
+        # Left join: all left rows, null for unmatched right
+        auto left = orders.join(customers, ("cust_id",), "left");
+        assertEq(3, left.numRows(), "left join row count");
+        auto sorted_left = left.sortBy(("cust_id",));
+        assertEq((10, 20, 30), sorted_left.getColumn("cust_id"), "left join keys");
+        assertEq(NOTHING, sorted_left.getColumn("name")[2], "left join null for unmatched");
+
+        # Right join: all right rows, null for unmatched left
+        auto right = orders.join(customers, ("cust_id",), "right");
+        assertEq(3, right.numRows(), "right join row count");
+        auto sorted_right = right.sortBy(("cust_id",));
+        assertEq((10, 20, 40), sorted_right.getColumn("cust_id"), "right join keys");
+        assertEq(NOTHING, sorted_right.getColumn("amount")[2], "right join null for unmatched");
+
+        # Outer join: all rows from both sides
+        auto outer = orders.join(customers, ("cust_id",), "outer");
+        assertEq(4, outer.numRows(), "outer join row count");
+
+        # Cross join
+        DataFrame::DataFrame a(
+            ({"x": 1}, {"x": 2}));
+        DataFrame::DataFrame b(
+            ({"y": "a"}, {"y": "b"}, {"y": "c"}));
+        auto cross = a.join(b, (), "cross");
+        assertEq(6, cross.numRows(), "cross join 2x3=6");
+
+        # Column name conflict
+        DataFrame::DataFrame t1(({"id": 1, "val": 10}, {"id": 2, "val": 11}));
+        DataFrame::DataFrame t2(({"id": 1, "val": 20}, {"id": 2, "val": 21}));
+        auto conflict = t1.join(t2, ("id",));
+        list<string> cols = conflict.columnNames();
+        assertTrue(cols.contains("val"), "conflict: left val");
+        assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
+    }
+
+    dataProviderTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30, "score": 95.5},
+             {"name": "Bob",   "age": 25, "score": 88.0},
+             {"name": "Carol", "age": 35, "score": 92.0}));
+
+        DataProviderDataFrame::DataFrameDataProvider prov(df);
+        assertEq("dataframe", prov.getName(), "provider name");
+
+        # Record type reflects DataFrame schema
+        *hash<string, AbstractDataField> rt = prov.getRecordType();
+        assertTrue(exists rt.name, "record type has name field");
+        assertTrue(exists rt.age, "record type has age field");
+
+        # Search with equality filter
+        auto it = prov.searchRecords({"name": "Bob"});
+        assertTrue(it.next(), "search finds Bob");
+        hash<auto> rec = it.getValue();
+        assertEq("Bob", rec.name, "search result name");
+        assertEq(25, rec.age, "search result age");
+        assertFalse(it.next(), "search has no more results");
+
+        # Search with comparison filter
+        auto it2 = prov.searchRecords({"age": {">=": 30}});
+        int count = 0;
+        while (it2.next()) {
+            ++count;
+        }
+        assertEq(2, count, "comparison filter returns 2 records");
+
+        # Get DataFrame back from provider
+        DataFrame::DataFrame df2 = prov.getDataFrame();
+        assertEq(3, df2.numRows(), "getDataFrame preserves rows");
+    }
+
+    parquetTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Test Parquet read/write round-trip
+        DataFrame::DataFrame df(
+            ({"id": 1, "name": "Alice", "score": 95.5},
+             {"id": 2, "name": "Bob",   "score": 88.0},
+             {"id": 3, "name": "Carol", "score": NOTHING}));
+
+        string tmp_path = tmp_location() + "/df_parquet_test_" + string(getpid()) + ".parquet";
+        on_exit {
+            unlink(tmp_path);
+        }
+
+        # Write — may throw MISSING-FEATURE-ERROR if Arrow not available
+        try {
+            df.writeParquet(tmp_path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "MISSING-FEATURE-ERROR") {
+                testSkip("Apache Arrow not available");
+            }
+            rethrow;
+        }
+
+        # Read back
+        auto df2 = DataFrame::DataFrame::readParquet(tmp_path);
+        assertEq(3, df2.numRows(), "Parquet round-trip rows");
+        assertEq(3, df2.numCols(), "Parquet round-trip cols");
+
+        # Verify values
+        assertEq((1, 2, 3), df2.getColumn("id"), "Parquet int column");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "Parquet string column");
+
+        # Score column: 95.5, 88.0, NULL
+        list<auto> scores = df2.getColumn("score");
+        assertEq(95.5, scores[0], "Parquet float value");
+        assertEq(88.0, scores[1], "Parquet float value 2");
+        assertEq(NOTHING, scores[2], "Parquet null preserved");
+    }
+
+    mlIntegrationTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"x1": 1.0, "x2": 2.0, "y": 10.0, "label": "a"},
+             {"x1": 3.0, "x2": 4.0, "y": 20.0, "label": "b"},
+             {"x1": 5.0, "x2": 6.0, "y": 30.0, "label": "c"}));
+
+        # toMatrix — specified columns
+        list<auto> mat = df.toMatrix(("x1", "x2"));
+        assertEq(3, mat.size(), "toMatrix row count");
+        assertEq(2, mat[0].size(), "toMatrix col count");
+        assertEq(1.0, mat[0][0], "toMatrix first value");
+        assertEq(6.0, mat[2][1], "toMatrix last value");
+
+        # toMatrix — all numeric (skips string column)
+        list<auto> mat_all = df.toMatrix();
+        assertEq(3, mat_all.size(), "toMatrix all rows");
+        assertEq(3, mat_all[0].size(), "toMatrix all numeric cols (x1, x2, y)");
+
+        # toVector
+        list<auto> target = df.toVector("y");
+        assertEq((10.0, 20.0, 30.0), target, "toVector values");
+
+        # toVector error on non-numeric
+        assertThrows("DATAFRAME-ERROR", \df.toVector(), ("label",),
+            "toVector on string column throws");
+
+        # fromMatrix round-trip
+        auto df2 = DataFrame::DataFrame::fromMatrix(mat, ("a", "b"));
+        assertEq(3, df2.numRows(), "fromMatrix rows");
+        assertEq(2, df2.numCols(), "fromMatrix cols");
+        assertEq(("a", "b"), df2.columnNames(), "fromMatrix column names");
+        assertEq(1.0, df2.getColumn("a")[0], "fromMatrix first value");
+
+        # toMatrix → fromMatrix round-trip
+        auto df3 = DataFrame::DataFrame::fromMatrix(df.toMatrix(("x1", "x2")), ("x1", "x2"));
+        assertEq(df.getColumn("x1"), df3.getColumn("x1"), "round-trip x1");
+        assertEq(df.getColumn("x2"), df3.getColumn("x2"), "round-trip x2");
+
+        # Test with null values → NaN
+        DataFrame::DataFrame df_null(
+            ({"v": 1.0}, {"v": NOTHING}, {"v": 3.0}));
+        list<auto> vec_null = df_null.toVector("v");
+        assertEq(1.0, vec_null[0], "toVector null: first");
+        # NaN check: NaN != NaN
+        assertTrue(vec_null[1] != vec_null[1], "toVector null: NaN for NOTHING");
+        assertEq(3.0, vec_null[2], "toVector null: third");
+    }
+
+    dbQueryTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Skip if no database connection available
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            testSkip("QORE_DB_CONNSTR_PGSQL not set");
+        }
+
+        # Test with a simple query
+        Datasource ds(connstr);
+        ds.open();
+        on_exit {
+            ds.close();
+        }
+
+        # Create a temp table, insert data, query into DataFrame
+        ds.exec("CREATE TEMP TABLE df_test (id int, name text, score float)");
+        ds.exec("INSERT INTO df_test VALUES (1, 'Alice', 95.5)");
+        ds.exec("INSERT INTO df_test VALUES (2, 'Bob', 88.0)");
+        ds.exec("INSERT INTO df_test VALUES (3, 'Carol', 92.0)");
+        ds.commit();
+
+        auto df = DataFrame::DataFrame::fromQuery(ds, "SELECT * FROM df_test ORDER BY id");
+        assertEq(3, df.numRows(), "DB query row count");
+        assertEq(3, df.numCols(), "DB query col count");
+
+        # Verify data
+        list<auto> ids = df.getColumn("id");
+        assertEq(3, ids.size(), "DB query id column size");
+
+        # toTable round-trip
+        ds.exec("CREATE TEMP TABLE df_test_out (id int, name text, score float)");
+        df.toTable(ds, "df_test_out");
+        ds.commit();
+
+        auto df2 = DataFrame::DataFrame::fromQuery(ds,
+            "SELECT * FROM df_test_out ORDER BY id");
+        assertEq(3, df2.numRows(), "toTable round-trip rows");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "toTable round-trip names");
+    }
+
+    csvMissingValuesTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        string csv_path = get_script_dir() + "/data/test_missing.csv";
+        auto df = DataFrame::DataFrame::readCSV(csv_path);
+
+        assertEq(4, df.numRows(), "CSV missing rows");
+
+        # Row 2 (index 1): value is empty → null
+        list<auto> vals = df.getColumn("value");
+        assertEq(10.5, vals[0], "CSV first value present");
+        assertEq(NOTHING, vals[1], "CSV empty cell is null");
+        assertEq(30.0, vals[2], "CSV third value present");
+        assertEq(NOTHING, vals[3], "CSV 'NA' is null");
+
+        # Row 3 (index 2): label is empty → null
+        list<auto> labels = df.getColumn("label");
+        assertEq("A", labels[0], "CSV first label");
+        assertEq(NOTHING, labels[2], "CSV empty label is null");
+    }
+}

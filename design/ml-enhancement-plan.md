@@ -3,14 +3,25 @@
 ## Overview
 
 This document describes the phased plan to build Qore into an enterprise data science
-platform. Phases 1–7 are **complete** and delivered the ML foundation: 17 algorithms,
-preprocessing, metrics, serialization, model registry, and HuggingFace tokenization.
-Phases 8–14 extend this into a competitive enterprise alternative to Python's data
-science ecosystem.
+platform. Phases 1–7 are **complete** (ML foundation: 17 algorithms, preprocessing,
+metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
+**complete** (DataFrame module with SQL-like operations, CSV/Parquet/DB I/O, ML
+integration, DataProvider wrapper). Phase 9 is **complete** (DecisionTree, RandomForest, GradientBoostedTrees with
+6 DataProvider processors, GBT multiclass softmax, typed predict API).
+Phase 10 is **complete** (SVM, NaiveBayes).
+Phase 11 is **complete** (statistical functions with Cephes incbet).
+Phase 12 is **complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
+PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
+Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley, DDM;
+13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
+DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
+Phase 14 is **in progress** (14.3 vector similarity functions complete —
+remaining: Arrow/Parquet, ONNX export, LLM embedding pipeline, tokenizer C API).
 
-## Current State (after Phases 1–7)
+## Current State (after Phases 1–9)
 
-- **ml module**: 17 native algorithms (IsolationForest, LOF, DBSCAN, KMeans, GMM,
+- **ml module**: 22 native algorithms (Phase 9: DecisionTree, RandomForest,
+  GradientBoostedTrees with shared FlatTree CART engine; Phase 10: SVM, NaiveBayes) (IsolationForest, LOF, DBSCAN, KMeans, GMM,
   LinearRegression, LogisticRegression, KNN, HoltWinters, SeasonalDecomposition, PCA,
   StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator) + OnnxModel +
   classification/regression/clustering metrics + native serialization + online learning
@@ -1230,7 +1241,7 @@ Phase 7 (Tokenizer enhancements) ✅ — independent of Phases 1–6
 
 ---
 
-## Phase 8: DataFrame / Columnar Data Abstraction
+## Phase 8: DataFrame / Columnar Data Abstraction ✅ COMPLETE
 
 ### Motivation
 
@@ -1362,7 +1373,25 @@ DataFrame predictions = model.predictDataFrame(df.select(feature_columns));
 
 ---
 
-## Phase 9: Tree-Based Algorithms
+## Phase 9: Tree-Based Algorithms ✅ CORE COMPLETE
+
+### Status
+
+Core algorithms implemented: DecisionTree, RandomForest, GradientBoostedTrees with
+shared FlatTree CART engine, full serialization, feature importance, and tests.
+20 new test cases, 75 new assertions.
+
+**Remaining items:**
+- GBT multiclass: currently uses simplified nearest-class-to-raw-prediction; proper
+  softmax with K sets of trees per round needed for calibrated multiclass probabilities
+- DataProvider processors: decision-tree-classification, decision-tree-regression,
+  random-forest-classification, random-forest-regression, gbt-classification,
+  gbt-regression (6 processor files + MLProcessorsDataProvider + DataProviderML.qm
+  registration)
+- `findBestSplit()` performance: creates new index vectors per candidate threshold;
+  pre-sorted index optimization would reduce allocation pressure for large datasets
+- DecisionTree `fit()` has no cancellation check inside the recursive tree build;
+  acceptable since bounded by max_depth but could be improved for very deep trees
 
 ### Motivation
 
@@ -1453,7 +1482,7 @@ class QoreGBT : public AbstractPrivateData {
 
 ---
 
-## Phase 10: Additional Classifiers — SVM and Naive Bayes
+## Phase 10: Additional Classifiers — SVM and Naive Bayes ✅ COMPLETE
 
 ### Motivation
 
@@ -1494,7 +1523,7 @@ class QoreNaiveBayes : public AbstractPrivateData {
 
 ---
 
-## Phase 11: Statistical Functions
+## Phase 11: Statistical Functions ✅ COMPLETE
 
 ### Motivation
 
@@ -1660,6 +1689,32 @@ Build on the tokenizer module:
 - **ONNX inference pipeline processor** (deferred 7.7): chains tokenizer → ONNX model
   → output in a DataProvider processor
 - **Prompt templating**: structured prompt construction for LLM API calls
+
+#### 14.4 Tokenizer Module C API for Cross-Module Integration
+
+The tokenizer binary module (`QoreTokenizer::QoreHFTokenizer` in `modules/tokenizer/src/`)
+currently has no `extern "C"` API. To allow the ml module's `TextFeatures` (and future
+NLP classes) to use BPE/WordPiece/Unigram tokenization via `dlsym()`, add a C-linkage
+API to the tokenizer module:
+
+```c
+extern "C" {
+    // Create a tokenizer from a JSON config string; returns opaque handle
+    void* qore_tokenizer_create(const char* json_config, int json_len, char** error);
+    // Tokenize text; returns array of token strings
+    char** qore_tokenizer_tokenize(void* handle, const char* text, int text_len, int* count);
+    // Free token array
+    void qore_tokenizer_free_tokens(char** tokens, int count);
+    // Destroy tokenizer
+    void qore_tokenizer_destroy(void* handle);
+}
+```
+
+The ml module would `dlsym()` these symbols at runtime from the loaded tokenizer module
+(similar to how optional ONNX Runtime support works). When available, `TextFeatures`
+would use the tokenizer module for subword tokenization instead of the built-in
+whitespace splitter. This enables multilingual text, subword vocabulary, and
+HuggingFace-compatible tokenization in ML feature pipelines.
 
 ---
 

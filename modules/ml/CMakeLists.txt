@@ -86,6 +86,22 @@ set(ML_QPP_SRC
     src/QC_Imputer.qpp
     src/QC_MLPipeline.qpp
     src/QC_CrossValidator.qpp
+    src/QC_DecisionTree.qpp
+    src/QC_RandomForest.qpp
+    src/QC_GradientBoostedTrees.qpp
+    src/QC_SVM.qpp
+    src/QC_NaiveBayes.qpp
+    src/QC_OneHotEncoder.qpp
+    src/QC_LabelEncoder.qpp
+    src/QC_VarianceThreshold.qpp
+    src/QC_PolynomialFeatures.qpp
+    src/QC_SelectKBest.qpp
+    src/QC_RFE.qpp
+    src/QC_ADWIN.qpp
+    src/QC_PageHinkley.qpp
+    src/QC_DDM.qpp
+    src/QC_TextFeatures.qpp
+    src/QC_DateTimeFeatures.qpp
     src/ql_ml.qpp
 )
 
@@ -111,6 +127,24 @@ set(ML_CPP_SRC
     src/MLPipeline.cpp
     src/ml_metrics.cpp
     src/CrossValidator.cpp
+    src/FlatTree.cpp
+    src/DecisionTree.cpp
+    src/RandomForest.cpp
+    src/GradientBoostedTrees.cpp
+    src/SVM.cpp
+    src/NaiveBayes.cpp
+    src/ml_stats.cpp
+    src/OneHotEncoder.cpp
+    src/LabelEncoder.cpp
+    src/VarianceThreshold.cpp
+    src/PolynomialFeatures.cpp
+    src/SelectKBest.cpp
+    src/RFE.cpp
+    src/ADWIN.cpp
+    src/PageHinkley.cpp
+    src/DDM.cpp
+    src/TextFeatures.cpp
+    src/DateTimeFeatures.cpp
 )
 
 # Conditional ONNX Runtime support

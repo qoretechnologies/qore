@@ -1,0 +1,127 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DateTimeFeatures.qpp
+
+    Qore DateTimeFeatures class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_DateTimeFeatures.h"
+
+//! Extracts numeric features from date/datetime values for use in ML models
+/** For example, extract day_of_week and hour from timestamps to predict delivery
+    times -- the model can learn that Mondays at 9am have different patterns than
+    Saturdays at 3pm.
+
+    This is a stateless transformer: no fit() is needed. The constructor configures
+    which date components to extract, and transform() produces numeric output from
+    date input.
+
+    Supported features: \c "year", \c "month", \c "day", \c "hour", \c "minute",
+    \c "second", \c "day_of_week" (0=Sunday..6=Saturday), \c "day_of_year",
+    \c "quarter" (1-4), \c "is_weekend" (0 or 1), \c "week_of_year".
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::DateTimeFeatures dtf({"features": ("month", "day_of_week", "hour", "is_weekend")});
+    list<auto> result = dtf.transform((2026-03-25T09:30:00, 2026-03-28T15:00:00));
+    # result[0] = (3.0, 3.0, 9.0, 0.0)   # March, Wednesday, 9am, weekday
+    # result[1] = (3.0, 6.0, 15.0, 1.0)   # March, Saturday, 3pm, weekend
+    @endcode
+
+    @since ml 1.0
+*/
+qclass DateTimeFeatures [arg=QoreDateTimeFeatures* dtf; ns=Qore::ML; flags=final];
+
+//! Creates a DateTimeFeatures transformer
+/** @param options optional hash with:
+    - \c features (list<string>): which date components to extract.
+      Default: ("month", "day", "hour", "day_of_week", "quarter", "is_weekend").
+      Supported values: "year", "month", "day", "hour", "minute", "second",
+      "day_of_week", "day_of_year", "quarter", "is_weekend", "week_of_year".
+
+    @throw ML-DATETIMEFEATURES-ERROR if an invalid feature name is specified
+*/
+DateTimeFeatures::constructor(*hash<auto> options) {
+    std::vector<std::string> features;
+    if (options) {
+        QoreValue v = options->getKeyValue("features");
+        if (v.getType() == NT_LIST) {
+            const QoreListNode* flist = v.get<const QoreListNode>();
+            for (size_t i = 0; i < flist->size(); ++i) {
+                QoreValue fv = flist->retrieveEntry(i);
+                if (fv.getType() == NT_STRING) {
+                    features.push_back(fv.get<const QoreStringNode>()->c_str());
+                } else {
+                    xsink->raiseException("ML-DATETIMEFEATURES-ERROR",
+                        "feature list element %d is not a string", (int)i);
+                    return;
+                }
+            }
+        } else if (!v.isNullOrNothing()) {
+            xsink->raiseException("ML-DATETIMEFEATURES-ERROR",
+                "'features' option must be a list of strings");
+            return;
+        }
+    }
+
+    // Default features if none specified
+    if (features.empty()) {
+        features = {"month", "day", "hour", "day_of_week", "quarter", "is_weekend"};
+    }
+
+    if (!QoreDateTimeFeatures::validateFeatures(features, xsink)) {
+        return;
+    }
+
+    self->setPrivate(CID_DATETIMEFEATURES, new QoreDateTimeFeatures(features));
+}
+
+//! DateTimeFeatures objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+DateTimeFeatures::copy() {
+    xsink->raiseException("COPY-ERROR", "DateTimeFeatures objects cannot be copied");
+}
+
+//! Extracts numeric features from a list of date/datetime values
+/** @param dates a list of date/datetime values
+    @return a list of list<float>, one row per input date, with one column per
+    configured feature
+
+    @par Example:
+    @code{.py}
+    list<auto> result = dtf.transform((2026-01-15T10:30:00, 2026-07-04T18:00:00));
+    @endcode
+
+    @throw ML-DATETIMEFEATURES-ERROR if the input list is empty
+*/
+list<auto> DateTimeFeatures::transform(list<auto> dates) {
+    return dtf->transform(dates, xsink);
+}
+
+//! Returns the list of output feature names
+/** @return a list of string feature names in the order they appear in transform() output
+*/
+list<string> DateTimeFeatures::getOutputFeatureNames() {
+    return dtf->getOutputFeatureNames(xsink);
+}
+
+//! Returns the number of output features per date
+/** @return the number of features extracted from each date value
+*/
+int DateTimeFeatures::getNumOutputFeatures() [flags=CONSTANT] {
+    return dtf->getNumOutputFeatures();
+}
+
+//! Returns True (this is a stateless transformer, always "fitted")
+/** @return always True
+*/
+bool DateTimeFeatures::isFitted() [flags=CONSTANT] {
+    return true;
+}

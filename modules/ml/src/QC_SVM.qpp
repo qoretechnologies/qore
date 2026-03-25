@@ -1,0 +1,170 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SVM.qpp
+
+    Qore SVM class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_SVM.h"
+#include "ml_common.h"
+
+extern const TypedHashDecl* hashdeclSVMResult;
+
+//! Support Vector Machine for classification
+/** Implements the SMO algorithm with linear and RBF kernels.
+    Binary classification uses a single model; multiclass uses one-vs-one voting.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::SVM svm({"C": 1.0, "kernel": "rbf"});
+    svm.fitMatrix(X_train, y_train);
+    auto result = svm.predictMatrix(X_test);
+    printf("Predicted: %d (confidence %.2f)\n",
+        result[0].predicted_class, result[0].confidence);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass SVM [arg=QoreSVM* svm; ns=Qore::ML; flags=final];
+
+//! Creates an SVM with the given options
+/** @param options a hash with:
+    - \c C (*float): regularization parameter (default 1.0)
+    - \c kernel (*string): "linear" (default) or "rbf"
+    - \c gamma (*float): RBF parameter (default 0 = auto: 1/n_features)
+    - \c tol (*float): convergence tolerance (default 1e-3)
+    - \c max_iter (*int): maximum SMO iterations (default 1000)
+    - \c seed (*int): random seed (default 0 = random)
+
+    @throw ML-SVM-ERROR if options are invalid
+*/
+SVM::constructor(hash<auto> options) {
+    double C = 1.0;
+    std::string kernel = "linear";
+    double gamma = 0.0;
+    int degree = 3;
+    double tol = 1e-3;
+    int max_iter = 1000;
+    int64_t seed = 0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("C");
+        if (!v.isNullOrNothing()) {
+            C = v.getAsFloat();
+            if (C <= 0) {
+                xsink->raiseException("ML-SVM-ERROR", "C must be > 0; got %f", C);
+                return;
+            }
+        }
+        v = options->getKeyValue("kernel");
+        if (v.getType() == NT_STRING) {
+            kernel = v.get<const QoreStringNode>()->c_str();
+            if (kernel != "linear" && kernel != "rbf") {
+                xsink->raiseException("ML-SVM-ERROR",
+                    "kernel must be 'linear' or 'rbf'; got '%s'", kernel.c_str());
+                return;
+            }
+        }
+        v = options->getKeyValue("gamma");
+        if (!v.isNullOrNothing()) { gamma = v.getAsFloat(); }
+        v = options->getKeyValue("tol");
+        if (!v.isNullOrNothing()) { tol = v.getAsFloat(); }
+        v = options->getKeyValue("max_iter");
+        if (!v.isNullOrNothing()) { max_iter = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) { seed = v.getAsBigInt(); }
+    }
+
+    self->setPrivate(CID_SVM, new QoreSVM(C, kernel, gamma, degree, tol, max_iter, seed));
+}
+
+//! SVM objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+SVM::copy() {
+    xsink->raiseException("COPY-ERROR", "SVM objects cannot be copied");
+}
+
+//! Trains on hash records with a target field
+/** @param data list of hash records
+    @param target_field the target column name
+*/
+nothing SVM::fit(list<auto> data, string target_field) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    std::string target = target_field->c_str();
+    int target_idx = -1;
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (field_names[i] == target) { target_idx = (int)i; break; }
+    }
+    if (target_idx < 0) {
+        xsink->raiseException("ML-SVM-ERROR", "target field '%s' not found", target.c_str());
+        return QoreValue();
+    }
+    VectorXd y = matrix.col(target_idx);
+    MatrixXd X(matrix.rows(), matrix.cols() - 1);
+    std::vector<std::string> feature_names;
+    int col = 0;
+    for (int i = 0; i < (int)matrix.cols(); ++i) {
+        if (i != target_idx) {
+            X.col(col) = matrix.col(i);
+            feature_names.push_back(field_names[i]);
+            ++col;
+        }
+    }
+    svm->setFieldNames(feature_names);
+    svm->setTargetField(target);
+    svm->fit(X, y, xsink);
+}
+
+//! Trains on a numeric feature matrix and target vector
+/** @param matrix list of row lists
+    @param target list of target values
+*/
+nothing SVM::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    svm->fit(X, y, xsink);
+}
+
+//! Predicts for a single record hash
+/** @param record a hash with feature fields
+    @return SVMResult hash with predicted_class, decision_value, confidence
+*/
+hash<auto> SVM::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = svm->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-SVM-ERROR",
+            "model was trained with matrix API; use predictMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return svm->predict(point, xsink);
+}
+
+//! Predicts for multiple rows
+/** @param matrix list of row lists
+    @return list of SVMResult hashes
+*/
+list<hash<auto>> SVM::predictMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return svm->predictMatrix(X, xsink);
+}
+
+//! Returns whether the model has been fitted
+/** @return True if fit() or fitMatrix() has been called
+*/
+bool SVM::isFitted() [flags=CONSTANT] {
+    return svm->isFitted();
+}

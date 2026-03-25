@@ -1,0 +1,877 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DataFrame.qpp
+
+    Qore DataFrame class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "QC_DataFrame.h"
+#include "QC_GroupedDataFrame.h"
+#include "df_csv.h"
+
+using namespace QoreDataFrameNS;
+
+//! Columnar DataFrame for typed, SQL-like data manipulation
+/** Provides a column-oriented data structure with typed columns (float64, int64,
+    string, bool, date), null/missing value support, and SQL-like operations.
+
+    @par Example:
+    @code{.py}
+    %requires dataframe
+
+    # Construct from records
+    DataFrame df(
+        ({"name": "Alice", "age": 30, "score": 95.5},
+         {"name": "Bob",   "age": 25, "score": 88.0},
+         {"name": "Carol", "age": 35, "score": 92.0}));
+
+    printf("Shape: %y\n", df.shape());
+    printf("Columns: %y\n", df.columnNames());
+    printf("%s\n", df.toString());
+    @endcode
+
+    @since dataframe 1.0
+*/
+qclass DataFrame [arg=QoreDataFrame* df; ns=Qore::DataFrame; flags=final];
+
+//! Creates an empty DataFrame
+/** Creates a DataFrame with no rows and no columns.
+*/
+DataFrame::constructor() {
+    self->setPrivate(CID_DATAFRAME, new QoreDataFrame());
+}
+
+//! Creates a DataFrame from a list of record hashes
+/** @param records a list of hashes where each hash is a row; column names
+    and types are inferred from the data
+
+    @throw DATAFRAME-ERROR if records contain non-hash elements or are inconsistent
+*/
+DataFrame::constructor(list<auto> records) {
+    QoreDataFrame* dataframe = QoreDataFrame::fromRecords(records, xsink);
+    if (!dataframe) {
+        return;
+    }
+    self->setPrivate(CID_DATAFRAME, dataframe);
+}
+
+//! Creates a DataFrame from a hash of column lists
+/** @param columns a hash where keys are column names and values are lists
+    of column values; all lists must have the same length
+
+    @throw DATAFRAME-ERROR if column lengths are inconsistent
+*/
+DataFrame::constructor(hash<auto> columns) {
+    QoreDataFrame* dataframe = QoreDataFrame::fromColumns(columns, xsink);
+    if (!dataframe) {
+        return;
+    }
+    self->setPrivate(CID_DATAFRAME, dataframe);
+}
+
+//! DataFrames cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+DataFrame::copy() {
+    xsink->raiseException("COPY-ERROR", "DataFrame objects cannot be copied");
+}
+
+//! Returns the number of rows
+/** @return the row count
+*/
+int DataFrame::numRows() [flags=CONSTANT] {
+    return df->numRows();
+}
+
+//! Returns the number of columns
+/** @return the column count
+*/
+int DataFrame::numCols() [flags=CONSTANT] {
+    return df->numCols();
+}
+
+//! Returns the list of column names
+/** @return list of column name strings
+*/
+list<string> DataFrame::columnNames() [flags=CONSTANT] {
+    return df->columnNames(xsink);
+}
+
+//! Returns the list of column type names
+/** @return list of type name strings (e.g. "float64", "int64", "string")
+*/
+list<string> DataFrame::dtypes() [flags=CONSTANT] {
+    return df->dtypes(xsink);
+}
+
+//! Returns the shape as a hash with "rows" and "cols" keys
+/** @return hash with "rows" and "cols" integer values
+*/
+hash<auto> DataFrame::shape() [flags=CONSTANT] {
+    return df->shape(xsink);
+}
+
+//! Returns a column's values as a list
+/** @param name the column name
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+*/
+list<auto> DataFrame::getColumn(string name) [flags=RET_VALUE_ONLY] {
+    return df->getColumn(name->c_str(), xsink);
+}
+
+//! Returns a row as a hash
+/** @param index the zero-based row index
+    @throw DATAFRAME-INDEX-ERROR if index out of range
+*/
+hash<auto> DataFrame::getRow(int index) [flags=RET_VALUE_ONLY] {
+    return df->getRow(index, xsink);
+}
+
+//! Returns the first n rows as a new DataFrame (default 5)
+/** @param n number of rows (default 5)
+    @return new DataFrame object with the first n rows
+
+    @par Example:
+    @code{.py}
+    auto top3 = df.head(3);
+    printf("Top 3: %d rows\n", top3.numRows());
+    @endcode
+*/
+auto DataFrame::head(*int n) [flags=RET_VALUE_ONLY] {
+    int64_t rows = n ? (int64_t)n : 5;
+    QoreDataFrame* result = df->head(rows, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    // Wrap in a new Qore DataFrame object
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns the last n rows as a new DataFrame (default 5)
+/** @param n number of rows (default 5)
+    @return new DataFrame object with the last n rows
+*/
+auto DataFrame::tail(*int n) [flags=RET_VALUE_ONLY] {
+    int64_t rows = n ? (int64_t)n : 5;
+    QoreDataFrame* result = df->tail(rows, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a row slice [start, end) as a new DataFrame
+/** @param start the starting row index (inclusive)
+    @param end the ending row index (exclusive)
+    @return new DataFrame object with the specified row range
+*/
+auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->slice(start, end, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Extracts numeric columns as a matrix for ML algorithms
+/** @param columns optional list of column names (default: all numeric columns)
+    @return list of row lists (list<list<float>>); null values become NaN
+
+    The output format is compatible with ML module's fitMatrix() method.
+
+    @par Example:
+    @code{.py}
+    list<auto> matrix = df.toMatrix(("feature1", "feature2"));
+    model.fitMatrix(matrix, df.toVector("target"));
+    @endcode
+
+    @throw DATAFRAME-ERROR if a specified column is not numeric
+*/
+list<auto> DataFrame::toMatrix(*list<string> columns) [flags=RET_VALUE_ONLY] {
+    return df->toMatrix(columns, xsink);
+}
+
+//! Extracts a single numeric column as a flat list for ML algorithms
+/** @param column the column name
+    @return list of float values; null values become NaN
+
+    @par Example:
+    @code{.py}
+    list<auto> target = df.toVector("price");
+    @endcode
+
+    @throw DATAFRAME-ERROR if the column is not numeric
+*/
+list<auto> DataFrame::toVector(string column) [flags=RET_VALUE_ONLY] {
+    return df->toVector(column->c_str(), xsink);
+}
+
+//! Creates a DataFrame from a numeric matrix and column names
+/** @param matrix list of row lists (list<list<float>>)
+    @param column_names optional list of column names
+
+    @return new DataFrame with float64 columns
+
+    @par Example:
+    @code{.py}
+    auto df = DataFrame::fromMatrix(
+        ((1.0, 2.0), (3.0, 4.0)), ("x", "y"));
+    @endcode
+*/
+static auto DataFrame::fromMatrix(list<auto> matrix, *list<string> column_names) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::fromMatrix(matrix, column_names, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Joins this DataFrame with another on shared key columns
+/** @param other the right-side DataFrame
+    @param on list of column names to join on (must exist in both DataFrames)
+    @param how join type: "inner" (default), "left", "right", "outer", "cross"
+
+    For non-key columns with the same name in both DataFrames, the right-side
+    column is suffixed with "_right".
+
+    @return new DataFrame object with joined rows
+
+    @par Example:
+    @code{.py}
+    DataFrame orders(
+        ({"order_id": 1, "customer_id": 10, "amount": 99.0},
+         {"order_id": 2, "customer_id": 20, "amount": 50.0}));
+    DataFrame customers(
+        ({"customer_id": 10, "name": "Alice"},
+         {"customer_id": 20, "name": "Bob"}));
+
+    auto joined = orders.join(customers, ("customer_id",));
+    # Result: order_id, customer_id, amount, name
+    @endcode
+
+    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
+
+*/
+auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* other = static_cast<QoreDataFrame*>(
+        other_obj->getReferencedPrivateData(CID_DATAFRAME, xsink));
+    if (!other) {
+        xsink->raiseException("DATAFRAME-JOIN-ERROR",
+            "argument is not a DataFrame object");
+        return QoreValue();
+    }
+    std::string how_str = how ? how->c_str() : "inner";
+    QoreDataFrame* result = df->join(other, on, how_str, xsink);
+    other->deref(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Groups the DataFrame by the specified columns for aggregation
+/** @param columns list of column names to group by
+    @return a GroupedDataFrame object for calling agg(), count(), sum(), mean()
+
+    @par Example:
+    @code{.py}
+    auto gdf = df.groupBy(("dept",));
+    auto means = gdf.agg({"salary": "mean"});
+    auto counts = gdf.count();
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if a column name is not found
+
+*/
+auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
+    // Convert column name list to std::vector
+    std::vector<std::string> col_names;
+    for (size_t i = 0; i < columns->size(); ++i) {
+        const QoreStringNode* s = columns->retrieveEntry(i).get<const QoreStringNode>();
+        if (s) {
+            col_names.push_back(s->c_str());
+        }
+    }
+    QoreGroupedDataFrame* gdf_result = new QoreGroupedDataFrame(df, col_names, xsink);
+    if (*xsink) {
+        delete gdf_result;
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(
+        new QoreObject(QC_GROUPEDDATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_GROUPEDDATAFRAME, gdf_result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with only the specified columns
+/** @param columns list of column names to select
+    @return new DataFrame object with the selected columns
+
+    @par Example:
+    @code{.py}
+    auto nums = df.select(("age", "score"));
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if a column name is not found
+
+*/
+auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->select(columns, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with rows matching the condition
+/** @param column the column name to filter on
+    @param op the comparison operator: "==", "!=", "<", "<=", ">", ">=",
+    "contains", "startswith", "endswith", "is_null", "not_null"
+    @param value the value to compare against
+
+    @return new DataFrame object with matching rows
+
+    @par Example:
+    @code{.py}
+    auto adults = df.filter("age", ">=", 18);
+    auto bobs = df.filter("name", "==", "Bob");
+    auto has_score = df.filter("score", "not_null", 0);
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+
+*/
+auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame sorted by the specified columns
+/** @param columns list of column names to sort by
+    @param ascending optional list of booleans (True = ascending, default True)
+
+    @return new DataFrame object with sorted rows
+
+    @par Example:
+    @code{.py}
+    auto sorted = df.sortBy(("age",));
+    auto desc = df.sortBy(("score",), (False,));
+    auto multi = df.sortBy(("dept", "salary"), (True, False));
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+
+*/
+auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->sortBy(columns, ascending, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with null values replaced by the given value
+/** @param value the replacement value (converted to each column's type)
+    @return new DataFrame object with nulls filled
+
+    @par Example:
+    @code{.py}
+    auto filled = df.fillna(0);
+    @endcode
+
+*/
+auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->fillna(value, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with rows containing any null values removed
+/** @return new DataFrame object with no null values
+
+    @par Example:
+    @code{.py}
+    auto clean = df.dropna();
+    @endcode
+
+*/
+auto DataFrame::dropna() [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->dropna(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Converts the DataFrame to a list of record hashes
+/** @return list<hash<auto>> where each element is one row
+*/
+list<hash<auto>> DataFrame::toRecords() [flags=RET_VALUE_ONLY] {
+    return df->toRecords(xsink);
+}
+
+//! Converts the DataFrame to a hash of column lists
+/** @return hash<auto> where keys are column names, values are lists
+*/
+hash<auto> DataFrame::toColumnHash() [flags=RET_VALUE_ONLY] {
+    return df->toColumnHash(xsink);
+}
+
+//! Returns per-column descriptive statistics
+/** @return list of ColumnStats hashes with count, mean, std, min, max, quartiles
+*/
+list<auto> DataFrame::describe() [flags=RET_VALUE_ONLY] {
+    return df->describe(xsink);
+}
+
+//! Returns a string representation for display
+/** @param max_rows maximum number of rows to show (default 10)
+*/
+string DataFrame::toString(*int max_rows) [flags=RET_VALUE_ONLY] {
+    int64_t rows = max_rows ? (int64_t)max_rows : 10;
+    return df->toString(rows, xsink);
+}
+
+//! Adds a new column to the DataFrame (in-place)
+/** @param name the column name
+    @param data a list of values for the column (must match row count)
+    @throw DATAFRAME-COLUMN-ERROR if column already exists or row count mismatch
+*/
+nothing DataFrame::addColumn(string name, list<auto> data) {
+    df->addColumn(name->c_str(), data, xsink);
+}
+
+//! Removes a column from the DataFrame (in-place)
+/** @param name the column name to remove
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+*/
+nothing DataFrame::dropColumn(string name) {
+    df->dropColumn(name->c_str(), xsink);
+}
+
+//! Renames a column (in-place)
+/** @param old_name the current column name
+    @param new_name the new column name
+    @throw DATAFRAME-COLUMN-ERROR if old column not found or new name already exists
+*/
+nothing DataFrame::renameColumn(string old_name, string new_name) {
+    df->renameColumn(old_name->c_str(), new_name->c_str(), xsink);
+}
+
+//! Reads a CSV file into a new DataFrame
+/** @param path the file path to read
+    @param options optional CsvOptions hash controlling separator, quoting, headers, etc.
+
+    @return new DataFrame object with inferred column types
+
+    Column types are inferred from the data: integers → int64, decimals → float64,
+    otherwise → string. Empty cells and recognized null strings ("NA", "NULL", "None")
+    are treated as null values.
+
+    @par Example:
+    @code{.py}
+    auto df = DataFrame::readCSV("/path/to/data.csv");
+    auto tsv = DataFrame::readCSV("data.tsv", {"separator": "\t"});
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened
+
+*/
+static auto DataFrame::readCSV(string path, *hash<auto> options) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::readCSV(path->c_str(), options, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Writes the DataFrame to a CSV file
+/** @param path the file path to write
+    @param options optional CsvOptions hash controlling separator
+
+    @par Example:
+    @code{.py}
+    df.writeCSV("/path/to/output.csv");
+    df.writeCSV("output.tsv", {"separator": "\t"});
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+
+*/
+nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
+    df->writeCSV(path->c_str(), options, xsink);
+}
+
+//! Creates a DataFrame from a SQL query result
+/** @param ds a Datasource or DatasourcePool object
+    @param sql the SQL SELECT query to execute
+    @param args optional bind arguments for the query
+
+    Calls the datasource's \c select() method, which returns a column-oriented
+    hash of lists, and builds a DataFrame from the result.
+
+    @return new DataFrame object with query results
+
+    @par Example:
+    @code{.py}
+    Datasource ds("pgsql:user/pass@mydb%localhost");
+    ds.open();
+    auto df = DataFrame::fromQuery(ds,
+        "SELECT name, age, salary FROM employees WHERE dept = %v", ("sales",));
+    printf("Loaded %d rows\n", df.numRows());
+    @endcode
+
+    @throw DATAFRAME-DB-ERROR if the query fails or returns unexpected results
+*/
+static auto DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [dom=DATABASE; flags=RET_VALUE_ONLY] {
+    if (qore_check_cancel(xsink, "executing query for DataFrame")) {
+        return QoreValue();
+    }
+
+    // Call ds.select(sql, bind_args...) via Qore method dispatch
+    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+    call_args->push(sql->refSelf(), xsink);
+    if (bind_args) {
+        // Flatten bind args into the call
+        for (size_t i = 0; i < bind_args->size(); ++i) {
+            call_args->push(bind_args->retrieveEntry(i).refSelf(), xsink);
+        }
+    }
+
+    QoreValue result = ds->evalMethod("select", *call_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreDataFrame* df_result = nullptr;
+    if (result.getType() == NT_HASH) {
+        // Column-oriented: {"col1": (v1, v2, ...), ...}
+        df_result = QoreDataFrame::fromColumns(result.get<const QoreHashNode>(), xsink);
+    } else if (result.getType() == NT_LIST) {
+        // Row-oriented: ({"col1": v1, ...}, ...)
+        df_result = QoreDataFrame::fromRecords(result.get<const QoreListNode>(), xsink);
+    } else if (result.isNullOrNothing()) {
+        df_result = new QoreDataFrame();
+    } else {
+        xsink->raiseException("DATAFRAME-DB-ERROR",
+            "unexpected query result type: %s", result.getTypeName());
+    }
+    result.discard(xsink);
+
+    if (!df_result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, df_result);
+    return obj.release();
+}
+
+//! Reads a Parquet file into a new DataFrame
+/** @param path the Parquet file path
+
+    Requires Apache Arrow to be installed. If Arrow is not available, throws
+    \c MISSING-FEATURE-ERROR.
+
+    @return new DataFrame object with Parquet data
+
+    @par Example:
+    @code{.py}
+    auto df = DataFrame::readParquet("/data/sales.parquet");
+    printf("Loaded %d rows, %d cols\n", df.numRows(), df.numCols());
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened or parsed
+    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
+*/
+static auto DataFrame::readParquet(string path) [dom=FILESYSTEM; flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = QoreDataFrame::readParquet(path->c_str(), xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Writes the DataFrame to a Parquet file
+/** @param path the Parquet file path
+
+    Requires Apache Arrow to be installed. If Arrow is not available, throws
+    \c MISSING-FEATURE-ERROR.
+
+    @par Example:
+    @code{.py}
+    df.writeParquet("/data/output.parquet");
+    @endcode
+
+    @throw DATAFRAME-IO-ERROR if the file cannot be opened for writing
+    @throw MISSING-FEATURE-ERROR if Apache Arrow is not installed
+*/
+nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
+    df->writeParquet(path->c_str(), xsink);
+}
+
+//! Inserts DataFrame rows into a database table
+/** @param ds a Datasource or DatasourcePool object
+    @param table_name the target table name
+    @param options optional hash: \c commit_interval (int, default 1000 — commit every N rows)
+
+    Generates INSERT statements with bind placeholders and executes one per row.
+    Column names from the DataFrame are used as the column list.
+
+    @par Example:
+    @code{.py}
+    Datasource ds("pgsql:user/pass@mydb%localhost");
+    ds.open();
+    df.toTable(ds, "employees");
+    ds.commit();
+    @endcode
+
+    @throw DATAFRAME-DB-ERROR if the INSERT fails
+*/
+nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
+    if (qore_check_cancel(xsink, "writing DataFrame to table")) {
+        return QoreValue();
+    }
+
+    int64_t n_rows_val = df->numRows();
+    int64_t n_cols_val = df->numCols();
+    if (n_rows_val == 0 || n_cols_val == 0) {
+        return QoreValue();
+    }
+
+    // Get column names
+    ReferenceHolder<QoreListNode> col_names_list(df->columnNames(xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Build INSERT SQL: INSERT INTO table (col1, col2, ...) VALUES (%v, %v, ...)
+    QoreStringNode* sql = new QoreStringNode("INSERT INTO ");
+    sql->concat(table_name->c_str());
+    sql->concat(" (");
+    for (int64_t c = 0; c < n_cols_val; ++c) {
+        if (c > 0) {
+            sql->concat(", ");
+        }
+        const QoreStringNode* cname = col_names_list->retrieveEntry(c)
+            .get<const QoreStringNode>();
+        if (cname) {
+            sql->concat(cname->c_str());
+        }
+    }
+    sql->concat(") VALUES (");
+    for (int64_t c = 0; c < n_cols_val; ++c) {
+        if (c > 0) {
+            sql->concat(", ");
+        }
+        sql->concat("%v");
+    }
+    sql->concat(")");
+    SimpleRefHolder<QoreStringNode> sql_holder(sql);
+
+    // Parse commit interval
+    int64_t commit_interval = 1000;
+    if (options) {
+        QoreValue ci = options->getKeyValue("commit_interval");
+        if (!ci.isNullOrNothing()) {
+            commit_interval = ci.getAsBigInt();
+        }
+    }
+
+    // Insert rows one at a time via exec()
+    for (int64_t r = 0; r < n_rows_val; ++r) {
+        // Periodic cancellation check
+        if ((r % 10000) == 0 && r > 0) {
+            if (qore_check_cancel(xsink, "writing DataFrame to table")) {
+                return QoreValue();
+            }
+        }
+
+        // Get row values
+        ReferenceHolder<QoreHashNode> row(df->getRow(r, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        // Build call args: (sql, val1, val2, ...)
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(sql->refSelf(), xsink);
+
+        ConstHashIterator hi(*row);
+        while (hi.next()) {
+            call_args->push(hi.get().refSelf(), xsink);
+        }
+
+        // Execute INSERT
+        QoreValue result = ds->evalMethod("exec", *call_args, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        result.discard(xsink);
+    }
+
+    return QoreValue();
+}
+
+//! Returns a new DataFrame with an added or replaced column
+/** @param name column name (replaces if already exists)
+    @param data list of values (must match row count)
+    @return new DataFrame object
+
+    @par Example:
+    @code{.py}
+    auto df2 = df.withColumn("rank", df.rowNumber({"order_by": ("score",)}));
+    @endcode
+
+*/
+auto DataFrame::withColumn(string name, list<auto> data) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->withColumn(name->c_str(), data, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Pivots from long to wide format
+/** @param index_col column to use as row index
+    @param columns_col column whose unique values become output columns
+    @param values_col column with values to aggregate
+    @param agg_func aggregation function: "sum" (default) or "mean"
+    @return new DataFrame in wide format
+
+    @par Example:
+    @code{.py}
+    # Long: name, metric, value → Wide: name, metric1, metric2
+    auto wide = df.pivot("name", "metric", "value");
+    @endcode
+
+*/
+auto DataFrame::pivot(string index_col, string columns_col, string values_col, *string agg_func) [flags=RET_VALUE_ONLY] {
+    std::string func = agg_func ? agg_func->c_str() : "sum";
+    QoreDataFrame* result = df->pivot(index_col->c_str(), columns_col->c_str(),
+        values_col->c_str(), func, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Melts from wide to long format (unpivot)
+/** @param id_vars columns to keep as identifier variables
+    @param value_vars columns to unpivot (default: all non-id columns)
+    @param var_name name for the variable column (default "variable")
+    @param value_name name for the value column (default "value")
+    @return new DataFrame in long format
+
+    @par Example:
+    @code{.py}
+    auto long_df = df.melt(("name",), ("score", "age"), "metric", "value");
+    @endcode
+
+*/
+auto DataFrame::melt(list<string> id_vars, *list<string> value_vars, *string var_name, *string value_name) [flags=RET_VALUE_ONLY] {
+    std::string vn = var_name ? var_name->c_str() : "variable";
+    std::string val_n = value_name ? value_name->c_str() : "value";
+    QoreDataFrame* result = df->melt(id_vars, value_vars, vn, val_n, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns row numbers within optional partitions (window function)
+/** @param spec optional WindowSpec hash with partition_by, order_by, ascending
+    @return list of integers (1-based row numbers)
+
+    @par Example:
+    @code{.py}
+    list<int> rn = df.rowNumber({"partition_by": ("dept",), "order_by": ("salary",)});
+    auto df2 = df.withColumn("row_num", rn);
+    @endcode
+
+*/
+list<int> DataFrame::rowNumber(*hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->rowNumber(spec, xsink);
+}
+
+//! Returns previous row's value within partitions (window function)
+/** @param column column to access
+    @param offset number of rows to look back (default 1)
+    @param spec optional WindowSpec hash
+    @return list of values (NOTHING at partition boundaries)
+
+*/
+list<auto> DataFrame::lag(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    int64_t off = offset ? (int64_t)offset : 1;
+    return df->lag(column->c_str(), off, spec, xsink);
+}
+
+//! Returns next row's value within partitions (window function)
+/** @param column column to access
+    @param offset number of rows to look ahead (default 1)
+    @param spec optional WindowSpec hash
+    @return list of values (NOTHING at partition boundaries)
+
+*/
+list<auto> DataFrame::lead(string column, *int offset, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    int64_t off = offset ? (int64_t)offset : 1;
+    return df->lead(column->c_str(), off, spec, xsink);
+}
+
+//! Returns cumulative sum within partitions (window function)
+/** @param column numeric column to sum
+    @param spec optional WindowSpec hash
+    @return list of cumulative sums
+
+*/
+list<auto> DataFrame::cumSum(string column, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->cumSum(column->c_str(), spec, xsink);
+}
+
+//! Returns rolling mean within partitions (window function)
+/** @param column numeric column to average
+    @param window_size number of rows in the rolling window
+    @param spec optional WindowSpec hash
+    @return list of rolling mean values (NOTHING when window has no data)
+
+*/
+list<auto> DataFrame::rollingMean(string column, int window_size, *hash<auto> spec) [flags=RET_VALUE_ONLY] {
+    return df->rollingMean(column->c_str(), (int64_t)window_size, spec, xsink);
+}

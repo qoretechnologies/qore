@@ -1,0 +1,153 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_RFE.qpp
+
+    Qore RFE (Recursive Feature Elimination) class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_RFE.h"
+#include "ml_common.h"
+
+//! Recursive Feature Elimination using decision tree importances
+/** Iteratively fits a decision tree, ranks features by importance, removes
+    the least important feature(s), and repeats until the desired number of
+    features remain.
+
+    This is a wrapper-based feature selection method — it uses the model's
+    own assessment of feature importance (Gini/MSE reduction) to select
+    features, which often produces better results than filter methods
+    like VarianceThreshold or SelectKBest.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    # Select the 3 most important features out of 5
+    ML::RFE rfe({"n_features_to_select": 3});
+    rfe.fitMatrix(X_train, y_train);
+    list<auto> X_selected = rfe.transformMatrix(X_test);
+    # X_selected has 3 columns — the most important features
+    list<auto> ranking = rfe.getRanking();
+    # ranking = (1, 2, 1, 1, 3) — rank 1 = selected
+    @endcode
+
+    @since ml 1.0
+*/
+qclass RFE [arg=QoreRFE* rfe; ns=Qore::ML; flags=final];
+
+//! Creates a Recursive Feature Elimination selector
+/** @param options optional hash with:
+    - \c n_features_to_select (int): number of features to keep (default 1)
+    - \c step (int): number of features to remove per iteration (default 1)
+*/
+RFE::constructor(*hash<auto> options) {
+    int n_features_to_select = 1;
+    int step = 1;
+    if (options) {
+        QoreValue v = options->getKeyValue("n_features_to_select");
+        if (!v.isNullOrNothing()) {
+            n_features_to_select = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("step");
+        if (!v.isNullOrNothing()) {
+            step = (int)v.getAsBigInt();
+        }
+    }
+    if (n_features_to_select < 1) {
+        xsink->raiseException("ML-RFE-ERROR",
+            "n_features_to_select must be >= 1, got %d", n_features_to_select);
+        return;
+    }
+    if (step < 1) {
+        xsink->raiseException("ML-RFE-ERROR", "step must be >= 1, got %d", step);
+        return;
+    }
+    self->setPrivate(CID_RFE, new QoreRFE(n_features_to_select, step));
+}
+
+//! RFE objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+RFE::copy() {
+    xsink->raiseException("COPY-ERROR", "RFE objects cannot be copied");
+}
+
+//! Fits by iteratively eliminating features
+/** @param matrix list of row lists (features)
+    @param target list of target values
+*/
+nothing RFE::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    rfe->fit(X, y, xsink);
+}
+
+//! Transforms by selecting only surviving features
+/** @param matrix list of row lists
+    @return list of row lists with only selected features
+*/
+list<auto> RFE::transformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = rfe->transform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in one step
+/** @param matrix list of row lists (features)
+    @param target list of target values
+    @return list of row lists with only selected features
+*/
+list<auto> RFE::fitTransformMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = rfe->fitTransform(X, y, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns whether the selector has been fitted
+/** @return True if fitMatrix() has been called
+*/
+bool RFE::isFitted() [flags=CONSTANT] {
+    return rfe->isFitted();
+}
+
+//! Returns the support mask (True = feature selected, False = eliminated)
+/** @return list of boolean values
+*/
+list<auto> RFE::getSupport() {
+    return rfe->getSupport(xsink);
+}
+
+//! Returns the feature ranking (1 = selected, 2+ = elimination round)
+/** @return list of integer rankings
+*/
+list<int> RFE::getRanking() {
+    return rfe->getRanking(xsink);
+}

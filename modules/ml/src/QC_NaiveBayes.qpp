@@ -1,0 +1,151 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_NaiveBayes.qpp
+
+    Qore NaiveBayes class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_NaiveBayes.h"
+#include "ml_common.h"
+
+extern const TypedHashDecl* hashdeclNaiveBayesResult;
+
+//! Gaussian Naive Bayes classifier
+/** Fast probabilistic classifier that assumes feature independence within each class.
+    Good baseline for text classification and high-dimensional data.
+    Supports online learning via update().
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::NaiveBayes nb();
+    nb.fitMatrix(X_train, y_train);
+    auto result = nb.predictMatrix(X_test);
+    printf("Predicted: %d (prob %.2f)\n",
+        result[0].predicted_class, result[0].max_probability);
+
+    # Online update with new data
+    nb.update(X_new, y_new);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass NaiveBayes [arg=QoreNaiveBayes* nb; ns=Qore::ML; flags=final];
+
+//! Creates a NaiveBayes classifier
+/** @param options optional hash with:
+    - \c var_smoothing (*float): variance smoothing to prevent zero variance (default 1e-9)
+*/
+NaiveBayes::constructor(*hash<auto> options) {
+    double var_smoothing = 1e-9;
+    if (options) {
+        QoreValue v = options->getKeyValue("var_smoothing");
+        if (!v.isNullOrNothing()) {
+            var_smoothing = v.getAsFloat();
+        }
+    }
+    self->setPrivate(CID_NAIVEBAYES, new QoreNaiveBayes(var_smoothing));
+}
+
+//! NaiveBayes objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+NaiveBayes::copy() {
+    xsink->raiseException("COPY-ERROR", "NaiveBayes objects cannot be copied");
+}
+
+//! Trains on hash records with a target field
+/** @param data list of hash records
+    @param target_field the target column name
+*/
+nothing NaiveBayes::fit(list<auto> data, string target_field) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    std::string target = target_field->c_str();
+    int target_idx = -1;
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (field_names[i] == target) { target_idx = (int)i; break; }
+    }
+    if (target_idx < 0) {
+        xsink->raiseException("ML-NAIVE-BAYES-ERROR",
+            "target field '%s' not found", target.c_str());
+        return QoreValue();
+    }
+    VectorXd y = matrix.col(target_idx);
+    MatrixXd X(matrix.rows(), matrix.cols() - 1);
+    std::vector<std::string> feature_names;
+    int col = 0;
+    for (int i = 0; i < (int)matrix.cols(); ++i) {
+        if (i != target_idx) {
+            X.col(col) = matrix.col(i);
+            feature_names.push_back(field_names[i]);
+            ++col;
+        }
+    }
+    nb->setFieldNames(feature_names);
+    nb->setTargetField(target);
+    nb->fit(X, y, xsink);
+}
+
+//! Trains on a numeric feature matrix and target vector
+/** @param matrix list of row lists
+    @param target list of target values
+*/
+nothing NaiveBayes::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    nb->fit(X, y, xsink);
+}
+
+//! Incrementally updates the model with new data
+/** @param matrix list of row lists
+    @param target list of target values
+*/
+nothing NaiveBayes::updateMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    nb->update(X, y, xsink);
+}
+
+//! Predicts for a single record hash
+/** @param record a hash with feature fields
+    @return NaiveBayesResult hash
+*/
+hash<auto> NaiveBayes::predict(hash<auto> record) {
+    const std::vector<std::string>& field_names = nb->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-NAIVE-BAYES-ERROR",
+            "model was trained with matrix API; use predictMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return nb->predict(point, xsink);
+}
+
+//! Predicts for multiple rows
+/** @param matrix list of row lists
+    @return list of NaiveBayesResult hashes
+*/
+list<hash<auto>> NaiveBayes::predictMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return nb->predictMatrix(X, xsink);
+}
+
+//! Returns whether the model has been fitted
+/** @return True if fit() or fitMatrix() has been called
+*/
+bool NaiveBayes::isFitted() [flags=CONSTANT] {
+    return nb->isFitted();
+}

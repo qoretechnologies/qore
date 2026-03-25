@@ -1,0 +1,145 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_PolynomialFeatures.qpp
+
+    Qore PolynomialFeatures class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_PolynomialFeatures.h"
+#include "ml_common.h"
+
+//! Generates polynomial and interaction features from input features
+/** For input features [a, b] with degree=2:
+    - Full polynomial: [1, a, b, a^2, a*b, b^2] (with include_bias)
+    - Interaction only: [1, a, b, a*b] (with include_bias and interaction_only)
+
+    Polynomial features enable linear models to capture non-linear relationships.
+    For example, LinearRegression with degree-2 polynomial features is equivalent
+    to polynomial regression.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::PolynomialFeatures pf({"degree": 2});
+    pf.fitMatrix(((1.0, 2.0), (3.0, 4.0)));
+    list<auto> result = pf.transformMatrix(((1.0, 2.0),));
+    # result = ((1.0, 2.0, 1.0, 2.0, 4.0)) — [a, b, a^2, a*b, b^2]
+    @endcode
+
+    @since ml 1.0
+*/
+qclass PolynomialFeatures [arg=QorePolynomialFeatures* pf; ns=Qore::ML; flags=final];
+
+//! Creates a PolynomialFeatures transformer
+/** @param options optional hash with:
+    - \c degree (int): maximum polynomial degree (default 2)
+    - \c include_bias (bool): include a bias column of ones (default False)
+    - \c interaction_only (bool): only produce interaction features, no powers (default False)
+*/
+PolynomialFeatures::constructor(*hash<auto> options) {
+    int degree = 2;
+    bool include_bias = false;
+    bool interaction_only = false;
+    if (options) {
+        QoreValue v = options->getKeyValue("degree");
+        if (!v.isNullOrNothing()) {
+            degree = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("include_bias");
+        if (!v.isNullOrNothing()) {
+            include_bias = v.getAsBool();
+        }
+        v = options->getKeyValue("interaction_only");
+        if (!v.isNullOrNothing()) {
+            interaction_only = v.getAsBool();
+        }
+    }
+    if (degree < 1) {
+        xsink->raiseException("ML-POLYNOMIAL-FEATURES-ERROR",
+            "degree must be >= 1, got %d", degree);
+        return;
+    }
+    self->setPrivate(CID_POLYNOMIALFEATURES, new QorePolynomialFeatures(degree, include_bias, interaction_only));
+}
+
+//! PolynomialFeatures objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+PolynomialFeatures::copy() {
+    xsink->raiseException("COPY-ERROR", "PolynomialFeatures objects cannot be copied");
+}
+
+//! Fits on a numeric matrix (learns feature count)
+/** @param matrix list of row lists
+*/
+nothing PolynomialFeatures::fitMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    pf->fit(X, xsink);
+}
+
+//! Transforms input features to polynomial features
+/** @param matrix list of row lists
+    @return list of row lists with polynomial features
+*/
+list<auto> PolynomialFeatures::transformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = pf->transform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in one step
+/** @param matrix list of row lists
+    @return list of row lists with polynomial features
+*/
+list<auto> PolynomialFeatures::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = pf->fitTransform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns whether the transformer has been fitted
+/** @return True if fitMatrix() has been called
+*/
+bool PolynomialFeatures::isFitted() [flags=CONSTANT] {
+    return pf->isFitted();
+}
+
+//! Returns the output feature names
+/** @return list of feature name strings (e.g., "x0", "x1", "x0^2", "x0 x1", "x1^2")
+*/
+list<string> PolynomialFeatures::getOutputFeatureNames() {
+    return pf->getOutputFeatureNames(xsink);
+}
+
+//! Returns the number of output features
+/** @return the number of columns in the transformed output
+*/
+int PolynomialFeatures::getNumOutputFeatures() [flags=CONSTANT] {
+    return pf->getNumOutputFeatures();
+}

@@ -46,6 +46,12 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "logistic-regression": "QoreLogisticRegressionProcessor",
             "knn-classification": "QoreKNNClassificationProcessor",
             "knn-regression": "QoreKNNRegressionProcessor",
+            "decision-tree-classification": "QoreDecisionTreeClassificationProcessor",
+            "decision-tree-regression": "QoreDecisionTreeRegressionProcessor",
+            "random-forest-classification": "QoreRandomForestClassificationProcessor",
+            "random-forest-regression": "QoreRandomForestRegressionProcessor",
+            "gbt-classification": "QoreGBTClassificationProcessor",
+            "gbt-regression": "QoreGBTRegressionProcessor",
             "lof": "QoreLOFProcessor",
             "gmm": "QoreGMMProcessor",
             "standard-scaler": "QoreStandardScalerProcessor",
@@ -54,6 +60,10 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "classification-metrics": "QoreClassificationMetricsProcessor",
             "regression-metrics": "QoreRegressionMetricsProcessor",
             "clustering-metrics": "QoreClusteringMetricsProcessor",
+            "rolling-stats": "QoreRollingStatsProcessor",
+            "ewma": "QoreEWMAProcessor",
+            "data-profile": "QoreDataProfileProcessor",
+            "schema-validation": "QoreSchemaValidationProcessor",
         };
 
         #! Full child processor names including optional ones
@@ -116,6 +126,18 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreKNNClassificationProcessor();
             case "knn-regression":
                 return new QoreKNNRegressionProcessor();
+            case "decision-tree-classification":
+                return new QoreDecisionTreeClassificationProcessor();
+            case "decision-tree-regression":
+                return new QoreDecisionTreeRegressionProcessor();
+            case "random-forest-classification":
+                return new QoreRandomForestClassificationProcessor();
+            case "random-forest-regression":
+                return new QoreRandomForestRegressionProcessor();
+            case "gbt-classification":
+                return new QoreGBTClassificationProcessor();
+            case "gbt-regression":
+                return new QoreGBTRegressionProcessor();
             case "lof":
                 return new QoreLOFProcessor();
             case "gmm":
@@ -132,6 +154,14 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreRegressionMetricsProcessor();
             case "clustering-metrics":
                 return new QoreClusteringMetricsProcessor();
+            case "rolling-stats":
+                return new QoreRollingStatsProcessor();
+            case "ewma":
+                return new QoreEWMAProcessor();
+            case "data-profile":
+                return new QoreDataProfileProcessor();
+            case "schema-validation":
+                return new QoreSchemaValidationProcessor();
             case "onnx-model":
                 if (ML::ml_get_capabilities().has_onnx) {
                     return new QoreOnnxModelProcessor();

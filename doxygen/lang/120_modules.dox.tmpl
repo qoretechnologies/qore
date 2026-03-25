@@ -243,16 +243,24 @@ ModuleName/
         mapping APIs
     |user|<a href="../../modules/MemcachedDataProvider/html/index.html#memcacheddataproviderintro">MemcachedDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Memcached caching servers
-    |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides machine learning algorithms \
-        (IsolationForest, LOF, DBSCAN, KMeans, GMM, LinearRegression, HoltWinters, PCA, SeasonalDecomposition) \
-        and optional ONNX Runtime inference
+    |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
+        DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
+        melt, window functions), CSV/Parquet/database I/O, and ML integration
+    |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
+        with searchable record iteration and filtering
+    |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides 20 machine learning algorithms \
+        including DecisionTree, RandomForest, GradientBoostedTrees, LogisticRegression, KNN, KMeans, GMM, \
+        IsolationForest, LOF, PCA, LinearRegression, HoltWinters, and preprocessing/pipeline utilities \
+        with metrics, serialization, online learning, and optional ONNX Runtime inference
     |user|<a href="../../modules/DataProviderML/html/index.html#dataprovidermlintro">DataProviderML</a>|Provides \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
         processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
         learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
     |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
-        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with full tokenizer.json support, \
-        truncation, padding, batch encoding, offset mapping, and special tokens mask
+        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with word_ids, sliding window, \
+        pre-tokenized input, dynamic vocabulary, and full tokenizer.json support
     |binary|<a href="../../modules/mongodb/html/index.html#mongodbintro">mongodb</a>|Provides MongoDB client connectivity using \
         libmongoc with full CRUD, aggregation, and automatic BSON conversion
     |user|<a href="../../modules/MongoDbDataProvider/html/index.html#mongodbdataproviderintro">MongoDbDataProvider</a>|Provides a \

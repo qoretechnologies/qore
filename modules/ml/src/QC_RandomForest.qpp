@@ -1,0 +1,252 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_RandomForest.qpp
+
+    Qore RandomForest class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_RandomForest.h"
+#include "ml_common.h"
+
+extern const TypedHashDecl* hashdeclRandomForestClassificationResult;
+extern const TypedHashDecl* hashdeclRandomForestRegressionResult;
+extern const TypedHashDecl* hashdeclFeatureImportanceInfo;
+
+//! Random Forest ensemble of CART decision trees
+/** Trains multiple decision trees on bootstrap samples with random feature
+    subsets, then aggregates predictions (majority vote for classification,
+    mean for regression).
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::RandomForest rf({"n_trees": 100, "task": "classification", "max_features": "sqrt"});
+    rf.fitMatrix(X_train, y_train);
+    auto results = rf.predictClassificationMatrix(X_test);
+    printf("Predicted: %d\n", results[0].predicted_class);
+    @endcode
+
+    @since ml 1.0
+*/
+qclass RandomForest [arg=QoreRandomForest* rf; ns=Qore::ML; flags=final];
+
+//! Creates a RandomForest with the given options
+/** @param options a hash with:
+    - \c n_trees (*int): number of trees (default 100)
+    - \c max_depth (*int): maximum tree depth (default 10; 0 = unlimited)
+    - \c min_samples_split (*int): minimum samples to split (default 2)
+    - \c min_samples_leaf (*int): minimum samples per leaf (default 1)
+    - \c max_features (*string): features per tree — "sqrt" (default), "log2", or integer
+    - \c bootstrap (*bool): use bootstrap sampling (default True)
+    - \c criterion (*string): "gini" (default for classification), "entropy", or "mse"
+    - \c task (*string): "classification" (default) or "regression"
+    - \c seed (*int): random seed (default 0 = random)
+
+    @throw ML-RANDOM-FOREST-ERROR if options are invalid
+*/
+RandomForest::constructor(hash<auto> options) {
+    int n_trees = 100;
+    int max_depth = 10;
+    int min_samples_split = 2;
+    int min_samples_leaf = 1;
+    std::string max_features = "sqrt";
+    bool bootstrap = true;
+    std::string criterion;
+    std::string task = "classification";
+    int64_t seed = 0;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("n_trees");
+        if (!v.isNullOrNothing()) {
+            n_trees = (int)v.getAsBigInt();
+            if (n_trees < 1) {
+                xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+                    "n_trees must be >= 1; got %d", n_trees);
+                return;
+            }
+        }
+        v = options->getKeyValue("max_depth");
+        if (!v.isNullOrNothing()) { max_depth = (int)v.getAsBigInt(); }
+        v = options->getKeyValue("min_samples_split");
+        if (!v.isNullOrNothing()) {
+            min_samples_split = (int)v.getAsBigInt();
+            if (min_samples_split < 2) {
+                xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+                    "min_samples_split must be >= 2; got %d", min_samples_split);
+                return;
+            }
+        }
+        v = options->getKeyValue("min_samples_leaf");
+        if (!v.isNullOrNothing()) {
+            min_samples_leaf = (int)v.getAsBigInt();
+            if (min_samples_leaf < 1) {
+                xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+                    "min_samples_leaf must be >= 1; got %d", min_samples_leaf);
+                return;
+            }
+        }
+        v = options->getKeyValue("max_features");
+        if (v.getType() == NT_STRING) {
+            max_features = v.get<const QoreStringNode>()->c_str();
+        }
+        v = options->getKeyValue("bootstrap");
+        if (!v.isNullOrNothing()) { bootstrap = v.getAsBool(); }
+        v = options->getKeyValue("task");
+        if (v.getType() == NT_STRING) {
+            task = v.get<const QoreStringNode>()->c_str();
+            if (task != "classification" && task != "regression") {
+                xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+                    "task must be 'classification' or 'regression'; got '%s'",
+                    task.c_str());
+                return;
+            }
+        }
+        v = options->getKeyValue("criterion");
+        if (v.getType() == NT_STRING) { criterion = v.get<const QoreStringNode>()->c_str(); }
+        v = options->getKeyValue("seed");
+        if (!v.isNullOrNothing()) { seed = v.getAsBigInt(); }
+    }
+
+    if (criterion.empty()) {
+        criterion = (task == "classification") ? "gini" : "mse";
+    }
+
+    self->setPrivate(CID_RANDOMFOREST,
+        new QoreRandomForest(n_trees, max_depth, min_samples_split, min_samples_leaf,
+            max_features, bootstrap, criterion, task, seed));
+}
+
+//! RandomForest objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+RandomForest::copy() {
+    xsink->raiseException("COPY-ERROR", "RandomForest objects cannot be copied");
+}
+
+//! Trains on a list of hash records with a target field
+/** @param data list of hash records
+    @param target_field the target column name
+*/
+nothing RandomForest::fit(list<auto> data, string target_field) {
+    std::vector<std::string> field_names;
+    MatrixXd matrix = qoreListOfHashesToMatrix(data, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+
+    std::string target = target_field->c_str();
+    int target_idx = -1;
+    for (size_t i = 0; i < field_names.size(); ++i) {
+        if (field_names[i] == target) { target_idx = (int)i; break; }
+    }
+    if (target_idx < 0) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "target field '%s' not found in data", target.c_str());
+        return QoreValue();
+    }
+
+    VectorXd y = matrix.col(target_idx);
+    MatrixXd X(matrix.rows(), matrix.cols() - 1);
+    std::vector<std::string> feature_names;
+    int col = 0;
+    for (int i = 0; i < (int)matrix.cols(); ++i) {
+        if (i != target_idx) {
+            X.col(col) = matrix.col(i);
+            feature_names.push_back(field_names[i]);
+            ++col;
+        }
+    }
+
+    rf->setFieldNames(feature_names);
+    rf->setTargetField(target);
+    rf->fit(X, y, xsink);
+}
+
+//! Trains on a numeric feature matrix and target vector
+/** @param matrix list of row lists
+    @param target list of target values
+*/
+nothing RandomForest::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    rf->fit(X, y, xsink);
+}
+
+//! Classifies a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return RandomForestClassificationResult hash
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a classification model, or features don't match
+*/
+hash<RandomForestClassificationResult> RandomForest::predictClassification(hash<auto> record) {
+    const std::vector<std::string>& field_names = rf->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "model was trained with matrix API; use predictClassificationMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictClassification(point, xsink);
+}
+
+//! Predicts a regression value for a single record hash
+/** @param record a hash with the same feature fields used in training
+    @return RandomForestRegressionResult hash
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a regression model, or features don't match
+*/
+hash<RandomForestRegressionResult> RandomForest::predictRegression(hash<auto> record) {
+    const std::vector<std::string>& field_names = rf->getFieldNames();
+    if (field_names.empty()) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "model was trained with matrix API; use predictRegressionMatrix()");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, field_names, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictRegression(point, xsink);
+}
+
+//! Classifies multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of RandomForestClassificationResult hashes
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a classification model, or features don't match
+*/
+list<hash<RandomForestClassificationResult>> RandomForest::predictClassificationMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictClassificationMatrix(X, xsink);
+}
+
+//! Predicts regression values for multiple rows in matrix form
+/** @param matrix list of row lists
+    @return list of RandomForestRegressionResult hashes
+
+    @throw ML-RANDOM-FOREST-ERROR if the model is not fitted, not a regression model, or features don't match
+*/
+list<hash<RandomForestRegressionResult>> RandomForest::predictRegressionMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    return rf->predictRegressionMatrix(X, xsink);
+}
+
+//! Returns whether the model has been fitted
+/** @return True if fit() or fitMatrix() has been called
+*/
+bool RandomForest::isFitted() [flags=CONSTANT] {
+    return rf->isFitted();
+}
+
+//! Returns feature importances averaged across all trees
+/** @return FeatureImportanceInfo hash
+*/
+hash<auto> RandomForest::getFeatureImportances() {
+    return rf->getFeatureImportances(xsink);
+}

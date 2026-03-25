@@ -92,6 +92,7 @@ public class DataProvider {
             "close": "CloseDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
+            "dataframe": "DataProviderDataFrame",
             "db": "DbDataProvider",
             "deel": "DeelDataProvider",
             "discord": "DiscordDataProvider",

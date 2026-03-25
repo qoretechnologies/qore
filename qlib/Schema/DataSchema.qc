@@ -54,8 +54,8 @@ public const AL_ADMIN = "admin";
 */
 public class DataSchema inherits AbstractVersionedSchema {
     private {
-        #! The normalized schema data
-        hash<auto> schema_data;
+        #! The normalized schema data (auto! prevents type narrowing on mixed-type values)
+        hash<auto!> schema_data;
 
         #! The access level for migration actions
         string access_level;
@@ -74,11 +74,10 @@ public class DataSchema inherits AbstractVersionedSchema {
         @param al access level for migration actions
     */
     constructor(Qore::SQL::AbstractDatasource ds, string file_path,
-            *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED)
-            : AbstractVersionedSchema(ds, opts.data_ts, opts.index_ts, opts.db_opts
-                ? ("db_opts": opts.db_opts) : NOTHING) {
+            *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED) {
         access_level = al;
         schema_data = DataSchemaLoader::loadFile(file_path);
+        initDataSchema(ds, opts);
     }
 
     #! Creates the schema from a pre-loaded hash
@@ -88,11 +87,25 @@ public class DataSchema inherits AbstractVersionedSchema {
         @param al access level for migration actions
     */
     constructor(Qore::SQL::AbstractDatasource ds, hash<auto> data,
-            *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED)
-            : AbstractVersionedSchema(ds, opts.data_ts, opts.index_ts, opts.db_opts
-                ? ("db_opts": opts.db_opts) : NOTHING) {
+            *hash<SchemaOptionInfo> opts, string al = AL_TRUSTED) {
         access_level = al;
         schema_data = data;
+        initDataSchema(ds, opts);
+    }
+
+    #! Initializes the schema after schema_data is set
+    /** Calls the parent init() and then sets versioned schema fields.
+        This avoids the issue where the parent constructor calls virtual
+        methods before schema_data is available.
+
+        @since Schema 1.1
+    */
+    private initDataSchema(Qore::SQL::AbstractDatasource ds, *hash<SchemaOptionInfo> opts) {
+        init(ds, opts);
+        # Set versioned schema fields (normally done in AbstractVersionedSchema constructor)
+        version_table = getVersionTable();
+        version_column = getVersionColumn();
+        version_where = getVersionWhere();
     }
 
     #! Returns the schema name

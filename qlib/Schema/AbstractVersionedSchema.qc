@@ -59,6 +59,12 @@ public namespace Schema {
             version_where = getVersionWhere();
         }
 
+        #! Protected constructor for subclasses that call init() themselves
+        /** @since Schema 1.1
+        */
+        private constructor() {
+        }
+
         #! returns the existing schema version or @ref nothing if not present
         private *softstring getSchemaVersion() {
             Table vt(ds, version_table);

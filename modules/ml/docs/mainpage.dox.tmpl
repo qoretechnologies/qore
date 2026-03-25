@@ -29,15 +29,35 @@
     |@ref Qore::ML::HoltWinters "HoltWinters"|Time Series|Forecast monthly revenue, daily server load, or weekly inventory
     |@ref Qore::ML::SeasonalDecomposition "SeasonalDecomposition"|Time Series|Separate sales into growth trend, holiday spikes, and noise
     |@ref Qore::ML::PCA "PCA"|Dimensionality Reduction|Compress 50 sensor readings into 3 key values for analysis
+    |@ref Qore::ML::DecisionTree "DecisionTree"|Classification/Regression|Predict categories or values using learned decision rules from data
+    |@ref Qore::ML::RandomForest "RandomForest"|Classification/Regression|Ensemble of decision trees — more accurate than a single tree on noisy data
+    |@ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees"|Classification/Regression|Sequential boosting — the enterprise workhorse for tabular data (fraud, churn, credit)
+    |@ref Qore::ML::SVM "SVM"|Classification|Support vector machine with linear and RBF kernels, multiclass via one-vs-one
+    |@ref Qore::ML::NaiveBayes "NaiveBayes"|Classification|Gaussian Naive Bayes with online learning (incremental updates)
     |@ref Qore::ML::OnnxModel "OnnxModel"|Inference|Run neural networks or gradient-boosted models trained in Python
     |@ref Qore::ML::StandardScaler "StandardScaler"|Preprocessing|Normalize features to zero mean and unit variance
     |@ref Qore::ML::MinMaxScaler "MinMaxScaler"|Preprocessing|Scale features to a configurable range (e.g., 0 to 1)
     |@ref Qore::ML::Imputer "Imputer"|Preprocessing|Fill missing values using mean, median, mode, or constant
+    |@ref Qore::ML::OneHotEncoder "OneHotEncoder"|Feature Engineering|Convert integer-encoded categoricals to binary columns
+    |@ref Qore::ML::LabelEncoder "LabelEncoder"|Feature Engineering|Map string/integer categories to consecutive integers
+    |@ref Qore::ML::VarianceThreshold "VarianceThreshold"|Feature Selection|Remove low-variance features from datasets
+    |@ref Qore::ML::PolynomialFeatures "PolynomialFeatures"|Feature Engineering|Generate polynomial and interaction terms from input features
+    |@ref Qore::ML::SelectKBest "SelectKBest"|Feature Selection|Select top-k features by ANOVA F-test or mutual information
+    |@ref Qore::ML::RFE "RFE"|Feature Selection|Recursive feature elimination using decision tree importances
+    |@ref Qore::ML::DateTimeFeatures "DateTimeFeatures"|Feature Engineering|Extract day_of_week, hour, quarter, is_weekend from dates
+    |@ref Qore::ML::TextFeatures "TextFeatures"|Feature Engineering|TF-IDF and bag-of-words text-to-numeric conversion
+    |@ref Qore::ML::ADWIN "ADWIN"|Drift Detection|Detect distribution changes in streaming data with adaptive windowing
+    |@ref Qore::ML::PageHinkley "PageHinkley"|Drift Detection|Detect mean shifts in sequential observations
+    |@ref Qore::ML::DDM "DDM"|Drift Detection|Monitor classifier error rate for statistically significant increases
     |@ref Qore::ML::MLPipeline "MLPipeline"|Pipeline|Chain preprocessing steps and an estimator into one unit
     |@ref Qore::ML::CrossValidator "CrossValidator"|Evaluation|Split data into training/test folds for cross-validation
     |@ref Qore::ML::ml_accuracy() "ml_accuracy()", @ref Qore::ML::ml_classification_report() "ml_classification_report()"|Evaluation|Measure classification accuracy, precision, recall, F1
     |@ref Qore::ML::ml_mse() "ml_mse()", @ref Qore::ML::ml_rmse() "ml_rmse()", @ref Qore::ML::ml_mae() "ml_mae()", @ref Qore::ML::ml_r2_score() "ml_r2_score()"|Evaluation|Measure regression prediction quality
     |@ref Qore::ML::ml_silhouette_score() "ml_silhouette_score()", @ref Qore::ML::ml_davies_bouldin_score() "ml_davies_bouldin_score()"|Evaluation|Measure clustering quality
+    |@ref Qore::ML::ml_t_test() "ml_t_test()", @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"|Statistics|Hypothesis testing (Welch's t-test, chi-squared test)
+    |@ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"|Statistics|Descriptive statistics and distribution shape metrics
+    |@ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"|Statistics|Normal distribution probability functions
+    |@ref Qore::ML::ml_cosine_similarity() "ml_cosine_similarity()", @ref Qore::ML::ml_euclidean_distance() "ml_euclidean_distance()"|Vector Similarity|Distance and similarity metrics for embeddings and RAG
 
     @subsection mlalgo_anomaly Anomaly Detection
 
@@ -88,6 +108,42 @@
       this customer will too. Also works for regression (predict a number as the average of
       neighbors' values). Simple, interpretable, and no training phase — but slower on large
       datasets since it compares against every training record.
+
+    @subsection mlalgo_trees Tree-Based Algorithms
+
+    The enterprise ML workhorses for tabular data — decision trees, random forests, and
+    gradient boosting dominate fraud detection, churn prediction, credit scoring, and
+    virtually every structured data competition.
+
+    - @ref Qore::ML::DecisionTree "DecisionTree" — Learns a tree of if/then rules that
+      split data into groups. For example, "if income > 50K and credit_score > 700, approve
+      the loan." Supports Gini impurity, entropy, and MSE criteria. Reports feature
+      importances showing which fields matter most. Fast to train and fully interpretable.
+    - @ref Qore::ML::RandomForest "RandomForest" — Trains many decision trees on random
+      subsets of the data and features, then combines their votes. More accurate than a
+      single tree because individual trees' mistakes cancel out. Configurable via n_trees,
+      max_features ("sqrt" or "log2"), and bootstrap sampling.
+    - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — Builds trees
+      sequentially, each one correcting the previous ensemble's errors. The standard choice
+      for tabular data in production (equivalent to XGBoost/LightGBM). Supports binary
+      classification (log-loss), regression (MSE), early stopping with validation set, and
+      row subsampling for stochastic gradient boosting.
+
+    @subsection mlalgo_svm_nb SVM and Naive Bayes
+
+    Classic statistical classifiers — SVM for maximum-margin linear and non-linear
+    classification, Naive Bayes for fast probabilistic classification.
+
+    - @ref Qore::ML::SVM "SVM" — Finds the decision boundary that maximizes the margin
+      between classes. For example, separate legitimate from fraudulent transactions by
+      finding the widest gap in feature space. Supports linear and RBF (Gaussian) kernels.
+      Multiclass via one-vs-one voting with confidence probabilities. Regularization via C
+      parameter prevents overfitting.
+    - @ref Qore::ML::NaiveBayes "NaiveBayes" — Assumes features are independent given the
+      class label, then uses Bayes' theorem to compute class probabilities. Despite the
+      "naive" independence assumption, often competitive for text classification, spam
+      filtering, and medical diagnosis. Extremely fast to train and supports online learning
+      (incremental updates) via Welford's algorithm for streaming variance computation.
 
     @subsection mlalgo_regression Regression
 
@@ -148,6 +204,89 @@
       example, chain a StandardScaler with KMeans so that new data is always scaled the same
       way before being assigned to a cluster. Prevents inconsistencies between training and
       production.
+
+    @subsection mlalgo_feature_eng Feature Engineering
+
+    Transform raw data into forms suitable for ML algorithms. Encode categorical variables,
+    select informative features, and ensure consistency between training and production.
+
+    - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — Converts integer-encoded categorical
+      features into binary columns. Each unique value becomes its own column with 0/1 values.
+      For example, a "color" column with values 0 (red), 1 (green), 2 (blue) becomes three
+      columns: \c color_0, \c color_1, \c color_2. Use \c drop_first to avoid multicollinearity
+      in linear models by dropping the first category (the reference level).
+    - @ref Qore::ML::LabelEncoder "LabelEncoder" — Maps string or integer category values
+      to consecutive integers 0, 1, 2, ..., n_classes-1. For example, ("red", "green", "blue")
+      becomes (2, 1, 0) in alphabetical order. Supports inverse transformation back to original
+      values. Unknown/null values are encoded as -1.
+    - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — Removes features with low
+      variance (population variance). Features with variance at or below the threshold are
+      removed during transform(). Default threshold 0.0 removes only constant (zero-variance)
+      features. Use to eliminate uninformative columns before feeding data into algorithms.
+    - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — Generates polynomial and
+      interaction terms from input features. For example, with degree=2 and features [a, b],
+      produces [a, b, a^2, a*b, b^2]. Enables linear models to capture non-linear
+      relationships (polynomial regression). Supports \c interaction_only mode (no powers)
+      and optional bias column.
+    - @ref Qore::ML::DateTimeFeatures "DateTimeFeatures" — Extracts numeric components from
+      date/datetime values: year, month, day, hour, minute, second, day_of_week, day_of_year,
+      quarter, is_weekend, week_of_year. Use to let ML models learn temporal patterns
+      (e.g., delivery times vary by day of week and hour).
+    - @ref Qore::ML::TextFeatures "TextFeatures" — Converts text documents into numeric
+      feature vectors using TF-IDF weighting or raw word counts (bag-of-words). Use to
+      turn customer reviews, support tickets, or log messages into numbers that ML
+      algorithms can process. Configurable vocabulary size and minimum document frequency.
+    - @ref Qore::ML::SelectKBest "SelectKBest" — Selects the top-k most informative features
+      based on a scoring function. Supports ANOVA F-statistic (\c "f_classif") for
+      classification tasks and discretized mutual information (\c "mutual_info") for any
+      target type. Reports per-feature scores and a boolean support mask.
+    - @ref Qore::ML::RFE "RFE" — Recursive Feature Elimination: iteratively fits a decision
+      tree, ranks features by importance (Gini/MSE reduction), removes the least important
+      feature(s), and repeats until the desired number remain. A wrapper-based method that
+      often produces better results than filter methods. Reports per-feature ranking
+      (1 = selected, 2+ = elimination round).
+
+    @subsection mlalgo_stats Statistical Functions
+
+    Descriptive statistics, hypothesis testing, and probability distribution functions
+    for data exploration and validation.
+
+    <b>Descriptive statistics</b>:
+    - @ref Qore::ML::ml_percentile() "ml_percentile()" — compute any percentile (e.g., median = 50th percentile)
+    - @ref Qore::ML::ml_iqr() "ml_iqr()" — interquartile range (75th - 25th percentile) for outlier detection
+    - @ref Qore::ML::ml_skewness() "ml_skewness()" — measure distribution asymmetry (0 = symmetric)
+    - @ref Qore::ML::ml_kurtosis() "ml_kurtosis()" — measure tail heaviness (excess kurtosis; 0 = normal)
+    - @ref Qore::ML::ml_correlation_matrix() "ml_correlation_matrix()" — Pearson correlation between all feature pairs
+    - @ref Qore::ML::ml_covariance_matrix() "ml_covariance_matrix()" — covariance between all feature pairs
+
+    <b>Hypothesis testing</b>:
+    - @ref Qore::ML::ml_t_test() "ml_t_test()" — Welch's two-sample t-test with exact p-values via Cephes incbet (regularized incomplete beta function, same as scipy)
+    - @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()" — chi-squared test of independence for contingency tables
+
+    <b>Normal distribution</b>:
+    - @ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()" — probability density function
+    - @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()" — cumulative distribution function
+    - @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()" — percent point function (inverse CDF, quantile function)
+
+    @subsection mlalgo_drift Concept Drift Detection
+
+    Monitor deployed models for performance degradation. When the data distribution
+    changes (concept drift), a model trained on historical data may give incorrect
+    predictions. These detectors tell you when to retrain.
+
+    - @ref Qore::ML::ADWIN "ADWIN" — Maintains an adaptive window of observations and
+      detects distribution changes by comparing sub-window means. Automatically drops
+      outdated data when drift is detected. O(log N) memory via exponential histogram
+      compression. Best for general-purpose monitoring of any numeric metric (prediction
+      error, latency, accuracy, revenue).
+    - @ref Qore::ML::PageHinkley "PageHinkley" — Detects mean shifts by tracking the
+      cumulative deviation from the running mean. When the deviation exceeds a threshold
+      (lambda), drift is signaled. Simple and efficient — good for monitoring a single
+      metric like average prediction error or transaction amount.
+    - @ref Qore::ML::DDM "DDM" — Monitors a classifier's error rate using binomial
+      statistics. Provides two levels: \c warning (possible drift, collect more data)
+      and \c drift (confirmed, retrain now). Feed 0 for correct predictions, 1 for
+      errors. Best for directly monitoring classification model accuracy.
 
     @subsection mlalgo_evaluation Model Evaluation
 
@@ -226,7 +365,7 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     @endcode
 
     The native \c .qml format is a compact binary format with CRC-32 integrity checking.
-    All 12 algorithm types are supported.
+    All algorithm types are supported.
 
     @section mlchoosing Choosing the Right Algorithm
 
@@ -244,16 +383,25 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::GMM "GMM"
 
     <b>"I need to assign records to categories"</b>
-    - Do your categories have a clear boundary (e.g., approve/deny based on rules)?
+    - Is this tabular data (rows and columns) and accuracy matters most?
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" or @ref Qore::ML::RandomForest "RandomForest"
+    - Do you need interpretable rules (e.g., for compliance or audit)?
+      → Use @ref Qore::ML::DecisionTree "DecisionTree" — you can inspect the learned rules
+    - Do your categories have a clear linear boundary?
       → Use @ref Qore::ML::LogisticRegression "LogisticRegression"
     - Do you want to classify based on what similar past records looked like?
       → Use @ref Qore::ML::KNN "KNN" (classification mode)
+    - Do you need a maximum-margin classifier with kernel support?
+      → Use @ref Qore::ML::SVM "SVM" with linear or RBF kernel
+    - Do you need fast probabilistic classification (e.g., text, spam filtering)?
+      → Use @ref Qore::ML::NaiveBayes "NaiveBayes"
 
     <b>"I need to predict or forecast values"</b>
     - Is your data a time series with seasonal patterns (daily, weekly, monthly)?
       → Use @ref Qore::ML::HoltWinters "HoltWinters"
     - Do you want to predict a value from input features (price from size, time from distance)?
-      → Use @ref Qore::ML::LinearRegression "LinearRegression"
+      → Use @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" (regression mode) for best accuracy,
+        or @ref Qore::ML::LinearRegression "LinearRegression" for speed and interpretability
 
     <b>"I need to understand or simplify my data"</b>
     - Do you want to separate trend, seasonality, and noise in a time series?
@@ -271,6 +419,24 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
     - Want to test on data the model hasn't seen?
       → Use @ref Qore::ML::CrossValidator "CrossValidator" for k-fold cross-validation
 
+    <b>"My data has categorical columns (strings, labels)"</b>
+    - Do you need binary indicator columns for each category (for linear models, neural nets)?
+      → Use @ref Qore::ML::OneHotEncoder "OneHotEncoder"
+    - Do you need simple integer encoding (for tree-based models)?
+      → Use @ref Qore::ML::LabelEncoder "LabelEncoder"
+    - Do you want to remove uninformative (near-constant) columns?
+      → Use @ref Qore::ML::VarianceThreshold "VarianceThreshold"
+    - Do you need polynomial or interaction features for a linear model?
+      → Use @ref Qore::ML::PolynomialFeatures "PolynomialFeatures"
+    - Do you want to select the most informative features automatically?
+      → Use @ref Qore::ML::SelectKBest "SelectKBest" (filter) or @ref Qore::ML::RFE "RFE" (wrapper, more accurate)
+
+    <b>"I need to test a statistical hypothesis"</b>
+    - Are two groups' means significantly different?
+      → Use @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's two-sample t-test)
+    - Are two categorical variables related?
+      → Use @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
+
     <b>"My data has different scales or missing values"</b>
     - Do your fields have very different ranges (e.g., age 18–65 vs income 20,000–200,000)?
       → Use @ref Qore::ML::StandardScaler "StandardScaler" to put them on the same scale
@@ -280,6 +446,14 @@ hash<Qore::ML::KMeansResult> result = km2.predict(customer_data);
       → Use @ref Qore::ML::Imputer "Imputer" to fill them in automatically
     - Do you want to preprocess <i>and</i> analyze in one step?
       → Use @ref Qore::ML::MLPipeline "MLPipeline" to chain preprocessing with analysis
+
+    <b>"My deployed model might be getting stale"</b>
+    - Monitor any numeric metric (error, latency, revenue) for distribution shifts?
+      → Use @ref Qore::ML::ADWIN "ADWIN" — the most general-purpose drift detector
+    - Monitor a single metric for mean shifts?
+      → Use @ref Qore::ML::PageHinkley "PageHinkley" — simple and efficient
+    - Monitor a classifier's error rate directly?
+      → Use @ref Qore::ML::DDM "DDM" — provides warning and drift levels
 
     <b>"I have a pre-trained model from Python or R"</b>
     - Export it to ONNX format and use @ref Qore::ML::OnnxModel "OnnxModel"
@@ -503,7 +677,8 @@ if (!caps.has_onnx) {
     @section mlreleasenotes ml Module Release Notes
 
     @subsection ml_1_0 ml Module Version 1.0
-    - Initial release with 11 native ML algorithms and 4 preprocessing tools:
+    - Initial release with native ML algorithms, preprocessing tools, feature engineering,
+      and statistical functions:
       - @ref Qore::ML::IsolationForest "IsolationForest" — anomaly detection using isolation trees
       - @ref Qore::ML::LOF "LOF" — Local Outlier Factor density-based anomaly detection
       - @ref Qore::ML::DBSCAN "DBSCAN" — density-based clustering
@@ -533,4 +708,36 @@ if (!caps.has_onnx) {
     - All algorithms support cooperative cancellation for responsive interrupt handling
     - \c NOTHING values in input data are treated as missing values for Imputer compatibility
     - @ref Qore::ML::ml_get_capabilities() "ml_get_capabilities()" function for runtime capability and ONNX support discovery
+    - Tree-based algorithms:
+      - @ref Qore::ML::DecisionTree "DecisionTree" — CART with Gini, entropy, and MSE criteria; feature importance
+      - @ref Qore::ML::RandomForest "RandomForest" — bagging ensemble with bootstrap sampling and random feature subsets
+      - @ref Qore::ML::GradientBoostedTrees "GradientBoostedTrees" — gradient boosting with log-loss and MSE; early stopping; row subsampling
+      - Shared FlatTree CART engine with flat-array node storage
+      - @ref Qore::ML::FeatureImportanceInfo "FeatureImportanceInfo" hashdecl for tree-based feature importance
+    - Additional classifiers:
+      - @ref Qore::ML::SVM "SVM" — support vector machine with simplified SMO, linear and RBF kernels, multiclass via one-vs-one voting
+      - @ref Qore::ML::NaiveBayes "NaiveBayes" — Gaussian Naive Bayes with online learning (incremental mean/variance updates via Welford's algorithm)
+    - Statistical functions:
+      - Descriptive: @ref Qore::ML::ml_percentile() "ml_percentile()", @ref Qore::ML::ml_iqr() "ml_iqr()", @ref Qore::ML::ml_skewness() "ml_skewness()", @ref Qore::ML::ml_kurtosis() "ml_kurtosis()"
+      - Correlation: @ref Qore::ML::ml_correlation_matrix() "ml_correlation_matrix()", @ref Qore::ML::ml_covariance_matrix() "ml_covariance_matrix()"
+      - Hypothesis testing: @ref Qore::ML::ml_t_test() "ml_t_test()" (Welch's, exact p-values via Cephes incbet), @ref Qore::ML::ml_chi_squared_test() "ml_chi_squared_test()"
+      - Normal distribution: @ref Qore::ML::ml_normal_pdf() "ml_normal_pdf()", @ref Qore::ML::ml_normal_cdf() "ml_normal_cdf()", @ref Qore::ML::ml_normal_ppf() "ml_normal_ppf()"
+    - Feature engineering:
+      - @ref Qore::ML::OneHotEncoder "OneHotEncoder" — categorical-to-binary column encoding with drop_first option
+      - @ref Qore::ML::LabelEncoder "LabelEncoder" — string/integer-to-consecutive-integer mapping with inverse transform
+      - @ref Qore::ML::VarianceThreshold "VarianceThreshold" — feature selector removing low-variance features (population variance)
+      - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
+      - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
+      - @ref Qore::ML::RFE "RFE" — recursive feature elimination using decision tree importances
+      - @ref Qore::ML::DateTimeFeatures "DateTimeFeatures" — extract numeric components (day_of_week, hour, quarter, is_weekend, etc.) from dates
+      - @ref Qore::ML::TextFeatures "TextFeatures" — TF-IDF and bag-of-words text vectorization
+    - Concept drift detection for monitoring deployed models:
+      - @ref Qore::ML::ADWIN "ADWIN" — adaptive windowing with O(log N) memory
+      - @ref Qore::ML::PageHinkley "PageHinkley" — cumulative sum test for mean shifts
+      - @ref Qore::ML::DDM "DDM" — error rate monitoring with warning and drift levels
+    - Vector similarity functions for embedding/RAG pipelines:
+      - @ref Qore::ML::ml_cosine_similarity() "ml_cosine_similarity()" — direction similarity (-1 to 1)
+      - @ref Qore::ML::ml_dot_product() "ml_dot_product()" — element-wise product sum
+      - @ref Qore::ML::ml_euclidean_distance() "ml_euclidean_distance()" — straight-line distance
+      - @ref Qore::ML::ml_manhattan_distance() "ml_manhattan_distance()" — city-block distance
 */

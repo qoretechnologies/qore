@@ -1,0 +1,118 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_OneHotEncoder.qpp
+
+    Qore OneHotEncoder class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_OneHotEncoder.h"
+#include "ml_common.h"
+
+//! One-hot encoder for categorical features
+/** Converts integer-encoded categorical features to binary columns.
+    Each unique value becomes its own column with 0/1 values.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::OneHotEncoder enc();
+    # Input: color column with values 0=red, 1=green, 2=blue
+    enc.fitMatrix(((0,), (1,), (2,), (0,)));
+    list<auto> encoded = enc.transformMatrix(((1,)));
+    # Output: ((0, 1, 0)) — green column is 1
+    @endcode
+
+    @since ml 1.0
+*/
+qclass OneHotEncoder [arg=QoreOneHotEncoder* enc; ns=Qore::ML; flags=final];
+
+//! Creates a OneHotEncoder
+/** @param options optional hash with:
+    - \c drop_first (*bool): drop first category to avoid multicollinearity (default False)
+*/
+OneHotEncoder::constructor(*hash<auto> options) {
+    bool drop_first = false;
+    if (options) {
+        QoreValue v = options->getKeyValue("drop_first");
+        if (!v.isNullOrNothing()) {
+            drop_first = v.getAsBool();
+        }
+    }
+    self->setPrivate(CID_ONEHOTENCODER, new QoreOneHotEncoder(drop_first));
+}
+
+//! OneHotEncoder objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+OneHotEncoder::copy() {
+    xsink->raiseException("COPY-ERROR", "OneHotEncoder objects cannot be copied");
+}
+
+//! Fits the encoder on a numeric matrix (learns unique categories per column)
+/** @param matrix list of row lists with integer-encoded categorical values
+*/
+nothing OneHotEncoder::fitMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    enc->fit(X, xsink);
+}
+
+//! Transforms integer-encoded features to one-hot binary columns
+/** @param matrix list of row lists
+    @return list of row lists with binary columns
+*/
+list<auto> OneHotEncoder::transformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = enc->transform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    // Convert back to list of lists
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in one step
+/** @param matrix list of row lists
+    @return list of row lists with binary columns
+*/
+list<auto> OneHotEncoder::fitTransformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = enc->fitTransform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns whether the encoder has been fitted
+/** @return True if fitMatrix() has been called
+*/
+bool OneHotEncoder::isFitted() [flags=CONSTANT] {
+    return enc->isFitted();
+}
+
+//! Returns the output feature names (one per category per input feature)
+/** @return list of output column names
+*/
+list<string> OneHotEncoder::getOutputFeatureNames() {
+    return enc->getOutputFeatureNames(xsink);
+}

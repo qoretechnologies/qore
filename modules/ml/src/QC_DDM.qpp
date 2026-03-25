@@ -1,0 +1,172 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DDM.qpp
+
+    Qore DDM class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_DDM.h"
+
+//! DDM (Drift Detection Method) drift detector for monitoring classifier accuracy
+/** Monitors the error rate of a classification model by tracking the running
+    error rate and its standard deviation. When the error rate increases
+    significantly beyond its minimum observed value, drift is signaled.
+
+    Feed 0 for correct predictions, 1 for errors. The detector assumes the
+    error rate follows a binomial distribution and uses the DDM statistic
+    to detect when the model's accuracy has degraded.
+
+    Use this to detect when a deployed classification model needs retraining —
+    for example, when a fraud detection model's accuracy drops due to new
+    attack patterns, or when a customer churn predictor degrades as market
+    conditions change.
+
+    @par Example: Monitoring fraud detection accuracy
+    @code{.py}
+    %requires ml
+
+    ML::DDM detector({"min_instances": 30, "warning_threshold": 2.0, "drift_threshold": 3.0});
+    # Feed prediction results: 0 = correct, 1 = error
+    for (int i = 0; i < 1000; ++i) {
+        int prediction = model.predict(get_transaction());
+        int actual = get_label();
+        float error = prediction != actual ? 1.0 : 0.0;
+        if (detector.add(error)) {
+            printf("DRIFT detected at observation %d! Error rate: %f\n",
+                i, detector.getErrorRate());
+            # Retrain the model
+            detector.reset();
+        } else if (detector.warningDetected()) {
+            printf("WARNING at observation %d — error rate rising: %f\n",
+                i, detector.getErrorRate());
+            # Start collecting data for potential retraining
+        }
+    }
+    @endcode
+
+    @par Example: Tracking model degradation over time
+    @code{.py}
+    %requires ml
+
+    ML::DDM drift_monitor();  # uses defaults: min_instances=30, warning=2.0, drift=3.0
+    while (True) {
+        auto sample = get_next_labeled_sample();
+        float is_error = model.predict(sample.features) != sample.label ? 1.0 : 0.0;
+        drift_monitor.add(is_error);
+        if (drift_monitor.driftDetected()) {
+            trigger_model_retraining();
+            drift_monitor.reset();
+        }
+    }
+    @endcode
+
+    @since ml 1.0
+*/
+qclass DDM [arg=QoreDDM* ddm; ns=Qore::ML; flags=final];
+
+//! Creates a DDM drift detector
+/** @param options optional hash with:
+    - \c min_instances (int): minimum number of observations before testing for
+      drift (default 30). Must be >= 1.
+    - \c warning_threshold (float): number of standard deviations above the
+      minimum for a warning signal (default 2.0). Must be > 0.
+    - \c drift_threshold (float): number of standard deviations above the
+      minimum for drift detection (default 3.0). Must be > 0 and greater than
+      \c warning_threshold.
+*/
+DDM::constructor(*hash<auto> options) {
+    int min_instances = 30;
+    double warning_threshold = 2.0;
+    double drift_threshold = 3.0;
+    if (options) {
+        QoreValue v = options->getKeyValue("min_instances");
+        if (!v.isNullOrNothing()) {
+            min_instances = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("warning_threshold");
+        if (!v.isNullOrNothing()) {
+            warning_threshold = v.getAsFloat();
+        }
+        v = options->getKeyValue("drift_threshold");
+        if (!v.isNullOrNothing()) {
+            drift_threshold = v.getAsFloat();
+        }
+    }
+    if (min_instances < 1) {
+        xsink->raiseException("ML-DDM-ERROR",
+            "min_instances must be >= 1, got %d", min_instances);
+        return;
+    }
+    if (warning_threshold <= 0) {
+        xsink->raiseException("ML-DDM-ERROR",
+            "warning_threshold must be > 0, got %f", warning_threshold);
+        return;
+    }
+    if (drift_threshold <= 0) {
+        xsink->raiseException("ML-DDM-ERROR",
+            "drift_threshold must be > 0, got %f", drift_threshold);
+        return;
+    }
+    if (warning_threshold >= drift_threshold) {
+        xsink->raiseException("ML-DDM-ERROR",
+            "warning_threshold (%f) must be less than drift_threshold (%f)",
+            warning_threshold, drift_threshold);
+        return;
+    }
+    self->setPrivate(CID_DDM, new QoreDDM(min_instances, warning_threshold, drift_threshold));
+}
+
+//! DDM objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+DDM::copy() {
+    xsink->raiseException("COPY-ERROR", "DDM objects cannot be copied");
+}
+
+//! Adds a prediction result to the detector
+/** @param value 0.0 for a correct prediction, 1.0 for an error
+    @return True if concept drift was detected after adding this value
+*/
+bool DDM::add(float value) {
+    return ddm->add(value);
+}
+
+//! Returns whether drift was detected on the last add() call
+/** @return True if the last observation triggered drift detection
+*/
+bool DDM::driftDetected() [flags=CONSTANT] {
+    return ddm->driftDetected();
+}
+
+//! Returns whether a warning was signaled on the last add() call
+/** @return True if the last observation triggered a warning (error rate rising)
+*/
+bool DDM::warningDetected() [flags=CONSTANT] {
+    return ddm->warningDetected();
+}
+
+//! Returns the current error rate
+/** @return the running error rate (errors / total observations)
+*/
+float DDM::getErrorRate() {
+    return ddm->getErrorRate();
+}
+
+//! Returns the total number of observations added since creation/reset
+/** @return total observation count
+*/
+int DDM::getTotal() [flags=CONSTANT] {
+    return ddm->getTotal();
+}
+
+//! Resets the detector to its initial state
+/** Clears all observations, error counts, and drift/warning state. Use
+    after retraining a model to start monitoring the new model's performance.
+*/
+nothing DDM::reset() {
+    ddm->reset();
+}
