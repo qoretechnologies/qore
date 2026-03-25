@@ -398,6 +398,20 @@ public:
     // user features present in this Program object
     strset_t userFeatureList;
 
+    //! features fully committed to this Program (namespace changes applied)
+    /** populated AFTER namespace commit in addToProgramImpl(); safe to read without plock
+        because it only transitions from absent → present after the module is fully loaded
+    */
+    strset_t committedFeatureList;
+
+    //! read-write lock for thread-safe feature list access without the exclusive parse lock
+    /** Lock hierarchy (outer → inner): plock → QoreModuleManager::mutex → featureLock.
+        This lock is always a leaf: code holding it never acquires another lock.
+        Read callers may acquire this independently of plock/mutex for the fast path.
+        Write callers always already hold plock (and usually mutex) from the module loading path.
+    */
+    mutable QoreRWLock featureLock;
+
     // modules loadded with parse commands
     strset_t parse_modules;
 
@@ -2000,6 +2014,7 @@ public:
 
     DLLLOCAL int addFeature(const char* f) {
         //printd(5, "qore_program_private::addFeature() this: %p pgm: %p '%s'\n", this, pgm, f);
+        QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = featureList.lower_bound(f);
         if (i != featureList.end() && (*i == f)) {
             return -1;
@@ -2010,6 +2025,7 @@ public:
     }
 
     DLLLOCAL void removeFeature(const char* f) {
+        QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = featureList.find(f);
         assert(i != featureList.end());
         featureList.erase(i);
@@ -2017,6 +2033,7 @@ public:
 
     DLLLOCAL int addUserFeature(const char* f) {
         //printd(5, "qore_program_private::addFeature() this: %p pgm: %p '%s'\n", this, pgm, f);
+        QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = userFeatureList.lower_bound(f);
         if (i != userFeatureList.end() && (*i == f)) {
             return -1;
@@ -2027,18 +2044,35 @@ public:
     }
 
     DLLLOCAL bool hasUserFeature(const std::string feature) const {
+        QoreSafeRWReadLocker rl(featureLock);
         return userFeatureList.find(feature) != userFeatureList.end();
     }
 
     DLLLOCAL void removeUserFeature(const char* f) {
+        QoreSafeRWWriteLocker wl(featureLock);
         strset_t::iterator i = userFeatureList.find(f);
         assert(i != userFeatureList.end());
         userFeatureList.erase(i);
     }
 
     DLLLOCAL bool hasFeature(const char* f) const {
+        QoreSafeRWReadLocker rl(featureLock);
         return (featureList.find(f) != featureList.end())
             || (userFeatureList.find(f) != userFeatureList.end());
+    }
+
+    //! marks a feature as fully committed (namespace changes applied); called AFTER qmc.commit()
+    /** safe to call under plock + mutex; featureLock(write) is the innermost lock
+    */
+    DLLLOCAL void commitFeature(const char* f) {
+        QoreSafeRWWriteLocker wl(featureLock);
+        committedFeatureList.insert(f);
+    }
+
+    //! checks if a feature has been fully committed; safe to call WITHOUT plock
+    DLLLOCAL bool hasCommittedFeature(const char* f) const {
+        QoreSafeRWReadLocker rl(featureLock);
+        return committedFeatureList.find(f) != committedFeatureList.end();
     }
 
     DLLLOCAL void runtimeImportSystemClassesIntern(const qore_program_private& spgm, ExceptionSink* xsink);
