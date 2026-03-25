@@ -97,6 +97,9 @@ set(ML_QPP_SRC
     src/QC_PolynomialFeatures.qpp
     src/QC_SelectKBest.qpp
     src/QC_RFE.qpp
+    src/QC_ADWIN.qpp
+    src/QC_PageHinkley.qpp
+    src/QC_DDM.qpp
     src/ql_ml.qpp
 )
 
@@ -135,6 +138,9 @@ set(ML_CPP_SRC
     src/PolynomialFeatures.cpp
     src/SelectKBest.cpp
     src/RFE.cpp
+    src/ADWIN.cpp
+    src/PageHinkley.cpp
+    src/DDM.cpp
 )
 
 # Conditional ONNX Runtime support

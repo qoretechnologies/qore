@@ -1,0 +1,137 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_PageHinkley.qpp
+
+    Qore PageHinkley class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_PageHinkley.h"
+
+//! Page-Hinkley drift detector
+/** Monitors a stream of numeric values for changes in the mean. The detector
+    maintains a cumulative sum that grows when observations deviate from the
+    running mean. When the cumulative deviation exceeds a threshold (lambda),
+    drift is signaled.
+
+    Use this to detect when a deployed model's accuracy degrades over time —
+    for example, when a fraud detection model's precision drops due to
+    changing attacker strategies, or when sensor readings indicate equipment
+    degradation.
+
+    The Page-Hinkley test is computationally lightweight (O(1) per observation)
+    and well-suited for real-time monitoring of production ML models and
+    streaming data pipelines.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::PageHinkley detector({"delta": 0.005, "lambda": 50.0, "min_instances": 30});
+    # Feed a stream of prediction errors
+    for (int i = 0; i < 1000; ++i) {
+        float error = get_prediction_error();
+        if (detector.add(error)) {
+            printf("Drift detected at observation %d! Running mean: %f\n",
+                i, detector.getMean());
+            # Retrain the model
+            detector.reset();
+        }
+    }
+    @endcode
+
+    @since ml 1.0
+*/
+qclass PageHinkley [arg=QorePageHinkley* ph; ns=Qore::ML; flags=final];
+
+//! Creates a Page-Hinkley drift detector
+/** @param options optional hash with:
+    - \c delta (float): minimum magnitude of change to detect (default 0.005).
+      Larger values make the detector less sensitive to small shifts.
+    - \c lambda (float): decision threshold (default 50.0). Larger values
+      reduce false alarms but slow detection of real drift.
+    - \c min_instances (int): minimum number of observations before testing
+      for drift (default 30). Prevents false alarms during the warm-up period.
+*/
+PageHinkley::constructor(*hash<auto> options) {
+    double delta = 0.005;
+    double lambda = 50.0;
+    int min_instances = 30;
+    if (options) {
+        QoreValue v = options->getKeyValue("delta");
+        if (!v.isNullOrNothing()) {
+            delta = v.getAsFloat();
+        }
+        v = options->getKeyValue("lambda");
+        if (!v.isNullOrNothing()) {
+            lambda = v.getAsFloat();
+        }
+        v = options->getKeyValue("min_instances");
+        if (!v.isNullOrNothing()) {
+            min_instances = (int)v.getAsBigInt();
+        }
+    }
+    if (delta <= 0) {
+        xsink->raiseException("ML-PAGEHINKLEY-ERROR",
+            "delta must be greater than 0, got %f", delta);
+        return;
+    }
+    if (lambda <= 0) {
+        xsink->raiseException("ML-PAGEHINKLEY-ERROR",
+            "lambda must be greater than 0, got %f", lambda);
+        return;
+    }
+    if (min_instances < 1) {
+        xsink->raiseException("ML-PAGEHINKLEY-ERROR",
+            "min_instances must be at least 1, got %d", min_instances);
+        return;
+    }
+    self->setPrivate(CID_PAGEHINKLEY, new QorePageHinkley(delta, lambda, min_instances));
+}
+
+//! PageHinkley objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+PageHinkley::copy() {
+    xsink->raiseException("COPY-ERROR", "PageHinkley objects cannot be copied");
+}
+
+//! Adds a new observation to the detector
+/** @param value the numeric observation (e.g., prediction error, metric value)
+    @return True if drift was detected after adding this value
+*/
+bool PageHinkley::add(float value) {
+    return ph->add(value);
+}
+
+//! Returns whether drift was detected on the last add() call
+/** @return True if the last observation triggered drift detection
+*/
+bool PageHinkley::driftDetected() [flags=CONSTANT] {
+    return ph->driftDetected();
+}
+
+//! Returns the current running mean
+/** @return the incremental mean of all observations since creation/reset
+*/
+float PageHinkley::getMean() {
+    return ph->getMean();
+}
+
+//! Returns the total number of observations added since creation/reset
+/** @return total observation count
+*/
+int PageHinkley::getTotal() [flags=CONSTANT] {
+    return ph->getTotal();
+}
+
+//! Resets the detector to its initial state
+/** Clears all observations and drift state. Use after retraining a model
+    to start monitoring the new model's performance.
+*/
+nothing PageHinkley::reset() {
+    ph->reset();
+}

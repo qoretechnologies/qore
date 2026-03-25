@@ -254,6 +254,24 @@ public class MlTest inherits QUnit::Test {
         addTestCase("RFE step > 1", \rfeStepTest());
         addTestCase("serialize RFE round-trip", \serializeRFETest());
         addTestCase("save/load RFE", \saveLoadRFETest());
+        addTestCase("ADWIN basic drift detection", \adwinBasicTest());
+        addTestCase("ADWIN no drift on stable data", \adwinStableTest());
+        addTestCase("ADWIN reset", \adwinResetTest());
+        addTestCase("ADWIN errors", \adwinErrorTest());
+        addTestCase("ADWIN sensitivity", \adwinSensitivityTest());
+        addTestCase("PageHinkley basic drift detection", \pageHinkleyBasicTest());
+        addTestCase("PageHinkley no drift on stable data", \pageHinkleyStableTest());
+        addTestCase("PageHinkley reset", \pageHinkleyResetTest());
+        addTestCase("PageHinkley errors", \pageHinkleyErrorTest());
+        addTestCase("PageHinkley sensitivity", \pageHinkleySensitivityTest());
+        addTestCase("PageHinkley min_instances", \pageHinkleyMinInstancesTest());
+        addTestCase("DDM basic drift detection", \ddmBasicTest());
+        addTestCase("DDM no drift on stable data", \ddmStableTest());
+        addTestCase("DDM reset", \ddmResetTest());
+        addTestCase("DDM errors", \ddmErrorTest());
+        addTestCase("DDM sensitivity", \ddmSensitivityTest());
+        addTestCase("DDM min_instances", \ddmMinInstancesTest());
+        addTestCase("DDM warning detection", \ddmWarningTest());
         set_return_value(main());
     }
 
@@ -285,9 +303,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(28, caps.native_algorithms.size());
+            assertEq(31, caps.native_algorithms.size());
         } else {
-            assertEq(27, caps.native_algorithms.size());
+            assertEq(30, caps.native_algorithms.size());
         }
     }
 
@@ -5333,6 +5351,438 @@ public class MlTest inherits QUnit::Test {
         assertEq(orig[0].size(), res[0].size(), "RFE save/load col count");
         for (int i = 0; i < orig[0].size(); ++i) {
             assertEq(orig[0][i], res[0][i], sprintf("RFE save/load col %d", i));
+        }
+    }
+
+    adwinBasicTest() {
+        ML::ADWIN detector({"delta": 0.002});
+        assertFalse(detector.driftDetected(), "ADWIN no drift initially");
+        assertEq(0, detector.getWidth(), "ADWIN empty width");
+        assertEq(0, detector.getTotal(), "ADWIN empty total");
+
+        # Feed stable data (mean ~0.5)
+        bool drift_found = False;
+        for (int i = 0; i < 200; ++i) {
+            detector.add(0.5 + (i % 3) * 0.01);
+        }
+        assertFalse(detector.driftDetected(), "ADWIN no drift on stable");
+        assertTrue(detector.getWidth() > 0, "ADWIN has width after data");
+        assertEq(200, detector.getTotal(), "ADWIN total 200");
+
+        # Introduce a distribution shift (mean jumps to ~5.0)
+        for (int i = 0; i < 200; ++i) {
+            if (detector.add(5.0 + (i % 3) * 0.01)) {
+                drift_found = True;
+            }
+        }
+        assertTrue(drift_found, "ADWIN detects mean shift from 0.5 to 5.0");
+        assertEq(400, detector.getTotal(), "ADWIN total 400");
+
+        # After drift, window mean should be close to the new distribution
+        float mean = detector.getMean();
+        assertTrue(mean > 3.0, "ADWIN mean shifted toward new distribution");
+    }
+
+    adwinStableTest() {
+        ML::ADWIN detector({"delta": 0.002});
+
+        # Feed 500 values from the same distribution
+        bool any_drift = False;
+        for (int i = 0; i < 500; ++i) {
+            if (detector.add(10.0 + (i % 10) * 0.1)) {
+                any_drift = True;
+            }
+        }
+        # Should not detect drift on stable data
+        assertFalse(any_drift, "ADWIN no false alarm on stable data");
+        assertTrue(detector.getWidth() > 100, "ADWIN retains most data when stable");
+    }
+
+    adwinResetTest() {
+        ML::ADWIN detector({"delta": 0.01});
+
+        for (int i = 0; i < 100; ++i) {
+            detector.add(1.0);
+        }
+        assertTrue(detector.getWidth() > 0, "ADWIN has data before reset");
+        assertTrue(detector.getTotal() > 0, "ADWIN has total before reset");
+
+        detector.reset();
+        assertEq(0, detector.getWidth(), "ADWIN width 0 after reset");
+        assertEq(0, detector.getTotal(), "ADWIN total 0 after reset");
+        assertFalse(detector.driftDetected(), "ADWIN no drift after reset");
+    }
+
+    adwinErrorTest() {
+        # Invalid delta
+        assertThrows("ML-ADWIN-ERROR", sub () { new ML::ADWIN({"delta": 0.0}); });
+        assertThrows("ML-ADWIN-ERROR", sub () { new ML::ADWIN({"delta": 1.0}); });
+        assertThrows("ML-ADWIN-ERROR", sub () { new ML::ADWIN({"delta": -0.1}); });
+
+        # Copy error
+        ML::ADWIN d({"delta": 0.01});
+        assertThrows("COPY-ERROR", sub () { ML::ADWIN cp = d.copy(); });
+    }
+
+    adwinSensitivityTest() {
+        # Higher delta = more sensitive (detects smaller shifts faster)
+        ML::ADWIN sensitive({"delta": 0.1});
+        ML::ADWIN conservative({"delta": 0.001});
+
+        int sensitive_drift_at = -1;
+        int conservative_drift_at = -1;
+
+        # Feed same data to both: stable then shifted
+        for (int i = 0; i < 100; ++i) {
+            sensitive.add(1.0);
+            conservative.add(1.0);
+        }
+        for (int i = 0; i < 100; ++i) {
+            float val = 3.0;
+            if (sensitive.add(val) && sensitive_drift_at < 0) {
+                sensitive_drift_at = i;
+            }
+            if (conservative.add(val) && conservative_drift_at < 0) {
+                conservative_drift_at = i;
+            }
+        }
+
+        # Sensitive should detect drift earlier (or at same time)
+        assertTrue(sensitive_drift_at >= 0, "ADWIN sensitive detects drift");
+        if (conservative_drift_at >= 0) {
+            assertTrue(sensitive_drift_at <= conservative_drift_at,
+                "ADWIN sensitive detects earlier than conservative");
+        }
+    }
+
+    pageHinkleyBasicTest() {
+        ML::PageHinkley detector({"delta": 0.005, "lambda": 50.0, "min_instances": 30});
+        assertFalse(detector.driftDetected(), "PageHinkley no drift initially");
+        assertEq(0, detector.getTotal(), "PageHinkley empty total");
+
+        # Feed stable data (mean ~0.5)
+        bool drift_found = False;
+        for (int i = 0; i < 200; ++i) {
+            detector.add(0.5 + (i % 3) * 0.01);
+        }
+        assertFalse(detector.driftDetected(), "PageHinkley no drift on stable");
+        assertEq(200, detector.getTotal(), "PageHinkley total 200");
+
+        # Introduce a distribution shift (mean jumps to ~5.0)
+        for (int i = 0; i < 200; ++i) {
+            if (detector.add(5.0 + (i % 3) * 0.01)) {
+                drift_found = True;
+            }
+        }
+        assertTrue(drift_found, "PageHinkley detects mean shift from 0.5 to 5.0");
+        assertEq(400, detector.getTotal(), "PageHinkley total 400");
+
+        # After drift, running mean should have moved toward the new distribution
+        float mean = detector.getMean();
+        assertTrue(mean > 1.0, "PageHinkley mean shifted toward new distribution");
+    }
+
+    pageHinkleyStableTest() {
+        ML::PageHinkley detector({"delta": 0.005, "lambda": 50.0, "min_instances": 30});
+
+        # Feed 500 values from the same distribution
+        bool any_drift = False;
+        for (int i = 0; i < 500; ++i) {
+            if (detector.add(10.0 + (i % 10) * 0.1)) {
+                any_drift = True;
+            }
+        }
+        # Should not detect drift on stable data
+        assertFalse(any_drift, "PageHinkley no false alarm on stable data");
+    }
+
+    pageHinkleyResetTest() {
+        ML::PageHinkley detector({"delta": 0.005, "lambda": 50.0});
+
+        for (int i = 0; i < 100; ++i) {
+            detector.add(1.0);
+        }
+        assertTrue(detector.getTotal() > 0, "PageHinkley has total before reset");
+
+        detector.reset();
+        assertEq(0, detector.getTotal(), "PageHinkley total 0 after reset");
+        assertFalse(detector.driftDetected(), "PageHinkley no drift after reset");
+
+        # Verify getMean returns 0 after reset
+        float mean = detector.getMean();
+        assertEq(0.0, mean, "PageHinkley mean 0 after reset");
+    }
+
+    pageHinkleyErrorTest() {
+        # Invalid delta
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"delta": 0.0}); });
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"delta": -0.1}); });
+
+        # Invalid lambda
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"lambda": 0.0}); });
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"lambda": -10.0}); });
+
+        # Invalid min_instances
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"min_instances": 0}); });
+        assertThrows("ML-PAGEHINKLEY-ERROR", sub () { new ML::PageHinkley({"min_instances": -1}); });
+
+        # Copy error
+        ML::PageHinkley d({"delta": 0.005});
+        assertThrows("COPY-ERROR", sub () { ML::PageHinkley cp = d.copy(); });
+    }
+
+    pageHinkleySensitivityTest() {
+        # Smaller lambda = more sensitive (detects smaller shifts faster)
+        ML::PageHinkley sensitive({"delta": 0.005, "lambda": 10.0, "min_instances": 30});
+        ML::PageHinkley conservative({"delta": 0.005, "lambda": 200.0, "min_instances": 30});
+
+        int sensitive_drift_at = -1;
+        int conservative_drift_at = -1;
+
+        # Feed same data to both: stable then shifted
+        for (int i = 0; i < 100; ++i) {
+            sensitive.add(1.0);
+            conservative.add(1.0);
+        }
+        for (int i = 0; i < 200; ++i) {
+            float val = 3.0;
+            if (sensitive.add(val) && sensitive_drift_at < 0) {
+                sensitive_drift_at = i;
+            }
+            if (conservative.add(val) && conservative_drift_at < 0) {
+                conservative_drift_at = i;
+            }
+        }
+
+        # Sensitive should detect drift earlier (or at same time)
+        assertTrue(sensitive_drift_at >= 0, "PageHinkley sensitive detects drift");
+        if (conservative_drift_at >= 0) {
+            assertTrue(sensitive_drift_at <= conservative_drift_at,
+                "PageHinkley sensitive detects earlier than conservative");
+        }
+    }
+
+    pageHinkleyMinInstancesTest() {
+        # With a high min_instances, drift should not be detected early
+        ML::PageHinkley detector({"delta": 0.005, "lambda": 10.0, "min_instances": 100});
+
+        # Feed data that would normally trigger drift quickly
+        bool drift_before_min = False;
+        for (int i = 0; i < 50; ++i) {
+            detector.add(1.0);
+        }
+        for (int i = 0; i < 49; ++i) {
+            if (detector.add(100.0)) {
+                drift_before_min = True;
+            }
+        }
+        # Should not detect drift before min_instances (100) observations
+        assertFalse(drift_before_min, "PageHinkley respects min_instances");
+        assertEq(99, detector.getTotal(), "PageHinkley total before min_instances reached");
+
+        # Now with low min_instances, the same data should trigger drift
+        ML::PageHinkley detector2({"delta": 0.005, "lambda": 10.0, "min_instances": 1});
+        bool drift_found = False;
+        for (int i = 0; i < 50; ++i) {
+            detector2.add(1.0);
+        }
+        for (int i = 0; i < 50; ++i) {
+            if (detector2.add(100.0)) {
+                drift_found = True;
+            }
+        }
+        assertTrue(drift_found, "PageHinkley with low min_instances detects drift");
+    }
+
+    ddmBasicTest() {
+        ML::DDM detector({"min_instances": 30, "warning_threshold": 2.0, "drift_threshold": 3.0});
+        assertFalse(detector.driftDetected(), "DDM no drift initially");
+        assertFalse(detector.warningDetected(), "DDM no warning initially");
+        assertEq(0, detector.getTotal(), "DDM empty total");
+
+        # Feed correct predictions (error rate ~0)
+        for (int i = 0; i < 200; ++i) {
+            detector.add(0.0);
+        }
+        assertFalse(detector.driftDetected(), "DDM no drift on correct predictions");
+        assertEq(200, detector.getTotal(), "DDM total 200");
+        assertTrue(detector.getErrorRate() < 0.01, "DDM error rate near 0");
+
+        # Introduce errors (error rate jumps)
+        bool drift_found = False;
+        for (int i = 0; i < 200; ++i) {
+            if (detector.add(1.0)) {
+                drift_found = True;
+            }
+        }
+        assertTrue(drift_found, "DDM detects error rate increase");
+        assertEq(400, detector.getTotal(), "DDM total 400");
+    }
+
+    ddmStableTest() {
+        ML::DDM detector({"min_instances": 30, "warning_threshold": 2.0, "drift_threshold": 3.0});
+
+        # Feed a stable mix of correct and incorrect (steady ~20% error rate)
+        bool any_drift = False;
+        for (int i = 0; i < 500; ++i) {
+            float val = (i % 5 == 0) ? 1.0 : 0.0;
+            if (detector.add(val)) {
+                any_drift = True;
+            }
+        }
+        # Should not detect drift on stable error rate
+        assertFalse(any_drift, "DDM no false alarm on stable error rate");
+        float error_rate = detector.getErrorRate();
+        assertTrue(error_rate > 0.15 && error_rate < 0.25,
+            "DDM error rate near 20% on stable data");
+    }
+
+    ddmResetTest() {
+        ML::DDM detector();
+
+        for (int i = 0; i < 100; ++i) {
+            detector.add(0.0);
+        }
+        assertTrue(detector.getTotal() > 0, "DDM has total before reset");
+
+        detector.reset();
+        assertEq(0, detector.getTotal(), "DDM total 0 after reset");
+        assertFalse(detector.driftDetected(), "DDM no drift after reset");
+        assertFalse(detector.warningDetected(), "DDM no warning after reset");
+        assertEq(0.0, detector.getErrorRate(), "DDM error rate 0 after reset");
+    }
+
+    ddmErrorTest() {
+        # Invalid min_instances
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"min_instances": 0}); });
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"min_instances": -1}); });
+
+        # Invalid warning_threshold
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"warning_threshold": 0.0}); });
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"warning_threshold": -1.0}); });
+
+        # Invalid drift_threshold
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"drift_threshold": 0.0}); });
+        assertThrows("ML-DDM-ERROR", sub () { new ML::DDM({"drift_threshold": -1.0}); });
+
+        # warning_threshold >= drift_threshold
+        assertThrows("ML-DDM-ERROR", sub () {
+            new ML::DDM({"warning_threshold": 3.0, "drift_threshold": 2.0});
+        });
+        assertThrows("ML-DDM-ERROR", sub () {
+            new ML::DDM({"warning_threshold": 3.0, "drift_threshold": 3.0});
+        });
+
+        # Copy error
+        ML::DDM d();
+        assertThrows("COPY-ERROR", sub () { ML::DDM cp = d.copy(); });
+    }
+
+    ddmSensitivityTest() {
+        # Lower drift_threshold = more sensitive (detects smaller shifts faster)
+        ML::DDM sensitive({"min_instances": 30, "warning_threshold": 1.5, "drift_threshold": 2.0});
+        ML::DDM conservative({"min_instances": 30, "warning_threshold": 3.0, "drift_threshold": 4.0});
+
+        int sensitive_drift_at = -1;
+        int conservative_drift_at = -1;
+
+        # Feed same data to both: correct predictions then errors
+        for (int i = 0; i < 100; ++i) {
+            sensitive.add(0.0);
+            conservative.add(0.0);
+        }
+        for (int i = 0; i < 200; ++i) {
+            if (sensitive.add(1.0) && sensitive_drift_at < 0) {
+                sensitive_drift_at = i;
+            }
+            if (conservative.add(1.0) && conservative_drift_at < 0) {
+                conservative_drift_at = i;
+            }
+        }
+
+        # Sensitive should detect drift earlier (or at same time)
+        assertTrue(sensitive_drift_at >= 0, "DDM sensitive detects drift");
+        if (conservative_drift_at >= 0) {
+            assertTrue(sensitive_drift_at <= conservative_drift_at,
+                "DDM sensitive detects earlier than conservative");
+        }
+    }
+
+    ddmMinInstancesTest() {
+        # With a high min_instances, drift should not be detected early
+        ML::DDM detector({"min_instances": 100, "warning_threshold": 2.0, "drift_threshold": 3.0});
+
+        # Feed data that would normally trigger drift quickly
+        bool drift_before_min = False;
+        for (int i = 0; i < 50; ++i) {
+            detector.add(0.0);
+        }
+        for (int i = 0; i < 49; ++i) {
+            if (detector.add(1.0)) {
+                drift_before_min = True;
+            }
+        }
+        # Should not detect drift before min_instances (100) observations
+        assertFalse(drift_before_min, "DDM respects min_instances");
+        assertEq(99, detector.getTotal(), "DDM total before min_instances reached");
+
+        # Now with low min_instances, the same data should trigger drift
+        ML::DDM detector2({"min_instances": 1, "warning_threshold": 2.0, "drift_threshold": 3.0});
+        bool drift_found = False;
+        for (int i = 0; i < 50; ++i) {
+            detector2.add(0.0);
+        }
+        for (int i = 0; i < 50; ++i) {
+            if (detector2.add(1.0)) {
+                drift_found = True;
+            }
+        }
+        assertTrue(drift_found, "DDM with low min_instances detects drift");
+    }
+
+    ddmWarningTest() {
+        ML::DDM detector({"min_instances": 30, "warning_threshold": 2.0, "drift_threshold": 3.0});
+
+        # Establish baseline with moderate error rate (~10%)
+        for (int i = 0; i < 200; ++i) {
+            float val = (i % 10 == 0) ? 1.0 : 0.0;
+            detector.add(val);
+        }
+        assertFalse(detector.warningDetected(), "DDM no warning on stable error rate");
+        assertFalse(detector.driftDetected(), "DDM no drift on stable error rate");
+
+        # Gradually increase error rate — warning should come before drift
+        bool warning_found = False;
+        bool drift_found = False;
+        int warning_at = -1;
+        int drift_at = -1;
+        for (int i = 0; i < 500; ++i) {
+            # Increase error rate: ~30% errors initially, then ~50%, then ~80%
+            float error_prob;
+            if (i < 100) {
+                error_prob = (i % 3 == 0) ? 1.0 : 0.0;  # ~33%
+            } else if (i < 200) {
+                error_prob = (i % 2 == 0) ? 1.0 : 0.0;  # ~50%
+            } else {
+                error_prob = (i % 5 != 0) ? 1.0 : 0.0;  # ~80%
+            }
+            bool result = detector.add(error_prob);
+            if (detector.warningDetected() && warning_at < 0) {
+                warning_found = True;
+                warning_at = i;
+            }
+            if (result && drift_at < 0) {
+                drift_found = True;
+                drift_at = i;
+            }
+        }
+
+        # At least one of warning or drift should be detected
+        assertTrue(warning_found || drift_found,
+            "DDM detects warning or drift on increasing error rate");
+        if (warning_found && drift_found) {
+            assertTrue(warning_at <= drift_at,
+                "DDM warning comes before or at same time as drift");
         }
     }
 }

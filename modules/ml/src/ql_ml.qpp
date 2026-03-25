@@ -637,6 +637,9 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("PolynomialFeatures"), xsink);
     algos->push(new QoreStringNode("SelectKBest"), xsink);
     algos->push(new QoreStringNode("RFE"), xsink);
+    algos->push(new QoreStringNode("ADWIN"), xsink);
+    algos->push(new QoreStringNode("PageHinkley"), xsink);
+    algos->push(new QoreStringNode("DDM"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif

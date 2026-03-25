@@ -1,0 +1,118 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_ADWIN.qpp
+
+    Qore ADWIN class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_ADWIN.h"
+
+//! ADWIN adaptive windowing drift detector
+/** Monitors a stream of numeric values for distribution changes. When the
+    statistical properties of the data change (concept drift), the detector
+    drops the outdated portion of the window and signals drift.
+
+    Use this to detect when a deployed model's assumptions are violated —
+    for example, when customer spending patterns shift after a holiday season,
+    or when sensor readings indicate equipment degradation.
+
+    The detector maintains a compressed window of observations using
+    exponential histograms. Memory usage is O(log N) where N is the window
+    size.
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::ADWIN detector({"delta": 0.002});
+    # Feed a stream of prediction errors
+    for (int i = 0; i < 500; ++i) {
+        float error = get_prediction_error();
+        if (detector.add(error)) {
+            printf("Drift detected at observation %d! Window mean: %f\n",
+                i, detector.getMean());
+            # Retrain the model
+        }
+    }
+    @endcode
+
+    @since ml 1.0
+*/
+qclass ADWIN [arg=QoreADWIN* adwin; ns=Qore::ML; flags=final];
+
+//! Creates an ADWIN drift detector
+/** @param options optional hash with:
+    - \c delta (float): confidence parameter (default 0.002). Smaller values
+      make the detector less sensitive (fewer false alarms but slower to detect
+      real drift). Range: 0.0001 (very conservative) to 0.1 (very sensitive).
+*/
+ADWIN::constructor(*hash<auto> options) {
+    double delta = 0.002;
+    if (options) {
+        QoreValue v = options->getKeyValue("delta");
+        if (!v.isNullOrNothing()) {
+            delta = v.getAsFloat();
+        }
+    }
+    if (delta <= 0 || delta >= 1.0) {
+        xsink->raiseException("ML-ADWIN-ERROR",
+            "delta must be between 0 and 1 (exclusive), got %f", delta);
+        return;
+    }
+    self->setPrivate(CID_ADWIN, new QoreADWIN(delta));
+}
+
+//! ADWIN objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+ADWIN::copy() {
+    xsink->raiseException("COPY-ERROR", "ADWIN objects cannot be copied");
+}
+
+//! Adds a new observation to the window
+/** @param value the numeric observation (e.g., prediction error, metric value)
+    @return True if concept drift was detected after adding this value
+*/
+bool ADWIN::add(float value) {
+    return adwin->add(value);
+}
+
+//! Returns whether drift was detected on the last add() call
+/** @return True if the last observation triggered drift detection
+*/
+bool ADWIN::driftDetected() [flags=CONSTANT] {
+    return adwin->driftDetected();
+}
+
+//! Returns the current window mean
+/** @return the mean of observations currently in the adaptive window
+*/
+float ADWIN::getMean() {
+    return adwin->getMean();
+}
+
+//! Returns the current window size (number of observations retained)
+/** @return the number of observations in the current window
+*/
+int ADWIN::getWidth() {
+    return adwin->getWidth();
+}
+
+//! Returns the total number of observations added since creation/reset
+/** @return total observation count
+*/
+int ADWIN::getTotal() [flags=CONSTANT] {
+    return adwin->getTotal();
+}
+
+//! Resets the detector to its initial state
+/** Clears all observations and drift state. Use after retraining a model
+    to start monitoring the new model's performance.
+*/
+nothing ADWIN::reset() {
+    adwin->reset();
+}

@@ -56,6 +56,9 @@
 #include "QC_PolynomialFeatures.h"
 #include "QC_SelectKBest.h"
 #include "QC_RFE.h"
+#include "QC_ADWIN.h"
+#include "QC_PageHinkley.h"
+#include "QC_DDM.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -186,6 +189,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitPolynomialFeaturesClass();
     preinitSelectKBestClass();
     preinitRFEClass();
+    preinitADWINClass();
+    preinitPageHinkleyClass();
+    preinitDDMClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -253,6 +259,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initPolynomialFeaturesClass(MLNS));
     MLNS.addSystemClass(initSelectKBestClass(MLNS));
     MLNS.addSystemClass(initRFEClass(MLNS));
+    MLNS.addSystemClass(initADWINClass(MLNS));
+    MLNS.addSystemClass(initPageHinkleyClass(MLNS));
+    MLNS.addSystemClass(initDDMClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
