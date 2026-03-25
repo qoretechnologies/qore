@@ -3,14 +3,17 @@
 ## Overview
 
 This document describes the phased plan to build Qore into an enterprise data science
-platform. Phases 1–7 are **complete** and delivered the ML foundation: 17 algorithms,
-preprocessing, metrics, serialization, model registry, and HuggingFace tokenization.
-Phases 8–14 extend this into a competitive enterprise alternative to Python's data
-science ecosystem.
+platform. Phases 1–7 are **complete** (ML foundation: 17 algorithms, preprocessing,
+metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
+**complete** (DataFrame module with SQL-like operations, CSV/Parquet/DB I/O, ML
+integration, DataProvider wrapper). Phase 9 is **core complete** (DecisionTree,
+RandomForest, GradientBoostedTrees — DataProvider processors and GBT multiclass
+softmax remaining). Phases 10–14 are planned.
 
-## Current State (after Phases 1–7)
+## Current State (after Phases 1–9)
 
-- **ml module**: 17 native algorithms (IsolationForest, LOF, DBSCAN, KMeans, GMM,
+- **ml module**: 20 native algorithms (added DecisionTree, RandomForest,
+  GradientBoostedTrees in Phase 9) with shared FlatTree CART engine (IsolationForest, LOF, DBSCAN, KMeans, GMM,
   LinearRegression, LogisticRegression, KNN, HoltWinters, SeasonalDecomposition, PCA,
   StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator) + OnnxModel +
   classification/regression/clustering metrics + native serialization + online learning
@@ -1230,7 +1233,7 @@ Phase 7 (Tokenizer enhancements) ✅ — independent of Phases 1–6
 
 ---
 
-## Phase 8: DataFrame / Columnar Data Abstraction
+## Phase 8: DataFrame / Columnar Data Abstraction ✅ COMPLETE
 
 ### Motivation
 
@@ -1362,7 +1365,25 @@ DataFrame predictions = model.predictDataFrame(df.select(feature_columns));
 
 ---
 
-## Phase 9: Tree-Based Algorithms
+## Phase 9: Tree-Based Algorithms ✅ CORE COMPLETE
+
+### Status
+
+Core algorithms implemented: DecisionTree, RandomForest, GradientBoostedTrees with
+shared FlatTree CART engine, full serialization, feature importance, and tests.
+20 new test cases, 75 new assertions.
+
+**Remaining items:**
+- GBT multiclass: currently uses simplified nearest-class-to-raw-prediction; proper
+  softmax with K sets of trees per round needed for calibrated multiclass probabilities
+- DataProvider processors: decision-tree-classification, decision-tree-regression,
+  random-forest-classification, random-forest-regression, gbt-classification,
+  gbt-regression (6 processor files + MLProcessorsDataProvider + DataProviderML.qm
+  registration)
+- `findBestSplit()` performance: creates new index vectors per candidate threshold;
+  pre-sorted index optimization would reduce allocation pressure for large datasets
+- DecisionTree `fit()` has no cancellation check inside the recursive tree build;
+  acceptable since bounded by max_depth but could be improved for very deep trees
 
 ### Motivation
 
