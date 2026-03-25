@@ -74,6 +74,7 @@ set(DF_CPP_SRC
     src/df_csv.cpp
     src/df_join.cpp
     src/df_window.cpp
+    src/df_db.cpp
 )
 
 # Conditional Arrow/Parquet support

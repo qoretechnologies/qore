@@ -35,6 +35,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
+        addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -626,6 +627,39 @@ class DataFrameTest inherits QUnit::Test {
         list<string> cols = conflict.columnNames();
         assertTrue(cols.contains("val"), "conflict: left val");
         assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
+    }
+
+    dbQueryTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Skip if no database connection available
+        *string connstr = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!connstr) {
+            testSkip("QORE_DB_CONNSTR_PGSQL not set");
+        }
+
+        # Test with a simple query
+        Datasource ds(connstr);
+        ds.open();
+        on_exit {
+            ds.close();
+        }
+
+        # Create a temp table, insert data, query into DataFrame
+        ds.exec("CREATE TEMP TABLE df_test (id int, name text, score float)");
+        ds.exec("INSERT INTO df_test VALUES (1, 'Alice', 95.5)");
+        ds.exec("INSERT INTO df_test VALUES (2, 'Bob', 88.0)");
+        ds.exec("INSERT INTO df_test VALUES (3, 'Carol', 92.0)");
+        ds.commit();
+
+        auto df = DataFrame::DataFrame::fromQuery(ds, "SELECT * FROM df_test ORDER BY id");
+        assertEq(3, df.numRows(), "DB query row count");
+        assertEq(3, df.numCols(), "DB query col count");
+
+        # Verify data
+        list<auto> ids = df.getColumn("id");
+        assertEq(3, ids.size(), "DB query id column size");
     }
 
     csvMissingValuesTest() {

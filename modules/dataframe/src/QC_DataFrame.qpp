@@ -477,6 +477,70 @@ nothing DataFrame::writeCSV(string path, *hash<auto> options) [dom=FILESYSTEM] {
     df->writeCSV(path->c_str(), options, xsink);
 }
 
+//! Creates a DataFrame from a SQL query result
+/** @param ds a Datasource or DatasourcePool object
+    @param sql the SQL SELECT query to execute
+    @param args optional bind arguments for the query
+
+    Calls the datasource's \c select() method, which returns a column-oriented
+    hash of lists, and builds a DataFrame from the result.
+
+    @return new DataFrame object with query results
+
+    @par Example:
+    @code{.py}
+    Datasource ds("pgsql:user/pass@mydb%localhost");
+    ds.open();
+    auto df = DataFrame::fromQuery(ds,
+        "SELECT name, age, salary FROM employees WHERE dept = %v", ("sales",));
+    printf("Loaded %d rows\n", df.numRows());
+    @endcode
+
+    @throw DATAFRAME-DB-ERROR if the query fails or returns unexpected results
+*/
+static auto DataFrame::fromQuery(object ds, string sql, *list<auto> bind_args) [dom=DATABASE; flags=RET_VALUE_ONLY] {
+    if (qore_check_cancel(xsink, "executing query for DataFrame")) {
+        return QoreValue();
+    }
+
+    // Call ds.select(sql, bind_args...) via Qore method dispatch
+    ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+    call_args->push(sql->refSelf(), xsink);
+    if (bind_args) {
+        // Flatten bind args into the call
+        for (size_t i = 0; i < bind_args->size(); ++i) {
+            call_args->push(bind_args->retrieveEntry(i).refSelf(), xsink);
+        }
+    }
+
+    QoreValue result = ds->evalMethod("select", *call_args, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    QoreDataFrame* df_result = nullptr;
+    if (result.getType() == NT_HASH) {
+        // Column-oriented: {"col1": (v1, v2, ...), ...}
+        df_result = QoreDataFrame::fromColumns(result.get<const QoreHashNode>(), xsink);
+    } else if (result.getType() == NT_LIST) {
+        // Row-oriented: ({"col1": v1, ...}, ...)
+        df_result = QoreDataFrame::fromRecords(result.get<const QoreListNode>(), xsink);
+    } else if (result.isNullOrNothing()) {
+        df_result = new QoreDataFrame();
+    } else {
+        xsink->raiseException("DATAFRAME-DB-ERROR",
+            "unexpected query result type: %s", result.getTypeName());
+    }
+    result.discard(xsink);
+
+    if (!df_result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, df_result);
+    return obj.release();
+}
+
 //! Returns a new DataFrame with an added or replaced column
 /** @param name column name (replaces if already exists)
     @param data list of values (must match row count)
