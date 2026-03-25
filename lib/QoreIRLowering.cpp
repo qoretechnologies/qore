@@ -1079,27 +1079,21 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         return true;
     }
     if (auto* on_block_exit_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
-        // Phase 3a/4 Refactor: Inline handler lowering on normal paths
+        // Phase 1: Inline handler lowering on normal paths
         //
-        // For now (Phase 1): Register handler in block_handlers for future inline lowering,
-        // and create OnBlockExit instruction for runtime handler vector on exception paths.
-        // Handler code uses AST fallback (handler.code->exec()) instead of compiled IR,
-        // which correctly accesses outer-scope variables via TLS.
+        // Register handler in block_handlers for inline lowering at normal exit points.
+        // Handler code is lowered directly into parent IR context via lowerStatementBlock(),
+        // which correctly accesses outer-scope variables (same value frame, same slot cache).
 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
-            // Register for inline lowering at exit points (normal paths) — Phase 1 doesn't use this yet
-            // But we keep it registered for Phase 2 implementation
+            // Register for inline lowering at exit points
             block_handlers.emplace_back(InlineHandler{
                 on_block_exit_stmt->getType(),
                 handler_code,
                 stmt->loc
             });
-
-            // Create OnBlockExit instruction for runtime handler vector (exception paths)
-            // handler_ir is NOT compiled to IR; runtime uses AST fallback via handler.code->exec()
-            QoreIROnBlockExitInstruction* obe_inst = builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
-            // handler_ir left as nullptr — AST execution correctly accesses outer-scope vars
+            // No OnBlockExit instruction emitted — handlers inlined at normal exit points
         }
 
         return true;
@@ -1754,7 +1748,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     uint32_t scope_id = 0;
 
     if (has_on_block_exit) {
-        // Allocate a unique scope ID and emit ScopeEnter
+        // Allocate a unique scope ID (for compatibility with Phase 2/3)
         scope_id = ++scope_counter;
         scope_stack.push_back(scope_id);
         {
@@ -1764,7 +1758,7 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             scope_entry.handler_start = block_handler_start;  // Record handler start for inline lowering
             cleanup_stack.push_back(scope_entry);
         }
-        builder.createScopeEnter(scope_id);
+        // Phase 1: No ScopeEnter instruction — handlers inlined at exit points
     }
 
     bool terminated = false;
@@ -1791,11 +1785,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // Pop handler stack
     handler_stack.pop();
 
-    // At fall-through (normal exit), emit ScopeExit for runtime handler execution
+    // At fall-through (normal exit), inline handlers
     if (has_on_block_exit) {
         if (!terminated) {
-            // Runtime handler vector execution — Phase 1: handlers use AST fallback (no IR)
-            builder.createScopeExit(scope_id, false, nullptr, false);
+            // Phase 1: Inline handlers at fall-through exit
+            if (!lowerHandlersAtExit(false, error, block_handler_start)) {
+                return false;
+            }
         }
         scope_stack.pop_back();
         cleanup_stack.pop_back();
@@ -1831,8 +1827,10 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
         const BlockCleanupEntry& entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
-                // Runtime handler vector execution — Phase 1: handlers use AST fallback (no IR)
-                builder.createScopeExit(entry.scope_id, is_error, entry.loc, false);
+                // Phase 1: Inline handlers on break/continue/return cleanup
+                if (!lowerHandlersAtExit(is_error, error, entry.handler_start)) {
+                    return false;
+                }
                 break;
             }
             case BlockCleanupEntry::Lvars:
