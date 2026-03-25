@@ -1,0 +1,32 @@
+/** @mainpage %Qore dataframe Module
+
+    @tableofcontents
+
+    @section dataframeintro dataframe Module Introduction
+
+    The \c dataframe module provides a columnar DataFrame data structure for the
+    <a href="../../lang/html/index.html">Qore programming language</a>, enabling
+    typed, SQL-like data manipulation for enterprise data science workloads.
+
+    Features:
+    - Typed columns: \c float64 (Eigen3-backed), \c int64, \c string, \c bool, \c date
+    - Null/missing value support with per-column null masks
+    - SQL-like operations: select, filter, sort, groupby, join, pivot, melt, window functions
+    - I/O: CSV (streaming reader), Parquet (optional Apache Arrow), database (Qore DBI)
+    - ML integration: toMatrix/toVector/fromMatrix for zero-overhead ML feeding
+    - Thread-safe with cooperative cancellation support
+
+    To use this module, use \c "%requires dataframe" in your code.
+
+    @section dataframeapi dataframe Module API
+
+    Main classes:
+    - @ref DataFrame::DataFrame "DataFrame" - the columnar data structure
+    - @ref DataFrame::GroupedDataFrame "GroupedDataFrame" - grouped DataFrame for aggregation
+
+    @section dataframerelease dataframe Module Release History
+
+    @subsection dataframe_1_0 dataframe Module Version 1.0
+    - initial public release with full SQL-like query operations, CSV/Parquet/database I/O,
+      and ML integration
+*/
