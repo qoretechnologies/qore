@@ -968,9 +968,16 @@ class ModelRegistryTest inherits QUnit::Test {
 %ifdef NoSqlUtil
         testSkip("SqlUtil module not available");
 %endif
-        string dsn = "pgsql:omquser/omquser@omquser";
+        *string dsn = ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!dsn) {
+            testSkip("QORE_DB_CONNSTR_PGSQL not set");
+        }
         Datasource ds(dsn);
-        ds.open();
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("PostgreSQL not available: %s", ex.desc));
+        }
         on_exit ds.close();
 
         string prefix = "ml_test_";
