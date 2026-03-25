@@ -272,6 +272,8 @@ public class MlTest inherits QUnit::Test {
         addTestCase("DDM sensitivity", \ddmSensitivityTest());
         addTestCase("DDM min_instances", \ddmMinInstancesTest());
         addTestCase("DDM warning detection", \ddmWarningTest());
+        addTestCase("vector similarity functions", \vectorSimilarityTest());
+        addTestCase("vector similarity errors", \vectorSimilarityErrorTest());
         set_return_value(main());
     }
 
@@ -5784,5 +5786,61 @@ public class MlTest inherits QUnit::Test {
             assertTrue(warning_at <= drift_at,
                 "DDM warning comes before or at same time as drift");
         }
+    }
+
+    vectorSimilarityTest() {
+        # Cosine similarity
+        float cos_same = ML::ml_cosine_similarity((1.0, 0.0), (1.0, 0.0));
+        assertTrue(abs(cos_same - 1.0) < 1e-10, "cosine identical vectors = 1.0");
+
+        float cos_ortho = ML::ml_cosine_similarity((1.0, 0.0), (0.0, 1.0));
+        assertTrue(abs(cos_ortho) < 1e-10, "cosine orthogonal vectors = 0.0");
+
+        float cos_opposite = ML::ml_cosine_similarity((1.0, 0.0), (-1.0, 0.0));
+        assertTrue(abs(cos_opposite + 1.0) < 1e-10, "cosine opposite vectors = -1.0");
+
+        float cos_partial = ML::ml_cosine_similarity((1.0, 0.0, 1.0), (0.0, 1.0, 1.0));
+        assertTrue(cos_partial > 0.4 && cos_partial < 0.6, "cosine partial similarity ~0.5");
+
+        # Zero vector
+        float cos_zero = ML::ml_cosine_similarity((0.0, 0.0), (1.0, 0.0));
+        assertEq(0.0, cos_zero, "cosine with zero vector = 0");
+
+        # Dot product
+        float dp = ML::ml_dot_product((1.0, 2.0, 3.0), (4.0, 5.0, 6.0));
+        assertTrue(abs(dp - 32.0) < 1e-10, "dot product (1,2,3)·(4,5,6) = 32");
+
+        float dp_zero = ML::ml_dot_product((1.0, 0.0), (0.0, 1.0));
+        assertTrue(abs(dp_zero) < 1e-10, "dot product orthogonal = 0");
+
+        # Euclidean distance
+        float ed = ML::ml_euclidean_distance((0.0, 0.0), (3.0, 4.0));
+        assertTrue(abs(ed - 5.0) < 1e-10, "euclidean (0,0)→(3,4) = 5");
+
+        float ed_same = ML::ml_euclidean_distance((1.0, 2.0), (1.0, 2.0));
+        assertTrue(abs(ed_same) < 1e-10, "euclidean same point = 0");
+
+        # Manhattan distance
+        float md = ML::ml_manhattan_distance((0.0, 0.0), (3.0, 4.0));
+        assertTrue(abs(md - 7.0) < 1e-10, "manhattan (0,0)→(3,4) = 7");
+
+        float md_same = ML::ml_manhattan_distance((1.0, 2.0), (1.0, 2.0));
+        assertTrue(abs(md_same) < 1e-10, "manhattan same point = 0");
+
+        # Higher dimensions
+        float ed3 = ML::ml_euclidean_distance((1.0, 2.0, 3.0), (4.0, 6.0, 3.0));
+        assertTrue(abs(ed3 - 5.0) < 1e-10, "euclidean 3D = 5");
+    }
+
+    vectorSimilarityErrorTest() {
+        # Mismatched lengths
+        assertThrows("ML-VECTOR-ERROR",
+            \ML::ml_cosine_similarity(), ((1.0, 2.0), (1.0, 2.0, 3.0)));
+        assertThrows("ML-VECTOR-ERROR",
+            \ML::ml_dot_product(), ((1.0,), (1.0, 2.0)));
+        assertThrows("ML-VECTOR-ERROR",
+            \ML::ml_euclidean_distance(), ((1.0, 2.0), (1.0,)));
+        assertThrows("ML-VECTOR-ERROR",
+            \ML::ml_manhattan_distance(), ((1.0, 2.0, 3.0), (1.0, 2.0)));
     }
 }

@@ -1854,4 +1854,118 @@ float ml_normal_ppf(float p, float mean = 0.0, float std_dev = 1.0) [dom=DEFAULT
     return ::ml_normal_ppf(p, mean, std_dev);
 }
 
+//! Computes the cosine similarity between two vectors
+/** Measures how similar two vectors are in direction (ignoring magnitude).
+    Returns a value from -1 (opposite) through 0 (orthogonal) to 1 (identical
+    direction). Commonly used for comparing text embeddings, document similarity,
+    and recommendation systems.
+
+    @param a first vector (list of numeric values)
+    @param b second vector (same length as a)
+    @return cosine similarity from -1.0 to 1.0
+
+    @par Example:
+    @code{.py}
+    float sim = ml_cosine_similarity((1.0, 0.0, 1.0), (0.0, 1.0, 1.0));
+    # sim ≈ 0.5 — partially similar directions
+    @endcode
+*/
+float ml_cosine_similarity(list<auto> a, list<auto> b) [dom=DEFAULT] {
+    VectorXd va = qoreListToVector(a, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd vb = qoreListToVector(b, xsink);
+    if (*xsink) { return QoreValue(); }
+    if (va.size() != vb.size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "vectors must have the same length: %d vs %d",
+            (int)va.size(), (int)vb.size());
+        return QoreValue();
+    }
+    return ::ml_cosine_similarity(va, vb);
+}
+
+//! Computes the dot product between two vectors
+/** The sum of element-wise products. Used in scoring functions, similarity
+    computations, and as a building block for other metrics.
+
+    @param a first vector
+    @param b second vector (same length as a)
+    @return the dot product value
+
+    @par Example:
+    @code{.py}
+    float dp = ml_dot_product((1.0, 2.0, 3.0), (4.0, 5.0, 6.0));
+    # dp = 1*4 + 2*5 + 3*6 = 32.0
+    @endcode
+*/
+float ml_dot_product(list<auto> a, list<auto> b) [dom=DEFAULT] {
+    VectorXd va = qoreListToVector(a, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd vb = qoreListToVector(b, xsink);
+    if (*xsink) { return QoreValue(); }
+    if (va.size() != vb.size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "vectors must have the same length: %d vs %d",
+            (int)va.size(), (int)vb.size());
+        return QoreValue();
+    }
+    return ::ml_dot_product(va, vb);
+}
+
+//! Computes the Euclidean (straight-line) distance between two vectors
+/** The most common distance metric. Measures the straight-line distance
+    between two points in N-dimensional space.
+
+    @param a first vector
+    @param b second vector (same length as a)
+    @return the Euclidean distance (always >= 0)
+
+    @par Example:
+    @code{.py}
+    float dist = ml_euclidean_distance((1.0, 0.0), (4.0, 4.0));
+    # dist = 5.0
+    @endcode
+*/
+float ml_euclidean_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+    VectorXd va = qoreListToVector(a, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd vb = qoreListToVector(b, xsink);
+    if (*xsink) { return QoreValue(); }
+    if (va.size() != vb.size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "vectors must have the same length: %d vs %d",
+            (int)va.size(), (int)vb.size());
+        return QoreValue();
+    }
+    return ::ml_euclidean_distance(va, vb);
+}
+
+//! Computes the Manhattan (city-block) distance between two vectors
+/** Measures distance by summing the absolute differences in each dimension.
+    Less sensitive to outliers in individual dimensions than Euclidean distance.
+
+    @param a first vector
+    @param b second vector (same length as a)
+    @return the Manhattan distance (always >= 0)
+
+    @par Example:
+    @code{.py}
+    float dist = ml_manhattan_distance((1.0, 0.0), (4.0, 4.0));
+    # dist = 3 + 4 = 7.0
+    @endcode
+*/
+float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
+    VectorXd va = qoreListToVector(a, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd vb = qoreListToVector(b, xsink);
+    if (*xsink) { return QoreValue(); }
+    if (va.size() != vb.size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "vectors must have the same length: %d vs %d",
+            (int)va.size(), (int)vb.size());
+        return QoreValue();
+    }
+    return ::ml_manhattan_distance(va, vb);
+}
+
 ///@}

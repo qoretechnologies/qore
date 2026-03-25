@@ -48,4 +48,16 @@ DLLLOCAL double ml_normal_cdf(double x, double mean, double std);
 //! Normal distribution inverse CDF / PPF (approximation)
 DLLLOCAL double ml_normal_ppf(double p, double mean, double std);
 
+//! Cosine similarity between two vectors (-1 to 1)
+DLLLOCAL double ml_cosine_similarity(const VectorXd& a, const VectorXd& b);
+
+//! Dot product between two vectors
+DLLLOCAL double ml_dot_product(const VectorXd& a, const VectorXd& b);
+
+//! Euclidean distance between two vectors
+DLLLOCAL double ml_euclidean_distance(const VectorXd& a, const VectorXd& b);
+
+//! Manhattan distance between two vectors
+DLLLOCAL double ml_manhattan_distance(const VectorXd& a, const VectorXd& b);
+
 #endif

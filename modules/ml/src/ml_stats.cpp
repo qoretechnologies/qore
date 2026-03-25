@@ -510,3 +510,27 @@ double ml_normal_ppf(double p, double mean, double std_dev) {
 
     return mean + std_dev * z;
 }
+
+// --- Vector similarity functions ---
+
+double ml_cosine_similarity(const VectorXd& a, const VectorXd& b) {
+    double dot = a.dot(b);
+    double norm_a = a.norm();
+    double norm_b = b.norm();
+    if (norm_a < 1e-15 || norm_b < 1e-15) {
+        return 0.0;
+    }
+    return dot / (norm_a * norm_b);
+}
+
+double ml_dot_product(const VectorXd& a, const VectorXd& b) {
+    return a.dot(b);
+}
+
+double ml_euclidean_distance(const VectorXd& a, const VectorXd& b) {
+    return (a - b).norm();
+}
+
+double ml_manhattan_distance(const VectorXd& a, const VectorXd& b) {
+    return (a - b).cwiseAbs().sum();
+}
