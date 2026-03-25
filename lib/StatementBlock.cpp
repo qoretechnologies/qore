@@ -880,16 +880,17 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
                         return;
                     }
 
+                    // Compute slot IDs and embed them into instructions for fast array access
+                    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
+                    func->computeSlotIdsAndEmbed();
+
                     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
-                    // This must happen before computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
+                    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
                     std::string handler_compile_error;
                     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
                     if (!handler_compile_error.empty()) {
                         printd(1, "Top-level handler compilation: %s\n", handler_compile_error.c_str());
                     }
-
-                    // Compute slot IDs and embed them into instructions for fast array access
-                    func->computeSlotIdsAndEmbed();
                     // NOTE: do NOT call func->computeIROnlyLocals() for top-level code.
                     // Top-level locals are accessible by any called function/sub through the
                     // thread-local variable stack, but the IR-only analysis doesn't track

@@ -2471,16 +2471,17 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
         return;
     }
 
+    // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
+    // This must happen BEFORE compileAllHandlerIRs() to ensure parent slots are populated
+    func->computeSlotIdsAndEmbed();
+
     // Phase A4: Compile all handler bodies to separate IR functions and attach to OnBlockExit instructions
-    // This must happen before computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
+    // This must happen AFTER computeSlotIdsAndEmbed() so handlers can be compiled with correct parent context
     std::string handler_compile_error;
     int handlers_compiled = lowering.compileAllHandlerIRs(handler_compile_error);
     if (!handler_compile_error.empty()) {
         printd(2, "UserVariantBase::attemptIRLowering() '%s' handler compilation: %s\n", name, handler_compile_error.c_str());
     }
-
-    // Compute slot IDs, max_value_id, and embed pre-computed fields in instructions
-    func->computeSlotIdsAndEmbed();
 
     // Classify locals as IR-only vs AST-visible for optimization
     func->computeIROnlyLocals();
