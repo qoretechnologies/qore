@@ -71,6 +71,7 @@ set(TOK_QPP_SRC
 # C++ source files
 set(TOK_CPP_SRC
     src/tokenizer-module.cpp
+    src/tokenizer-c-api.cpp
     src/HFTokenizer.cpp
     src/normalizers/AbstractNormalizer.cpp
     src/normalizers/BertNormalizer.cpp
