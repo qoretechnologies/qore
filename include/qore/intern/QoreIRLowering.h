@@ -59,6 +59,7 @@ class QoreFoldrOperatorNode;
 class QoreMapSelectOperatorNode;
 class QoreHashMapOperatorNode;
 class QoreHashMapSelectOperatorNode;
+class QoreIROnBlockExitInstruction;
 
 class QoreIRLowering {
 public:
@@ -68,9 +69,10 @@ public:
      *  compiled as separate QoreIRFunction objects.
      */
     struct InlineHandler {
-        obe_type_e type;                     //!< handler type (OBE_Unconditional/Success/Error)
-        StatementBlock* code;                //!< handler code block
-        const QoreProgramLocation* loc;      //!< source location for error reporting
+        obe_type_e type;                                    //!< handler type (OBE_Unconditional/Success/Error)
+        StatementBlock* code;                               //!< handler code block
+        const QoreProgramLocation* loc;                     //!< source location for error reporting
+        QoreIROnBlockExitInstruction* obe_inst = nullptr;   //!< instruction to attach compiled handler IR
     };
 
     //! Captured variables needed by a handler for parent scope access
@@ -88,6 +90,11 @@ public:
     bool lowerStatement(const AbstractStatement* stmt, std::string& error);
     bool lowerStatementBlock(const StatementBlock* block, std::string& error);
     void setParseContext(QoreParseContext* parse_context);
+
+    //! Compile all handler bodies to separate QoreIRFunction objects and attach to OnBlockExit instructions
+    //! @param error receives error message for any compilation failures (non-fatal)
+    //! @return number of handlers successfully compiled
+    int compileAllHandlerIRs(std::string& error);
 
 public:
     // Expression handler methods - public for use by QoreIRExprRegistry

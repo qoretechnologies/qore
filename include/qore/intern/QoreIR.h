@@ -1841,6 +1841,11 @@ public:
     // Maps LocalVar* pointers to their slot IDs for flat array access instead of hash maps
     uint32_t max_local_slot_id = 0;
 
+    // For handler IR functions: number of slots inherited from parent function
+    // Slot IDs 0..parent_slot_count-1 come from the parent, rest are handler-own
+    // At runtime, parent's local values are copied into these inherited slots
+    uint32_t parent_slot_count = 0;
+
     // Mapping of LocalVar* pointers to their slot IDs (computed during IR analysis)
     // Used by the IR interpreter to convert unordered_map lookups to direct array access
     std::unordered_map<const LocalVar*, uint32_t> local_var_slots;

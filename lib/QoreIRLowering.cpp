@@ -1087,14 +1087,15 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         StatementBlock* handler_code = on_block_exit_stmt->getCode();
         if (handler_code) {
+            // Phase 2a: Emit OnBlockExit instruction so handlers are registered for exception-path execution
+            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
+
             // Register for inline lowering at exit points
             block_handlers.emplace_back(InlineHandler{
                 on_block_exit_stmt->getType(),
                 handler_code,
                 stmt->loc
             });
-            // Phase 2a: Emit OnBlockExit instruction so handlers are registered for exception-path execution
-            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
         }
 
         return true;
@@ -2228,6 +2229,20 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 
     // Transfer ownership to caller
     return handler_func.release();
+}
+
+int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
+    // Phase A4: Handler IR compilation infrastructure
+    // Currently disabled: handlers use AST fallback (handler_ir = nullptr)
+    // Future: Compile handlers to separate QoreIRFunction objects with parent slot inheritance
+    //
+    // TODO: Implement parent slot inheritance mechanism
+    // - Pre-seed handler's local_var_slots with parent function's entries
+    // - Set parent_slot_count to track inherited slots
+    // - Copy parent's local values into handler frame at runtime
+    // - Update deserializer to pass enclosing_locals for parent scope variables
+
+    return 0;  // No handlers compiled yet (all use AST fallback)
 }
 
 bool QoreIRLowering::lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index) {
