@@ -12,6 +12,7 @@
 #include "utils/qore_helpers.h"
 
 #include <algorithm>
+#include <mutex>
 
 namespace QoreTokenizer {
 
