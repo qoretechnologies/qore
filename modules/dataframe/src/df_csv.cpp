@@ -11,11 +11,10 @@
 #include "df_csv.h"
 
 #include <cerrno>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <sstream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -223,6 +222,12 @@ QoreDataFrame* QoreDataFrame::readCSV(const std::string& path, const QoreHashNod
     while (std::getline(file, line)) {
         if (max_rows >= 0 && rows_read >= max_rows) {
             break;
+        }
+        // Periodic cancellation check every 10K rows
+        if ((rows_read % 10000) == 0 && rows_read > 0) {
+            if (qore_check_cancel(xsink, "reading CSV file")) {
+                return nullptr;
+            }
         }
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
