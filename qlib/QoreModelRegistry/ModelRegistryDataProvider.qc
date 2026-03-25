@@ -39,7 +39,11 @@ public class ModelRegistryDataProvider inherits AbstractDataProvider {
         };
 
         #! Supported backend type values for the \c backend_type option
-        const BackendTypes = ("filesystem", "database", "rest");
+        const BackendTypes = (
+            <AllowedValueInfo>{"value": "filesystem", "display_name": "Filesystem"},
+            <AllowedValueInfo>{"value": "database", "display_name": "Database (SqlUtil)"},
+            <AllowedValueInfo>{"value": "rest", "display_name": "REST API"},
+        );
 
         const ConstructorOptions = {
             "backend_type": <DataProviderOptionInfo>{

@@ -144,7 +144,7 @@ public class QoreRegistryModelProcessor inherits DataProvider::AbstractDataProvi
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
 
         model_name = copts.model_name;
-        fields = copts.fields;
+        fields = DataProvider::AbstractDataProvider::parseFieldList(copts.fields);
         if (copts.window_size) {
             window_size = copts.window_size;
         }

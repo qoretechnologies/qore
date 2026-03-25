@@ -80,8 +80,7 @@ bool DartsTrie::parse(const uint8_t* data, size_t size) {
 //   contains the value via value()
 //
 // label check: (unit ^ c) & ((1 << 31) | 0xFF) == c
-// But for commonPrefixSearch, we skip label validation for performance (the trie
-// is trusted data from the precompiled normalizer).
+// commonPrefixSearch validates labels on each transition to ensure correctness.
 
 std::vector<TrieMatch> DartsTrie::commonPrefixSearch(const uint8_t* input,
         size_t input_len) const {

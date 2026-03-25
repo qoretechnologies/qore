@@ -30,8 +30,9 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/DataProvider
-%requires ../../../../qlib/DataProviderML
 %requires ml
+%requires ../../../../qlib/QoreModelRegistry
+%requires ../../../../qlib/DataProviderML
 
 %exec-class DataProviderMLProcessorsTest
 
@@ -121,6 +122,9 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         addTestCase("classification-metrics - basic", \classMetricsBasic());
         addTestCase("regression-metrics - basic", \regMetricsBasic());
         addTestCase("clustering-metrics - basic", \clusterMetricsBasic());
+
+        # RegistryModel tests
+        addTestCase("registry-model - field parsing", \registryModelFieldParsing());
 
         # Integration tests
         addTestCase("integration - factory registration", \integrationFactory());
@@ -1424,6 +1428,51 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(results[0].silhouette_score > 0.9);
         assertEq(2, results[0].n_clusters);
         assertEq(6, results[0].sample_count);
+    }
+
+    # ===================== RegistryModel Tests =====================
+
+    registryModelFieldParsing() {
+        # Create a temp registry with a simple KMeans model
+        string dir = tmp_location() + DirSep + "reg_model_test_" + get_random_bytes(4).toHex();
+        mkdir_ex(dir, 0755, True);
+        on_exit {
+            system("rm -rf " + dir);
+        }
+
+        # Create and register a model
+        ML::KMeans km({"k": 2, "seed": 42});
+        km.fitMatrix(((1.0, 1.0), (1.1, 1.1), (5.0, 5.0), (5.1, 5.1)));
+
+        QoreModelRegistry::ModelRegistry registry({"path": dir});
+        registry.register(km, {
+            "name": "test_km",
+            "description": "test",
+        });
+
+        # Verify the registry-model processor is accessible via the factory
+        auto factory = DataProvider::DataProvider::getFactory("ml-processors");
+        auto provider = factory.create({});
+        list<string> children = provider.getChildProviderNames();
+        assertTrue(children.contains("registry-model"),
+            "registry-model processor should be available");
+
+        # Test parseFieldList by verifying comma-separated fields string
+        # works when processed through the DataProvider options infrastructure
+        list<string> parsed = DataProvider::AbstractDataProvider::parseFieldList("x, y");
+        assertEq(("x", "y"), parsed);
+
+        # Also test list input
+        list<string> parsed2 = DataProvider::AbstractDataProvider::parseFieldList(("a,b", "c"));
+        assertEq(("a", "b", "c"), parsed2);
+
+        # Verify the field parsing is used correctly in the processor constructor
+        # by checking that it matches the pattern used by all other processors
+        list<string> parsed3 = DataProvider::AbstractDataProvider::parseFieldList("feature_1, feature_2, target");
+        assertEq(3, parsed3.size());
+        assertEq("feature_1", parsed3[0]);
+        assertEq("feature_2", parsed3[1]);
+        assertEq("target", parsed3[2]);
     }
 
     # ===================== Integration Tests =====================

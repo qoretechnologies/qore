@@ -393,6 +393,8 @@ public class RestBackend inherits AbstractModelRegistryBackend {
     /** RestClient raises REST-RESPONSE-ERROR by default for HTTP error status
         codes. This method catches those and normalizes them to
         ML-REGISTRY-REST-ERROR for consistent error handling.
+
+        Non-REST exceptions are re-thrown as-is.
     */
     private static nothing rethrowRestError(hash<ExceptionInfo> ex, string method,
             string path) {
@@ -401,7 +403,7 @@ public class RestBackend inherits AbstractModelRegistryBackend {
                 sprintf("%s %s failed: %s (status %s)", method, path,
                     ex.desc, ex.arg.status_code ?? "unknown");
         }
-        rethrow;
+        throw ex.err, ex.desc, ex.arg;
     }
 }
 

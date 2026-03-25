@@ -89,8 +89,8 @@ public hashdecl PruneOptions {
 
     Available implementations:
     - @ref FilesystemBackend — stores models on the local filesystem
-    - @ref DatabaseBackend — stores models in a database via SqlUtil (future)
-    - @ref RestBackend — stores models via a REST API (future)
+    - @ref DatabaseBackend — stores models in a database via SqlUtil
+    - @ref RestBackend — stores models via a REST API
 
     @since QoreModelRegistry 2.0
 */
