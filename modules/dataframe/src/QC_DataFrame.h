@@ -87,6 +87,29 @@ public:
     //! String representation for display
     DLLLOCAL QoreStringNode* toString(int64_t max_rows, ExceptionSink* xsink) const;
 
+    // --- Query Operations (return new DataFrames) ---
+
+    //! Select a subset of columns
+    DLLLOCAL QoreDataFrame* select(const QoreListNode* columns, ExceptionSink* xsink) const;
+
+    //! Filter rows by a single condition: column op value
+    DLLLOCAL QoreDataFrame* filter(const std::string& column, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const;
+
+    //! Sort by one or more columns
+    DLLLOCAL QoreDataFrame* sortBy(const QoreListNode* columns,
+        const QoreListNode* ascending, ExceptionSink* xsink) const;
+
+    //! Concatenate DataFrames vertically (axis=0) or horizontally (axis=1)
+    DLLLOCAL static QoreDataFrame* concat(const QoreListNode* dataframes, int axis,
+        ExceptionSink* xsink);
+
+    //! Fill null values with a constant
+    DLLLOCAL QoreDataFrame* fillna(QoreValue value, ExceptionSink* xsink) const;
+
+    //! Drop rows containing any null values
+    DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
+
     // --- Mutation (in-place, under lock) ---
 
     DLLLOCAL void addColumn(const std::string& name, const QoreListNode* data,
@@ -104,8 +127,12 @@ private:
     //! Get column index by name, or raise exception
     DLLLOCAL int getColIdx(const std::string& name, ExceptionSink* xsink) const;
 
-    //! Build a new DataFrame from a row index subset
+    //! Build a new DataFrame from a contiguous row range
     DLLLOCAL QoreDataFrame* sliceRows(int64_t start, int64_t count,
+        ExceptionSink* xsink) const;
+
+    //! Build a new DataFrame from an arbitrary row index list
+    DLLLOCAL QoreDataFrame* selectRows(const std::vector<int64_t>& indices,
         ExceptionSink* xsink) const;
 
     //! Rebuild col_index from columns vector

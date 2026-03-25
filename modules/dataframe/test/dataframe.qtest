@@ -28,6 +28,10 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("headTailSliceTest", \headTailSliceTest());
         addTestCase("nullHandlingTest", \nullHandlingTest());
         addTestCase("errorCasesTest", \errorCasesTest());
+        addTestCase("selectTest", \selectTest());
+        addTestCase("filterTest", \filterTest());
+        addTestCase("sortByTest", \sortByTest());
+        addTestCase("fillnaDropnaTest", \fillnaDropnaTest());
 
         set_return_value(main());
     }
@@ -238,6 +242,108 @@ class DataFrameTest inherits QUnit::Test {
         hash<auto> a_stats = stats[0];
         assertEq(2, a_stats.count, "describe count excludes nulls");
         assertEq(1, a_stats.null_count, "describe null_count");
+    }
+
+    selectTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1, "b": "x", "c": 10.0},
+             {"a": 2, "b": "y", "c": 20.0},
+             {"a": 3, "b": "z", "c": 30.0}));
+
+        auto sel = df.select(("a", "c"));
+        assertEq(3, sel.numRows(), "select preserves rows");
+        assertEq(2, sel.numCols(), "select reduces columns");
+        assertEq(("a", "c"), sel.columnNames(), "select column names");
+        assertEq((1, 2, 3), sel.getColumn("a"), "select values preserved");
+    }
+
+    filterTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30, "score": 95.5},
+             {"name": "Bob",   "age": 25, "score": 88.0},
+             {"name": "Carol", "age": 35, "score": 92.0},
+             {"name": "Dave",  "age": 28, "score": 78.0}));
+
+        # Numeric comparison
+        auto older = df.filter("age", ">=", 30);
+        assertEq(2, older.numRows(), "filter >= 30 returns 2 rows");
+        assertEq(("Alice", "Carol"), older.getColumn("name"), "filter >= values");
+
+        # String equality
+        auto bob = df.filter("name", "==", "Bob");
+        assertEq(1, bob.numRows(), "filter string ==");
+        assertEq(25, bob.getColumn("age")[0], "filter string == value");
+
+        # String contains
+        auto has_a = df.filter("name", "contains", "a");
+        # "Carol" and "Dave" contain lowercase 'a'
+        assertEq(2, has_a.numRows(), "filter contains");
+
+        # No matches
+        auto none = df.filter("age", ">", 100);
+        assertEq(0, none.numRows(), "filter no matches");
+
+        # Null filter
+        DataFrame::DataFrame df2(
+            ({"a": 1, "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3, "b": NOTHING}));
+        auto nulls = df2.filter("a", "is_null", 0);
+        assertEq(1, nulls.numRows(), "filter is_null");
+        auto non_nulls = df2.filter("a", "not_null", 0);
+        assertEq(2, non_nulls.numRows(), "filter not_null");
+    }
+
+    sortByTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Carol", "age": 35},
+             {"name": "Alice", "age": 30},
+             {"name": "Bob",   "age": 25}));
+
+        # Sort ascending
+        auto sorted = df.sortBy(("age",));
+        assertEq((25, 30, 35), sorted.getColumn("age"), "sort ascending");
+        assertEq(("Bob", "Alice", "Carol"), sorted.getColumn("name"),
+            "sort carries other columns");
+
+        # Sort descending
+        auto desc = df.sortBy(("age",), (False,));
+        assertEq((35, 30, 25), desc.getColumn("age"), "sort descending");
+
+        # Sort by string
+        auto alpha = df.sortBy(("name",));
+        assertEq(("Alice", "Bob", "Carol"), alpha.getColumn("name"), "sort string");
+    }
+
+    fillnaDropnaTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1,       "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3,       "b": NOTHING}));
+
+        # fillna
+        auto filled = df.fillna(0);
+        assertEq(3, filled.numRows(), "fillna preserves rows");
+        assertEq((1, 0, 3), filled.getColumn("a"), "fillna replaces int nulls");
+        assertEq(("x", "y", "0"), filled.getColumn("b"), "fillna replaces string nulls");
+
+        # dropna
+        auto dropped = df.dropna();
+        assertEq(1, dropped.numRows(), "dropna keeps only complete rows");
+        assertEq(1, dropped.getColumn("a")[0], "dropna correct row");
+        assertEq("x", dropped.getColumn("b")[0], "dropna correct row value");
     }
 
     errorCasesTest() {

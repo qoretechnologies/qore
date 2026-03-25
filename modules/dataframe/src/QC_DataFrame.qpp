@@ -180,6 +180,126 @@ auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
     return obj.release();
 }
 
+//! Returns a new DataFrame with only the specified columns
+/** @param columns list of column names to select
+    @return new DataFrame object with the selected columns
+
+    @par Example:
+    @code{.py}
+    auto nums = df.select(("age", "score"));
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if a column name is not found
+
+    @since dataframe 1.0
+*/
+auto DataFrame::select(list<string> columns) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->select(columns, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with rows matching the condition
+/** @param column the column name to filter on
+    @param op the comparison operator: "==", "!=", "<", "<=", ">", ">=",
+    "contains", "startswith", "endswith", "is_null", "not_null"
+    @param value the value to compare against
+
+    @return new DataFrame object with matching rows
+
+    @par Example:
+    @code{.py}
+    auto adults = df.filter("age", ">=", 18);
+    auto bobs = df.filter("name", "==", "Bob");
+    auto has_score = df.filter("score", "not_null", 0);
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+
+    @since dataframe 1.0
+*/
+auto DataFrame::filter(string column, string op, auto value) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->filter(column->c_str(), op->c_str(), value, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame sorted by the specified columns
+/** @param columns list of column names to sort by
+    @param ascending optional list of booleans (True = ascending, default True)
+
+    @return new DataFrame object with sorted rows
+
+    @par Example:
+    @code{.py}
+    auto sorted = df.sortBy(("age",));
+    auto desc = df.sortBy(("score",), (False,));
+    auto multi = df.sortBy(("dept", "salary"), (True, False));
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if column not found
+
+    @since dataframe 1.0
+*/
+auto DataFrame::sortBy(list<string> columns, *list<auto> ascending) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->sortBy(columns, ascending, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with null values replaced by the given value
+/** @param value the replacement value (converted to each column's type)
+    @return new DataFrame object with nulls filled
+
+    @par Example:
+    @code{.py}
+    auto filled = df.fillna(0);
+    @endcode
+
+    @since dataframe 1.0
+*/
+auto DataFrame::fillna(auto value) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->fillna(value, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a new DataFrame with rows containing any null values removed
+/** @return new DataFrame object with no null values
+
+    @par Example:
+    @code{.py}
+    auto clean = df.dropna();
+    @endcode
+
+    @since dataframe 1.0
+*/
+auto DataFrame::dropna() [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = df->dropna(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
 //! Converts the DataFrame to a list of record hashes
 /** @return list<hash<auto>> where each element is one row
 */
