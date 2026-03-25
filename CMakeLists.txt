@@ -1879,6 +1879,7 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
 qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")

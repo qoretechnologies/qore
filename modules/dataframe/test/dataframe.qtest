@@ -14,6 +14,10 @@
 %define NoDataFrame
 %endtry
 
+%try-module DataProviderDataFrame
+%define NoDataProviderDataFrame
+%endtry
+
 %exec-class DataFrameTest
 
 class DataFrameTest inherits QUnit::Test {
@@ -38,6 +42,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("dbQueryTest", \dbQueryTest());
         addTestCase("mlIntegrationTest", \mlIntegrationTest());
         addTestCase("parquetTest", \parquetTest());
+        addTestCase("dataProviderTest", \dataProviderTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
         addTestCase("joinTest", \joinTest());
@@ -629,6 +634,47 @@ class DataFrameTest inherits QUnit::Test {
         list<string> cols = conflict.columnNames();
         assertTrue(cols.contains("val"), "conflict: left val");
         assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
+    }
+
+    dataProviderTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+%ifdef NoDataProviderDataFrame
+        testSkip("DataProviderDataFrame module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30, "score": 95.5},
+             {"name": "Bob",   "age": 25, "score": 88.0},
+             {"name": "Carol", "age": 35, "score": 92.0}));
+
+        DataProviderDataFrame::DataFrameDataProvider prov(df);
+        assertEq("dataframe", prov.getName(), "provider name");
+
+        # Record type reflects DataFrame schema
+        *hash<string, AbstractDataField> rt = prov.getRecordType();
+        assertTrue(exists rt.name, "record type has name field");
+        assertTrue(exists rt.age, "record type has age field");
+
+        # Search with equality filter
+        auto it = prov.searchRecords({"name": "Bob"});
+        assertTrue(it.next(), "search finds Bob");
+        hash<auto> rec = it.getValue();
+        assertEq("Bob", rec.name, "search result name");
+        assertEq(25, rec.age, "search result age");
+        assertFalse(it.next(), "search has no more results");
+
+        # Search with comparison filter
+        auto it2 = prov.searchRecords({"age": {">=": 30}});
+        int count = 0;
+        while (it2.next()) {
+            ++count;
+        }
+        assertEq(2, count, "comparison filter returns 2 records");
+
+        # Get DataFrame back from provider
+        DataFrame::DataFrame df2 = prov.getDataFrame();
+        assertEq(3, df2.numRows(), "getDataFrame preserves rows");
     }
 
     parquetTest() {
