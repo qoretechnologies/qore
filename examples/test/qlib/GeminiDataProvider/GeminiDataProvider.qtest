@@ -2,7 +2,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
 %modern
-%enable-all-warnings
 %exec-class GeminiDataProviderTest
 %requires QUnit
 
@@ -30,7 +29,9 @@
 %define NoDataProvider
 %endtry
 
-%requires json
+%try-module json
+%define NoJson
+%endtry
 
 class FakeGeminiRestClient inherits RestClientIo::RestClientIo {
     public {
@@ -96,6 +97,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
         addTestCase("cached contents", \cachedContentsTest());
         addTestCase("file search stores", \fileSearchStoresTest());
         addTestCase("connection scheme", \connectionSchemeTest());
+        addTestCase("example event data", \exampleEventDataTest());
         addTestCase("integration", \integrationTest());
         set_return_value(main());
     }
@@ -252,14 +254,14 @@ class GeminiDataProviderTest inherits QUnit::Test {
 
         AbstractDataProvider child = dp.getChildProviderEx("embed-content");
         auto resp = child.doRequest({
-            "model": "text-embedding-004",
+            "model": "gemini-embedding-001",
             "content": {
                 "role": "user",
                 "parts": ({"text": "Hello world"},),
             },
         });
         assertEq("POST", fake.last_method);
-        assertTrue(fake.last_path.find("models/text-embedding-004:embedContent") >= 0);
+        assertTrue(fake.last_path.find("models/gemini-embedding-001:embedContent") >= 0);
         assertEq(True, resp.hasKey("values"));
     }
 
@@ -273,14 +275,14 @@ class GeminiDataProviderTest inherits QUnit::Test {
 
         AbstractDataProvider child = dp.getChildProviderEx("batch-embed");
         auto resp = child.doRequest({
-            "model": "text-embedding-004",
+            "model": "gemini-embedding-001",
             "requests": (
                 {"content": {"role": "user", "parts": ({"text": "Hello"},)}},
                 {"content": {"role": "user", "parts": ({"text": "World"},)}},
             ),
         });
         assertEq("POST", fake.last_method);
-        assertTrue(fake.last_path.find("models/text-embedding-004:batchEmbedContents") >= 0);
+        assertTrue(fake.last_path.find("models/gemini-embedding-001:batchEmbedContents") >= 0);
         assertEq(True, resp.hasKey("embeddings"));
     }
 
@@ -377,6 +379,15 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq("fileSearchStores/store-123", resp.name);
     }
 
+    exampleEventDataTest() {
+        AbstractDataProvider stream = dp.getChildProviderEx("stream-content");
+        auto example = stream.getExampleEventData(GeminiDataProvider::EVENT_GEMINI_STREAM);
+        assertTrue(example.hasKey("candidates"), "example data has candidates");
+        assertTrue(example.hasKey("usageMetadata"), "example data has usageMetadata");
+        assertTrue(example.candidates[0].content.hasKey("parts"), "example data has content parts");
+        assertTrue(example.candidates[0].content.hasKey("role"), "example data has content role");
+    }
+
     connectionSchemeTest() {
 %ifdef NoConnectionProvider
         testSkip("ConnectionProvider module not available");
@@ -433,7 +444,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
         # Test embed content
         AbstractDataProvider embed = live_dp.getChildProviderEx("embed-content");
         auto embed_resp = embed.doRequest({
-            "model": "text-embedding-004",
+            "model": "gemini-embedding-001",
             "content": {
                 "role": "user",
                 "parts": ({"text": "Hello world"},),
@@ -442,7 +453,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertTrue(embed_resp.values.size() > 0, "should have embedding values");
 
         # Test connection ping
-        AbstractConnection conn = get_connection_hash({
+        GeminiRestClient::GeminiRestConnection conn({
             "name": "test-gemini",
             "desc": "Test Gemini connection",
             "url": "gemini://generativelanguage.googleapis.com",

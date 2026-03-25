@@ -54,7 +54,7 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
         const RequestType = new GeminiGenerateContentRequestDataType();
 
         #! Response type
-        const ResponseType = GeminiStreamEventDataType;
+        const ResponseType = GeminiStreamEventDataTypeInst;
     }
 
     private {
@@ -96,6 +96,47 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
     #! Returns the data provider name
     string getName() {
         return ProviderInfo.name;
+    }
+
+    #! Returns example event data for the given event
+    private auto getExampleEventDataImpl(string event_id) {
+        try {
+            # Try to get real data from the API using a simple prompt
+            hash<auto> req = {
+                "contents": ({
+                    "role": "user",
+                    "parts": ({"text": "Say hello"},),
+                },),
+            };
+            hash<auto> resp = doRestCommand("POST",
+                GeminiDataProviderBase::buildModelPath("gemini-2.5-flash", "generateContent"), req).body;
+            if (resp.candidates) {
+                return resp;
+            }
+        } catch () {
+            # Fall through to fake data
+        }
+        return getFakeExampleData();
+    }
+
+    #! Returns fake example data for the stream event
+    private hash<auto> getFakeExampleData() {
+        return {
+            "candidates": ({
+                "content": {
+                    "parts": ({"text": "Hello! How can I help you today?"},),
+                    "role": "model",
+                },
+                "finishReason": "STOP",
+                "index": 0,
+            },),
+            "usageMetadata": {
+                "promptTokenCount": 5,
+                "candidatesTokenCount": 10,
+                "totalTokenCount": 15,
+            },
+            "modelVersion": "gemini-2.5-flash",
+        };
     }
 
     #! Returns supported event types

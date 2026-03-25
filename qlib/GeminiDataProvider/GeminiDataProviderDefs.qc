@@ -49,6 +49,11 @@ public class GeminiInlineDataDataType inherits HashDataType {
     constructor() {
         addQoreFields(Fields);
     }
+
+    #! Creates the object with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "GeminiInlineDataDataType") {
+        addQoreFields(Fields);
+    }
 }
 
 #! Content part data type
@@ -71,7 +76,7 @@ public class GeminiContentPartDataType inherits HashDataType {
             "display_name": "Inline Data",
             "short_desc": "Inline media data",
             "desc": "Inline media data such as images, audio, or video; mutually exclusive with `text`",
-            "type": new GeminiInlineDataDataType(),
+            "type": new GeminiInlineDataDataType(AutoHashOrNothingType),
         }));
     }
 }
@@ -84,7 +89,7 @@ public class GeminiContentDataType inherits HashDataType {
                 "display_name": "Role",
                 "short_desc": "The role of the content author",
                 "desc": "The role of the content author: `user` or `model`",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "display_name": "User",
@@ -102,6 +107,18 @@ public class GeminiContentDataType inherits HashDataType {
     }
 
     constructor() {
+        addQoreFields(Fields);
+        addField(new QoreDataField({
+            "name": "parts",
+            "display_name": "Parts",
+            "short_desc": "The content parts",
+            "desc": "Ordered list of content parts that make up this message",
+            "type": new ListDataType("ContentPartList", new GeminiContentPartDataType()),
+        }));
+    }
+
+    #! Creates the object with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "GeminiContentDataType") {
         addQoreFields(Fields);
         addField(new QoreDataField({
             "name": "parts",
@@ -158,9 +175,25 @@ public class GeminiGenerationConfigDataType inherits HashDataType {
             "responseMimeType": {
                 "display_name": "Response MIME Type",
                 "short_desc": "Output MIME type",
-                "desc": "The MIME type of the generated candidate text. Supported values: `text/plain`, "
-                    "`application/json`, `text/x.enum`",
+                "desc": "The MIME type of the generated candidate text",
                 "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Plain Text",
+                        "value": "text/plain",
+                        "desc": "Plain text output",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "JSON",
+                        "value": "application/json",
+                        "desc": "JSON structured output (use with `responseSchema`)",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Enum",
+                        "value": "text/x.enum",
+                        "desc": "Enum output (one of a set of values)",
+                    },
+                ),
             },
             "responseSchema": {
                 "display_name": "Response Schema",
@@ -173,6 +206,11 @@ public class GeminiGenerationConfigDataType inherits HashDataType {
     }
 
     constructor() {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the object with a base type (for optional fields)
+    constructor(Type base_type) : HashDataType(base_type, "GeminiGenerationConfigDataType") {
         addQoreFields(Fields);
     }
 }
@@ -188,22 +226,27 @@ public class GeminiSafetySettingDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."string",
                 "allowed_values": (
                     <AllowedValueInfo>{
+                        "display_name": "Harassment",
                         "value": "HARM_CATEGORY_HARASSMENT",
                         "desc": "Harassment content",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Hate Speech",
                         "value": "HARM_CATEGORY_HATE_SPEECH",
                         "desc": "Hate speech content",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Sexually Explicit",
                         "value": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
                         "desc": "Sexually explicit content",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Dangerous Content",
                         "value": "HARM_CATEGORY_DANGEROUS_CONTENT",
                         "desc": "Dangerous content",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Civic Integrity",
                         "value": "HARM_CATEGORY_CIVIC_INTEGRITY",
                         "desc": "Civic integrity content",
                     },
@@ -216,18 +259,22 @@ public class GeminiSafetySettingDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."string",
                 "allowed_values": (
                     <AllowedValueInfo>{
+                        "display_name": "Block None",
                         "value": "BLOCK_NONE",
                         "desc": "Always show regardless of probability of unsafe content",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Block Low and Above",
                         "value": "BLOCK_LOW_AND_ABOVE",
                         "desc": "Block when low probability of unsafe content or higher",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Block Medium and Above",
                         "value": "BLOCK_MEDIUM_AND_ABOVE",
                         "desc": "Block when medium probability of unsafe content or higher",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Block Only High",
                         "value": "BLOCK_ONLY_HIGH",
                         "desc": "Block when high probability of unsafe content",
                     },
@@ -336,21 +383,21 @@ public class GeminiGenerateContentRequestDataType inherits HashDataType {
             "display_name": "System Instruction",
             "short_desc": "System instruction for the model",
             "desc": "Optional system instruction that sets the behavior and context for the model",
-            "type": new GeminiContentDataType(),
+            "type": new GeminiContentDataType(AutoHashOrNothingType),
         }));
         addField(new QoreDataField({
             "name": "generationConfig",
             "display_name": "Generation Config",
             "short_desc": "Configuration for generation",
             "desc": "Configuration options for model generation and outputs",
-            "type": new GeminiGenerationConfigDataType(),
+            "type": new GeminiGenerationConfigDataType(AutoHashOrNothingType),
         }));
         addField(new QoreDataField({
             "name": "safetySettings",
             "display_name": "Safety Settings",
             "short_desc": "Safety settings for content filtering",
             "desc": "A list of unique safety settings for blocking unsafe content",
-            "type": new ListDataType("SafetySettingList", new GeminiSafetySettingDataType()),
+            "type": new ListDataType("SafetySettingList", new GeminiSafetySettingDataType(), True),
         }));
     }
 }
@@ -501,9 +548,9 @@ public class GeminiEmbedContentRequestDataType inherits HashDataType {
             "model": {
                 "display_name": "Model",
                 "short_desc": "The embedding model to use",
-                "desc": "The model name to use for embedding (e.g., `text-embedding-004`)",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
+                "desc": "The model name to use for embedding (e.g., `gemini-embedding-001`). Required for standalone "
+                    "requests; ignored in batch requests where the top-level model is used",
+                "type": AbstractDataProviderTypeMap."*string",
                 "ref_data": "models",
             },
             "taskType": {
@@ -513,22 +560,27 @@ public class GeminiEmbedContentRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
+                        "display_name": "Retrieval Query",
                         "value": "RETRIEVAL_QUERY",
                         "desc": "Specifies the given text is a query in a search/retrieval setting",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Retrieval Document",
                         "value": "RETRIEVAL_DOCUMENT",
                         "desc": "Specifies the given text is a document from the corpus being searched",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Semantic Similarity",
                         "value": "SEMANTIC_SIMILARITY",
                         "desc": "Specifies the given text will be used for semantic text similarity",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Classification",
                         "value": "CLASSIFICATION",
                         "desc": "Specifies that the given text will be classified",
                     },
                     <AllowedValueInfo>{
+                        "display_name": "Clustering",
                         "value": "CLUSTERING",
                         "desc": "Specifies that the embeddings will be used for clustering",
                     },
@@ -537,7 +589,7 @@ public class GeminiEmbedContentRequestDataType inherits HashDataType {
             "title": {
                 "display_name": "Title",
                 "short_desc": "An optional title for the text",
-                "desc": "An optional title for the text. Only applicable when task_type is RETRIEVAL_DOCUMENT",
+                "desc": "An optional title for the text. Only applicable when `taskType` is `RETRIEVAL_DOCUMENT`",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "outputDimensionality": {
@@ -634,7 +686,7 @@ public class GeminiBatchEmbedContentsRequestDataType inherits HashDataType {
             "model": {
                 "display_name": "Model",
                 "short_desc": "The embedding model to use",
-                "desc": "The model name to use for embedding (e.g., `text-embedding-004`)",
+                "desc": "The model name to use for embedding (e.g., `gemini-embedding-001`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "ref_data": "models",
@@ -644,7 +696,7 @@ public class GeminiBatchEmbedContentsRequestDataType inherits HashDataType {
                 "short_desc": "Embed requests to batch",
                 "desc": "List of individual embed content requests. The `model` field in each request is ignored "
                     "in favor of the top-level model",
-                "type": AbstractDataProviderTypeMap."softlist",
+                "type": new ListDataType("BatchEmbedRequestList", new GeminiEmbedContentRequestDataType()),
                 "required": True,
             },
         };
@@ -664,7 +716,7 @@ public class GeminiBatchEmbedContentsResponseDataType inherits HashDataType {
                 "short_desc": "The generated embeddings",
                 "desc": "The generated embeddings for each request, in the same order as provided in the batch "
                     "request",
-                "type": AbstractDataProviderTypeMap."softlist",
+                "type": new ListDataType("EmbeddingList", new GeminiEmbedContentResponseDataType()),
             },
         };
     }
@@ -932,7 +984,7 @@ public class GeminiCachedContentCreateRequestDataType inherits HashDataType {
             "display_name": "System Instruction",
             "short_desc": "System instruction to cache",
             "desc": "Optional system instruction to include in the cache",
-            "type": new GeminiContentDataType(),
+            "type": new GeminiContentDataType(AutoHashOrNothingType),
         }));
     }
 }
@@ -1023,6 +1075,30 @@ public class GeminiFileSearchStoreImportFileRequestDataType inherits HashDataTyp
     }
 }
 
+#! Delete response data type (returned by all delete actions)
+public class GeminiDeleteResponseDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "deleted": {
+                "display_name": "Deleted",
+                "short_desc": "Whether the resource was deleted",
+                "desc": "Whether the resource was successfully deleted",
+                "type": AbstractDataProviderTypeMap."bool",
+            },
+            "name": {
+                "display_name": "Name",
+                "short_desc": "The resource name of the deleted item",
+                "desc": "The resource name of the deleted item",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
 #! Stream event data type
 public class GeminiStreamEventDataType inherits HashDataType {
     public {
@@ -1066,5 +1142,5 @@ public class GeminiStreamEventDataType inherits HashDataType {
     }
 }
 
-public const GeminiStreamEventDataType = new GeminiStreamEventDataType();
+public const GeminiStreamEventDataTypeInst = new GeminiStreamEventDataType();
 }

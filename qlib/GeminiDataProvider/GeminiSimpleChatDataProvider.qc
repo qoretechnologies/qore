@@ -68,7 +68,7 @@ public class GeminiSimpleChatDataProvider inherits GeminiDataProviderBase {
         *string system_instruction = remove req.systemInstruction;
 
         # Build the generateContent request body
-        hash<auto> body = {
+        hash<auto!> body = {
             "contents": ({
                 "role": role,
                 "parts": ({"text": content},),

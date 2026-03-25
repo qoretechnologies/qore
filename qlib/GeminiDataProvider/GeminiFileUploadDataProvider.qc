@@ -74,7 +74,8 @@ public class GeminiFileUploadDataProvider inherits GeminiDataProviderBase {
             },
             "inline_data": req.file_data,
         };
-        return doRestCommand("POST", "files", file_body).body."file" ?? doRestCommand("POST", "files", file_body).body;
+        hash<auto> resp = doRestCommand("POST", "files", file_body).body;
+        return resp."file" ?? resp;
     }
 
     #! Returns the description of a successful request message, if any
