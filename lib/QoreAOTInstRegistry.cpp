@@ -2046,35 +2046,48 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 43: MapHashKey
     { "MapHashKey", 43, true, false, writeMapHashKey, readMapHashKey, "Hash key mapping operation" },
 
-    // Index 44: IteratorCreate
-    { "IteratorCreate", 44, true, false, writeIteratorCreate, readIteratorCreate, "Iterator creation from iterable" },
-
-    // Index 45: IteratorNext
-    { "IteratorNext", 45, true, false, writeIteratorNext, readIteratorNext, "Iterator advance with targets" },
-
-    // Index 46: RefForeachInit
-    { "RefForeachInit", 46, true, false, writeRefForeachInit, readRefForeachInit, "Reference foreach initialization" },
-
-    // Index 47: SwitchRegexMatch
-    { "SwitchRegexMatch", 47, true, false, writeSwitchRegexMatch, readSwitchRegexMatch, "Regex pattern matching" },
-
-    // Index 48: OnBlockExit
-    { "OnBlockExit", 48, true, true, writeOnBlockExit, readOnBlockExit, "Exception handler with nested IR function" },
-
-    // Index 49: MakeHashConstKeys
-    { "MakeHashConstKeys", 49, true, false, writeMakeHashConstKeys, readMakeHashConstKeys, "Create hash with constant keys" },
-
-    // Index 50: SwitchCaseMatch
-    { "SwitchCaseMatch", 50, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
-
-    // Index 51: ListIndexAccess
-    { "ListIndexAccess", 51, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
-
-    // Remaining 52-255: Unsupported/undefined
+    // Index 44: Foreach was removed - preserved as gap for binary compatibility
     #define UNUSED_ENTRY(idx) { nullptr, idx, false, false, nullptr, nullptr, nullptr }
+    UNUSED_ENTRY(44),
 
-    UNUSED_ENTRY(52), UNUSED_ENTRY(53), UNUSED_ENTRY(54), UNUSED_ENTRY(55),
-    UNUSED_ENTRY(56), UNUSED_ENTRY(57), UNUSED_ENTRY(58), UNUSED_ENTRY(59),
+    // Index 45: OnBlockExit
+    { "OnBlockExit", 45, true, true, writeOnBlockExit, readOnBlockExit, "Exception handler with nested IR function" },
+
+    // Index 46: IteratorCreate
+    { "IteratorCreate", 46, true, false, writeIteratorCreate, readIteratorCreate, "Iterator creation from iterable" },
+
+    // Index 47: IteratorNext
+    { "IteratorNext", 47, true, false, writeIteratorNext, readIteratorNext, "Iterator advance with targets" },
+
+    // Index 48: SwitchRegexMatch
+    { "SwitchRegexMatch", 48, true, false, writeSwitchRegexMatch, readSwitchRegexMatch, "Regex pattern matching" },
+
+    // Index 49: RefForeachInit
+    { "RefForeachInit", 49, true, false, writeRefForeachInit, readRefForeachInit, "Reference foreach initialization" },
+
+    // Index 50: Debug was removed - preserved as gap for binary compatibility
+    UNUSED_ENTRY(50),
+
+    // Index 51: Assert was removed - preserved as gap for binary compatibility
+    UNUSED_ENTRY(51),
+
+    // Index 52: MakeHashConstKeys
+    { "MakeHashConstKeys", 52, true, false, writeMakeHashConstKeys, readMakeHashConstKeys, "Create hash with constant keys" },
+
+    // Index 53: SwitchCaseMatch
+    { "SwitchCaseMatch", 53, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
+
+    // Index 54: Context holds raw ContextStatement* pointer - no serialization
+    UNUSED_ENTRY(54),
+
+    // Index 55: Summarize holds raw SummarizeStatement* pointer - no serialization
+    UNUSED_ENTRY(55),
+
+    // Index 56: ListIndexAccess
+    { "ListIndexAccess", 56, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
+
+    // Remaining 57-255: Unsupported/undefined
+    UNUSED_ENTRY(57), UNUSED_ENTRY(58), UNUSED_ENTRY(59),
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),

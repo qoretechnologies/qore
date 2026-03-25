@@ -1060,7 +1060,25 @@ QoreIRSummarizeInstruction* QoreIRBuilder::createSummarize(const SummarizeStatem
 
 QoreIRSwitchRegexMatchInstruction* QoreIRBuilder::createSwitchRegexMatch(const CaseNodeRegex* regex_case,
         QoreIRValue switch_val, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRSwitchRegexMatchInstruction>(regex_case);
+    // Clone the regex case node so the IR instruction doesn't depend on the AST node's lifetime
+    // (important when serializing cached IR after the AST has been freed)
+    QoreRegex* re = regex_case->getRegex();
+    QoreRegex* cloned_re = nullptr;
+    if (re) {
+        ExceptionSink xsink;
+        cloned_re = new QoreRegex(re->getPatternCStr(), re->getOptions(), &xsink);
+        if (xsink) {
+            delete cloned_re;
+            return nullptr;
+        }
+    }
+
+    const CaseNodeRegex* cloned_case = dynamic_cast<const CaseNodeNegRegex*>(regex_case)
+        ? new CaseNodeNegRegex(loc ? loc : &loc_builtin, cloned_re, nullptr)
+        : new CaseNodeRegex(loc ? loc : &loc_builtin, cloned_re, nullptr);
+
+    auto inst = block->appendInstruction<QoreIRSwitchRegexMatchInstruction>(cloned_case);
+    inst->owns_regex_case = true;
     inst->operands.push_back(switch_val);
     inst->loc = loc;
     inst->result = func->createValue();
