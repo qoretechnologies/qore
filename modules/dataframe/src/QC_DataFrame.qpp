@@ -182,6 +182,52 @@ auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
     return obj.release();
 }
 
+//! Joins this DataFrame with another on shared key columns
+/** @param other the right-side DataFrame
+    @param on list of column names to join on (must exist in both DataFrames)
+    @param how join type: "inner" (default), "left", "right", "outer", "cross"
+
+    For non-key columns with the same name in both DataFrames, the right-side
+    column is suffixed with "_right".
+
+    @return new DataFrame object with joined rows
+
+    @par Example:
+    @code{.py}
+    DataFrame orders(
+        ({"order_id": 1, "customer_id": 10, "amount": 99.0},
+         {"order_id": 2, "customer_id": 20, "amount": 50.0}));
+    DataFrame customers(
+        ({"customer_id": 10, "name": "Alice"},
+         {"customer_id": 20, "name": "Bob"}));
+
+    auto joined = orders.join(customers, ("customer_id",));
+    # Result: order_id, customer_id, amount, name
+    @endcode
+
+    @throw DATAFRAME-JOIN-ERROR if join type is invalid or key columns not found
+
+    @since dataframe 1.0
+*/
+auto DataFrame::join(object other_obj, list<string> on, *string how) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* other = static_cast<QoreDataFrame*>(
+        other_obj->getReferencedPrivateData(CID_DATAFRAME, xsink));
+    if (!other) {
+        xsink->raiseException("DATAFRAME-JOIN-ERROR",
+            "argument is not a DataFrame object");
+        return QoreValue();
+    }
+    std::string how_str = how ? how->c_str() : "inner";
+    QoreDataFrame* result = df->join(other, on, how_str, xsink);
+    other->deref(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
 //! Groups the DataFrame by the specified columns for aggregation
 /** @param columns list of column names to group by
     @return a GroupedDataFrame object for calling agg(), count(), sum(), mean()

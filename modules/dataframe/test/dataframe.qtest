@@ -37,6 +37,7 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
         addTestCase("groupByTest", \groupByTest());
         addTestCase("groupByAggTest", \groupByAggTest());
+        addTestCase("joinTest", \joinTest());
 
         set_return_value(main());
     }
@@ -488,6 +489,61 @@ class DataFrameTest inherits QUnit::Test {
         assertEq((30.0, 30.0), sorted.getColumn("val_sum"), "agg val_sum");
         assertEq((15.0, 30.0), sorted.getColumn("val_mean"), "agg val_mean");
         assertEq((2.0, 3.0), sorted.getColumn("score"), "agg score max");
+    }
+
+    joinTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame orders(
+            ({"order_id": 1, "cust_id": 10, "amount": 99.0},
+             {"order_id": 2, "cust_id": 20, "amount": 50.0},
+             {"order_id": 3, "cust_id": 30, "amount": 75.0}));
+        DataFrame::DataFrame customers(
+            ({"cust_id": 10, "name": "Alice"},
+             {"cust_id": 20, "name": "Bob"},
+             {"cust_id": 40, "name": "Dave"}));
+
+        # Inner join: only matching keys
+        auto inner = orders.join(customers, ("cust_id",));
+        assertEq(2, inner.numRows(), "inner join row count");
+        auto sorted_inner = inner.sortBy(("cust_id",));
+        assertEq((10, 20), sorted_inner.getColumn("cust_id"), "inner join keys");
+        assertEq(("Alice", "Bob"), sorted_inner.getColumn("name"), "inner join names");
+
+        # Left join: all left rows, null for unmatched right
+        auto left = orders.join(customers, ("cust_id",), "left");
+        assertEq(3, left.numRows(), "left join row count");
+        auto sorted_left = left.sortBy(("cust_id",));
+        assertEq((10, 20, 30), sorted_left.getColumn("cust_id"), "left join keys");
+        assertEq(NOTHING, sorted_left.getColumn("name")[2], "left join null for unmatched");
+
+        # Right join: all right rows, null for unmatched left
+        auto right = orders.join(customers, ("cust_id",), "right");
+        assertEq(3, right.numRows(), "right join row count");
+        auto sorted_right = right.sortBy(("cust_id",));
+        assertEq((10, 20, 40), sorted_right.getColumn("cust_id"), "right join keys");
+        assertEq(NOTHING, sorted_right.getColumn("amount")[2], "right join null for unmatched");
+
+        # Outer join: all rows from both sides
+        auto outer = orders.join(customers, ("cust_id",), "outer");
+        assertEq(4, outer.numRows(), "outer join row count");
+
+        # Cross join
+        DataFrame::DataFrame a(
+            ({"x": 1}, {"x": 2}));
+        DataFrame::DataFrame b(
+            ({"y": "a"}, {"y": "b"}, {"y": "c"}));
+        auto cross = a.join(b, (), "cross");
+        assertEq(6, cross.numRows(), "cross join 2x3=6");
+
+        # Column name conflict
+        DataFrame::DataFrame t1(({"id": 1, "val": 10}, {"id": 2, "val": 11}));
+        DataFrame::DataFrame t2(({"id": 1, "val": 20}, {"id": 2, "val": 21}));
+        auto conflict = t1.join(t2, ("id",));
+        list<string> cols = conflict.columnNames();
+        assertTrue(cols.contains("val"), "conflict: left val");
+        assertTrue(cols.contains("val_right"), "conflict: right val suffixed");
     }
 
     csvMissingValuesTest() {

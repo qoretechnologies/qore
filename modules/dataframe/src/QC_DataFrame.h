@@ -120,6 +120,17 @@ public:
     //! Drop rows containing any null values
     DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
 
+    //! Join with another DataFrame
+    /** @param other the right-side DataFrame
+        @param on_columns join key column names (must exist in both DataFrames)
+        @param how join type: "inner", "left", "right", "outer", "cross"
+        @param xsink exception sink
+        @return new DataFrame with joined rows
+    */
+    DLLLOCAL QoreDataFrame* join(const QoreDataFrame* other,
+        const QoreListNode* on_columns, const std::string& how,
+        ExceptionSink* xsink) const;
+
     //! Access to internal columns for GroupedDataFrame (friend access)
     DLLLOCAL const std::vector<Column>& getColumns() const { return columns; }
     DLLLOCAL const std::unordered_map<std::string, size_t>& getColIndex() const {
