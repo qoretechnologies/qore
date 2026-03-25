@@ -83,7 +83,8 @@ public:
             const LocalVar* excluded_selfid = nullptr,
             const StatementBlock* statements = nullptr, QoreProgram* pgm = nullptr,
             bool suppress_guard_deopt = false,
-            const IRDirectParams* direct_params = nullptr);
+            const IRDirectParams* direct_params = nullptr,
+            std::vector<QoreValue>* parent_slot_cache = nullptr);
 };
 
 #endif

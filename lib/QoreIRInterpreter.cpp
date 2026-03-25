@@ -1555,11 +1555,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
 
 // Execute a single on_block_exit handler body, using compiled IR if available, otherwise AST.
 // Returns true if execution encountered an error.
-static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink) {
+static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSink* obe_xsink,
+        std::vector<QoreValue>* parent_slot_cache = nullptr) {
     if (handler.handler_ir) {
-        // Execute compiled handler via IR interpreter
+        // Execute compiled handler via IR interpreter with parent slot cache for scope access
         QoreValue rv;
-        QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink);
+        QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
+                                   nullptr, nullptr, nullptr, nullptr, false, nullptr, parent_slot_cache);
         rv.discard(obe_xsink);
     } else if (handler.code) {
         // AST fallback
@@ -1647,7 +1649,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
         const std::vector<QoreValue>* closure, const std::unordered_set<const LocalVar*>* pre_instantiated,
         const LocalVar* excluded_selfid, const StatementBlock* statements, QoreProgram* pgm, bool suppress_guard_deopt,
-        const IRDirectParams* direct_params) {
+        const IRDirectParams* direct_params, std::vector<QoreValue>* parent_slot_cache) {
 #ifdef QORE_MANAGE_STACK
     if (check_stack(xsink)) {
         return false;
@@ -1676,6 +1678,54 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_init_slots = frame.local_init_slots;
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
+
+    // Phase B2: Copy parent's local values into handler frame (parent slot inheritance)
+    // When this handler IR function is called from a parent, it inherits the parent's
+    // local variable values for the first parent_slot_count slots
+    if (func.parent_slot_count > 0 && parent_slot_cache) {
+        assert(parent_slot_cache->size() >= func.parent_slot_count);
+        for (uint32_t i = 0; i < func.parent_slot_count; ++i) {
+            // Copy parent's value into handler's slot (with reference counting)
+            const QoreValue& parent_val = (*parent_slot_cache)[i];
+            locals_slot_cache[i] = parent_val;
+            if (parent_val.hasNode()) {
+                locals_slot_cache[i].refSelf();
+            }
+            // Mark as instantiated (parent is responsible for its own instantiation)
+            locals_instantiated[i] = !parent_val.isNothing();
+        }
+    }
+
+    // Phase B2: RAII guard for parent slot copy-back on all exit paths
+    // Copies modified parent slot values back to parent's locals_slot_cache,
+    // restoring parent's ownership of the references
+    struct ParentSlotWriteback {
+        uint32_t parent_slot_count;
+        std::vector<QoreValue>& locals_slot_cache;
+        std::vector<QoreValue>* parent_slot_cache;
+        ExceptionSink* xsink;
+
+        ParentSlotWriteback(uint32_t psc, std::vector<QoreValue>& lsc,
+                           std::vector<QoreValue>* psc_ptr, ExceptionSink* xs)
+            : parent_slot_count(psc), locals_slot_cache(lsc), parent_slot_cache(psc_ptr), xsink(xs) {
+        }
+
+        ~ParentSlotWriteback() {
+            // Copy modified parent slot values back to parent's locals_slot_cache
+            if (parent_slot_count > 0 && parent_slot_cache) {
+                assert(parent_slot_cache->size() >= parent_slot_count);
+                for (uint32_t i = 0; i < parent_slot_count; ++i) {
+                    // Discard parent's old reference and copy new value
+                    (*parent_slot_cache)[i].discard(xsink);
+                    (*parent_slot_cache)[i] = locals_slot_cache[i];
+                    // Handler now transfers ownership back to parent
+                    if (locals_slot_cache[i].hasNode()) {
+                        // Already has refSelf() from parent, no additional ref needed
+                    }
+                }
+            }
+        }
+    } parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache, xsink);
 
     // Precompute bitmask of IR-only local slots.  After function calls (without
     // reference args), only non-IR-only slots need cache invalidation because callees
@@ -1792,7 +1842,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                                         except->makeExceptionObject(), xsink));
                                 }
                             }
-                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                            executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache);
                             // Restore td->catchException BEFORE clearing xsink to avoid
                             // a use-after-free window where td->catchException points to
                             // the freed exception chain
@@ -2833,7 +2883,7 @@ next_instruction:
                                                 except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
@@ -4983,7 +5033,7 @@ load_local_done:
                                             argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                                         }
                                     }
-                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink);
+                                    executeHandlerBody(on_block_exit_handlers[i - 1], &obe_xsink, &locals_slot_cache);
                                     // Restore td->catchException BEFORE clearing xsink to avoid
                                     // a use-after-free window where td->catchException points to
                                     // the freed exception chain
