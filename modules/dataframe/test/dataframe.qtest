@@ -35,6 +35,8 @@ class DataFrameTest inherits QUnit::Test {
         addTestCase("csvReadTest", \csvReadTest());
         addTestCase("csvWriteRoundTripTest", \csvWriteRoundTripTest());
         addTestCase("csvMissingValuesTest", \csvMissingValuesTest());
+        addTestCase("groupByTest", \groupByTest());
+        addTestCase("groupByAggTest", \groupByAggTest());
 
         set_return_value(main());
     }
@@ -423,6 +425,69 @@ class DataFrameTest inherits QUnit::Test {
         assertEq(2, df2.numRows(), "CSV round-trip rows");
         assertEq((1, 2), df2.getColumn("x"), "CSV round-trip int values");
         assertEq(("hello", "world"), df2.getColumn("y"), "CSV round-trip string values");
+    }
+
+    groupByTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"dept": "sales",  "name": "Alice", "salary": 50000},
+             {"dept": "sales",  "name": "Bob",   "salary": 60000},
+             {"dept": "eng",    "name": "Carol", "salary": 80000},
+             {"dept": "eng",    "name": "Dave",  "salary": 90000},
+             {"dept": "eng",    "name": "Eve",   "salary": 85000}));
+
+        auto gdf = df.groupBy(("dept",));
+        assertEq(2, gdf.numGroups(), "groupBy creates 2 groups");
+
+        # count()
+        auto counts = gdf.count();
+        assertEq(2, counts.numRows(), "count has 2 rows");
+        # Sort by dept to get deterministic order
+        auto sorted_counts = counts.sortBy(("dept",));
+        assertEq(("eng", "sales"), sorted_counts.getColumn("dept"), "count dept values");
+        assertEq((3, 2), sorted_counts.getColumn("count"), "count values");
+
+        # sum()
+        auto sums = gdf.sum();
+        auto sorted_sums = sums.sortBy(("dept",));
+        # eng: 80000+90000+85000=255000, sales: 50000+60000=110000
+        assertEq((255000.0, 110000.0), sorted_sums.getColumn("salary"), "sum values");
+
+        # mean()
+        auto means = gdf.mean();
+        auto sorted_means = means.sortBy(("dept",));
+        # eng: 255000/3=85000, sales: 110000/2=55000
+        assertEq((85000.0, 55000.0), sorted_means.getColumn("salary"), "mean values");
+    }
+
+    groupByAggTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"cat": "A", "val": 10, "score": 1.0},
+             {"cat": "A", "val": 20, "score": 2.0},
+             {"cat": "B", "val": 30, "score": 3.0}));
+
+        auto gdf = df.groupBy(("cat",));
+
+        # Multi-function aggregation
+        auto result = gdf.agg({"val": ("sum", "mean"), "score": "max"});
+        auto sorted = result.sortBy(("cat",));
+        assertEq(2, sorted.numRows(), "agg row count");
+        # Check column names: cat, val_sum, val_mean, score
+        list<string> cols = sorted.columnNames();
+        assertTrue(cols.contains("val_sum"), "agg has val_sum column");
+        assertTrue(cols.contains("val_mean"), "agg has val_mean column");
+        assertTrue(cols.contains("score"), "agg has score column");
+
+        # A: val_sum=30, val_mean=15, score_max=2.0
+        # B: val_sum=30, val_mean=30, score_max=3.0
+        assertEq((30.0, 30.0), sorted.getColumn("val_sum"), "agg val_sum");
+        assertEq((15.0, 30.0), sorted.getColumn("val_mean"), "agg val_mean");
+        assertEq((2.0, 3.0), sorted.getColumn("score"), "agg score max");
     }
 
     csvMissingValuesTest() {

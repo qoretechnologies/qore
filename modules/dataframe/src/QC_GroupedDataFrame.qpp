@@ -1,0 +1,129 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_GroupedDataFrame.qpp
+
+    Qore GroupedDataFrame class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "QC_GroupedDataFrame.h"
+
+using namespace QoreDataFrameNS;
+
+//! A grouped DataFrame for aggregation operations
+/** Created by @ref DataFrame::groupBy(). Holds group keys and row indices per group.
+
+    @par Example:
+    @code{.py}
+    %requires dataframe
+
+    DataFrame df(
+        ({"dept": "sales",  "salary": 50000},
+         {"dept": "sales",  "salary": 60000},
+         {"dept": "eng",    "salary": 80000},
+         {"dept": "eng",    "salary": 90000}));
+
+    auto gdf = df.groupBy(("dept",));
+    auto result = gdf.agg({"salary": "mean"});
+    printf("%s\n", result.toString());
+    @endcode
+
+    @since dataframe 1.0
+*/
+qclass GroupedDataFrame [arg=QoreGroupedDataFrame* gdf; ns=Qore::DataFrame; flags=final];
+
+//! GroupedDataFrames cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+GroupedDataFrame::copy() {
+    xsink->raiseException("COPY-ERROR", "GroupedDataFrame objects cannot be copied");
+}
+
+//! Aggregates groups with per-column function specifications
+/** @param agg_spec a hash mapping column names to aggregation functions.
+    Each value can be a string (single function) or a list of strings
+    (multiple functions — result columns suffixed with _func).
+
+    Supported functions for numeric columns: "sum", "mean", "min", "max",
+    "std", "median", "count", "first", "last".
+    For any column: "count", "nunique".
+
+    @return new DataFrame with one row per group
+
+    @par Example:
+    @code{.py}
+    auto result = gdf.agg({"salary": "mean", "bonus": ("sum", "max")});
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if a column is not found
+
+    @since dataframe 1.0
+*/
+auto GroupedDataFrame::agg(hash<auto> agg_spec) [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = gdf->agg(agg_spec, xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns a count of rows per group
+/** @return new DataFrame with group key columns plus a "count" column
+
+    @par Example:
+    @code{.py}
+    auto counts = gdf.count();
+    @endcode
+
+    @since dataframe 1.0
+*/
+auto GroupedDataFrame::count() [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = gdf->count(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns the sum of numeric columns per group
+/** @return new DataFrame with group key columns plus summed numeric columns
+
+    @since dataframe 1.0
+*/
+auto GroupedDataFrame::sum() [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = gdf->sum(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns the mean of numeric columns per group
+/** @return new DataFrame with group key columns plus averaged numeric columns
+
+    @since dataframe 1.0
+*/
+auto GroupedDataFrame::mean() [flags=RET_VALUE_ONLY] {
+    QoreDataFrame* result = gdf->mean(xsink);
+    if (!result) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Returns the number of groups
+/** @return the group count
+*/
+int GroupedDataFrame::numGroups() [flags=CONSTANT] {
+    return gdf->numGroups();
+}

@@ -11,6 +11,7 @@
 #include "qore/Qore.h"
 
 #include "QC_DataFrame.h"
+#include "QC_GroupedDataFrame.h"
 
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void dataframe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns,
@@ -48,6 +49,7 @@ const TypedHashDecl* hashdeclCsvOptions;
 static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     // Phase 1: Pre-init classes
     preinitDataFrameClass();
+    preinitGroupedDataFrameClass();
 
     // Phase 2: Init hashdecls
     hashdeclDataFrameShape = init_hashdecl_DataFrameShape(DFNS);
@@ -56,6 +58,7 @@ static void dataframe_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsi
 
     // Phase 3: Add classes with methods
     DFNS.addSystemClass(initDataFrameClass(DFNS));
+    DFNS.addSystemClass(initGroupedDataFrameClass(DFNS));
 }
 
 static void dataframe_module_ns_init(QoreNamespace* rns, QoreNamespace* qns,

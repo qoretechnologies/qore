@@ -61,6 +61,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 # QPP source files
 set(DF_QPP_SRC
     src/QC_DataFrame.qpp
+    src/QC_GroupedDataFrame.qpp
     src/ql_dataframe.qpp
 )
 
@@ -69,6 +70,7 @@ set(DF_CPP_SRC
     src/dataframe-module.cpp
     src/df_column.cpp
     src/DataFrame.cpp
+    src/GroupedDataFrame.cpp
     src/df_csv.cpp
 )
 

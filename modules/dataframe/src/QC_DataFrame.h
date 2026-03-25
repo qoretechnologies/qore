@@ -120,6 +120,14 @@ public:
     //! Drop rows containing any null values
     DLLLOCAL QoreDataFrame* dropna(ExceptionSink* xsink) const;
 
+    //! Access to internal columns for GroupedDataFrame (friend access)
+    DLLLOCAL const std::vector<Column>& getColumns() const { return columns; }
+    DLLLOCAL const std::unordered_map<std::string, size_t>& getColIndex() const {
+        return col_index;
+    }
+    DLLLOCAL int64_t getNumRows() const { return n_rows; }
+    DLLLOCAL std::mutex& getMutex() const { return mtx; }
+
     // --- Mutation (in-place, under lock) ---
 
     DLLLOCAL void addColumn(const std::string& name, const QoreListNode* data,
@@ -129,6 +137,8 @@ public:
         const std::string& new_name, ExceptionSink* xsink);
 
 private:
+    friend class QoreGroupedDataFrame;
+
     std::vector<Column> columns;
     std::unordered_map<std::string, size_t> col_index;
     int64_t n_rows = 0;

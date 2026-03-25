@@ -9,6 +9,7 @@
 */
 
 #include "QC_DataFrame.h"
+#include "QC_GroupedDataFrame.h"
 #include "df_csv.h"
 
 using namespace QoreDataFrameNS;
@@ -178,6 +179,41 @@ auto DataFrame::slice(int start, int end) [flags=RET_VALUE_ONLY] {
     }
     ReferenceHolder<QoreObject> obj(new QoreObject(QC_DATAFRAME, getProgram()), xsink);
     obj->setPrivate(CID_DATAFRAME, result);
+    return obj.release();
+}
+
+//! Groups the DataFrame by the specified columns for aggregation
+/** @param columns list of column names to group by
+    @return a GroupedDataFrame object for calling agg(), count(), sum(), mean()
+
+    @par Example:
+    @code{.py}
+    auto gdf = df.groupBy(("dept",));
+    auto means = gdf.agg({"salary": "mean"});
+    auto counts = gdf.count();
+    @endcode
+
+    @throw DATAFRAME-COLUMN-ERROR if a column name is not found
+
+    @since dataframe 1.0
+*/
+auto DataFrame::groupBy(list<string> columns) [flags=RET_VALUE_ONLY] {
+    // Convert column name list to std::vector
+    std::vector<std::string> col_names;
+    for (size_t i = 0; i < columns->size(); ++i) {
+        const QoreStringNode* s = columns->retrieveEntry(i).get<const QoreStringNode>();
+        if (s) {
+            col_names.push_back(s->c_str());
+        }
+    }
+    QoreGroupedDataFrame* gdf_result = new QoreGroupedDataFrame(df, col_names, xsink);
+    if (*xsink) {
+        delete gdf_result;
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> obj(
+        new QoreObject(QC_GROUPEDDATAFRAME, getProgram()), xsink);
+    obj->setPrivate(CID_GROUPEDDATAFRAME, gdf_result);
     return obj.release();
 }
 
