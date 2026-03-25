@@ -39,6 +39,9 @@
 %define NoSqlUtil
 %endtry
 
+%requires ../../../../qlib/Schema
+
+
 %exec-class ModelRegistryTest
 
 class ModelRegistryTest inherits QUnit::Test {
@@ -982,55 +985,28 @@ class ModelRegistryTest inherits QUnit::Test {
 
         string prefix = "ml_test_";
 
-        # Create sequences and tables
+        # Use DataSchema with DatabaseBackend's table definitions for
+        # DB-independent schema management
+        hash<auto> schema_def = {
+            "schema": {
+                "name": "MlRegistryTest",
+                "version": "1.0",
+            },
+            "sequences": {
+                (prefix + "seq_models"): {},
+                (prefix + "seq_versions"): {},
+                (prefix + "seq_blobs"): {},
+            },
+            "tables": QoreModelRegistry::DatabaseBackend::getTableDefinitions(prefix),
+        };
+
+        hash<auto> normalized = Schema::DataSchemaLoader::loadHash(schema_def, False);
+        Schema::DataSchema schema(ds, normalized);
         on_exit {
-            # Cleanup: drop tables and sequences
-            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "blobs CASCADE"); ds.commit(); } catch () {}
-            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "versions CASCADE"); ds.commit(); } catch () {}
-            try { ds.exec("DROP TABLE IF EXISTS " + prefix + "models CASCADE"); ds.commit(); } catch () {}
-            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_models"); ds.commit(); } catch () {}
-            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_versions"); ds.commit(); } catch () {}
-            try { ds.exec("DROP SEQUENCE IF EXISTS " + prefix + "seq_blobs"); ds.commit(); } catch () {}
+            schema.drop(True);
+            ds.commit();
         }
-
-        # Create sequences
-        ds.exec("CREATE SEQUENCE " + prefix + "seq_models START 1");
-        ds.exec("CREATE SEQUENCE " + prefix + "seq_versions START 1");
-        ds.exec("CREATE SEQUENCE " + prefix + "seq_blobs START 1");
-
-        # Create tables
-        ds.exec("CREATE TABLE " + prefix + "models ("
-            + "modelid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_models') PRIMARY KEY, "
-            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
-            + "name VARCHAR(255) NOT NULL, "
-            + "algorithm VARCHAR(255), "
-            + "created TIMESTAMP NOT NULL, "
-            + "modified TIMESTAMP NOT NULL, "
-            + "UNIQUE(tenant_id, name))");
-
-        ds.exec("CREATE TABLE " + prefix + "versions ("
-            + "versionid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_versions') PRIMARY KEY, "
-            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
-            + "modelid INTEGER NOT NULL REFERENCES " + prefix + "models(modelid), "
-            + "version_id VARCHAR(255) NOT NULL, "
-            + "algorithm VARCHAR(255), "
-            + "format VARCHAR(50) DEFAULT 'qml', "
-            + "artifact_size INTEGER, "
-            + "metrics TEXT, "
-            + "tags TEXT DEFAULT '[]', "
-            + "training_data_hash VARCHAR(255), "
-            + "description TEXT, "
-            + "config TEXT, "
-            + "created TIMESTAMP NOT NULL, "
-            + "UNIQUE(tenant_id, modelid, version_id))");
-
-        ds.exec("CREATE TABLE " + prefix + "blobs ("
-            + "blobid INTEGER NOT NULL DEFAULT nextval('" + prefix + "seq_blobs') PRIMARY KEY, "
-            + "tenant_id VARCHAR(255) NOT NULL DEFAULT '', "
-            + "versionid INTEGER NOT NULL REFERENCES " + prefix + "versions(versionid), "
-            + "data BYTEA NOT NULL, "
-            + "UNIQUE(tenant_id, versionid))");
-
+        schema.align();
         ds.commit();
 
         # Create backend

@@ -1,0 +1,271 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  dataframe.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%requires ../../../qlib/Util.qm
+%requires ../../../qlib/QUnit.qm
+
+%try-module dataframe
+%define NoDataFrame
+%endtry
+
+%exec-class DataFrameTest
+
+class DataFrameTest inherits QUnit::Test {
+    constructor() : Test("DataFrameTest", "1.0") {
+        addTestCase("constructionTest", \constructionTest());
+        addTestCase("typeInferenceTest", \typeInferenceTest());
+        addTestCase("metadataTest", \metadataTest());
+        addTestCase("accessTest", \accessTest());
+        addTestCase("roundTripTest", \roundTripTest());
+        addTestCase("mutationTest", \mutationTest());
+        addTestCase("describeTest", \describeTest());
+        addTestCase("headTailSliceTest", \headTailSliceTest());
+        addTestCase("nullHandlingTest", \nullHandlingTest());
+        addTestCase("errorCasesTest", \errorCasesTest());
+
+        set_return_value(main());
+    }
+
+    constructionTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        # Empty constructor
+        DataFrame::DataFrame empty();
+        assertEq(0, empty.numRows(), "empty DataFrame has 0 rows");
+        assertEq(0, empty.numCols(), "empty DataFrame has 0 cols");
+
+        # Construct from list<hash>
+        DataFrame::DataFrame df(
+            ({"x": 1, "y": 2.0},
+             {"x": 3, "y": 4.0}));
+        assertEq(2, df.numRows(), "from records: 2 rows");
+        assertEq(2, df.numCols(), "from records: 2 cols");
+
+        # Construct from hash of lists (column-oriented)
+        DataFrame::DataFrame df2({"a": (1, 2, 3), "b": ("x", "y", "z")});
+        assertEq(3, df2.numRows(), "from columns: 3 rows");
+        assertEq(2, df2.numCols(), "from columns: 2 cols");
+    }
+
+    typeInferenceTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"int_col": 42, "float_col": 3.14, "str_col": "hello",
+              "bool_col": True},));
+
+        list<string> types = df.dtypes();
+        assertEq("int64", types[0], "int column detected as int64");
+        assertEq("float64", types[1], "float column detected as float64");
+        assertEq("string", types[2], "string column detected as string");
+        assertEq("bool", types[3], "bool column detected as bool");
+
+        # Mixed int+float → float64
+        DataFrame::DataFrame df2({"mixed": (1, 2.5, 3)});
+        assertEq("float64", df2.dtypes()[0], "mixed int+float → float64");
+    }
+
+    metadataTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"name": "Alice", "age": 30},
+             {"name": "Bob",   "age": 25}));
+
+        assertEq(("name", "age"), df.columnNames(), "column names");
+        assertEq(("string", "int64"), df.dtypes(), "dtypes");
+
+        hash<auto> s = df.shape();
+        assertEq(2, s.rows, "shape rows");
+        assertEq(2, s.cols, "shape cols");
+    }
+
+    accessTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 10, "b": "x"},
+             {"a": 20, "b": "y"},
+             {"a": 30, "b": "z"}));
+
+        # getColumn
+        assertEq((10, 20, 30), df.getColumn("a"), "getColumn int");
+        assertEq(("x", "y", "z"), df.getColumn("b"), "getColumn string");
+
+        # getRow
+        hash<auto> row = df.getRow(1);
+        assertEq(20, row.a, "getRow a");
+        assertEq("y", row.b, "getRow b");
+    }
+
+    roundTripTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        list<hash<auto>> original = (
+            {"x": 1, "y": "a"},
+            {"x": 2, "y": "b"},
+            {"x": 3, "y": "c"},
+        );
+
+        DataFrame::DataFrame df(original);
+        list<hash<auto>> result = df.toRecords();
+
+        assertEq(3, result.size(), "round-trip preserves row count");
+        assertEq(1, result[0].x, "round-trip preserves int value");
+        assertEq("b", result[1].y, "round-trip preserves string value");
+
+        # Column hash round-trip
+        hash<auto> cols = df.toColumnHash();
+        assertEq((1, 2, 3), cols.x, "toColumnHash x");
+        assertEq(("a", "b", "c"), cols.y, "toColumnHash y");
+    }
+
+    mutationTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(({"a": 1}, {"a": 2}));
+
+        # addColumn
+        df.addColumn("b", (10, 20));
+        assertEq(("a", "b"), df.columnNames(), "addColumn adds column");
+        assertEq((10, 20), df.getColumn("b"), "addColumn values correct");
+
+        # renameColumn
+        df.renameColumn("b", "c");
+        assertEq(("a", "c"), df.columnNames(), "renameColumn works");
+
+        # dropColumn
+        df.dropColumn("c");
+        assertEq(("a",), df.columnNames(), "dropColumn removes column");
+
+        # Error: duplicate column
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.addColumn(), ("a", (1, 2)),
+            "addColumn duplicate throws");
+
+        # Error: drop non-existent
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.dropColumn(), ("nonexistent",),
+            "dropColumn missing throws");
+    }
+
+    describeTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"val": 10.0, "name": "a"},
+             {"val": 20.0, "name": "b"},
+             {"val": 30.0, "name": "c"},
+             {"val": 40.0, "name": "a"}));
+
+        list<auto> stats = df.describe();
+        assertEq(2, stats.size(), "describe returns stats for all columns");
+
+        # Numeric column stats
+        hash<auto> val_stats = stats[0];
+        assertEq("val", val_stats.name, "describe name");
+        assertEq(4, val_stats.count, "describe count");
+        assertEq(0, val_stats.null_count, "describe null_count");
+        # mean of 10, 20, 30, 40 = 25
+        float delta = abs(val_stats.mean - 25.0);
+        assertTrue(delta < 0.01, "describe mean ≈ 25");
+        assertEq(10.0, val_stats.min, "describe min");
+        assertEq(40.0, val_stats.max, "describe max");
+
+        # String column stats
+        hash<auto> name_stats = stats[1];
+        assertEq("name", name_stats.name, "describe string name");
+        assertEq(3, name_stats.unique_count, "describe unique_count");
+    }
+
+    headTailSliceTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"v": 1}, {"v": 2}, {"v": 3}, {"v": 4}, {"v": 5}));
+
+        auto h = df.head(2);
+        assertEq(2, h.numRows(), "head(2) rows");
+        assertEq((1, 2), h.getColumn("v"), "head(2) values");
+
+        auto t = df.tail(2);
+        assertEq(2, t.numRows(), "tail(2) rows");
+        assertEq((4, 5), t.getColumn("v"), "tail(2) values");
+
+        auto s = df.slice(1, 4);
+        assertEq(3, s.numRows(), "slice(1,4) rows");
+        assertEq((2, 3, 4), s.getColumn("v"), "slice(1,4) values");
+
+        # Default head/tail (5 rows, but only 5 available)
+        auto h5 = df.head();
+        assertEq(5, h5.numRows(), "head() default 5");
+    }
+
+    nullHandlingTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(
+            ({"a": 1, "b": "x"},
+             {"a": NOTHING, "b": "y"},
+             {"a": 3, "b": NOTHING}));
+
+        # Nulls in getColumn
+        list<auto> a_vals = df.getColumn("a");
+        assertEq(1, a_vals[0], "null handling: first value present");
+        assertEq(NOTHING, a_vals[1], "null handling: NOTHING preserved");
+        assertEq(3, a_vals[2], "null handling: third value present");
+
+        # Nulls in getRow
+        hash<auto> row = df.getRow(1);
+        assertEq(NOTHING, row.a, "null in row hash");
+        assertEq("y", row.b, "non-null in row hash");
+
+        # Describe with nulls
+        list<auto> stats = df.describe();
+        hash<auto> a_stats = stats[0];
+        assertEq(2, a_stats.count, "describe count excludes nulls");
+        assertEq(1, a_stats.null_count, "describe null_count");
+    }
+
+    errorCasesTest() {
+%ifdef NoDataFrame
+        testSkip("dataframe module not available");
+%endif
+        DataFrame::DataFrame df(({"a": 1}, {"a": 2}));
+
+        # Column not found
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.getColumn(), ("nonexistent",),
+            "getColumn missing column");
+
+        # Row index out of range
+        assertThrows("DATAFRAME-INDEX-ERROR", \df.getRow(), (99,),
+            "getRow out of range");
+
+        # Mismatched column lengths
+        bool caught = False;
+        try {
+            new DataFrame::DataFrame({"a": (1, 2), "b": (1, 2, 3)});
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("DATAFRAME-ERROR", ex.err, "mismatched column lengths");
+            caught = True;
+        }
+        assertTrue(caught, "mismatched column lengths throws");
+
+        # addColumn row count mismatch
+        assertThrows("DATAFRAME-COLUMN-ERROR", \df.addColumn(), ("b", (1, 2, 3)),
+            "addColumn row mismatch");
+    }
+}

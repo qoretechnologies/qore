@@ -1797,6 +1797,7 @@ if (NOT Eigen3_FOUND)
 endif()
 add_subdirectory(modules/ml)
 add_subdirectory(modules/tokenizer)
+add_subdirectory(modules/dataframe)
 # protobuf module (requires libprotobuf)
 # Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files
 # (e.g., MacPorts protobuf-targets-macports.cmake referencing missing upb targets)

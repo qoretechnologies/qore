@@ -1,0 +1,53 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_dataframe.qpp
+
+    Qore dataframe module hashdecls and namespace functions
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+
+//! DataFrame shape information
+/** @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::DataFrameShape {
+    //! Number of rows
+    int rows;
+    //! Number of columns
+    int cols;
+}
+
+//! Per-column descriptive statistics
+/** Returned by @ref DataFrame::describe()
+
+    @since dataframe 1.0
+*/
+hashdecl Qore::DataFrame::ColumnStats {
+    //! Column name
+    string name;
+    //! Column data type
+    string dtype;
+    //! Count of non-null values
+    int count;
+    //! Count of null values
+    int null_count;
+    //! Mean (numeric columns only)
+    *float mean;
+    //! Standard deviation (numeric columns only)
+    *float std;
+    //! Minimum value (numeric columns only)
+    *float min;
+    //! 25th percentile (numeric columns only)
+    *float q25;
+    //! Median / 50th percentile (numeric columns only)
+    *float q50;
+    //! 75th percentile (numeric columns only)
+    *float q75;
+    //! Maximum value (numeric columns only)
+    *float max;
+    //! Count of unique non-null values (string columns only)
+    *int unique_count;
+}
