@@ -54,7 +54,7 @@ private:
     };
 
     DLLLOCAL void generateTerms();
-    DLLLOCAL double evaluateTerm(const Eigen::VectorXd& row, const Term& term) const;
+    DLLLOCAL double evaluateTerm(const MatrixXd& X, int64_t row, const Term& term) const;
     DLLLOCAL std::string termName(const Term& term) const;
 
     int degree;

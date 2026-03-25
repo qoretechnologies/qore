@@ -84,11 +84,11 @@ void QorePolynomialFeatures::generateTerms() {
     n_output_cols = (int)terms.size();
 }
 
-double QorePolynomialFeatures::evaluateTerm(const Eigen::VectorXd& row,
+double QorePolynomialFeatures::evaluateTerm(const MatrixXd& X, int64_t row,
     const Term& term) const {
     double val = 1.0;
     for (int idx : term.indices) {
-        val *= row(idx);
+        val *= X(row, idx);
     }
     return val;
 }
@@ -157,9 +157,8 @@ MatrixXd QorePolynomialFeatures::transform(const MatrixXd& X,
 
     MatrixXd result(X.rows(), n_output_cols);
     for (int64_t i = 0; i < X.rows(); ++i) {
-        Eigen::VectorXd row = X.row(i);
         for (int t = 0; t < n_output_cols; ++t) {
-            result(i, t) = evaluateTerm(row, terms[t]);
+            result(i, t) = evaluateTerm(X, i, terms[t]);
         }
     }
     return result;
@@ -233,10 +232,11 @@ QorePolynomialFeatures* QorePolynomialFeatures::deserializeState(
     pf->fitted = true;
     // n_output_cols is set by generateTerms(), verify consistency
     if (pf->n_output_cols != noc) {
+        int actual = pf->n_output_cols;
         delete pf;
         xsink->raiseException("ML-DESERIALIZE-ERROR",
             "PolynomialFeatures deserialization mismatch: expected %d output cols, got %d",
-            noc, pf->n_output_cols);
+            noc, actual);
         return nullptr;
     }
     return pf;
