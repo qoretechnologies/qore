@@ -1250,4 +1250,77 @@ public namespace DataProviderML {
         #! The original input values for the fields that were analyzed
         hash<auto> record_values;
     }
+
+    #! Decision Tree classification event hashdecl
+    public hashdecl DecisionTreeClassificationEventInfo {
+        #! The type of analysis that produced this result (always "decision-tree-classification")
+        string event_type = "decision-tree-classification";
+        #! The class label predicted by the decision tree
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (uncertain) to 1.0 (very confident);
+        #! represents the proportion of training samples in the leaf node belonging to
+        #! the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Decision Tree regression event hashdecl
+    public hashdecl DecisionTreeRegressionEventInfo {
+        #! The type of analysis that produced this result (always "decision-tree-regression")
+        string event_type = "decision-tree-regression";
+        #! The predicted numeric value, computed as the mean of target values in the
+        #! leaf node reached by this record
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Random Forest classification event hashdecl
+    public hashdecl RandomForestClassificationEventInfo {
+        #! The type of analysis that produced this result (always "random-forest-classification")
+        string event_type = "random-forest-classification";
+        #! The class label predicted by majority vote across all trees in the forest
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (no consensus) to 1.0 (all trees
+        #! agree); represents the proportion of trees voting for the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Random Forest regression event hashdecl
+    public hashdecl RandomForestRegressionEventInfo {
+        #! The type of analysis that produced this result (always "random-forest-regression")
+        string event_type = "random-forest-regression";
+        #! The predicted numeric value, computed as the average prediction across all
+        #! trees in the forest
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Gradient Boosted Trees classification event hashdecl
+    public hashdecl GBTClassificationEventInfo {
+        #! The type of analysis that produced this result (always "gbt-classification")
+        string event_type = "gbt-classification";
+        #! The class label predicted by the gradient boosted ensemble
+        int predicted_class;
+        #! How confident the prediction is, from 0.0 (uncertain) to 1.0 (very confident);
+        #! derived from the boosted model's probability estimate for the predicted class
+        float confidence;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
+
+    #! Gradient Boosted Trees regression event hashdecl
+    public hashdecl GBTRegressionEventInfo {
+        #! The type of analysis that produced this result (always "gbt-regression")
+        string event_type = "gbt-regression";
+        #! The predicted numeric value, computed by summing the contributions of all
+        #! sequentially built trees
+        float prediction;
+        #! The original input values for the fields that were analyzed
+        hash<auto> record_values;
+    }
 }

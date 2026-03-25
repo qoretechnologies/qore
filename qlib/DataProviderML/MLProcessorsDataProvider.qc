@@ -46,6 +46,12 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
             "logistic-regression": "QoreLogisticRegressionProcessor",
             "knn-classification": "QoreKNNClassificationProcessor",
             "knn-regression": "QoreKNNRegressionProcessor",
+            "decision-tree-classification": "QoreDecisionTreeClassificationProcessor",
+            "decision-tree-regression": "QoreDecisionTreeRegressionProcessor",
+            "random-forest-classification": "QoreRandomForestClassificationProcessor",
+            "random-forest-regression": "QoreRandomForestRegressionProcessor",
+            "gbt-classification": "QoreGBTClassificationProcessor",
+            "gbt-regression": "QoreGBTRegressionProcessor",
             "lof": "QoreLOFProcessor",
             "gmm": "QoreGMMProcessor",
             "standard-scaler": "QoreStandardScalerProcessor",
@@ -116,6 +122,18 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreKNNClassificationProcessor();
             case "knn-regression":
                 return new QoreKNNRegressionProcessor();
+            case "decision-tree-classification":
+                return new QoreDecisionTreeClassificationProcessor();
+            case "decision-tree-regression":
+                return new QoreDecisionTreeRegressionProcessor();
+            case "random-forest-classification":
+                return new QoreRandomForestClassificationProcessor();
+            case "random-forest-regression":
+                return new QoreRandomForestRegressionProcessor();
+            case "gbt-classification":
+                return new QoreGBTClassificationProcessor();
+            case "gbt-regression":
+                return new QoreGBTRegressionProcessor();
             case "lof":
                 return new QoreLOFProcessor();
             case "gmm":
