@@ -271,17 +271,17 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
                 debug("REST %y %y body: %y", method, path, body);
                 switch (method.upr()) {
                     case "GET":
-                        return rest.restGet(path);
+                        return rest.restGet(path, hdr);
                     case "POST":
-                        return rest.restPost(path, body);
+                        return rest.restPost(path, body, hdr);
                     case "PUT":
-                        return rest.restPut(path, body);
+                        return rest.restPut(path, body, hdr);
                     case "PATCH":
-                        return rest.restPatch(path, body);
+                        return rest.restPatch(path, body, hdr);
                     case "DELETE":
-                        return rest.restDel(path);
+                        return rest.restDel(path, body, hdr);
                     default:
-                        return rest.restDoRequest(method, path, body);
+                        return rest.restDoRequest(method, path, body, hdr);
                 }
             } catch (hash<ExceptionInfo> ex) {
                 if (retry(ex, \retries)) {

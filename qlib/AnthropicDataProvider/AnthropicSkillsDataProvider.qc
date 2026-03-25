@@ -65,6 +65,12 @@ public class AnthropicSkillResponseDataType inherits HashDataType {
                 "desc": "RFC 3339 datetime when the skill was created",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "latest_version": {
+                "display_name": "Latest Version",
+                "short_desc": "The latest version identifier of the skill",
+                "desc": "The latest version identifier of the skill",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "updated_at": {
                 "display_name": "Updated At",
                 "short_desc": "When the skill was last updated",
@@ -81,6 +87,43 @@ public class AnthropicSkillResponseDataType inherits HashDataType {
 }
 
 public const AnthropicSkillResponseDataType = new AnthropicSkillResponseDataType();
+
+#! List skills request type with pagination and filtering
+public class AnthropicSkillListRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "Maximum number of skills to return",
+                "desc": "Maximum number of skills to return per page. Default: `20`, max: `100`",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": 20,
+            },
+            "page": {
+                "display_name": "Page Token",
+                "short_desc": "Pagination token from a previous response",
+                "desc": "Pagination token from a previous response's `next_page` field for retrieving the next page "
+                    "of results",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "source": {
+                "display_name": "Source Filter",
+                "short_desc": "Filter skills by source",
+                "desc": "Filter skills by their source",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "custom", "display_name": "Custom",
+                        "short_desc": "Only custom skills"},
+                    <AllowedValueInfo>{"value": "anthropic", "display_name": "Anthropic",
+                        "short_desc": "Only Anthropic-provided skills"},
+                ),
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AnthropicSkillListRequestDataType = new AnthropicSkillListRequestDataType();
 
 #! Skill ID request type
 public class AnthropicSkillIdRequestDataType inherits HashDataType {
@@ -158,6 +201,7 @@ public class AnthropicSkillsDataProvider inherits AnthropicDataProviderCommon {
     private {
         const ChildMap = {
             "create": Class::forName("AnthropicDataProvider::AnthropicSkillCreateDataProvider"),
+            "delete": Class::forName("AnthropicDataProvider::AnthropicSkillDeleteDataProvider"),
             "list": Class::forName("AnthropicDataProvider::AnthropicSkillListDataProvider"),
             "get": Class::forName("AnthropicDataProvider::AnthropicSkillGetDataProvider"),
             "update": Class::forName("AnthropicDataProvider::AnthropicSkillUpdateDataProvider"),
@@ -224,12 +268,20 @@ public class AnthropicSkillListDataProvider inherits AnthropicDataProviderCommon
     constructor(RestClientIo::RestClientIo rest) : AnthropicDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : AnthropicDataProviderCommon(options) {}
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return AnthropicSkillListRequestDataType; }
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "skills", NOTHING, SkillsBetaHeader).body."data";
+        hash<auto> params = {};
+        if (req.limit) { params.limit = req.limit; }
+        if (req.page) { params.page = req.page; }
+        if (req.source) { params.source = req.source; }
+        string path = "skills";
+        if (params) {
+            path += "?" + (map sprintf("%s=%s", $1.key, $1.value), params.pairIterator()).join("&");
+        }
+        return doRestCommand("GET", path, NOTHING, SkillsBetaHeader).body."data";
     }
 }
 
@@ -285,6 +337,56 @@ public class AnthropicSkillUpdateDataProvider inherits AnthropicDataProviderComm
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string skill_id = remove req.skill_id;
         return doRestCommand("PUT", "skills/" + skill_id, req, SkillsBetaHeader).body;
+    }
+}
+
+#! Delete skill response data type
+public class AnthropicSkillDeleteResponseDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "id": {
+                "display_name": "Skill ID",
+                "short_desc": "ID of the deleted skill",
+                "desc": "The unique identifier of the deleted skill",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "type": {
+                "display_name": "Object Type",
+                "short_desc": "Object type",
+                "desc": "Object type, always `skill_deleted`",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AnthropicSkillDeleteResponseDataType = new AnthropicSkillDeleteResponseDataType();
+
+#! Delete a skill
+public class AnthropicSkillDeleteDataProvider inherits AnthropicDataProviderCommon {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "name": "delete",
+            "type": "AnthropicSkillDeleteDataProvider",
+            "constructor_options": ConstructorOptions,
+            "supports_request": True,
+        };
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys});
+        const RequestType = AnthropicSkillIdRequestDataType;
+        const ResponseType = AnthropicSkillDeleteResponseDataType;
+    }
+
+    constructor(RestClientIo::RestClientIo rest) : AnthropicDataProviderCommon(rest) {}
+    constructor(*hash<auto> options) : AnthropicDataProviderCommon(options) {}
+    string getName() { return ProviderInfo.name; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
+    private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        return doRestCommand("DELETE", "skills/" + req.skill_id, NOTHING, SkillsBetaHeader).body;
     }
 }
 }

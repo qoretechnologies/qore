@@ -82,7 +82,7 @@ public class AnthropicBatchRequestItemDataType inherits HashDataType {
                 "display_name": "Parameters",
                 "short_desc": "Message creation parameters",
                 "desc": "The parameters for the message creation request. Same structure as POST `/v1/messages`",
-                "type": AbstractDataProviderTypeMap."hash",
+                "type": new AnthropicMessageRequestDataType(),
                 "required": True,
             },
         };

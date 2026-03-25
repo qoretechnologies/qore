@@ -157,6 +157,59 @@ public class AnthropicDeleteResponseDataType inherits HashDataType {
 
 public const AnthropicDeleteResponseDataType = new AnthropicDeleteResponseDataType();
 
+#! File content response data type
+public class AnthropicFileContentResponseDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "content": {
+                "display_name": "File Content",
+                "short_desc": "The raw file content",
+                "desc": "The raw binary content of the file. The format depends on the file's MIME type",
+                "type": AbstractDataProviderTypeMap."auto",
+            },
+            "mime_type": {
+                "display_name": "MIME Type",
+                "short_desc": "The MIME type of the content",
+                "desc": "The MIME type of the returned content",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AnthropicFileContentResponseDataType = new AnthropicFileContentResponseDataType();
+
+#! List files request type with pagination
+public class AnthropicFileListRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "Maximum number of files to return",
+                "desc": "Maximum number of files to return per page. Default: `20`, range: `1`-`1000`",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": 20,
+            },
+            "after_id": {
+                "display_name": "After ID",
+                "short_desc": "Cursor for forward pagination",
+                "desc": "Return files after this file ID (cursor for forward pagination)",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "before_id": {
+                "display_name": "Before ID",
+                "short_desc": "Cursor for backward pagination",
+                "desc": "Return files before this file ID (cursor for backward pagination)",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AnthropicFileListRequestDataType = new AnthropicFileListRequestDataType();
+
 #! Container provider for Files API
 public class AnthropicFilesDataProvider inherits AnthropicDataProviderCommon {
     public {
@@ -248,12 +301,20 @@ public class AnthropicFileListDataProvider inherits AnthropicDataProviderCommon 
     constructor(RestClientIo::RestClientIo rest) : AnthropicDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : AnthropicDataProviderCommon(options) {}
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return AnthropicFileListRequestDataType; }
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "files", NOTHING, FilesBetaHeader).body."data";
+        hash<auto> params = {};
+        if (req.limit) { params.limit = req.limit; }
+        if (req.after_id) { params.after_id = req.after_id; }
+        if (req.before_id) { params.before_id = req.before_id; }
+        string path = "files";
+        if (params) {
+            path += "?" + (map sprintf("%s=%s", $1.key, $1.value), params.pairIterator()).join("&");
+        }
+        return doRestCommand("GET", path, NOTHING, FilesBetaHeader).body."data";
     }
 }
 
@@ -323,16 +384,22 @@ public class AnthropicFileGetContentDataProvider inherits AnthropicDataProviderC
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys});
         const RequestType = AnthropicFileIdRequestDataType;
+        const ResponseType = AnthropicFileContentResponseDataType;
     }
 
     constructor(RestClientIo::RestClientIo rest) : AnthropicDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : AnthropicDataProviderCommon(options) {}
     string getName() { return ProviderInfo.name; }
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
+    private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "files/" + req.file_id + "/content", NOTHING, FilesBetaHeader).body;
+        hash<auto> resp = doRestCommand("GET", "files/" + req.file_id + "/content", NOTHING, FilesBetaHeader);
+        return {
+            "content": resp.body,
+            "mime_type": resp."content-type",
+        };
     }
 }
 }

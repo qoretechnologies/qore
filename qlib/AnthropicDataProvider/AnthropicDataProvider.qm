@@ -68,6 +68,7 @@ module AnthropicDataProvider {
             "desc": "Send a structured message to an Anthropic Claude model and receive a complete response. "
                 "Supports text, images, tool use, and extended thinking.",
             "action_code": DPAT_API,
+            "groups": ("Messages",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicMessageRequestDataType::Fields{"model", "messages", "max_tokens"}, {
                     "preselected": True,
@@ -90,6 +91,7 @@ module AnthropicDataProvider {
                 "Events are emitted incrementally as the model generates content.",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ANTHROPIC_MESSAGE_STREAM,
+            "groups": ("Messages",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicMessageRequestDataType::Fields{"model", "messages", "max_tokens"}, {
                     "preselected": True,
@@ -111,6 +113,7 @@ module AnthropicDataProvider {
             "desc": "Count the number of input tokens that would be used by a message request without actually "
                 "creating the message. Useful for estimating costs and managing context windows.",
             "action_code": DPAT_API,
+            "groups": ("Messages",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicCountTokensRequestDataType::Fields{"model", "messages"}, {
                     "preselected": True,
@@ -136,6 +139,7 @@ module AnthropicDataProvider {
             "desc": "Retrieve details for a specific Anthropic model including capabilities, context window size, "
                 "and max output tokens.",
             "action_code": DPAT_API,
+            "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicModelIdRequestDataType::Fields{"model_id",}, {
                     "preselected": True,
@@ -143,6 +147,27 @@ module AnthropicDataProvider {
                 }
             ),
             "output_type": AnthropicModelGetDataProvider::ResponseType,
+        });
+
+        # register list-models action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/models/list",
+            "action": "list-models",
+            "display_name": "List Models",
+            "short_desc": "List all available Anthropic models",
+            "desc": "List all available Anthropic models including their capabilities, context window sizes, "
+                "and max output tokens.",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicModelListRequestDataType::Fields{"limit",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicModelListRequestDataType::Fields - "limit"
+            ),
+            "output_type": AnthropicModelListDataProvider::ResponseType,
         });
 
         # register create-batch action
@@ -155,6 +180,7 @@ module AnthropicDataProvider {
             "desc": "Submit a batch of message requests for asynchronous processing at 50% reduced cost. "
                 "Batches are processed within 24 hours.",
             "action_code": DPAT_API,
+            "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicCreateBatchRequestDataType::Fields{"requests",}, {
                     "preselected": True,
@@ -174,6 +200,7 @@ module AnthropicDataProvider {
             "desc": "Retrieve the status and metadata of a specific message batch. Use this to poll for "
                 "batch completion.",
             "action_code": DPAT_API,
+            "groups": ("Batches",),
             "path_vars": {
                 "batch_id": <DataProviderPathVarInfo>{
                     "display_name": "Batch ID",
@@ -194,6 +221,7 @@ module AnthropicDataProvider {
             "short_desc": "List all message batches in the workspace",
             "desc": "List all message batches with pagination support.",
             "action_code": DPAT_API,
+            "groups": ("Batches",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicBatchListRequestDataType::Fields{"limit",}, {
                     "preselected": True,
@@ -214,6 +242,7 @@ module AnthropicDataProvider {
             "desc": "Cancel a message batch. The batch enters a `canceling` state; already-processed requests "
                 "are not undone.",
             "action_code": DPAT_API,
+            "groups": ("Batches",),
             "path_vars": {
                 "batch_id": <DataProviderPathVarInfo>{
                     "display_name": "Batch ID",
@@ -235,13 +264,16 @@ module AnthropicDataProvider {
             "desc": "Upload a file that can be referenced in multiple API calls. Supports PDF, text, and "
                 "image files up to 500 MB. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "groups": ("Files",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicUploadFileRequestDataType::Fields{"file_data", "filename"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AnthropicUploadFileRequestDataType::Fields - ("file_data", "filename")
+                AnthropicUploadFileRequestDataType::Fields{"mime_type",}, {
+                    "preselected": True,
+                }
             ),
             "output_type": AnthropicFileUploadDataProvider::ResponseType,
         });
@@ -253,8 +285,17 @@ module AnthropicDataProvider {
             "action": "list-files",
             "display_name": "List Files",
             "short_desc": "List all uploaded files in the workspace (Beta)",
-            "desc": "List all files that have been uploaded to the workspace. Requires the Files API beta.",
+            "desc": "List all files that have been uploaded to the workspace with pagination support. "
+                "Requires the Files API beta.",
             "action_code": DPAT_API,
+            "groups": ("Files",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicFileListRequestDataType::Fields{"limit",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicFileListRequestDataType::Fields - "limit"
+            ),
             "output_type": AnthropicFileListDataProvider::ResponseType,
         });
 
@@ -267,6 +308,7 @@ module AnthropicDataProvider {
             "short_desc": "Get metadata for a specific file (Beta)",
             "desc": "Retrieve metadata for a specific uploaded file. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "groups": ("Files",),
             "path_vars": {
                 "file_id": <DataProviderPathVarInfo>{
                     "display_name": "File ID",
@@ -278,6 +320,28 @@ module AnthropicDataProvider {
             "output_type": AnthropicFileGetDataProvider::ResponseType,
         });
 
+        # register get-file-content action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/files/{file_id}/get-content",
+            "action": "get-file-content",
+            "display_name": "Get File Content",
+            "short_desc": "Download the content of a file (Beta)",
+            "desc": "Download the content of a previously uploaded file. Only available for files created by "
+                "skills or code execution where `downloadable` is `True`. Requires the Files API beta.",
+            "action_code": DPAT_API,
+            "groups": ("Files",),
+            "path_vars": {
+                "file_id": <DataProviderPathVarInfo>{
+                    "display_name": "File ID",
+                    "short_desc": "The ID of the file",
+                    "desc": "The ID of the file to download content for",
+                    "example_value": "file_abc123",
+                },
+            },
+            "output_type": AnthropicFileGetContentDataProvider::ResponseType,
+        });
+
         # register delete-file action (Beta)
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": AnthropicDataProvider::AppName,
@@ -287,6 +351,7 @@ module AnthropicDataProvider {
             "short_desc": "Delete a file from the workspace (Beta)",
             "desc": "Delete a file that was previously uploaded. Requires the Files API beta.",
             "action_code": DPAT_API,
+            "groups": ("Files",),
             "path_vars": {
                 "file_id": <DataProviderPathVarInfo>{
                     "display_name": "File ID",
@@ -308,13 +373,16 @@ module AnthropicDataProvider {
             "desc": "Create a new custom skill that packages domain expertise and workflows. "
                 "Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "groups": ("Skills",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 AnthropicSkillRequestDataType::Fields{"display_title",}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                AnthropicSkillRequestDataType::Fields - "display_title"
+                AnthropicSkillRequestDataType::Fields - "display_title", {
+                    "preselected": True,
+                }
             ),
             "output_type": AnthropicSkillCreateDataProvider::ResponseType,
         });
@@ -326,9 +394,21 @@ module AnthropicDataProvider {
             "action": "list-skills",
             "display_name": "List Skills",
             "short_desc": "List available skills (Beta)",
-            "desc": "List all available skills including custom and Anthropic-provided skills. "
-                "Requires the Skills API beta.",
+            "desc": "List all available skills including custom and Anthropic-provided skills with pagination "
+                "and source filtering. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "groups": ("Skills",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillListRequestDataType::Fields{"limit",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillListRequestDataType::Fields{"source",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AnthropicSkillListRequestDataType::Fields{"page",}
+            ),
             "output_type": AnthropicSkillListDataProvider::ResponseType,
         });
 
@@ -341,14 +421,37 @@ module AnthropicDataProvider {
             "short_desc": "Get details for a specific skill (Beta)",
             "desc": "Retrieve details for a specific skill by ID. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "groups": ("Skills",),
             "path_vars": {
                 "skill_id": <DataProviderPathVarInfo>{
                     "display_name": "Skill ID",
                     "short_desc": "The ID of the skill",
                     "desc": "The ID of the skill",
+                    "example_value": "skill_abc123",
                 },
             },
             "output_type": AnthropicSkillGetDataProvider::ResponseType,
+        });
+
+        # register delete-skill action (Beta)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AnthropicDataProvider::AppName,
+            "path": "/skills/{skill_id}/delete",
+            "action": "delete-skill",
+            "display_name": "Delete Skill",
+            "short_desc": "Delete a custom skill (Beta)",
+            "desc": "Delete a custom skill by ID. Requires the Skills API beta.",
+            "action_code": DPAT_API,
+            "groups": ("Skills",),
+            "path_vars": {
+                "skill_id": <DataProviderPathVarInfo>{
+                    "display_name": "Skill ID",
+                    "short_desc": "The ID of the skill to delete",
+                    "desc": "The ID of the skill to delete",
+                    "example_value": "skill_abc123",
+                },
+            },
+            "output_type": AnthropicSkillDeleteDataProvider::ResponseType,
         });
 
         # register update-skill action (Beta)
@@ -360,15 +463,19 @@ module AnthropicDataProvider {
             "short_desc": "Update an existing skill (Beta)",
             "desc": "Update an existing custom skill. Requires the Skills API beta.",
             "action_code": DPAT_API,
+            "groups": ("Skills",),
             "path_vars": {
                 "skill_id": <DataProviderPathVarInfo>{
                     "display_name": "Skill ID",
                     "short_desc": "The ID of the skill to update",
                     "desc": "The ID of the skill to update",
+                    "example_value": "skill_abc123",
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                AnthropicSkillRequestDataType::Fields
+                AnthropicSkillRequestDataType::Fields, {
+                    "preselected": True,
+                }
             ),
             "output_type": AnthropicSkillUpdateDataProvider::ResponseType,
         });

@@ -20,6 +20,7 @@ class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
         hash<auto> last_request;
         string last_method;
         string last_path;
+        *hash<auto> last_headers;
         hash<auto> response_body;
         hash<auto> last_stream_request;
         list<hash<SseMessageInfo>> stream_events;
@@ -28,10 +29,11 @@ class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
     constructor() : RestClientIo({"url": "https://api.anthropic.com", "token": "x", "data": "json"}) {
     }
 
-    hash<RestClient::RestResponseInfo> restPost(string path, auto body) {
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
         last_method = "POST";
         last_path = path;
         last_request = body;
+        last_headers = hdr;
         if (!response_body) {
             response_body = {
                 "id": "msg_test123",
@@ -56,9 +58,10 @@ class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
         };
     }
 
-    hash<RestClient::RestResponseInfo> restGet(string path) {
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
         last_method = "GET";
         last_path = path;
+        last_headers = hdr;
         return <RestClient::RestResponseInfo>{
             "body": {
                 "data": (
@@ -72,6 +75,15 @@ class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
                     },
                 ),
             },
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        last_method = "DELETE";
+        last_path = path;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body ?? {"id": "deleted", "type": "deleted"},
         };
     }
 
@@ -194,6 +206,9 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         addTestCase("action session create", \actionSessionCreateTest());
         addTestCase("action session stream", \actionSessionStreamTest());
         addTestCase("action session invalid", \actionSessionInvalidTest());
+        addTestCase("beta headers passed", \betaHeadersTest());
+        addTestCase("files pagination", \filesPaginationTest());
+        addTestCase("skills pagination", \skillsPaginationTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("data types", \dataTypesTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -241,6 +256,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(DPAT_EVENT, action.action_code);
         assertEq(AnthropicDataProvider::EVENT_ANTHROPIC_MESSAGE_STREAM, action.action_val);
         assertEq(True, action.output_type instanceof AnthropicStreamEventDataType);
+        assertEq(("Messages",), action.groups);
 
         # test create action
         action = DataProviderActionCatalog::getAppAction(
@@ -248,6 +264,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq("/messages/create", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Messages",), action.groups);
         # verify new fields are in action options
         assertEq(True, action.options.hasKey("service_tier"));
         assertEq(True, action.options.hasKey("output_config"));
@@ -259,6 +276,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq("/count-tokens", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Messages",), action.groups);
 
         # test batch actions
         action = DataProviderActionCatalog::getAppAction(
@@ -266,12 +284,22 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq("/batches/create", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Batches",), action.groups);
 
         action = DataProviderActionCatalog::getAppAction(
             AnthropicDataProvider::AppName, "get-model"
         );
         assertEq("/models/get", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Models",), action.groups);
+
+        # test list-models action
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "list-models"
+        );
+        assertEq("/models/list", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Models",), action.groups);
 
         # test file actions
         action = DataProviderActionCatalog::getAppAction(
@@ -279,6 +307,16 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq("/files/upload", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Files",), action.groups);
+
+        # test get-file-content action
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "get-file-content"
+        );
+        assertEq("/files/{file_id}/get-content", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Files",), action.groups);
+        assertEq(True, action.output_type instanceof AbstractDataProviderType);
 
         # test skill actions
         action = DataProviderActionCatalog::getAppAction(
@@ -286,6 +324,18 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         );
         assertEq("/skills/create", action.path);
         assertEq(DPAT_API, action.action_code);
+        assertEq(("Skills",), action.groups);
+        # verify description and instructions are preselected
+        assertEq(True, action.options.description.preselected);
+        assertEq(True, action.options.instructions.preselected);
+
+        # test delete-skill action
+        action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "delete-skill"
+        );
+        assertEq("/skills/{skill_id}/delete", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Skills",), action.groups);
     }
 
     childProvidersTest() {
@@ -304,7 +354,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
 
         # verify skills children
         AbstractDataProvider skills = prov.getChildProvider("skills");
-        assertEq(("create", "get", "list", "update"), sort(skills.getChildProviderNames()));
+        assertEq(("create", "delete", "get", "list", "update"), sort(skills.getChildProviderNames()));
 
         # verify models children (now a container)
         AbstractDataProvider models = prov.getChildProvider("models");
@@ -562,13 +612,35 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         FakeAnthropicRestClientIo rest();
         AnthropicDataProvider prov(rest);
         AbstractDataProvider models = prov.getChildProvider("models").getChildProvider("list");
+
+        # verify request type has pagination fields
+        *AbstractDataProviderType req_type = models.getRequestType();
+        assertEq(True, req_type instanceof AbstractDataProviderType);
+        hash<string, AbstractDataField> fields = req_type.getFields();
+        assertEq(True, fields.hasKey("limit"));
+        assertEq(True, fields.hasKey("after_id"));
+        assertEq(True, fields.hasKey("before_id"));
+
+        # test without pagination (default limit=20 is still sent)
         auto resp = models.doRequest(NOTHING);
         assertEq("GET", rest.last_method);
-        assertEq("models", rest.last_path);
+        assertRegex("^models", rest.last_path);
         assertEq(1, resp.lsize());
         assertEq("claude-sonnet-4-6-20250514", resp[0].id);
         assertEq(1000000, resp[0].max_input_tokens);
         assertEq(64000, resp[0].max_tokens);
+
+        # test with pagination params
+        models.doRequest({"limit": 5, "after_id": "claude-haiku-4-5-20241022"});
+        assertEq("GET", rest.last_method);
+        assertRegex("limit=5", rest.last_path);
+        assertRegex("after_id=claude-haiku-4-5-20241022", rest.last_path);
+
+        # test action catalog has options
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "list-models"
+        );
+        assertEq(True, action.options.hasKey("limit"));
 %endif
     }
 
@@ -631,6 +703,105 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertThrows("INVALID-ACTION", sub () {
             session.handleAction("invalid-action");
         });
+%endif
+    }
+
+    betaHeadersTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        rest.response_body = {
+            "id": "skill_test",
+            "type": "skill",
+            "display_title": "Test",
+        };
+        AnthropicDataProvider prov(rest);
+
+        # test that Skills API passes beta headers
+        AbstractDataProvider skill_create = prov.getChildProvider("skills").getChildProvider("create");
+        skill_create.doRequest({"display_title": "Test"});
+        assertEq("POST", rest.last_method);
+        assertEq("skills", rest.last_path);
+        assertEq("skills-2025-10-02", rest.last_headers."anthropic-beta");
+
+        # test that Files API passes beta headers
+        rest.response_body = {
+            "id": "file_test",
+            "type": "file",
+            "filename": "test.pdf",
+        };
+        AbstractDataProvider file_upload = prov.getChildProvider("files").getChildProvider("upload");
+        file_upload.doRequest({"file_data": "dGVzdA==", "filename": "test.pdf"});
+        assertEq("POST", rest.last_method);
+        assertEq("files", rest.last_path);
+        assertEq("files-api-2025-04-14", rest.last_headers."anthropic-beta");
+
+        # test that Files delete passes beta headers
+        rest.response_body = {"id": "file_del", "type": "file_deleted"};
+        AbstractDataProvider file_del = prov.getChildProvider("files").getChildProvider("delete");
+        file_del.doRequest({"file_id": "file_del"});
+        assertEq("DELETE", rest.last_method);
+        assertEq("files/file_del", rest.last_path);
+        assertEq("files-api-2025-04-14", rest.last_headers."anthropic-beta");
+%endif
+    }
+
+    filesPaginationTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider files_list = prov.getChildProvider("files").getChildProvider("list");
+
+        # verify request type has pagination fields
+        *AbstractDataProviderType req_type = files_list.getRequestType();
+        assertEq(True, req_type instanceof AbstractDataProviderType);
+        hash<string, AbstractDataField> fields = req_type.getFields();
+        assertEq(True, fields.hasKey("limit"));
+        assertEq(True, fields.hasKey("after_id"));
+        assertEq(True, fields.hasKey("before_id"));
+
+        # test with pagination params
+        files_list.doRequest({"limit": 5, "after_id": "file_abc"});
+        assertEq("GET", rest.last_method);
+        assertRegex("limit=5", rest.last_path);
+        assertRegex("after_id=file_abc", rest.last_path);
+
+        # test action catalog has options
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "list-files"
+        );
+        assertEq(True, action.options.hasKey("limit"));
+%endif
+    }
+
+    skillsPaginationTest() {
+        checkModule();
+%ifndef NoJson
+        FakeAnthropicRestClientIo rest();
+        AnthropicDataProvider prov(rest);
+        AbstractDataProvider skills_list = prov.getChildProvider("skills").getChildProvider("list");
+
+        # verify request type has pagination and filter fields
+        *AbstractDataProviderType req_type = skills_list.getRequestType();
+        assertEq(True, req_type instanceof AbstractDataProviderType);
+        hash<string, AbstractDataField> fields = req_type.getFields();
+        assertEq(True, fields.hasKey("limit"));
+        assertEq(True, fields.hasKey("page"));
+        assertEq(True, fields.hasKey("source"));
+
+        # test with pagination params
+        skills_list.doRequest({"limit": 10, "source": "custom"});
+        assertEq("GET", rest.last_method);
+        assertRegex("limit=10", rest.last_path);
+        assertRegex("source=custom", rest.last_path);
+
+        # test action catalog has options
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            AnthropicDataProvider::AppName, "list-skills"
+        );
+        assertEq(True, action.options.hasKey("limit"));
+        assertEq(True, action.options.hasKey("source"));
 %endif
     }
 
@@ -718,6 +889,38 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(True, stream_fields.hasKey("message"));
         assertEq(True, stream_fields.hasKey("content_block"));
         assertEq(True, stream_fields.hasKey("delta"));
+
+        # verify file content response type
+        AnthropicFileContentResponseDataType content_type();
+        hash<string, AbstractDataField> content_fields = content_type.getFields();
+        assertEq(True, content_fields.hasKey("content"));
+        assertEq(True, content_fields.hasKey("mime_type"));
+
+        # verify model list request type has pagination
+        AnthropicModelListRequestDataType model_list_req();
+        hash<string, AbstractDataField> model_list_fields = model_list_req.getFields();
+        assertEq(True, model_list_fields.hasKey("limit"));
+        assertEq(True, model_list_fields.hasKey("after_id"));
+        assertEq(True, model_list_fields.hasKey("before_id"));
+
+        # verify file list request type has pagination
+        AnthropicFileListRequestDataType file_list_req();
+        hash<string, AbstractDataField> file_list_fields = file_list_req.getFields();
+        assertEq(True, file_list_fields.hasKey("limit"));
+        assertEq(True, file_list_fields.hasKey("after_id"));
+        assertEq(True, file_list_fields.hasKey("before_id"));
+
+        # verify skill list request type has pagination and filter
+        AnthropicSkillListRequestDataType skill_list_req();
+        hash<string, AbstractDataField> skill_list_fields = skill_list_req.getFields();
+        assertEq(True, skill_list_fields.hasKey("limit"));
+        assertEq(True, skill_list_fields.hasKey("page"));
+        assertEq(True, skill_list_fields.hasKey("source"));
+
+        # verify skill response type has latest_version
+        AnthropicSkillResponseDataType skill_resp();
+        hash<string, AbstractDataField> skill_fields = skill_resp.getFields();
+        assertEq(True, skill_fields.hasKey("latest_version"));
 %endif
     }
 

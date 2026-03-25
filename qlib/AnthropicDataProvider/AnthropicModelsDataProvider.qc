@@ -132,12 +132,20 @@ public class AnthropicModelListDataProvider inherits AnthropicDataProviderCommon
     constructor(RestClientIo::RestClientIo rest) : AnthropicDataProviderCommon(rest) {}
     constructor(*hash<auto> options) : AnthropicDataProviderCommon(options) {}
     string getName() { return ProviderInfo.name; }
-    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return; }
+    private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return AnthropicModelListRequestDataType; }
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "models").body."data";
+        hash<auto> params = {};
+        if (req.limit) { params.limit = req.limit; }
+        if (req.after_id) { params.after_id = req.after_id; }
+        if (req.before_id) { params.before_id = req.before_id; }
+        string path = "models";
+        if (params) {
+            path += "?" + (map sprintf("%s=%s", $1.key, $1.value), params.pairIterator()).join("&");
+        }
+        return doRestCommand("GET", path).body."data";
     }
 }
 
@@ -160,6 +168,36 @@ public class AnthropicModelIdRequestDataType inherits HashDataType {
 }
 
 public const AnthropicModelIdRequestDataType = new AnthropicModelIdRequestDataType();
+
+#! List models request type with pagination
+public class AnthropicModelListRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "limit": {
+                "display_name": "Limit",
+                "short_desc": "Maximum number of models to return",
+                "desc": "Maximum number of models to return per page. Default: `20`, range: `1`-`1000`",
+                "type": AbstractDataProviderTypeMap."*int",
+                "default_value": 20,
+            },
+            "after_id": {
+                "display_name": "After ID",
+                "short_desc": "Cursor for forward pagination",
+                "desc": "Return models after this model ID (cursor for forward pagination)",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "before_id": {
+                "display_name": "Before ID",
+                "short_desc": "Cursor for backward pagination",
+                "desc": "Return models before this model ID (cursor for backward pagination)",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+        };
+    }
+    constructor() { addQoreFields(Fields); }
+}
+
+public const AnthropicModelListRequestDataType = new AnthropicModelListRequestDataType();
 
 #! Gets a specific model by ID
 public class AnthropicModelGetDataProvider inherits AnthropicDataProviderCommon {
