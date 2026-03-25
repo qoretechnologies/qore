@@ -765,7 +765,9 @@ cargo install tree-sitter-cli@0.26.5
         VarianceThreshold for removing low-variance features (population variance),
         PolynomialFeatures for polynomial and interaction term generation,
         SelectKBest for top-k feature selection by ANOVA F-test or mutual information,
-        RFE (Recursive Feature Elimination) using decision tree importances
+        RFE (Recursive Feature Elimination) using decision tree importances,
+        DateTimeFeatures for extracting numeric date components (day_of_week, hour, quarter, etc.),
+        TextFeatures for TF-IDF and bag-of-words text vectorization
       - Concept drift detection for monitoring deployed models:
         ADWIN (adaptive windowing), Page-Hinkley (mean shift detection),
         DDM (classifier error rate monitoring with warning/drift levels)

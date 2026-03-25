@@ -44,6 +44,8 @@
     |@ref Qore::ML::PolynomialFeatures "PolynomialFeatures"|Feature Engineering|Generate polynomial and interaction terms from input features
     |@ref Qore::ML::SelectKBest "SelectKBest"|Feature Selection|Select top-k features by ANOVA F-test or mutual information
     |@ref Qore::ML::RFE "RFE"|Feature Selection|Recursive feature elimination using decision tree importances
+    |@ref Qore::ML::DateTimeFeatures "DateTimeFeatures"|Feature Engineering|Extract day_of_week, hour, quarter, is_weekend from dates
+    |@ref Qore::ML::TextFeatures "TextFeatures"|Feature Engineering|TF-IDF and bag-of-words text-to-numeric conversion
     |@ref Qore::ML::ADWIN "ADWIN"|Drift Detection|Detect distribution changes in streaming data with adaptive windowing
     |@ref Qore::ML::PageHinkley "PageHinkley"|Drift Detection|Detect mean shifts in sequential observations
     |@ref Qore::ML::DDM "DDM"|Drift Detection|Monitor classifier error rate for statistically significant increases
@@ -226,6 +228,14 @@
       produces [a, b, a^2, a*b, b^2]. Enables linear models to capture non-linear
       relationships (polynomial regression). Supports \c interaction_only mode (no powers)
       and optional bias column.
+    - @ref Qore::ML::DateTimeFeatures "DateTimeFeatures" — Extracts numeric components from
+      date/datetime values: year, month, day, hour, minute, second, day_of_week, day_of_year,
+      quarter, is_weekend, week_of_year. Use to let ML models learn temporal patterns
+      (e.g., delivery times vary by day of week and hour).
+    - @ref Qore::ML::TextFeatures "TextFeatures" — Converts text documents into numeric
+      feature vectors using TF-IDF weighting or raw word counts (bag-of-words). Use to
+      turn customer reviews, support tickets, or log messages into numbers that ML
+      algorithms can process. Configurable vocabulary size and minimum document frequency.
     - @ref Qore::ML::SelectKBest "SelectKBest" — Selects the top-k most informative features
       based on a scoring function. Supports ANOVA F-statistic (\c "f_classif") for
       classification tasks and discretized mutual information (\c "mutual_info") for any
@@ -719,6 +729,8 @@ if (!caps.has_onnx) {
       - @ref Qore::ML::PolynomialFeatures "PolynomialFeatures" — polynomial and interaction term generation with configurable degree
       - @ref Qore::ML::SelectKBest "SelectKBest" — top-k feature selection by ANOVA F-test or mutual information
       - @ref Qore::ML::RFE "RFE" — recursive feature elimination using decision tree importances
+      - @ref Qore::ML::DateTimeFeatures "DateTimeFeatures" — extract numeric components (day_of_week, hour, quarter, is_weekend, etc.) from dates
+      - @ref Qore::ML::TextFeatures "TextFeatures" — TF-IDF and bag-of-words text vectorization
     - Concept drift detection for monitoring deployed models:
       - @ref Qore::ML::ADWIN "ADWIN" — adaptive windowing with O(log N) memory
       - @ref Qore::ML::PageHinkley "PageHinkley" — cumulative sum test for mean shifts

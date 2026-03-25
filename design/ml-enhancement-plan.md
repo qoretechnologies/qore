@@ -10,8 +10,8 @@ integration, DataProvider wrapper). Phase 9 is **complete** (DecisionTree, Rando
 6 DataProvider processors, GBT multiclass softmax, typed predict API).
 Phase 10 is **complete** (SVM, NaiveBayes).
 Phase 11 is **complete** (statistical functions with Cephes incbet).
-Phase 12 is **core complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
-PolynomialFeatures, SelectKBest, RFE — remaining: DateTimeFeatures, TextFeatures).
+Phase 12 is **complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
+PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
 Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley, DDM;
 13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
 DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
