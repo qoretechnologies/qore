@@ -9138,15 +9138,20 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto it = scope_obe_counts.find(sinst->scope_id);
             if (it != scope_obe_counts.end()) {
                 llvm::Value* saved_count = it->second;
-                // The runtime helper determines error state by checking xsink->isException()
-                // at the time of the call, which correctly handles on_error/on_success semantics
-                auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit",
-                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-                builder->CreateCall(helper, {saved_count, xsink_arg});
+                // Call the implementation function with inline_lowered flag
+                // If inline_lowered=true, skip handler execution (handlers were already inlined)
+                // If inline_lowered=false, execute handlers normally
+                auto helper = module.getOrInsertFunction("qore_rt_exec_on_block_exit_impl",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type, builder->getInt1Ty()}, false));
+                llvm::Value* inline_lowered_val = llvm::ConstantInt::get(builder->getInt1Ty(), sinst->inline_lowered ? 1 : 0);
+                builder->CreateCall(helper, {saved_count, xsink_arg, inline_lowered_val});
                 // On-block-exit handlers execute through the AST path and can modify
                 // any local variable on the thread-local stack. Reload all local
                 // allocas so subsequent LoadLocal sees the updated values.
-                reloadAllLocalsFromRuntime(module, llvm_func);
+                // (Only needed if handlers actually executed, but safe to do always)
+                if (!sinst->inline_lowered) {
+                    reloadAllLocalsFromRuntime(module, llvm_func);
+                }
             }
             // ScopeExit produces NOTHING as its result
             if (inst->result.isValid()) {

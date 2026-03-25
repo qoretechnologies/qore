@@ -4182,7 +4182,7 @@ extern "C" DLLEXPORT int64_t qore_rt_get_on_block_exit_count() {
     return static_cast<int64_t>(jit_obe_handlers.size());
 }
 
-extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink) {
+extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, ExceptionSink* xsink, bool inline_lowered) {
     size_t start = static_cast<size_t>(saved_count);
     if (jit_obe_handlers.size() <= start) {
         return;
@@ -4191,62 +4191,65 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
     ExceptionSink obe_xsink;
     bool error = xsink && xsink->isException();
 
-    // Execute in reverse order (LIFO) — matching the AST's
-    // StatementBlock::execIntern() semantics.
-    for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
-        obe_type_e type = jit_obe_handlers[i].type;
-        if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
-            if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir
-                    || jit_obe_handlers[i].compiled_fn) {
-                // Instantiate exception for on_error blocks as an implicit arg
-                std::unique_ptr<SingleArgvContextHelper> argv_helper;
-                std::unique_ptr<CatchExceptionHelper> ex_helper;
-                if (type == OBE_Error && xsink) {
-                    QoreException* except = xsink->getException();
-                    if (except) {
-                        ex_helper.reset(new CatchExceptionHelper(except));
-                        argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
-                    }
-                }
-                if (jit_obe_handlers[i].compiled_fn) {
-                    // Execute natively compiled handler
-                    const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
-                    if (hf) {
-                        const QoreParseOptions& po = runtime_get_parse_options();
-                        for (LocalVar* lv : hf->all_body_locals) {
-                            lv->instantiate(po);
+    // Skip handler execution if handlers were already inlined; just clean up the vector
+    if (!inline_lowered) {
+        // Execute in reverse order (LIFO) — matching the AST's
+        // StatementBlock::execIntern() semantics.
+        for (int i = static_cast<int>(jit_obe_handlers.size()) - 1; i >= static_cast<int>(start); --i) {
+            obe_type_e type = jit_obe_handlers[i].type;
+            if (type == OBE_Unconditional || (!error && type == OBE_Success) || (error && type == OBE_Error)) {
+                if (jit_obe_handlers[i].code || jit_obe_handlers[i].handler_ir
+                        || jit_obe_handlers[i].compiled_fn) {
+                    // Instantiate exception for on_error blocks as an implicit arg
+                    std::unique_ptr<SingleArgvContextHelper> argv_helper;
+                    std::unique_ptr<CatchExceptionHelper> ex_helper;
+                    if (type == OBE_Error && xsink) {
+                        QoreException* except = xsink->getException();
+                        if (except) {
+                            ex_helper.reset(new CatchExceptionHelper(except));
+                            argv_helper.reset(new SingleArgvContextHelper(except->makeExceptionObject(), xsink));
                         }
                     }
-                    QoreValue rv(jit_obe_handlers[i].compiled_fn(&obe_xsink));
-                    rv.discard(nullptr);
-                    if (hf) {
-                        for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
-                            hf->all_body_locals[j]->uninstantiate(&obe_xsink);
+                    if (jit_obe_handlers[i].compiled_fn) {
+                        // Execute natively compiled handler
+                        const QoreIRFunction* hf = jit_obe_handlers[i].handler_func;
+                        if (hf) {
+                            const QoreParseOptions& po = runtime_get_parse_options();
+                            for (LocalVar* lv : hf->all_body_locals) {
+                                lv->instantiate(po);
+                            }
                         }
-                    }
-                } else if (jit_obe_handlers[i].handler_ir) {
-                    // Execute compiled handler via IR interpreter
-                    QoreValue rv;
-                    QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink);
-                    rv.discard(nullptr);
-                } else {
-                    // AST fallback
-                    QoreValue rv;
-                    jit_obe_handlers[i].code->exec(rv, &obe_xsink);
-                    rv.discard(nullptr);
-                }
-                if (type == OBE_Error) {
-                    if (qore_es_private::get(obe_xsink)->rethrown) {
-                        if (xsink) {
-                            xsink->clear();
+                        QoreValue rv(jit_obe_handlers[i].compiled_fn(&obe_xsink));
+                        rv.discard(nullptr);
+                        if (hf) {
+                            for (int j = (int)hf->all_body_locals.size() - 1; j >= 0; --j) {
+                                hf->all_body_locals[j]->uninstantiate(&obe_xsink);
+                            }
                         }
-                    }
-                }
-                if (obe_xsink) {
-                    if (xsink) {
-                        xsink->assimilate(obe_xsink);
+                    } else if (jit_obe_handlers[i].handler_ir) {
+                        // Execute compiled handler via IR interpreter
+                        QoreValue rv;
+                        QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink);
+                        rv.discard(nullptr);
                     } else {
-                        obe_xsink.clear();
+                        // AST fallback
+                        QoreValue rv;
+                        jit_obe_handlers[i].code->exec(rv, &obe_xsink);
+                        rv.discard(nullptr);
+                    }
+                    if (type == OBE_Error) {
+                        if (qore_es_private::get(obe_xsink)->rethrown) {
+                            if (xsink) {
+                                xsink->clear();
+                            }
+                        }
+                    }
+                    if (obe_xsink) {
+                        if (xsink) {
+                            xsink->assimilate(obe_xsink);
+                        } else {
+                            obe_xsink.clear();
+                        }
                     }
                 }
             }
@@ -4255,6 +4258,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, Except
 
     // Remove handlers for this function scope
     jit_obe_handlers.resize(start);
+}
+
+// Backward-compatible wrapper that calls the implementation with inline_lowered=false
+extern "C" DLLEXPORT void qore_rt_exec_on_block_exit(int64_t saved_count, ExceptionSink* xsink) {
+    qore_rt_exec_on_block_exit_impl(saved_count, xsink, false);
 }
 
 // --- AOT context-based helpers (Phase 7b) ---

@@ -1093,7 +1093,8 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 handler_code,
                 stmt->loc
             });
-            // No OnBlockExit instruction emitted — handlers inlined at normal exit points
+            // Phase 2a: Emit OnBlockExit instruction so handlers are registered for exception-path execution
+            builder.createOnBlockExit(on_block_exit_stmt, stmt->loc);
         }
 
         return true;
@@ -1758,7 +1759,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             scope_entry.handler_start = block_handler_start;  // Record handler start for inline lowering
             cleanup_stack.push_back(scope_entry);
         }
-        // Phase 1: No ScopeEnter instruction — handlers inlined at exit points
+        // Phase 2a: Emit ScopeEnter so scope_stack has watermark for exception-path handler execution
+        builder.createScopeEnter(scope_id);
     }
 
     bool terminated = false;
@@ -1793,6 +1795,8 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
                 return false;
             }
         }
+        // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
+        builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
         scope_stack.pop_back();
         cleanup_stack.pop_back();
     }
@@ -1831,6 +1835,8 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 if (!lowerHandlersAtExit(is_error, error, entry.handler_start)) {
                     return false;
                 }
+                // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
+                builder.createScopeExit(entry.scope_id, is_error, entry.loc, /*inline_lowered=*/true);
                 break;
             }
             case BlockCleanupEntry::Lvars:
