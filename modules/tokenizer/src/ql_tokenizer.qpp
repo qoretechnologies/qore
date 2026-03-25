@@ -28,4 +28,20 @@ hashdecl Qore::Tokenizer::TokenizerEncoding {
     *list<list<int>> offset_mapping;
     //! Special tokens mask (1 = special token, 0 = content token)
     *list<int> special_tokens_mask;
+    //! Word index for each token (NOTHING for special/added/padding tokens)
+    /** Maps each output token to the index of the pre-token (word) it was
+        produced from. Subword tokens from the same word share the same word_id.
+        Special tokens, added tokens, and padding tokens have NOTHING.
+
+        @since tokenizer 1.1
+    */
+    *list<*int> word_ids;
+    //! Overflowing token chunks from sliding window truncation
+    /** Present only when encodeAdvanced is called with \c stride > 0 and
+        \c return_overflowing_tokens = True, and truncation actually discards
+        tokens. Each element is an encoding result for one overflow chunk.
+
+        @since tokenizer 1.1
+    */
+    *list<hash<TokenizerEncoding>> overflowing;
 }

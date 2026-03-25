@@ -117,9 +117,13 @@ hash<string, int> HFTokenizer::getVocab() [flags=CONSTANT] {
     - \c padding (*string): padding strategy: "max_length" (to max_length) or "true" (batch)
     - \c add_special_tokens (*bool): whether to add special tokens (default True)
     - \c pad_token_id (*int): override pad token ID
+    - \c is_pretokenized (*bool): if True, treat input as pre-tokenized words
+    - \c words (*list<string>): explicit word list for pre-tokenized input
+    - \c stride (*int): overlap size for sliding window when truncation produces overflow
+    - \c return_overflowing_tokens (*bool): if True, include overflowing token chunks
 
     @return encoding result hash with input_ids, token_type_ids, attention_mask,
-    tokens, offset_mapping, special_tokens_mask
+    tokens, offset_mapping, special_tokens_mask, word_ids, and optionally overflowing
 */
 hash<auto> HFTokenizer::encodeAdvanced(string text, *hash<auto> options) {
     return tok->encodeAdvanced(text, options, xsink);
@@ -140,4 +144,60 @@ list<hash<auto>> HFTokenizer::encodeBatch(list<string> texts, *hash<auto> option
 */
 int HFTokenizer::getPadTokenId() [flags=CONSTANT] {
     return tok->getPadTokenId();
+}
+
+//! Encodes pre-tokenized word list (skips normalization and pre-tokenization)
+/** @param words list of pre-tokenized words to encode
+    @param options optional hash with the same options as encodeAdvanced
+    (max_length, truncation, padding, add_special_tokens, pad_token_id)
+
+    word_ids in the result naturally map to the index of each input word.
+    This is useful when the caller has domain-specific tokenization
+    (e.g., code tokenizers, chemical formulas) and wants to skip the
+    tokenizer's normalization and pre-tokenization stages.
+
+    @return encoding result hash
+
+    @par Example:
+    @code{.py}
+    hash<auto> enc = tok.encodePreTokenized(("Hello", "world", "!"));
+    printf("word_ids: %y\n", enc.word_ids);
+    # word_ids maps each token to its input word index
+    @endcode
+
+    @since tokenizer 1.1
+*/
+hash<auto> HFTokenizer::encodePreTokenized(list<string> words, *hash<auto> options) {
+    // Build options hash with is_pretokenized flag
+    ReferenceHolder<QoreHashNode> opts(new QoreHashNode(autoTypeInfo), xsink);
+    if (options) {
+        ConstHashIterator it(options);
+        while (it.next()) {
+            opts->setKeyValue(it.getKey(), it.get().refSelf(), xsink);
+        }
+    }
+    opts->setKeyValue("is_pretokenized", true, xsink);
+    opts->setKeyValue("words", words->refSelf(), xsink);
+    SimpleRefHolder<QoreStringNode> empty_text(new QoreStringNode(""));
+    return tok->encodeAdvanced(*empty_text, *opts, xsink);
+}
+
+//! Adds tokens to the tokenizer vocabulary dynamically
+/** @param tokens a list of token definitions; each element can be either:
+    - a string (the token content, added as non-special)
+    - a hash with keys: \c content (string), \c special (bool), \c single_word (bool)
+
+    Duplicate tokens (already in the model vocabulary or added tokens) are skipped.
+
+    @return the number of tokens actually added
+
+    @par Example:
+    @code{.py}
+    int added = tok.addTokens(("<|custom|>", {"content": "<|pad|>", "special": True}));
+    @endcode
+
+    @since tokenizer 1.1
+*/
+int HFTokenizer::addTokens(list<auto> tokens) {
+    return tok->addTokens(tokens, xsink);
 }

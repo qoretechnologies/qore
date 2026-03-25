@@ -20,6 +20,7 @@
 #include "decoders/AbstractDecoder.h"
 
 #include <memory>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -86,7 +87,18 @@ public:
     //! Returns the pad token ID (or -1 if no pad token)
     int getPadTokenId() const { return pad_token_id; }
 
+    //! Adds tokens to the vocabulary dynamically
+    /** @param tokens list of token definitions (string or hash with content/special/single_word)
+        @param xsink exception sink
+        @return the number of tokens actually added (duplicates are skipped)
+
+        @since tokenizer 1.1
+    */
+    int addTokens(const QoreListNode* tokens, ExceptionSink* xsink);
+
 private:
+    //! Reader-writer lock for thread-safe dynamic vocab extension
+    mutable std::shared_mutex rw_mutex;
     std::unique_ptr<AbstractNormalizer> normalizer;
     std::unique_ptr<AbstractPreTokenizer> pre_tokenizer;
     std::unique_ptr<AbstractTokenizerModel> model;
@@ -108,12 +120,28 @@ private:
     //! Pad token ID (-1 if no pad token found)
     int pad_token_id = -1;
 
-    //! Internal encoding result with offsets
+    //! Count of tokens added dynamically via addTokens() (not from config)
+    int dynamic_added_count = 0;
+
+    //! Internal encoding result with offsets and word IDs
     struct InternalEncoding {
         std::vector<int> ids;
         std::vector<std::string> tokens;
         std::vector<std::pair<size_t, size_t>> offsets;
+        std::vector<int> word_ids;  //!< pre-token word index; -1 = special/added token
     };
+
+    //! Internal: encodeAdvanced without locking (caller must hold shared_lock)
+    QoreHashNode* encodeAdvancedIntern(const QoreStringNode* text,
+        const QoreHashNode* options, ExceptionSink* xsink);
+
+    //! Internal: encode pre-tokenized words (skip normalize + pre-tokenize)
+    InternalEncoding encodePreTokenizedWords(
+        const std::vector<std::string>& words) const;
+
+    //! Internal: build a Qore encoding hash from an EncodingResult
+    QoreHashNode* buildEncodingHash(const EncodingResult& post_result,
+        const std::vector<int>& attention_mask, ExceptionSink* xsink) const;
 
     //! Internal: tokenize a single pre-token through the model
     std::vector<int> tokenizePreToken(const std::string& pre_token) const;

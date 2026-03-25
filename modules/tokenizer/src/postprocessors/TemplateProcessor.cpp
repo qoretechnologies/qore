@@ -209,6 +209,8 @@ EncodingResult TemplateProcessor::processWithOffsets(
         const std::vector<std::string>& tokens_b,
         const std::vector<std::pair<size_t, size_t>>& offsets_a,
         const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        const std::vector<int>& word_ids_a,
+        const std::vector<int>& word_ids_b,
         bool add_special) const {
     EncodingResult result;
 
@@ -219,6 +221,7 @@ EncodingResult TemplateProcessor::processWithOffsets(
         result.tokens = tokens_a;
         result.offsets.insert(result.offsets.end(), offsets_a.begin(), offsets_a.end());
         result.special_tokens_mask.assign(ids_a.size(), 0);
+        result.word_ids = word_ids_a;
 
         if (!ids_b.empty()) {
             result.ids.insert(result.ids.end(), ids_b.begin(), ids_b.end());
@@ -227,6 +230,8 @@ EncodingResult TemplateProcessor::processWithOffsets(
             result.tokens.insert(result.tokens.end(), tokens_b.begin(), tokens_b.end());
             result.offsets.insert(result.offsets.end(), offsets_b.begin(), offsets_b.end());
             result.special_tokens_mask.resize(result.ids.size(), 0);
+            result.word_ids.insert(result.word_ids.end(),
+                word_ids_b.begin(), word_ids_b.end());
         }
         return result;
     }
@@ -235,7 +240,8 @@ EncodingResult TemplateProcessor::processWithOffsets(
     const std::vector<TemplatePiece>& tmpl =
         (!ids_b.empty() && !pair_template.empty()) ? pair_template : single_template;
 
-    // Walk the template: SEQUENCE pieces get input offsets, SPECIAL_TOKEN pieces get (0,0)
+    // Walk the template: SEQUENCE pieces get input offsets/word_ids,
+    // SPECIAL_TOKEN pieces get (0,0) offset and word_id = -1
     size_t a_pos = 0;
     size_t b_pos = 0;
 
@@ -244,17 +250,20 @@ EncodingResult TemplateProcessor::processWithOffsets(
             const std::vector<int>* ids_ptr = nullptr;
             const std::vector<std::string>* tokens_ptr = nullptr;
             const std::vector<std::pair<size_t, size_t>>* offsets_ptr = nullptr;
+            const std::vector<int>* wids_ptr = nullptr;
             size_t* pos_ptr = nullptr;
 
             if (piece.id == "A") {
                 ids_ptr = &ids_a;
                 tokens_ptr = &tokens_a;
                 offsets_ptr = &offsets_a;
+                wids_ptr = &word_ids_a;
                 pos_ptr = &a_pos;
             } else if (piece.id == "B") {
                 ids_ptr = &ids_b;
                 tokens_ptr = &tokens_b;
                 offsets_ptr = &offsets_b;
+                wids_ptr = &word_ids_b;
                 pos_ptr = &b_pos;
             }
 
@@ -271,6 +280,8 @@ EncodingResult TemplateProcessor::processWithOffsets(
                         result.offsets.push_back({0, 0});
                     }
                     result.special_tokens_mask.push_back(0);
+                    result.word_ids.push_back(
+                        *pos_ptr < wids_ptr->size() ? (*wids_ptr)[*pos_ptr] : -1);
                     ++(*pos_ptr);
                 }
             }
@@ -286,6 +297,7 @@ EncodingResult TemplateProcessor::processWithOffsets(
                     }
                     result.offsets.push_back({0, 0});
                     result.special_tokens_mask.push_back(1);
+                    result.word_ids.push_back(-1);
                 }
             }
         }

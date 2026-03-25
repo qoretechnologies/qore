@@ -35,6 +35,9 @@ struct EncodingResult {
 
     //! special tokens mask (1 = special, 0 = content)
     std::vector<int> special_tokens_mask;
+
+    //! word index for each token; -1 = special/added token
+    std::vector<int> word_ids;
 };
 
 //! Abstract base class for post-processors
@@ -72,6 +75,8 @@ public:
         const std::vector<std::string>& tokens_b,
         const std::vector<std::pair<size_t, size_t>>& offsets_a,
         const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        const std::vector<int>& word_ids_a,
+        const std::vector<int>& word_ids_b,
         bool add_special) const;
 
     //! Returns the number of special tokens added for single/pair encoding

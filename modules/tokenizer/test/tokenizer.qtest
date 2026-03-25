@@ -38,6 +38,12 @@ class TokenizerTest inherits QUnit::Test {
         addTestCase("truncationTest", \truncationTest());
         addTestCase("paddingTest", \paddingTest());
         addTestCase("batchEncodingTest", \batchEncodingTest());
+        addTestCase("unicodeDigitTest", \unicodeDigitTest());
+        addTestCase("decoderCleanupTest", \decoderCleanupTest());
+        addTestCase("wordIdsTest", \wordIdsTest());
+        addTestCase("addTokensTest", \addTokensTest());
+        addTestCase("preTokenizedTest", \preTokenizedTest());
+        addTestCase("slidingWindowTest", \slidingWindowTest());
 
         set_return_value(main());
     }
@@ -401,5 +407,308 @@ class TokenizerTest inherits QUnit::Test {
         assertThrows("TOKENIZER-MODEL-ERROR", sub() {
             new Tokenizer::HFTokenizer({"model": {"type": "InvalidType"}});
         });
+    }
+
+    slidingWindowTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        # Long input that will be truncated
+        string long_text = "The quick brown fox jumps over the lazy dog and then "
+            "runs around the park several times before finally stopping";
+
+        # Encode with stride and return_overflowing_tokens
+        hash<auto> enc = tok.encodeAdvanced(long_text, {
+            "max_length": 10,
+            "truncation": "longest_first",
+            "stride": 3,
+            "return_overflowing_tokens": True,
+        });
+
+        # Primary encoding should have exactly 10 tokens
+        assertEq(10, enc.input_ids.size(), "primary has max_length tokens");
+
+        # Overflowing should exist
+        assertTrue(exists enc.overflowing, "overflowing key present");
+        assertTrue(enc.overflowing.size() > 0, "at least one overflow chunk");
+
+        # Each overflow chunk should also have max_length or fewer tokens
+        foreach hash<auto> chunk in (enc.overflowing) {
+            assertTrue(chunk.input_ids.size() <= 10,
+                "overflow chunk within max_length");
+            assertTrue(chunk.input_ids.size() > 0,
+                "overflow chunk is not empty");
+            # word_ids should be present
+            assertEq(chunk.input_ids.size(), chunk.word_ids.size(),
+                "overflow chunk word_ids length matches");
+        }
+
+        # Verify overlap: last `stride` content tokens of primary should match
+        # first `stride` content tokens of first overflow chunk
+        # (skipping special tokens [CLS] at 0, [SEP] at end)
+        # Primary content tokens: positions 1..(size-2)
+        int plen = enc.input_ids.size();
+        list<int> primary_tail = (enc.input_ids[plen - 4], enc.input_ids[plen - 3],
+            enc.input_ids[plen - 2]);
+        # First overflow chunk content tokens: positions 1..3 (after [CLS])
+        hash<auto> first_chunk = enc.overflowing[0];
+        list<int> overflow_head = (first_chunk.input_ids[1], first_chunk.input_ids[2],
+            first_chunk.input_ids[3]);
+        assertEq(primary_tail, overflow_head,
+            "stride overlap matches between primary and first overflow");
+
+        # --- No overflow when input fits ---
+        hash<auto> enc2 = tok.encodeAdvanced("Hi", {
+            "max_length": 10,
+            "truncation": "longest_first",
+            "stride": 3,
+            "return_overflowing_tokens": True,
+        });
+        assertTrue(!exists enc2.overflowing || enc2.overflowing.size() == 0,
+            "no overflow when input fits");
+
+        # --- No overflow without return_overflowing_tokens ---
+        hash<auto> enc3 = tok.encodeAdvanced(long_text, {
+            "max_length": 10,
+            "truncation": "longest_first",
+            "stride": 3,
+        });
+        assertTrue(!exists enc3.overflowing,
+            "no overflow without return_overflowing_tokens");
+    }
+
+    preTokenizedTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        # --- BERT: encodePreTokenized ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            # Pre-tokenized words
+            hash<auto> enc = tok.encodePreTokenized(("hello", "world"));
+            # BERT adds [CLS] ... [SEP]
+            assertTrue(enc.input_ids.size() >= 4, "pre-tokenized has at least 4 tokens");
+            # word_ids: NOTHING(CLS), 0(hello), 1(world), NOTHING(SEP)
+            assertEq(NOTHING, enc.word_ids[0], "pre-tokenized CLS word_id");
+            assertEq(0, enc.word_ids[1], "pre-tokenized 'hello' word_id");
+            assertEq(1, enc.word_ids[2], "pre-tokenized 'world' word_id");
+            assertEq(NOTHING, enc.word_ids[enc.word_ids.size() - 1],
+                "pre-tokenized SEP word_id");
+        }
+
+        # --- encodeAdvanced with is_pretokenized option ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            hash<auto> enc = tok.encodeAdvanced("", {
+                "is_pretokenized": True,
+                "words": ("hello", "world"),
+            });
+            assertEq(0, enc.word_ids[1], "is_pretokenized option word_id 0");
+            assertEq(1, enc.word_ids[2], "is_pretokenized option word_id 1");
+        }
+
+        # --- Pre-tokenized with truncation ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            hash<auto> enc = tok.encodePreTokenized(
+                ("the", "quick", "brown", "fox", "jumps", "over", "the", "lazy", "dog"), {
+                    "max_length": 6,
+                    "truncation": "longest_first",
+                });
+            # 6 tokens total including [CLS] and [SEP]
+            assertEq(6, enc.input_ids.size(), "pre-tokenized truncation works");
+        }
+    }
+
+    addTokensTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+        Tokenizer::HFTokenizer tok = createMinimalWordPiece();
+
+        int orig_size = tok.getVocabSize();
+
+        # Add a new non-special token (string form)
+        int added = tok.addTokens(("<|custom|>",));
+        assertEq(1, added, "one new token added");
+        assertEq(orig_size + 1, tok.getVocabSize(),
+            "getVocabSize includes added tokens");
+
+        # Token should be recognized and get its own ID
+        int custom_id = tok.tokenToId("<|custom|>");
+        assertTrue(custom_id >= 0, "newly added token has a valid ID");
+
+        # Add a duplicate — should return 0
+        int added2 = tok.addTokens(("<|custom|>",));
+        assertEq(0, added2, "duplicate token not added");
+
+        # Add a special token (hash form)
+        int added3 = tok.addTokens(({"content": "<|endoftext|>", "special": True},));
+        assertEq(1, added3, "special token added");
+
+        # Verify special token is filtered in decode
+        int eot_id = tok.tokenToId("<|endoftext|>");
+        assertTrue(eot_id >= 0, "special token has valid ID");
+        string decoded = tok.decode((eot_id,), True);
+        # With skip_special_tokens, the special token should be omitted
+        assertEq("", decoded, "special token skipped in decode");
+
+        # Add token that already exists in model vocab — should be skipped
+        int added4 = tok.addTokens(("hello",));
+        assertEq(0, added4, "existing model vocab token not re-added");
+
+        # Encode text containing the new token
+        hash<auto> enc = tok.encode("<|custom|> hello");
+        assertTrue(enc.input_ids.size() > 0, "encode with added token succeeds");
+        # The added token should appear as its own token ID
+        bool found = False;
+        foreach int id in (enc.input_ids) {
+            if (id == custom_id) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "added token ID appears in encoding");
+    }
+
+    wordIdsTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        # --- BERT: word_ids with special tokens ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            hash<auto> enc = tok.encode("Hello world");
+            # BERT: [CLS] hello world [SEP]
+            # word_ids: NOTHING, 0, 1, NOTHING
+            assertEq(4, enc.word_ids.size(), "BERT word_ids length matches token count");
+            assertEq(NOTHING, enc.word_ids[0], "BERT [CLS] word_id is NOTHING");
+            assertEq(0, enc.word_ids[1], "BERT 'hello' word_id is 0");
+            assertEq(1, enc.word_ids[2], "BERT 'world' word_id is 1");
+            assertEq(NOTHING, enc.word_ids[3], "BERT [SEP] word_id is NOTHING");
+
+            # Sentence pair: word_ids for second sentence
+            hash<auto> enc2 = tok.encodeWithOptions("Hello", "world");
+            # BERT: [CLS] hello [SEP] world [SEP]
+            assertEq(5, enc2.word_ids.size(), "BERT pair word_ids length");
+            assertEq(NOTHING, enc2.word_ids[0], "BERT pair [CLS] is NOTHING");
+            assertEq(0, enc2.word_ids[1], "BERT pair 'hello' word_id");
+            assertEq(NOTHING, enc2.word_ids[2], "BERT pair [SEP] is NOTHING");
+            assertEq(0, enc2.word_ids[3], "BERT pair 'world' word_id");
+            assertEq(NOTHING, enc2.word_ids[4], "BERT pair final [SEP] is NOTHING");
+        }
+
+        # --- GPT-2: word_ids without special tokens ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/gpt2-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            hash<auto> enc = tok.encode("The quick fox");
+            # GPT-2 has no special tokens by default
+            # Each word is a pre-token with its own word_id
+            assertTrue(enc.word_ids.size() > 0, "GPT-2 word_ids present");
+            # All word_ids should be non-NOTHING (no special tokens)
+            foreach auto wid in (enc.word_ids) {
+                assertTrue(exists wid, "GPT-2 word_id is not NOTHING");
+            }
+        }
+
+        # --- word_ids with padding ---
+        {
+            string json_str = ReadOnlyFile::readTextFile(
+                get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+            Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+            hash<auto> enc = tok.encodeAdvanced("Hi", {
+                "max_length": 8,
+                "truncation": "longest_first",
+                "padding": "max_length",
+            });
+            # Padded tokens should have NOTHING word_ids
+            assertEq(8, enc.word_ids.size(), "padded word_ids length");
+            # Last tokens are padding → NOTHING
+            assertEq(NOTHING, enc.word_ids[7], "padding word_id is NOTHING");
+        }
+    }
+
+    decoderCleanupTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/bert-base-uncased-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        # Test Unicode punctuation cleanup: em-dash U+2014
+        hash<auto> enc = tok.encode("hello \u2014 world");
+        string decoded = tok.decode(enc.input_ids, True);
+        # With cleanup, space before em-dash should be removed
+        assertRegex("hello", decoded, "decoded text contains hello");
+
+        # Test Unicode left/right double quotation marks U+201C / U+201D
+        hash<auto> enc2 = tok.encode("she said \u201chello\u201d");
+        string decoded2 = tok.decode(enc2.input_ids, True);
+        # Verify decode round-trips without crashing
+        assertTrue(decoded2.size() > 0, "Unicode quote decode produces output");
+
+        # Test that ASCII punctuation cleanup still works
+        hash<auto> enc3 = tok.encode("hello , world .");
+        string decoded3 = tok.decode(enc3.input_ids, True);
+        assertRegex("hello,", decoded3, "ASCII punctuation cleanup works");
+    }
+
+    unicodeDigitTest() {
+%ifdef NoTokenizer
+        testSkip("tokenizer module not available");
+%endif
+%ifdef NoJson
+        testSkip("json module not available");
+%endif
+        string json_str = ReadOnlyFile::readTextFile(
+            get_script_dir() + "/test_data/gpt2-tokenizer.json");
+        Tokenizer::HFTokenizer tok(parse_json(json_str));
+
+        # U+00BD = vulgar fraction one half (category No)
+        # Should be grouped as a digit token, not with letters or punctuation
+        hash<auto> enc = tok.encode("price \u00bd off");
+        assertTrue(enc.input_ids.size() > 0, "Unicode fraction encodes successfully");
+
+        # U+00B2 = superscript two (category No)
+        hash<auto> enc2 = tok.encode("x\u00b2 + y\u00b2");
+        assertTrue(enc2.input_ids.size() > 0, "Unicode superscript encodes successfully");
+
+        # Verify regular ASCII digits still work
+        hash<auto> enc3 = tok.encode("test 42 end");
+        assertEq((9288, 5433, 886), enc3.input_ids,
+            "ASCII digits still tokenize correctly");
     }
 }

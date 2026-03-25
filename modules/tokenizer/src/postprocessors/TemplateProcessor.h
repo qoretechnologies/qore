@@ -68,6 +68,8 @@ public:
         const std::vector<std::string>& tokens_b,
         const std::vector<std::pair<size_t, size_t>>& offsets_a,
         const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        const std::vector<int>& word_ids_a,
+        const std::vector<int>& word_ids_b,
         bool add_special) const override;
 
     int numAddedTokens(bool has_pair) const override;

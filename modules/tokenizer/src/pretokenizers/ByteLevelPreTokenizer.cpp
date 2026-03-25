@@ -87,8 +87,11 @@ bool ByteLevelPreTokenizer::isDigit(const std::string& s, size_t pos, size_t& ch
             | ((s[pos + 2] & 0x3F) << 6) | (s[pos + 3] & 0x3F);
     }
 
-    // Check Unicode Nd (decimal digit number) category
-    return utf8proc_category(cp) == UTF8PROC_CATEGORY_ND;
+    // Check Unicode Number category (\p{N}): Nd + Nl + No
+    utf8proc_category_t cat = utf8proc_category(cp);
+    return cat == UTF8PROC_CATEGORY_ND   // decimal digit (0-9, etc.)
+        || cat == UTF8PROC_CATEGORY_NL   // letter number (Roman numerals, etc.)
+        || cat == UTF8PROC_CATEGORY_NO;  // other number (fractions, superscripts, etc.)
 }
 
 bool ByteLevelPreTokenizer::isSpace(unsigned char c) {

@@ -32,7 +32,7 @@ private:
     //! the continuation prefix to strip (default "##")
     std::string prefix;
 
-    //! whether to remove spaces before punctuation
+    //! whether to remove spaces before punctuation (Unicode-aware)
     bool cleanup;
 };
 

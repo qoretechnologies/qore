@@ -55,6 +55,8 @@ EncodingResult AbstractPostProcessor::processWithOffsets(
         const std::vector<std::string>& tokens_b,
         const std::vector<std::pair<size_t, size_t>>& offsets_a,
         const std::vector<std::pair<size_t, size_t>>& offsets_b,
+        const std::vector<int>& word_ids_a,
+        const std::vector<int>& word_ids_b,
         bool add_special) const {
     // Call the base process() to get ids, type_ids, tokens
     EncodingResult result = process(ids_a, ids_b, tokens_a, tokens_b, add_special);
@@ -68,6 +70,7 @@ EncodingResult AbstractPostProcessor::processWithOffsets(
     size_t b_pos = 0;
     result.offsets.reserve(result.ids.size());
     result.special_tokens_mask.reserve(result.ids.size());
+    result.word_ids.reserve(result.ids.size());
 
     for (size_t i = 0; i < result.ids.size(); ++i) {
         int type_id = i < result.type_ids.size() ? result.type_ids[i] : 0;
@@ -79,6 +82,8 @@ EncodingResult AbstractPostProcessor::processWithOffsets(
                 result.offsets.push_back({0, 0});
             }
             result.special_tokens_mask.push_back(0);
+            result.word_ids.push_back(
+                a_pos < word_ids_a.size() ? word_ids_a[a_pos] : -1);
             ++a_pos;
         } else if (type_id == 1 && b_pos < ids_b.size()) {
             if (b_pos < offsets_b.size()) {
@@ -87,11 +92,14 @@ EncodingResult AbstractPostProcessor::processWithOffsets(
                 result.offsets.push_back({0, 0});
             }
             result.special_tokens_mask.push_back(0);
+            result.word_ids.push_back(
+                b_pos < word_ids_b.size() ? word_ids_b[b_pos] : -1);
             ++b_pos;
         } else {
             // Special token
             result.offsets.push_back({0, 0});
             result.special_tokens_mask.push_back(1);
+            result.word_ids.push_back(-1);
         }
     }
 
