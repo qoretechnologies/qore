@@ -1153,13 +1153,23 @@ void NarrowedTypeHelper::mergeAndApply() {
             }
 
             if (!concrete_types.empty()) {
-                // Create union type from all concrete branch types
-                const QoreTypeInfo* union_type = has_null_branch
-                    ? qore_get_union_or_nothing_type(concrete_types)
-                    : qore_get_union_type(concrete_types, false);
-                lvar->parseSetNarrowedType(union_type);
-                QORE_DEBUG_NARROW_MERGE_ACTION("creating union type");
-                printd(5, "    creating union type: %s\n", QoreTypeInfo::getName(union_type));
+                // When some branches don't narrow the variable (null in record), check pre-branch type
+                // If pre-branch type was auto (unrestricted), null branches mean "variable stays as auto"
+                // Cannot narrow the result in that case - reset to auto instead of creating union with nothing
+                if (has_null_branch && !saved_entry.second) {
+                    // Some branches leave the variable as unrestricted auto - cannot narrow
+                    lvar->parseResetNarrowedType();
+                    QORE_DEBUG_NARROW_MERGE_ACTION("resetting due to auto branch");
+                    printd(5, "    resetting narrowed type (auto branch)\n");
+                } else {
+                    // Create union type from all concrete branch types
+                    const QoreTypeInfo* union_type = has_null_branch
+                        ? qore_get_union_or_nothing_type(concrete_types)
+                        : qore_get_union_type(concrete_types, false);
+                    lvar->parseSetNarrowedType(union_type);
+                    QORE_DEBUG_NARROW_MERGE_ACTION("creating union type");
+                    printd(5, "    creating union type: %s\n", QoreTypeInfo::getName(union_type));
+                }
             } else {
                 // All branches had null — no concrete type available
                 lvar->parseResetNarrowedType();
