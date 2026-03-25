@@ -215,6 +215,11 @@ public class MlTest inherits QUnit::Test {
         addTestCase("SVM error cases", \svmErrorTest());
         addTestCase("SVM copy error", \svmCopyTest());
         addTestCase("serialize SVM round-trip", \serializeSVMTest());
+        addTestCase("NaiveBayes classification basic", \nbClassificationBasicTest());
+        addTestCase("NaiveBayes online update", \nbOnlineUpdateTest());
+        addTestCase("NaiveBayes error cases", \nbErrorTest());
+        addTestCase("NaiveBayes copy error", \nbCopyTest());
+        addTestCase("serialize NaiveBayes round-trip", \serializeNaiveBayesTest());
         set_return_value(main());
     }
 
@@ -246,9 +251,9 @@ public class MlTest inherits QUnit::Test {
 
         if (caps.has_onnx) {
             assertTrue(caps.native_algorithms.contains("OnnxModel"));
-            assertEq(21, caps.native_algorithms.size());
+            assertEq(22, caps.native_algorithms.size());
         } else {
-            assertEq(20, caps.native_algorithms.size());
+            assertEq(21, caps.native_algorithms.size());
         }
     }
 
@@ -4375,5 +4380,88 @@ public class MlTest inherits QUnit::Test {
         list<hash<auto>> res = restored.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
         assertEq(orig[0].predicted_class, res[0].predicted_class, "SVM serialize class 0");
         assertEq(orig[1].predicted_class, res[1].predicted_class, "SVM serialize class 1");
+    }
+
+    # --- Naive Bayes Tests ---
+
+    nbClassificationBasicTest() {
+        ML::NaiveBayes nb();
+        assertFalse(nb.isFitted(), "NB not fitted initially");
+
+        nb.fitMatrix(
+            ((0.0, 0.0), (0.5, 0.5), (1.0, 0.0), (0.0, 1.0),
+             (10.0, 10.0), (10.5, 10.5), (11.0, 10.0), (10.0, 11.0)),
+            (0, 0, 0, 0, 1, 1, 1, 1));
+        assertTrue(nb.isFitted(), "NB fitted");
+
+        list<hash<auto>> results = nb.predictMatrix(((0.2, 0.3),));
+        assertEq(0, results[0].predicted_class, "NB predicts class 0");
+        assertTrue(results[0].max_probability >= 0.9, "NB high confidence");
+
+        results = nb.predictMatrix(((10.3, 10.2),));
+        assertEq(1, results[0].predicted_class, "NB predicts class 1");
+
+        # Probabilities should sum to ~1.0
+        float prob_sum = 0;
+        foreach auto p in (results[0].probabilities) { prob_sum += p; }
+        assertFloat(1.0, prob_sum, 1e-10);
+    }
+
+    nbOnlineUpdateTest() {
+        ML::NaiveBayes nb();
+        nb.fitMatrix(
+            ((0.0,), (1.0,), (10.0,), (11.0,)),
+            (0, 0, 1, 1));
+
+        # Predict before update
+        list<hash<auto>> before = nb.predictMatrix(((5.0,),));
+
+        # Update with more data reinforcing class 0 near 5.0
+        nb.updateMatrix(((4.0,), (5.0,), (6.0,)), (0, 0, 0));
+
+        # After update, prediction at 5.0 should favor class 0 more
+        list<hash<auto>> after = nb.predictMatrix(((5.0,),));
+        assertEq(0, after[0].predicted_class, "NB update shifts prediction to class 0");
+    }
+
+    nbErrorTest() {
+        ML::NaiveBayes nb();
+        assertThrows("ML-NAIVE-BAYES-ERROR",
+            \nb.predictMatrix(), (((1.0, 2.0),),));
+
+        # Update before fit
+        assertThrows("ML-NAIVE-BAYES-ERROR",
+            \nb.updateMatrix(), (((1.0,),), ((0,),)));
+    }
+
+    nbCopyTest() {
+        ML::NaiveBayes nb();
+        bool caught = False;
+        try { ML::NaiveBayes nb2 = nb.copy(); }
+        catch (hash<ExceptionInfo> ex) {
+            assertEq("COPY-ERROR", ex.err);
+            caught = True;
+        }
+        assertTrue(caught, "NB copy throws");
+    }
+
+    serializeNaiveBayesTest() {
+        ML::NaiveBayes nb();
+        nb.fitMatrix(
+            ((0.0, 0.0), (1.0, 1.0),
+             (10.0, 10.0), (11.0, 11.0)),
+            (0, 0, 1, 1));
+
+        list<hash<auto>> orig = nb.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
+
+        binary blob = ML::ml_serialize(nb);
+        assertTrue(blob.size() > 0, "NB serialized");
+
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::NaiveBayes, "NB deserialized type");
+
+        list<hash<auto>> res = restored.predictMatrix(((0.5, 0.5), (10.5, 10.5)));
+        assertEq(orig[0].predicted_class, res[0].predicted_class, "NB serialize class 0");
+        assertEq(orig[1].predicted_class, res[1].predicted_class, "NB serialize class 1");
     }
 }

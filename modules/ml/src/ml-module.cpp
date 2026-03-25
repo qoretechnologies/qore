@@ -49,6 +49,7 @@
 #include "QC_RandomForest.h"
 #include "QC_GradientBoostedTrees.h"
 #include "QC_SVM.h"
+#include "QC_NaiveBayes.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -105,6 +106,7 @@ DLLLOCAL TypedHashDecl* init_hashdecl_RandomForestRegressionResult(QoreNamespace
 DLLLOCAL TypedHashDecl* init_hashdecl_GBTClassificationResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_GBTRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SVMResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_NaiveBayesResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -140,6 +142,7 @@ const TypedHashDecl* hashdeclRandomForestRegressionResult;
 const TypedHashDecl* hashdeclGBTClassificationResult;
 const TypedHashDecl* hashdeclGBTRegressionResult;
 const TypedHashDecl* hashdeclSVMResult;
+const TypedHashDecl* hashdeclNaiveBayesResult;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -168,6 +171,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitRandomForestClass();
     preinitGradientBoostedTreesClass();
     preinitSVMClass();
+    preinitNaiveBayesClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -202,6 +206,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclGBTClassificationResult = init_hashdecl_GBTClassificationResult(MLNS);
     hashdeclGBTRegressionResult = init_hashdecl_GBTRegressionResult(MLNS);
     hashdeclSVMResult = init_hashdecl_SVMResult(MLNS);
+    hashdeclNaiveBayesResult = init_hashdecl_NaiveBayesResult(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -226,6 +231,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initRandomForestClass(MLNS));
     MLNS.addSystemClass(initGradientBoostedTreesClass(MLNS));
     MLNS.addSystemClass(initSVMClass(MLNS));
+    MLNS.addSystemClass(initNaiveBayesClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -294,6 +300,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("SVM", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreSVM::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("NaiveBayes", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreNaiveBayes::deserializeState(data, len, xsink);
     });
 }
 

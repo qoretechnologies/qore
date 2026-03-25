@@ -45,6 +45,7 @@
 #include "QC_RandomForest.h"
 #include "QC_GradientBoostedTrees.h"
 #include "QC_SVM.h"
+#include "QC_NaiveBayes.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -547,6 +548,20 @@ hashdecl Qore::ML::SVMResult {
     float confidence;
 }
 
+//! Naive Bayes prediction result
+/** Returned by @ref NaiveBayes::predict() and @ref NaiveBayes::predictMatrix().
+*/
+hashdecl Qore::ML::NaiveBayesResult {
+    //! predicted class label
+    int predicted_class;
+    //! probability of the predicted class
+    float max_probability;
+    //! probability for each class
+    list<float> probabilities;
+    //! class labels
+    list<float> classes;
+}
+
 /** @defgroup ml_functions ML Functions
     ML utility functions
 */
@@ -595,6 +610,7 @@ hash<MLCapabilities> ml_get_capabilities() [flags=CONSTANT; dom=DEFAULT] {
     algos->push(new QoreStringNode("RandomForest"), xsink);
     algos->push(new QoreStringNode("GradientBoostedTrees"), xsink);
     algos->push(new QoreStringNode("SVM"), xsink);
+    algos->push(new QoreStringNode("NaiveBayes"), xsink);
 #ifdef HAVE_ONNXRUNTIME
     algos->push(new QoreStringNode("OnnxModel"), xsink);
 #endif
@@ -1123,6 +1139,23 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreNaiveBayes* nbp = dynamic_cast<QoreNaiveBayes*>(
+        model->getReferencedPrivateData(CID_NAIVEBAYES, xsink));
+    if (nbp) {
+        if (!nbp->isFitted()) {
+            nbp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "model has not been fitted: call fit() before serializing");
+            return QoreValue();
+        }
+        algorithm = "NaiveBayes";
+        model_data = nbp->serializeState();
+        field_names = nbp->getFieldNames();
+        nbp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreSVM* svmp = dynamic_cast<QoreSVM*>(
         model->getReferencedPrivateData(CID_SVM, xsink));
     if (svmp) {
@@ -1245,6 +1278,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "SVM") {
         obj = new QoreObject(QC_SVM, getProgram());
         obj->setPrivate(CID_SVM, priv);
+    } else if (header.algorithm == "NaiveBayes") {
+        obj = new QoreObject(QC_NAIVEBAYES, getProgram());
+        obj->setPrivate(CID_NAIVEBAYES, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1313,6 +1349,7 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_RANDOMFOREST, QoreRandomForest, "RandomForest")
     TRY_SERIALIZE_ALGO(CID_GRADIENTBOOSTEDTREES, QoreGradientBoostedTrees, "GradientBoostedTrees")
     TRY_SERIALIZE_ALGO(CID_SVM, QoreSVM, "SVM")
+    TRY_SERIALIZE_ALGO(CID_NAIVEBAYES, QoreNaiveBayes, "NaiveBayes")
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {

@@ -90,6 +90,7 @@ set(ML_QPP_SRC
     src/QC_RandomForest.qpp
     src/QC_GradientBoostedTrees.qpp
     src/QC_SVM.qpp
+    src/QC_NaiveBayes.qpp
     src/ql_ml.qpp
 )
 
@@ -120,6 +121,7 @@ set(ML_CPP_SRC
     src/RandomForest.cpp
     src/GradientBoostedTrees.cpp
     src/SVM.cpp
+    src/NaiveBayes.cpp
 )
 
 # Conditional ONNX Runtime support
