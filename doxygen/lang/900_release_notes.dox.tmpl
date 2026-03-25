@@ -748,6 +748,11 @@ cargo install tree-sitter-cli@0.26.5
         (file-based .qml native format) for all 12 algorithms
       - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
       - MLPipeline for chaining preprocessing steps and estimators into a single fit/predict unit
+      - DecisionTree (CART) for classification (Gini/entropy) and regression (MSE) with feature importance
+      - RandomForest bagging ensemble with bootstrap sampling and random feature subsets
+      - GradientBoostedTrees sequential boosting with log-loss (classification) and MSE (regression),
+        early stopping via validation_fraction and n_iter_no_change, row subsampling
+      - Shared FlatTree CART engine with flat-array node storage for cache-friendly traversal
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
