@@ -926,6 +926,7 @@ static bool writeScopeExit(AOTInstWriteCtx& ctx) {
     auto* si = static_cast<const QoreIRScopeExitInstruction*>(ctx.inst);
     ctx.writer.writeU32(si->scope_id);
     ctx.writer.writeU8(si->is_error ? 1 : 0);
+    ctx.writer.writeU8(si->inline_lowered ? 1 : 0);
     return true;
 }
 
@@ -935,7 +936,8 @@ static std::unique_ptr<QoreIRInstruction> readScopeExit(
         AOTInstReadCtx& ctx) {
     uint32_t scope_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     bool is_error = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    auto inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error);
+    bool inline_lowered = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    auto inst = std::make_unique<QoreIRScopeExitInstruction>(scope_id, is_error, inline_lowered);
     inst->result = QoreIRValue(result_id);
     inst->operands = operands;
     inst->exception_target = exc_target;
