@@ -755,6 +755,17 @@ class DataFrameTest inherits QUnit::Test {
         # Verify data
         list<auto> ids = df.getColumn("id");
         assertEq(3, ids.size(), "DB query id column size");
+
+        # toTable round-trip
+        ds.exec("CREATE TEMP TABLE df_test_out (id int, name text, score float)");
+        df.toTable(ds, "df_test_out");
+        ds.commit();
+
+        auto df2 = DataFrame::DataFrame::fromQuery(ds,
+            "SELECT * FROM df_test_out ORDER BY id");
+        assertEq(3, df2.numRows(), "toTable round-trip rows");
+        assertEq(("Alice", "Bob", "Carol"), df2.getColumn("name"),
+            "toTable round-trip names");
     }
 
     csvMissingValuesTest() {

@@ -641,6 +641,109 @@ nothing DataFrame::writeParquet(string path) [dom=FILESYSTEM] {
     df->writeParquet(path->c_str(), xsink);
 }
 
+//! Inserts DataFrame rows into a database table
+/** @param ds a Datasource or DatasourcePool object
+    @param table_name the target table name
+    @param options optional hash: \c commit_interval (int, default 1000 — commit every N rows)
+
+    Generates INSERT statements with bind placeholders and executes one per row.
+    Column names from the DataFrame are used as the column list.
+
+    @par Example:
+    @code{.py}
+    Datasource ds("pgsql:user/pass@mydb%localhost");
+    ds.open();
+    df.toTable(ds, "employees");
+    ds.commit();
+    @endcode
+
+    @throw DATAFRAME-DB-ERROR if the INSERT fails
+*/
+nothing DataFrame::toTable(object ds, string table_name, *hash<auto> options) [dom=DATABASE] {
+    if (qore_check_cancel(xsink, "writing DataFrame to table")) {
+        return QoreValue();
+    }
+
+    int64_t n_rows_val = df->numRows();
+    int64_t n_cols_val = df->numCols();
+    if (n_rows_val == 0 || n_cols_val == 0) {
+        return QoreValue();
+    }
+
+    // Get column names
+    ReferenceHolder<QoreListNode> col_names_list(df->columnNames(xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    // Build INSERT SQL: INSERT INTO table (col1, col2, ...) VALUES (%v, %v, ...)
+    QoreStringNode* sql = new QoreStringNode("INSERT INTO ");
+    sql->concat(table_name->c_str());
+    sql->concat(" (");
+    for (int64_t c = 0; c < n_cols_val; ++c) {
+        if (c > 0) {
+            sql->concat(", ");
+        }
+        const QoreStringNode* cname = col_names_list->retrieveEntry(c)
+            .get<const QoreStringNode>();
+        if (cname) {
+            sql->concat(cname->c_str());
+        }
+    }
+    sql->concat(") VALUES (");
+    for (int64_t c = 0; c < n_cols_val; ++c) {
+        if (c > 0) {
+            sql->concat(", ");
+        }
+        sql->concat("%v");
+    }
+    sql->concat(")");
+    SimpleRefHolder<QoreStringNode> sql_holder(sql);
+
+    // Parse commit interval
+    int64_t commit_interval = 1000;
+    if (options) {
+        QoreValue ci = options->getKeyValue("commit_interval");
+        if (!ci.isNullOrNothing()) {
+            commit_interval = ci.getAsBigInt();
+        }
+    }
+
+    // Insert rows one at a time via exec()
+    for (int64_t r = 0; r < n_rows_val; ++r) {
+        // Periodic cancellation check
+        if ((r % 10000) == 0 && r > 0) {
+            if (qore_check_cancel(xsink, "writing DataFrame to table")) {
+                return QoreValue();
+            }
+        }
+
+        // Get row values
+        ReferenceHolder<QoreHashNode> row(df->getRow(r, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+
+        // Build call args: (sql, val1, val2, ...)
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(sql->refSelf(), xsink);
+
+        ConstHashIterator hi(*row);
+        while (hi.next()) {
+            call_args->push(hi.get().refSelf(), xsink);
+        }
+
+        // Execute INSERT
+        QoreValue result = ds->evalMethod("exec", *call_args, xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        result.discard(xsink);
+    }
+
+    return QoreValue();
+}
+
 //! Returns a new DataFrame with an added or replaced column
 /** @param name column name (replaces if already exists)
     @param data list of values (must match row count)
