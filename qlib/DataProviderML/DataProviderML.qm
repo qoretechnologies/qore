@@ -996,6 +996,72 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register rolling-stats action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/rolling-stats",
+            "action": "rolling-stats",
+            "display_name": "Compute Rolling Statistics",
+            "short_desc": "Enriches each record with rolling window statistics for numeric fields",
+            "desc": "Monitors trends, detects anomalies, and tracks volatility in time series "
+                "data by computing rolling statistics over a sliding window of recent records. "
+                "For example, with `window_size=20`, each record gets the average, standard "
+                "deviation, min, max, or sum of the last 20 values for each monitored field.\n\n"
+                "**Use cases**:\n"
+                "- Track a 20-period moving average of sensor temperature to smooth out noise\n"
+                "- Detect volatility spikes by watching rolling standard deviation of stock "
+                "prices\n"
+                "- Monitor rolling min/max to detect new highs or lows in streaming data\n\n"
+                "Each record passes through enriched with computed fields named "
+                "`{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreRollingStatsProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRollingStatsProcessor::ConstructorOptions{"fields", "window_size"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRollingStatsProcessor::ConstructorOptions{"statistics",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register ewma action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/ewma",
+            "action": "ewma",
+            "display_name": "Smooth with Moving Average",
+            "short_desc": "Enriches each record with an exponential weighted moving average",
+            "desc": "Smooths noisy signals and tracks trends by computing exponential weighted "
+                "moving averages (EWMA) for specified numeric fields. Unlike a simple moving "
+                "average, EWMA gives more weight to recent values, making it more responsive "
+                "to changes while still filtering out noise.\n\n"
+                "**Use cases**:\n"
+                "- Smooth CPU usage readings to distinguish real load spikes from noise\n"
+                "- Track the trend in response times to detect gradual degradation\n"
+                "- Create a baseline for anomaly detection by comparing raw values to their "
+                "EWMA\n\n"
+                "Each record passes through enriched with `{field}_ewma` fields (e.g., "
+                "`temperature_ewma`, `cpu_usage_ewma`)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreEWMAProcessor",
+            "groups": ("ML Analytics",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEWMAProcessor::ConstructorOptions{"fields", "alpha"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 
