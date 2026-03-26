@@ -74,6 +74,8 @@ public class ConnectionSchemeCache {
     public {
         #! Map of known connection schemes to modules
         const SchemeMap = {
+            "anthropic": "AnthropicRestClient",
+
             "awsrests": "AwsRestClient",
 
             "bigcommerceres": "BigCommerceRestClient",

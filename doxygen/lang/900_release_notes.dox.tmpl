@@ -825,6 +825,20 @@ cargo install tree-sitter-cli@0.26.5
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
+    - @ref anthropicrestclientintro "AnthropicRestClient" module
+      - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
+      - supports API key authentication via x-api-key header
+      - provides AnthropicRestConnection for connection management with \c anthropic:// URL scheme
+      - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
+    - @ref anthropicdataproviderintro "AnthropicDataProvider" module
+      - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+      - message creation with support for text, images, tool use, and extended thinking
+      - SSE streaming for incremental message delivery via observer pattern
+      - token counting API for cost estimation
+      - models listing API
+      - conversation context store for multi-turn conversation persistence
+      - action session for Creator WebSocket integration with event normalization
+      - built on RestClientIo for async-capable multiplexed HTTP/2 and HTTP/3 connections
     - @ref apollorestclientintro "ApolloRestClient" module
       - new module providing a REST client for <a href="https://www.apollo.io/">Apollo</a>'s B2B sales intelligence API
       - supports OAuth2 authentication and API key authentication via x-api-key header
