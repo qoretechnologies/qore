@@ -2260,8 +2260,10 @@ static void collectBlockLocals(const LVList* lvars, std::vector<LocalVar*>& loca
 static void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 // helper: collect all locals from a single statement and recurse into nested blocks.
-// Only recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block).
-// Statements delegated to AST via special IR opcodes (foreach, on_block_exit, context, etc.)
+// Recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block/on_block_exit).
+// With Phase 1 inline handler lowering, on_block_exit handler code is lowered directly into the
+// parent IR context, so handler-internal locals must be collected.
+// Statements delegated to AST via special IR opcodes (context, summarize, assert)
 // are skipped because the AST's LVListInstantiator handles their locals.
 static void collectStatementLocals(const AbstractStatement* stmt, std::vector<LocalVar*>& locals) {
     if (!stmt) {
@@ -2305,10 +2307,16 @@ static void collectStatementLocals(const AbstractStatement* stmt, std::vector<Lo
         if (StatementBlock* block = debug_stmt->getBlock()) {
             collectAllStatementLocals(block, locals);
         }
+    } else if (auto* obe_stmt = dynamic_cast<const OnBlockExitStatement*>(stmt)) {
+        // Phase 1 inline lowering: on_exit handler code is directly lowered into the
+        // parent IR context at normal exit points (fall-through, break, continue, return).
+        // Handler-internal locals must be collected into pre_instantiated_locals so that
+        // evalTiered() pre-instantiates them on the TLS stack before IR execution.
+        // Without this, the IR interpreter cannot find handler locals (ThreadLocalVariableData::find asserts).
+        collectAllStatementLocals(obe_stmt->getCode(), locals);
     }
-    // OnBlockExitStatement, ContextStatement, SummarizeStatement,
-    // AssertStatement: these generate special IR opcodes that call into the AST,
-    // which handles their locals via LVListInstantiator. Skip them.
+    // ContextStatement, SummarizeStatement, AssertStatement: these generate special
+    // IR opcodes that call into the AST, which handles their locals via LVListInstantiator. Skip them.
 }
 
 // Recursively collect all local variables from a StatementBlock and all nested blocks
