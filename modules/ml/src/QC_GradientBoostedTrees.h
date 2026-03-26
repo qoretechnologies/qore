@@ -64,6 +64,30 @@ public:
         return target_field;
     }
 
+    //! Get all tree data for ONNX export
+    DLLLOCAL QoreListNode* getTreesData(ExceptionSink* xsink) const;
+
+    //! Get initial prediction (regression / binary classification)
+    DLLLOCAL double getInitialPrediction() const { return initial_prediction; }
+
+    //! Get initial predictions (multiclass)
+    DLLLOCAL QoreListNode* getInitialPredictions(ExceptionSink* xsink) const;
+
+    //! Get learning rate
+    DLLLOCAL double getLearningRate() const { return learning_rate; }
+
+    //! Get number of trees
+    DLLLOCAL int getNumTrees() const { return static_cast<int>(trees.size()); }
+
+    //! Get number of features
+    DLLLOCAL int getNumFeatures() const { return n_features; }
+
+    //! Get number of classes (0 for regression)
+    DLLLOCAL int getNumClasses() const { return n_classes; }
+
+    //! Get class labels
+    DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
+
     DLLLOCAL std::vector<uint8_t> serializeState() const;
     DLLLOCAL static QoreGradientBoostedTrees* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);

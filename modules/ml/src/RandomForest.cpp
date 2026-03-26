@@ -332,6 +332,52 @@ QoreHashNode* QoreRandomForest::getFeatureImportances(ExceptionSink* xsink) cons
     return rv.release();
 }
 
+QoreListNode* QoreRandomForest::getTreesData(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (const auto& ft : trees) {
+        ReferenceHolder<QoreListNode> node_list(new QoreListNode(autoTypeInfo), xsink);
+        for (const auto& node : ft.nodes) {
+            ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
+            nh->setKeyValue("feature_index", static_cast<int64>(node.feature_index), xsink);
+            nh->setKeyValue("threshold", node.threshold, xsink);
+            nh->setKeyValue("value", node.value, xsink);
+            nh->setKeyValue("n_samples", static_cast<int64>(node.n_samples), xsink);
+            nh->setKeyValue("left", static_cast<int64>(node.left), xsink);
+            nh->setKeyValue("right", static_cast<int64>(node.right), xsink);
+            if (!node.class_probs.empty()) {
+                ReferenceHolder<QoreListNode> probs(new QoreListNode(autoTypeInfo), xsink);
+                for (double p : node.class_probs) {
+                    probs->push(p, xsink);
+                }
+                nh->setKeyValue("class_probs", probs.release(), xsink);
+            }
+            node_list->push(nh.release(), xsink);
+        }
+        rv->push(node_list.release(), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreRandomForest::getClasses(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-RANDOM-FOREST-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (double c : classes) {
+        rv->push(c, xsink);
+    }
+    return rv.release();
+}
+
 // --- Serialization ---
 
 std::vector<uint8_t> QoreRandomForest::serializeState() const {

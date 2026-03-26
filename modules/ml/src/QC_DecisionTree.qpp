@@ -280,3 +280,46 @@ bool DecisionTree::isFitted() [flags=CONSTANT] {
 hash<auto> DecisionTree::getFeatureImportances() {
     return dt->getFeatureImportances(xsink);
 }
+
+//! Returns the tree structure for ONNX export
+/** Each node is a hash with keys: \c feature_index (-1 for leaf), \c threshold,
+    \c value (leaf prediction), \c class_probs (classification leaves),
+    \c n_samples, \c left (left child index, -1 if none), \c right
+
+    @return list of node hashes
+
+    @throw ML-DECISION-TREE-ERROR if the model has not been fitted
+*/
+list<hash<auto>> DecisionTree::getTreeData() [flags=RET_VALUE_ONLY] {
+    return dt->getTreeData(xsink);
+}
+
+//! Returns the number of features the model was trained with
+/** @return the number of features
+*/
+int DecisionTree::getNumFeatures() [flags=CONSTANT] {
+    return dt->getNumFeatures();
+}
+
+//! Returns the number of classes (0 for regression tasks)
+/** @return the number of unique class labels
+*/
+int DecisionTree::getNumClasses() [flags=CONSTANT] {
+    return dt->getNumClasses();
+}
+
+//! Returns the class labels used for classification
+/** @return list of class label values (floats); empty for regression tasks
+
+    @throw ML-DECISION-TREE-ERROR if the model has not been fitted
+*/
+list<auto> DecisionTree::getClasses() [flags=RET_VALUE_ONLY] {
+    return dt->getClasses(xsink);
+}
+
+//! Returns the task type ("classification" or "regression")
+/** @return the task type string
+*/
+string DecisionTree::getTask() [flags=CONSTANT] {
+    return new QoreStringNode(dt->getTask().c_str());
+}

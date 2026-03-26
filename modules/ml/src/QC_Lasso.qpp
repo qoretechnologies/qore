@@ -1,0 +1,338 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Lasso.qpp
+
+    Qore ml module - Lasso regression class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_Lasso.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclLassoResult;
+extern const TypedHashDecl* hashdeclLassoModelInfo;
+
+//! The Lasso class implements L1-regularized (Lasso) linear regression
+/** Lasso regression adds an L1 penalty (alpha * ||coefficients||_1) to the ordinary
+    least squares objective, which drives some coefficients exactly to zero and performs
+    automatic feature selection. It uses coordinate descent with soft-thresholding.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create a lasso regression model
+Lasso lasso({"alpha": 1.0, "fit_intercept": True});
+
+# Train on data with a target field
+list<hash<auto>> training_data = (
+    {"x1": 1.0, "x2": 2.0, "y": 5.0},
+    {"x1": 2.0, "x2": 3.0, "y": 8.0},
+    {"x1": 3.0, "x2": 4.0, "y": 11.0},
+);
+lasso.fit(training_data, "y");
+
+# Predict
+hash<LassoResult> result = lasso.predict({"x1": 4.0, "x2": 5.0});
+printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
+    @endcode
+
+*/
+qclass Lasso [arg=QoreLasso* lasso; ns=Qore::ML; flags=final];
+
+//! Creates a Lasso regression with the given options
+/** @param options a hash with the following optional keys:
+    - \c alpha (float): regularization strength; larger values mean stronger regularization (default: 1.0)
+    - \c fit_intercept (bool): whether to fit an intercept term (default: True)
+    - \c normalize (bool): whether to normalize features before fitting (default: False)
+    - \c max_iter (int): maximum number of coordinate descent iterations (default: 1000)
+    - \c tol (float): convergence tolerance; iteration stops when the maximum coefficient change is below this (default: 1e-4)
+
+    @par Example:
+    @code{.py}
+Lasso lasso({"alpha": 0.5, "fit_intercept": True, "max_iter": 2000});
+    @endcode
+*/
+Lasso::constructor(*hash<auto> options) {
+    double alpha = 1.0;
+    bool fit_intercept = true;
+    bool normalize = false;
+    int max_iter = 1000;
+    double tol = 1e-4;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("alpha");
+        if (!v.isNullOrNothing()) {
+            alpha = v.getAsFloat();
+        }
+        v = options->getKeyValue("fit_intercept");
+        if (!v.isNullOrNothing()) {
+            fit_intercept = v.getAsBool();
+        }
+        v = options->getKeyValue("normalize");
+        if (!v.isNullOrNothing()) {
+            normalize = v.getAsBool();
+        }
+        v = options->getKeyValue("max_iter");
+        if (!v.isNullOrNothing()) {
+            max_iter = static_cast<int>(v.getAsBigInt());
+        }
+        v = options->getKeyValue("tol");
+        if (!v.isNullOrNothing()) {
+            tol = v.getAsFloat();
+        }
+    }
+
+    if (alpha < 0.0) {
+        xsink->raiseException("ML-LASSO-ERROR", "alpha must be >= 0; got %f", alpha);
+        return;
+    }
+    if (max_iter <= 0) {
+        xsink->raiseException("ML-LASSO-ERROR", "max_iter must be > 0; got %d", max_iter);
+        return;
+    }
+    if (tol <= 0.0) {
+        xsink->raiseException("ML-LASSO-ERROR", "tol must be > 0; got %f", tol);
+        return;
+    }
+
+    self->setPrivate(CID_LASSO, new QoreLasso(alpha, fit_intercept, normalize, max_iter, tol));
+}
+
+//! Creates a copy of the Lasso
+/** @throw COPY-ERROR Lasso objects cannot be copied
+*/
+Lasso::copy() {
+    xsink->raiseException("COPY-ERROR", "Lasso objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the dependent variable.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field to predict
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-LASSO-ERROR if fitting fails
+*/
+nothing Lasso::fit(list<auto> data, string target_field) {
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "no numeric feature fields found in data (excluding target '%s')",
+            target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    lasso->setFieldNames(feat_names);
+    lasso->setTargetField(target_str);
+    lasso->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param X a list of lists where each inner list is a row of feature values
+    @param y a list of target values
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-LASSO-ERROR if fitting fails
+*/
+nothing Lasso::fitMatrix(list<auto> X, list<auto> y) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lasso->fit(mat, target, xsink);
+}
+
+//! Predicts the target value for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref LassoResult hash with prediction details
+
+    @throw ML-LASSO-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<LassoResult> Lasso::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = lasso->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-LASSO-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lasso->predict(point, xsink);
+}
+
+//! Predicts target values for multiple rows in matrix form
+/** @param X a list of lists where each inner list is a row of feature values
+
+    @return a list of @ref LassoResult hashes
+
+    @throw ML-LASSO-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<LassoResult>> Lasso::predictMatrix(list<auto> X) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return lasso->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool Lasso::isFitted() [flags=CONSTANT] {
+    return lasso->isFitted();
+}
+
+//! Returns model-level information in a single call
+/** @return a @ref LassoModelInfo hash with coefficients, intercept, R-squared,
+    feature count, alpha, and iterations_run
+
+    @throw ML-LASSO-ERROR if the model has not been fitted
+*/
+hash<LassoModelInfo> Lasso::getModelInfo() [flags=RET_VALUE_ONLY] {
+    return lasso->getModelInfo(xsink);
+}
+
+//! Returns the model coefficients
+/** @return a list of coefficient values, one per feature (some may be exactly zero)
+
+    @throw ML-LASSO-ERROR if the model has not been fitted
+*/
+list<float> Lasso::getCoefficients() [flags=RET_VALUE_ONLY] {
+    return lasso->getCoefficients(xsink);
+}
+
+//! Returns the intercept value
+/** @return the intercept (bias) term; 0.0 if fit_intercept was False
+
+    @throw ML-LASSO-ERROR if the model has not been fitted
+*/
+float Lasso::getIntercept() [flags=RET_VALUE_ONLY] {
+    return lasso->getIntercept(xsink);
+}
+
+//! Returns the R-squared (coefficient of determination)
+/** @return R-squared value; 1.0 means perfect fit, 0.0 means no better than mean
+
+    @throw ML-LASSO-ERROR if the model has not been fitted
+*/
+float Lasso::getRSquared() [flags=RET_VALUE_ONLY] {
+    return lasso->getRSquared(xsink);
+}
+
+//! Returns the regularization strength
+/** @return the alpha value used for L1 regularization
+*/
+float Lasso::getAlpha() [flags=CONSTANT] {
+    return lasso->getAlpha();
+}
+
+//! Returns the number of coordinate descent iterations actually executed
+/** @return the number of iterations run during the last fit() call
+*/
+int Lasso::getIterationsRun() [flags=CONSTANT] {
+    return lasso->getIterationsRun();
+}
+
+//! Returns True if the model was fitted with normalization
+/** @return True if the \c normalize option was set to True during construction
+*/
+bool Lasso::isNormalized() [flags=CONSTANT] {
+    return lasso->isNormalized();
+}
+
+//! Returns feature means used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature mean values, one per feature
+
+    @throw ML-LASSO-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> Lasso::getFeatureMeans() [flags=RET_VALUE_ONLY] {
+    return lasso->getFeatureMeans(xsink);
+}
+
+//! Returns feature standard deviations used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature standard deviation values, one per feature
+
+    @throw ML-LASSO-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> Lasso::getFeatureStds() [flags=RET_VALUE_ONLY] {
+    return lasso->getFeatureStds(xsink);
+}

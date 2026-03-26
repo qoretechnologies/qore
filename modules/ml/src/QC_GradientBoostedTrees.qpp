@@ -257,3 +257,80 @@ int GradientBoostedTrees::getActualEstimators() [flags=CONSTANT] {
 hash<auto> GradientBoostedTrees::getFeatureImportances() {
     return gbt->getFeatureImportances(xsink);
 }
+
+//! Returns all tree structures for ONNX export
+/** @return a list of trees, where each tree is a list of node hashes.
+    Each node hash has keys: \c feature_index (-1 for leaf), \c threshold,
+    \c value, \c class_probs, \c n_samples, \c left, \c right
+
+    For multiclass classification, trees are interleaved: tree 0 is for class 0,
+    tree 1 for class 1, ..., tree K-1 for class K-1, tree K for class 0 (round 2), etc.
+
+    @throw ML-GBT-ERROR if the model has not been fitted
+*/
+list<list<hash<auto>>> GradientBoostedTrees::getTreesData() [flags=RET_VALUE_ONLY] {
+    return gbt->getTreesData(xsink);
+}
+
+//! Returns the initial prediction value (for regression and binary classification)
+/** For regression, this is the mean of the training targets.
+    For binary classification, this is the log-odds of the positive class.
+
+    @return the initial prediction value
+*/
+float GradientBoostedTrees::getInitialPrediction() [flags=CONSTANT] {
+    return gbt->getInitialPrediction();
+}
+
+//! Returns the per-class initial predictions (for multiclass classification)
+/** @return list of initial prediction values, one per class
+
+    @throw ML-GBT-ERROR if the model has not been fitted
+*/
+list<float> GradientBoostedTrees::getInitialPredictions() [flags=RET_VALUE_ONLY] {
+    return gbt->getInitialPredictions(xsink);
+}
+
+//! Returns the learning rate
+/** @return the learning rate (shrinkage) parameter
+*/
+float GradientBoostedTrees::getLearningRate() [flags=CONSTANT] {
+    return gbt->getLearningRate();
+}
+
+//! Returns the number of trees in the ensemble
+/** @return total number of trees (for multiclass: actual_estimators * n_classes)
+*/
+int GradientBoostedTrees::getNumTrees() [flags=CONSTANT] {
+    return gbt->getNumTrees();
+}
+
+//! Returns the number of features the model was trained with
+/** @return the number of features
+*/
+int GradientBoostedTrees::getNumFeatures() [flags=CONSTANT] {
+    return gbt->getNumFeatures();
+}
+
+//! Returns the number of classes (0 for regression tasks)
+/** @return the number of unique class labels
+*/
+int GradientBoostedTrees::getNumClasses() [flags=CONSTANT] {
+    return gbt->getNumClasses();
+}
+
+//! Returns the class labels used for classification
+/** @return list of class label values; empty for regression tasks
+
+    @throw ML-GBT-ERROR if the model has not been fitted
+*/
+list<auto> GradientBoostedTrees::getClasses() [flags=RET_VALUE_ONLY] {
+    return gbt->getClasses(xsink);
+}
+
+//! Returns the task type ("classification" or "regression")
+/** @return the task type string
+*/
+string GradientBoostedTrees::getTask() [flags=CONSTANT] {
+    return new QoreStringNode(gbt->getTask().c_str());
+}

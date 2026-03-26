@@ -1,0 +1,375 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Ridge.qpp
+
+    Qore ml module - Ridge regression class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_Ridge.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclRidgeResult;
+extern const TypedHashDecl* hashdeclRidgeModelInfo;
+
+//! The Ridge class implements L2-regularized (Ridge) linear regression
+/** Ridge regression adds an L2 penalty (alpha * ||coefficients||^2) to the ordinary
+    least squares objective, which shrinks coefficients toward zero and helps with
+    multicollinearity. It uses LDLT decomposition for a stable closed-form solution.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create a ridge regression model
+Ridge ridge({"alpha": 1.0, "fit_intercept": True});
+
+# Train on data with a target field
+list<hash<auto>> training_data = (
+    {"x1": 1.0, "x2": 2.0, "y": 5.0},
+    {"x1": 2.0, "x2": 3.0, "y": 8.0},
+    {"x1": 3.0, "x2": 4.0, "y": 11.0},
+);
+ridge.fit(training_data, "y");
+
+# Predict
+hash<RidgeResult> result = ridge.predict({"x1": 4.0, "x2": 5.0});
+printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
+    @endcode
+
+*/
+qclass Ridge [arg=QoreRidge* ridge; ns=Qore::ML; flags=final];
+
+//! Creates a Ridge regression with the given options
+/** @param options a hash with the following optional keys:
+    - \c alpha (float): regularization strength; larger values mean stronger regularization (default: 1.0)
+    - \c fit_intercept (bool): whether to fit an intercept term (default: True)
+    - \c normalize (bool): whether to normalize features before fitting (default: False)
+
+    @par Example:
+    @code{.py}
+Ridge ridge({"alpha": 0.5, "fit_intercept": True});
+    @endcode
+*/
+Ridge::constructor(*hash<auto> options) {
+    double alpha = 1.0;
+    bool fit_intercept = true;
+    bool normalize = false;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("alpha");
+        if (!v.isNullOrNothing()) {
+            alpha = v.getAsFloat();
+        }
+        v = options->getKeyValue("fit_intercept");
+        if (!v.isNullOrNothing()) {
+            fit_intercept = v.getAsBool();
+        }
+        v = options->getKeyValue("normalize");
+        if (!v.isNullOrNothing()) {
+            normalize = v.getAsBool();
+        }
+    }
+
+    if (alpha < 0.0) {
+        xsink->raiseException("ML-RIDGE-ERROR", "alpha must be >= 0; got %f", alpha);
+        return;
+    }
+
+    self->setPrivate(CID_RIDGE, new QoreRidge(alpha, fit_intercept, normalize));
+}
+
+//! Creates a copy of the Ridge
+/** @throw COPY-ERROR Ridge objects cannot be copied
+*/
+Ridge::copy() {
+    xsink->raiseException("COPY-ERROR", "Ridge objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the dependent variable.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field to predict
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-RIDGE-ERROR if fitting fails
+*/
+nothing Ridge::fit(list<auto> data, string target_field) {
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "no numeric feature fields found in data (excluding target '%s')",
+            target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    ridge->setFieldNames(feat_names);
+    ridge->setTargetField(target_str);
+    ridge->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param X a list of lists where each inner list is a row of feature values
+    @param y a list of target values
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-RIDGE-ERROR if fitting fails
+*/
+nothing Ridge::fitMatrix(list<auto> X, list<auto> y) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ridge->fit(mat, target, xsink);
+}
+
+//! Performs a SGD online update with new hash-based data
+/** @param data a list of hashes with numeric fields plus the target field
+    @param learning_rate the step size for the gradient update
+
+    @throw ML-RIDGE-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing Ridge::update(list<auto> data, float learning_rate) {
+    const std::vector<std::string>& feat_names = ridge->getFieldNames();
+    const std::string& target_name = ridge->getTargetField();
+    if (feat_names.empty() || target_name.empty()) {
+        xsink->raiseException("ML-RIDGE-ERROR",
+            "model was fitted with fitMatrix(); use updateMatrix() or fit() with hash records first");
+        return QoreValue();
+    }
+
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_name.c_str());
+        y(i) = target_v.getAsFloat();
+    }
+
+    ridge->update(X, y, learning_rate, xsink);
+}
+
+//! Performs a SGD online update with a numeric matrix and target vector
+/** @param matrix a list of lists of numeric feature values
+    @param target a list of target values
+    @param learning_rate the step size for the gradient update
+
+    @throw ML-RIDGE-ERROR model not fitted or dimension mismatch
+    @throw ML-DATA-ERROR data format errors
+*/
+nothing Ridge::updateMatrix(list<auto> matrix, list<auto> target, float learning_rate) {
+    MatrixXd mat = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ridge->update(mat, y, learning_rate, xsink);
+}
+
+//! Predicts the target value for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref RidgeResult hash with prediction details
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<RidgeResult> Ridge::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = ridge->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-RIDGE-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return ridge->predict(point, xsink);
+}
+
+//! Predicts target values for multiple rows in matrix form
+/** @param X a list of lists where each inner list is a row of feature values
+
+    @return a list of @ref RidgeResult hashes
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<RidgeResult>> Ridge::predictMatrix(list<auto> X) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return ridge->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool Ridge::isFitted() [flags=CONSTANT] {
+    return ridge->isFitted();
+}
+
+//! Returns model-level information in a single call
+/** @return a @ref RidgeModelInfo hash with coefficients, intercept, R-squared,
+    feature count, and alpha
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted
+*/
+hash<RidgeModelInfo> Ridge::getModelInfo() [flags=RET_VALUE_ONLY] {
+    return ridge->getModelInfo(xsink);
+}
+
+//! Returns the model coefficients
+/** @return a list of coefficient values, one per feature
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted
+*/
+list<float> Ridge::getCoefficients() [flags=RET_VALUE_ONLY] {
+    return ridge->getCoefficients(xsink);
+}
+
+//! Returns the intercept value
+/** @return the intercept (bias) term; 0.0 if fit_intercept was False
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted
+*/
+float Ridge::getIntercept() [flags=RET_VALUE_ONLY] {
+    return ridge->getIntercept(xsink);
+}
+
+//! Returns the R-squared (coefficient of determination)
+/** @return R-squared value; 1.0 means perfect fit, 0.0 means no better than mean
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted
+*/
+float Ridge::getRSquared() [flags=RET_VALUE_ONLY] {
+    return ridge->getRSquared(xsink);
+}
+
+//! Returns the regularization strength
+/** @return the alpha value used for L2 regularization
+*/
+float Ridge::getAlpha() [flags=CONSTANT] {
+    return ridge->getAlpha();
+}
+
+//! Returns True if the model was fitted with normalization
+/** @return True if the \c normalize option was set to True during construction
+*/
+bool Ridge::isNormalized() [flags=CONSTANT] {
+    return ridge->isNormalized();
+}
+
+//! Returns feature means used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature mean values, one per feature
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> Ridge::getFeatureMeans() [flags=RET_VALUE_ONLY] {
+    return ridge->getFeatureMeans(xsink);
+}
+
+//! Returns feature standard deviations used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature standard deviation values, one per feature
+
+    @throw ML-RIDGE-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> Ridge::getFeatureStds() [flags=RET_VALUE_ONLY] {
+    return ridge->getFeatureStds(xsink);
+}

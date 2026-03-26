@@ -80,6 +80,27 @@ public class MlTest inherits QUnit::Test {
         addTestCase("LinearRegression copy error", \lrCopyTest());
         addTestCase("LinearRegression getModelInfo", \lrGetModelInfoTest());
         addTestCase("LinearRegression SGD update", \lrUpdateTest());
+        addTestCase("Ridge basic y=2x+1", \ridgeBasicTest());
+        addTestCase("Ridge shrinkage vs OLS", \ridgeShrinkageTest());
+        addTestCase("Ridge alpha=0 matches OLS", \ridgeAlphaZeroTest());
+        addTestCase("Ridge collinear features", \ridgeCollinearTest());
+        addTestCase("Ridge error cases", \ridgeErrorTest());
+        addTestCase("Ridge copy error", \ridgeCopyTest());
+        addTestCase("Ridge SGD update", \ridgeUpdateTest());
+        addTestCase("serialize Ridge round-trip", \serializeRidgeTest());
+        addTestCase("Lasso basic y=2x+1", \lassoBasicTest());
+        addTestCase("Lasso feature selection", \lassoFeatureSelectionTest());
+        addTestCase("Lasso high alpha zeros all", \lassoHighAlphaTest());
+        addTestCase("Lasso convergence", \lassoConvergenceTest());
+        addTestCase("Lasso error cases", \lassoErrorTest());
+        addTestCase("Lasso copy error", \lassoCopyTest());
+        addTestCase("serialize Lasso round-trip", \serializeLassoTest());
+        addTestCase("ElasticNet basic", \elasticNetBasicTest());
+        addTestCase("ElasticNet l1_ratio=0 matches Ridge", \elasticNetAsRidgeTest());
+        addTestCase("ElasticNet l1_ratio=1 matches Lasso", \elasticNetAsLassoTest());
+        addTestCase("ElasticNet error cases", \elasticNetErrorTest());
+        addTestCase("ElasticNet copy error", \elasticNetCopyTest());
+        addTestCase("serialize ElasticNet round-trip", \serializeElasticNetTest());
         addTestCase("LogisticRegression binary classification", \logregBinaryTest());
         addTestCase("LogisticRegression multiclass OvR", \logregMulticlassTest());
         addTestCase("LogisticRegression hash API", \logregHashTest());
@@ -1621,6 +1642,453 @@ public class MlTest inherits QUnit::Test {
         assertThrows("ML-LINEAR-REGRESSION-ERROR", sub() {
             lr.updateMatrix(((1.0,), (2.0,)), (1.0,), 0.01);
         });
+    }
+
+    # ===================== Ridge Regression Tests =====================
+
+    ridgeBasicTest() {
+        ML::Ridge ridge({"alpha": 0.1, "fit_intercept": True});
+
+        # y = 2*x + 1
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+
+        ridge.fitMatrix(X, y);
+        assertTrue(ridge.isFitted());
+
+        list<hash<ML::RidgeResult>> results = ridge.predictMatrix(((6.0,), (7.0,)));
+        assertEq(2, results.size());
+        # With small alpha, predictions should be close to OLS
+        assertTrue(abs(results[0].prediction - 13.0) < 0.5,
+            sprintf("prediction for x=6 should be ~13.0; got %f", results[0].prediction));
+        assertTrue(abs(results[1].prediction - 15.0) < 0.5,
+            sprintf("prediction for x=7 should be ~15.0; got %f", results[1].prediction));
+
+        # R-squared should be high
+        assertTrue(ridge.getRSquared() > 0.98,
+            sprintf("R-squared should be >0.98; got %f", ridge.getRSquared()));
+
+        # Alpha accessor
+        assertTrue(abs(ridge.getAlpha() - 0.1) < 1e-10);
+    }
+
+    ridgeShrinkageTest() {
+        # Ridge should shrink coefficients toward zero compared to OLS
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 50; ++i) {
+            float x1 = (i % 10) * 1.0;
+            float x2 = ((i * 3) % 10) * 1.0;
+            push X, (x1, x2);
+            push y, 1.0 * x1 + 2.0 * x2 + 3.0;
+        }
+
+        ML::LinearRegression ols({"fit_intercept": True});
+        ols.fitMatrix(X, y);
+
+        ML::Ridge ridge({"alpha": 10.0, "fit_intercept": True});
+        ridge.fitMatrix(X, y);
+
+        list<float> ols_coefs = ols.getCoefficients();
+        list<float> ridge_coefs = ridge.getCoefficients();
+
+        # Ridge coefficients should be smaller in magnitude
+        float ols_norm = 0.0;
+        float ridge_norm = 0.0;
+        for (int j = 0; j < ols_coefs.size(); ++j) {
+            ols_norm += ols_coefs[j] * ols_coefs[j];
+            ridge_norm += ridge_coefs[j] * ridge_coefs[j];
+        }
+        assertTrue(ridge_norm < ols_norm,
+            sprintf("Ridge L2 norm (%f) should be < OLS L2 norm (%f)", ridge_norm, ols_norm));
+    }
+
+    ridgeAlphaZeroTest() {
+        # Ridge with alpha=0 should match OLS (use non-collinear data)
+        list<list<float>> X = ((1.0, 5.0), (2.0, 3.0), (4.0, 1.0), (3.0, 7.0), (5.0, 2.0));
+        list<float> y = (16.0, 11.0, 7.0, 24.0, 11.0);  # y = 1*x1 + 3*x2
+
+        ML::LinearRegression ols({"fit_intercept": True});
+        ols.fitMatrix(X, y);
+
+        ML::Ridge ridge({"alpha": 0.0, "fit_intercept": True});
+        ridge.fitMatrix(X, y);
+
+        list<float> ols_coefs = ols.getCoefficients();
+        list<float> ridge_coefs = ridge.getCoefficients();
+
+        for (int j = 0; j < ols_coefs.size(); ++j) {
+            assertTrue(abs(ols_coefs[j] - ridge_coefs[j]) < 0.01,
+                sprintf("coef[%d]: OLS=%f Ridge=%f should match", j, ols_coefs[j], ridge_coefs[j]));
+        }
+        assertTrue(abs(ols.getIntercept() - ridge.getIntercept()) < 0.01,
+            sprintf("intercepts should match: OLS=%f Ridge=%f",
+                ols.getIntercept(), ridge.getIntercept()));
+    }
+
+    ridgeCollinearTest() {
+        # Ridge should handle collinear features (where OLS may be unstable)
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 20; ++i) {
+            float x1 = i * 1.0;
+            float x2 = x1 + 0.001 * i;  # nearly collinear
+            push X, (x1, x2);
+            push y, 3.0 * x1 + 2.0;
+        }
+
+        ML::Ridge ridge({"alpha": 1.0, "fit_intercept": True});
+        ridge.fitMatrix(X, y);
+        assertTrue(ridge.isFitted());
+
+        # Should produce reasonable predictions
+        list<hash<ML::RidgeResult>> results = ridge.predictMatrix(((10.0, 10.01),));
+        assertTrue(abs(results[0].prediction - 32.0) < 5.0,
+            sprintf("collinear prediction should be ~32; got %f", results[0].prediction));
+    }
+
+    ridgeErrorTest() {
+        ML::Ridge ridge({"alpha": 1.0});
+
+        # Predict before fit
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ridge.predictMatrix(((1.0,),));
+        });
+
+        # getCoefficients before fit
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ridge.getCoefficients();
+        });
+
+        # getIntercept before fit
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ridge.getIntercept();
+        });
+
+        # getRSquared before fit
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ridge.getRSquared();
+        });
+
+        # getModelInfo before fit
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ridge.getModelInfo();
+        });
+
+        # Negative alpha
+        assertThrows("ML-RIDGE-ERROR", sub() {
+            ML::Ridge bad({"alpha": -1.0});
+        });
+
+        # Empty data
+        assertThrows("ML-DATA-ERROR", sub() {
+            ridge.fitMatrix((), ());
+        });
+    }
+
+    ridgeCopyTest() {
+        ML::Ridge ridge({"alpha": 1.0});
+        assertThrows("COPY-ERROR", sub() {
+            ML::Ridge copy = ridge.copy();
+        });
+    }
+
+    ridgeUpdateTest() {
+        ML::Ridge ridge({"alpha": 0.5, "fit_intercept": True});
+
+        # Fit on y = 2x + 3
+        ridge.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (5.0, 7.0, 9.0, 11.0, 13.0));
+
+        list<float> coefs_before = ridge.getCoefficients();
+        float intercept_before = ridge.getIntercept();
+
+        # Update with more data
+        ridge.updateMatrix(((6.0,), (7.0,), (8.0,)),
+            (15.0, 17.0, 19.0), 0.001);
+
+        assertTrue(ridge.isFitted());
+
+        list<float> coefs_after = ridge.getCoefficients();
+        float intercept_after = ridge.getIntercept();
+        bool changed = (abs(coefs_after[0] - coefs_before[0]) > 1e-10)
+            || (abs(intercept_after - intercept_before) > 1e-10);
+        assertTrue(changed, "Ridge coefficients should change after update");
+    }
+
+    serializeRidgeTest() {
+        ML::Ridge ridge({"alpha": 2.0, "fit_intercept": True});
+        ridge.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        list<hash<ML::RidgeResult>> orig = ridge.predictMatrix(((3.5,),));
+
+        binary blob = ML::ml_serialize(ridge);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::Ridge);
+
+        list<hash<ML::RidgeResult>> res = restored.predictMatrix(((3.5,),));
+        assertFloat(orig[0].prediction, res[0].prediction, 1e-10);
+        assertFloat(orig[0].intercept, res[0].intercept, 1e-10);
+        assertFloat(orig[0].r_squared, res[0].r_squared, 1e-10);
+    }
+
+    # ===================== Lasso Regression Tests =====================
+
+    lassoBasicTest() {
+        ML::Lasso lasso({"alpha": 0.01, "fit_intercept": True});
+
+        # y = 2*x + 1
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+
+        lasso.fitMatrix(X, y);
+        assertTrue(lasso.isFitted());
+
+        list<hash<ML::LassoResult>> results = lasso.predictMatrix(((6.0,), (7.0,)));
+        assertEq(2, results.size());
+        # With small alpha, predictions should be close to exact
+        assertTrue(abs(results[0].prediction - 13.0) < 1.0,
+            sprintf("prediction for x=6 should be ~13.0; got %f", results[0].prediction));
+
+        assertTrue(lasso.getRSquared() > 0.95,
+            sprintf("R-squared should be >0.95; got %f", lasso.getRSquared()));
+
+        assertTrue(lasso.getIterationsRun() > 0, "should have run at least 1 iteration");
+    }
+
+    lassoFeatureSelectionTest() {
+        # Lasso should zero out irrelevant features
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 100; ++i) {
+            float x1 = (i % 10) * 1.0;
+            float x2 = ((i * 7) % 10) * 1.0;  # informative
+            float x3 = ((i * 3) % 10) * 1.0;  # noise (not in target)
+            push X, (x1, x2, x3);
+            push y, 2.0 * x1 + 3.0 * x2 + 5.0;
+        }
+
+        ML::Lasso lasso({"alpha": 0.5, "fit_intercept": True, "max_iter": 5000});
+        lasso.fitMatrix(X, y);
+
+        list<float> coefs = lasso.getCoefficients();
+        assertEq(3, coefs.size());
+        # x3 coefficient should be close to zero (feature selection)
+        assertTrue(abs(coefs[2]) < abs(coefs[0]),
+            sprintf("noise feature coef (%f) should be smaller than informative feature coef (%f)",
+                abs(coefs[2]), abs(coefs[0])));
+    }
+
+    lassoHighAlphaTest() {
+        # Very high alpha should zero all coefficients
+        ML::Lasso lasso({"alpha": 1000.0, "fit_intercept": True});
+
+        list<list<float>> X = ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0));
+        list<float> y = (1.0, 2.0, 3.0, 4.0);
+
+        lasso.fitMatrix(X, y);
+        assertTrue(lasso.isFitted());
+
+        list<float> coefs = lasso.getCoefficients();
+        for (int j = 0; j < coefs.size(); ++j) {
+            assertTrue(abs(coefs[j]) < 0.01,
+                sprintf("coef[%d]=%f should be ~0 with high alpha", j, coefs[j]));
+        }
+    }
+
+    lassoConvergenceTest() {
+        # Verify convergence with different tolerances
+        ML::Lasso lasso_tight({"alpha": 0.1, "max_iter": 10000, "tol": 1e-8});
+        ML::Lasso lasso_loose({"alpha": 0.1, "max_iter": 10000, "tol": 1e-2});
+
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,), (6.0,), (7.0,), (8.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0);
+
+        lasso_tight.fitMatrix(X, y);
+        lasso_loose.fitMatrix(X, y);
+
+        # Tight tolerance should use more iterations
+        assertTrue(lasso_tight.getIterationsRun() >= lasso_loose.getIterationsRun(),
+            sprintf("tight (%d iters) should use >= loose (%d iters)",
+                lasso_tight.getIterationsRun(), lasso_loose.getIterationsRun()));
+    }
+
+    lassoErrorTest() {
+        ML::Lasso lasso({"alpha": 1.0});
+
+        # Predict before fit
+        assertThrows("ML-LASSO-ERROR", sub() {
+            lasso.predictMatrix(((1.0,),));
+        });
+
+        # getCoefficients before fit
+        assertThrows("ML-LASSO-ERROR", sub() {
+            lasso.getCoefficients();
+        });
+
+        # Negative alpha
+        assertThrows("ML-LASSO-ERROR", sub() {
+            ML::Lasso bad({"alpha": -1.0});
+        });
+
+        # Invalid max_iter
+        assertThrows("ML-LASSO-ERROR", sub() {
+            ML::Lasso bad({"max_iter": 0});
+        });
+
+        # Invalid tol
+        assertThrows("ML-LASSO-ERROR", sub() {
+            ML::Lasso bad({"tol": -0.01});
+        });
+    }
+
+    lassoCopyTest() {
+        ML::Lasso lasso({"alpha": 1.0});
+        assertThrows("COPY-ERROR", sub() {
+            ML::Lasso copy = lasso.copy();
+        });
+    }
+
+    serializeLassoTest() {
+        ML::Lasso lasso({"alpha": 0.1, "fit_intercept": True});
+        lasso.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        list<hash<ML::LassoResult>> orig = lasso.predictMatrix(((3.5,),));
+
+        binary blob = ML::ml_serialize(lasso);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::Lasso);
+
+        list<hash<ML::LassoResult>> res = restored.predictMatrix(((3.5,),));
+        assertFloat(orig[0].prediction, res[0].prediction, 1e-10);
+        assertFloat(orig[0].intercept, res[0].intercept, 1e-10);
+        assertFloat(orig[0].r_squared, res[0].r_squared, 1e-10);
+    }
+
+    # ===================== ElasticNet Regression Tests =====================
+
+    elasticNetBasicTest() {
+        ML::ElasticNet enet({"alpha": 0.1, "l1_ratio": 0.5, "fit_intercept": True});
+
+        list<list<float>> X = ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,));
+        list<float> y = (3.0, 5.0, 7.0, 9.0, 11.0);
+
+        enet.fitMatrix(X, y);
+        assertTrue(enet.isFitted());
+
+        list<hash<ML::ElasticNetResult>> results = enet.predictMatrix(((6.0,),));
+        assertEq(1, results.size());
+        assertTrue(abs(results[0].prediction - 13.0) < 1.0,
+            sprintf("prediction should be ~13.0; got %f", results[0].prediction));
+
+        assertTrue(enet.getRSquared() > 0.95,
+            sprintf("R-squared should be >0.95; got %f", enet.getRSquared()));
+
+        assertTrue(abs(enet.getAlpha() - 0.1) < 1e-10);
+        assertTrue(abs(enet.getL1Ratio() - 0.5) < 1e-10);
+    }
+
+    elasticNetAsRidgeTest() {
+        # ElasticNet with l1_ratio=0 should behave like Ridge
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 30; ++i) {
+            float x1 = (i % 10) * 1.0;
+            push X, (x1,);
+            push y, 2.0 * x1 + 1.0;
+        }
+
+        ML::Ridge ridge({"alpha": 1.0, "fit_intercept": True});
+        ridge.fitMatrix(X, y);
+
+        ML::ElasticNet enet({"alpha": 1.0, "l1_ratio": 0.0, "fit_intercept": True,
+            "max_iter": 10000, "tol": 1e-8});
+        enet.fitMatrix(X, y);
+
+        list<float> ridge_coefs = ridge.getCoefficients();
+        list<float> enet_coefs = enet.getCoefficients();
+
+        for (int j = 0; j < ridge_coefs.size(); ++j) {
+            assertTrue(abs(ridge_coefs[j] - enet_coefs[j]) < 0.5,
+                sprintf("coef[%d]: Ridge=%f ElasticNet=%f should be similar",
+                    j, ridge_coefs[j], enet_coefs[j]));
+        }
+    }
+
+    elasticNetAsLassoTest() {
+        # ElasticNet with l1_ratio=1 should behave like Lasso
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 30; ++i) {
+            float x1 = (i % 10) * 1.0;
+            push X, (x1,);
+            push y, 2.0 * x1 + 1.0;
+        }
+
+        ML::Lasso lasso({"alpha": 0.5, "fit_intercept": True, "max_iter": 10000, "tol": 1e-8});
+        lasso.fitMatrix(X, y);
+
+        ML::ElasticNet enet({"alpha": 0.5, "l1_ratio": 1.0, "fit_intercept": True,
+            "max_iter": 10000, "tol": 1e-8});
+        enet.fitMatrix(X, y);
+
+        list<float> lasso_coefs = lasso.getCoefficients();
+        list<float> enet_coefs = enet.getCoefficients();
+
+        for (int j = 0; j < lasso_coefs.size(); ++j) {
+            assertTrue(abs(lasso_coefs[j] - enet_coefs[j]) < 0.1,
+                sprintf("coef[%d]: Lasso=%f ElasticNet=%f should be similar",
+                    j, lasso_coefs[j], enet_coefs[j]));
+        }
+    }
+
+    elasticNetErrorTest() {
+        ML::ElasticNet enet({"alpha": 1.0, "l1_ratio": 0.5});
+
+        # Predict before fit
+        assertThrows("ML-ELASTICNET-ERROR", sub() {
+            enet.predictMatrix(((1.0,),));
+        });
+
+        # Negative alpha
+        assertThrows("ML-ELASTICNET-ERROR", sub() {
+            ML::ElasticNet bad({"alpha": -1.0});
+        });
+
+        # l1_ratio out of range
+        assertThrows("ML-ELASTICNET-ERROR", sub() {
+            ML::ElasticNet bad({"l1_ratio": 1.5});
+        });
+
+        assertThrows("ML-ELASTICNET-ERROR", sub() {
+            ML::ElasticNet bad({"l1_ratio": -0.1});
+        });
+    }
+
+    elasticNetCopyTest() {
+        ML::ElasticNet enet({"alpha": 1.0, "l1_ratio": 0.5});
+        assertThrows("COPY-ERROR", sub() {
+            ML::ElasticNet copy = enet.copy();
+        });
+    }
+
+    serializeElasticNetTest() {
+        ML::ElasticNet enet({"alpha": 0.5, "l1_ratio": 0.7, "fit_intercept": True});
+        enet.fitMatrix(((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0));
+
+        list<hash<ML::ElasticNetResult>> orig = enet.predictMatrix(((3.5,),));
+
+        binary blob = ML::ml_serialize(enet);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::ElasticNet);
+
+        list<hash<ML::ElasticNetResult>> res = restored.predictMatrix(((3.5,),));
+        assertFloat(orig[0].prediction, res[0].prediction, 1e-10);
+        assertFloat(orig[0].intercept, res[0].intercept, 1e-10);
+        assertFloat(orig[0].r_squared, res[0].r_squared, 1e-10);
     }
 
     # ===================== LogisticRegression Tests =====================
