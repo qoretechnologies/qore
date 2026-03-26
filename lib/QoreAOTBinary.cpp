@@ -1628,6 +1628,32 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
         }
     }
 
+    // Add namespace constants from the class's enclosing namespace hierarchy
+    if (cls_priv->ns) {
+        const qore_ns_private* ns_priv = cls_priv->ns;
+        while (ns_priv) {
+            // Iterate namespace constants using the ConstantList directly
+            ConstConstantListIterator nsi(ns_priv->constant);
+            while (nsi.next()) {
+                QoreValue v = nsi.getValue();
+                if (!v.hasNode()) {
+                    continue;
+                }
+                const AbstractQoreNode* node = v.getInternalNode();
+                if (node && crm.find(node) == crm.end()) {  // Only add if not already present
+                    std::string ns_path = ns_priv->path;
+                    if (ns_path.size() >= 2) {
+                        ns_path = ns_path.substr(2);  // strip leading "::"
+                    }
+                    std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+                    crm.emplace(node, std::move(fqn));
+                }
+            }
+            // Walk up to parent namespace
+            ns_priv = ns_priv->parent;
+        }
+    }
+
     return crm;
 }
 
