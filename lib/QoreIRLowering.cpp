@@ -1805,13 +1805,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         cleanup_stack.pop_back();
     }
 
-    // Before erasing, save ALL handlers (including those in nested blocks) so compileAllHandlerIRs() can access them
-    // Handlers in nested blocks (loops, scoped blocks, etc.) must also be compiled to IR
-    // to avoid marking entire functions as needing source fallback when only handlers fail lowering
-    if (!block_handlers.empty() && block_handler_start < block_handlers.size()) {
-        // Append all handlers registered in this block (including nested blocks processed during our loop)
-        saved_top_level_handlers.insert(
-            saved_top_level_handlers.end(),
+    // Before erasing, save top-level handlers so compileAllHandlerIRs() can access them
+    // Only save handlers registered at the function's top level (block_handler_start == 0)
+    // to prevent accumulation of nested handlers that creates pathological CFGs for LLVM optimization
+    if (block_handler_start == 0) {
+        // Replace (not append) to avoid accumulating handlers from nested blocks
+        saved_top_level_handlers.assign(
             block_handlers.begin() + block_handler_start, block_handlers.end());
     }
 
