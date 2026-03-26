@@ -2278,6 +2278,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         for (auto& [lvar, slot_id] : handler_func->local_var_slots) {
             if (lvar && slot_id < parent_slot_count) {
                 handler_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lvar));
+                handler_func->pre_instantiated_cache.insert(lvar);
             }
         }
 

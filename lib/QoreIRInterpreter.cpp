@@ -1561,7 +1561,8 @@ static void executeHandlerBody(const IROnBlockExitHandler& handler, ExceptionSin
         // Execute compiled handler via IR interpreter with parent slot cache for scope access
         QoreValue rv;
         QoreIRInterpreter::execute(*handler.handler_ir, rv, obe_xsink, nullptr, nullptr, nullptr,
-                                   nullptr, nullptr, nullptr, nullptr, false, nullptr, parent_slot_cache);
+                                   &handler.handler_ir->pre_instantiated_cache, nullptr, nullptr, nullptr,
+                                   false, nullptr, parent_slot_cache);
         rv.discard(obe_xsink);
     } else if (handler.code) {
         // AST fallback

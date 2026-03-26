@@ -4241,7 +4241,9 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                         // Phase 2, Fix 2c: Pass parent slot cache for handler access to parent scope
                         QoreValue rv;
                         QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink,
-                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, false, nullptr,
+                            nullptr, nullptr, nullptr,
+                            &jit_obe_handlers[i].handler_ir->pre_instantiated_cache,
+                            nullptr, nullptr, nullptr, false, nullptr,
                             current_ir_slot_cache);
                         rv.discard(nullptr);
                     } else {
