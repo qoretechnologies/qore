@@ -1,0 +1,205 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%requires ../../../../qlib/QoreTokenizerUtils
+%requires tokenizer
+%requires Util
+%requires QUnit
+
+%try-module json
+%define NO_JSON
+%endtry
+
+%exec-class QoreTokenizerUtilsTest
+
+public class QoreTokenizerUtilsTest inherits QUnit::Test {
+    private {
+        # Path to test tokenizer config
+        string tokenizer_path;
+        hash<auto> tokenizer_config;
+    }
+
+    constructor() : Test("QoreTokenizerUtilsTest", "1.0") {
+        # Use BERT tokenizer from tokenizer module test data
+        tokenizer_path = normalize_dir(get_script_dir()
+            + "/../../../../modules/tokenizer/test/test_data/bert-base-uncased-tokenizer.json");
+
+        if (!is_file(tokenizer_path)) {
+            printf("SKIP: tokenizer test data not found at %s\n", tokenizer_path);
+            return;
+        }
+%ifdef NO_JSON
+        printf("SKIP: json module not available\n");
+        return;
+%endif
+        tokenizer_config = parse_json(ReadOnlyFile::readTextFile(tokenizer_path));
+
+        addTestCase("DocumentChunker basic chunking", \chunkerBasicTest());
+        addTestCase("DocumentChunker short text (no chunking needed)", \chunkerShortTextTest());
+        addTestCase("DocumentChunker empty text", \chunkerEmptyTextTest());
+        addTestCase("DocumentChunker overlap", \chunkerOverlapTest());
+        addTestCase("DocumentChunker error cases", \chunkerErrorTest());
+        addTestCase("TokenCounter count", \counterCountTest());
+        addTestCase("TokenCounter fits in context", \counterFitsTest());
+        addTestCase("TokenCounter truncate", \counterTruncateTest());
+        addTestCase("TokenCounter empty text", \counterEmptyTest());
+        set_return_value(main());
+    }
+
+    # ===================== DocumentChunker Tests =====================
+
+    chunkerBasicTest() {
+        QoreTokenizerUtils::DocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 20,
+            "chunk_overlap": 5,
+        });
+
+        # Create text long enough to require multiple chunks
+        string text = "The quick brown fox jumps over the lazy dog. "
+            "Machine learning algorithms can process large volumes of data efficiently. "
+            "Natural language processing enables computers to understand human text. "
+            "Retrieval augmented generation combines search with language models.";
+
+        list<hash<auto>> chunks = chunker.chunkText(text);
+
+        # Should produce multiple chunks for this text with 20-token limit
+        assertTrue(chunks.size() > 1,
+            sprintf("should produce multiple chunks; got %d", chunks.size()));
+
+        # Each chunk should have the expected fields
+        foreach hash<auto> chunk in (chunks) {
+            assertTrue(exists chunk.text, "chunk should have text");
+            assertTrue(exists chunk.input_ids, "chunk should have input_ids");
+            assertTrue(exists chunk.token_count, "chunk should have token_count");
+            assertTrue(exists chunk.start_offset, "chunk should have start_offset");
+            assertTrue(exists chunk.end_offset, "chunk should have end_offset");
+            assertTrue(exists chunk.chunk_index, "chunk should have chunk_index");
+            assertTrue(chunk.token_count <= 20,
+                sprintf("chunk token_count (%d) should be <= 20", chunk.token_count));
+            assertTrue(chunk.text.size() > 0, "chunk text should not be empty");
+        }
+
+        # Chunk indices should be sequential
+        for (int i = 0; i < chunks.size(); ++i) {
+            assertEq(i, chunks[i].chunk_index);
+        }
+    }
+
+    chunkerShortTextTest() {
+        QoreTokenizerUtils::DocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 512,
+            "chunk_overlap": 64,
+        });
+
+        string short_text = "Hello world.";
+        list<hash<auto>> chunks = chunker.chunkText(short_text);
+
+        # Short text should produce exactly 1 chunk
+        assertEq(1, chunks.size());
+        assertTrue(chunks[0].token_count < 512,
+            sprintf("short text should be < 512 tokens; got %d", chunks[0].token_count));
+    }
+
+    chunkerEmptyTextTest() {
+        QoreTokenizerUtils::DocumentChunker chunker(tokenizer_config);
+        list<hash<auto>> chunks = chunker.chunkText("");
+        assertEq(0, chunks.size());
+    }
+
+    chunkerOverlapTest() {
+        QoreTokenizerUtils::DocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 15,
+            "chunk_overlap": 5,
+        });
+
+        assertEq(15, chunker.getChunkSize());
+        assertEq(5, chunker.getChunkOverlap());
+    }
+
+    chunkerErrorTest() {
+        # chunk_size <= 0
+        assertThrows("DOCUMENT-CHUNKER-ERROR", sub() {
+            new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {"chunk_size": 0});
+        });
+
+        # chunk_overlap >= chunk_size
+        assertThrows("DOCUMENT-CHUNKER-ERROR", sub() {
+            new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {
+                "chunk_size": 10,
+                "chunk_overlap": 10,
+            });
+        });
+
+        # negative overlap
+        assertThrows("DOCUMENT-CHUNKER-ERROR", sub() {
+            new QoreTokenizerUtils::DocumentChunker(tokenizer_config, {
+                "chunk_overlap": -1,
+            });
+        });
+    }
+
+    # ===================== TokenCounter Tests =====================
+
+    counterCountTest() {
+        QoreTokenizerUtils::TokenCounter tc(tokenizer_config);
+
+        int count = tc.countTokens("Hello, world!");
+        assertTrue(count > 0, sprintf("token count should be > 0; got %d", count));
+
+        # BERT tokenizes "Hello, world!" as: hello, ,, world, !  = ~4 tokens
+        assertTrue(count >= 3 && count <= 6,
+            sprintf("BERT token count for 'Hello, world!' should be 3-6; got %d", count));
+
+        # Longer text should have more tokens
+        int long_count = tc.countTokens(
+            "The quick brown fox jumps over the lazy dog. "
+            "This is a much longer sentence with many more words.");
+        assertTrue(long_count > count,
+            sprintf("longer text (%d) should have more tokens than shorter (%d)",
+                long_count, count));
+    }
+
+    counterFitsTest() {
+        QoreTokenizerUtils::TokenCounter tc(tokenizer_config);
+
+        assertTrue(tc.fitsInContext("Hello", 100), "short text should fit in 100 tokens");
+        assertTrue(tc.fitsInContext("Hello", 1), "single word might fit in 1 token");
+
+        string long_text = "";
+        for (int i = 0; i < 100; ++i) {
+            long_text += "This is sentence number " + string(i) + ". ";
+        }
+        assertFalse(tc.fitsInContext(long_text, 10),
+            "very long text should not fit in 10 tokens");
+    }
+
+    counterTruncateTest() {
+        QoreTokenizerUtils::TokenCounter tc(tokenizer_config);
+
+        string long_text = "The quick brown fox jumps over the lazy dog. "
+            "Machine learning is a branch of artificial intelligence. "
+            "Natural language processing enables text understanding. "
+            "Deep learning uses neural networks with many layers.";
+
+        int original_count = tc.countTokens(long_text);
+        assertTrue(original_count > 10,
+            sprintf("original should be > 10 tokens; got %d", original_count));
+
+        string truncated = tc.truncateToTokens(long_text, 10);
+        int truncated_count = tc.countTokens(truncated);
+
+        assertTrue(truncated_count <= 10,
+            sprintf("truncated should be <= 10 tokens; got %d", truncated_count));
+        assertTrue(truncated.size() < long_text.size(),
+            "truncated text should be shorter");
+        assertTrue(truncated.size() > 0, "truncated text should not be empty");
+    }
+
+    counterEmptyTest() {
+        QoreTokenizerUtils::TokenCounter tc(tokenizer_config);
+        assertEq(0, tc.countTokens(""));
+        assertEq("", tc.truncateToTokens("", 100));
+        assertTrue(tc.fitsInContext("", 0));
+    }
+}

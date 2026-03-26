@@ -1,0 +1,76 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreTokenizerUtils.qm convenience utilities for RAG text ingestion
+
+/*  QoreTokenizerUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires tokenizer
+
+module QoreTokenizerUtils {
+    version = "1.0.0";
+    desc = "user module providing document chunking and token counting for RAG pipelines";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreTokenizerUtils Module
+
+    @tableofcontents
+
+    @section qoretokenizerutilsintro QoreTokenizerUtils Module Introduction
+
+    The %QoreTokenizerUtils module provides convenience utilities for RAG (Retrieval
+    Augmented Generation) text ingestion on top of the \c tokenizer binary module:
+
+    - @ref QoreTokenizerUtils::DocumentChunker "DocumentChunker" — splits documents into
+      overlapping token-bounded chunks for embedding and vector store ingestion
+    - @ref QoreTokenizerUtils::TokenCounter "TokenCounter" — counts tokens and manages
+      LLM context window limits with truncation support
+
+    Both classes accept a HuggingFace `tokenizer.json` configuration and produce output
+    compatible with any ONNX embedding model or LLM API.
+
+    @par Example: Chunk a document for RAG
+    @code{.py}
+%requires QoreTokenizerUtils
+
+hash<auto> config = parse_json(ReadOnlyFile::readTextFile("tokenizer.json"));
+DocumentChunker chunker(config, {"chunk_size": 512, "chunk_overlap": 64});
+
+list<hash<auto>> chunks = chunker.chunkText(long_document);
+foreach hash<auto> chunk in (chunks) {
+    printf("Chunk %d: %d tokens, offset %d-%d\n",
+        $#, chunk.token_count, chunk.start_offset, chunk.end_offset);
+    # chunk.text contains the text for this chunk
+    # chunk.input_ids contains token IDs for embedding
+}
+    @endcode
+
+    @section qoretokenizerutilsrelnotes QoreTokenizerUtils Module Release Notes
+
+    @subsection qoretokenizerutils_1_0 QoreTokenizerUtils Module Version 1.0
+    - Initial release with DocumentChunker and TokenCounter
+*/
