@@ -564,6 +564,17 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
 
+    // Assign slot IDs and compile handler IR functions
+    ir_func->computeSlotIdsAndEmbed();
+    std::string handler_error;
+    if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+        // Handler compilation failure is non-fatal; log and continue
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT-LOWER: handler IR compilation warning for '%s': %s\n",
+                    name, handler_error.c_str());
+        }
+    }
+
     // Collect ALL body locals from the statement tree (includes nested blocks from
     // for/while/if/try/switch statements).  Mark them as pre-instantiated so the
     // LLVM lowerer doesn't emit instantiation/uninstantiation calls - the caller

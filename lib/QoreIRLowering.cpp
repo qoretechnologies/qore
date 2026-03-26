@@ -1796,9 +1796,11 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
             if (!lowerHandlersAtExit(false, error, block_handler_start)) {
                 return false;
             }
+            // Phase 2a: Emit ScopeExit for fall-through path (inline_lowered=true means handlers already inlined)
+            builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
         }
-        // Phase 2a: Pop scope_stack without re-executing handlers (inline_lowered=true)
-        builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+        // Always pop scope/cleanup stacks - they're tracking compile-time state, not IR instructions
+        // When terminated=true, emitBlockCleanups already emitted the ScopeExit IR, but we still need to pop
         scope_stack.pop_back();
         cleanup_stack.pop_back();
     }

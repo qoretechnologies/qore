@@ -1680,6 +1680,19 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
 
+    // Phase B2: Build reverse map for parent slot TLS access (for LLVM-compiled parents)
+    // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1
+    // Used when parent_slot_cache is null (LLVM-compiled parents without IR frames)
+    std::vector<LocalVar*> parent_slot_to_lvar;
+    if (func.parent_slot_count > 0 && !parent_slot_cache) {
+        parent_slot_to_lvar.resize(func.parent_slot_count, nullptr);
+        for (auto& [lvar, slot_id] : func.local_var_slots) {
+            if (lvar && slot_id < func.parent_slot_count) {
+                parent_slot_to_lvar[slot_id] = const_cast<LocalVar*>(lvar);
+            }
+        }
+    }
+
     // Phase B2: Copy parent's local values into handler frame (parent slot inheritance)
     // When this handler IR function is called from a parent, it inherits the parent's
     // local variable values for the first parent_slot_count slots
@@ -1695,6 +1708,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // Mark as instantiated (parent is responsible for its own instantiation)
             locals_instantiated[i] = !parent_val.isNothing();
         }
+    } else if (func.parent_slot_count > 0 && !parent_slot_to_lvar.empty()) {
+        // TLS fallback: read parent locals from TLS stack (for LLVM-compiled parents)
+        // LLVM-compiled functions instantiate locals on TLS via qore_rt_instantiate_local
+        for (uint32_t i = 0; i < func.parent_slot_count; ++i) {
+            const LocalVar* lvar = parent_slot_to_lvar[i];
+            if (lvar) {
+                // Read from TLS using the same mechanism as LoadLocal
+                bool needs_deref = true;
+                QoreValue parent_val = lvar->eval(needs_deref, xsink);
+                if (!parent_val.isNothing()) {
+                    locals_slot_cache[i] = parent_val.hasNode() ? parent_val.refSelf() : parent_val;
+                    if (needs_deref && parent_val.hasNode()) {
+                        parent_val.getInternalNode()->deref(xsink);
+                    }
+                    locals_instantiated[i] = true;
+                }
+            }
+        }
     }
 
     // Phase B2: RAII guard for parent slot copy-back on all exit paths
@@ -1704,11 +1735,15 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         uint32_t parent_slot_count;
         std::vector<QoreValue>& locals_slot_cache;
         std::vector<QoreValue>* parent_slot_cache;
+        std::vector<LocalVar*>* slot_to_lvar_ptr;  // for TLS write-back (LLVM parents)
+        std::vector<bool>& locals_instantiated;
         ExceptionSink* xsink;
 
         ParentSlotWriteback(uint32_t psc, std::vector<QoreValue>& lsc,
-                           std::vector<QoreValue>* psc_ptr, ExceptionSink* xs)
-            : parent_slot_count(psc), locals_slot_cache(lsc), parent_slot_cache(psc_ptr), xsink(xs) {
+                           std::vector<QoreValue>* psc_ptr, std::vector<LocalVar*>* stl,
+                           std::vector<bool>& li, ExceptionSink* xs)
+            : parent_slot_count(psc), locals_slot_cache(lsc), parent_slot_cache(psc_ptr),
+              slot_to_lvar_ptr(stl), locals_instantiated(li), xsink(xs) {
         }
 
         ~ParentSlotWriteback() {
@@ -1724,9 +1759,20 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
                         // Already has refSelf() from parent, no additional ref needed
                     }
                 }
+            } else if (parent_slot_count > 0 && slot_to_lvar_ptr && !slot_to_lvar_ptr->empty()) {
+                // TLS write-back for LLVM-compiled parents
+                // Write modified parent slot values back to TLS using assignLocalVarValue
+                for (uint32_t i = 0; i < parent_slot_count; ++i) {
+                    LocalVar* lvar = (*slot_to_lvar_ptr)[i];
+                    if (lvar && locals_instantiated[i]) {
+                        assignLocalVarValue(lvar, locals_slot_cache[i], xsink);
+                    }
+                }
             }
         }
-    } parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache, xsink);
+    } parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache,
+                            parent_slot_to_lvar.empty() ? nullptr : &parent_slot_to_lvar,
+                            locals_instantiated, xsink);
 
     // Phase 2, Fix 2b: TLS guard for slot cache threading to exception-path handlers
     // When this IR interpreter frame is on the stack, nested handler IR functions can
