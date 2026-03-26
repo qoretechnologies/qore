@@ -301,6 +301,9 @@ const char* QoreValue::getTypeName() const {
     if (isShortString()) {
         return "string";
     }
+    if (isNull()) {
+        return "NULL";
+    }
     if (isPointer()) {
         return get_type_name(getPointerUnsafe());
     }
@@ -866,6 +869,9 @@ const char* QoreValue::getFullTypeName() const {
     if (isShortString()) {
         return "string";
     }
+    if (isNull()) {
+        return "NULL";
+    }
     if (isPointer()) {
         return get_full_type_name(getPointerUnsafe());
     }
@@ -888,6 +894,9 @@ const char* QoreValue::getFullTypeName(bool with_namespaces) const {
     }
     if (isShortString()) {
         return "string";
+    }
+    if (isNull()) {
+        return "NULL";
     }
     if (isPointer()) {
         return get_full_type_name(getPointerUnsafe(), with_namespaces);

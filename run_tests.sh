@@ -118,31 +118,21 @@ if [ -n "$LIBQORE_BINARY" ]; then
     LIBQORE="$LIBQORE_BINARY"
 fi
 
-# Test that qore is built.
-if [ -z "$QORE" ] && [ -s "./.libs/qore" ] && [ -f "./qore" ] && [ -f "./lib/.libs/libqore.so" -o "./lib/.libs/libqore.dylib" ]; then
-    if [ -f "./lib/.libs/libqore.so" ]; then
-        LIBQORE="./lib/.libs/libqore.so"
-    elif [ -f "./lib/.libs/libqore.dylib" ]; then
-        LIBQORE="./lib/.libs/libqore.dylib"
-    fi
-    QORE="./.libs/qore"
-    QR="./.libs/qr"
-else
-    if [ -z "$QORE" ]; then
-        for D in `ls -d */`; do
-            d=`echo ${D%%/}`
-            if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
-                if [ -f "$d/libqore.so" ]; then
-                    LIBQORE="$d/libqore.so"
-                elif [ -f "$d/libqore.dylib" ]; then
-                    LIBQORE="$d/libqore.dylib"
-                fi
-                QORE="$d/qore"
-                QR="$d/qr"
-                break
+# Test that qore is built (CMake only, autotools no longer supported).
+if [ -z "$QORE" ]; then
+    for D in `ls -d */`; do
+        d=`echo ${D%%/}`
+        if [ -f "$d/CMakeCache.txt" ] && [ -f "$d/qore" ] && [ -f "$d/libqore.so" -o "$d/libqore.dylib" ]; then
+            if [ -f "$d/libqore.so" ]; then
+                LIBQORE="$d/libqore.so"
+            elif [ -f "$d/libqore.dylib" ]; then
+                LIBQORE="$d/libqore.dylib"
             fi
-        done
-    fi
+            QORE="$d/qore"
+            QR="$d/qr"
+            break
+        fi
+    done
 fi
 
 if [ -z "$QORE" ] || [ -z "$LIBQORE" ]; then
