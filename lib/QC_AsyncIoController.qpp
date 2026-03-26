@@ -59,8 +59,8 @@ static AsyncIoControllerPriv* get_singleton(QoreObject*& obj, ExceptionSink* xsi
     @since %Qore 2.3
 */
 hashdecl Qore::SocketPollOperationInfo {
-    //! Socket object
-    Socket sock;
+    //! Pollable I/O object (Socket, EventNotifier, or any AbstractPollableIoObjectBase subclass)
+    AbstractPollableIoObjectBase sock;
 
     //! Poll operation
     AbstractPollOperation spop;
@@ -96,19 +96,6 @@ hashdecl Qore::SocketPollOperationInfo {
         on a listener) by using distinct keys like "accept:<hash>:1", "accept:<hash>:2".
     */
     *string key;
-
-    //! If True, the operation runs on its own dedicated I/O thread
-    /** Useful for QUIC/HTTP/3 connections where the userspace protocol stack
-        requires prompt packet processing and cannot share an I/O thread with
-        other connections.
-
-        Dedicated threads use a minimal stack (128KB) and call the C++ continuePoll()
-        method directly. If the poll operation has a Qore-language override of
-        continuePoll(), calls are dispatched to a shared Qore worker thread pool.
-
-        @since %Qore 2.3
-    */
-    *bool dedicated_thread;
 }
 
 //! Socket poll result info hash
@@ -233,7 +220,7 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
     @return @ref True "True" if an operation was found and canceled
     @since %Qore 2.3
 */
-static bool AsyncIoController::cancel(Socket[QoreSocketObject] sock) {
+static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] sock) {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -484,4 +471,27 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     ctrl->submitTask(task->refRefSelf(), cancel ? cancel->refRefSelf() : nullptr, xsink);
+}
+
+//! Sets the maximum number of callback dispatcher worker threads on the global singleton
+/** Controls the concurrency of user callback dispatch off the I/O thread.
+
+    The default is @code{.py}min(get_cpu_count(), 32)@endcode which is auto-scaled to the number
+    of CPU cores.
+
+    Takes effect when the dispatcher is next created (after controller stop/restart or first use).
+
+    @param max_workers the maximum number of workers; 0 = auto (min(get_cpu_count(), 32))
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0) [dom=NETWORK,PROCESS] {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->setMaxCallbackWorkers((int)max_workers);
 }

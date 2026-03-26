@@ -4,8 +4,8 @@
 
 The AsyncSocketIo module provides a shared async socket I/O controller that powers HttpServerAsyncIo, Http2ClientIo,
 and other components that rely on non-blocking socket polling. The core abstraction is a SocketPollOperation that
-represents a unit of work (accept, read/write, handshake, etc) executed by a dedicated I/O thread that polls
-all active sockets via an EventLoop (kqueue/epoll/poll).
+represents a unit of work (accept, read/write, handshake, etc) executed by the I/O thread that polls
+all active sockets via a shared EventLoop (kqueue/epoll/poll).
 
 This document describes the controller's internal model, the Http2ClientIo client module, and the supported
 integration points for other code.

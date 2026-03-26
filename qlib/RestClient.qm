@@ -3879,16 +3879,31 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         }
         auto ping_body = getPingBody();
 
+        hash<auto> ping_opts = real_opts + {
+            "ping_path": ping_path,
+            "ping_body": ping_body,
+        };
+
+        # Try RestClientIo for native HTTP/2 and HTTP/3 support; skip if ping_path is a
+        # full URL to a different server (RestClientIo is bound to the connection's base URL)
+        if (!ping_path || ping_path !~ /^http/) {
+            try {
+                load_module("RestClientIo");
+                return new RestClientIoPingPollOperation(self, ping_opts, logger);
+            } catch () {
+                # RestClientIo module not available; fall back to sync RestClient approach
+            }
+        }
+
+        # Fallback: sync RestClient + poll-based ping
         RestClient client = getPollImpl();
+        # update real_url from the module's actual URL; for auto_url connections the stored
+        # URL is a placeholder (e.g. "https://x") overridden by the module's getImpl()
+        real_url = client.getURL();
         if (logger) {
             client.setLogger(logger);
         }
-
-        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new RestPingPollOperation(self, client, real_opts + {
-            "ping_path": ping_path,
-            "ping_body": ping_body,
-        });
+        return new RestPingPollOperation(self, client, ping_opts);
     }
 
     #! Called after a new connection object is created from an existing connection
@@ -4089,7 +4104,8 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return real_opts + {
             "logger": logger,
             "update_options": update_options,
-        } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING);
+        } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING)
+          + (rtopts.skip_login ? {"skip_login": True} : NOTHING);
     }
 
     #! Sets alt token signer code and the header for it
@@ -4798,6 +4814,187 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
                 }
             }
         }
+    }
+}
+
+#! REST ping poll operation using RestClientIo for native HTTP/2 and HTTP/3 support
+/** Uses an EventNotifier to bridge the RestClientIo callback-based response to the
+    AbstractPollOperation poll interface.  All I/O is non-blocking — connection establishment,
+    HTTP/2 and HTTP/3 frame exchange are handled by the global AsyncSocketIoController.
+
+    @since %RestClient 2.6
+
+    @see RestPingPollOperation for the sync RestClient fallback
+*/
+public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Loading OpenAPI3 schema
+        const SPS_GET_OPENAPI3 = "io-get-openapi3";
+        #! Loading Swagger schema
+        const SPS_GET_SWAGGER = "io-get-swagger";
+        #! Waiting for response
+        const SPS_IO_WAITING = "io-waiting";
+        #! Complete
+        const SPS_COMPLETE = "io-complete";
+    }
+
+    private {
+        #! REST connection (weak reference)
+        RestConnection conn;
+
+        #! Ping options
+        hash<auto> ping_opts;
+
+        #! Logger
+        *Logger::LoggerInterface logger;
+
+        #! EventNotifier bridges the I/O thread callback to the poll loop
+        EventNotifier notifier();
+
+        #! Schema loading poller (non-blocking)
+        *AbstractPollOperation schema_poller;
+
+        #! Loaded schema validator
+        *RestSchemaValidator::AbstractRestSchemaValidator schema_validator;
+
+        #! RestClientIo instance (kept alive for the connection manager + stream)
+        *object rcio;
+
+        #! Current state
+        string state;
+
+        #! Goal reached
+        bool goal_reached = False;
+
+        #! Mutex protecting result/error
+        Mutex m();
+
+        #! Response from I/O callback
+        *hash<auto> result;
+
+        #! Error from I/O callback
+        *hash<auto> bg_ex;
+    }
+
+    #! Creates the poll operation
+    constructor(RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+        self.conn := conn;
+        self.ping_opts = ping_opts;
+        self.logger = logger;
+
+        # Stage 1: non-blocking schema loading if needed
+        if (ping_opts.openapi3) {
+            state = SPS_GET_OPENAPI3;
+            schema_poller = FileLocationHandler::getIoPollerForLocation(ping_opts.openapi3);
+        } else if (ping_opts.swagger) {
+            state = SPS_GET_SWAGGER;
+            schema_poller = FileLocationHandler::getIoPollerForLocation(ping_opts.swagger);
+        } else {
+            doSubmitPing();
+        }
+    }
+
+    string getGoal() {
+        return "ping";
+    }
+
+    string getState() {
+        return state + (schema_poller ? ("-" + schema_poller.getState()) : "");
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        # Stage 1: schema loading
+        if (schema_poller) {
+            *hash<SocketPollInfo> pinfo = schema_poller.continuePoll();
+            if (pinfo) {
+                return pinfo;
+            }
+            if (state == SPS_GET_OPENAPI3) {
+                schema_validator = OpenApi3Loader::fromString(schema_poller.getOutput().toString());
+            } else if (state == SPS_GET_SWAGGER) {
+                schema_validator = SwaggerLoader::fromString(schema_poller.getOutput().toString());
+            }
+            remove schema_poller;
+            doSubmitPing();
+        }
+
+        # Stage 2: waiting for response via EventNotifier
+        if (state == SPS_IO_WAITING) {
+            hash<auto> resp;
+            *hash<auto> err;
+            {
+                AutoLock al(m);
+                if (!result && !bg_ex) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": notifier,
+                    };
+                }
+                resp = result;
+                err = bg_ex;
+            }
+
+            notifier.acknowledge();
+            state = SPS_COMPLETE;
+
+            if (err) {
+                conn.authFailure();
+                throw err.err, err.desc;
+            }
+
+            int status_code = resp.status_code.toInt();
+            if ((status_code / 100) == 2) {
+                goal_reached = True;
+                conn.authSuccess();
+                return;
+            }
+
+            conn.authFailure();
+            throw "REST-PING-ERROR", sprintf("HTTP %d from RestClientIo ping %s %y",
+                status_code, ping_opts.ping_method ?? "GET", ping_opts.ping_path ?? "/");
+        }
+
+        return;
+    }
+
+    #! Creates RestClientIo and submits the ping — fully non-blocking
+    private doSubmitPing() {
+        # Create RestClientIo with skip_login to avoid blocking OAuth2 I/O
+        rcio = conn.getAsync(False, {"skip_login": True});
+
+        if (schema_validator) {
+            call_object_method(rcio, "setValidator", schema_validator);
+        }
+
+        # Update real_url from the RestClientIo's actual URL (fixes auto_url placeholders)
+        conn.real_url = call_object_method(rcio, "getUrl").toString();
+
+        string method = ping_opts.ping_method ?? "GET";
+        string path = ping_opts.ping_path ?? "/";
+        auto body = method != "GET" ? ping_opts.ping_body : NOTHING;
+        *hash<auto> hdr = ping_opts.ping_headers;
+
+        state = SPS_IO_WAITING;
+
+        # Submit with callback — non-blocking; skip_ensure_token avoids blocking OAuth2 refresh
+        call_object_method(rcio, "restDoRequestWithCallback", method, path, body, hdr,
+            sub (hash<auto> resp, *hash<auto> err) {
+                {
+                    AutoLock al(m);
+                    if (err) {
+                        bg_ex = err;
+                    } else {
+                        result = resp;
+                    }
+                }
+                notifier.notify();
+            },
+            True,  # skip_ensure_token
+        );
     }
 }
 

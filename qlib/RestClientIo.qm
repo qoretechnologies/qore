@@ -319,6 +319,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! True if this instance owns the connection manager (should close on close())
             bool owns_mgr = True;
 
+            #! Holds stream handle alive during deferred non-blocking callback submissions
+            *HttpClientIo::HttpClientStreamHandle pending_callback_stream;
+
             #! Target URL
             string url;
 
@@ -611,8 +614,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 mgr = buildConnectionManager(opts);
             }
 
-            # Acquire initial OAuth2 token if configured
-            checkLogin();
+            # Acquire initial OAuth2 token if configured; skip_login defers to the first
+            # request (for non-blocking ping operations that use the existing token as-is)
+            if (!opts.skip_login) {
+                checkLogin();
+            }
         }
 
         #! Copying is not supported
@@ -827,6 +833,41 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 };
 
             return new RestFuture(raw_future, stream, builder);
+        }
+
+        #! Submits a non-blocking REST request with a completion callback
+        /** Prepares the request (OAuth2 token, serialization, auth headers) and submits it
+            via the multiplexed connection manager. The callback is invoked from the I/O
+            thread when the response arrives. This method never blocks.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr request headers (optional)
+            @param callback called from the I/O thread with \c (hash<auto> resp, *hash<auto> err)
+            @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
+
+            @since %RestClientIo 1.1
+        */
+        nothing restDoRequestWithCallback(string method, string path, auto body, *hash<auto> hdr,
+                HttpClientIo::HttpResponseCallback callback, *bool skip_ensure_token) {
+            if (!skip_ensure_token) {
+                ensureToken();
+            }
+
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+            log(LoggerLevel::DEBUG, "restDoRequestWithCallback() %s %s%s", method, url, path);
+
+            # Store the stream handle to prevent GC before the deferred callback fires
+            pending_callback_stream = mgr.acquireStream(url);
+            pending_callback_stream.submitAsyncNonBlocking(method, path, hdr, prepared.serialized_body,
+                sub (hash<auto> resp, *hash<auto> err) {
+                    # Clear the stream reference now that the callback has fired
+                    remove pending_callback_stream;
+                    callback(resp, err);
+                },
+            );
         }
 
         #! Sends a signed REST request

@@ -389,6 +389,77 @@ public class HttpClientStreamHandle {
         return stream_id;
     }
 
+    #! Submits an asynchronous request without blocking on connection establishment
+    /** If the connection is already ready, the request is submitted immediately.
+        Otherwise, submission is deferred until the connection becomes ready via
+        @ref HttpClientConnection::callWhenReady().
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param callback user callback invoked when the response is complete
+
+        @note This method never blocks. Safe to call from event loop threads.
+
+        @since %HttpClientIo 1.1
+    */
+    submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body,
+            HttpResponseCallback callback) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        if (conn.isReady()) {
+            doSubmitAsyncImpl(method, path, headers, body, callback);
+        } else {
+            log(LoggerLevel::DEBUG, "deferring async request until connection ready: %s %s", method, path);
+            conn.callWhenReady(sub () {
+                try {
+                    {
+                        AutoLock al(lock);
+                        if (state != HttpClientStreamState::Open) {
+                            releaseReservationIfHeld();
+                            callback(NOTHING, {
+                                "err": "HTTPCLIENT-CANCELLED",
+                                "desc": "stream was cancelled during connection setup",
+                            });
+                            return;
+                        }
+                    }
+                    doSubmitAsyncImpl(method, path, headers, body, callback);
+                } catch (hash<ExceptionInfo> ex) {
+                    callback(NOTHING, ex);
+                }
+            });
+        }
+    }
+
+    #! Internal: performs the actual async submission
+    private doSubmitAsyncImpl(string method, string path, *hash<auto> headers, *data body,
+            HttpResponseCallback callback) {
+        log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
+        try {
+            stream_id = submitAsyncImpl(method, path, headers, body, callback);
+            @assert(stream_id >= 0);
+            reservation_held = False;
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            rethrow;
+        }
+    }
+
     #! Submits an asynchronous request with a QUIC datagram atomically
     /** Queues both the HTTP request and a QUIC datagram before waking the
         I/O controller, ensuring both are sent in the same write cycle.

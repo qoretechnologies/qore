@@ -43,9 +43,11 @@
 
 #include "qore/intern/ThreadPool.h"
 
+#include <algorithm>
 #include <atomic>
 #include <deque>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -55,10 +57,10 @@ class QoreObject;
 class QoreSocketObject;
 class SocketPollOperationBase;
 
-//! Lightweight dispatcher for executing Qore-language continuePoll() overrides
+//! Lightweight async dispatcher for executing user callbacks and Qore abort() off the I/O thread
 /** Manages a small pool of Qore worker threads (with full interpreter stack) that
-    can execute Qore method calls on behalf of dedicated I/O threads (which have
-    minimal stacks and no interpreter context).
+    execute user callbacks and Qore-language abort() calls on behalf of the I/O thread
+    (which must not run untrusted code or block on user callbacks).
 
     Workers are lazily created up to \c max_workers when work arrives.
 
@@ -66,41 +68,44 @@ class SocketPollOperationBase;
 */
 class QoreCallDispatcher {
 public:
-    //! Work item for cross-thread method dispatch
-    struct WorkItem {
-        QoreObject* spop_obj;           //!< Poll operation object (NOT referenced — caller keeps alive)
-        QoreHashNode* result = nullptr; //!< Output: new poll info hash (referenced) or nullptr
-        ExceptionSink xsink;            //!< Output: exceptions from evalMethod
-        QoreCondition done;             //!< Signaled when work is complete
-        bool completed = false;         //!< Set under dispatcher lock before signal
+    //! Async work item for fire-and-forget dispatch
+    struct AsyncWorkItem {
+        ResolvedCallReferenceNode* callback; //!< Referenced (ownership transferred, or nullptr)
+        QoreListNode* args;                  //!< Referenced (ownership transferred, or nullptr)
+        QoreObject* abort_obj;               //!< For abort dispatch (referenced, or nullptr)
     };
 
     //! Creates the dispatcher
-    /** @param max_workers maximum number of Qore worker threads
+    /** @param max_workers maximum number of Qore worker threads; 0 = auto (min(hardware_concurrency, 32))
     */
-    DLLLOCAL QoreCallDispatcher(int max_workers = DEFAULT_MAX_WORKERS);
+    DLLLOCAL QoreCallDispatcher(int max_workers = 0);
 
     //! Destructor — does NOT stop workers; call stop() first
     DLLLOCAL ~QoreCallDispatcher();
 
-    //! Dispatch a continuePoll() call to a Qore worker thread and block until complete
-    /** @param spop_obj the AbstractPollOperation object
-        @param caller_xsink receives any exceptions from the call
-        @return new poll info hash (referenced) or nullptr
+    //! Dispatch an abort() call asynchronously (fire-and-forget)
+    /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
     */
-    DLLLOCAL QoreHashNode* dispatchContinuePoll(QoreObject* spop_obj, ExceptionSink* caller_xsink);
+    DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj);
+
+    //! Dispatch a callback asynchronously (fire-and-forget)
+    /** The callback is executed on a worker thread. The caller does not wait for completion.
+        @param callback the callback code (referenced — ownership transferred)
+        @param args the argument list (referenced — ownership transferred, or nullptr)
+    */
+    DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
 
-    //! Default maximum workers
-    static constexpr int DEFAULT_MAX_WORKERS = 4;
+    //! Maximum cap for auto-scaled workers
+    static constexpr int MAX_WORKER_CAP = 32;
 
 private:
     QoreThreadLock m;
     QoreCondition work_avail;               //!< Signaled when work is available
     QoreCondition workers_done;             //!< Signaled when all workers have exited
-    std::deque<WorkItem*> queue;            //!< Pending work items
+    std::deque<AsyncWorkItem> async_queue;  //!< Pending async work items
     int active_workers = 0;                 //!< Number of running worker threads
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
@@ -171,7 +176,7 @@ public:
         @param xsink for exception handling
         @return true if an operation was found and canceled
     */
-    DLLLOCAL bool cancel(QoreSocketObject* sock, ExceptionSink* xsink);
+    DLLLOCAL bool cancel(AbstractPollableIoObjectBase* sock, ExceptionSink* xsink);
 
     //! Cancel an operation by key
     /** @param key the operation key
@@ -264,6 +269,13 @@ public:
     */
     DLLLOCAL void setTimerCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
 
+    //! Sets the maximum number of callback dispatcher worker threads
+    /** Controls the concurrency of user callback and abort() dispatch.
+        Takes effect on the next call_dispatcher creation (after stop/restart or first use).
+        @param max_workers the maximum number of workers; 0 = auto (min(hardware_concurrency, 32))
+    */
+    DLLLOCAL void setMaxCallbackWorkers(int max_workers);
+
     //! Submit a task to the controller's thread pool
     /** The thread pool is lazily created on first use. ThreadPool threads use
         QTF_EXTERNAL_LIFECYCLE so they don't block QoreProgramHelper shutdown;
@@ -314,8 +326,8 @@ private:
     //! Internal poll info (mirrors Qore Priv::PollInfo)
     struct PollInfo {
         int64 timeout_date_us;          //!< Absolute timeout (microseconds since epoch), 0 = not set
-        QoreObject* sock_obj;           //!< Socket QoreObject (referenced)
-        QoreSocketObject* sock;         //!< Socket private data
+        QoreObject* sock_obj;           //!< Pollable I/O QoreObject (referenced)
+        AbstractPollableIoObjectBase* sock; //!< Pollable I/O private data
         QoreObject* spop_obj;           //!< AbstractPollOperation QoreObject (referenced)
         QoreHashNode* poll_info;        //!< Last SocketPollInfo hash (referenced, or nullptr)
         int64 timeout_us;               //!< Timeout in microseconds (negative = no timeout)
@@ -323,10 +335,13 @@ private:
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
         ResolvedCallReferenceNode* callback; //!< Completion callback (referenced, or nullptr)
+        SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
+        bool has_qore_abort;            //!< True if abort() is overridden in Qore
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
-            other(nullptr), queue(nullptr), callback(nullptr) {
+            other(nullptr), queue(nullptr), callback(nullptr),
+            spop_base(nullptr), has_qore_abort(false) {
         }
 
         DLLLOCAL ~PollInfo() {
@@ -453,8 +468,8 @@ private:
     //! Log a message (acquires lock to snapshot logger — must NOT be called with lock held)
     DLLLOCAL void log(int level, const char* fmt, ...) const;
 
-    //! Get the socket unique hash from a QoreSocketObject
-    DLLLOCAL static std::string getSocketHash(QoreSocketObject* sock);
+    //! Get the unique hash from a pollable I/O object
+    DLLLOCAL static std::string getSocketHash(AbstractPollableIoObjectBase* sock);
 
     //! Get socket and poll info from a SocketPollInfo hash
     DLLLOCAL static QoreObject* getSocketFromPollInfo(QoreHashNode* poll_info, std::string& sock_hash,
@@ -470,46 +485,15 @@ private:
     DLLLOCAL static QoreHashNode* buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink);
 
-    // --- Dedicated thread support ---
+    //! Deliver a result via callback or queue (dispatches callback to worker thread)
+    DLLLOCAL void deliverResult(const std::string& key, Queue* queue, ResolvedCallReferenceNode* callback,
+        QoreHashNode* result, ExceptionSink* xsink);
 
-    //! Info for a dedicated I/O thread handling a single poll operation
-    /** @since %Qore 2.3
-    */
-    struct DedicatedThreadInfo {
-        AsyncIoControllerPriv* controller = nullptr; //!< Back-pointer (referenced)
-        std::string key;                        //!< Cache key for this operation
-        PollInfo pinfo;                         //!< The operation (owns refs)
-        SocketPollOperationBase* spop_base = nullptr; //!< C++ poll operation (referenced, or nullptr)
-        bool has_qore_override = false;         //!< True if continuePoll() is overridden in Qore
-        std::atomic<bool> stop_requested{false};//!< Set to request graceful stop
-        QoreEventLoop* loop = nullptr;          //!< Created by dedicated thread
-        QoreEventNotifier* notifier = nullptr;  //!< Created before thread spawn (referenced)
-        QoreCondition exit_cond;                //!< Signaled when thread exits
-        bool exited = false;                    //!< Set under controller lock
-        int tid = 0;                            //!< Thread ID
-    };
-
-    //! Stack size for dedicated I/O threads (128KB — no Qore stack guard enforced)
-    /** These threads run pure C++ I/O code with no Qore interpreter overhead.
-        The stack guard is disabled via QTF_NO_STACK_GUARD in q_start_thread().
-        128KB is needed because glibc reserves ~63KB of static TLS (QUIC/HTTP/3
-        buffers in libqore) from each thread's stack before the thread starts.
-    */
-    static constexpr size_t DEDICATED_THREAD_STACK_SIZE = 128 * 1024;
-
-    //! Dedicated thread map: key -> DedicatedThreadInfo (protected by m)
-    std::unordered_map<std::string, DedicatedThreadInfo*> dedicated_threads;
-
-    //! Deferred delete list for DedicatedThreadInfo objects (protected by m)
-    /** Threads enqueue themselves here after broadcasting exit_cond; the next
-        lock holder (cancelDedicatedThread, stopDedicatedThreads, or destructor)
-        processes the list. This prevents a race where the thread deletes dti
-        while cancelDedicatedThread is still accessing it inside exit_cond.wait().
-    */
-    std::vector<DedicatedThreadInfo*> deferred_dti_deletes;
-
-    //! Shared call dispatcher for Qore-language continuePoll() overrides (lazily created)
+    //! Shared call dispatcher for async callback/abort delivery (lazily created)
     QoreCallDispatcher* call_dispatcher = nullptr;
+
+    //! Configured max callback workers; 0 = auto
+    int max_callback_workers = 0;
 
     //! Thread pool for dispatching callbacks off the I/O thread (lazily created)
     /** Stopped during stop()/stopClear()/destructor. ThreadPool threads use
@@ -526,28 +510,6 @@ private:
     //! Stop the thread pool if it exists (caller must NOT hold pool_mutex)
     DLLLOCAL void stopThreadPool(ExceptionSink* xsink);
 
-    //! Spawn a dedicated I/O thread for an operation
-    /** @param dti the DedicatedThreadInfo (takes ownership)
-        @param xsink for exception handling
-    */
-    DLLLOCAL void spawnDedicatedThread(DedicatedThreadInfo* dti, ExceptionSink* xsink);
-
-    //! Dedicated thread entry point
-    DLLLOCAL static void dedicatedThreadEntry(ExceptionSink* xsink, void* arg);
-
-    //! Dedicated thread main loop
-    DLLLOCAL void dedicatedThread(DedicatedThreadInfo* dti, ExceptionSink* xsink);
-
-    //! Cancel a dedicated thread by key (caller must NOT hold lock)
-    /** @return true if a dedicated thread was found and canceled
-    */
-    DLLLOCAL bool cancelDedicatedThread(const std::string& key, ExceptionSink* xsink);
-
-    //! Stop all dedicated threads (caller must NOT hold lock)
-    DLLLOCAL void stopDedicatedThreads(ExceptionSink* xsink);
-
-    //! Call continuePoll — direct C++ or via dispatcher for Qore overrides
-    DLLLOCAL QoreHashNode* callContinuePollDedicated(DedicatedThreadInfo* dti, ExceptionSink* xsink);
 };
 
 //! Returns the global AsyncIoController singleton QoreObject (ref'd for caller); lazy-creates on first call

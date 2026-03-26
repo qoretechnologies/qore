@@ -501,9 +501,6 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     http1AsyncWebSocketTests() {
-        assertTrue(mServer.isAsyncMode(),
-            "HttpServer should run in async mode for HTTP/1.1 async WebSocket tests");
-
         list<auto> l = ();
         Counter c(1);
         code cb = sub (*data msg) {
