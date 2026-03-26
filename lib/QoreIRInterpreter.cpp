@@ -2006,11 +2006,18 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
 
     // Helper: discard all LoadLocal result slots for a given local variable,
     // clear the tracking vector, and reset the registration bitmap entries.
+    // CRITICAL: Don't discard load slots that are still in the cleanup vector.
+    // Return values are in cleanup and shouldn't be discarded by StoreLocal/operators.
     auto clearLoadSlots = [&](uint32_t slot_id) {
         if (slot_id >= local_load_slots.size() || local_load_slots[slot_id].empty()) {
             return;
         }
         for (uint32_t vid : local_load_slots[slot_id]) {
+            // Skip if this value is still in cleanup (e.g., return value)
+            bool in_cleanup = std::find(cleanup.begin(), cleanup.end(), vid) != cleanup.end();
+            if (in_cleanup) {
+                continue;  // Don't discard values that are in cleanup
+            }
             if (vid < values.size()) {
                 values[vid].discard(xsink);
                 values[vid] = QoreValue();
