@@ -59,7 +59,7 @@ public class MLScoringUtils {
         @param y_pred list of predicted values
         @return negative MSE (higher is better; 0.0 = perfect)
     */
-    static float negMseScorerr(list<auto> y_true, list<auto> y_pred) {
+    static float negMseScorer(list<auto> y_true, list<auto> y_pred) {
         return -ML::ml_mse(y_true, y_pred);
     }
 

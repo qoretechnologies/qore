@@ -34,16 +34,18 @@ public namespace QoreMLUtils {
 %requires ml
 
 # Define a model factory that creates and fits a Ridge model
-code model_factory = sub (hash<auto> params, list<auto> X_train, list<auto> y_train) {
-    ML::Ridge model(params);
-    model.fitMatrix(X_train, y_train);
-    return model;
-};
+code<object(hash<auto>, list<auto>, list<auto>)> model_factory =
+    object sub (hash<auto> params, list<auto> X_train, list<auto> y_train) {
+        ML::Ridge model(params);
+        model.fitMatrix(X_train, y_train);
+        return model;
+    };
 
 # Define a prediction extractor
-code predictor = sub (object model, list<auto> X_test) {
-    return map $1.prediction, model.predictMatrix(X_test);
-};
+code<list<auto>(object, list<auto>)> predictor =
+    list<auto> sub (object model, list<auto> X_test) {
+        return map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+    };
 
 GridSearch gs({
     "model_factory": model_factory,

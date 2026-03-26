@@ -40,7 +40,7 @@ public namespace QoreMLUtils {
 ML::LinearRegression lr({"fit_intercept": True});
 lr.fitMatrix(X, y);
 
-code predictor = sub (list<auto> X_data) {
+code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
     return map $1.prediction, lr.predictMatrix(X_data);
 };
 
