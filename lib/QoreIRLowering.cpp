@@ -1803,6 +1803,13 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         cleanup_stack.pop_back();
     }
 
+    // Before erasing, save top-level handlers so compileAllHandlerIRs() can access them
+    if (block_handler_start == 0) {
+        // Replace (not append) to avoid accumulating handlers from multiple blocks
+        saved_top_level_handlers.assign(
+            block_handlers.begin() + block_handler_start, block_handlers.end());
+    }
+
     // Remove handlers registered in this block (restore to previous size)
     if (block_handler_start < block_handlers.size()) {
         block_handlers.erase(block_handlers.begin() + block_handler_start, block_handlers.end());
@@ -2245,7 +2252,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
     }
 
     // Iterate through all registered handlers for this lowering context
-    for (InlineHandler& handler : block_handlers) {
+    for (InlineHandler& handler : saved_top_level_handlers) {
         // Skip if already compiled or invalid
         if (!handler.obe_inst || !handler.code) {
             continue;
@@ -2294,6 +2301,17 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
             continue;
         }
 
+        // Recursively compile any nested on_exit handlers inside this handler body
+        std::string nested_error;
+        handler_lowering.compileAllHandlerIRs(nested_error);
+        // nested_error is informational only — append to outer error if non-empty
+        if (!nested_error.empty()) {
+            if (!error.empty()) {
+                error += "; ";
+            }
+            error += "nested handler compilation: " + nested_error;
+        }
+
         // If handler doesn't end with a terminator, add return nothing
         QoreIRBasicBlock* final_block = handler_builder.getBlock();
         if (!final_block || final_block->instructions.empty() ||
@@ -2312,6 +2330,9 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
         handler.obe_inst->handler_ir = std::move(handler_func);
         compiled_count++;
     }
+
+    // Clear saved handlers after compilation to avoid polluting subsequent compilations
+    saved_top_level_handlers.clear();
 
     return compiled_count;
 }

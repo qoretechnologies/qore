@@ -356,6 +356,13 @@ private:
     //! Handlers registered for current block, to be lowered inline at exit points
     std::vector<InlineHandler> block_handlers;
 
+    //! Top-level handlers saved before block_handlers is erased
+    /** Used by compileAllHandlerIRs() to iterate over handlers that would otherwise
+     *  be lost when lowerStatementBlock() erases block_handlers. Only populated at
+     *  the top-level block scope (block_handler_start == 0).
+     */
+    std::vector<InlineHandler> saved_top_level_handlers;
+
     //! Stack of handler vector sizes at each block entry for nested block tracking
     /** When entering a nested block, push the current block_handlers.size().
      *  On exit, pop and restore to enable proper handler isolation between block scopes.
