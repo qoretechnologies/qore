@@ -92,6 +92,13 @@ public:
     void setParseContext(QoreParseContext* parse_context);
 
     //! Compile all handler bodies to separate QoreIRFunction objects and attach to OnBlockExit instructions
+    //! @param handlers handlers to compile for this block level
+    //! @param parent_func parent function for slot inheritance
+    //! @param error receives error message for any compilation failures (non-fatal)
+    //! @return number of handlers successfully compiled, -1 on error
+    int compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
+        QoreIRFunction* parent_func, std::string& error);
+
     //! @param error receives error message for any compilation failures (non-fatal)
     //! @return number of handlers successfully compiled
     int compileAllHandlerIRs(std::string& error);

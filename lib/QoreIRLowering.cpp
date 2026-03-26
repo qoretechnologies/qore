@@ -1805,14 +1805,24 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         cleanup_stack.pop_back();
     }
 
-    // Before erasing, save ALL handlers (including those in nested blocks) so compileAllHandlerIRs() can access them
-    // Handlers in nested blocks (loops, scoped blocks, etc.) must also be compiled to IR
-    // to avoid marking entire functions as needing source fallback when only handlers fail lowering
+    // Compile handlers registered in THIS block level IMMEDIATELY as we exit
+    // This avoids accumulating handlers from all nesting levels, which creates pathological CFGs for LLVM
+    // Each block's handlers are compiled independently before the parent block resumes
     if (!block_handlers.empty() && block_handler_start < block_handlers.size()) {
-        // Append all handlers registered in this block (including nested blocks processed during our loop)
-        saved_top_level_handlers.insert(
-            saved_top_level_handlers.end(),
+        // Extract handlers registered in this block level
+        std::vector<InlineHandler> block_level_handlers(
             block_handlers.begin() + block_handler_start, block_handlers.end());
+
+        // Compile only this block's handlers (not nested ones - they compile themselves)
+        // This prevents handler accumulation and keeps CFGs manageable
+        int compiled_count = compileBlockHandlerIRs(block_level_handlers, builder.getFunction(), error);
+        if (compiled_count < 0 && !error.empty()) {
+            // Handler compilation failure is non-fatal for block-level handlers
+            // Log but continue - handler will use AST fallback
+            if (getenv("QORE_DEBUG_HANDLERS")) {
+                fprintf(stderr, "Block-level handler IR compilation warning: %s\n", error.c_str());
+            }
+        }
     }
 
     // Remove handlers registered in this block (restore to previous size)
@@ -2242,6 +2252,98 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
 
     // Transfer ownership to caller
     return handler_func.release();
+}
+
+int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& handlers,
+        QoreIRFunction* parent_func, std::string& error) {
+    // Compile a specific set of handlers (for a block level) without accumulation
+    // This prevents pathological CFGs that occur when many handlers are compiled together
+    int compiled_count = 0;
+
+    if (!parent_func) {
+        error = "no parent function available for handler compilation";
+        return -1;
+    }
+
+    // Iterate through the handlers provided for this block level
+    for (const InlineHandler& handler : handlers) {
+        // Skip if already compiled or invalid
+        if (!handler.obe_inst || !handler.code) {
+            continue;
+        }
+
+        // Skip if handler already has IR attached (already compiled)
+        if (handler.obe_inst->handler_ir) {
+            continue;
+        }
+
+        // Create handler IR function
+        auto handler_func = std::make_unique<QoreIRFunction>("handler");
+
+        // Phase B1: Pre-seed handler's local_var_slots with parent's entries
+        uint32_t parent_slot_count = parent_func->local_var_slots.size();
+        handler_func->local_var_slots = parent_func->local_var_slots;
+        handler_func->parent_slot_count = parent_slot_count;
+
+        // Mark parent locals as pre-instantiated in the handler
+        for (auto& [lvar, slot_id] : handler_func->local_var_slots) {
+            if (lvar && slot_id < parent_slot_count) {
+                handler_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lvar));
+                handler_func->pre_instantiated_cache.insert(lvar);
+            }
+        }
+
+        // Create entry block for handler
+        QoreIRBasicBlock* entry = handler_func->createBlock("entry");
+
+        // Create a builder for the handler function
+        QoreIRBuilder handler_builder(handler_func.get());
+        handler_builder.setBlock(entry);
+
+        // Create temporary lowering context for the handler body
+        QoreIRLowering handler_lowering(handler_builder, parse_context);
+
+        // Lower the handler body into the handler IR function
+        std::string handler_error;
+        if (!handler_lowering.lowerStatementBlock(handler.code, handler_error)) {
+            // Log failure but continue (non-fatal) - handler will use AST fallback
+            if (!error.empty()) {
+                error += "; ";
+            }
+            error += "handler body lowering failed: " + handler_error;
+            continue;
+        }
+
+        // Recursively compile any nested handlers inside this handler body
+        std::string nested_error;
+        handler_lowering.compileAllHandlerIRs(nested_error);
+        if (!nested_error.empty()) {
+            if (!error.empty()) {
+                error += "; ";
+            }
+            error += "nested handler compilation: " + nested_error;
+        }
+
+        // If handler doesn't end with a terminator, add return nothing
+        QoreIRBasicBlock* final_block = handler_builder.getBlock();
+        if (!final_block || final_block->instructions.empty() ||
+                !isTerminatorOpcode(final_block->instructions.back()->opcode)) {
+            handler_builder.createReturnNothing();
+        }
+
+        // Update function metadata
+        handler_func->max_value_id = handler_builder.getFunction()->max_value_id;
+        handler_func->max_local_slot_id = handler_builder.getFunction()->max_local_slot_id;
+
+        // Compute slot IDs for handler-specific locals (parent slots already pre-seeded)
+        handler_func->computeSlotIdsAndEmbed();
+
+        // Attach compiled handler IR to instruction
+        handler.obe_inst->handler_ir = std::move(handler_func);
+        compiled_count++;
+    }
+
+    return compiled_count;
 }
 
 int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
