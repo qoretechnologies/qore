@@ -28,6 +28,8 @@
 #include "QC_LogisticRegression.h"
 #include "ml_serialization.h"
 
+#include <LBFGS.h>
+
 #include <algorithm>
 #include <set>
 
@@ -117,53 +119,63 @@ void QoreLogisticRegression::fit(const MatrixXd& X, const VectorXd& y, Exception
             }
         }
 
-        // Gradient descent for this binary classifier
-        RowVectorXd w = RowVectorXd::Zero(n_features);
-        double b = 0.0;
+        // L-BFGS quasi-Newton optimizer for each binary classifier
+        int n_params = fit_intercept ? n_features + 1 : n_features;
+        VectorXd params = VectorXd::Zero(n_params);
 
-        for (int iter = 0; iter < max_iterations; ++iter) {
-            if (qore_check_cancel(xsink, "LogisticRegression fit")) {
-                return;
-            }
+        auto objective = [&](const VectorXd& x, VectorXd& grad) -> double {
+            RowVectorXd w_local = x.head(n_features).transpose();
+            double b_local = fit_intercept ? x(n_features) : 0.0;
 
-            // Compute predictions: sigmoid(X * w^T + b)
-            VectorXd z = (X * w.transpose()).array() + b;
+            // Forward pass: sigmoid(X * w^T + b)
+            VectorXd z = (X * w_local.transpose()).array() + b_local;
             VectorXd predictions(n_samples);
             for (int i = 0; i < n_samples; ++i) {
                 predictions(i) = sigmoid(z(i));
             }
 
-            // Compute error
-            VectorXd error = predictions - y_binary;
+            // Log-loss: -(1/n) * sum(y*log(p) + (1-y)*log(1-p))
+            double loss = 0.0;
+            for (int i = 0; i < n_samples; ++i) {
+                double p = std::clamp(predictions(i), 1e-15, 1.0 - 1e-15);
+                loss -= y_binary(i) * std::log(p) + (1.0 - y_binary(i)) * std::log(1.0 - p);
+            }
+            loss /= n_samples;
 
-            // Compute gradients
-            // gradient_w = (1/n) * X^T * error + regularization * w (for L2)
-            RowVectorXd gradient_w = (X.transpose() * error).transpose() / n_samples;
+            // L2 regularization
             if (penalty == "l2") {
-                gradient_w += regularization * w;
+                loss += 0.5 * regularization * w_local.squaredNorm();
             }
 
-            double gradient_b = 0.0;
+            // Gradient
+            VectorXd error = predictions - y_binary;
+            VectorXd grad_w = X.transpose() * error / n_samples;
+            if (penalty == "l2") {
+                grad_w += regularization * w_local.transpose();
+            }
+            grad.head(n_features) = grad_w;
             if (fit_intercept) {
-                gradient_b = error.mean();
+                grad(n_features) = error.mean();
             }
 
-            // Update weights
-            RowVectorXd old_w = w;
-            w -= learning_rate * gradient_w;
-            if (fit_intercept) {
-                b -= learning_rate * gradient_b;
-            }
+            return loss;
+        };
 
-            // Check convergence: max absolute weight change
-            double max_change = (w - old_w).array().abs().maxCoeff();
-            if (max_change < tolerance) {
-                break;
-            }
+        LBFGSpp::LBFGSParam<double> lbfgs_params;
+        lbfgs_params.max_iterations = max_iterations;
+        lbfgs_params.epsilon = tolerance;
+        lbfgs_params.m = 10;
+
+        LBFGSpp::LBFGSSolver<double> lbfgs_solver(lbfgs_params);
+        double final_loss;
+        try {
+            lbfgs_solver.minimize(objective, params, final_loss);
+        } catch (const std::exception&) {
+            // L-BFGS may throw on convergence issues; use current params
         }
 
-        weights.row(m) = w;
-        intercepts(m) = b;
+        weights.row(m) = params.head(n_features).transpose();
+        intercepts(m) = fit_intercept ? params(n_features) : 0.0;
     }
 
     fitted = true;

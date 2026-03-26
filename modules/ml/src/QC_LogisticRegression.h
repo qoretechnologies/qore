@@ -39,7 +39,7 @@ DLLLOCAL extern QoreClass* QC_LOGISTICREGRESSION;
 DLLLOCAL void preinitLogisticRegressionClass();
 DLLLOCAL QoreClass* initLogisticRegressionClass(QoreNamespace& ns);
 
-//! Logistic regression implementation class using gradient descent
+//! Logistic regression using L-BFGS optimizer (batch) and gradient descent (online)
 class QoreLogisticRegression : public AbstractPrivateData {
 public:
     //! Constructor with hyperparameters
