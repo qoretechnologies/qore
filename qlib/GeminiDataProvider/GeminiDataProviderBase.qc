@@ -102,6 +102,9 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
     *hash<string, bool> getSupportedReferenceData() {
         return {
             "models": True,
+            "files": True,
+            "cached_contents": True,
+            "file_search_stores": True,
         };
     }
 
@@ -109,6 +112,9 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
             case "models": return getReferenceModels();
+            case "files": return getReferenceFiles();
+            case "cached_contents": return getReferenceCachedContents();
+            case "file_search_stores": return getReferenceFileSearchStores();
         }
     }
 
@@ -125,6 +131,117 @@ public class GeminiDataProviderBase inherits DataProvider::AbstractDataProvider 
             };
         }
         return rv;
+    }
+
+    #! Returns available files
+    private *list<hash<AllowedValueInfo>> getReferenceFiles() {
+        list<hash<AllowedValueInfo>> rv;
+        *list<auto> files = doRestCommand("GET", "files").body."files";
+        foreach hash<auto> file in (files) {
+            string name = file.name;
+            string display = file.displayName ?? name;
+            rv += <AllowedValueInfo>{
+                "display_name": display,
+                "short_desc": file.mimeType ?? display,
+                "value": string(name),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available cached contents
+    private *list<hash<AllowedValueInfo>> getReferenceCachedContents() {
+        list<hash<AllowedValueInfo>> rv;
+        *list<auto> items = doRestCommand("GET", "cachedContents").body."cachedContents";
+        foreach hash<auto> item in (items) {
+            string name = item.name;
+            string display = item.displayName ?? name;
+            rv += <AllowedValueInfo>{
+                "display_name": display,
+                "short_desc": item.model ?? display,
+                "value": string(name),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns available file search stores
+    private *list<hash<AllowedValueInfo>> getReferenceFileSearchStores() {
+        list<hash<AllowedValueInfo>> rv;
+        *list<auto> stores = doRestCommand("GET", "fileSearchStores").body."fileSearchStores";
+        foreach hash<auto> store in (stores) {
+            string name = store.name;
+            string short_name = name =~ /^fileSearchStores\// ? name.substr(17) : name;
+            string display = store.displayName ?? short_name;
+            rv += <AllowedValueInfo>{
+                "display_name": display,
+                "short_desc": display,
+                "value": string(name),
+            };
+        }
+        return rv;
+    }
+
+    #! Uploads a file using the Gemini resumable upload protocol and returns the file info
+    /** @param display_name the display name for the file
+        @param mime_type the MIME type of the file
+        @param base64_content the file content as a base64-encoded string
+
+        @return the file info hash from the Gemini API
+    */
+    private hash<auto> uploadFile(string display_name, string mime_type, string base64_content) {
+        binary file_bytes = parse_base64_string(base64_content);
+        int num_bytes = file_bytes.size();
+
+        # Get default headers (includes API key)
+        hash<auto> default_hdr = rest.getDefaultHeaders();
+
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+
+        # Phase 1: Initiate resumable upload
+        hash<auto> phase1_hdr = default_hdr + {
+            "content-type": "application/json",
+            "x-goog-upload-protocol": "resumable",
+            "x-goog-upload-command": "start",
+            "x-goog-upload-header-content-length": string(num_bytes),
+            "x-goog-upload-header-content-type": mime_type,
+        };
+        string metadata = make_json({"file": {"display_name": display_name}});
+        HttpClientIo::HttpClientStreamHandle stream1 = mgr.acquireStream(rest.getUrl());
+        hash<auto> phase1_resp = stream1.request("POST", "/upload/v1beta/files", phase1_hdr, metadata);
+        if (phase1_resp.status_code != 200) {
+            throw "UPLOAD-ERROR", sprintf("upload initiation failed with HTTP %d: %s",
+                phase1_resp.status_code, phase1_resp.body);
+        }
+
+        # Get upload URL from response headers
+        *string upload_url = phase1_resp.headers."x-goog-upload-url";
+        if (!upload_url) {
+            throw "UPLOAD-ERROR", "no X-Goog-Upload-URL in upload initiation response";
+        }
+
+        # Phase 2: Upload file bytes to the upload URL
+        hash<auto> url_parts = parse_url(upload_url);
+        string upload_path = url_parts.path;
+        if (url_parts.query) {
+            upload_path += "?" + url_parts.query;
+        }
+        hash<auto> phase2_hdr = default_hdr + {
+            "content-length": string(num_bytes),
+            "x-goog-upload-offset": "0",
+            "x-goog-upload-command": "upload, finalize",
+            "content-type": mime_type,
+        };
+        HttpClientIo::HttpClientStreamHandle stream2 = mgr.acquireStream(rest.getUrl());
+        hash<auto> phase2_resp = stream2.request("PUT", upload_path, phase2_hdr, file_bytes);
+        if (phase2_resp.status_code != 200) {
+            throw "UPLOAD-ERROR", sprintf("file upload failed with HTTP %d: %s",
+                phase2_resp.status_code, phase2_resp.body);
+        }
+
+        # Parse JSON response
+        hash<auto> result = parse_json(phase2_resp.body);
+        return result."file" ?? result;
     }
 
     #! Builds a model-qualified API path

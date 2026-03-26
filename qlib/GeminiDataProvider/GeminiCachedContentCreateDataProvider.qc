@@ -62,6 +62,22 @@ public class GeminiCachedContentCreateDataProvider inherits GeminiDataProviderBa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # Handle prompt shortcut
+        if (req.prompt) {
+            string prompt = remove req.prompt;
+            req.contents = ({
+                "role": "user",
+                "parts": ({"text": prompt},),
+            },);
+        } else if (!req.contents) {
+            throw "CACHED-CONTENT-ERROR", "either 'prompt' or 'contents' must be provided";
+        }
+        # Wrap systemInstruction string into Content format
+        if (req.systemInstruction.typeCode() == NT_STRING) {
+            req.systemInstruction = {"parts": ({"text": req.systemInstruction},)};
+        } else if (req.systemInstruction) {
+            delete req.systemInstruction.role;
+        }
         return doRestCommand("POST", "cachedContents", req).body;
     }
 

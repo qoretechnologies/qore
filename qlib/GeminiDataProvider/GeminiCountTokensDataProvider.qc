@@ -63,6 +63,16 @@ public class GeminiCountTokensDataProvider inherits GeminiDataProviderBase {
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string model = remove req.model;
+        # Handle prompt shortcut
+        if (req.prompt) {
+            string prompt = remove req.prompt;
+            req.contents = ({
+                "role": "user",
+                "parts": ({"text": prompt},),
+            },);
+        } else if (!req.contents) {
+            throw "COUNT-TOKENS-ERROR", "either 'prompt' or 'contents' must be provided";
+        }
         string path = buildModelPath(model, "countTokens");
         return doRestCommand("POST", path, req).body;
     }

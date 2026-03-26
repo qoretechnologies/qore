@@ -52,6 +52,10 @@ public class GeminiCachedContentUpdateDataProvider inherits GeminiDataProviderBa
         hash<auto> content_info;
     }
 
+    #! Creates the object from a REST client (standalone)
+    constructor(RestClientIo::RestClientIo rest) : GeminiDataProviderBase(rest) {
+    }
+
     #! Creates the object from the arguments
     constructor(RestClientIo::RestClientIo rest, hash<auto> content_info) : GeminiDataProviderBase(rest) {
         self.content_info = content_info;
@@ -64,7 +68,14 @@ public class GeminiCachedContentUpdateDataProvider inherits GeminiDataProviderBa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string name = content_info.name;
+        string name;
+        if (req.cachedContent) {
+            name = remove req.cachedContent;
+        } else if (content_info.name) {
+            name = content_info.name;
+        } else {
+            throw "UPDATE-CACHED-CONTENT-ERROR", "missing 'cachedContent' option";
+        }
         if (name !~ /^cachedContents\//) {
             name = "cachedContents/" + name;
         }

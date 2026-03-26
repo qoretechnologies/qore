@@ -41,15 +41,19 @@ public class GeminiCachedContentDeleteDataProvider inherits GeminiDataProviderBa
         });
 
         #! Request type
-        const RequestType = AbstractDataProviderTypeMap."nothing";
+        const RequestType = new GeminiCachedContentDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = AbstractDataProviderTypeMap."hash";
+        const ResponseType = new GeminiDeleteResponseDataType();
     }
 
     private {
         #! The cached content info
         hash<auto> content_info;
+    }
+
+    #! Creates the object from a REST client (standalone)
+    constructor(RestClientIo::RestClientIo rest) : GeminiDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -64,12 +68,19 @@ public class GeminiCachedContentDeleteDataProvider inherits GeminiDataProviderBa
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string name = content_info.name;
+        string name;
+        if (req.cachedContent) {
+            name = remove req.cachedContent;
+        } else if (content_info.name) {
+            name = content_info.name;
+        } else {
+            throw "DELETE-CACHED-CONTENT-ERROR", "missing 'cachedContent' option";
+        }
         if (name !~ /^cachedContents\//) {
             name = "cachedContents/" + name;
         }
         doRestCommand("DELETE", name);
-        return {"deleted": True, "name": content_info.name};
+        return {"deleted": True, "name": name};
     }
 
     #! Returns the description of a successful request message, if any

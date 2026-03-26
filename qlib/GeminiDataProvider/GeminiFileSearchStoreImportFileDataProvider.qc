@@ -44,12 +44,16 @@ public class GeminiFileSearchStoreImportFileDataProvider inherits GeminiDataProv
         const RequestType = new GeminiFileSearchStoreImportFileRequestDataType();
 
         #! Response type
-        const ResponseType = AbstractDataProviderTypeMap."hash";
+        const ResponseType = new GeminiImportFileResponseDataType();
     }
 
     private {
         #! The store info
         hash<auto> store_info;
+    }
+
+    #! Creates the object from a REST client (standalone)
+    constructor(RestClientIo::RestClientIo rest) : GeminiDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -64,9 +68,25 @@ public class GeminiFileSearchStoreImportFileDataProvider inherits GeminiDataProv
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string name = store_info.name;
+        # Get store name from request or from parent store context
+        string name;
+        if (req.fileSearchStore) {
+            name = remove req.fileSearchStore;
+        } else if (store_info.name) {
+            name = store_info.name;
+        } else {
+            throw "IMPORT-FILE-ERROR", "missing 'fileSearchStore' option";
+        }
         if (name !~ /^fileSearchStores\//) {
             name = "fileSearchStores/" + name;
+        }
+        # Handle file upload: upload first, then import
+        if (req."file") {
+            hash<auto> file = remove req."file";
+            hash<auto> file_info = uploadFile(file.name, file.mime_type, file.content);
+            req.fileName = file_info.name;
+        } else if (!req.fileName) {
+            throw "IMPORT-FILE-ERROR", "either 'file' or 'fileName' must be provided";
         }
         return doRestCommand("POST", name + ":importFile", req).body;
     }

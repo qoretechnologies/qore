@@ -63,6 +63,16 @@ public class GeminiEmbedContentDataProvider inherits GeminiDataProviderBase {
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string model = remove req.model;
+        # Handle text shortcut
+        if (req.text) {
+            string text = remove req.text;
+            req.content = {
+                "role": "user",
+                "parts": ({"text": text},),
+            };
+        } else if (!req.content) {
+            throw "EMBED-CONTENT-ERROR", "either 'text' or 'content' must be provided";
+        }
         string path = buildModelPath(model, "embedContent");
         hash<auto> resp = doRestCommand("POST", path, req).body;
         return resp.embedding ?? resp;

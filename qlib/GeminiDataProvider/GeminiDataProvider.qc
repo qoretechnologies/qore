@@ -46,13 +46,18 @@ public class GeminiDataProvider inherits GeminiDataProviderBase {
             "batch-embed": Class::forName("GeminiDataProvider::GeminiBatchEmbedContentsDataProvider"),
             "cached-contents": Class::forName("GeminiDataProvider::GeminiCachedContentsDataProvider"),
             "count-tokens": Class::forName("GeminiDataProvider::GeminiCountTokensDataProvider"),
+            "delete-cached-content": Class::forName("GeminiDataProvider::GeminiCachedContentDeleteDataProvider"),
+            "delete-file": Class::forName("GeminiDataProvider::GeminiFileDeleteDataProvider"),
+            "delete-file-search-store": Class::forName("GeminiDataProvider::GeminiFileSearchStoreDeleteDataProvider"),
             "embed-content": Class::forName("GeminiDataProvider::GeminiEmbedContentDataProvider"),
             "file-search-stores": Class::forName("GeminiDataProvider::GeminiFileSearchStoresDataProvider"),
             "files": Class::forName("GeminiDataProvider::GeminiFilesDataProvider"),
             "generate-content": Class::forName("GeminiDataProvider::GeminiGenerateContentDataProvider"),
+            "import-file-to-store": Class::forName("GeminiDataProvider::GeminiFileSearchStoreImportFileDataProvider"),
             "models": Class::forName("GeminiDataProvider::GeminiModelsDataProvider"),
             "simple-chat": Class::forName("GeminiDataProvider::GeminiSimpleChatDataProvider"),
             "stream-content": Class::forName("GeminiDataProvider::GeminiStreamContentDataProvider"),
+            "update-cached-content": Class::forName("GeminiDataProvider::GeminiCachedContentUpdateDataProvider"),
             "upload-file": Class::forName("GeminiDataProvider::GeminiFileUploadDataProvider"),
         };
     }

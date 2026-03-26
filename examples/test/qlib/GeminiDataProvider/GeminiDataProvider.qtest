@@ -4,30 +4,12 @@
 %modern
 %exec-class GeminiDataProviderTest
 %requires QUnit
-
-%try-module GeminiDataProvider
-%define NoGeminiDataProvider
-%endtry
-
-%try-module GeminiRestClient
-%define NoGeminiRestClient
-%endtry
-
-%try-module RestClientIo
-%define NoRestClientIo
-%endtry
-
-%try-module HttpClientIo
-%define NoHttpClientIo
-%endtry
-
-%try-module ConnectionProvider
-%define NoConnectionProvider
-%endtry
-
-%try-module DataProvider
-%define NoDataProvider
-%endtry
+%requires GeminiDataProvider
+%requires GeminiRestClient
+%requires RestClientIo
+%requires HttpClientIo
+%requires ConnectionProvider
+%requires DataProvider
 
 %try-module json
 %define NoJson
@@ -82,9 +64,6 @@ class GeminiDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("GeminiDataProviderTest", "1.0") {
-%ifdef NoGeminiDataProvider
-        testSkip("GeminiDataProvider module not available");
-%endif
         addTestCase("provider structure", \providerStructureTest());
         addTestCase("data types", \dataTypesTest());
         addTestCase("generate content", \generateContentTest());
@@ -110,7 +89,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
     providerStructureTest() {
         assertEq("gemini", dp.getName());
         *list<string> children = dp.getChildProviderNames();
-        assertTrue(children.size() >= 10);
+        assertTrue(children.size() >= 15);
         assertEq(True, (children.contains("generate-content")));
         assertEq(True, (children.contains("simple-chat")));
         assertEq(True, (children.contains("stream-content")));
@@ -122,6 +101,11 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq(True, (children.contains("upload-file")));
         assertEq(True, (children.contains("cached-contents")));
         assertEq(True, (children.contains("file-search-stores")));
+        assertEq(True, (children.contains("delete-file")));
+        assertEq(True, (children.contains("delete-cached-content")));
+        assertEq(True, (children.contains("delete-file-search-store")));
+        assertEq(True, (children.contains("import-file-to-store")));
+        assertEq(True, (children.contains("update-cached-content")));
     }
 
     dataTypesTest() {
@@ -183,6 +167,10 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq(True, file_info.getFields().hasKey("name"));
         assertEq(True, file_info.getFields().hasKey("mimeType"));
 
+        GeminiDataProvider::GeminiFileUploadRequestDataType upload_req();
+        assertEq(True, upload_req.getFields().hasKey("file"));
+        assertEq(True, upload_req.getFields().hasKey("display_name"));
+
         GeminiDataProvider::GeminiStreamEventDataType stream_evt();
         assertEq(True, stream_evt.getFields().hasKey("type"));
         assertEq(True, stream_evt.getFields().hasKey("event"));
@@ -204,6 +192,7 @@ class GeminiDataProviderTest inherits QUnit::Test {
             },
         };
 
+        # Test with full contents
         AbstractDataProvider child = dp.getChildProviderEx("generate-content");
         auto resp = child.doRequest({
             "model": "gemini-2.5-flash",
@@ -214,6 +203,18 @@ class GeminiDataProviderTest inherits QUnit::Test {
         });
         assertEq("POST", fake.last_method);
         assertTrue(fake.last_path.find("models/gemini-2.5-flash:generateContent") >= 0);
+        assertEq(True, resp.hasKey("candidates"));
+
+        # Test with prompt shortcut
+        resp = child.doRequest({
+            "model": "gemini-2.5-flash",
+            "prompt": "Hello",
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("models/gemini-2.5-flash:generateContent") >= 0);
+        # Verify prompt was wrapped into contents
+        assertEq("user", fake.last_request.contents[0].role);
+        assertEq("Hello", fake.last_request.contents[0].parts[0].text);
         assertEq(True, resp.hasKey("candidates"));
     }
 
@@ -360,6 +361,28 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertTrue(fake.last_path.find("cachedContents") >= 0);
         assertEq("cachedContents/test-123", resp.name);
+
+        # Test listing and update cached content
+        fake.response_body = {
+            "cachedContents": (
+                {"name": "cachedContents/test-123", "displayName": "Test cache"},
+            ),
+        };
+        *list<string> cache_names = cached.getChildProviderNames();
+        assertTrue(cache_names.contains("test-123"), "cached content should appear in listing");
+
+        # getChildProviderEx refetches the listing, so keep the listing response
+        AbstractDataProvider cache_dp = cached.getChildProviderEx("test-123");
+        AbstractDataProvider update = cache_dp.getChildProviderEx("update");
+        fake.response_body = {
+            "name": "cachedContents/test-123",
+            "model": "models/gemini-2.5-flash",
+            "displayName": "Test cache",
+        };
+        auto update_resp = update.doRequest({"cachedContent": "cachedContents/test-123", "ttl": "600s"});
+        assertEq("PATCH", fake.last_method);
+        assertTrue(fake.last_path.find("cachedContents/test-123") >= 0);
+        assertEq("cachedContents/test-123", update_resp.name);
     }
 
     fileSearchStoresTest() {
@@ -377,6 +400,28 @@ class GeminiDataProviderTest inherits QUnit::Test {
         assertEq("POST", fake.last_method);
         assertTrue(fake.last_path.find("fileSearchStores") >= 0);
         assertEq("fileSearchStores/store-123", resp.name);
+
+        # Test import file to store
+        fake.response_body = {
+            "fileSearchStores": (
+                {"name": "fileSearchStores/store-123", "displayName": "My Store"},
+            ),
+        };
+        *list<string> store_names = stores.getChildProviderNames();
+        assertTrue(store_names.contains("store-123"), "store should appear in listing");
+
+        # getChildProviderEx refetches the listing, so keep the listing response
+        AbstractDataProvider store_dp = stores.getChildProviderEx("store-123");
+        AbstractDataProvider import_file = store_dp.getChildProviderEx("import-file");
+        fake.response_body = {
+            "name": "fileSearchStores/store-123/files/file-456",
+        };
+        auto import_resp = import_file.doRequest({
+            "fileSearchStore": "fileSearchStores/store-123",
+            "fileName": "files/abc-123",
+        });
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_path.find("fileSearchStores/store-123:importFile") >= 0);
     }
 
     exampleEventDataTest() {
@@ -389,9 +434,6 @@ class GeminiDataProviderTest inherits QUnit::Test {
     }
 
     connectionSchemeTest() {
-%ifdef NoConnectionProvider
-        testSkip("ConnectionProvider module not available");
-%endif
         hash<auto> scheme = ConnectionSchemeCache::getScheme("gemini");
         assertEq(True, scheme.hasKey("display_name"));
         assertEq("apikey", scheme.required_options);
@@ -451,6 +493,64 @@ class GeminiDataProviderTest inherits QUnit::Test {
             },
         });
         assertTrue(embed_resp.values.size() > 0, "should have embedding values");
+
+        # Test file upload and delete lifecycle
+        AbstractDataProvider upload = live_dp.getChildProviderEx("upload-file");
+        auto upload_resp = upload.doRequest({
+            "file": {
+                "name": "test-gemini-dp.txt",
+                "content": make_base64_string("Hello from Gemini data provider test"),
+                "mime_type": "text/plain",
+            },
+        });
+        assertTrue(upload_resp.name.val(), "uploaded file should have a name");
+        assertTrue(upload_resp.uri.val(), "uploaded file should have a URI");
+
+        # Verify file appears in listing
+        AbstractDataProvider files = live_dp.getChildProviderEx("files");
+        *list<string> file_names = files.getChildProviderNames();
+        string short_name = upload_resp.name =~ /^files\// ? upload_resp.name.substr(6) : upload_resp.name;
+        assertTrue(file_names.contains(short_name), "uploaded file should appear in listing");
+
+        # Delete the uploaded file
+        AbstractDataProvider file_dp = files.getChildProviderEx(short_name);
+        AbstractDataProvider del = file_dp.getChildProviderEx("delete");
+        auto del_resp = del.doRequest(NOTHING);
+        assertEq(True, del_resp.deleted, "file should be deleted");
+
+        # Test cached content lifecycle: create -> update -> delete
+        AbstractDataProvider cached = live_dp.getChildProviderEx("cached-contents");
+        AbstractDataProvider cache_create = cached.getChildProviderEx("create");
+        auto cache_resp = cache_create.doRequest({
+            "model": "models/gemini-2.5-flash",
+            "contents": ({
+                "role": "user",
+                "parts": ({"text": "This is cached test content for the Gemini data provider test"},),
+            },),
+            "displayName": "DP Test Cache",
+            "ttl": "300s",
+        });
+        assertTrue(cache_resp.name.val(), "cached content should have a name");
+        assertEq("DP Test Cache", cache_resp.displayName, "cached content display name should match");
+
+        # Verify cached content appears in listing
+        *list<string> cache_names = cached.getChildProviderNames();
+        string cache_short = cache_resp.name =~ /^cachedContents\//
+            ? cache_resp.name.substr(15) : cache_resp.name;
+        assertTrue(cache_names.contains(cache_short), "cached content should appear in listing");
+
+        # Update cached content TTL
+        AbstractDataProvider cache_dp = cached.getChildProviderEx(cache_short);
+        AbstractDataProvider cache_update = cache_dp.getChildProviderEx("update");
+        auto update_resp = cache_update.doRequest({
+            "ttl": "600s",
+        });
+        assertTrue(update_resp.name.val(), "updated cached content should have a name");
+
+        # Delete cached content
+        AbstractDataProvider cache_del = cache_dp.getChildProviderEx("delete");
+        auto cache_del_resp = cache_del.doRequest(NOTHING);
+        assertEq(True, cache_del_resp.deleted, "cached content should be deleted");
 
         # Test connection ping
         GeminiRestClient::GeminiRestConnection conn({

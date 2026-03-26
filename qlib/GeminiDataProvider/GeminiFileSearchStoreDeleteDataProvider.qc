@@ -41,15 +41,19 @@ public class GeminiFileSearchStoreDeleteDataProvider inherits GeminiDataProvider
         });
 
         #! Request type
-        const RequestType = AbstractDataProviderTypeMap."nothing";
+        const RequestType = new GeminiFileSearchStoreDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = AbstractDataProviderTypeMap."hash";
+        const ResponseType = new GeminiDeleteResponseDataType();
     }
 
     private {
         #! The store info
         hash<auto> store_info;
+    }
+
+    #! Creates the object from a REST client (standalone)
+    constructor(RestClientIo::RestClientIo rest) : GeminiDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -64,12 +68,19 @@ public class GeminiFileSearchStoreDeleteDataProvider inherits GeminiDataProvider
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string name = store_info.name;
+        string name;
+        if (req.fileSearchStore) {
+            name = remove req.fileSearchStore;
+        } else if (store_info.name) {
+            name = store_info.name;
+        } else {
+            throw "DELETE-FILE-SEARCH-STORE-ERROR", "missing 'fileSearchStore' option";
+        }
         if (name !~ /^fileSearchStores\//) {
             name = "fileSearchStores/" + name;
         }
         doRestCommand("DELETE", name);
-        return {"deleted": True, "name": store_info.name};
+        return {"deleted": True, "name": name};
     }
 
     #! Returns the description of a successful request message, if any

@@ -179,6 +179,32 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
 
     #! Starts streaming with the given request
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # Handle prompt shortcut: wrap into contents structure
+        if (req.prompt) {
+            string prompt = remove req.prompt;
+            req.contents = ({
+                "role": "user",
+                "parts": ({"text": prompt},),
+            },);
+        } else if (!req.contents) {
+            throw "STREAM-CONTENT-ERROR", "either 'prompt' or 'contents' must be provided";
+        }
+        # Auto-fill missing role on content items (default to "user")
+        req.contents = map $1 + ($1.role ? {} : {"role": "user"}), req.contents;
+        # Wrap systemInstruction string into Content format
+        if (req.systemInstruction.typeCode() == NT_STRING) {
+            req.systemInstruction = {"parts": ({"text": req.systemInstruction},)};
+        } else if (req.systemInstruction) {
+            delete req.systemInstruction.role;
+        }
+        # Map fileSearchStore to tools structure
+        if (req.fileSearchStore) {
+            string store = remove req.fileSearchStore;
+            if (store !~ /^fileSearchStores\//) {
+                store = "fileSearchStores/" + store;
+            }
+            req.tools = ({"file_search": {"file_search_store_names": (store,)}},);
+        }
         stream_req = req;
         if (ready && !started) {
             start();
@@ -201,16 +227,22 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
 
     #! Stops the SSE thread
     private stop() {
-        m.lock();
-        on_exit m.unlock();
-        if (!started) {
-            return;
+        bool do_wait;
+        {
+            m.lock();
+            on_exit m.unlock();
+            if (!started || stop_flag) {
+                return;
+            }
+            stop_flag = True;
+            if (stream) {
+                stream.close();
+            }
+            do_wait = True;
         }
-        stop_flag = True;
-        if (stream) {
-            stream.close();
+        if (do_wait) {
+            cnt.wait();
         }
-        cnt.wait();
     }
 
     #! SSE event loop
@@ -236,9 +268,13 @@ public class GeminiStreamContentDataProvider inherits GeminiDataProviderBase, Da
             while (!stop_flag) {
                 *hash<SseMessageInfo> evt = stream.readEvent(1s);
                 if (!evt) {
-                    # Stream ended (no [DONE] sentinel in Gemini API)
-                    notifyObservers(EVENT_GEMINI_STREAM, {"type": "done"});
-                    break;
+                    if (stream.isDone()) {
+                        # Stream ended (no [DONE] sentinel in Gemini API)
+                        notifyObservers(EVENT_GEMINI_STREAM, {"type": "done"});
+                        break;
+                    }
+                    # Timeout — server is still generating, keep polling
+                    continue;
                 }
                 hash<auto> payload = parseEventData(evt);
                 if (payload) {

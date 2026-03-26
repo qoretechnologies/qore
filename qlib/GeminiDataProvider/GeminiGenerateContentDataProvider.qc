@@ -63,6 +63,32 @@ public class GeminiGenerateContentDataProvider inherits GeminiDataProviderBase {
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string model = remove req.model;
+        # Handle prompt shortcut: wrap into contents structure
+        if (req.prompt) {
+            string prompt = remove req.prompt;
+            req.contents = ({
+                "role": "user",
+                "parts": ({"text": prompt},),
+            },);
+        } else if (!req.contents) {
+            throw "GENERATE-CONTENT-ERROR", "either 'prompt' or 'contents' must be provided";
+        }
+        # Auto-fill missing role on content items (default to "user")
+        req.contents = map $1 + ($1.role ? {} : {"role": "user"}), req.contents;
+        # Wrap systemInstruction string into Content format
+        if (req.systemInstruction.typeCode() == NT_STRING) {
+            req.systemInstruction = {"parts": ({"text": req.systemInstruction},)};
+        } else if (req.systemInstruction) {
+            delete req.systemInstruction.role;
+        }
+        # Map fileSearchStore to tools structure
+        if (req.fileSearchStore) {
+            string store = remove req.fileSearchStore;
+            if (store !~ /^fileSearchStores\//) {
+                store = "fileSearchStores/" + store;
+            }
+            req.tools = ({"file_search": {"file_search_store_names": (store,)}},);
+        }
         string path = buildModelPath(model, "generateContent");
         return doRestCommand("POST", path, req).body;
     }

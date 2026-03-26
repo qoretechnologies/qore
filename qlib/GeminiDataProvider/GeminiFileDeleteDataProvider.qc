@@ -41,15 +41,19 @@ public class GeminiFileDeleteDataProvider inherits GeminiDataProviderBase {
         });
 
         #! Request type
-        const RequestType = AbstractDataProviderTypeMap."nothing";
+        const RequestType = new GeminiFileDeleteRequestDataType();
 
         #! Response type
-        const ResponseType = AbstractDataProviderTypeMap."hash";
+        const ResponseType = new GeminiDeleteResponseDataType();
     }
 
     private {
         #! The file info
         hash<auto> file_info;
+    }
+
+    #! Creates the object from a REST client (standalone)
+    constructor(RestClientIo::RestClientIo rest) : GeminiDataProviderBase(rest) {
     }
 
     #! Creates the object from the arguments
@@ -64,12 +68,19 @@ public class GeminiFileDeleteDataProvider inherits GeminiDataProviderBase {
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string name = file_info.name;
+        string name;
+        if (req.fileName) {
+            name = remove req.fileName;
+        } else if (file_info.name) {
+            name = file_info.name;
+        } else {
+            throw "DELETE-FILE-ERROR", "missing 'fileName' option";
+        }
         if (name !~ /^files\//) {
             name = "files/" + name;
         }
         doRestCommand("DELETE", name);
-        return {"deleted": True, "name": file_info.name};
+        return {"deleted": True, "name": name};
     }
 
     #! Returns the description of a successful request message, if any

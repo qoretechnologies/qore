@@ -199,7 +199,10 @@ public class GeminiGenerationConfigDataType inherits HashDataType {
                 "display_name": "Response Schema",
                 "short_desc": "Schema for structured output",
                 "desc": "Output schema for the generated candidate text when `responseMimeType` is "
-                    "`application/json`",
+                    "`application/json`. Uses OpenAPI 3.0 Schema format with uppercase type names "
+                    "(e.g., `STRING`, `OBJECT`, `ARRAY`, `NUMBER`, `INTEGER`, `BOOLEAN`). Supports "
+                    "`properties`, `items`, `required`, `enum`, `description`, `nullable`, and numeric "
+                    "constraints (`minimum`, `maximum`)",
                 "type": AbstractDataProviderTypeMap."*hash",
             },
         };
@@ -295,8 +298,34 @@ public class GeminiCandidateDataType inherits HashDataType {
             "finishReason": {
                 "display_name": "Finish Reason",
                 "short_desc": "The reason the model stopped generating",
-                "desc": "The reason the model stopped generating tokens: `STOP`, `MAX_TOKENS`, `SAFETY`, "
-                    "`RECITATION`, or `OTHER`",
+                "desc": "The reason the model stopped generating tokens",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Stop",
+                        "value": "STOP",
+                        "desc": "Natural stop point reached",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Max Tokens",
+                        "value": "MAX_TOKENS",
+                        "desc": "Maximum token limit reached",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Safety",
+                        "value": "SAFETY",
+                        "desc": "Content filtered for safety reasons",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Recitation",
+                        "value": "RECITATION",
+                        "desc": "Content filtered for recitation reasons",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Other",
+                        "value": "OTHER",
+                        "desc": "Other reason",
+                    },
+                ),
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "index": {
@@ -361,7 +390,23 @@ public class GeminiGenerateContentRequestDataType inherits HashDataType {
                 "desc": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "ref_data": "models",
+                "example_value": "gemini-2.5-flash",
+                "attr": {
+                    "ref_data": "models",
+                },
+            },
+            "prompt": {
+                "display_name": "Prompt",
+                "short_desc": "Simple text prompt for single-turn generation",
+                "desc": "A simple text prompt for single-turn generation. The provider automatically wraps this "
+                    "into the `contents` message format. Use this for simple requests; use `contents` instead "
+                    "for multi-turn conversations or multimodal input",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "Explain quantum computing in simple terms",
+                "attr": {
+                    "required_groups": ("input",),
+                    "exclusive_with": "contents",
+                },
             },
         };
     }
@@ -371,19 +416,24 @@ public class GeminiGenerateContentRequestDataType inherits HashDataType {
         addField(new QoreDataField({
             "name": "contents",
             "display_name": "Contents",
-            "short_desc": "The conversation contents",
+            "short_desc": "The conversation contents for multi-turn or multimodal input",
             "desc": "The content of the current conversation with the model. For single-turn queries, this is a "
                 "single message. For multi-turn queries, this is a repeated field that contains conversation "
-                "history and the latest request",
-            "type": new ListDataType("ContentList", new GeminiContentDataType()),
-            "required": True,
+                "history and the latest request. For simple text prompts, use the `prompt` field instead",
+            "type": new ListDataType("ContentList", new GeminiContentDataType(), True),
+            "attr": {
+                "required_groups": ("input",),
+                "exclusive_with": "prompt",
+            },
         }));
         addField(new QoreDataField({
             "name": "systemInstruction",
             "display_name": "System Instruction",
             "short_desc": "System instruction for the model",
-            "desc": "Optional system instruction that sets the behavior and context for the model",
-            "type": new GeminiContentDataType(AutoHashOrNothingType),
+            "desc": "Optional system instruction text that sets the behavior and context for the model. "
+                "For example: `You are a helpful customer support agent for TechStore`",
+            "type": AbstractDataProviderTypeMap."*string",
+            "example_value": "You are a helpful assistant. Be concise and accurate.",
         }));
         addField(new QoreDataField({
             "name": "generationConfig",
@@ -398,6 +448,17 @@ public class GeminiGenerateContentRequestDataType inherits HashDataType {
             "short_desc": "Safety settings for content filtering",
             "desc": "A list of unique safety settings for blocking unsafe content",
             "type": new ListDataType("SafetySettingList", new GeminiSafetySettingDataType(), True),
+        }));
+        addField(new QoreDataField({
+            "name": "fileSearchStore",
+            "display_name": "File Search Store",
+            "short_desc": "File search store for RAG grounding",
+            "desc": "The name of a file search store to use for retrieval-augmented generation (RAG). "
+                "The model will search the store's documents to ground its response with relevant content",
+            "type": AbstractDataProviderTypeMap."*string",
+            "attr": {
+                "ref_data": "file_search_stores",
+            },
         }));
     }
 }
@@ -445,7 +506,10 @@ public class GeminiSimpleChatRequestDataType inherits HashDataType {
                 "desc": "The model name to use for generation (e.g., `gemini-2.5-flash`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "ref_data": "models",
+                "example_value": "gemini-2.5-flash",
+                "attr": {
+                    "ref_data": "models",
+                },
             },
             "role": {
                 "display_name": "Role",
@@ -460,6 +524,7 @@ public class GeminiSimpleChatRequestDataType inherits HashDataType {
                 "desc": "The text content of the message to send to the model",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "example_value": "Explain quantum computing in simple terms",
             },
             "temperature": {
                 "display_name": "Temperature",
@@ -551,7 +616,21 @@ public class GeminiEmbedContentRequestDataType inherits HashDataType {
                 "desc": "The model name to use for embedding (e.g., `gemini-embedding-001`). Required for standalone "
                     "requests; ignored in batch requests where the top-level model is used",
                 "type": AbstractDataProviderTypeMap."*string",
-                "ref_data": "models",
+                "attr": {
+                    "ref_data": "models",
+                },
+            },
+            "text": {
+                "display_name": "Text",
+                "short_desc": "Simple text to embed",
+                "desc": "A simple text string to generate an embedding for. The provider automatically wraps "
+                    "this into the `content` message format. Use `content` instead for multimodal input",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "What is the meaning of life?",
+                "attr": {
+                    "required_groups": ("input",),
+                    "exclusive_with": "content",
+                },
             },
             "taskType": {
                 "display_name": "Task Type",
@@ -608,9 +687,13 @@ public class GeminiEmbedContentRequestDataType inherits HashDataType {
             "name": "content",
             "display_name": "Content",
             "short_desc": "The content to embed",
-            "desc": "The content to embed. Only the `parts.text` fields will be counted",
-            "type": new GeminiContentDataType(),
-            "required": True,
+            "desc": "The content to embed. Only the `parts.text` fields will be counted. For simple text, "
+                "use the `text` field instead",
+            "type": new GeminiContentDataType(AutoHashOrNothingType),
+            "attr": {
+                "required_groups": ("input",),
+                "exclusive_with": "text",
+            },
         }));
     }
 }
@@ -643,7 +726,22 @@ public class GeminiCountTokensRequestDataType inherits HashDataType {
                 "desc": "The model name to use for token counting",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "ref_data": "models",
+                "attr": {
+                    "ref_data": "models",
+                },
+            },
+            "prompt": {
+                "display_name": "Prompt",
+                "short_desc": "Simple text to count tokens for",
+                "desc": "A simple text string to count tokens for. The provider automatically wraps this "
+                    "into the `contents` message format. Use `contents` instead for multi-turn or "
+                    "multimodal input",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "How many tokens is this sentence?",
+                "attr": {
+                    "required_groups": ("input",),
+                    "exclusive_with": "contents",
+                },
             },
         };
     }
@@ -654,9 +752,12 @@ public class GeminiCountTokensRequestDataType inherits HashDataType {
             "name": "contents",
             "display_name": "Contents",
             "short_desc": "The content to count tokens for",
-            "desc": "The content to count tokens for",
-            "type": new ListDataType("CountTokensContentList", new GeminiContentDataType()),
-            "required": True,
+            "desc": "The content to count tokens for. For simple text, use the `prompt` field instead",
+            "type": new ListDataType("CountTokensContentList", new GeminiContentDataType(), True),
+            "attr": {
+                "required_groups": ("input",),
+                "exclusive_with": "prompt",
+            },
         }));
     }
 }
@@ -689,7 +790,9 @@ public class GeminiBatchEmbedContentsRequestDataType inherits HashDataType {
                 "desc": "The model name to use for embedding (e.g., `gemini-embedding-001`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "ref_data": "models",
+                "attr": {
+                    "ref_data": "models",
+                },
             },
             "requests": {
                 "display_name": "Requests",
@@ -843,7 +946,24 @@ public class GeminiFileInfoDataType inherits HashDataType {
             "state": {
                 "display_name": "State",
                 "short_desc": "Processing state of the file",
-                "desc": "Processing state of the file: `PROCESSING`, `ACTIVE`, or `FAILED`",
+                "desc": "Processing state of the file",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Processing",
+                        "value": "PROCESSING",
+                        "desc": "File is being processed",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Active",
+                        "value": "ACTIVE",
+                        "desc": "File is ready for use",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Failed",
+                        "value": "FAILED",
+                        "desc": "File processing failed",
+                    },
+                ),
                 "type": AbstractDataProviderTypeMap."*string",
             },
         };
@@ -908,25 +1028,19 @@ public class GeminiCachedContentInfoDataType inherits HashDataType {
 public class GeminiFileUploadRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "file": {
+                "display_name": "File",
+                "short_desc": "The file to upload",
+                "desc": "The file to upload to Google Gemini for use with multimodal content generation",
+                "type": FileDataType,
+                "required": True,
+            },
             "display_name": {
                 "display_name": "Display Name",
                 "short_desc": "Display name for the uploaded file",
-                "desc": "Optional display name for the uploaded file",
+                "desc": "Optional display name for the uploaded file. If not provided, the file name from the "
+                    "uploaded file is used",
                 "type": AbstractDataProviderTypeMap."*string",
-            },
-            "mime_type": {
-                "display_name": "MIME Type",
-                "short_desc": "The MIME type of the file",
-                "desc": "The MIME type of the file being uploaded",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
-            },
-            "file_data": {
-                "display_name": "File Data",
-                "short_desc": "The file data to upload",
-                "desc": "Base64-encoded file data to upload",
-                "type": AbstractDataProviderTypeMap."string",
-                "required": True,
             },
         };
     }
@@ -943,10 +1057,24 @@ public class GeminiCachedContentCreateRequestDataType inherits HashDataType {
             "model": {
                 "display_name": "Model",
                 "short_desc": "The model to use",
-                "desc": "The name of the model to use for cached content (e.g., `models/gemini-2.5-flash`)",
+                "desc": "The name of the model to use for cached content (e.g., `gemini-2.5-flash`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "ref_data": "models",
+                "attr": {
+                    "ref_data": "models",
+                },
+            },
+            "prompt": {
+                "display_name": "Prompt",
+                "short_desc": "Simple text content to cache",
+                "desc": "A simple text string to cache for reuse across multiple requests. The provider "
+                    "automatically wraps this into the `contents` message format. Use `contents` instead "
+                    "for multi-turn or multimodal content",
+                "type": AbstractDataProviderTypeMap."*string",
+                "attr": {
+                    "required_groups": ("input",),
+                    "exclusive_with": "contents",
+                },
             },
             "displayName": {
                 "display_name": "Display Name",
@@ -975,16 +1103,19 @@ public class GeminiCachedContentCreateRequestDataType inherits HashDataType {
             "name": "contents",
             "display_name": "Contents",
             "short_desc": "The content to cache",
-            "desc": "The content to cache for future use",
-            "type": new ListDataType("CachedContentList", new GeminiContentDataType()),
-            "required": True,
+            "desc": "The content to cache for future use. For simple text, use the `prompt` field instead",
+            "type": new ListDataType("CachedContentList", new GeminiContentDataType(), True),
+            "attr": {
+                "required_groups": ("input",),
+                "exclusive_with": "prompt",
+            },
         }));
         addField(new QoreDataField({
             "name": "systemInstruction",
             "display_name": "System Instruction",
             "short_desc": "System instruction to cache",
-            "desc": "Optional system instruction to include in the cache",
-            "type": new GeminiContentDataType(AutoHashOrNothingType),
+            "desc": "Optional system instruction text to include in the cache",
+            "type": AbstractDataProviderTypeMap."*string",
         }));
     }
 }
@@ -993,6 +1124,16 @@ public class GeminiCachedContentCreateRequestDataType inherits HashDataType {
 public class GeminiCachedContentUpdateRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "cachedContent": {
+                "display_name": "Cached Content",
+                "short_desc": "The cached content to update",
+                "desc": "The resource name of the cached content to update",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "attr": {
+                    "ref_data": "cached_contents",
+                },
+            },
             "expireTime": {
                 "display_name": "Expire Time",
                 "short_desc": "New expiration timestamp",
@@ -1060,12 +1201,150 @@ public class GeminiFileSearchStoreCreateRequestDataType inherits HashDataType {
 public class GeminiFileSearchStoreImportFileRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "file_name": {
-                "display_name": "File Name",
-                "short_desc": "The resource name of the file to import",
-                "desc": "The resource name of the file to import (e.g., `files/abc-123`)",
+            "fileSearchStore": {
+                "display_name": "File Search Store",
+                "short_desc": "The file search store to import into",
+                "desc": "The name of the file search store to import the file into",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
+                "attr": {
+                    "ref_data": "file_search_stores",
+                },
+            },
+            "file": {
+                "display_name": "File",
+                "short_desc": "Upload and import a file",
+                "desc": "Upload a new file and import it into the search store in one step. The provider "
+                    "uploads the file first, then imports it. Use this or `fileName` for an "
+                    "already-uploaded file",
+                "type": FileDataType.getOrNothingType(),
+                "attr": {
+                    "required_groups": ("file_input",),
+                    "exclusive_with": "fileName",
+                    "preselected": True,
+                },
+            },
+            "fileName": {
+                "display_name": "Existing File",
+                "short_desc": "An already-uploaded file to import",
+                "desc": "The resource name of an already-uploaded file to import (e.g., `files/abc-123`). "
+                    "Use this or `file` to upload a new file directly",
+                "type": AbstractDataProviderTypeMap."*string",
+                "attr": {
+                    "ref_data": "files",
+                    "required_groups": ("file_input",),
+                    "exclusive_with": "file",
+                },
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Import file response data type (long-running Operation)
+public class GeminiImportFileResponseDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "name": {
+                "display_name": "Operation Name",
+                "short_desc": "Server-assigned operation name",
+                "desc": "The server-assigned name of the long-running operation",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "done": {
+                "display_name": "Done",
+                "short_desc": "Whether the operation is complete",
+                "desc": "Whether the operation has completed. When `true`, the result is available in the "
+                    "`response` or `error` field",
+                "type": AbstractDataProviderTypeMap."*softbool",
+            },
+            "metadata": {
+                "display_name": "Metadata",
+                "short_desc": "Service-specific operation metadata",
+                "desc": "Service-specific metadata associated with the operation",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "error": {
+                "display_name": "Error",
+                "short_desc": "Error status if the operation failed",
+                "desc": "The error result of the operation in case of failure",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "response": {
+                "display_name": "Response",
+                "short_desc": "The operation result on success",
+                "desc": "The result of the operation on success, containing the imported document resource",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+#! File delete request data type
+public class GeminiFileDeleteRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "fileName": {
+                "display_name": "File",
+                "short_desc": "The file to delete",
+                "desc": "The resource name of the file to delete (e.g., `files/abc-123`)",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "attr": {
+                    "ref_data": "files",
+                },
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Cached content delete request data type
+public class GeminiCachedContentDeleteRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "cachedContent": {
+                "display_name": "Cached Content",
+                "short_desc": "The cached content to delete",
+                "desc": "The resource name of the cached content to delete",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "attr": {
+                    "ref_data": "cached_contents",
+                },
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! File search store delete request data type
+public class GeminiFileSearchStoreDeleteRequestDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "fileSearchStore": {
+                "display_name": "File Search Store",
+                "short_desc": "The file search store to delete",
+                "desc": "The resource name of the file search store to delete",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "attr": {
+                    "ref_data": "file_search_stores",
+                },
             },
         };
     }

@@ -62,20 +62,8 @@ public class GeminiFileUploadDataProvider inherits GeminiDataProviderBase {
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        hash<auto> body = {
-            "file": {
-                "display_name": req.display_name,
-            },
-        };
-        # Use inline data upload via the files endpoint
-        hash<auto> file_body = body + {
-            "file": body."file" + {
-                "mime_type": req.mime_type,
-            },
-            "inline_data": req.file_data,
-        };
-        hash<auto> resp = doRestCommand("POST", "files", file_body).body;
-        return resp."file" ?? resp;
+        hash<auto> file = req."file";
+        return uploadFile(req.display_name ?? file.name, file.mime_type, file.content);
     }
 
     #! Returns the description of a successful request message, if any
