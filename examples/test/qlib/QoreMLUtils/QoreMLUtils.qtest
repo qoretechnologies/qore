@@ -1,6 +1,10 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+/*  QoreMLUtils.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
 %modern
 %requires ../../../../qlib/QoreMLUtils
 %requires ml
