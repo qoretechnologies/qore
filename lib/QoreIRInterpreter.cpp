@@ -1578,8 +1578,6 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
     if (handlers.empty()) {
         return 0;
     }
-    fprintf(stderr, "[ON_EXIT-IR] executing %zu on_exit handlers\n", handlers.size());
-    fflush(stderr);
     ExceptionSink obe_xsink;
     int nrc = 0;
     bool error = xsink && xsink->isException();
@@ -2264,7 +2262,7 @@ next_instruction:
                             if (debug_active) {
                                 tlpd->dbgFunctionExit(statements, return_value, xsink);
                             }
-                            executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                            executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
                             return dbg_rc == RC_RETURN;
@@ -2910,7 +2908,7 @@ next_instruction:
                         if (debug_active) {
                             tlpd->dbgFunctionExit(statements, return_value, xsink);
                         }
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -5070,7 +5068,7 @@ load_local_done:
                     if (xsink) {
                         xsink->raiseException("IR-EXEC-ERROR", "on-block-exit requires a statement or handler IR");
                     }
-                    executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                    executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -5222,7 +5220,7 @@ load_local_done:
                         // after side-effecting code (e.g., Mutex::lock() + on_exit
                         // Mutex::unlock()); without this, on_exit handlers are orphaned
                         // and resources like mutexes remain locked.
-                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                        executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -6819,7 +6817,7 @@ load_local_done:
                 res = evalAndRef(expr_inst->expr, xsink);
             }
             if (xsink && *xsink) {
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
                 return false;
@@ -6843,7 +6841,7 @@ load_local_done:
                 res = QoreValue(false);
             }
             if (xsink && *xsink) {
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
                 return false;
@@ -6864,7 +6862,7 @@ load_local_done:
                 res = QoreValue(false);
             }
             if (xsink && *xsink) {
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
                 return false;
@@ -7290,7 +7288,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupLocalCaches();
                 return true;
@@ -7300,7 +7298,7 @@ load_local_done:
                 if (debug_active) {
                     tlpd->dbgFunctionExit(statements, return_value, xsink);
                 }
-                executeOnBlockExitHandlers(on_block_exit_handlers, xsink);
+                executeOnBlockExitHandlers(on_block_exit_handlers, xsink, &locals_slot_cache);
                 cleanupValues(values, cleanup, xsink, false, cleanup_log);
                 cleanupLocalCaches();
                 return true;
