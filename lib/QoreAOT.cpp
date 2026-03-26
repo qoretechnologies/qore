@@ -5032,6 +5032,23 @@ class ExprTreeSerializer {
             return true;
         }
 
+        // Check constant reverse map FIRST — provides FQN for RuntimeConstantRefNode and others
+        // This must come BEFORE RuntimeConstantRefNode check so that constants are resolved
+        // via their fully-qualified names instead of unqualified names
+        if (const_reverse_map) {
+            auto it = const_reverse_map->find(node);
+            if (it != const_reverse_map->end()) {
+                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
+                writeStr(it->second);
+                writeU16(0);
+                if (debug) {
+                    fprintf(stderr, "EXPR_TREE: resolved '%s' (type %d) via constant reverse lookup: '%s'\n",
+                        node->getTypeName(), node->getType(), it->second.c_str());
+                }
+                return true;
+            }
+        }
+
         // RuntimeConstantRefNode
         if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
@@ -5750,21 +5767,6 @@ class ExprTreeSerializer {
             writeStr(f ? f->getName() : "");
             writeU16(0);
             return true;
-        }
-
-        // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
-        if (const_reverse_map) {
-            auto it = const_reverse_map->find(node);
-            if (it != const_reverse_map->end()) {
-                writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_CONST_REF));
-                writeStr(it->second);
-                writeU16(0);
-                if (debug) {
-                    fprintf(stderr, "EXPR_TREE: resolved '%s' (type %d) via constant reverse lookup: '%s'\n",
-                        node->getTypeName(), node->getType(), it->second.c_str());
-                }
-                return true;
-            }
         }
 
         // Unsupported node type

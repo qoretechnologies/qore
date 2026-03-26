@@ -942,6 +942,8 @@ static const char* getTypePath(const QoreTypeInfo* ti) {
 
 //! Internal state for collecting namespace items during serialization
 struct AOTSerializeState {
+    qore_ns_private* root_ns = nullptr;  // program root namespace (for program-wide CRM)
+
     struct NSInfo {
         qore_ns_private* ns;
         uint32_t parent_idx;
@@ -1603,6 +1605,62 @@ static void writeFunctionsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
     writer.endSection(sec_idx);
 }
 
+//! Recursively build a reverse map from constant value node pointers to FQNs for all namespaces
+//! Used for BCA serialization to resolve constants from the entire program, not just ancestor namespaces
+static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
+        AOTConstantReverseMap& crm) {
+    if (!ns) {
+        return;
+    }
+
+    // Add namespace constants
+    ConstConstantListIterator nsi(ns->constant);
+    while (nsi.next()) {
+        QoreValue v = nsi.getValue();
+        if (!v.hasNode()) {
+            continue;
+        }
+        const AbstractQoreNode* node = v.getInternalNode();
+        if (node && crm.find(node) == crm.end()) {  // Only add if not already present
+            std::string ns_path = ns->path;
+            if (ns_path.size() >= 2) {
+                ns_path = ns_path.substr(2);  // strip leading "::"
+            }
+            std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
+            crm.emplace(node, std::move(fqn));
+        }
+    }
+
+    // Add class constants within this namespace
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        std::string class_prefix = std::string(qc->getPath() + 2) + "::";  // strip leading "::"
+        ConstConstantListIterator cci(qore_class_private::get(*qc)->constlist);
+        while (cci.next()) {
+            QoreValue v = cci.getValue();
+            if (!v.hasNode()) {
+                continue;
+            }
+            const AbstractQoreNode* node = v.getInternalNode();
+            if (node && crm.find(node) == crm.end()) {  // Only add if not already present
+                std::string fqn = class_prefix + cci.getName();
+                crm.emplace(node, std::move(fqn));
+            }
+        }
+    }
+
+    // Recurse into child namespaces
+    for (auto& ni : ns->nsl.nsmap) {
+        if (ni.second) {
+            buildProgramConstantReverseMapImpl(qore_ns_private::get(*ni.second), crm);
+        }
+    }
+}
+
 //! Build a reverse map from constant value node pointers to names for a specific class
 //! Includes the class's own constants and parent namespace constants
 static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
@@ -1660,6 +1718,13 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
 //! Write METHODS section
 static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::METHODS);
+
+    // Build program-wide constant reverse map for BCA arg serialization
+    // This includes constants from ALL namespaces, not just the class's ancestors
+    AOTConstantReverseMap program_crm;
+    if (state.root_ns) {
+        buildProgramConstantReverseMapImpl(state.root_ns, program_crm);
+    }
 
     uint32_t count = static_cast<uint32_t>(state.methods.size());
     writer.writeU32(count);
@@ -1748,9 +1813,6 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 }
                             }
 
-                            // Build reverse map for class constants (Phase 2: BCA serialization fix)
-                            AOTConstantReverseMap bca_crm = buildClassConstantReverseMap(mi.method->getClass());
-
                             for (const BCANode* bca : *bcal) {
                                 // Write base class path for runtime resolution
                                 const QoreClass* base_cls = nullptr;
@@ -1773,7 +1835,7 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                                 for (uint16_t ai = 0; ai < num_args; ++ai) {
                                     QoreValue arg_val = args->retrieveEntry(ai);
                                     std::vector<uint8_t> blob;
-                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug, &bca_crm)) {
+                                    if (serializeExprTreeToBlob(arg_val, bca_slots, blob, debug, &program_crm)) {
                                         writer.writeU32(static_cast<uint32_t>(blob.size()));
                                         if (!blob.empty()) {
                                             writer.writeBytes(blob.data(),
@@ -4201,6 +4263,7 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     printd(5, "serializeNamespaceTree: module_name='%s' root_ns='%s'\n",
         module_name ? module_name : "n/a", root_ns->ns->getName());
     AOTSerializeState state;
+    state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
     collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules);
 
     // Phase 2: Write each section
