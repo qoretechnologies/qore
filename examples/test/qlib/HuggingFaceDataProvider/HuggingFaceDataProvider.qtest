@@ -1,0 +1,477 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/HuggingFaceDataProvider
+
+%exec-class HuggingFaceDataProviderTest
+
+class FakeHuggingFaceRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        *hash<auto> last_request;
+        *hash<auto> last_headers;
+        auto response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://huggingface.co", "data": "json",
+            "headers": {"Authorization": "Bearer test-token"}}) {
+    }
+
+    hash<auto> getDefaultHeaders() {
+        return {"Authorization": "Bearer test-token", "Accept": MimeTypeJson};
+    }
+
+    string getConnectionPath() {
+        return "api";
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        last_method = "GET";
+        last_path = path;
+        last_headers = hdr;
+        if (response_body) {
+            return <RestClient::RestResponseInfo>{"body": response_body};
+        }
+        # default response for list endpoints
+        return <RestClient::RestResponseInfo>{
+            "body": (
+                {
+                    "id": "meta-llama/Llama-3.1-8B",
+                    "modelId": "meta-llama/Llama-3.1-8B",
+                    "author": "meta-llama",
+                    "lastModified": "2025-01-15T00:00:00Z",
+                    "private": False,
+                    "pipeline_tag": "text-generation",
+                    "downloads": 1000000,
+                    "likes": 5000,
+                },
+            ),
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_method = "POST";
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        if (response_body) {
+            return <RestClient::RestResponseInfo>{"body": response_body};
+        }
+        # default create response
+        return <RestClient::RestResponseInfo>{
+            "body": {
+                "url": "https://huggingface.co/test-user/test-repo",
+                "repoUrl": "https://huggingface.co/test-user/test-repo",
+            },
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        last_method = "PUT";
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": {},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        last_method = "DELETE";
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": {},
+        };
+    }
+}
+
+class HuggingFaceDataProviderTest inherits QUnit::Test {
+    private {
+        FakeHuggingFaceRestClientIo fake_rest;
+        HuggingFaceDataProvider::HuggingFaceDataProvider provider;
+    }
+
+    constructor() : Test("HuggingFaceDataProvider", "1.0") {
+        addTestCase("test provider tree", \testProviderTree());
+        addTestCase("test list models", \testListModels());
+        addTestCase("test list models pipeline_tag", \testListModelsPipelineTag());
+        addTestCase("test get model", \testGetModel());
+        addTestCase("test create model", \testCreateModel());
+        addTestCase("test update model", \testUpdateModel());
+        addTestCase("test delete model", \testDeleteModel());
+        addTestCase("test list datasets", \testListDatasets());
+        addTestCase("test get dataset", \testGetDataset());
+        addTestCase("test create dataset", \testCreateDataset());
+        addTestCase("test update dataset", \testUpdateDataset());
+        addTestCase("test delete dataset", \testDeleteDataset());
+        addTestCase("test list spaces", \testListSpaces());
+        addTestCase("test get space", \testGetSpace());
+        addTestCase("test create space", \testCreateSpace());
+        addTestCase("test update space", \testUpdateSpace());
+        addTestCase("test delete space", \testDeleteSpace());
+        addTestCase("test chat completions", \testChatCompletions());
+        addTestCase("test reference data", \testReferenceData());
+        set_return_value(main());
+    }
+
+    setUp() {
+        fake_rest = new FakeHuggingFaceRestClientIo();
+        provider = new HuggingFaceDataProvider::HuggingFaceDataProvider(fake_rest);
+    }
+
+    testProviderTree() {
+        list<string> children = provider.getChildProviderNames();
+        assertEq(True, inlist("models", children), "models child exists");
+        assertEq(True, inlist("datasets", children), "datasets child exists");
+        assertEq(True, inlist("spaces", children), "spaces child exists");
+        assertEq(True, inlist("inference", children), "inference child exists");
+
+        # check models children
+        AbstractDataProvider models = provider.getChildProvider("models");
+        list<string> model_children = models.getChildProviderNames();
+        assertEq(True, inlist("list", model_children), "models/list exists");
+        assertEq(True, inlist("get", model_children), "models/get exists");
+        assertEq(True, inlist("create", model_children), "models/create exists");
+        assertEq(True, inlist("update", model_children), "models/update exists");
+        assertEq(True, inlist("delete", model_children), "models/delete exists");
+    }
+
+    testListModels() {
+        AbstractDataProvider list_dp = provider.getChildProvider("models").getChildProvider("list");
+        auto result = list_dp.doRequest({"limit": 10, "search": "llama"});
+        assertEq("GET", fake_rest.last_method, "list models uses GET");
+        assertRegex("models\\?", fake_rest.last_path, "list models path contains models?");
+        assertRegex("search=llama", fake_rest.last_path, "list models path contains search param");
+        assertRegex("limit=10", fake_rest.last_path, "list models path contains limit param");
+    }
+
+    testListModelsPipelineTag() {
+        AbstractDataProvider list_dp = provider.getChildProvider("models").getChildProvider("list");
+        auto result = list_dp.doRequest({"pipeline_tag": "text-generation"});
+        assertEq("GET", fake_rest.last_method, "list models pipeline_tag uses GET");
+        assertRegex("pipeline_tag=text-generation", fake_rest.last_path,
+            "list models path contains pipeline_tag param");
+    }
+
+    testGetModel() {
+        AbstractDataProvider get_dp = provider.getChildProvider("models").getChildProvider("get");
+        fake_rest.response_body = {
+            "id": "meta-llama/Llama-3.1-8B",
+            "author": "meta-llama",
+            "pipeline_tag": "text-generation",
+            "downloads": 1000000,
+        };
+        auto result = get_dp.doRequest({"repo_id": "meta-llama/Llama-3.1-8B"});
+        assertEq("GET", fake_rest.last_method, "get model uses GET");
+        assertEq("models/meta-llama/Llama-3.1-8B", fake_rest.last_path, "get model path");
+        assertEq("meta-llama/Llama-3.1-8B", result.id, "model id returned");
+        fake_rest.response_body = NOTHING;
+    }
+
+    testCreateModel() {
+        AbstractDataProvider create_dp = provider.getChildProvider("models").getChildProvider("create");
+        auto result = create_dp.doRequest({
+            "name": "test-model",
+            "private": True,
+            "license": "apache-2.0",
+        });
+        assertEq("POST", fake_rest.last_method, "create model uses POST");
+        assertEq("repos/create", fake_rest.last_path, "create model path");
+        assertEq("model", fake_rest.last_request."type", "create model type is model");
+        assertEq("test-model", fake_rest.last_request.name, "create model name");
+        assertEq(True, fake_rest.last_request."private", "create model private flag");
+        assertEq("apache-2.0", fake_rest.last_request.license, "create model license");
+    }
+
+    testUpdateModel() {
+        AbstractDataProvider update_dp = provider.getChildProvider("models").getChildProvider("update");
+        auto result = update_dp.doRequest({"repo_id": "my-org/my-model", "visibility": "private"});
+        assertEq("PUT", fake_rest.last_method, "update model uses PUT");
+        assertEq("models/my-org/my-model/settings", fake_rest.last_path, "update model path");
+        assertEq("private", fake_rest.last_request.visibility, "update model visibility");
+        # repo_id should be removed from body
+        assertEq(NOTHING, fake_rest.last_request.repo_id, "repo_id not in body");
+    }
+
+    testDeleteModel() {
+        AbstractDataProvider delete_dp = provider.getChildProvider("models").getChildProvider("delete");
+        auto result = delete_dp.doRequest({"repo_id": "my-org/my-model"});
+        assertEq("DELETE", fake_rest.last_method, "delete model uses DELETE");
+        assertEq("repos/delete", fake_rest.last_path, "delete model path");
+        assertEq("model", fake_rest.last_request."type", "delete model type");
+        assertEq("my-org/my-model", fake_rest.last_request.name, "delete model name");
+    }
+
+    testListDatasets() {
+        AbstractDataProvider list_dp = provider.getChildProvider("datasets").getChildProvider("list");
+        auto result = list_dp.doRequest({"search": "imdb"});
+        assertEq("GET", fake_rest.last_method, "list datasets uses GET");
+        assertRegex("datasets\\?", fake_rest.last_path, "list datasets path");
+        assertRegex("search=imdb", fake_rest.last_path, "list datasets search param");
+    }
+
+    testGetDataset() {
+        AbstractDataProvider get_dp = provider.getChildProvider("datasets").getChildProvider("get");
+        fake_rest.response_body = {
+            "id": "imdb",
+            "author": "stanfordnlp",
+            "downloads": 500000,
+        };
+        auto result = get_dp.doRequest({"repo_id": "imdb"});
+        assertEq("GET", fake_rest.last_method, "get dataset uses GET");
+        assertEq("datasets/imdb", fake_rest.last_path, "get dataset path");
+        fake_rest.response_body = NOTHING;
+    }
+
+    testCreateDataset() {
+        AbstractDataProvider create_dp = provider.getChildProvider("datasets").getChildProvider("create");
+        auto result = create_dp.doRequest({"name": "my-dataset"});
+        assertEq("POST", fake_rest.last_method, "create dataset uses POST");
+        assertEq("repos/create", fake_rest.last_path, "create dataset path");
+        assertEq("dataset", fake_rest.last_request."type", "create dataset type is dataset");
+    }
+
+    testUpdateDataset() {
+        AbstractDataProvider update_dp = provider.getChildProvider("datasets").getChildProvider("update");
+        auto result = update_dp.doRequest({"repo_id": "my-org/my-dataset", "visibility": "public"});
+        assertEq("PUT", fake_rest.last_method, "update dataset uses PUT");
+        assertEq("datasets/my-org/my-dataset/settings", fake_rest.last_path, "update dataset path");
+        assertEq("public", fake_rest.last_request.visibility, "update dataset visibility");
+        assertEq(NOTHING, fake_rest.last_request.repo_id, "repo_id not in body");
+    }
+
+    testDeleteDataset() {
+        AbstractDataProvider delete_dp = provider.getChildProvider("datasets").getChildProvider("delete");
+        auto result = delete_dp.doRequest({"repo_id": "my-org/my-dataset"});
+        assertEq("DELETE", fake_rest.last_method, "delete dataset uses DELETE");
+        assertEq("repos/delete", fake_rest.last_path, "delete dataset path");
+        assertEq("dataset", fake_rest.last_request."type", "delete dataset type");
+        assertEq("my-org/my-dataset", fake_rest.last_request.name, "delete dataset name");
+    }
+
+    testListSpaces() {
+        AbstractDataProvider list_dp = provider.getChildProvider("spaces").getChildProvider("list");
+        auto result = list_dp.doRequest({"author": "gradio"});
+        assertEq("GET", fake_rest.last_method, "list spaces uses GET");
+        assertRegex("spaces\\?", fake_rest.last_path, "list spaces path");
+        assertRegex("author=gradio", fake_rest.last_path, "list spaces author param");
+    }
+
+    testGetSpace() {
+        AbstractDataProvider get_dp = provider.getChildProvider("spaces").getChildProvider("get");
+        fake_rest.response_body = {
+            "id": "gradio/chatbot",
+            "author": "gradio",
+            "sdk": "gradio",
+        };
+        auto result = get_dp.doRequest({"repo_id": "gradio/chatbot"});
+        assertEq("GET", fake_rest.last_method, "get space uses GET");
+        assertEq("spaces/gradio/chatbot", fake_rest.last_path, "get space path");
+        fake_rest.response_body = NOTHING;
+    }
+
+    testCreateSpace() {
+        AbstractDataProvider create_dp = provider.getChildProvider("spaces").getChildProvider("create");
+        auto result = create_dp.doRequest({"name": "my-space", "space_sdk": "gradio"});
+        assertEq("POST", fake_rest.last_method, "create space uses POST");
+        assertEq("repos/create", fake_rest.last_path, "create space path");
+        assertEq("space", fake_rest.last_request."type", "create space type is space");
+        assertEq("gradio", fake_rest.last_request.space_sdk, "create space sdk");
+    }
+
+    testUpdateSpace() {
+        AbstractDataProvider update_dp = provider.getChildProvider("spaces").getChildProvider("update");
+        auto result = update_dp.doRequest({"repo_id": "my-org/my-space", "visibility": "protected"});
+        assertEq("PUT", fake_rest.last_method, "update space uses PUT");
+        assertEq("spaces/my-org/my-space/settings", fake_rest.last_path, "update space path");
+        assertEq("protected", fake_rest.last_request.visibility, "update space visibility");
+        assertEq(NOTHING, fake_rest.last_request.repo_id, "repo_id not in body");
+    }
+
+    testDeleteSpace() {
+        AbstractDataProvider delete_dp = provider.getChildProvider("spaces").getChildProvider("delete");
+        auto result = delete_dp.doRequest({"repo_id": "my-org/my-space"});
+        assertEq("DELETE", fake_rest.last_method, "delete space uses DELETE");
+        assertEq("repos/delete", fake_rest.last_path, "delete space path");
+        assertEq("space", fake_rest.last_request."type", "delete space type");
+        assertEq("my-org/my-space", fake_rest.last_request.name, "delete space name");
+    }
+
+    testChatCompletions() {
+        # the inference container creates a separate RestClientIo;
+        # we test the chat completions provider directly with our fake rest
+        FakeHuggingFaceRestClientIo inference_rest = new FakeHuggingFaceRestClientIo();
+        inference_rest.response_body = {
+            "id": "chatcmpl-test123",
+            "object": "chat.completion",
+            "created": 1234567890,
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Machine learning is a subset of AI.",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 8,
+                "total_tokens": 18,
+            },
+        };
+        HuggingFaceDataProvider::HuggingFaceChatCompletionsDataProvider chat_dp(inference_rest);
+        auto result = chat_dp.doRequest({
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": (
+                {"role": "user", "content": "What is machine learning?"},
+            ),
+            "max_tokens": 100,
+        });
+        assertEq("POST", inference_rest.last_method, "chat completions uses POST");
+        assertEq("chat/completions", inference_rest.last_path, "chat completions path");
+        assertEq("meta-llama/Llama-3.1-8B-Instruct", inference_rest.last_request.model,
+            "chat completions model");
+        assertEq(False, inference_rest.last_request.stream, "streaming forced off");
+        assertEq("Machine learning is a subset of AI.", result.output_text,
+            "output_text convenience field");
+        assertEq("chatcmpl-test123", result.id, "completion id");
+        assertEq(18, result.usage.total_tokens, "total tokens");
+    }
+
+    testReferenceData() {
+        fake_rest.response_body = NOTHING;
+        *hash<string, bool> ref_data = provider.getSupportedReferenceData();
+        assertEq(True, ref_data.models, "models reference data supported");
+    }
+}
+
+#! Integration tests against the real Hugging Face API
+/** Requires HUGGINGFACE_TOKEN environment variable to be set
+*/
+class HuggingFaceIntegrationTest inherits QUnit::Test {
+    private {
+        *string token;
+        HuggingFaceDataProvider::HuggingFaceDataProvider provider;
+    }
+
+    constructor() : Test("HuggingFaceIntegration", "1.0") {
+        token = ENV.HUGGINGFACE_TOKEN;
+        if (!token) {
+            testSkip("Set HUGGINGFACE_TOKEN to run integration tests");
+            return;
+        }
+        provider = new HuggingFaceDataProvider::HuggingFaceDataProvider({"apikey": token});
+        addTestCase("integration: list models", \testIntegrationListModels());
+        addTestCase("integration: get model", \testIntegrationGetModel());
+        addTestCase("integration: list datasets", \testIntegrationListDatasets());
+        addTestCase("integration: list spaces", \testIntegrationListSpaces());
+        addTestCase("integration: model CRUD", \testIntegrationModelCrud());
+        addTestCase("integration: reference data", \testIntegrationReferenceData());
+        set_return_value(main());
+    }
+
+    testIntegrationListModels() {
+        AbstractDataProvider list_dp = provider.getChildProvider("models").getChildProvider("list");
+        auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
+        assertEq(Type::List, result.type(), "list models returns a list");
+        assertTrue(result.size() > 0, "list models returns results");
+        assertTrue(result[0].id.val(), "first model has id");
+        assertTrue(result[0].downloads >= 0, "first model has downloads");
+    }
+
+    testIntegrationGetModel() {
+        AbstractDataProvider get_dp = provider.getChildProvider("models").getChildProvider("get");
+        auto result = get_dp.doRequest({"repo_id": "bert-base-uncased"});
+        assertEq("bert-base-uncased", result.id, "get model returns correct id");
+        assertTrue(result.downloads > 0, "bert-base-uncased has downloads");
+    }
+
+    testIntegrationListDatasets() {
+        AbstractDataProvider list_dp = provider.getChildProvider("datasets").getChildProvider("list");
+        auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
+        assertEq(Type::List, result.type(), "list datasets returns a list");
+        assertTrue(result.size() > 0, "list datasets returns results");
+        assertTrue(result[0].id.val(), "first dataset has id");
+    }
+
+    testIntegrationListSpaces() {
+        AbstractDataProvider list_dp = provider.getChildProvider("spaces").getChildProvider("list");
+        auto result = list_dp.doRequest({"limit": 3, "sort": "likes", "direction": -1});
+        assertEq(Type::List, result.type(), "list spaces returns a list");
+        assertTrue(result.size() > 0, "list spaces returns results");
+        assertTrue(result[0].id.val(), "first space has id");
+    }
+
+    testIntegrationModelCrud() {
+        # generate unique repo name to avoid conflicts
+        string repo_name = sprintf("qore-test-%d", clock_getmicros());
+
+        # Create
+        AbstractDataProvider create_dp = provider.getChildProvider("models").getChildProvider("create");
+        auto create_result = create_dp.doRequest({
+            "name": repo_name,
+            "private": True,
+        });
+        assertTrue(create_result.url.val() || create_result.repoUrl.val(),
+            "create model returns URL");
+
+        # Get - verify persistence
+        AbstractDataProvider get_dp = provider.getChildProvider("models").getChildProvider("get");
+        # need to determine the full repo_id (user/repo_name)
+        *string repo_url = create_result.repoUrl ?? create_result.url;
+        # extract repo_id from URL: https://huggingface.co/user/repo_name
+        string repo_id;
+        if (repo_url) {
+            list<string> parts = repo_url.split("/");
+            # last two parts are user/repo_name
+            if (parts.size() >= 2) {
+                repo_id = parts[parts.size() - 2] + "/" + parts[parts.size() - 1];
+            }
+        }
+        if (!repo_id) {
+            # fallback: try whoami to get username
+            testSkip("Could not determine repo_id from create response");
+            return;
+        }
+
+        on_exit {
+            # Delete - cleanup
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("models")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"repo_id": repo_id});
+            } catch (hash<ExceptionInfo> ex) {
+                # log but don't fail the test on cleanup failure
+                printf("WARNING: failed to delete test repo %y: %s: %s\n",
+                    repo_id, ex.err, ex.desc);
+            }
+        }
+
+        auto get_result = get_dp.doRequest({"repo_id": repo_id});
+        assertEq(repo_id, get_result.id, "get model returns created repo");
+        assertEq(True, get_result."private", "model is private");
+
+        # Update
+        AbstractDataProvider update_dp = provider.getChildProvider("models").getChildProvider("update");
+        update_dp.doRequest({"repo_id": repo_id, "gated": "auto"});
+    }
+
+    testIntegrationReferenceData() {
+        *list<hash<AllowedValueInfo>> models = provider.getReferenceData("models");
+        assertTrue(models.size() > 0, "models reference data returns results");
+        assertTrue(models[0].value.val(), "first model ref has value");
+        assertTrue(models[0].display_name.val(), "first model ref has display_name");
+    }
+}

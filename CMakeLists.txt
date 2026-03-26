@@ -1982,6 +1982,7 @@ qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
+qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2038,6 +2039,7 @@ qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataPr
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/AnthropicDataProvider" "AnthropicRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "anthropic-logo.svg")
 qore_user_module("qlib/GrokDataProvider" "GrokRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "grok-logo.svg")
+qore_user_module("qlib/HuggingFaceDataProvider" "HuggingFaceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "huggingface-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")
 
 # base 9 modules

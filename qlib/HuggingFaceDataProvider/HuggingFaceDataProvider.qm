@@ -1,0 +1,431 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore HuggingFaceDataProvider module definition
+
+/*  HuggingFaceDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) HuggingFaceRestClient
+%requires RestClientIo
+
+module HuggingFaceDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Hugging Face services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new HuggingFaceDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": HuggingFaceDataProvider::AppName,
+            "display_name": "Hugging Face",
+            "short_desc": "Hugging Face Hub and Inference API services",
+            "desc": "Hugging Face Hub and Inference API integration providing:\n"
+                "- **Models**: List, create, update, and delete ML models on the Hub\n"
+                "- **Datasets**: Manage datasets for training and evaluation\n"
+                "- **Spaces**: Deploy and manage interactive ML applications\n"
+                "- **Inference API**: Chat completions with hosted models",
+            "scheme": "huggingface",
+            "logo": HuggingFaceLogo,
+            "logo_file_name": "huggingface-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # ---- Models actions ----
+
+        # register list-models action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/models/list",
+            "action": "list-models",
+            "display_name": "List Models",
+            "short_desc": "List Hugging Face models",
+            "desc": "List models on Hugging Face Hub with optional search, filtering, and sorting",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelListRequestDataType::Fields{"search", "author", "pipeline_tag"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelListRequestDataType::Fields - ("search", "author", "pipeline_tag")
+            ),
+            "output_type": HuggingFaceModelListDataProvider::ResponseType,
+        });
+
+        # register get-model action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/models/get",
+            "action": "get-model",
+            "display_name": "Get Model",
+            "short_desc": "Get details for a specific model",
+            "desc": "Retrieve detailed information for a specific model by its repository ID",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelIdRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceModelGetDataProvider::ResponseType,
+        });
+
+        # register create-model action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/models/create",
+            "action": "create-model",
+            "display_name": "Create Model",
+            "short_desc": "Create a new model repository",
+            "desc": "Create a new model repository on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields{"license",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields - ("name", "license")
+            ),
+            "output_type": HuggingFaceModelCreateDataProvider::ResponseType,
+        });
+
+        # register update-model action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/models/update",
+            "action": "update-model",
+            "display_name": "Update Model",
+            "short_desc": "Update model repository settings",
+            "desc": "Update settings for an existing model repository on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelUpdateRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelUpdateRequestDataType::Fields - "repo_id"
+            ),
+            "output_type": HuggingFaceModelUpdateDataProvider::ResponseType,
+        });
+
+        # register delete-model action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/models/delete",
+            "action": "delete-model",
+            "display_name": "Delete Model",
+            "short_desc": "Delete a model repository",
+            "desc": "Delete a model repository from Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Models",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelDeleteRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceModelDeleteDataProvider::ResponseType,
+        });
+
+        # ---- Datasets actions ----
+
+        # register list-datasets action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/datasets/list",
+            "action": "list-datasets",
+            "display_name": "List Datasets",
+            "short_desc": "List Hugging Face datasets",
+            "desc": "List datasets on Hugging Face Hub with optional search, filtering, and sorting",
+            "action_code": DPAT_API,
+            "groups": ("Datasets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceListRequestDataType::Fields{"search", "author"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceListRequestDataType::Fields - ("search", "author")
+            ),
+            "output_type": HuggingFaceDatasetListDataProvider::ResponseType,
+        });
+
+        # register get-dataset action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/datasets/get",
+            "action": "get-dataset",
+            "display_name": "Get Dataset",
+            "short_desc": "Get details for a specific dataset",
+            "desc": "Retrieve detailed information for a specific dataset by its repository ID",
+            "action_code": DPAT_API,
+            "groups": ("Datasets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceDatasetIdRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceDatasetGetDataProvider::ResponseType,
+        });
+
+        # register create-dataset action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/datasets/create",
+            "action": "create-dataset",
+            "display_name": "Create Dataset",
+            "short_desc": "Create a new dataset repository",
+            "desc": "Create a new dataset repository on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Datasets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields{"license",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceRepoCreateRequestDataType::Fields - ("name", "license")
+            ),
+            "output_type": HuggingFaceDatasetCreateDataProvider::ResponseType,
+        });
+
+        # register update-dataset action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/datasets/update",
+            "action": "update-dataset",
+            "display_name": "Update Dataset",
+            "short_desc": "Update dataset repository settings",
+            "desc": "Update settings for an existing dataset repository on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Datasets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceDatasetUpdateRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceDatasetUpdateRequestDataType::Fields - "repo_id"
+            ),
+            "output_type": HuggingFaceDatasetUpdateDataProvider::ResponseType,
+        });
+
+        # register delete-dataset action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/datasets/delete",
+            "action": "delete-dataset",
+            "display_name": "Delete Dataset",
+            "short_desc": "Delete a dataset repository",
+            "desc": "Delete a dataset repository from Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Datasets",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceDatasetDeleteRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceDatasetDeleteDataProvider::ResponseType,
+        });
+
+        # ---- Spaces actions ----
+
+        # register list-spaces action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/spaces/list",
+            "action": "list-spaces",
+            "display_name": "List Spaces",
+            "short_desc": "List Hugging Face Spaces",
+            "desc": "List Spaces on Hugging Face Hub with optional search, filtering, and sorting",
+            "action_code": DPAT_API,
+            "groups": ("Spaces",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceListRequestDataType::Fields{"search", "author"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceListRequestDataType::Fields - ("search", "author")
+            ),
+            "output_type": HuggingFaceSpaceListDataProvider::ResponseType,
+        });
+
+        # register get-space action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/spaces/get",
+            "action": "get-space",
+            "display_name": "Get Space",
+            "short_desc": "Get details for a specific Space",
+            "desc": "Retrieve detailed information for a specific Space by its repository ID",
+            "action_code": DPAT_API,
+            "groups": ("Spaces",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceIdRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceSpaceGetDataProvider::ResponseType,
+        });
+
+        # register create-space action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/spaces/create",
+            "action": "create-space",
+            "display_name": "Create Space",
+            "short_desc": "Create a new Space",
+            "desc": "Create a new Space on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Spaces",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceCreateRequestDataType::Fields{"name", "space_sdk"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceCreateRequestDataType::Fields - ("name", "space_sdk")
+            ),
+            "output_type": HuggingFaceSpaceCreateDataProvider::ResponseType,
+        });
+
+        # register update-space action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/spaces/update",
+            "action": "update-space",
+            "display_name": "Update Space",
+            "short_desc": "Update Space settings",
+            "desc": "Update settings for an existing Space on Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Spaces",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceUpdateRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceUpdateRequestDataType::Fields - "repo_id"
+            ),
+            "output_type": HuggingFaceSpaceUpdateDataProvider::ResponseType,
+        });
+
+        # register delete-space action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/spaces/delete",
+            "action": "delete-space",
+            "display_name": "Delete Space",
+            "short_desc": "Delete a Space",
+            "desc": "Delete a Space from Hugging Face Hub",
+            "action_code": DPAT_API,
+            "groups": ("Spaces",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceDeleteRequestDataType::Fields{"repo_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": HuggingFaceSpaceDeleteDataProvider::ResponseType,
+        });
+
+        # ---- Inference actions ----
+
+        # register chat-completions action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": HuggingFaceDataProvider::AppName,
+            "path": "/inference/chat-completions",
+            "action": "chat-completions",
+            "display_name": "Chat Completions",
+            "short_desc": "Send a chat completion request via the Inference API",
+            "desc": "Send a chat completion request to a model hosted on Hugging Face via the "
+                "Inference API. Compatible with the OpenAI chat completions format.",
+            "action_code": DPAT_API,
+            "groups": ("Inference",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceChatCompletionsRequestDataType::Fields{"model", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceChatCompletionsRequestDataType::Fields{"max_tokens", "temperature"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceChatCompletionsRequestDataType::Fields - (
+                    "model", "messages", "max_tokens", "temperature"
+                )
+            ),
+            "output_type": HuggingFaceChatCompletionsDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage HuggingFaceDataProvider Module
+
+    @tableofcontents
+
+    @section huggingfacedataproviderintro HuggingFaceDataProvider Introduction
+
+    The %HuggingFaceDataProvider module provides a data provider API for Hugging Face Hub
+    and Inference API services.
+
+    To use this module, use \c "%requires HuggingFaceDataProvider" in your code.
+
+    @section HuggingFaceDataProviderRelnotes Release Notes
+
+    @subsection HuggingFaceDataProviderv1_0 HuggingFaceDataProvider v1.0
+    - the initial version of the %HuggingFaceDataProvider module
+*/
+
+#! contains all public definitions in the HuggingFaceDataProvider module
+public namespace HuggingFaceDataProvider {
+    #! Application name
+    public const AppName = "HuggingFace";
+
+    #! Hugging Face logo SVG
+    const HuggingFaceLogo = File::readTextFile(get_script_dir() + "/huggingface-logo.svg");
+}

@@ -82,6 +82,8 @@ public class DataProvider {
 
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
+
+            "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
 
             "bcrest": "CdsRestDataProvider",
