@@ -64,6 +64,7 @@
 #include "QC_DDM.h"
 #include "QC_DateTimeFeatures.h"
 #include "QC_TextFeatures.h"
+#include "QC_SparseMatrix.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -214,6 +215,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitDDMClass();
     preinitDateTimeFeaturesClass();
     preinitTextFeaturesClass();
+    preinitSparseMatrixClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -295,6 +297,7 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initDDMClass(MLNS));
     MLNS.addSystemClass(initDateTimeFeaturesClass(MLNS));
     MLNS.addSystemClass(initTextFeaturesClass(MLNS));
+    MLNS.addSystemClass(initSparseMatrixClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -403,6 +406,10 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("RFE", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreRFE::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("SparseMatrix", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreSparseMatrix::deserializeState(data, len, xsink);
     });
     MLSerialization::registerAlgorithm("DateTimeFeatures", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {

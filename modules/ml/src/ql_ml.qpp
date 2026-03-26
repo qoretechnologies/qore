@@ -58,6 +58,7 @@
 #include "QC_RFE.h"
 #include "QC_DateTimeFeatures.h"
 #include "QC_TextFeatures.h"
+#include "QC_SparseMatrix.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -1509,6 +1510,16 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
+        model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
+    if (smp) {
+        algorithm = "SparseMatrix";
+        model_data = smp->serializeState();
+        smp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     xsink->raiseException("ML-SERIALIZE-ERROR",
         "unknown model type: object is not a supported ML algorithm");
     return QoreValue();
@@ -1633,6 +1644,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "TextFeatures") {
         obj = new QoreObject(QC_TEXTFEATURES, getProgram());
         obj->setPrivate(CID_TEXTFEATURES, priv);
+    } else if (header.algorithm == "SparseMatrix") {
+        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
+        obj->setPrivate(CID_SPARSEMATRIX, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1712,6 +1726,18 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_SELECTKBEST, QoreSelectKBest, "SelectKBest")
     TRY_SERIALIZE_ALGO(CID_RFE, QoreRFE, "RFE")
     TRY_SERIALIZE_ALGO(CID_TEXTFEATURES, QoreTextFeatures, "TextFeatures")
+
+    // SparseMatrix has no field_names/isFitted pattern
+    if (!found) {
+        QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
+            model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
+        if (smp) {
+            algorithm = "SparseMatrix";
+            model_data = smp->serializeState();
+            smp->deref(xsink);
+            found = true;
+        } else if (*xsink) { xsink->clear(); }
+    }
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
@@ -1899,6 +1925,9 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "TextFeatures") {
         obj = new QoreObject(QC_TEXTFEATURES, getProgram());
         obj->setPrivate(CID_TEXTFEATURES, priv);
+    } else if (header.algorithm == "SparseMatrix") {
+        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
+        obj->setPrivate(CID_SPARSEMATRIX, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",

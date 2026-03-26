@@ -105,6 +105,7 @@ set(ML_QPP_SRC
     src/QC_DDM.qpp
     src/QC_TextFeatures.qpp
     src/QC_DateTimeFeatures.qpp
+    src/QC_SparseMatrix.qpp
     src/ql_ml.qpp
 )
 
@@ -152,6 +153,8 @@ set(ML_CPP_SRC
     src/DDM.cpp
     src/TextFeatures.cpp
     src/DateTimeFeatures.cpp
+    src/ml_sparse.cpp
+    src/SparseMatrix.cpp
 )
 
 # Conditional ONNX Runtime support

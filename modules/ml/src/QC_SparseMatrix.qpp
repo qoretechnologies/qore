@@ -1,0 +1,168 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SparseMatrix.qpp
+
+    Qore ml module - SparseMatrix class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_SparseMatrix.h"
+
+//! Sparse matrix for memory-efficient storage of high-dimensional data
+/** Stores only non-zero entries using compressed row storage, making it ideal for
+    text features (TF-IDF), one-hot encoded categoricals, and other sparse data.
+
+    Can be converted to/from dense matrices (list of lists) and triplet format
+    (list of `{row, col, value}` hashes).
+
+    @par Example: Create from triplets
+    @code{.py}
+# 3x4 matrix with 3 non-zero entries
+SparseMatrix sm(3, 4, (
+    {"row": 0, "col": 1, "value": 5.0},
+    {"row": 1, "col": 3, "value": 2.0},
+    {"row": 2, "col": 0, "value": 1.0},
+));
+printf("Size: %dx%d, NNZ: %d\n", sm.rows(), sm.cols(), sm.nnz());
+    @endcode
+
+    @par Example: Create from dense matrix
+    @code{.py}
+# Sparsify a dense matrix (values < 0.01 become zero)
+SparseMatrix sm(((1.0, 0.0, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 3.0)), 0.01);
+printf("NNZ: %d (out of %d)\n", sm.nnz(), sm.rows() * sm.cols());
+    @endcode
+*/
+qclass SparseMatrix [arg=QoreSparseMatrix* sm; ns=Qore::ML; flags=final];
+
+//! Creates a SparseMatrix from triplet entries
+/** @param rows number of rows
+    @param cols number of columns
+    @param triplets a list of `{row, col, value}` hashes specifying non-zero entries
+
+    @throw ML-SPARSE-ERROR if dimensions are invalid or triplet entries are malformed
+
+    @par Example:
+    @code{.py}
+SparseMatrix sm(1000, 5000, ({"row": 0, "col": 42, "value": 1.5},));
+    @endcode
+*/
+SparseMatrix::constructor(int rows, int cols, *list<auto> triplets) {
+    std::unique_ptr<QoreSparseMatrix> obj(
+        new QoreSparseMatrix(static_cast<int>(rows), static_cast<int>(cols),
+            triplets, xsink));
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_SPARSEMATRIX, obj.release());
+}
+
+//! Creates a SparseMatrix from a dense matrix with optional sparsification threshold
+/** @param dense a list of lists (dense matrix); values with absolute value at or
+    below \c threshold are treated as zero
+    @param threshold absolute value threshold below which entries are dropped
+    (default: `0.0`, meaning only exact zeros are dropped)
+
+    @throw ML-DATA-ERROR if the matrix is malformed
+
+    @par Example:
+    @code{.py}
+SparseMatrix sm(((1.0, 0.001, 0.0), (0.0, 2.0, 0.0)), 0.01);
+printf("NNZ: %d\n", sm.nnz());  # 2 (0.001 dropped)
+    @endcode
+*/
+SparseMatrix::constructor(list<auto> dense, float threshold = 0.0) {
+    MatrixXd mat = qoreListOfListsToMatrix(dense, xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_SPARSEMATRIX, new QoreSparseMatrix(mat, threshold));
+}
+
+//! Creates a copy of the SparseMatrix
+/** @throw COPY-ERROR SparseMatrix objects cannot be copied
+*/
+SparseMatrix::copy() {
+    xsink->raiseException("COPY-ERROR", "SparseMatrix objects cannot be copied");
+}
+
+//! Returns the number of rows
+/** @return number of rows
+*/
+int SparseMatrix::rows() [flags=CONSTANT] {
+    return sm->getRows();
+}
+
+//! Returns the number of columns
+/** @return number of columns
+*/
+int SparseMatrix::cols() [flags=CONSTANT] {
+    return sm->getCols();
+}
+
+//! Returns the number of non-zero entries
+/** @return number of stored non-zero entries
+*/
+int SparseMatrix::nnz() [flags=CONSTANT] {
+    return sm->getNnz();
+}
+
+//! Converts to a dense matrix (list of lists)
+/** @return the full dense representation where zeros are explicit
+
+    @par Example:
+    @code{.py}
+list<list<float>> dense = sm.toDense();
+    @endcode
+
+    @note For very large sparse matrices, this may consume significant memory.
+*/
+list<auto> SparseMatrix::toDense() [flags=RET_VALUE_ONLY] {
+    return sm->toDense(xsink);
+}
+
+//! Returns the triplet (COO) representation
+/** @return a list of `{row, col, value}` hashes for each non-zero entry
+
+    @par Example:
+    @code{.py}
+list<hash<auto>> triplets = sm.toTriplets();
+foreach hash<auto> t in (triplets) {
+    printf("(%d, %d) = %f\n", t.row, t.col, t.value);
+}
+    @endcode
+*/
+list<auto> SparseMatrix::toTriplets() [flags=RET_VALUE_ONLY] {
+    return sm->toTriplets(xsink);
+}
+
+//! Returns the density (fraction of non-zero entries)
+/** @return nnz / (rows * cols); `0.0` for empty matrices
+*/
+float SparseMatrix::density() [flags=CONSTANT] {
+    int total = sm->getRows() * sm->getCols();
+    if (total == 0) {
+        return 0.0;
+    }
+    return static_cast<double>(sm->getNnz()) / total;
+}

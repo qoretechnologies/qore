@@ -312,6 +312,13 @@ public class MlTest inherits QUnit::Test {
         addTestCase("TextFeatures transform before fit error", \textFeaturesNotFittedTest());
         addTestCase("TextFeatures copy error", \textFeaturesCopyErrorTest());
         addTestCase("TextFeatures serialization round-trip", \textFeaturesSerializeTest());
+        addTestCase("SparseMatrix from triplets", \sparseFromTripletsTest());
+        addTestCase("SparseMatrix from dense", \sparseFromDenseTest());
+        addTestCase("SparseMatrix round-trip", \sparseRoundTripTest());
+        addTestCase("SparseMatrix density", \sparseDensityTest());
+        addTestCase("SparseMatrix serialization", \sparseSerializationTest());
+        addTestCase("SparseMatrix error cases", \sparseErrorTest());
+        addTestCase("SparseMatrix copy error", \sparseCopyTest());
         set_return_value(main());
     }
 
@@ -6720,5 +6727,142 @@ public class MlTest inherits QUnit::Test {
             assertEq(orig_vocab[i], res_vocab[i],
                 sprintf("TF vocab[%d] after deserialize", i));
         }
+    }
+
+    # ===================== SparseMatrix Tests =====================
+
+    sparseFromTripletsTest() {
+        ML::SparseMatrix sm(3, 4, (
+            {"row": 0, "col": 1, "value": 5.0},
+            {"row": 1, "col": 3, "value": 2.0},
+            {"row": 2, "col": 0, "value": 1.0},
+        ));
+
+        assertEq(3, sm.rows());
+        assertEq(4, sm.cols());
+        assertEq(3, sm.nnz());
+
+        # Verify triplet round-trip
+        list<hash<auto>> triplets = sm.toTriplets();
+        assertEq(3, triplets.size());
+
+        # Convert to dense and check values
+        list<auto> dense = sm.toDense();
+        assertEq(3, dense.size());
+        assertEq(4, dense[0].size());
+        assertTrue(abs(dense[0][1] - 5.0) < 1e-10, "dense[0][1] should be 5.0");
+        assertTrue(abs(dense[1][3] - 2.0) < 1e-10, "dense[1][3] should be 2.0");
+        assertTrue(abs(dense[2][0] - 1.0) < 1e-10, "dense[2][0] should be 1.0");
+        # Zeros
+        assertTrue(abs(dense[0][0]) < 1e-10, "dense[0][0] should be 0.0");
+        assertTrue(abs(dense[1][0]) < 1e-10, "dense[1][0] should be 0.0");
+    }
+
+    sparseFromDenseTest() {
+        # Identity-like matrix with small noise
+        ML::SparseMatrix sm(((1.0, 0.001, 0.0), (0.0, 2.0, 0.0), (0.0, 0.0, 3.0)), 0.01);
+
+        assertEq(3, sm.rows());
+        assertEq(3, sm.cols());
+        # 0.001 should be dropped (below threshold 0.01), leaving 3 entries
+        assertEq(3, sm.nnz());
+
+        list<auto> dense = sm.toDense();
+        assertTrue(abs(dense[0][0] - 1.0) < 1e-10);
+        assertTrue(abs(dense[0][1]) < 1e-10, "0.001 should be sparsified to 0");
+        assertTrue(abs(dense[1][1] - 2.0) < 1e-10);
+        assertTrue(abs(dense[2][2] - 3.0) < 1e-10);
+    }
+
+    sparseRoundTripTest() {
+        # Dense -> Sparse -> Dense
+        list<list<float>> original = ((1.0, 0.0, 3.0), (0.0, 5.0, 0.0));
+
+        ML::SparseMatrix sm(original);
+        assertEq(2, sm.rows());
+        assertEq(3, sm.cols());
+        assertEq(3, sm.nnz());  # 3 non-zero values
+
+        list<auto> result = sm.toDense();
+        assertEq(2, result.size());
+        assertEq(3, result[0].size());
+        assertTrue(abs(result[0][0] - 1.0) < 1e-10);
+        assertTrue(abs(result[0][1]) < 1e-10);
+        assertTrue(abs(result[0][2] - 3.0) < 1e-10);
+        assertTrue(abs(result[1][0]) < 1e-10);
+        assertTrue(abs(result[1][1] - 5.0) < 1e-10);
+        assertTrue(abs(result[1][2]) < 1e-10);
+    }
+
+    sparseDensityTest() {
+        # 3x3 matrix with 3 non-zero entries = density 3/9 = 0.333...
+        ML::SparseMatrix sm(3, 3, (
+            {"row": 0, "col": 0, "value": 1.0},
+            {"row": 1, "col": 1, "value": 1.0},
+            {"row": 2, "col": 2, "value": 1.0},
+        ));
+        assertTrue(abs(sm.density() - 1.0/3.0) < 0.01,
+            sprintf("density should be ~0.333; got %f", sm.density()));
+
+        # Empty matrix
+        ML::SparseMatrix empty(5, 5);
+        assertEq(0, empty.nnz());
+        assertTrue(abs(empty.density()) < 1e-10, "empty density should be 0");
+    }
+
+    sparseSerializationTest() {
+        ML::SparseMatrix sm(3, 4, (
+            {"row": 0, "col": 1, "value": 5.0},
+            {"row": 1, "col": 3, "value": 2.0},
+            {"row": 2, "col": 0, "value": 1.0},
+        ));
+
+        binary blob = ML::ml_serialize(sm);
+        auto restored = ML::ml_deserialize(blob);
+        assertTrue(restored instanceof ML::SparseMatrix);
+
+        ML::SparseMatrix rsm = cast<ML::SparseMatrix>(restored);
+        assertEq(sm.rows(), rsm.rows());
+        assertEq(sm.cols(), rsm.cols());
+        assertEq(sm.nnz(), rsm.nnz());
+
+        # Compare dense representations
+        list<auto> orig_dense = sm.toDense();
+        list<auto> res_dense = rsm.toDense();
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                assertTrue(abs(orig_dense[i][j] - res_dense[i][j]) < 1e-10,
+                    sprintf("mismatch at (%d,%d)", i, j));
+            }
+        }
+    }
+
+    sparseErrorTest() {
+        # Negative dimensions
+        assertThrows("ML-SPARSE-ERROR", sub() {
+            new ML::SparseMatrix(-1, 5);
+        });
+
+        # Out-of-bounds triplet
+        assertThrows("ML-SPARSE-ERROR", sub() {
+            new ML::SparseMatrix(2, 2, ({"row": 5, "col": 0, "value": 1.0},));
+        });
+
+        # Missing key in triplet
+        assertThrows("ML-SPARSE-ERROR", sub() {
+            new ML::SparseMatrix(2, 2, ({"row": 0, "col": 0},));
+        });
+
+        # Non-hash triplet element
+        assertThrows("ML-SPARSE-ERROR", sub() {
+            new ML::SparseMatrix(2, 2, (42,));
+        });
+    }
+
+    sparseCopyTest() {
+        ML::SparseMatrix sm(2, 2);
+        assertThrows("COPY-ERROR", sub() {
+            ML::SparseMatrix copy = sm.copy();
+        });
     }
 }
