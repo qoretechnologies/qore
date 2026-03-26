@@ -1728,6 +1728,26 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
         }
     } parent_slot_writeback(func.parent_slot_count, locals_slot_cache, parent_slot_cache, xsink);
 
+    // Phase 2, Fix 2b: TLS guard for slot cache threading to exception-path handlers
+    // When this IR interpreter frame is on the stack, nested handler IR functions can
+    // access the parent's locals_slot_cache via qore_rt_exec_on_block_exit_impl
+    struct TLSSlotCacheGuard {
+        void** tls_slot_ptr;
+        std::vector<QoreValue>* prev_slot_cache;
+
+        TLSSlotCacheGuard(std::vector<QoreValue>& locals_slot_cache) {
+            tls_slot_ptr = qore_rt_get_ir_slot_cache_ptr();
+            prev_slot_cache = reinterpret_cast<std::vector<QoreValue>*>(*tls_slot_ptr);
+            *tls_slot_ptr = reinterpret_cast<void*>(&locals_slot_cache);
+        }
+
+        ~TLSSlotCacheGuard() {
+            if (tls_slot_ptr) {
+                *tls_slot_ptr = reinterpret_cast<void*>(prev_slot_cache);
+            }
+        }
+    } tls_slot_guard(locals_slot_cache);
+
     // Precompute bitmask of IR-only local slots.  After function calls (without
     // reference args), only non-IR-only slots need cache invalidation because callees
     // can access non-IR-only locals through the TLS variable stack (Qore's scoping

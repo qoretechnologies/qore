@@ -7,22 +7,8 @@ To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 QUnit Test "AOTSmokeTest" v1.0
-FAILURE: AOT regex switch: 1 assertion, 0 succeeded
-2026-03-25 19:29:48.277528: Assertion "AOT regex switch output matches interpreter" failure at ./examples/test/ir/AOTSmoke.qtest:457 [AOTSmokeTest::testSwitchRegex()] <- ./examples/test/ir/AOTSmoke.qtest:125 [AOTSmokeTest::constructor()]
------
-	>> Expected:
-	>> 	--------------------
-	>> 	"matched pattern
-	>> 	" (UTF-8 size 16)
-	>> 	--------------------
-	>> Actual:
-	>> 	--------------------
-	>> 	"COMPILE_FAILED: Segmentation fault
-	>> 	" (UTF-8 size 35)
-	>> 	--------------------
------
 FAILURE: AOT on_exit blocks: 2 assertions, 1 succeeded
-2026-03-25 19:29:52.878470: Assertion "on_exit blocks output matches interpreter" failure at ./examples/test/ir/AOTSmoke.qtest:843 [AOTSmokeTest::testOnExitBlocks()] <- ./examples/test/ir/AOTSmoke.qtest:125 [AOTSmokeTest::constructor()]
+2026-03-25 22:23:43.525438: Assertion "on_exit blocks output matches interpreter" failure at ./examples/test/ir/AOTSmoke.qtest:843 [AOTSmokeTest::testOnExitBlocks()] <- ./examples/test/ir/AOTSmoke.qtest:125 [AOTSmokeTest::constructor()]
 -----
 	>> Expected:
 	>> 	--------------------
@@ -36,10 +22,10 @@ FAILURE: AOT on_exit blocks: 2 assertions, 1 succeeded
 	>> 	--------------------
 	>> Actual:
 	>> 	--------------------
-	>> 	"COMPILE_FAILED: /usr/bin/ld: /tmp/aot_test_2773213_6137526208188194597.o: in function `test_on_success(string)':
-	>> 	/tmp/aot_test_2773213_6137526208188194597.q:(.text+0x1bf): undefined reference to `qore_rt_exec_on_block_exit_impl'
-	>> 	/usr/bin/ld: /tmp/aot_test_2773213_6137526208188194597.o: in function `test_on_exit(string)':
-	>> 	/tmp/aot_test_2773213_6137526208188194597.q:(.text+0x44c): undefined reference to `qore_rt_exec_on_block_exit_impl'
+	>> 	"COMPILE_FAILED: /usr/bin/ld: /tmp/aot_test_3194623_6636967480214274785.o: in function `test_on_success(string)':
+	>> 	/tmp/aot_test_3194623_6636967480214274785.q:(.text+0x1bf): undefined reference to `qore_rt_exec_on_block_exit_impl'
+	>> 	/usr/bin/ld: /tmp/aot_test_3194623_6636967480214274785.o: in function `test_on_exit(string)':
+	>> 	/tmp/aot_test_3194623_6636967480214274785.q:(.text+0x44c): undefined reference to `qore_rt_exec_on_block_exit_impl'
 	>> 	collect2: error: ld returned 1 exit status
 	>> 	AOT compilation failed: linker command failed with exit code 256
 	>> 	AOT compilation: 3/3 functions pre-compiled (0 failed, 0 skipped)
@@ -49,15 +35,15 @@ FAILURE: AOT on_exit blocks: 2 assertions, 1 succeeded
 	>> 	--------------------
 -----
 Skipped: AOT static linking: 0 assertions
-2026-03-25 19:29:54.489804: Skip requested at ./examples/test/ir/AOTSmoke.qtest:936 [AOTSmokeTest::testAOTStaticLink()] <- ./examples/test/ir/AOTSmoke.qtest:125 [AOTSmokeTest::constructor()]
+2026-03-25 22:23:45.450913: Skip requested at ./examples/test/ir/AOTSmoke.qtest:936 [AOTSmokeTest::testAOTStaticLink()] <- ./examples/test/ir/AOTSmoke.qtest:125 [AOTSmokeTest::constructor()]
 -----
 	>> static libqore not built (requires -DBUILD_STATIC_LIBQORE=ON)
 -----
 
 Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
-0x00007ffff7a4b3a8 in assignLocalVarValue(LocalVar*, QoreValue const&, ExceptionSink*) () from build/libqore.so.20
+0x00007ffff7a4b728 in assignLocalVarValue(LocalVar*, QoreValue const&, ExceptionSink*) () from build/libqore.so.20
 
-Thread 2 (Thread 0x7fffedb716c0 (LWP 2773216) "qore/1"):
+Thread 2 (Thread 0x7fffedb716c0 (LWP 3194626) "qore/1"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a013c in __internal_syscall_cancel (a1=140737181521472, a2=140737181521200, a3=0, a4=8, a5=0, a6=0, nr=128) at ./nptl/cancellation.c:49
@@ -69,144 +55,144 @@ No locals.
 #3  0x00007fffee646b25 in __GI___sigtimedwait (set=set@entry=0x7fffedb61640, info=info@entry=0x7fffedb61530, timeout=timeout@entry=0x0) at ../sysdeps/unix/sysv/linux/sigtimedwait.c:31
         result = <optimized out>
 #4  0x00007fffee646250 in __GI___sigwait (set=0x7fffedb61640, sig=0x7fffedb61604) at ../sysdeps/unix/sysv/linux/sigwait.c:28
-        si = {si_signo = -62392, si_errno = -1, si_code = 0, __pad0 = 0, _sifields = {_pad = {0, 0, 817857280, -2027532769, -402649328, 32767, 24, 0, -402653136, 32767, -306833856, 32767, -306766620, 32767, -12985, 32767, -306834000, 32767, -294959767, 32767, 8388608, 0, -402649136, 32767, 24, 0, -136040376, 32767}, _kill = {si_pid = 0, si_uid = 0}, _timer = {si_tid = 0, si_overrun = 0, si_sigval = {sival_int = 817857280, sival_ptr = 0x87264e1f30bf8300}}, _rt = {si_pid = 0, si_uid = 0, si_sigval = {sival_int = 817857280, sival_ptr = 0x87264e1f30bf8300}}, _sigchld = {si_pid = 0, si_uid = 0, si_status = 817857280, si_utime = 140737085706000, si_stime = 24}, _sigfault = {si_addr = 0x0, si_addr_lsb = -32000, _bounds = {_addr_bnd = {_lower = 0x7fffe8000f10, _upper = 0x18}, _pkey = 3892317968}}, _sigpoll = {si_band = 0, si_fd = 817857280}, _sigsys = {_call_addr = 0x0, _syscall = 817857280, _arch = 2267434527}}}
+        si = {si_signo = -62392, si_errno = -1, si_code = 0, __pad0 = 0, _sifields = {_pad = {0, 0, -1989973504, -987857214, -402649328, 32767, 24, 0, -402653136, 32767, -306833856, 32767, -306766620, 32767, -13001, 32767, -306834000, 32767, -294959767, 32767, 8388608, 0, -402649136, 32767, 24, 0, -136032216, 32767}, _kill = {si_pid = 0, si_uid = 0}, _timer = {si_tid = 0, si_overrun = 0, si_sigval = {sival_int = -1989973504, sival_ptr = 0xc51e7ec289636a00}}, _rt = {si_pid = 0, si_uid = 0, si_sigval = {sival_int = -1989973504, sival_ptr = 0xc51e7ec289636a00}}, _sigchld = {si_pid = 0, si_uid = 0, si_status = -1989973504, si_utime = 140737085706000, si_stime = 24}, _sigfault = {si_addr = 0x0, si_addr_lsb = 27136, _bounds = {_addr_bnd = {_lower = 0x7fffe8000f10, _upper = 0x18}, _pkey = 3892317968}}, _sigpoll = {si_band = 0, si_fd = -1989973504}, _sigsys = {_call_addr = 0x0, _syscall = -1989973504, _arch = 3307110082}}}
         ret = <optimized out>
-#5  0x00007ffff787d59b in QoreSignalManager::signal_handler_thread() () from build/libqore.so.20
+#5  0x00007ffff787d55b in QoreSignalManager::signal_handler_thread() () from build/libqore.so.20
 No symbol table info available.
-#6  0x00007ffff787db44 in sig_thread () from build/libqore.so.20
+#6  0x00007ffff787db04 in sig_thread () from build/libqore.so.20
 No symbol table info available.
 #7  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, -6390594922279727200, 140737181587136, 140737488342080, 22, 140737488342343, -6390594922086789216, -6390594133046587488}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, 5891233612322461828, 140737181587136, 140737488342064, 22, 140737488342327, 5891233611810756740, 5891230003375921284}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #8  0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 1 (Thread 0x7fffee441e40 (LWP 2773213) "qore/1"):
-#0  0x00007ffff7a4b3a8 in assignLocalVarValue(LocalVar*, QoreValue const&, ExceptionSink*) () from build/libqore.so.20
+Thread 1 (Thread 0x7fffee441e40 (LWP 3194623) "qore/1"):
+#0  0x00007ffff7a4b728 in assignLocalVarValue(LocalVar*, QoreValue const&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#1  0x00007ffff7a4f17a in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*) () from build/libqore.so.20
+#1  0x00007ffff7a50b93 in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*, std::vector<QoreValue, std::allocator<QoreValue> >*) () from build/libqore.so.20
 No symbol table info available.
-#2  0x00007ffff7ae0382 in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
+#2  0x00007ffff7ae16c8 in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#3  0x00007ffff7ae0f28 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
+#3  0x00007ffff7ae2268 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
 No symbol table info available.
-#4  0x00007ffff7ae16d7 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
+#4  0x00007ffff7ae2a17 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#5  0x00007ffff7a069bc in NormalMethodFunction::evalMethod(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreObject*, QoreListNode const*, qore_class_private const*, QoreProgram*) const () from build/libqore.so.20
+#5  0x00007ffff7a06d5c in NormalMethodFunction::evalMethod(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreObject*, QoreListNode const*, qore_class_private const*, QoreProgram*) const () from build/libqore.so.20
 No symbol table info available.
-#6  0x00007ffff7a19f94 in RunTimeResolvedMethodReferenceNode::execValue(QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
+#6  0x00007ffff7a1a334 in RunTimeResolvedMethodReferenceNode::execValue(QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#7  0x00007ffff7bd0d60 in BuiltinFunctionValueVariant::evalFunction(ExceptionSink*, CodeEvaluationHelper&) const () from build/libqore.so.20
+#7  0x00007ffff7bd22e0 in BuiltinFunctionValueVariant::evalFunction(ExceptionSink*, CodeEvaluationHelper&) const () from build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff7a1a170 in QoreFunction::evalFunction(AbstractQoreFunctionVariant const*, QoreListNode const*, QoreProgram*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
+#8  0x00007ffff7a1a510 in QoreFunction::evalFunction(AbstractQoreFunctionVariant const*, QoreListNode const*, QoreProgram*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#9  0x00007ffff76d081d in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from build/libqore.so.20
+#9  0x00007ffff76d090d in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from build/libqore.so.20
 No symbol table info available.
-#10 0x00007ffff76d0cb8 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#10 0x00007ffff76d0da8 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#11 0x00007ffff7950342 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#11 0x00007ffff7950de2 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#12 0x00007ffff796bb65 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#12 0x00007ffff796bef5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#13 0x00007ffff796c188 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#13 0x00007ffff796c518 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#14 0x00007ffff796c449 in TryStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#14 0x00007ffff796c7d9 in TryStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#15 0x00007ffff7950342 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#15 0x00007ffff7950de2 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#16 0x00007ffff796bb65 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#16 0x00007ffff796bef5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#17 0x00007ffff796c188 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#17 0x00007ffff796c518 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#18 0x00007ffff768f026 in StatementBlock::exec(ExceptionSink*) () from build/libqore.so.20
+#18 0x00007ffff768f066 in StatementBlock::exec(ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#19 0x00007ffff7adfb9e in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
+#19 0x00007ffff7ae0ede in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#20 0x00007ffff7ae0f28 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
+#20 0x00007ffff7ae2268 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
 No symbol table info available.
-#21 0x00007ffff7ae16d7 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
+#21 0x00007ffff7ae2a17 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#22 0x00007ffff7a069bc in NormalMethodFunction::evalMethod(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreObject*, QoreListNode const*, qore_class_private const*, QoreProgram*) const () from build/libqore.so.20
+#22 0x00007ffff7a06d5c in NormalMethodFunction::evalMethod(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreObject*, QoreListNode const*, qore_class_private const*, QoreProgram*) const () from build/libqore.so.20
 No symbol table info available.
-#23 0x00007ffff7a228e0 in qore_class_private::evalMethod(QoreObject*, char const*, QoreListNode const*, qore_class_private const*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
+#23 0x00007ffff7a22c80 in qore_class_private::evalMethod(QoreObject*, char const*, QoreListNode const*, qore_class_private const*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#24 0x00007ffff7a373da in AbstractMethodCallNode::exec(QoreObject*, char const*, qore_class_private const*, ExceptionSink*) const () from build/libqore.so.20
+#24 0x00007ffff7a3775a in AbstractMethodCallNode::exec(QoreObject*, char const*, qore_class_private const*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#25 0x00007ffff7a37c9e in QoreDotEvalOperatorNode::evalWithBase(QoreValue, ExceptionSink*) const () from build/libqore.so.20
+#25 0x00007ffff7a3801e in QoreDotEvalOperatorNode::evalWithBase(QoreValue, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#26 0x00007ffff7a38127 in QoreDotEvalOperatorNode::evalImpl(bool&, ExceptionSink*) const () from build/libqore.so.20
+#26 0x00007ffff7a384a7 in QoreDotEvalOperatorNode::evalImpl(bool&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#27 0x00007ffff76d081d in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from build/libqore.so.20
+#27 0x00007ffff76d090d in AbstractQoreNode::eval(RuntimeConfig&, bool&, ExceptionSink*) const [clone .part.0] () from build/libqore.so.20
 No symbol table info available.
-#28 0x00007ffff76d0cb8 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#28 0x00007ffff76d0da8 in ExpressionStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#29 0x00007ffff7950342 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#29 0x00007ffff7950de2 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#30 0x00007ffff796bb65 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#30 0x00007ffff796bef5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#31 0x00007ffff796c003 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#31 0x00007ffff796c393 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#32 0x00007ffff7a4a6dd in ForEachStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#32 0x00007ffff7a4aa5d in ForEachStatement::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#33 0x00007ffff7950342 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#33 0x00007ffff7950de2 in AbstractStatement::exec(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#34 0x00007ffff796bb65 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#34 0x00007ffff796bef5 in StatementBlock::execIntern(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#35 0x00007ffff796c003 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#35 0x00007ffff796c393 in StatementBlock::execImpl(RuntimeConfig&, QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#36 0x00007ffff768f026 in StatementBlock::exec(ExceptionSink*) () from build/libqore.so.20
+#36 0x00007ffff768f066 in StatementBlock::exec(ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#37 0x00007ffff7adfb9e in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
+#37 0x00007ffff7ae0ede in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#38 0x00007ffff7ae0f28 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
+#38 0x00007ffff7ae2268 in UserVariantBase::eval(char const*, CodeEvaluationHelper*, QoreObject*, ExceptionSink*, qore_class_private const*) const () from build/libqore.so.20
 No symbol table info available.
-#39 0x00007ffff7ae16d7 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
+#39 0x00007ffff7ae2a17 in UserMethodVariant::evalMethod(QoreObject*, CodeEvaluationHelper&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#40 0x00007ffff7a03654 in qore_method_private::evalNormalVariant(QoreObject*, RuntimeConfig&, QoreExternalMethodVariant const*, QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
+#40 0x00007ffff7a039f4 in qore_method_private::evalNormalVariant(QoreObject*, RuntimeConfig&, QoreExternalMethodVariant const*, QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#41 0x00007ffff76cd8c9 in AbstractQoreNode::eval(bool&, ExceptionSink*) const () from build/libqore.so.20
+#41 0x00007ffff76cd9b9 in AbstractQoreNode::eval(bool&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#42 0x00007ffff76d07ad in evalAndRef(QoreValue&, ExceptionSink*) () from build/libqore.so.20
+#42 0x00007ffff76d089d in evalAndRef(QoreValue&, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#43 0x00007ffff7a5676d in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*) () from build/libqore.so.20
+#43 0x00007ffff7a575ea in QoreIRInterpreter::execute(QoreIRFunction const&, QoreValue&, ExceptionSink*, std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > >*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::vector<QoreValue, std::allocator<QoreValue> > const*, std::unordered_set<LocalVar const*, std::hash<LocalVar const*>, std::equal_to<LocalVar const*>, std::allocator<LocalVar const*> > const*, LocalVar const*, StatementBlock const*, QoreProgram*, bool, IRDirectParams const*, std::vector<QoreValue, std::allocator<QoreValue> >*) () from build/libqore.so.20
 No symbol table info available.
-#44 0x00007ffff7ae0382 in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
+#44 0x00007ffff7ae16c8 in UserVariantBase::evalTiered(char const*, ReferenceHolder<QoreListNode>&, QoreObject*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#45 0x00007ffff7ae1cef in UserConstructorVariant::evalConstructor(QoreClass const&, QoreObject*, CodeEvaluationHelper&, BCList*, BCEAList*, ExceptionSink*) const () from build/libqore.so.20
+#45 0x00007ffff7ae302f in UserConstructorVariant::evalConstructor(QoreClass const&, QoreObject*, CodeEvaluationHelper&, BCList*, BCEAList*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#46 0x00007ffff7a05c0d in ConstructorMethodFunction::evalConstructor(AbstractQoreFunctionVariant const*, QoreClass const&, QoreObject*, QoreListNode const*, BCList*, BCEAList*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
+#46 0x00007ffff7a05fad in ConstructorMethodFunction::evalConstructor(AbstractQoreFunctionVariant const*, QoreClass const&, QoreObject*, QoreListNode const*, BCList*, BCEAList*, RuntimeConfig&, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#47 0x00007ffff7a32b3a in qore_class_private::execConstructor(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreListNode const*, QoreClass const*, bool) const () from build/libqore.so.20
+#47 0x00007ffff7a32eba in qore_class_private::execConstructor(ExceptionSink*, RuntimeConfig&, AbstractQoreFunctionVariant const*, QoreListNode const*, QoreClass const*, bool) const () from build/libqore.so.20
 No symbol table info available.
-#48 0x00007ffff7a330e4 in QoreClass::execConstructor(QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
+#48 0x00007ffff7a33464 in QoreClass::execConstructor(QoreListNode const*, ExceptionSink*) const () from build/libqore.so.20
 No symbol table info available.
-#49 0x00007ffff7a3359a in QoreProgram::runClass(char const*, ExceptionSink*) () from build/libqore.so.20
+#49 0x00007ffff7a3391a in QoreProgram::runClass(char const*, ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
-#50 0x00007ffff7a33648 in QoreProgram::run(ExceptionSink*) () from build/libqore.so.20
+#50 0x00007ffff7a339c8 in QoreProgram::run(ExceptionSink*) () from build/libqore.so.20
 No symbol table info available.
 #51 0x000055555555cd28 in qore_main_intern (argc=<optimized out>, argv=<optimized out>, other_po=<optimized out>) at /home/david/src/qore/git/qore/command-line.cpp:1785
         rv = {bits = 1, static DOUBLE_ENCODE_OFFSET = 281474976710656, static DOUBLE_BOUNDARY = 18444773748872577024, static TAG_INT48 = 18444773748872577024, static TAG_POINTER = 18445055223849287680, static TAG_SPECIAL = 18445336698825998336, static TAG_SHORTSTR_BASE = 18445618173802708992, static TAG_ENUM = 18445899648779419648, static TAG_MASK = 18446462598732840960, static PAYLOAD_MASK = 281474976710655, static VAL_NOTHING = 0, static VAL_NULL = 18445336698825998337, static VAL_FALSE = 18445336698825998338, static VAL_TRUE = 18445336698825998339, static INT48_MIN = -140737488355328, static INT48_MAX = 140737488355327, static SHORTSTR_MAX_BYTES = 6, static InlineIntMin = -140737488355328, static InlineIntMax = 140737488355327}
-        qpgm = {pgm = 0x555555996480, xsink = @0x7fffffffcfe0}
+        qpgm = {pgm = 0x555555996480, xsink = @0x7fffffffcfd0}
         mod_errs = <optimized out>
         rc = 0
         program_file_name = 0x555555616fc0 "./examples/test/ir/AOTSmoke.qtest"
         scopeGuard1547 = <optimized out>
         wsink = {priv = 0x555555996440}
         xsink = {priv = 0x555555996460}
-#52 0x00007fffee62a575 in __libc_start_call_main (main=main@entry=0x55555555a590 <main(int, char**)>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd298) at ../sysdeps/nptl/libc_start_call_main.h:58
+#52 0x00007fffee62a575 in __libc_start_call_main (main=main@entry=0x55555555a590 <main(int, char**)>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd288) at ../sysdeps/nptl/libc_start_call_main.h:58
         self = <optimized out>
         result = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, -6390555826991788128, 140737488343704, 2, 140737354125312, 93824992464376, -6390555827073577056, -6390594197931159648}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd298}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, 5891263919429933188, 140737488343688, 2, 140737354125312, 93824992464376, 5891263919457196164, 5891229930572503172}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd288}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
-#53 0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a590 <main(int, char**)>, argc=2, argv=0x7fffffffd298, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd288) at ../csu/libc-start.c:360
+#53 0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a590 <main(int, char**)>, argc=2, argv=0x7fffffffd288, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd278) at ../csu/libc-start.c:360
 No locals.
 #54 0x000055555555a5c5 in _start ()
 No symbol table info available.
 A debugging session is active.
 
-	Inferior 1 [process 2773213] will be killed.
+	Inferior 1 [process 3194623] will be killed.
 
 Quit anyway? (y or n) [answered Y; input not from terminal]

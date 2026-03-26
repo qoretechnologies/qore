@@ -4164,6 +4164,16 @@ struct JITOnBlockExitHandler {
 
 static thread_local std::vector<JITOnBlockExitHandler> jit_obe_handlers;
 
+// Thread-local pointer to the innermost IR interpreter's slot cache
+// Set/restored by QoreIRInterpreter::execute() to allow qore_rt_exec_on_block_exit_impl
+// to pass parent_slot_cache when executing handler IR functions (Phase 2, Fix 2a)
+static thread_local std::vector<QoreValue>* current_ir_slot_cache = nullptr;
+
+// Accessor exported for IR interpreter (returns void** for C ABI compatibility)
+extern "C" DLLEXPORT void** qore_rt_get_ir_slot_cache_ptr() {
+    return reinterpret_cast<void**>(&current_ir_slot_cache);
+}
+
 extern "C" DLLEXPORT void qore_rt_push_on_block_exit(int type, StatementBlock* code) {
     jit_obe_handlers.push_back({static_cast<obe_type_e>(type), code, nullptr, nullptr, nullptr});
 }
@@ -4228,8 +4238,11 @@ extern "C" DLLEXPORT void qore_rt_exec_on_block_exit_impl(int64_t saved_count, E
                         }
                     } else if (jit_obe_handlers[i].handler_ir) {
                         // Execute compiled handler via IR interpreter
+                        // Phase 2, Fix 2c: Pass parent slot cache for handler access to parent scope
                         QoreValue rv;
-                        QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink);
+                        QoreIRInterpreter::execute(*jit_obe_handlers[i].handler_ir, rv, &obe_xsink,
+                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, false, nullptr,
+                            current_ir_slot_cache);
                         rv.discard(nullptr);
                     } else {
                         // AST fallback

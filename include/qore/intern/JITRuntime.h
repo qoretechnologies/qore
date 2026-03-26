@@ -656,6 +656,11 @@ uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, int32_t slot, uint64_t
 uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_val_bits,
     ExceptionSink* xsink);
 
+//! Get pointer to TLS slot cache variable for threading parent scope to exception-path handlers
+//! Phase 2, Fix 2a: Used by QoreIRInterpreter to set/restore the current IR frame's slot cache
+//! Returns address of thread-local pointer (cast to void** for C ABI compatibility)
+void** qore_rt_get_ir_slot_cache_ptr();
+
 } // extern "C"
 
 #endif
