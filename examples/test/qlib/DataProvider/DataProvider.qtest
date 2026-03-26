@@ -4028,14 +4028,14 @@ public class DataProviderTest inherits QUnit::Test {
         {
             QoreListDataType t(new Type("softlist<int>"));
             assertEq((1,), t.acceptsValue(1));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq((1,), t.acceptsValue((1,)));
         }
 
         {
             QoreListDataType t(new Type("softlist<string>"));
             assertEq(("a",), t.acceptsValue("a"));
-            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), (NULL,));
+            assertThrows("RUNTIME-TYPE-ERROR", "NULL", \t.acceptsValue(), ((NULL,),));
             assertEq(("a",), t.acceptsValue(("a",)));
         }
     }
