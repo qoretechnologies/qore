@@ -62,6 +62,9 @@ SparseMatrixXd qoreTripletListToSparse(int rows, int cols,
         eigen_triplets.reserve(triplets->size());
 
         for (size_t i = 0; i < triplets->size(); ++i) {
+            if (i % 1000 == 0 && qore_check_cancel(xsink, "SparseMatrix from triplets")) {
+                return SparseMatrixXd(0, 0);
+            }
             QoreValue entry = triplets->retrieveEntry(i);
             if (entry.getType() != NT_HASH) {
                 xsink->raiseException("ML-SPARSE-ERROR",
@@ -105,8 +108,12 @@ QoreListNode* sparseToQoreTripletList(const SparseMatrixXd& sparse,
     ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
 
+    int check_counter = 0;
     for (int k = 0; k < sparse.outerSize(); ++k) {
         for (SparseMatrixXd::InnerIterator it(sparse, k); it; ++it) {
+            if (++check_counter % 1000 == 0 && qore_check_cancel(xsink, "SparseMatrix toTriplets")) {
+                return nullptr;
+            }
             ReferenceHolder<QoreHashNode> entry(new QoreHashNode(autoTypeInfo), xsink);
             entry->setKeyValue("row", static_cast<int64>(it.row()), xsink);
             entry->setKeyValue("col", static_cast<int64>(it.col()), xsink);

@@ -47,6 +47,9 @@ QoreListNode* QoreSparseMatrix::toDense(ExceptionSink* xsink) const {
 
     ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
     for (int i = 0; i < rows; ++i) {
+        if (i % 100 == 0 && qore_check_cancel(xsink, "SparseMatrix toDense")) {
+            return nullptr;
+        }
         ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
         for (int j = 0; j < cols; ++j) {
             row->push(dense(i, j), xsink);
