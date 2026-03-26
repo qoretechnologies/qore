@@ -319,9 +319,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! True if this instance owns the connection manager (should close on close())
             bool owns_mgr = True;
 
-            #! Holds stream handle alive during deferred non-blocking callback submissions
-            *HttpClientIo::HttpClientStreamHandle pending_callback_stream;
-
             #! Target URL
             string url;
 
@@ -837,14 +834,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
         #! Submits a non-blocking REST request with a completion callback
         /** Prepares the request (OAuth2 token, serialization, auth headers) and submits it
-            via the multiplexed connection manager. The callback is invoked from the I/O
-            thread when the response arrives. This method never blocks.
+            via the multiplexed connection manager. The callback is invoked from the callback
+            worker pool (off the I/O thread) when the response arrives. This method never blocks.
 
             @param method HTTP method
             @param path request path
             @param body request body (optional)
             @param hdr request headers (optional)
-            @param callback called from the I/O thread with \c (hash<auto> resp, *hash<auto> err)
+            @param callback called from the callback worker pool with \c (hash<auto> resp, *hash<auto> err)
             @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
 
             @since %RestClientIo 1.1
@@ -859,12 +856,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             log(LoggerLevel::DEBUG, "restDoRequestWithCallback() %s %s%s", method, url, path);
 
-            # Store the stream handle to prevent GC before the deferred callback fires
-            pending_callback_stream = mgr.acquireStream(url);
-            pending_callback_stream.submitAsyncNonBlocking(method, path, hdr, prepared.serialized_body,
+            # Closure capture keeps stream alive until callback fires, preventing premature GC
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            stream.submitAsyncNonBlocking(method, path, hdr, prepared.serialized_body,
                 sub (hash<auto> resp, *hash<auto> err) {
-                    # Clear the stream reference now that the callback has fired
-                    remove pending_callback_stream;
+                    remove stream;
                     callback(resp, err);
                 },
             );

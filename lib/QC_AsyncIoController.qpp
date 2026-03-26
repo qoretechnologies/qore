@@ -84,7 +84,7 @@ hashdecl Qore::SocketPollOperationInfo {
     */
     *Queue resultQueue;
 
-    //! Optional completion callback; called in the I/O thread when the operation completes
+    //! Optional completion callback; called from the callback worker pool when the operation completes
     /** When provided, results are delivered via callback instead of Queue.
         The callback signature must accept a single hash<SocketPollResultInfo> argument.
         Mutually exclusive with \c resultQueue.
@@ -104,8 +104,8 @@ hashdecl Qore::SocketPollOperationInfo {
     @since %Qore 2.3
 */
 hashdecl Qore::SocketPollResultInfo {
-    //! The socket that completed the operation
-    Socket sock;
+    //! The pollable I/O object that completed the operation
+    AbstractPollableIoObjectBase sock;
 
     //! The poll operation that completed
     AbstractPollOperation spop;

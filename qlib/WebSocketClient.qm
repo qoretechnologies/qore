@@ -2129,7 +2129,7 @@ ws.setEventQueue();
                 logDebug("async I/O cancel error: %s: %s", ex.err, ex.desc);
             }
         }
-        delete poll_op;
+        remove poll_op;
     }
 
     #! Wakes the async I/O controller to process pending operations

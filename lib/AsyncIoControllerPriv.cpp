@@ -198,14 +198,12 @@ void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj) {
             int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
             if (tid == -1) {
                 --active_workers;
-                if (active_workers == 0) {
-                    spop_obj->deref(&xsink);
-                    return;
-                }
             }
         }
 
-        // Use AsyncWorkItem with nullptr callback — signals abort dispatch
+        // Enqueue even if no workers exist — stop() will drain and clean up.
+        // Cannot execute synchronously here: caller may be the I/O thread,
+        // and abort() overrides in Qore could call submit() causing deadlock.
         async_queue.push_back({nullptr, nullptr, spop_obj});
         work_avail.signal();
     }
@@ -234,19 +232,12 @@ void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, Qore
             int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
             if (tid == -1) {
                 --active_workers;
-                if (active_workers == 0) {
-                    // No workers — execute synchronously as fallback
-                    if (callback) {
-                        callback->deref(&xsink);
-                    }
-                    if (args) {
-                        args->deref(&xsink);
-                    }
-                    return;
-                }
             }
         }
 
+        // Enqueue even if no workers exist — stop() will drain and clean up.
+        // Cannot execute synchronously here: caller may be the I/O thread,
+        // and callbacks could call submit() causing deadlock.
         async_queue.push_back({callback, args, nullptr});
         work_avail.signal();
     }
@@ -438,7 +429,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         sock_obj->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
     if (!sock) {
         if (!*xsink) {
-            xsink->raiseException("ASYNC-IO-ERROR", "invalid Socket object in 'sock' field");
+            xsink->raiseException("ASYNC-IO-ERROR",
+                "invalid pollable I/O object in 'sock' field; got instance of '%s'",
+                sock_obj->getClassName());
         }
         return nullptr;
     }
