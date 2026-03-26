@@ -405,7 +405,7 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
     }
 
     #! Called when the operation completes; dispatches result to the controller
-    nothing onComplete(hash<auto> result) {
+    nothing onComplete(hash<SocketPollResultInfo> result) {
         if (completion_controller) {
             completion_controller.handleAcceptResult(result, completion_listener, completion_target,
                 ssl, cert, key, completion_http_version, completion_owner);

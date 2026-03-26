@@ -571,7 +571,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
     }
 
     #! Called when the operation completes; dispatches result to the controller
-    nothing onComplete(hash<auto> result) {
+    nothing onComplete(hash<SocketPollResultInfo> result) {
         if (completion_controller) {
             completion_controller.handleQuicAcceptResult(result, completion_listener,
                 completion_target, completion_owner, self);

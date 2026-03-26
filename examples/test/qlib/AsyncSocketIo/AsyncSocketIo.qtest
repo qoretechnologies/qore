@@ -41,7 +41,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         Counter done(1);
         hash<SocketPollResultInfo> rv;
         info.spop = new AsyncSocketIo::CompletionPollProxy(info.spop,
-            sub (hash<auto> result) {
+            sub (hash<SocketPollResultInfo> result) {
                 rv = cast<hash<SocketPollResultInfo>>(result);
                 done.dec();
             });
@@ -705,7 +705,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
             RestClient rest({"url": "http://127.0.0.1:" + port});
             AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
             auto wrapped = new AsyncSocketIo::CompletionPollProxy(spop,
-                sub (hash<auto> result) {
+                sub (hash<SocketPollResultInfo> result) {
                     {
                         AutoLock al(cb_m);
                         push callback_results, {
@@ -793,7 +793,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
         auto wrapped_spop = new AsyncSocketIo::CompletionPollProxy(spop,
-            sub (hash<auto> result) {
+            sub (hash<SocketPollResultInfo> result) {
                 {
                     AutoLock al(cb_m);
                     ++callback_count;
@@ -846,7 +846,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         AbstractPollOperation op = server.startPollAccept();
         auto wrapped = new AsyncSocketIo::CompletionPollProxy(op,
-            sub (hash<auto> result) {
+            sub (hash<SocketPollResultInfo> result) {
                 # Submit a new accept from within onComplete — previously caused LOCK-ERROR
                 AbstractPollOperation op2 = server.startPollAccept();
                 ctrl.submit(<SocketPollOperationInfo>{

@@ -867,13 +867,12 @@ public class HttpClientConnectionManager {
                 conn.getProtocol(), conn.getConnectionId(), key);
         }
 
-        auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
-            sub (hash<SocketPollResultInfo> result) {
-                handleConnectionResult(key, conn, result);
-            });
+        op.setCompletionHandler(sub (hash<SocketPollResultInfo> result) {
+            handleConnectionResult(key, conn, result);
+        });
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
-            "spop": wrapped_op,
+            "spop": op,
             "owner": owner,
             "to": -1s,
         });

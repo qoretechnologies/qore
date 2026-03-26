@@ -5058,7 +5058,7 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     /** Schedules one final delivery so the terminal message is consumed.
         @since WebSocketClient 2.4
     */
-    nothing onComplete(hash<auto> result) {
+    nothing onComplete(hash<SocketPollResultInfo> result) {
         notifyPollComplete();
     }
 
@@ -5712,7 +5712,7 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation 
     /** Starts the event loop on success, or cleans up on failure.
         @since WebSocketClient 2.4
     */
-    nothing onComplete(hash<auto> result) {
+    nothing onComplete(hash<SocketPollResultInfo> result) {
         try {
             if (result.canceled) {
                 throw "WEBSOCKET-CONNECT-ERROR", "async connect was canceled";

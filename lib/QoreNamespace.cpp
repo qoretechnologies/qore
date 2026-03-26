@@ -165,6 +165,7 @@ DLLLOCAL QoreClass* initTransformInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initTransformOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStdoutOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStderrOutputStreamClass(QoreNamespace& ns);
+DLLLOCAL void preinitAbstractPollOperationClass();
 DLLLOCAL QoreClass* initAbstractPollOperationClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
 
@@ -1253,7 +1254,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     preinitInputStreamClass();
     preinitOutputStreamClass();
 
-    qns.addSystemClass(initAbstractPollOperationClass(qns));
+    preinitAbstractPollOperationClass();  // shell only; full init after SocketPollResultInfo
     qns.addSystemClass(initSocketPollOperationBaseClass(qns));
     preinitSocketClass();
     qns.addSystemClass(initSocketPollOperationClass(qns));
@@ -1302,6 +1303,9 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // Must be before initAsyncIoControllerClass which references these hashdecls
     hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+    // Now that SocketPollResultInfo is available, finish AbstractPollOperation init
+    // (adds onComplete(hash<SocketPollResultInfo>) which references the hashdecl)
+    qns.addSystemClass(initAbstractPollOperationClass(qns));
 
     qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));

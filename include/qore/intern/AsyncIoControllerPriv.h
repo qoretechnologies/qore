@@ -66,13 +66,16 @@ class SocketPollOperationBase;
 
     @since %Qore 2.3
 */
+class AsyncIoControllerPriv;  // forward declaration for DT_CONTINUE_POLL
+
 class QoreCallDispatcher {
 public:
     //! Dispatch type for async work items
     enum DispatchType {
-        DT_ABORT,        //!< Call abort() on spop_obj
-        DT_ON_COMPLETE,  //!< Call onComplete(result) on spop_obj
-        DT_CALLBACK,     //!< Call a code reference with args (timer callbacks)
+        DT_ABORT,           //!< Call abort() on spop_obj
+        DT_ON_COMPLETE,     //!< Call onComplete(result) on spop_obj
+        DT_CALLBACK,        //!< Call a code reference with args (timer callbacks)
+        DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -82,6 +85,8 @@ public:
         ResolvedCallReferenceNode* callback; //!< For DT_CALLBACK: referenced (or nullptr)
         QoreListNode* args;                  //!< For DT_CALLBACK: referenced (or nullptr)
         DispatchType type;                   //!< What method to call
+        AsyncIoControllerPriv* controller;   //!< For DT_CONTINUE_POLL: controller (referenced)
+        std::string key;                     //!< For DT_CONTINUE_POLL: operation key
     };
 
     //! Creates the dispatcher
@@ -108,6 +113,14 @@ public:
         @param args the argument list (referenced — ownership transferred, or nullptr)
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args);
+
+    //! Dispatch continuePoll() asynchronously with result delivery back to I/O thread
+    /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
+        @param controller the AsyncIoControllerPriv to deliver the result to (referenced)
+        @param key the operation key for result correlation
+    */
+    DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
+        AsyncIoControllerPriv* controller, const std::string& key);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
@@ -148,6 +161,8 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollResultInfo;
     @since %Qore 2.3
 */
 class AsyncIoControllerPriv : public AbstractPrivateData {
+    friend class QoreCallDispatcher;  // for enqueueContinuePollResult from worker thread
+
 public:
     //! Default I/O operation timeout (30 seconds)
     static constexpr int64 DEFAULT_IO_TIMEOUT_US = 30000000LL;
@@ -327,17 +342,21 @@ private:
         Wake,
         AddTimer,
         CancelTimer,
+        ContinuePollResult,  //!< Result from async continuePoll() dispatch
     };
 
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::Wake;
-        std::string key;                //!< For Cancel: the cache key
+        std::string key;                //!< For Cancel / ContinuePollResult: the cache key
         std::string owner;              //!< For CancelOwner: the owner string
         QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
         bool* cancel_done_flag = nullptr; //!< For CancelOwner: set to true under lock before broadcast
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
+        QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
+        QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
+        bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -354,11 +373,13 @@ private:
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
+        bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
             other(nullptr), queue(nullptr),
-            spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false) {
+            spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false),
+            continue_poll_in_flight(false) {
         }
 
         DLLLOCAL ~PollInfo() {
@@ -494,7 +515,9 @@ private:
         int& events, ExceptionSink* xsink);
 
     //! Call continuePoll on an AbstractPollOperation object
-    DLLLOCAL static QoreHashNode* callContinuePoll(QoreObject* spop_obj, ExceptionSink* xsink);
+    //! Enqueue a continuePoll result from a worker thread back to the I/O thread
+    DLLLOCAL void enqueueContinuePollResult(const std::string& key, QoreHashNode* new_poll_info,
+        QoreHashNode* ex_hash, bool completed);
 
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);

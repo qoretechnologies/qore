@@ -3332,7 +3332,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         Counter done(1);
         *hash<auto> op_ex;
         auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
-            sub (hash<auto> result) {
+            sub (hash<SocketPollResultInfo> result) {
                 if (result.ex) {
                     op_ex = result.ex;
                 }

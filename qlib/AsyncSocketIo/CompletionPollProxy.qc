@@ -76,7 +76,7 @@ public class AsyncSocketIo::CompletionPollProxy inherits AbstractPollOperation {
         return inner.getOutput();
     }
 
-    nothing onComplete(hash<auto> result) {
+    nothing onComplete(hash<SocketPollResultInfo> result) {
         completion_handler(result);
     }
 }
