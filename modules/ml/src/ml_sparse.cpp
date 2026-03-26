@@ -29,7 +29,6 @@
 
 SparseMatrixXd denseToSparse(const MatrixXd& dense, double threshold) {
     std::vector<Eigen::Triplet<double>> triplets;
-    triplets.reserve(dense.nonZeros());
 
     for (Eigen::Index i = 0; i < dense.rows(); ++i) {
         for (Eigen::Index j = 0; j < dense.cols(); ++j) {
