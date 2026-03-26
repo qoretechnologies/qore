@@ -111,6 +111,7 @@ public class DataProvider {
             "fixedlengthwrite": "FixedLengthUtil",
             "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
+            "gemini": "GeminiDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
