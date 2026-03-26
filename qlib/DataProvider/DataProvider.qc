@@ -74,6 +74,7 @@ public class DataProvider {
     public {
         #! Map of known data provider factory names to modules
         const FactoryMap = {
+            "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
 

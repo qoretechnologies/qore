@@ -1974,6 +1974,7 @@ qore_user_module("qlib/JotformRestClient.qm" "ConnectionProvider;Mime;RestClient
 qore_user_module("qlib/MailgunRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2026,6 +2027,7 @@ qore_user_module("qlib/WooCommerceDataProvider" "WooCommerceRestClient;RestClien
 qore_user_module("qlib/JotformDataProvider" "JotformRestClient;RestClient;DataProvider" "jotform-logo.svg")
 qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataProvider" "mailgun-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
+qore_user_module("qlib/AnthropicDataProvider" "AnthropicRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "anthropic-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")
 
 # base 9 modules
