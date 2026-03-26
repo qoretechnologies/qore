@@ -2084,9 +2084,8 @@ struct qore_socket_private {
 
     DLLLOCAL int set_non_blocking(bool non_blocking, ExceptionSink* xsink) {
         assert(xsink);
-        // ignore call when socket already closed
+        // ignore call when socket already closed (e.g. during shutdown cleanup)
         if (sock == QORE_INVALID_SOCKET) {
-            assert(*xsink);
             return -1;
         }
 
