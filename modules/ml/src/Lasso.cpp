@@ -337,6 +337,105 @@ QoreListNode* QoreLasso::getFeatureStds(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+void QoreLasso::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (X.rows() == 0 || X.cols() == 0) {
+        xsink->raiseException("ML-LASSO-ERROR",
+            "cannot fit on empty data: provide at least one sample with one feature");
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-LASSO-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+
+    n_features = static_cast<int>(X.cols());
+    int n_samples = static_cast<int>(X.rows());
+
+    // Note: normalization skipped for sparse data (centering destroys sparsity)
+
+    // Center y if fit_intercept
+    double y_mean = 0.0;
+    VectorXd y_c = y;
+    if (fit_intercept) {
+        y_mean = y.mean();
+        y_c = y.array() - y_mean;
+    }
+
+    // Precompute sparse column squared norms
+    VectorXd X_col_sq(n_features);
+    for (int j = 0; j < n_features; ++j) {
+        X_col_sq(j) = X.col(j).squaredNorm();
+    }
+
+    // Initialize coefficients to zero
+    coefficients = VectorXd::Zero(n_features);
+
+    // L1 penalty scaled by number of samples
+    double lambda = alpha * n_samples;
+
+    // Maintain residual vector (sparse col ops are O(nnz_j))
+    VectorXd residual = y_c;
+
+    // Coordinate descent
+    int iter = 0;
+    for (iter = 0; iter < max_iter; ++iter) {
+        if (iter % 10 == 0 && qore_check_cancel(xsink, "Lasso fitSparse")) {
+            return;
+        }
+
+        VectorXd coef_old = coefficients;
+
+        for (int j = 0; j < n_features; ++j) {
+            double old_coef_j = coefficients(j);
+            double rho_j = X.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
+
+            double x_sq = X_col_sq(j);
+            if (x_sq < 1e-10) {
+                coefficients(j) = 0.0;
+            } else {
+                coefficients(j) = softThreshold(rho_j, lambda) / x_sq;
+            }
+
+            double delta = coefficients(j) - old_coef_j;
+            if (delta != 0.0) {
+                // Sparse column * scalar → update residual efficiently
+                residual -= X.col(j) * delta;
+            }
+        }
+
+        if ((coefficients - coef_old).lpNorm<Eigen::Infinity>() < tol) {
+            ++iter;
+            break;
+        }
+    }
+    iterations_run = iter;
+
+    // Compute intercept
+    if (fit_intercept) {
+        VectorXd col_sums = X.transpose() * VectorXd::Ones(n_samples);
+        VectorXd X_mean = col_sums / n_samples;
+        intercept = y_mean - X_mean.dot(coefficients);
+    } else {
+        intercept = 0.0;
+    }
+
+    // R-squared
+    VectorXd y_pred = (X * coefficients).array() + intercept;
+    double ss_res = (y - y_pred).squaredNorm();
+    double ss_tot = (y.array() - y.mean()).square().sum();
+    if (ss_tot > 1e-10) {
+        r_squared = 1.0 - ss_res / ss_tot;
+    } else {
+        r_squared = (ss_res < 1e-10) ? 1.0 : 0.0;
+    }
+
+    fitted = true;
+}
+
 std::vector<uint8_t> QoreLasso::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

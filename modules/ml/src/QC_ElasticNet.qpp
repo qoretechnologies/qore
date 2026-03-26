@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 #include "QC_ElasticNet.h"
+#include "QC_SparseMatrix.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclElasticNetResult;
@@ -365,4 +366,25 @@ list<float> ElasticNet::getFeatureMeans() [flags=RET_VALUE_ONLY] {
 */
 list<float> ElasticNet::getFeatureStds() [flags=RET_VALUE_ONLY] {
     return enet->getFeatureStds(xsink);
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse column operations in coordinate descent for memory-efficient fitting
+    on high-dimensional sparse data.
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of target values
+
+    @note Feature normalization is not applied when fitting with sparse data, as
+    centering destroys sparsity. Pre-normalize your features if needed.
+
+    @throw ML-ELASTICNET-ERROR if fitting fails or dimensions mismatch
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing ElasticNet::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    enet->fitSparse(X->getMatrix(), target, xsink);
 }

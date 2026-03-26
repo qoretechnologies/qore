@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_LASSO_H
 
 #include "ml_common.h"
+#include "ml_sparse.h"
 
 #include <mutex>
 
@@ -51,6 +52,9 @@ public:
 
     //! Fit on feature matrix X and target vector y (thread-safe)
     DLLLOCAL void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
+
+    //! Fit on sparse feature matrix (thread-safe)
+    DLLLOCAL void fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
 
     //! Predict for a single row vector
     DLLLOCAL QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
