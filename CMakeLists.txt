@@ -280,6 +280,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
+    lib/QC_DelegatingPollOperation.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
     lib/QC_LoggerInterfaceBase.qpp
@@ -1507,6 +1508,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"

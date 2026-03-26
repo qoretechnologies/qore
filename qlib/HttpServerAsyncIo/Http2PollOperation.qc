@@ -37,7 +37,7 @@ public namespace HttpServerAsyncIo {
     a higher-level interface for the HttpServer async I/O controller.
 
 */
-public class Http2PollOperation inherits AbstractPollOperation {
+public class Http2PollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_INIT = "init";

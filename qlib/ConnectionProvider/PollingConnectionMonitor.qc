@@ -543,7 +543,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         cache{name}.ping_active = True;
         int submit_gen = ++cache{name}.ping_gen;
         string conn_name = name;
-        auto wrapped_spop = new AsyncSocketIo::CompletionPollProxy(spop,
+        auto wrapped_spop = new DelegatingPollOperation(spop,
             sub (hash<SocketPollResultInfo> result) {
                 handlePingResult(conn_name, submit_gen, result);
             });

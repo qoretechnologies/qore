@@ -35,7 +35,7 @@ public namespace HttpServerAsyncIo {
     The client receives events in the text/event-stream format.
 
 */
-public class HttpSseStreamPollOperation inherits AbstractPollOperation {
+public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_STREAMING = "streaming";

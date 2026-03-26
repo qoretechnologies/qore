@@ -374,12 +374,13 @@ private:
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
+        int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
             other(nullptr), queue(nullptr),
             spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false),
-            continue_poll_in_flight(false) {
+            continue_poll_in_flight(false), poll_timeout_deadline_us(0) {
         }
 
         DLLLOCAL ~PollInfo() {

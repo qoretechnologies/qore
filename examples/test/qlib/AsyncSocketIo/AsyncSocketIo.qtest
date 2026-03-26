@@ -33,14 +33,14 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         int port;
     }
 
-    #! Synchronous exec replacement: submit with CompletionPollProxy + Counter wait
+    #! Synchronous exec replacement: submit with DelegatingPollOperation + Counter wait
     /** Replaces the removed AsyncSocketIoController::exec() method.
     */
     static hash<SocketPollResultInfo> execOp(AsyncSocketIoController ctrl,
             hash<SocketPollOperationInfo> info) {
         Counter done(1);
         hash<SocketPollResultInfo> rv;
-        info.spop = new AsyncSocketIo::CompletionPollProxy(info.spop,
+        info.spop = new DelegatingPollOperation(info.spop,
             sub (hash<SocketPollResultInfo> result) {
                 rv = cast<hash<SocketPollResultInfo>>(result);
                 done.dec();
@@ -704,7 +704,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         for (int i = 0; i < num_ops; ++i) {
             RestClient rest({"url": "http://127.0.0.1:" + port});
             AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-            auto wrapped = new AsyncSocketIo::CompletionPollProxy(spop,
+            auto wrapped = new DelegatingPollOperation(spop,
                 sub (hash<SocketPollResultInfo> result) {
                     {
                         AutoLock al(cb_m);
@@ -792,7 +792,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-        auto wrapped_spop = new AsyncSocketIo::CompletionPollProxy(spop,
+        auto wrapped_spop = new DelegatingPollOperation(spop,
             sub (hash<SocketPollResultInfo> result) {
                 {
                     AutoLock al(cb_m);
@@ -845,7 +845,7 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         Counter done(1);
 
         AbstractPollOperation op = server.startPollAccept();
-        auto wrapped = new AsyncSocketIo::CompletionPollProxy(op,
+        auto wrapped = new DelegatingPollOperation(op,
             sub (hash<SocketPollResultInfo> result) {
                 # Submit a new accept from within onComplete — previously caused LOCK-ERROR
                 AbstractPollOperation op2 = server.startPollAccept();

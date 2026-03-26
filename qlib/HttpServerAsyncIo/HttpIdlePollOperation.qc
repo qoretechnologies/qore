@@ -35,7 +35,7 @@ public namespace HttpServerAsyncIo {
     and the connection should transition to header reading.
 
 */
-public class HttpIdlePollOperation inherits AbstractPollOperation {
+public class HttpIdlePollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_IDLE = "idle";

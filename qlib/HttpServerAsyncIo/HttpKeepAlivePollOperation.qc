@@ -45,7 +45,7 @@ public namespace HttpServerAsyncIo {
     which already stays in continuous read state.
 
 */
-public class HttpKeepAlivePollOperation inherits AbstractPollOperation {
+public class HttpKeepAlivePollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! Phase constants
         const PHASE_IDLE = "idle";

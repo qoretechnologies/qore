@@ -2204,7 +2204,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # dispatch to the full thread pool).
             Counter done(1);
             *hash<auto> send_ex;
-            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
+            auto wrapped_op = new DelegatingPollOperation(op,
                 sub (hash<SocketPollResultInfo> result) {
                     if (result.ex) {
                         send_ex = result.ex;

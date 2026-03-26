@@ -98,6 +98,18 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         *code<nothing(hash<SocketPollResultInfo>)> completion_handler;
     }
 
+    #! Sets a completion handler called from onComplete()
+    setCompletionHandler(code<nothing(hash<SocketPollResultInfo>)> handler) {
+        completion_handler = handler;
+    }
+
+    #! Called when the poll operation completes
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (completion_handler) {
+            completion_handler(result);
+        }
+    }
+
     #! Returns True if the connection is closed
     bool isClosed() {
         string s = state;
@@ -140,17 +152,6 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
     */
     setReadyCallback(code<nothing()> callback) {
         ready_callback = callback;
-    }
-
-    #! Sets a completion handler called from onComplete()
-    setCompletionHandler(code<nothing(hash<SocketPollResultInfo>)> handler) {
-        completion_handler = handler;
-    }
-
-    nothing onComplete(hash<SocketPollResultInfo> result) {
-        if (completion_handler) {
-            completion_handler(result);
-        }
     }
 
     #! Returns True if an error occurred

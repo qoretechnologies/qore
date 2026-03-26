@@ -35,7 +35,7 @@ public namespace HttpServerAsyncIo {
     WebSocket frames are handled according to RFC 6455.
 
 */
-public class HttpWebSocketPollOperation inherits AbstractPollOperation {
+public class HttpWebSocketPollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_CONNECTED = "connected";

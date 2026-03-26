@@ -1408,7 +1408,7 @@ public class HttpAsyncSocketIoController {
         }
         string owner = linfo.listener.uniqueHash();
         try {
-            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(ssl_op,
+            auto wrapped_op = new DelegatingPollOperation(ssl_op,
                 sub (hash<SocketPollResultInfo> result) {
                     handleSslResult(result, uh, linfo, http_version);
                 });
@@ -1716,13 +1716,21 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
-            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
-                sub (hash<SocketPollResultInfo> result) {
-                    handleConnectionResult(result, uh, cinfo.state);
-                });
+            # Set completion context on operations that support it (our base class);
+            # wrap C++ operations (startPollReadHttpHeader) in DelegatingPollOperation
+            AbstractPollOperation submit_op;
+            if (op instanceof HttpConnectionPollOperationBase) {
+                cast<HttpConnectionPollOperationBase>(op).setCompletionContext(self, uh, cinfo.state);
+                submit_op = op;
+            } else {
+                submit_op = new DelegatingPollOperation(op,
+                    sub (hash<SocketPollResultInfo> result) {
+                        handleConnectionResult(result, uh, cinfo.state);
+                    });
+            }
             controller.submit(<SocketPollOperationInfo>{
                 "sock": cinfo.sock,
-                "spop": wrapped_op,
+                "spop": submit_op,
                 "owner": owner,
                 "to": timeout,
             }, True);  # replace=True since connection key may be reused
@@ -1742,7 +1750,7 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Handles connection operation result from the controller
-    private handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
+    handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {
         if (result.canceled) {
             log(LoggerLevel::DEBUG, "connection op canceled: %s state=%y", uh, orig_state);

@@ -28,13 +28,6 @@
 
 %modern
 
-# Set up SIGUSR1 handler to dump thread stacks for debugging
-@debug {
-    set_signal_handler(SIGUSR1, sub (int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    });
-}
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
@@ -335,6 +328,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         # HTTP/3 callback ordering (stream removal after callback)
         addTestCase("H3 callback ordering", \testH3CallbackOrdering());
+
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("%Y\n", get_all_thread_call_stacks());
+            });
+        }
 
         set_return_value(main());
     }
