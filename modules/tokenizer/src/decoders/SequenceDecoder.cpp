@@ -171,6 +171,10 @@ SequenceDecoder::SequenceDecoder(const QoreHashNode* config, ExceptionSink* xsin
     }
 }
 
+SequenceDecoder::SequenceDecoder(std::vector<std::unique_ptr<AbstractDecoder>> decoders)
+        : decoders(std::move(decoders)) {
+}
+
 std::string SequenceDecoder::decode(const std::vector<std::string>& tokens) const {
     if (decoders.empty()) {
         // No decoders: just join tokens
