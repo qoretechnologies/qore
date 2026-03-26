@@ -1002,13 +1002,14 @@ ws.connect();
         } + opts.hdr;
 
         WebSocketConnectPollOperation connect_op(self, hc, hdr, http_opts, url, ws_ver,
-            offered_extensions);
+            offered_extensions, ready_queue);
 
         # Generate the async owner for this connection
         async_owner = "wsc-" + get_random_string(12);
 
-        # Submit the connect poll operation to the controller with a callback
-        # that starts the event loop when the connect completes
+        # Submit the connect poll operation to the controller
+        # The onComplete() override on the poll operation starts the event loop when
+        # the connect completes
         AsyncSocketIo::AsyncSocketIoController controller =
             AsyncSocketIo::getGlobalAsyncIoController();
         controller.submit(<SocketPollOperationInfo>{
@@ -1016,40 +1017,6 @@ ws.connect();
             "spop": connect_op,
             "owner": async_owner,
             "to": timeout_ms,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                try {
-                    if (result.canceled) {
-                        throw "WEBSOCKET-CONNECT-ERROR", "async connect was canceled";
-                    }
-                    if (result.ex) {
-                        throw result.ex.err, result.ex.desc;
-                    }
-                    hash<auto> connect_result = connect_op.getOutput();
-                    startEventLoop(connect_result);
-                    if (ready_queue) {
-                        ready_queue.push(connect_result);
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    # Clean up on failure: stop async I/O and close the socket
-                    try {
-                        stopAsyncIo();
-                        if (hc.isOpen()) {
-                            hc.shutdown();
-                            hc.close();
-                        }
-                    } catch () {
-                        # ignore cleanup errors
-                    }
-                    try {
-                        logError("async connect error: %s: %s", ex.err, ex.desc);
-                    } catch () {
-                        # ignore logging errors (OBJECT-ALREADY-DELETED)
-                    }
-                    if (ready_queue) {
-                        ready_queue.push({"error": ex});
-                    }
-                }
-            },
         });
     }
 
@@ -2098,17 +2065,6 @@ ws.setEventQueue();
             "spop": poll_op,
             "owner": async_owner,
             "to": -1s,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                # Schedule final delivery for any remaining messages (e.g., "closed")
-                try {
-                    scheduleDelivery();
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        return;
-                    }
-                    rethrow;
-                }
-            },
         });
 
         # Wake the controller to ensure the first continuePoll() runs immediately;
@@ -5098,6 +5054,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         }
     }
 
+    #! Called when the poll operation completes (goal reached or error/timeout)
+    /** Schedules one final delivery so the terminal message is consumed.
+        @since WebSocketClient 2.4
+    */
+    nothing onComplete(hash<auto> result) {
+        notifyPollComplete();
+    }
+
     #! Reads available data from the socket into recv_buffer (non-blocking)
     private readAvailableData() {
         if (transport == "http3") {
@@ -5632,6 +5596,8 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation 
         *hash<auto> output;
         #! Current state
         string state = "connecting";
+        #! Optional queue to signal when the connection is ready
+        *Queue ready_queue;
     }
 
     #! Creates a new WebSocketConnectPollOperation
@@ -5642,11 +5608,14 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation 
         @param url the WebSocket URL
         @param ws_ver the WebSocket protocol version (default 13)
         @param offered_extensions optional list of extensions to offer
+        @param ready_queue optional queue to receive the connect result or error
     */
     constructor(WebSocketClient wsc, HTTPClient hc, hash<auto> hdr, hash<auto> http_opts,
-            string url, softint ws_ver, *list<AbstractWebSocketExtension> offered_extensions) {
+            string url, softint ws_ver, *list<AbstractWebSocketExtension> offered_extensions,
+            *Queue ready_queue) {
         self.wsc = wsc;
         self.hc = hc;
+        self.ready_queue = ready_queue;
 
         # Generate WebSocket key for handshake
         ws_key = get_random_string(16).toBase64();
@@ -5736,6 +5705,35 @@ public class WebSocketConnectPollOperation inherits Qore::AbstractPollOperation 
     abort() {
         if (inner_poller) {
             inner_poller.abort();
+        }
+    }
+
+    #! Called when the poll operation completes (goal reached or error/timeout)
+    /** Starts the event loop on success, or cleans up on failure.
+        @since WebSocketClient 2.4
+    */
+    nothing onComplete(hash<auto> result) {
+        try {
+            if (result.canceled) {
+                throw "WEBSOCKET-CONNECT-ERROR", "async connect was canceled";
+            }
+            if (result.ex) {
+                throw result.ex.err, result.ex.desc;
+            }
+            hash<auto> connect_result = self.getOutput();
+            wsc.startEventLoop(connect_result);
+            if (ready_queue) {
+                ready_queue.push(connect_result);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # Clean up on failure; exceptions are ignored during cleanup
+            try { wsc.disconnect(); } catch () {}
+            try {
+                wsc.logArgs(LoggerLevel::ERROR, "async connect error: %s: %s", ex.err, ex.desc);
+            } catch () {}
+            if (ready_queue) {
+                ready_queue.push({"error": ex});
+            }
         }
     }
 }

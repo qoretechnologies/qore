@@ -83,6 +83,21 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
 
         #! True if the connection is using HTTP/2
         bool is_http2 = False;
+
+        #! Controller for completion callback
+        *HttpAsyncSocketIoController completion_controller;
+
+        #! Listener socket for completion callback
+        *Socket completion_listener;
+
+        #! Target for completion callback
+        *HttpAsyncTarget completion_target;
+
+        #! HTTP version for completion callback
+        *string completion_http_version;
+
+        #! Owner identifier for completion callback
+        *string completion_owner;
     }
 
     #! Creates the poll operation
@@ -371,6 +386,30 @@ public class HttpAcceptPollOperation inherits AbstractPollOperation {
     #! Returns the negotiated ALPN protocol
     *string getNegotiatedProtocol() {
         return negotiated_protocol;
+    }
+
+    #! Sets the completion context so that onComplete() can dispatch the result
+    /** @param controller the async I/O controller
+        @param listener the server listener socket
+        @param target the async target
+        @param http_version the HTTP version string
+        @param owner the owner identifier
+    */
+    nothing setCompletionContext(HttpAsyncSocketIoController controller, Socket listener,
+            HttpAsyncTarget target, string http_version, string owner) {
+        completion_controller = controller;
+        completion_listener = listener;
+        completion_target = target;
+        completion_http_version = http_version;
+        completion_owner = owner;
+    }
+
+    #! Called when the operation completes; dispatches result to the controller
+    nothing onComplete(hash<auto> result) {
+        if (completion_controller) {
+            completion_controller.handleAcceptResult(result, completion_listener, completion_target,
+                ssl, cert, key, completion_http_version, completion_owner);
+        }
     }
 
     #! Aborts the operation

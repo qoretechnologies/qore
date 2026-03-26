@@ -158,10 +158,6 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
         queue->deref(xsink);
         queue = nullptr;
     }
-    if (callback) {
-        callback->deref(xsink);
-        callback = nullptr;
-    }
     if (spop_base) {
         spop_base->deref(xsink);
         spop_base = nullptr;
@@ -183,64 +179,53 @@ QoreCallDispatcher::~QoreCallDispatcher() {
 }
 
 void QoreCallDispatcher::dispatchAbortAsync(QoreObject* spop_obj) {
-    {
-        AutoLocker al(m);
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_ABORT});
+}
 
-        if (stopping) {
-            ExceptionSink xsink;
-            spop_obj->deref(&xsink);
-            return;
-        }
-
-        if (active_workers < max_workers) {
-            ++active_workers;
-            ExceptionSink xsink;
-            int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
-            if (tid == -1) {
-                --active_workers;
-            }
-        }
-
-        // Enqueue even if no workers exist — stop() will drain and clean up.
-        // Cannot execute synchronously here: caller may be the I/O thread,
-        // and abort() overrides in Qore could call submit() causing deadlock.
-        async_queue.push_back({nullptr, nullptr, spop_obj});
-        work_avail.signal();
-    }
+void QoreCallDispatcher::dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result) {
+    enqueue({spop_obj, result, nullptr, nullptr, DT_ON_COMPLETE});
 }
 
 void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args) {
-    {
-        AutoLocker al(m);
+    enqueue({nullptr, nullptr, callback, args, DT_CALLBACK});
+}
 
-        if (stopping) {
-            // Cannot dispatch — clean up refs synchronously
-            ExceptionSink xsink;
-            if (callback) {
-                callback->deref(&xsink);
-            }
-            if (args) {
-                args->deref(&xsink);
-            }
-            return;
+void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
+    AutoLocker al(m);
+
+    if (stopping) {
+        // Cannot dispatch — clean up refs synchronously
+        ExceptionSink xsink;
+        if (item.spop_obj) {
+            item.spop_obj->deref(&xsink);
         }
-
-        // Lazily spawn a worker if needed and below max
-        if (active_workers < max_workers) {
-            ++active_workers;
-            ExceptionSink xsink;
-            int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
-            if (tid == -1) {
-                --active_workers;
-            }
+        if (item.result) {
+            item.result->deref(&xsink);
         }
-
-        // Enqueue even if no workers exist — stop() will drain and clean up.
-        // Cannot execute synchronously here: caller may be the I/O thread,
-        // and callbacks could call submit() causing deadlock.
-        async_queue.push_back({callback, args, nullptr});
-        work_avail.signal();
+        if (item.callback) {
+            item.callback->deref(&xsink);
+        }
+        if (item.args) {
+            item.args->deref(&xsink);
+        }
+        return;
     }
+
+    // Lazily spawn a worker if needed and below max
+    if (active_workers < max_workers) {
+        ++active_workers;
+        ExceptionSink xsink;
+        int tid = q_start_thread(&xsink, workerEntry, this, QTF_EXTERNAL_LIFECYCLE);
+        if (tid == -1) {
+            --active_workers;
+        }
+    }
+
+    // Enqueue even if no workers exist — stop() will drain and clean up.
+    // Cannot execute synchronously here: caller may be the I/O thread,
+    // and Qore code could call submit() causing deadlock.
+    async_queue.push_back(std::move(item));
+    work_avail.signal();
 }
 
 void QoreCallDispatcher::stop(ExceptionSink* xsink) {
@@ -256,14 +241,17 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
     // Clean up any remaining async work items
     for (auto& item : async_queue) {
+        if (item.spop_obj) {
+            item.spop_obj->deref(xsink);
+        }
+        if (item.result) {
+            item.result->deref(xsink);
+        }
         if (item.callback) {
             item.callback->deref(xsink);
         }
         if (item.args) {
             item.args->deref(xsink);
-        }
-        if (item.abort_obj) {
-            item.abort_obj->deref(xsink);
         }
     }
     async_queue.clear();
@@ -279,7 +267,7 @@ void QoreCallDispatcher::workerEntry(ExceptionSink* xsink, void* arg) {
 
 void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
     while (true) {
-        AsyncWorkItem async_item{nullptr, nullptr, nullptr};
+        AsyncWorkItem async_item{nullptr, nullptr, nullptr, nullptr, DT_ABORT};
 
         {
             AutoLocker al(m);
@@ -297,31 +285,56 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_queue.pop_front();
         }
 
+        ExceptionSink work_xsink;
+        const char* method_name = nullptr;
+
+        switch (async_item.type) {
+            case DT_ABORT: {
+                method_name = "abort";
+                ValueHolder rv(async_item.spop_obj->evalMethod("abort", nullptr, &work_xsink),
+                    &work_xsink);
+                break;
+            }
+            case DT_ON_COMPLETE: {
+                method_name = "onComplete";
+                ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                if (async_item.result) {
+                    args->push(async_item.result, xsink);
+                    async_item.result = nullptr;  // ownership transferred to args
+                }
+                ValueHolder rv(async_item.spop_obj->evalMethod("onComplete", *args, &work_xsink),
+                    &work_xsink);
+                break;
+            }
+            case DT_CALLBACK: {
+                method_name = "callback";
+                if (async_item.callback) {
+                    ValueHolder rv(async_item.callback->execValue(async_item.args, &work_xsink),
+                        &work_xsink);
+                }
+                break;
+            }
+        }
+
+        if (work_xsink) {
+            printd(1, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
+                method_name,
+                work_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
+                work_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
+            work_xsink.clear();
+        }
+
+        if (async_item.spop_obj) {
+            async_item.spop_obj->deref(xsink);
+        }
+        if (async_item.result) {
+            async_item.result->deref(xsink);
+        }
         if (async_item.callback) {
-            // Asynchronous callback dispatch (fire-and-forget)
-            ExceptionSink cb_xsink;
-            ValueHolder rv(async_item.callback->execValue(async_item.args, &cb_xsink), &cb_xsink);
-            if (cb_xsink) {
-                printd(1, "QoreCallDispatcher::workerLoop() callback exception: %s: %s\n",
-                    cb_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
-                    cb_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
-                cb_xsink.clear();
-            }
             async_item.callback->deref(xsink);
-            if (async_item.args) {
-                async_item.args->deref(xsink);
-            }
-        } else if (async_item.abort_obj) {
-            // Asynchronous abort dispatch (fire-and-forget)
-            ExceptionSink abort_xsink;
-            ValueHolder rv(async_item.abort_obj->evalMethod("abort", nullptr, &abort_xsink), &abort_xsink);
-            if (abort_xsink) {
-                printd(1, "QoreCallDispatcher::workerLoop() abort exception: %s: %s\n",
-                    abort_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
-                    abort_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
-                abort_xsink.clear();
-            }
-            async_item.abort_obj->deref(xsink);
+        }
+        if (async_item.args) {
+            async_item.args->deref(xsink);
         }
     }
 }
@@ -450,10 +463,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         return nullptr;
     }
 
-    // Detect Qore-language abort() override — if present, dispatch to worker thread on cancel
+    // Detect Qore-language method overrides — if present, dispatch to worker thread
     const QoreClass* spop_cls = spop_obj->getClass();
     const QoreMethod* abort_meth = spop_cls->findMethod("abort");
     bool has_qore_abort = abort_meth && !abort_meth->isBuiltin();
+    const QoreMethod* on_complete_meth = spop_cls->findMethod("onComplete");
+    bool has_qore_on_complete = on_complete_meth && !on_complete_meth->isBuiltin();
 
     // Get C++ poll operation for direct continuePoll() calls (bypasses evalMethod overhead).
     // Only attempt getReferencedPrivateData if the class actually inherits the C++ base;
@@ -500,18 +515,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         timeout_us = v.getAsBigInt() * 1000LL;
     }
 
-    // Get callback — wrap in RAII immediately
-    v = info->getKeyValue("callback");
-    ResolvedCallReferenceNode* callback = nullptr;
-    if (v.getType() == NT_RUNTIME_CLOSURE || v.getType() == NT_FUNCREF) {
-        callback = v.get<ResolvedCallReferenceNode>();
-        callback->ref();
-    }
-
     // RAII cleanup for refcounted resources acquired below.
     // Pointers are nulled as ownership transfers to PollInfo or the caller.
     struct SubmitResources {
-        ResolvedCallReferenceNode* callback;
         Queue* result_queue;
         QoreHashNode* other_hash;
         QoreHashNode* poll_info_hash;
@@ -519,13 +525,12 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         ExceptionSink* xsink;
 
         ~SubmitResources() {
-            if (callback) { callback->deref(xsink); }
             if (result_queue) { result_queue->deref(xsink); }
             if (other_hash) { other_hash->deref(xsink); }
             if (poll_info_hash) { poll_info_hash->deref(xsink); }
             if (new_queue_obj) { new_queue_obj->deref(xsink); }
         }
-    } res{callback, nullptr, nullptr, nullptr, nullptr, xsink};
+    } res{nullptr, nullptr, nullptr, nullptr, xsink};
 
     // Get result queue
     v = info->getKeyValue("resultQueue");
@@ -555,8 +560,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         res.poll_info_hash->ref();
     }
 
-    // If no callback and no shared queue, create a new result queue
-    if (!callback && !res.result_queue) {
+    // If no onComplete override and no shared queue, create a new result queue
+    if (!has_qore_on_complete && !res.result_queue) {
         res.result_queue = new Queue();
         res.new_queue_obj = new QoreObject(QC_QUEUE, getProgram(), res.result_queue);
         res.result_queue->ref();  // extra ref for PollInfo storage
@@ -645,9 +650,9 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         pinfo.owner = owner;
         pinfo.other = res.other_hash; res.other_hash = nullptr;
         pinfo.queue = res.result_queue; res.result_queue = nullptr;
-        pinfo.callback = res.callback; res.callback = nullptr;
         pinfo.timeout_date_us = 0;  // Will be set in I/O thread
         pinfo.has_qore_abort = has_qore_abort;
+        pinfo.has_qore_on_complete = has_qore_on_complete;
         pinfo.spop_base = spop_base;
         spop_base_holder.release();  // Transfer ownership to pinfo
 
@@ -877,7 +882,7 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         AutoLocker al(m);
         std::vector<std::string> keys;
         for (auto& [key, pinfo] : cache) {
-            if (pinfo.callback && pinfo.callback->getProgram() == pgm) {
+            if (pinfo.spop_obj && pinfo.spop_obj->getProgram() == pgm) {
                 keys.push_back(key);
             }
         }
@@ -1507,10 +1512,11 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (dd.queue) {
                         dd.queue->ref();
                     }
-                    dd.callback = pinfo.callback;
-                    if (dd.callback) {
-                        dd.callback->ref();
+                    dd.spop_obj = pinfo.spop_obj;
+                    if (dd.spop_obj) {
+                        dd.spop_obj->ref();
                     }
+                    dd.has_on_complete = pinfo.has_qore_on_complete;
                     dd.result = result_hash;
                     deferred_deliveries.push_back(std::move(dd));
 
@@ -1620,11 +1626,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
         }
 
-        // Deliver results outside lock — callbacks are dispatched to worker threads
+        // Deliver results outside lock — onComplete dispatched to worker threads
         for (auto& dd : deferred_deliveries) {
-            // deliverResult takes ownership of callback ref and result ref
-            deliverResult(dd.key, dd.queue, dd.callback, dd.result, xsink);
-            dd.callback = nullptr;
+            deliverResult(dd.queue, dd.spop_obj, dd.has_on_complete, dd.result, xsink);
+            dd.spop_obj = nullptr;
             dd.result = nullptr;
             if (dd.queue) {
                 dd.queue->deref(xsink);
@@ -2131,26 +2136,14 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         callAbort(pinfo.spop_obj, xsink);
     }
 
-    // Build result hash and deliver to queue if set.
-    // Skip callback delivery during cancel: the callback runs asynchronously on a
-    // worker thread and may access the owning object (e.g., WebSocketClient) after
-    // the caller has destroyed it — the destructor only waits for delivery threads,
-    // not for completion callback workers.  Queue delivery is fine (synchronous push
-    // on the I/O thread).  The caller already knows the operation is cancelled.
+    // Build result hash
     QoreHashNode* result = buildResultHash(pinfo, true, nullptr, xsink);
 
-    if (pinfo.queue) {
-        deliverResult(pinfo.owner, pinfo.queue, nullptr, result, xsink);
-    } else {
-        if (result) {
-            result->deref(xsink);
-        }
+    // Deliver result — dispatches onComplete to worker thread if overridden
+    if (pinfo.spop_obj) {
+        pinfo.spop_obj->ref();
     }
-    // Deref the callback since we're not dispatching it
-    if (pinfo.callback) {
-        pinfo.callback->deref(xsink);
-        pinfo.callback = nullptr;
-    }
+    deliverResult(pinfo.queue, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink);
 }
 
 void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
@@ -2569,30 +2562,32 @@ void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink
     }
 }
 
-void AsyncIoControllerPriv::deliverResult(const std::string& key, Queue* queue,
-        ResolvedCallReferenceNode* callback, QoreHashNode* result, ExceptionSink* xsink) {
-    if (callback) {
-        // Dispatch callback to worker thread — never run untrusted code on the I/O thread.
-        // Async (fire-and-forget): the I/O thread must not block here because callbacks
-        // may call submit() which needs the I/O thread to process commands.
-        QoreListNode* args = new QoreListNode(autoTypeInfo);
-        if (result) {
-            args->push(result, xsink);
-            result = nullptr;  // ownership transferred
-        }
-        // Ensure call_dispatcher exists (lazily created)
+void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
+        bool has_on_complete, QoreHashNode* result, ExceptionSink* xsink) {
+    if (has_on_complete && spop_obj) {
+        // Dispatch onComplete() to worker thread — never run Qore code on the I/O thread.
+        // The poll operation holds strong references to its context (owning object, etc.),
+        // so the dispatch keeps everything alive until onComplete() finishes.
         {
             AutoLocker al(m);
             if (!call_dispatcher) {
                 call_dispatcher = new QoreCallDispatcher(max_callback_workers);
             }
         }
-        // dispatchAsync takes ownership of callback ref and args ref
-        call_dispatcher->dispatchAsync(callback, args);
+        // dispatchOnCompleteAsync takes ownership of spop_obj ref and result ref
+        call_dispatcher->dispatchOnCompleteAsync(spop_obj, result);
     } else if (queue) {
+        if (spop_obj) {
+            spop_obj->deref(xsink);
+        }
         queue->push(xsink, result);
-    } else if (result) {
-        result->deref(xsink);
+    } else {
+        if (spop_obj) {
+            spop_obj->deref(xsink);
+        }
+        if (result) {
+            result->deref(xsink);
+        }
     }
 }
 

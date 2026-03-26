@@ -543,14 +543,15 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         cache{name}.ping_active = True;
         int submit_gen = ++cache{name}.ping_gen;
         string conn_name = name;
+        auto wrapped_spop = new AsyncSocketIo::CompletionPollProxy(spop,
+            sub (hash<SocketPollResultInfo> result) {
+                handlePingResult(conn_name, submit_gen, result);
+            });
         controller.submit(<SocketPollOperationInfo>{
             "sock": poll_info.socket,
-            "spop": spop,
+            "spop": wrapped_spop,
             "to": ping_timeout,
             "owner": "pcm:" + name,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                handlePingResult(conn_name, submit_gen, result);
-            },
         });
     }
 

@@ -80,16 +80,12 @@ hashdecl Qore::SocketPollOperationInfo {
     *hash<auto> other;
 
     //! Optional result Queue; if provided, results will be pushed to this Queue instead of a new one
-    /** This allows multiple operations to share a single result Queue for easier coordination
+    /** This allows multiple operations to share a single result Queue for easier coordination.
+
+        If neither a Queue nor an @ref AbstractPollOperation::onComplete() "onComplete()" override
+        is provided, a new Queue is created and returned from @ref submit().
     */
     *Queue resultQueue;
-
-    //! Optional completion callback; called from the callback worker pool when the operation completes
-    /** When provided, results are delivered via callback instead of Queue.
-        The callback signature must accept a single hash<SocketPollResultInfo> argument.
-        Mutually exclusive with \c resultQueue.
-    */
-    *code callback;
 
     //! Optional custom cache key; default: sock.uniqueHash()
     /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts

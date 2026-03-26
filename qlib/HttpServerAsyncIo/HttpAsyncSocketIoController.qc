@@ -649,20 +649,18 @@ public class HttpAsyncSocketIoController {
             }
         }
 
+        op.setCompletionContext(self, listener, target, http_version, owner);
         controller.submit(<SocketPollOperationInfo>{
             "sock": listener,
             "spop": op,
             "key": op_key,
             "owner": owner,
             "to": -1s,  # no timeout for accepts
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                handleAcceptResult(result, listener, target, ssl, cert, key, http_version, owner);
-            },
         });
     }
 
     #! Handles accept operation result from the controller
-    private handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
+    handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
             string http_version, string owner) {
         # Decrement accept count
@@ -912,20 +910,18 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 
+        h3op.setCompletionContext(self, listener, target, owner);
         controller.submit(<SocketPollOperationInfo>{
             "sock": listener,
             "spop": h3op,
             "key": op_key,
             "owner": owner,
             "to": -1s,  # no timeout for QUIC accept
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                handleQuicAcceptResult(result, listener, target, owner, h3op);
-            },
         });
     }
 
     #! Handles QUIC accept result
-    private handleQuicAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
+    handleQuicAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
             HttpAsyncTarget target, string owner, Http3ServerPollOperation h3op) {
         if (result.canceled) {
             return;
@@ -980,15 +976,13 @@ public class HttpAsyncSocketIoController {
                 AutoWriteLock al(m);
                 seq = ++accept_seq;
             }
+            h3op.setCompletionContext(self, listener, target, owner);
             controller.submit(<SocketPollOperationInfo>{
                 "sock": listener,
                 "spop": h3op,
                 "key": sprintf("quic-read:%s:%d", owner, seq),
                 "owner": owner,
                 "to": -1s,
-                "callback": sub (hash<SocketPollResultInfo> result2) {
-                    handleQuicAcceptResult(result2, listener, target, owner, h3op);
-                },
             });
             return;
         }
@@ -1414,14 +1408,15 @@ public class HttpAsyncSocketIoController {
         }
         string owner = linfo.listener.uniqueHash();
         try {
+            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(ssl_op,
+                sub (hash<SocketPollResultInfo> result) {
+                    handleSslResult(result, uh, linfo, http_version);
+                });
             controller.submit(<SocketPollOperationInfo>{
                 "sock": sock,
-                "spop": ssl_op,
+                "spop": wrapped_op,
                 "owner": owner,
                 "to": AsyncSocketIoController::DefaultIoOperationTimeout,
-                "callback": sub (hash<SocketPollResultInfo> result) {
-                    handleSslResult(result, uh, linfo, http_version);
-                },
             });
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit SSL op for %s: %s: %s", uh, ex.err, ex.desc);
@@ -1721,14 +1716,15 @@ public class HttpAsyncSocketIoController {
         }
 
         try {
+            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
+                sub (hash<SocketPollResultInfo> result) {
+                    handleConnectionResult(result, uh, cinfo.state);
+                });
             controller.submit(<SocketPollOperationInfo>{
                 "sock": cinfo.sock,
-                "spop": op,
+                "spop": wrapped_op,
                 "owner": owner,
                 "to": timeout,
-                "callback": sub (hash<SocketPollResultInfo> result) {
-                    handleConnectionResult(result, uh, cinfo.state);
-                },
             }, True);  # replace=True since connection key may be reused
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit connection op for %s (state=%y): %s: %s",

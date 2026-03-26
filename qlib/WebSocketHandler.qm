@@ -2204,19 +2204,19 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # dispatch to the full thread pool).
             Counter done(1);
             *hash<auto> send_ex;
-            code cb = sub (hash<SocketPollResultInfo> result) {
-                if (result.ex) {
-                    send_ex = result.ex;
-                }
-                done.dec();
-            };
+            auto wrapped_op = new AsyncSocketIo::CompletionPollProxy(op,
+                sub (hash<auto> result) {
+                    if (result.ex) {
+                        send_ex = result.ex;
+                    }
+                    done.dec();
+                });
             wsc.getAsyncCtrl().submit(<SocketPollOperationInfo>{
                 "sock": sock,
-                "spop": op,
+                "spop": wrapped_op,
                 "to": send_timeout,
                 "owner": wsc.getOwnerId(),
                 "other": {"goal": "ws-send"},
-                "callback": cb,
             });
             done.waitForZero();
             if (send_ex) {

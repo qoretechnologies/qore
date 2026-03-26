@@ -68,11 +68,20 @@ class SocketPollOperationBase;
 */
 class QoreCallDispatcher {
 public:
+    //! Dispatch type for async work items
+    enum DispatchType {
+        DT_ABORT,        //!< Call abort() on spop_obj
+        DT_ON_COMPLETE,  //!< Call onComplete(result) on spop_obj
+        DT_CALLBACK,     //!< Call a code reference with args (timer callbacks)
+    };
+
     //! Async work item for fire-and-forget dispatch
     struct AsyncWorkItem {
-        ResolvedCallReferenceNode* callback; //!< Referenced (ownership transferred, or nullptr)
-        QoreListNode* args;                  //!< Referenced (ownership transferred, or nullptr)
-        QoreObject* abort_obj;               //!< For abort dispatch (referenced, or nullptr)
+        QoreObject* spop_obj;                //!< Referenced (ownership transferred, or nullptr)
+        QoreHashNode* result;                //!< For onComplete: referenced result hash (or nullptr)
+        ResolvedCallReferenceNode* callback; //!< For DT_CALLBACK: referenced (or nullptr)
+        QoreListNode* args;                  //!< For DT_CALLBACK: referenced (or nullptr)
+        DispatchType type;                   //!< What method to call
     };
 
     //! Creates the dispatcher
@@ -88,9 +97,14 @@ public:
     */
     DLLLOCAL void dispatchAbortAsync(QoreObject* spop_obj);
 
-    //! Dispatch a callback asynchronously (fire-and-forget)
-    /** The callback is executed on a worker thread. The caller does not wait for completion.
-        @param callback the callback code (referenced — ownership transferred)
+    //! Dispatch an onComplete(result) call asynchronously (fire-and-forget)
+    /** @param spop_obj the AbstractPollOperation object (referenced — ownership transferred)
+        @param result the SocketPollResultInfo hash (referenced — ownership transferred)
+    */
+    DLLLOCAL void dispatchOnCompleteAsync(QoreObject* spop_obj, QoreHashNode* result);
+
+    //! Dispatch a code callback asynchronously (for timer events)
+    /** @param callback the callback code (referenced — ownership transferred)
         @param args the argument list (referenced — ownership transferred, or nullptr)
     */
     DLLLOCAL void dispatchAsync(ResolvedCallReferenceNode* callback, QoreListNode* args);
@@ -109,6 +123,9 @@ private:
     int active_workers = 0;                 //!< Number of running worker threads
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
+
+    //! Enqueue a work item, starting a worker if needed
+    DLLLOCAL void enqueue(AsyncWorkItem&& item);
 
     //! Worker thread entry point
     DLLLOCAL static void workerEntry(ExceptionSink* xsink, void* arg);
@@ -334,14 +351,14 @@ private:
         std::string owner;              //!< Owner identifier
         QoreHashNode* other;            //!< Free-form data (referenced, or nullptr)
         Queue* queue;                   //!< Result queue (referenced, or nullptr)
-        ResolvedCallReferenceNode* callback; //!< Completion callback (referenced, or nullptr)
         SocketPollOperationBase* spop_base; //!< C++ poll operation (referenced, or nullptr)
         bool has_qore_abort;            //!< True if abort() is overridden in Qore
+        bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
-            other(nullptr), queue(nullptr), callback(nullptr),
-            spop_base(nullptr), has_qore_abort(false) {
+            other(nullptr), queue(nullptr),
+            spop_base(nullptr), has_qore_abort(false), has_qore_on_complete(false) {
         }
 
         DLLLOCAL ~PollInfo() {
@@ -356,7 +373,8 @@ private:
     struct DeferredDelivery {
         std::string key;
         Queue* queue;                      //!< Referenced or nullptr
-        ResolvedCallReferenceNode* callback; //!< Referenced or nullptr
+        QoreObject* spop_obj;              //!< Referenced or nullptr (for onComplete dispatch)
+        bool has_on_complete;              //!< True if spop has onComplete() override
         QoreHashNode* result;              //!< Referenced
     };
 
@@ -485,8 +503,8 @@ private:
     DLLLOCAL static QoreHashNode* buildResultHash(PollInfo& pinfo, bool canceled,
         QoreHashNode* ex_hash, ExceptionSink* xsink);
 
-    //! Deliver a result via callback or queue (dispatches callback to worker thread)
-    DLLLOCAL void deliverResult(const std::string& key, Queue* queue, ResolvedCallReferenceNode* callback,
+    //! Deliver a result via onComplete or queue (dispatches onComplete to worker thread)
+    DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink);
 
     //! Shared call dispatcher for async callback/abort delivery (lazily created)

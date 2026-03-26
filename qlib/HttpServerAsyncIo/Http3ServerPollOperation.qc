@@ -111,6 +111,18 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Mutex for thread safety between I/O thread (continuePoll) and handler
         #! thread (startSendResponse)
         Mutex op_lock();
+
+        #! Controller for completion callback
+        *HttpAsyncSocketIoController completion_controller;
+
+        #! Listener socket for completion callback
+        *Socket completion_listener;
+
+        #! Target for completion callback
+        *HttpAsyncTarget completion_target;
+
+        #! Owner identifier for completion callback
+        *string completion_owner;
     }
 
     #! Creates the poll operation
@@ -542,6 +554,28 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         drain_start = now_us();
         drain_session_id = session_id;
         state = STATE_DRAINING;
+    }
+
+    #! Sets the completion context so that onComplete() can dispatch the result
+    /** @param controller the async I/O controller
+        @param listener the server listener socket
+        @param target the async target
+        @param owner the owner identifier
+    */
+    nothing setCompletionContext(HttpAsyncSocketIoController controller, Socket listener,
+            HttpAsyncTarget target, string owner) {
+        completion_controller = controller;
+        completion_listener = listener;
+        completion_target = target;
+        completion_owner = owner;
+    }
+
+    #! Called when the operation completes; dispatches result to the controller
+    nothing onComplete(hash<auto> result) {
+        if (completion_controller) {
+            completion_controller.handleQuicAcceptResult(result, completion_listener,
+                completion_target, completion_owner, self);
+        }
     }
 
     #! Aborts the operation
