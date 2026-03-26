@@ -15,26 +15,37 @@ PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
 Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley, DDM;
 13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
 DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
-Phase 14 is **in progress** (14.1 removed — covered by gRPC module; 14.3 vector
-similarity + TextFeatures subword integration complete; 14.4 tokenizer C API
-complete — remaining: ONNX export (low priority), AI Gateway chunker integration
+Phase 14 is **in progress** (14.1 removed — covered by gRPC module; 14.2 ONNX tree
+ensemble export complete; 14.3 vector similarity + TextFeatures subword integration
+complete; 14.4 tokenizer C API complete — remaining: AI Gateway chunker integration
 (Qorus repo)).
+Phase 15 is **complete** (15.1 Ridge/Lasso/ElasticNet regularized regression; 15.2
+SparseMatrix with COO serialization; 15.3 ONNX export for DecisionTree, RandomForest,
+GradientBoostedTrees; 15.4 GridSearch/RandomSearch hyperparameter optimization; 15.5
+PermutationImportance model-agnostic explainability).
 
 ## Current State (after Phases 1–9)
 
-- **ml module**: 22 native algorithms (Phase 9: DecisionTree, RandomForest,
-  GradientBoostedTrees with shared FlatTree CART engine; Phase 10: SVM, NaiveBayes) (IsolationForest, LOF, DBSCAN, KMeans, GMM,
+- **ml module**: 25 native algorithms (Phase 9: DecisionTree, RandomForest,
+  GradientBoostedTrees with shared FlatTree CART engine; Phase 10: SVM, NaiveBayes;
+  Phase 15: Ridge, Lasso, ElasticNet) (IsolationForest, LOF, DBSCAN, KMeans, GMM,
   LinearRegression, LogisticRegression, KNN, HoltWinters, SeasonalDecomposition, PCA,
-  StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator) + OnnxModel +
-  classification/regression/clustering metrics + native serialization + online learning
+  StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator, SparseMatrix) +
+  OnnxModel + classification/regression/clustering metrics + native serialization +
+  online learning
 - **DataProviderML module**: 20 pipeline processors (algorithms + preprocessing +
   metrics + registry model)
 - **QoreModelRegistry module**: Multi-tenant model versioning with filesystem, database,
   and REST backends
+- **QoreOnnxExport module**: ONNX export for 11 algorithms (StandardScaler, MinMaxScaler,
+  Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest,
+  DecisionTree, RandomForest, GradientBoostedTrees)
+- **QoreMLUtils module**: GridSearch, RandomSearch (hyperparameter optimization),
+  PermutationImportance (model-agnostic explainability), MLScoringUtils
 - **tokenizer module**: HuggingFace-compatible BPE/WordPiece/Unigram tokenization with
   word_ids, pre-tokenized input, sliding window, dynamic vocabulary, Unicode support
 - **Architecture**: C++ with Eigen3 (no Python), thread-safe, typed hashdecl results,
-  dual API (hash-based + matrix-based)
+  dual API (hash-based + matrix-based), sparse matrix support (Eigen::SparseMatrix)
 
 ## Architecture (Current — Phases 1–7 Complete)
 
@@ -50,9 +61,10 @@ complete — remaining: ONNX export (low priority), AI Gateway chunker integrati
 │  Model versioning, comparison, multi-tenant, 3 backends  │
 ├──────────────────────────────────────────────────────────┤
 │        ml (C++ binary)          tokenizer (C++ binary)   │
-│  17 algorithms + metrics +      BPE, WordPiece, Unigram  │
+│  25 algorithms + metrics +      BPE, WordPiece, Unigram  │
 │  serialization + pipeline +     word_ids, sliding window  │
-│  online learning + CrossVal     addTokens, pre-tokenized │
+│  online learning + CrossVal +   addTokens, pre-tokenized │
+│  SparseMatrix + Ridge/Lasso                              │
 ├──────────────────────────────────────────────────────────┤
 │    Eigen3       ONNX Runtime (opt)       utf8proc        │
 └──────────────────────────────────────────────────────────┘
@@ -1678,12 +1690,19 @@ support (IPC, streaming, cross-process sharing) is provided by the gRPC module
 in-process conversion, but this is a small utility if needed — not a phase-level
 effort. Defer to customer demand.
 
-#### 14.2 ONNX Export (extend ml module) — LOW PRIORITY
+#### 14.2 ONNX Export (extend ml module) — ✅ TREE ENSEMBLES COMPLETE
 
-Complete Phase 5's ONNX export plan — export native Qore models to ONNX format for
-deployment in any ONNX Runtime environment. Requires optional `libprotobuf` dependency.
+QoreOnnxExport v1.1 now exports 11 algorithms to ONNX format:
+- **Preprocessing**: StandardScaler, MinMaxScaler, Imputer
+- **Linear models**: LinearRegression, LogisticRegression, PCA, KMeans
+- **Anomaly detection**: IsolationForest
+- **Tree ensembles** (Phase 15.3): DecisionTree, RandomForest, GradientBoostedTrees
 
-See Phase 5 for the algorithm-to-ONNX operator mapping table.
+Tree ensembles use `ai.onnx.ml` domain operators:
+- `TreeEnsembleClassifier` for classification (class probabilities from leaf nodes)
+- `TreeEnsembleRegressor` for regression (leaf values with SUM/AVERAGE aggregation)
+- GBT: learning rate baked into leaf weights, `base_values` for initial predictions,
+  Sigmoid (binary) or Softmax (multiclass) post-processing
 
 #### 14.3 LLM / Embedding Pipeline
 
@@ -1723,7 +1742,96 @@ HuggingFace-compatible tokenization in ML feature pipelines.
 
 ---
 
-## Implementation Schedule — Phases 8–14
+## Phase 15: Regularization, Sparse Data, ONNX Trees, and ML Utilities ✅ COMPLETE
+
+### Motivation
+
+Close the most impactful gaps between Qore ML and Python's scikit-learn ecosystem:
+regularized regression (the most-used linear model variants), sparse matrix support
+(required for text/categorical data), ONNX export for the most commonly deployed model
+types (tree ensembles), hyperparameter optimization (table stakes for production ML),
+and model-agnostic explainability (increasingly required for compliance).
+
+### Components
+
+#### 15.1 Regularized Linear Models ✅ COMPLETE
+
+Three new C++ classes with full API (fit, predict, serialize, hash + matrix interfaces):
+
+- **Ridge** (`QC_Ridge.h/.cpp/.qpp`): L2-regularized regression using Eigen LDLT
+  closed-form solver `(X^T X + αI)β = X^T y`. SGD update with L2 penalty gradient.
+- **Lasso** (`QC_Lasso.h/.cpp/.qpp`): L1-regularized regression using coordinate
+  descent with soft-thresholding. Incremental residual updates for O(n·p) per iteration
+  (not O(n·p²)). No update() — coordinate descent is not naturally incremental.
+- **ElasticNet** (`QC_ElasticNet.h/.cpp/.qpp`): Combined L1+L2 penalty with `l1_ratio`
+  parameter (0 = pure Ridge, 1 = pure Lasso). Same coordinate descent with incremental
+  residuals.
+
+Hashdecls: RidgeResult, RidgeModelInfo, LassoResult, LassoModelInfo, ElasticNetResult,
+ElasticNetModelInfo. Serialization registered for all three. 22 test cases.
+
+#### 15.2 Sparse Matrix Support ✅ COMPLETE
+
+- **SparseMatrix class** (`QC_SparseMatrix.h/.cpp/.qpp`): Wraps
+  `Eigen::SparseMatrix<double, RowMajor>` with triplet and dense constructors,
+  threshold-based sparsification, toDense/toTriplets conversion, density accessor,
+  COO-format serialization.
+- **Utility functions** (`ml_sparse.h/.cpp`): `denseToSparse()`, `sparseToDense()`,
+  `qoreTripletListToSparse()`, `sparseToQoreTripletList()`.
+- Cooperative cancellation in all long-running operations.
+- 7 test cases. No new Eigen dependency (ships `<Eigen/Sparse>` in same package).
+
+#### 15.3 ONNX Export for Tree Ensembles ✅ COMPLETE
+
+Extended QoreOnnxExport module (v1.0 → v1.1) with tree ensemble export:
+
+- **C++ tree data accessors**: Added `getTreeData()` / `getTreesData()`, `getNumFeatures()`,
+  `getNumClasses()`, `getClasses()`, `getTask()` to DecisionTree, RandomForest, and
+  GradientBoostedTrees. GBT also exposes `getInitialPrediction()`,
+  `getInitialPredictions()`, `getLearningRate()`.
+- **ONNX exporters**: `exportDecisionTree()`, `exportRandomForest()`, `exportGBT()` with
+  shared helpers `exportTreeEnsembleRegressor()` and `exportTreeEnsembleClassifier()`.
+- **GBT variants**: regression (SUM + base_values), binary classification
+  (TreeEnsembleRegressor → Sigmoid), multiclass (TreeEnsembleRegressor with
+  n_targets=K → Softmax). Learning rate baked into leaf weights.
+- 10 new ONNX export test cases (classification + regression for each algorithm type).
+
+#### 15.4 Hyperparameter Optimization ✅ COMPLETE
+
+New `QoreMLUtils` Qore module (`qlib/QoreMLUtils/`):
+
+- **GridSearch**: Exhaustive Cartesian product over parameter grid with k-fold
+  cross-validation. Strongly-typed `code<>` callbacks for model_factory, predictor,
+  scorer. Returns best_params, best_score, cv_results with fold-level detail.
+- **RandomSearch**: Random sampling from parameter distributions with deterministic
+  LCG-based RNG for reproducibility. Same CV and callback pattern as GridSearch.
+- **MLScoringUtils**: Default scorers — `r2Scorer()`, `negMseScorer()`,
+  `accuracyScorer()` — wrapping ml module metric functions.
+- 7 test cases for search, 2 for scoring.
+
+#### 15.5 Permutation Importance ✅ COMPLETE
+
+- **PermutationImportance** (in QoreMLUtils module): Model-agnostic feature importance
+  via Fisher-Yates column shuffling. Measures score degradation per feature across
+  n_repeats. Works with any model that has a predict function. Deterministic seeding.
+- 4 test cases including feature ranking validation.
+
+### Test Summary
+
+| Component | Test Cases | Assertions |
+|-----------|-----------|------------|
+| Ridge/Lasso/ElasticNet | 22 | ~100 |
+| SparseMatrix | 7 | ~50 |
+| ONNX tree export | 10 | 132 |
+| GridSearch/RandomSearch | 7 | ~20 |
+| PermutationImportance | 4 | ~15 |
+| MLScoringUtils | 2 | ~5 |
+
+All tests pass. 0 memory leaks (verified with macOS `leaks --atExit`).
+
+---
+
+## Implementation Schedule — Phases 8–15
 
 ```
 Phase 8 (DataFrame) ──────> Phase 12 (Feature Eng)
@@ -1731,8 +1839,8 @@ Phase 8 (DataFrame) ──────> Phase 12 (Feature Eng)
         └──> Phase 9 (Trees) ─────>│──> Phase 13 (Streaming/Governance)
         │                          │
         └──> Phase 10 (SVM/NB)     └──> Phase 14 (Interop/LLM)
-        │
-        └──> Phase 11 (Statistics)
+        │                                    │
+        └──> Phase 11 (Statistics)           └──> Phase 15 (Regularization/Sparse/ONNX/Utils)
 ```
 
 - **Phase 8** (DataFrame) is the top priority — it unlocks Phases 9–14
