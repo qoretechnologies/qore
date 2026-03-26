@@ -312,7 +312,7 @@ public class AnthropicSkillListDataProvider inherits AnthropicDataProviderCommon
         if (req.source) { params.source = req.source; }
         string path = "skills";
         if (params) {
-            path += "?" + (map sprintf("%s=%s", $1.key, $1.value), params.pairIterator()).join("&");
+            path += "?" + (map sprintf("%s=%s", encode_url($1.key, True), encode_url(string($1.value), True)), params.pairIterator()).join("&");
         }
         return doRestCommand("GET", path, NOTHING, SkillsBetaHeader).body."data";
     }
