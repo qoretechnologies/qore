@@ -6,13 +6,13 @@ Debuginfod has been disabled.
 To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-QUnit Test "DatasourceProvider Test" v1.0
-Ran 2 test cases, 2 succeeded (4 assertions)
+QUnit Test "ConnectionProvider Test" v1.0
+Ran 3 test cases, 3 succeeded (17 assertions)
 
 Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
 0x00007ffff7650ca4 in QoreReferenceCounter::ROdereference() const () from /home/david/src/qore/git/qore/build/libqore.so.20
 
-Thread 3 (Thread 0x7fffe65ff6c0 (LWP 973406) "jemalloc_bg_thd"):
+Thread 3 (Thread 0x7fffe65ff6c0 (LWP 991639) "jemalloc_bg_thd"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140737154999848, a2=<optimized out>, a3=a3@entry=0, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -54,8 +54,8 @@ No locals.
 #6  ___pthread_cond_wait (cond=cond@entry=0x7fffec216608, mutex=mutex@entry=0x7fffec216678) at ./nptl/pthread_cond_wait.c:453
 No locals.
 #7  0x00007fffe7616e18 in background_thread_sleep (tsdn=<optimized out>, info=<optimized out>, interval=<optimized out>) at src/background_thread.c:137
-        tv = {tv_sec = 1774555751, tv_usec = 758763}
-        before_sleep = {ns = 1774555751758763000}
+        tv = {tv_sec = 1774555880, tv_usec = 221786}
+        before_sleep = {ns = 1774555880221786000}
         ret = <optimized out>
 #8  background_work_sleep_once (tsdn=<optimized out>, info=<optimized out>, ind=0) at src/background_thread.c:229
         ns_until_deferred = <optimized out>
@@ -74,12 +74,12 @@ No locals.
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737058436800, 4542303080726367490, 140737058436800, 140737488259936, 0, 140737488260199, 4542303080566983938, 4542321113112349954}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737058436800, 9014274418387977485, 140737058436800, 140737488254832, 0, 140737488255095, 9014274418664801549, 9014291909541233933}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #13 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 1 (Thread 0x7fffee441e40 (LWP 973016) "qore/1"):
+Thread 1 (Thread 0x7fffee441e40 (LWP 991077) "qore/1"):
 #0  0x00007ffff7650ca4 in QoreReferenceCounter::ROdereference() const () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #1  0x00007ffff768087d in QoreClassList::deleteAll() () from /home/david/src/qore/git/qore/build/libqore.so.20
@@ -95,13 +95,13 @@ No symbol table info available.
         arg = <optimized out>
         f = <optimized out>
         new_exitfn_called = 3105
-        cur = 0x5555566750f0
+        cur = 0x555555fd5930
         restart = <optimized out>
 #5  0x00007fffee64897e in __GI_exit (status=<optimized out>) at ./stdlib/exit.c:148
 No locals.
 #6  0x00007fffee62a57c in __libc_start_call_main (main=main@entry=0x55555555a5a0 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd298) at ../sysdeps/nptl/libc_start_call_main.h:74
         result = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, 4542359437865356546, 140737488343704, 2, 140737354125312, 93824992468472, 4542359437984894210, 4542321048076782850}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd298}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, 9014255442337465613, 140737488343704, 2, 140737354125312, 93824992468472, 9014255442352145677, 9014291836450505997}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd298}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #7  0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a5a0 <main>, argc=2, argv=0x7fffffffd298, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd288) at ../csu/libc-start.c:360
 No locals.
@@ -109,6 +109,6 @@ No locals.
 No symbol table info available.
 A debugging session is active.
 
-	Inferior 1 [process 973016] will be killed.
+	Inferior 1 [process 991077] will be killed.
 
 Quit anyway? (y or n) [answered Y; input not from terminal]

@@ -8,11 +8,11 @@ To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 QUnit Test "HttpServerHttp3MigrationTest" v1.0
 
-Thread 18 "qore/16" received signal SIGSEGV, Segmentation fault.
-[Switching to Thread 0x7fffc0ff96c0 (LWP 704711)]
-0x00007ffff7ad66b1 in QoreObjectClosureNode::execValue(QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
+Thread 22 "qore/15" received signal SIGSEGV, Segmentation fault.
+[Switching to Thread 0x7fff9e7fc6c0 (LWP 1002457)]
+0x00007ffff7ae39f1 in QoreObjectClosureNode::execValue(QoreListNode const*, ExceptionSink*) const () from /home/david/src/qore/git/qore/build/libqore.so.20
 
-Thread 37 (Thread 0x7fff61ffb6c0 (LWP 704730) "qore/36"):
+Thread 37 (Thread 0x7fff5dffb6c0 (LWP 1002474) "qore/36"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951508568, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -42,7 +42,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0005e78, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff61feb640, __canceltype = 1644082752, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff5dfeb640, __canceltype = 1576973888, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0005e38, mutex = 0x7fffe0005e78, private = 0}
         err = <optimized out>
         result = 0
@@ -53,20 +53,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0005e78) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734837536448, -5367683483425200358, 140734837536448, 140737169867696, 0, 140737169867959, -5367683483953682662, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734770427584, 6313918432050009513, 140734770427584, 140737169765296, 0, 140737169765559, 6313918432477828521, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 36 (Thread 0x7fff627fc6c0 (LWP 704729) "qore/35"):
+Thread 36 (Thread 0x7fff5e7fc6c0 (LWP 1002473) "qore/35"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951507928, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -96,7 +96,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0005bf8, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff627ec640, __canceltype = 1652475456, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff5e7ec640, __canceltype = 1585366592, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0005bb8, mutex = 0x7fffe0005bf8, private = 0}
         err = <optimized out>
         result = 0
@@ -107,20 +107,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0005bf8) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734845929152, -5367675787380676838, 140734845929152, 140737169867696, 0, 140737169867959, -5367675787909159142, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734778820288, 6313919531024766377, 140734778820288, 140737169765296, 0, 140737169765559, 6313919531452585385, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 35 (Thread 0x7fff62ffd6c0 (LWP 704728) "qore/34"):
+Thread 35 (Thread 0x7fff5effd6c0 (LWP 1002472) "qore/34"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951507288, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -150,7 +150,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0005978, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff62fed640, __canceltype = 1660868160, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff5efed640, __canceltype = 1593759296, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0005938, mutex = 0x7fffe0005978, private = 0}
         err = <optimized out>
         result = 0
@@ -161,20 +161,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0005978) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734854321856, -5367676887429175526, 140734854321856, 140737169867696, 0, 140737169867959, -5367676887957657830, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734787212992, 6313920629999523241, 140734787212992, 140737169765296, 0, 140737169765559, 6313920630427342249, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 34 (Thread 0x7fff637fe6c0 (LWP 704727) "qore/33"):
+Thread 34 (Thread 0x7fff5f7fe6c0 (LWP 1002471) "qore/33"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951506648, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -204,7 +204,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe00056f8, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff637ee640, __canceltype = 1669260864, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff5f7ee640, __canceltype = 1602152000, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe00056b8, mutex = 0x7fffe00056f8, private = 0}
         err = <optimized out>
         result = 0
@@ -215,20 +215,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe00056f8) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734862714560, -5367677987477674214, 140734862714560, 140737169867696, 0, 140737169867959, -5367677988006156518, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734795605696, 6313921728974280105, 140734795605696, 140737169765296, 0, 140737169765559, 6313921729402099113, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 33 (Thread 0x7fff63fff6c0 (LWP 704726) "qore/32"):
+Thread 33 (Thread 0x7fff5ffff6c0 (LWP 1002470) "qore/32"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951506008, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -258,7 +258,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0005478, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff63fef640, __canceltype = 1677653568, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff5ffef640, __canceltype = 1610544704, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0005438, mutex = 0x7fffe0005478, private = 0}
         err = <optimized out>
         result = 0
@@ -269,20 +269,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0005478) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734871107264, -5367679087526172902, 140734871107264, 140737169867696, 0, 140737169867959, -5367679088054655206, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140734803998400, 6313922827949036969, 140734803998400, 140737169765296, 0, 140737169765559, 6313922828376855977, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 32 (Thread 0x7fff84ff96c0 (LWP 704725) "qore/31"):
+Thread 32 (Thread 0x7fff7cff96c0 (LWP 1002469) "qore/31"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951505368, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -312,7 +312,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe00051f8, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff84fe9640, __canceltype = -2063690176, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff7cfe9640, __canceltype = 2097059392, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe00051b8, mutex = 0x7fffe00051f8, private = 0}
         err = <optimized out>
         result = 0
@@ -323,20 +323,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe00051f8) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735424730816, -5367197498211981542, 140735424730816, 140737169867696, 0, 140737169867959, -5367197498740463846, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735290513088, 6313986602844673449, 140735290513088, 140737169765296, 0, 140737169765559, 6313986603272492457, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 31 (Thread 0x7fff857fa6c0 (LWP 704724) "qore/30"):
+Thread 31 (Thread 0x7fff7d7fa6c0 (LWP 1002468) "qore/30"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951504728, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -366,7 +366,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0004f78, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff857ea640, __canceltype = -2055297472, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff7d7ea640, __canceltype = 2105452096, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0004f38, mutex = 0x7fffe0004f78, private = 0}
         err = <optimized out>
         result = 0
@@ -377,20 +377,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0004f78) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735433123520, -5367198598260480230, 140735433123520, 140737169867696, 0, 140737169867959, -5367198598788962534, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735298905792, 6313987701819430313, 140735298905792, 140737169765296, 0, 140737169765559, 6313987702247249321, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 30 (Thread 0x7fff85ffb6c0 (LWP 704723) "qore/29"):
+Thread 30 (Thread 0x7fff7dffb6c0 (LWP 1002466) "qore/29"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951504088, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -420,7 +420,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0004cf8, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff85feb640, __canceltype = -2046904768, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff7dfeb640, __canceltype = 2113844800, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0004cb8, mutex = 0x7fffe0004cf8, private = 0}
         err = <optimized out>
         result = 0
@@ -431,20 +431,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0004cf8) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735441516224, -5367199698308978918, 140735441516224, 140737169867696, 0, 140737169867959, -5367199698837461222, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735307298496, 6313988800794187177, 140735307298496, 140737169765296, 0, 140737169765559, 6313988801222006185, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 29 (Thread 0x7fff867fc6c0 (LWP 704722) "qore/28"):
+Thread 29 (Thread 0x7fff7e7fc6c0 (LWP 1002465) "qore/28"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951503448, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -474,7 +474,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe0004a78, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff867ec640, __canceltype = -2038512064, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff7e7ec640, __canceltype = 2122237504, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe0004a38, mutex = 0x7fffe0004a78, private = 0}
         err = <optimized out>
         result = 0
@@ -485,20 +485,20 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe0004a78) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735449908928, -5367192002264455398, 140735449908928, 140737169867696, 0, 140737169867959, -5367192002792937702, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735315691200, 6313989899768944041, 140735315691200, 140737169765296, 0, 140737169765559, 6313989900196763049, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 28 (Thread 0x7fff86ffd6c0 (LWP 704721) "qore/27"):
+Thread 28 (Thread 0x7fff7effd6c0 (LWP 1002464) "qore/27"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951502808, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
@@ -528,7 +528,7 @@ No locals.
 #5  0x00007fffee6a3067 in __pthread_cond_wait_common (cond=<optimized out>, mutex=0x7fffe00047f8, clockid=0, abstime=0x0) at ./nptl/pthread_cond_wait.c:421
         signals = 0
         g1_start = <optimized out>
-        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff86fed640, __canceltype = -2030119360, __prev = 0x0}
+        buffer = {__routine = 0x7fffee6a2e00 <__condvar_cleanup_waiting>, __arg = 0x7fff7efed640, __canceltype = 2130630208, __prev = 0x0}
         cbuffer = {wseq = 0, cond = 0x7fffe00047b8, mutex = 0x7fffe00047f8, private = 0}
         err = <optimized out>
         result = 0
@@ -539,21 +539,21 @@ No locals.
         private = 0
 #6  ___pthread_cond_wait (cond=<optimized out>, mutex=0x7fffe00047f8) at ./nptl/pthread_cond_wait.c:453
 No locals.
-#7  0x00007ffff77990c4 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
+#7  0x00007ffff77dd874 in ThreadPoolThread::worker(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#8  0x00007ffff785c75a in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#8  0x00007ffff787f4fa in q_run_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #9  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735458301632, -5367193102312954086, 140735458301632, 140737169867696, 0, 140737169867959, -5367193102841436390, -5367385417089833190}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140735324083904, 6313990998743700905, 140735324083904, 140737169765296, 0, 140737169765559, 6313990999171519913, 6313743717109585321}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #10 0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 27 (Thread 0x7fff877fe6c0 (LWP 704720) "qore/26"):
+Thread 27 (Thread 0x7fff7f7fe6c0 (LWP 1002463) "qore/26"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a00ac in __internal_syscall_cancel (a1=a1@entry=140736951502168, a2=<optimized out>, a3=a3@entry=4000007529, a4=a4@entry=0, a5=a5@entry=0, a6=a6@entry=4294967295, nr=202) at ./nptl/cancellation.c:49
-   
+        result = <optimize

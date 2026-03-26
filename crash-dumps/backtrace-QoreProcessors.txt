@@ -7,16 +7,76 @@ To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
 QUnit Test "QoreProcessorsTest" v1.0
-2026-03-22 16:30:24.208689 T1 [INFO]: DataProvider loading module: "AsyncApiDataProvider"
-2026-03-22 16:30:24.256815 T1 [INFO]: DataProvider loading module: "AwsRestClientDataProvider"
-2026-03-22 16:30:24.428681 T1 [INFO]: DataProvider loading module: "CdsRestDataProvider"
-2026-03-22 16:30:24.454112 T1 [INFO]: DataProvider loading module: "BigCommerceDataProvider"
-2026-03-22 16:30:24.534154 T1 [INFO]: DataProvider loading module: "BusyLightDataProvider"
+ERROR: output type with input type - select-fields: 0 assertions
+2026-03-26 21:19:07.200989: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:713 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:713 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputSelectFields() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: output type with input type - remove-fields: 0 assertions
+2026-03-26 21:19:07.201319: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:731 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:731 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputRemoveFields() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: output type with input type - set-fields: 0 assertions
+2026-03-26 21:19:07.201604: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:748 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:748 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputSetFields() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: output type with input type - search-replace: 0 assertions
+2026-03-26 21:19:07.201890: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:764 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:764 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputSearchReplace() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: output type with input type - filter pass-through: 0 assertions
+2026-03-26 21:19:07.202165: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:779 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:779 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputFilter() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+ERROR: output type with input type - edge cases: 3 assertions
+2026-03-26 21:19:07.202769: Unexpected exception: RUNTIME-TYPE-ERROR at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:816 (Qore)
+-----
+	>> System exception: ./examples/test/qlib/DataProvider/QoreProcessors.qtest:816 (Qore): RUNTIME-TYPE-ERROR: parameter 1 ('name') expects type 'string', but got no value instead
+	>>   QoreProcessorsTest::outputTypeWithInputEdgeCases() called at <builtin>:-1 (Qore user code)
+	>>   call_function_args() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:504 (Qore builtin code)
+	>>   TestCase::run() called at /home/david/src/qore/git/qore/qlib/QUnit.qm:2271 (Qore user code)
+	>>   Test::main() called at ./examples/test/qlib/DataProvider/QoreProcessors.qtest:136 (Qore user code)
+	>>   QoreProcessorsTest::constructor() called at <builtin>:-1 (Qore user code)
+-----
+2026-03-26 21:19:07.205793 T1 [INFO]: DataProvider loading module: "AsyncApiDataProvider"
+2026-03-26 21:19:07.257322 T1 [INFO]: DataProvider loading module: "AwsRestClientDataProvider"
+2026-03-26 21:19:07.447643 T1 [INFO]: DataProvider loading module: "CdsRestDataProvider"
+2026-03-26 21:19:07.474999 T1 [INFO]: DataProvider loading module: "BigCommerceDataProvider"
+2026-03-26 21:19:07.564552 T1 [INFO]: DataProvider loading module: "BusyLightDataProvider"
 
 Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
 0x00007fffcfa5f692 in ?? ()
 
-Thread 2 (Thread 0x7fffedb716c0 (LWP 655230) "qore/1"):
+Thread 2 (Thread 0x7fffedb716c0 (LWP 1023693) "qore/1"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a013c in __internal_syscall_cancel (a1=140737181521472, a2=140737181521200, a3=0, a4=8, a5=0, a6=0, nr=128) at ./nptl/cancellation.c:49
@@ -28,22 +88,22 @@ No locals.
 #3  0x00007fffee646b25 in __GI___sigtimedwait (set=set@entry=0x7fffedb61640, info=info@entry=0x7fffedb61530, timeout=timeout@entry=0x0) at ../sysdeps/unix/sysv/linux/sigtimedwait.c:31
         result = <optimized out>
 #4  0x00007fffee646250 in __GI___sigwait (set=0x7fffedb61640, sig=0x7fffedb61604) at ../sysdeps/unix/sysv/linux/sigwait.c:28
-        si = {si_signo = 31, si_errno = 0, si_code = 0, __pad0 = 0, _sifields = {_pad = {655227, 2000, 0 <repeats 26 times>}, _kill = {si_pid = 655227, si_uid = 2000}, _timer = {si_tid = 655227, si_overrun = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _rt = {si_pid = 655227, si_uid = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _sigchld = {si_pid = 655227, si_uid = 2000, si_status = 0, si_utime = 0, si_stime = 0}, _sigfault = {si_addr = 0x7d00009ff7b, si_addr_lsb = 0, _bounds = {_addr_bnd = {_lower = 0x0, _upper = 0x0}, _pkey = 0}}, _sigpoll = {si_band = 8589935247227, si_fd = 0}, _sigsys = {_call_addr = 0x7d00009ff7b, _syscall = 0, _arch = 0}}}
+        si = {si_signo = 31, si_errno = 0, si_code = 0, __pad0 = 0, _sifields = {_pad = {1023690, 2000, 0 <repeats 26 times>}, _kill = {si_pid = 1023690, si_uid = 2000}, _timer = {si_tid = 1023690, si_overrun = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _rt = {si_pid = 1023690, si_uid = 2000, si_sigval = {sival_int = 0, sival_ptr = 0x0}}, _sigchld = {si_pid = 1023690, si_uid = 2000, si_status = 0, si_utime = 0, si_stime = 0}, _sigfault = {si_addr = 0x7d0000f9eca, si_addr_lsb = 0, _bounds = {_addr_bnd = {_lower = 0x0, _upper = 0x0}, _pkey = 0}}, _sigpoll = {si_band = 8589935615690, si_fd = 0}, _sigsys = {_call_addr = 0x7d0000f9eca, _syscall = 0, _arch = 0}}}
         ret = <optimized out>
-#5  0x00007ffff785b17b in QoreSignalManager::signal_handler_thread() () from /home/david/src/qore/git/qore/build/libqore.so.20
+#5  0x00007ffff787df1b in QoreSignalManager::signal_handler_thread() () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
-#6  0x00007ffff785b724 in sig_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
+#6  0x00007ffff787e4c4 in sig_thread () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #7  0x00007fffee6a3d64 in start_thread (arg=<optimized out>) at ./nptl/pthread_create.c:448
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, -5027358148527477155, 140737181587136, 140737488342032, 22, 140737488342295, -5027358148200321443, -5027358733818089891}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, 2725225994369920346, 140737181587136, 140737488342064, 22, 140737488342327, 2725225993858215258, 2725228776334978394}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #8  0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 1 (Thread 0x7fffee85ce40 (LWP 655227) "qore/1"):
+Thread 1 (Thread 0x7fffee441e40 (LWP 1023690) "qore/1"):
 #0  0x00007fffcfa5f692 in ?? ()
 No symbol table info available.
 #1  0x0000000000000206 in ?? ()
@@ -52,6 +112,6 @@ No symbol table info available.
 No symbol table info available.
 A debugging session is active.
 
-	Inferior 1 [process 655227] will be killed.
+	Inferior 1 [process 1023690] will be killed.
 
 Quit anyway? (y or n) [answered Y; input not from terminal]
