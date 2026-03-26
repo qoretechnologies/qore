@@ -329,6 +329,81 @@ QoreListNode* QoreRidge::getFeatureStds(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+void QoreRidge::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (X.rows() == 0 || X.cols() == 0) {
+        xsink->raiseException("ML-RIDGE-ERROR",
+            "cannot fit on empty data: provide at least one sample with one feature");
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-RIDGE-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+
+    n_features = static_cast<int>(X.cols());
+    int n_samples = static_cast<int>(X.rows());
+
+    // Note: normalization with sparse data is skipped (centering destroys sparsity)
+
+    double y_mean = 0.0;
+    if (fit_intercept) {
+        y_mean = y.mean();
+    }
+
+    // Form normal equations with Ridge penalty
+    SparseMatrixXd XtX = (X.transpose() * X).pruned();
+    VectorXd Xty = X.transpose() * y;
+
+    if (fit_intercept) {
+        // Implicit centering via adjusted normal equations:
+        // (X_c)^T (X_c) = X^T X - n * X_mean * X_mean^T
+        // (X_c)^T y_c   = X^T y - n * X_mean * y_mean
+        VectorXd col_sums = X.transpose() * VectorXd::Ones(n_samples);
+        VectorXd X_mean = col_sums / n_samples;
+
+        MatrixXd XtX_dense = MatrixXd(XtX) - n_samples * X_mean * X_mean.transpose();
+        XtX_dense.diagonal().array() += alpha;
+
+        VectorXd Xty_adj = Xty - n_samples * X_mean * y_mean;
+        coefficients = XtX_dense.ldlt().solve(Xty_adj);
+        intercept = y_mean - X_mean.dot(coefficients);
+    } else {
+        // Add alpha to diagonal of sparse XtX
+        for (int j = 0; j < n_features; ++j) {
+            XtX.coeffRef(j, j) += alpha;
+        }
+        Eigen::SparseMatrix<double> XtX_colmajor = XtX;
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+        solver.compute(XtX_colmajor);
+        if (solver.info() != Eigen::Success) {
+            xsink->raiseException("ML-RIDGE-ERROR", "sparse LDLT decomposition failed");
+            return;
+        }
+        coefficients = solver.solve(Xty);
+        if (solver.info() != Eigen::Success) {
+            xsink->raiseException("ML-RIDGE-ERROR", "sparse LDLT solve failed");
+            return;
+        }
+        intercept = 0.0;
+    }
+
+    // R-squared
+    VectorXd y_pred = (X * coefficients).array() + intercept;
+    double ss_res = (y - y_pred).squaredNorm();
+    double ss_tot = (y.array() - y.mean()).square().sum();
+    if (ss_tot > 1e-10) {
+        r_squared = 1.0 - ss_res / ss_tot;
+    } else {
+        r_squared = (ss_res < 1e-10) ? 1.0 : 0.0;
+    }
+
+    fitted = true;
+}
+
 std::vector<uint8_t> QoreRidge::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

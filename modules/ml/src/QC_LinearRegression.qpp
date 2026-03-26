@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 #include "QC_LinearRegression.h"
+#include "QC_SparseMatrix.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclLinearRegressionResult;
@@ -414,4 +415,25 @@ list<float> LinearRegression::getFeatureMeans() {
 */
 list<float> LinearRegression::getFeatureStds() {
     return lr->getFeatureStds(xsink);
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse Eigen solvers for memory-efficient fitting on high-dimensional
+    sparse data (e.g., TF-IDF text features, one-hot encoded categoricals).
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of target values
+
+    @note Feature normalization is not applied when fitting with sparse data, as
+    centering destroys sparsity. Pre-normalize your features if needed.
+
+    @throw ML-LINEAR-REGRESSION-ERROR if fitting fails or dimensions mismatch
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing LinearRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->fitSparse(X->getMatrix(), target, xsink);
 }

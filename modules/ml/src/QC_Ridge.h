@@ -29,6 +29,7 @@
 #define _QORE_MODULE_ML_QC_RIDGE_H
 
 #include "ml_common.h"
+#include "ml_sparse.h"
 
 #include <mutex>
 
@@ -49,6 +50,9 @@ public:
 
     //! Fit on feature matrix X and target vector y (thread-safe)
     DLLLOCAL void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
+
+    //! Fit on sparse feature matrix (thread-safe)
+    DLLLOCAL void fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
 
     //! SGD update with L2 penalty (thread-safe)
     DLLLOCAL void update(const MatrixXd& X, const VectorXd& y, double learning_rate, ExceptionSink* xsink);

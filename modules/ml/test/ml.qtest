@@ -319,6 +319,9 @@ public class MlTest inherits QUnit::Test {
         addTestCase("SparseMatrix serialization", \sparseSerializationTest());
         addTestCase("SparseMatrix error cases", \sparseErrorTest());
         addTestCase("SparseMatrix copy error", \sparseCopyTest());
+        addTestCase("LinearRegression sparse fit", \lrSparseFitTest());
+        addTestCase("Ridge sparse fit", \ridgeSparseFitTest());
+        addTestCase("LogisticRegression sparse fit", \logregSparseFitTest());
         set_return_value(main());
     }
 
@@ -6864,5 +6867,103 @@ public class MlTest inherits QUnit::Test {
         assertThrows("COPY-ERROR", sub() {
             ML::SparseMatrix copy = sm.copy();
         });
+    }
+
+    # y = 2*x1 + 3*x2 + 1 -- same data as dense, but in sparse format
+    lrSparseFitTest() {
+        # Build sparse version of training data
+        list<hash<auto>> triplets();
+        list<float> y();
+        for (int i = 0; i < 20; ++i) {
+            float x1 = (i % 5) * 1.0;
+            float x2 = ((i * 3) % 5) * 1.0;
+            if (x1 != 0.0) {
+                push triplets, {"row": i, "col": 0, "value": x1};
+            }
+            if (x2 != 0.0) {
+                push triplets, {"row": i, "col": 1, "value": x2};
+            }
+            push y, 2.0 * x1 + 3.0 * x2 + 1.0;
+        }
+
+        ML::SparseMatrix X(20, 2, triplets);
+
+        # Sparse fit
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrixSparse(X, y);
+        assertTrue(lr.isFitted());
+
+        # Dense fit for comparison
+        ML::LinearRegression lr_dense({"fit_intercept": True});
+        lr_dense.fitMatrix(X.toDense(), y);
+
+        # Coefficients should match within tolerance
+        list<float> sparse_coefs = lr.getCoefficients();
+        list<float> dense_coefs = lr_dense.getCoefficients();
+        for (int j = 0; j < sparse_coefs.size(); ++j) {
+            assertTrue(abs(sparse_coefs[j] - dense_coefs[j]) < 0.1,
+                sprintf("LR sparse coef[%d]=%f vs dense=%f", j, sparse_coefs[j], dense_coefs[j]));
+        }
+        assertTrue(abs(lr.getIntercept() - lr_dense.getIntercept()) < 0.5,
+            sprintf("LR sparse intercept=%f vs dense=%f", lr.getIntercept(), lr_dense.getIntercept()));
+    }
+
+    ridgeSparseFitTest() {
+        list<hash<auto>> triplets();
+        list<float> y();
+        for (int i = 0; i < 20; ++i) {
+            float x1 = (i % 5) * 1.0;
+            float x2 = ((i * 3) % 5) * 1.0;
+            if (x1 != 0.0) {
+                push triplets, {"row": i, "col": 0, "value": x1};
+            }
+            if (x2 != 0.0) {
+                push triplets, {"row": i, "col": 1, "value": x2};
+            }
+            push y, 2.0 * x1 + 3.0 * x2 + 1.0;
+        }
+
+        ML::SparseMatrix X(20, 2, triplets);
+
+        ML::Ridge ridge({"alpha": 0.1, "fit_intercept": True});
+        ridge.fitMatrixSparse(X, y);
+        assertTrue(ridge.isFitted());
+
+        ML::Ridge ridge_dense({"alpha": 0.1, "fit_intercept": True});
+        ridge_dense.fitMatrix(X.toDense(), y);
+
+        list<float> sparse_coefs = ridge.getCoefficients();
+        list<float> dense_coefs = ridge_dense.getCoefficients();
+        for (int j = 0; j < sparse_coefs.size(); ++j) {
+            assertTrue(abs(sparse_coefs[j] - dense_coefs[j]) < 0.1,
+                sprintf("Ridge sparse coef[%d]=%f vs dense=%f", j, sparse_coefs[j], dense_coefs[j]));
+        }
+    }
+
+    logregSparseFitTest() {
+        # Simple 2-class classification
+        list<hash<auto>> triplets();
+        list<float> y();
+        for (int i = 0; i < 20; ++i) {
+            float x1 = i * 1.0;
+            float x2 = (i * 2) % 10 * 1.0;
+            if (x1 != 0.0) {
+                push triplets, {"row": i, "col": 0, "value": x1};
+            }
+            if (x2 != 0.0) {
+                push triplets, {"row": i, "col": 1, "value": x2};
+            }
+            push y, i < 10 ? 0.0 : 1.0;
+        }
+
+        ML::SparseMatrix X(20, 2, triplets);
+
+        ML::LogisticRegression logr({"learning_rate": 0.1, "max_iterations": 200, "seed": 42});
+        logr.fitMatrixSparse(X, y);
+        assertTrue(logr.isFitted());
+
+        # Should be able to predict after sparse fit
+        list<auto> results = logr.predictMatrix(X.toDense());
+        assertEq(20, results.size());
     }
 }

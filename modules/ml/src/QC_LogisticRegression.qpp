@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 #include "QC_LogisticRegression.h"
+#include "QC_SparseMatrix.h"
 
 extern const TypedHashDecl* hashdeclLogisticRegressionResult;
 
@@ -418,4 +419,24 @@ list<float> LogisticRegression::getClasses() {
 */
 bool LogisticRegression::isBinary() [flags=CONSTANT] {
     return lr->isBinaryClassification();
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse matrix-vector products in gradient descent for memory-efficient
+    fitting on high-dimensional sparse data (e.g., text classification with TF-IDF).
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of class labels
+
+    @note Feature normalization is not applied when fitting with sparse data.
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing LogisticRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->fitSparse(X->getMatrix(), target, xsink);
 }

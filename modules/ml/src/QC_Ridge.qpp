@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 #include "QC_Ridge.h"
+#include "QC_SparseMatrix.h"
 
 // Extern declarations for hashdecls (defined in ml-module.cpp)
 extern const TypedHashDecl* hashdeclRidgeResult;
@@ -372,4 +373,24 @@ list<float> Ridge::getFeatureMeans() [flags=RET_VALUE_ONLY] {
 */
 list<float> Ridge::getFeatureStds() [flags=RET_VALUE_ONLY] {
     return ridge->getFeatureStds(xsink);
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse normal equations with SimplicialLDLT for memory-efficient fitting
+    on high-dimensional sparse data.
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of target values
+
+    @note Feature normalization is not applied when fitting with sparse data.
+
+    @throw ML-RIDGE-ERROR if fitting fails or dimensions mismatch
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing Ridge::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ridge->fitSparse(X->getMatrix(), target, xsink);
 }

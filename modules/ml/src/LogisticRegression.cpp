@@ -169,6 +169,114 @@ void QoreLogisticRegression::fit(const MatrixXd& X, const VectorXd& y, Exception
     fitted = true;
 }
 
+void QoreLogisticRegression::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (X.rows() == 0 || X.cols() == 0) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "cannot fit on empty data: provide at least one sample with one feature");
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+
+    int n_samples = static_cast<int>(X.rows());
+    n_features = static_cast<int>(X.cols());
+
+    // Extract unique sorted classes from y
+    std::set<double> class_set;
+    for (int i = 0; i < n_samples; ++i) {
+        class_set.insert(y(i));
+    }
+    classes.assign(class_set.begin(), class_set.end());
+    int n_classes = static_cast<int>(classes.size());
+
+    if (n_classes < 2) {
+        xsink->raiseException("ML-LOGISTIC-REGRESSION-ERROR",
+            "need at least 2 distinct classes for classification; found %d", n_classes);
+        return;
+    }
+
+    is_binary = (n_classes == 2);
+
+    // Number of weight vectors: 1 for binary, n_classes for OvR multiclass
+    int n_models = is_binary ? 1 : n_classes;
+    weights = MatrixXd::Zero(n_models, n_features);
+    intercepts = VectorXd::Zero(n_models);
+
+    // Note: normalization with sparse data is skipped (centering destroys sparsity)
+
+    for (int m = 0; m < n_models; ++m) {
+        // Create binary target vector for this model
+        VectorXd y_binary(n_samples);
+        if (is_binary) {
+            for (int i = 0; i < n_samples; ++i) {
+                y_binary(i) = (y(i) == classes[1]) ? 1.0 : 0.0;
+            }
+        } else {
+            for (int i = 0; i < n_samples; ++i) {
+                y_binary(i) = (y(i) == classes[m]) ? 1.0 : 0.0;
+            }
+        }
+
+        // Gradient descent for this binary classifier
+        RowVectorXd w = RowVectorXd::Zero(n_features);
+        double b = 0.0;
+
+        for (int iter = 0; iter < max_iterations; ++iter) {
+            if (qore_check_cancel(xsink, "LogisticRegression fitSparse")) {
+                return;
+            }
+
+            // Compute predictions: sigmoid(X * w^T + b)
+            // Sparse * dense = dense (efficient via Eigen overloads)
+            VectorXd z = (X * w.transpose()).array() + b;
+            VectorXd predictions(n_samples);
+            for (int i = 0; i < n_samples; ++i) {
+                predictions(i) = sigmoid(z(i));
+            }
+
+            // Compute error
+            VectorXd error = predictions - y_binary;
+
+            // Compute gradients
+            // gradient_w = (1/n) * X^T * error + regularization * w (for L2)
+            // Sparse^T * dense = dense (efficient via Eigen overloads)
+            RowVectorXd gradient_w = (X.transpose() * error).transpose() / n_samples;
+            if (penalty == "l2") {
+                gradient_w += regularization * w;
+            }
+
+            double gradient_b = 0.0;
+            if (fit_intercept) {
+                gradient_b = error.mean();
+            }
+
+            // Update weights
+            RowVectorXd old_w = w;
+            w -= learning_rate * gradient_w;
+            if (fit_intercept) {
+                b -= learning_rate * gradient_b;
+            }
+
+            // Check convergence: max absolute weight change
+            double max_change = (w - old_w).array().abs().maxCoeff();
+            if (max_change < tolerance) {
+                break;
+            }
+        }
+
+        weights.row(m) = w;
+        intercepts(m) = b;
+    }
+
+    fitted = true;
+}
+
 void QoreLogisticRegression::update(const MatrixXd& X, const VectorXd& y,
     double lr, ExceptionSink* xsink) {
     std::lock_guard<std::mutex> lk(mtx);
