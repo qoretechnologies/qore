@@ -6,12 +6,12 @@ Debuginfod has been disabled.
 To make this setting permanent, add 'set debuginfod enabled off' to .gdbinit.
 [Thread debugging using libthread_db enabled]
 Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
-QUnit Test "NaN-boxing QoreValue tests" v1.0
+QUnit Test "UnaryPlusMinusTest" v1.0
 
 Thread 1 "qore/1" received signal SIGSEGV, Segmentation fault.
 0x00007ffff7650cc3 in AbstractQoreNode::deref(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 
-Thread 2 (Thread 0x7fffedb716c0 (LWP 1058236) "qore/1"):
+Thread 2 (Thread 0x7fffedb716c0 (LWP 1070074) "qore/1"):
 #0  __syscall_cancel_arch () at ../sysdeps/unix/sysv/linux/x86_64/syscall_cancel.S:56
 No locals.
 #1  0x00007fffee6a013c in __internal_syscall_cancel (a1=140737181521472, a2=140737181521200, a3=0, a4=8, a5=0, a6=0, nr=128) at ./nptl/cancellation.c:49
@@ -23,7 +23,7 @@ No locals.
 #3  0x00007fffee646b25 in __GI___sigtimedwait (set=set@entry=0x7fffedb61640, info=info@entry=0x7fffedb61530, timeout=timeout@entry=0x0) at ../sysdeps/unix/sysv/linux/sigtimedwait.c:31
         result = <optimized out>
 #4  0x00007fffee646250 in __GI___sigwait (set=0x7fffedb61640, sig=0x7fffedb61604) at ../sysdeps/unix/sysv/linux/sigwait.c:28
-        si = {si_signo = -62408, si_errno = -1, si_code = 0, __pad0 = 0, _sifields = {_pad = {0, 0, 2070606080, 608199337, -402649328, 32767, 24, 0, -402653136, 32767, -306833856, 32767, -306766620, 32767, -12985, 32767, -306834000, 32767, -294959767, 32767, 8388608, 0, -402649136, 32767, 24, 0, -136028088, 32767}, _kill = {si_pid = 0, si_uid = 0}, _timer = {si_tid = 0, si_overrun = 0, si_sigval = {sival_int = 2070606080, sival_ptr = 0x244062a97b6af100}}, _rt = {si_pid = 0, si_uid = 0, si_sigval = {sival_int = 2070606080, sival_ptr = 0x244062a97b6af100}}, _sigchld = {si_pid = 0, si_uid = 0, si_status = 2070606080, si_utime = 140737085706000, si_stime = 24}, _sigfault = {si_addr = 0x0, si_addr_lsb = -3840, _bounds = {_addr_bnd = {_lower = 0x7fffe8000f10, _upper = 0x18}, _pkey = 3892317968}}, _sigpoll = {si_band = 0, si_fd = 2070606080}, _sigsys = {_call_addr = 0x0, _syscall = 2070606080, _arch = 608199337}}}
+        si = {si_signo = -62408, si_errno = -1, si_code = 0, __pad0 = 0, _sifields = {_pad = {0, 0, -177050624, -1753663978, -402649328, 32767, 24, 0, -402653136, 32767, -306833856, 32767, -306766620, 32767, -13001, 32767, -306834000, 32767, -294959767, 32767, 8388608, 0, -402649136, 32767, 24, 0, -136028088, 32767}, _kill = {si_pid = 0, si_uid = 0}, _timer = {si_tid = 0, si_overrun = 0, si_sigval = {sival_int = -177050624, sival_ptr = 0x97793616f5726c00}}, _rt = {si_pid = 0, si_uid = 0, si_sigval = {sival_int = -177050624, sival_ptr = 0x97793616f5726c00}}, _sigchld = {si_pid = 0, si_uid = 0, si_status = -177050624, si_utime = 140737085706000, si_stime = 24}, _sigfault = {si_addr = 0x0, si_addr_lsb = 27648, _bounds = {_addr_bnd = {_lower = 0x7fffe8000f10, _upper = 0x18}, _pkey = 3892317968}}, _sigpoll = {si_band = 0, si_fd = -177050624}, _sigsys = {_call_addr = 0x0, _syscall = -177050624, _arch = 2541303318}}}
         ret = <optimized out>
 #5  0x00007ffff787df1b in QoreSignalManager::signal_handler_thread() () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
@@ -33,12 +33,12 @@ No symbol table info available.
         ret = <optimized out>
         pd = <optimized out>
         out = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, 5793034240429796294, 140737181587136, 140737488342080, 22, 140737488342343, 5793034240689843142, 5793030219366673350}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {140737181587136, 3945598507343093281, 140737181587136, 140737488342064, 22, 140737488342327, 3945598507334704673, 3945596687450709537}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x0}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
 #8  0x00007fffee7373fc in __GI___clone3 () at ../sysdeps/unix/sysv/linux/x86_64/clone3.S:78
 No locals.
 
-Thread 1 (Thread 0x7fffee441e40 (LWP 1058233) "qore/1"):
+Thread 1 (Thread 0x7fffee441e40 (LWP 1070071) "qore/1"):
 #0  0x00007ffff7650cc3 in AbstractQoreNode::deref(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
 No symbol table info available.
 #1  0x00007ffff76704ed in QoreValue::discard(ExceptionSink*) () from /home/david/src/qore/git/qore/build/libqore.so.20
@@ -147,17 +147,17 @@ No symbol table info available.
 No symbol table info available.
 #53 0x000055555555c87f in qore_main_intern(int, char**, int) ()
 No symbol table info available.
-#54 0x00007fffee62a575 in __libc_start_call_main (main=main@entry=0x55555555a5a0 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd2b8) at ../sysdeps/nptl/libc_start_call_main.h:58
+#54 0x00007fffee62a575 in __libc_start_call_main (main=main@entry=0x55555555a5a0 <main>, argc=argc@entry=2, argv=argv@entry=0x7fffffffd2a8) at ../sysdeps/nptl/libc_start_call_main.h:58
         self = <optimized out>
         result = <optimized out>
-        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, 5792994033437387718, 140737488343736, 2, 140737354125312, 93824992468472, 5792994033418513350, 5793030291916336070}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd2b8}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
+        unwind_buf = {cancel_jmp_buf = {{jmp_buf = {0, 3945628690030730785, 140737488343720, 2, 140737354125312, 93824992468472, 3945628690011856417, 3945596760805678625}, mask_was_saved = 0}}, priv = {pad = {0x0, 0x0, 0x0, 0x7fffffffd2a8}, data = {prev = 0x0, cleanup = 0x0, canceltype = 0}}}
         not_first_call = <optimized out>
-#55 0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a5a0 <main>, argc=2, argv=0x7fffffffd2b8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd2a8) at ../csu/libc-start.c:360
+#55 0x00007fffee62a628 in __libc_start_main_impl (main=0x55555555a5a0 <main>, argc=2, argv=0x7fffffffd2a8, init=<optimized out>, fini=<optimized out>, rtld_fini=<optimized out>, stack_end=0x7fffffffd298) at ../csu/libc-start.c:360
 No locals.
 #56 0x000055555555a5d5 in _start ()
 No symbol table info available.
 A debugging session is active.
 
-	Inferior 1 [process 1058233] will be killed.
+	Inferior 1 [process 1070071] will be killed.
 
 Quit anyway? (y or n) [answered Y; input not from terminal]
