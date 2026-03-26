@@ -2131,14 +2131,26 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         callAbort(pinfo.spop_obj, xsink);
     }
 
-    // Build result hash
+    // Build result hash and deliver to queue if set.
+    // Skip callback delivery during cancel: the callback runs asynchronously on a
+    // worker thread and may access the owning object (e.g., WebSocketClient) after
+    // the caller has destroyed it — the destructor only waits for delivery threads,
+    // not for completion callback workers.  Queue delivery is fine (synchronous push
+    // on the I/O thread).  The caller already knows the operation is cancelled.
     QoreHashNode* result = buildResultHash(pinfo, true, nullptr, xsink);
 
-    // Deliver result — dispatches callback to worker thread if on I/O thread
-    if (pinfo.callback) {
-        pinfo.callback->ref();
+    if (pinfo.queue) {
+        deliverResult(pinfo.owner, pinfo.queue, nullptr, result, xsink);
+    } else {
+        if (result) {
+            result->deref(xsink);
+        }
     }
-    deliverResult(pinfo.owner, pinfo.queue, pinfo.callback, result, xsink);
+    // Deref the callback since we're not dispatching it
+    if (pinfo.callback) {
+        pinfo.callback->deref(xsink);
+        pinfo.callback = nullptr;
+    }
 }
 
 void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
