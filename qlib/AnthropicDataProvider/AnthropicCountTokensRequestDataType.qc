@@ -65,6 +65,29 @@ public class AnthropicCountTokensRequestDataType inherits HashDataType {
                     "Messages API",
                 "type": new AnthropicThinkingConfigDataType(AutoHashOrNothingType),
             },
+            # Flattened action options (not sent directly to API; transformed in doRequestImpl)
+            "thinking_mode": {
+                "display_name": "Thinking Mode",
+                "short_desc": "Whether extended thinking is enabled",
+                "desc": "Whether extended thinking is enabled or disabled. Extended thinking allows the model "
+                    "to reason through complex problems step by step before responding",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "enabled", "display_name": "Enabled",
+                        "short_desc": "Enable extended thinking with a fixed budget"},
+                    <AllowedValueInfo>{"value": "disabled", "display_name": "Disabled",
+                        "short_desc": "Disable extended thinking"},
+                    <AllowedValueInfo>{"value": "adaptive", "display_name": "Adaptive",
+                        "short_desc": "Model decides whether to use thinking based on the task"},
+                ),
+            },
+            "thinking_budget_tokens": {
+                "display_name": "Thinking Budget Tokens",
+                "short_desc": "Maximum tokens for thinking",
+                "desc": "The maximum number of tokens to use for extended thinking. Must be at least `1024` "
+                    "and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
         };
     }
 

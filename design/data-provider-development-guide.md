@@ -1170,6 +1170,31 @@ Every `registerAction()` call **must** include `options` (generated via `getActi
 ### 12. Field ordering in request types
 Fields with `required_groups` must be declared first in the `Fields` constant, followed by required fields, then optional fields. This ensures the UI presents primary input options at the top of the form. When `required_groups` fields are scattered among optional fields, users may not see the main input choices without scrolling.
 
+### 12a. `required_groups` must be inside `attr` for nested type fields
+When defining `required_groups` on fields inside a `HashDataType` subclass (used via `addQoreFields()`), the `required_groups` key **must** be inside the `attr` hash. `QoreDataField` only reads attributes from `h.attr` — top-level keys like `"required_groups"` on the field hash are silently ignored.
+
+**Wrong** — `required_groups` at top level of field hash (ignored by `QoreDataField`):
+```qore
+"content": {
+    "display_name": "Content",
+    "type": AbstractDataProviderTypeMap."*string",
+    "required_groups": ("message_content",),  # WRONG: silently ignored
+},
+```
+
+**Correct** — `required_groups` inside `attr`:
+```qore
+"content": {
+    "display_name": "Content",
+    "type": AbstractDataProviderTypeMap."*string",
+    "attr": {
+        "required_groups": ("message_content",),
+    },
+},
+```
+
+Note: For top-level action option fields processed by `getActionOptionFromFields()`, either location works because that method explicitly reads `required_groups` from the field hash. But for fields in nested types (e.g., list element types), only the `attr` approach works.
+
 ### 13. Single-key hash slicing
 `Fields{"key"}` or `getFields(){"key"}` returns the value at that key (single-value dereference). For a single-key hash slice that returns a hash, use a trailing comma: `Fields{"key",}`. This is critical when passing fields to `getActionOptionFromFields()`, which expects a hash of field definitions — passing a single field's value instead of a hash causes `OPTION-ERROR` at module load time.
 

@@ -147,29 +147,47 @@ public const AnthropicSkillIdRequestDataType = new AnthropicSkillIdRequestDataTy
 public class AnthropicSkillRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "name": {
+                "display_name": "Name",
+                "short_desc": "Skill identifier",
+                "desc": "The skill identifier used in the SKILL.md frontmatter. Maximum 64 characters, "
+                    "lowercase letters, numbers, and hyphens only. Cannot contain reserved words "
+                    "like `anthropic` or `claude`",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "get-city-weather",
+                "attr": {
+                    "validation_regex": "^[a-z0-9-]{1,64}$",
+                },
+            },
             "display_title": {
                 "display_name": "Display Title",
                 "short_desc": "Human-readable skill title",
-                "desc": "A human-readable title for the skill",
+                "desc": "A human-readable title for the skill. This is shown in the UI but not included "
+                    "in the prompt sent to the model",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "example_value": "My Custom Skill",
+                "example_value": "Get City Weather",
             },
             "description": {
                 "display_name": "Description",
                 "short_desc": "Description of the skill",
-                "desc": "A description of what the skill does and when it should be used",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "A description of what the skill does and when it should be used. Maximum 1024 "
+                    "characters. Write in third person (e.g. `Retrieves weather data for a city`)",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "example_value": "Retrieves current weather data for a specified city",
             },
             "instructions": {
                 "display_name": "Instructions",
                 "short_desc": "Instructions for the skill",
-                "desc": "Detailed instructions for the skill's behavior",
+                "desc": "Detailed instructions for the skill's behavior. These form the body of the "
+                    "SKILL.md file that Claude reads when the skill is triggered",
                 "type": AbstractDataProviderTypeMap."*string",
             },
         };
     }
-    constructor() { addQoreFields(Fields); setDefaultOtherFieldType(AbstractDataProviderTypeMap."any"); }
+    constructor() { addQoreFields(Fields); }
 }
 
 public const AnthropicSkillRequestDataType = new AnthropicSkillRequestDataType();
@@ -247,8 +265,23 @@ public class AnthropicSkillCreateDataProvider inherits AnthropicDataProviderComm
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("POST", "skills", req, SkillsBetaHeader).body;
+        # generate SKILL.md content from request fields
+        string skill_md = generateSkillMd(req);
+        return doMultipartSkillUpload("POST", "skills", skill_md, req.display_title, req.name).body;
     }
+}
+
+#! Generates SKILL.md content from request fields
+/** @param req the request hash with name, description, display_title, and instructions
+    @return the SKILL.md file content
+*/
+string sub generateSkillMd(hash<auto> req) {
+    string skill_md = sprintf("---\nname: %s\ndescription: %s\n---\n",
+        req.name, req.description ?? req.display_title);
+    if (req.instructions.val()) {
+        skill_md += sprintf("\n# %s\n\n%s\n", req.display_title, req.instructions);
+    }
+    return skill_md;
 }
 
 #! List skills
@@ -336,7 +369,8 @@ public class AnthropicSkillUpdateDataProvider inherits AnthropicDataProviderComm
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         string skill_id = remove req.skill_id;
-        return doRestCommand("PUT", "skills/" + skill_id, req, SkillsBetaHeader).body;
+        string skill_md = generateSkillMd(req);
+        return doMultipartSkillUpload("PUT", "skills/" + skill_id, skill_md, req.display_title, req.name).body;
     }
 }
 

@@ -77,6 +77,17 @@ public class AnthropicCountTokensDataProvider inherits AnthropicDataProviderComm
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # transform flattened thinking options into nested API format
+        *string thinking_mode = remove req.thinking_mode;
+        *int thinking_budget = remove req.thinking_budget_tokens;
+        if (thinking_mode) {
+            req.thinking = {
+                "type": thinking_mode,
+            };
+            if (thinking_budget) {
+                req.thinking.budget_tokens = thinking_budget;
+            }
+        }
         req.messages = AnthropicMessageCreateDataProvider::convertMessages(req.messages);
         return doRestCommand("POST", "messages/count_tokens", req).body;
     }

@@ -231,6 +231,8 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
     *hash<string, bool> getSupportedReferenceData() {
         return {
             "models": True,
+            "skills": True,
+            "files": True,
         };
     }
 
@@ -245,6 +247,8 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
         switch (type) {
             case "models": return getReferenceModels();
+            case "skills": return getReferenceSkills();
+            case "files": return getReferenceFiles();
         }
     }
 
@@ -263,6 +267,56 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "getReferenceModels: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available skills (both Anthropic-provided and custom)
+    /** Values are encoded as \c "{type}/{skill_id}" strings (e.g. \c "anthropic/pptx",
+        \c "custom/skill_abc123").
+    */
+    private *list<hash<AllowedValueInfo>> getReferenceSkills() {
+        list<hash<AllowedValueInfo>> rv;
+        try {
+            # fetch Anthropic-provided skills
+            foreach hash<auto> skill in (doRestCommand("GET", "skills?source=anthropic", NOTHING,
+                    SkillsBetaHeader).body."data") {
+                rv += <AllowedValueInfo>{
+                    "display_name": skill.display_title ?? skill.id,
+                    "short_desc": skill.display_title ?? skill.id,
+                    "value": "anthropic/" + skill.id,
+                };
+            }
+            # fetch custom skills
+            foreach hash<auto> skill in (doRestCommand("GET", "skills?source=custom", NOTHING,
+                    SkillsBetaHeader).body."data") {
+                rv += <AllowedValueInfo>{
+                    "display_name": skill.display_title ?? skill.id,
+                    "short_desc": skill.display_title ?? skill.id,
+                    "value": "custom/" + skill.id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "getReferenceSkills: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available files
+    private *list<hash<AllowedValueInfo>> getReferenceFiles() {
+        list<hash<AllowedValueInfo>> rv;
+        try {
+            foreach hash<auto> file in (doRestCommand("GET", "files", NOTHING,
+                    FilesBetaHeader).body."data") {
+                string display = file.filename ?? file.id;
+                rv += <AllowedValueInfo>{
+                    "display_name": display,
+                    "short_desc": display,
+                    "value": file.id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "getReferenceFiles: %s: %s", ex.err, ex.desc);
         }
         return rv;
     }
@@ -322,6 +376,67 @@ public class AnthropicDataProviderCommon inherits DataProvider::AbstractDataProv
             return True;
         }
         return False;
+    }
+
+    #! Uploads a skill via multipart/form-data with a generated SKILL.md file
+    /** @param method the HTTP method (POST for create, PUT for update)
+        @param path the API path (e.g. "skills" or "skills/{id}")
+        @param skill_md the SKILL.md file content
+        @param display_title the display title for the skill
+
+        @return a hash with the response body
+    */
+    private hash<auto> doMultipartSkillUpload(string method, string path, string skill_md,
+            string display_title, string skill_name) {
+        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        # build multipart body with SKILL.md as files[]
+        binary msg = binary();
+        # display_title form field
+        msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"display_title\"\r\n\r\n%s\r\n",
+            mpboundary, display_title));
+        # SKILL.md file — filename must include skill name as directory prefix
+        msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"files[]\"; "
+            "filename=\"%s/SKILL.md\"\r\nContent-Type: text/markdown\r\n\r\n",
+            mpboundary, skill_name));
+        msg += binary(skill_md);
+        msg += binary("\r\n");
+        msg += binary(sprintf("--%s--\r\n", mpboundary));
+
+        # build headers
+        hash<auto> hdr = map {$1.key.lwr(): $1.value}, rest.getDefaultHeaders().pairIterator();
+        hdr += SkillsBetaHeader;
+        hdr."content-type" = sprintf("%s; boundary=\"%s\"", MimeTypeMultipartFormData, mpboundary);
+
+        # build full path with API version prefix (e.g. /v1/skills)
+        *string base = rest.getConnectionPath();
+        string full_path;
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            full_path = base + "/" + path;
+        } else {
+            full_path = "/" + path;
+        }
+        int retries = 0;
+        while (True) {
+            try {
+                hash<auto> raw = rest.getConnectionManager().request(rest.getUrl(),
+                    method, full_path, hdr, msg);
+                # parse response
+                int status = raw.status_code;
+                if (status >= 400) {
+                    throw "ANTHROPIC-SKILL-ERROR", sprintf("HTTP %d: %s", status, raw.body);
+                }
+                return {"body": parse_json(raw.body)};
+            } catch (hash<ExceptionInfo> ex) {
+                if (retry(ex, \retries)) {
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 }
 }

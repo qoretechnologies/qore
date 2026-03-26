@@ -15,6 +15,34 @@
 
 %exec-class AnthropicDataProviderTest
 
+class FakeConnectionManager {
+    public {
+        FakeAnthropicRestClientIo fake_rest;
+    }
+
+    constructor(FakeAnthropicRestClientIo rest) {
+        fake_rest = rest;
+    }
+
+    hash<auto> request(string url, string method, string path, hash<auto> hdr, binary body) {
+        fake_rest.last_method = method;
+        # strip /v1/ prefix from path for test assertions
+        fake_rest.last_path = path;
+        fake_rest.last_path =~ s/^\/v1\///;
+        fake_rest.last_headers = hdr;
+        return {
+            "status_code": 200,
+            "body": make_json(fake_rest.response_body ?? {
+                "id": "test_id",
+                "type": "skill",
+                "display_title": "Test",
+                "source": "custom",
+            }),
+            "headers": {},
+        };
+    }
+}
+
 class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
     public {
         hash<auto> last_request;
@@ -24,9 +52,23 @@ class FakeAnthropicRestClientIo inherits RestClientIo::RestClientIo {
         hash<auto> response_body;
         hash<auto> last_stream_request;
         list<hash<SseMessageInfo>> stream_events;
+        FakeConnectionManager conn_mgr;
     }
 
     constructor() : RestClientIo({"url": "https://api.anthropic.com", "token": "x", "data": "json"}) {
+        conn_mgr = new FakeConnectionManager(self);
+    }
+
+    FakeConnectionManager getConnectionManager() {
+        return conn_mgr;
+    }
+
+    string getUrl() {
+        return "https://api.anthropic.com";
+    }
+
+    string getConnectionPath() {
+        return "v1";
     }
 
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
@@ -268,8 +310,8 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         assertEq(("Messages",), action.groups);
         # verify new fields are in action options
         assertEq(True, action.options.hasKey("service_tier"));
-        assertEq(True, action.options.hasKey("output_config"));
-        assertEq(True, action.options.hasKey("container"));
+        assertEq(True, action.options.hasKey("output_schema"));
+        assertEq(True, action.options.hasKey("skill"));
 
         # test count-tokens action
         action = DataProviderActionCatalog::getAppAction(
@@ -314,7 +356,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         action = DataProviderActionCatalog::getAppAction(
             AnthropicDataProvider::AppName, "get-file-content"
         );
-        assertEq("/files/{file_id}/get-content", action.path);
+        assertEq("/files/get-content", action.path);
         assertEq(DPAT_API, action.action_code);
         assertEq(("Files",), action.groups);
         assertEq(True, action.output_type instanceof AbstractDataProviderType);
@@ -334,7 +376,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         action = DataProviderActionCatalog::getAppAction(
             AnthropicDataProvider::AppName, "delete-skill"
         );
-        assertEq("/skills/{skill_id}/delete", action.path);
+        assertEq("/skills/delete", action.path);
         assertEq(DPAT_API, action.action_code);
         assertEq(("Skills",), action.groups);
     }
@@ -814,7 +856,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
 
         # test that Skills API passes beta headers
         AbstractDataProvider skill_create = prov.getChildProvider("skills").getChildProvider("create");
-        skill_create.doRequest({"display_title": "Test"});
+        skill_create.doRequest({"name": "test-skill", "display_title": "Test", "description": "Test skill"});
         assertEq("POST", rest.last_method);
         assertEq("skills", rest.last_path);
         assertEq("skills-2025-10-02", rest.last_headers."anthropic-beta");
@@ -939,7 +981,7 @@ public class AnthropicDataProviderTest inherits QUnit::Test {
         # verify AnthropicOutputConfigDataType fields
         AnthropicOutputConfigDataType output_config_type();
         hash<string, AbstractDataField> oc_fields = output_config_type.getFields();
-        assertEq(True, oc_fields.hasKey("json_schema"));
+        assertEq(True, oc_fields.hasKey("format"));
         assertEq(True, oc_fields.hasKey("effort"));
 
         # verify new fields in request type

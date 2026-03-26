@@ -47,7 +47,9 @@ public class AnthropicMessageItemDataType inherits HashDataType {
                 "desc": "The text content of the message. Required unless a file is provided",
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "Hello, how can I help you?",
-                "required_groups": ("message_content",),
+                "attr": {
+                    "required_groups": ("message_content",),
+                },
             },
             "file": {
                 "display_name": "File",
@@ -57,7 +59,9 @@ public class AnthropicMessageItemDataType inherits HashDataType {
                     "Supported image types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`. "
                     "Supported document types: `application/pdf`",
                 "type": FileDataType.getOrNothingType(),
-                "required_groups": ("message_content",),
+                "attr": {
+                    "required_groups": ("message_content",),
+                },
             },
         };
     }
@@ -118,15 +122,16 @@ public class AnthropicJsonSchemaDataType inherits HashDataType {
             "properties": {
                 "display_name": "Properties",
                 "short_desc": "Property definitions for object schemas",
-                "desc": "A hash mapping property names to their JSON Schema definitions. Each property should "
-                    "have at least a `type` field",
+                "desc": "Property definitions. Use simple type names as values "
+                    "(e.g. `city`: `string`, `temperature`: `number`) — they are automatically "
+                    "converted to proper JSON Schema format",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "example_value": {"location": {"type": "string", "description": "City name"}},
+                "example_value": {"city": "string", "temperature": "number"},
             },
             "required": {
                 "display_name": "Required Properties",
                 "short_desc": "List of required property names",
-                "desc": "A list of property names that are required in the tool input",
+                "desc": "A list of property names that are required",
                 "type": new ListDataType("AnthropicSchemaRequired", StringType, True),
             },
             "description": {
@@ -271,16 +276,45 @@ public class AnthropicThinkingConfigDataType inherits HashDataType {
     }
 }
 
+#! Output format data type for structured output (json_schema)
+public class AnthropicOutputFormatDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Type",
+                "short_desc": "The output format type",
+                "desc": "The output format type. Currently only `json_schema` is supported",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+                "default_value": "json_schema",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "json_schema", "display_name": "JSON Schema",
+                        "short_desc": "Constrain output to match a JSON Schema"},
+                ),
+            },
+            "schema": {
+                "display_name": "Schema",
+                "short_desc": "JSON Schema for the output format",
+                "desc": "A JSON Schema object that constrains the model's output to match the specified structure",
+                "type": new AnthropicJsonSchemaDataType(AutoHashOrNothingType),
+            },
+        };
+    }
+
+    constructor() { addQoreFields(Fields); }
+    constructor(Type base_type) : HashDataType(base_type) { addQoreFields(Fields); }
+}
+
 #! Output configuration data type for structured output and effort control
 public class AnthropicOutputConfigDataType inherits HashDataType {
     public {
         const Fields = {
-            "json_schema": {
-                "display_name": "JSON Schema",
-                "short_desc": "JSON Schema for structured output",
-                "desc": "A JSON Schema object that constrains the model's output to match the specified structure. "
-                    "Enables structured, machine-readable responses",
-                "type": new AnthropicJsonSchemaDataType(AutoHashOrNothingType),
+            "format": {
+                "display_name": "Output Format",
+                "short_desc": "Structured output format configuration",
+                "desc": "Structured output format. Set `type` to `json_schema` and provide the schema in the "
+                    "`schema` field",
+                "type": new AnthropicOutputFormatDataType(AutoHashOrNothingType),
             },
             "effort": {
                 "display_name": "Effort",
@@ -430,6 +464,82 @@ public class AnthropicMessageRequestDataType inherits HashDataType {
                 "desc": "Controls structured output (JSON Schema) and effort level. Use `json_schema` for "
                     "machine-readable output, and `effort` to control response thoroughness",
                 "type": new AnthropicOutputConfigDataType(AutoHashOrNothingType),
+            },
+            # Flattened action options (not sent directly to API; transformed in prepareRequest)
+            "output_schema": {
+                "display_name": "Output Schema",
+                "short_desc": "JSON Schema for structured output",
+                "desc": "A JSON Schema object that constrains the model's output to match the specified structure. "
+                    "Enables structured, machine-readable responses. Note: for `object` types, "
+                    "`additionalProperties` must be set to `false`.\n\n"
+                    "Example:\n"
+                    "```\n"
+                    "type: object\n"
+                    "properties:\n"
+                    "  sentiment:\n"
+                    "    type: string\n"
+                    "    description: The sentiment of the text\n"
+                    "  score:\n"
+                    "    type: number\n"
+                    "    description: Confidence score from 0 to 1\n"
+                    "required:\n"
+                    "  - sentiment\n"
+                    "  - score\n"
+                    "additionalProperties: false\n"
+                    "```",
+                "type": new AnthropicJsonSchemaDataType(AutoHashOrNothingType),
+            },
+            "effort": {
+                "display_name": "Effort",
+                "short_desc": "Controls how much effort the model should spend",
+                "desc": "Controls how much effort the model should spend on the response",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "low", "display_name": "Low",
+                        "short_desc": "Fast, less thorough responses"},
+                    <AllowedValueInfo>{"value": "medium", "display_name": "Medium",
+                        "short_desc": "Balanced effort"},
+                    <AllowedValueInfo>{"value": "high", "display_name": "High",
+                        "short_desc": "More thorough responses"},
+                    <AllowedValueInfo>{"value": "max", "display_name": "Max",
+                        "short_desc": "Maximum effort and thoroughness"},
+                ),
+            },
+            "thinking_mode": {
+                "display_name": "Thinking Mode",
+                "short_desc": "Whether extended thinking is enabled",
+                "desc": "Whether extended thinking is enabled or disabled. Extended thinking allows the model "
+                    "to reason through complex problems step by step before responding",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "enabled", "display_name": "Enabled",
+                        "short_desc": "Enable extended thinking with a fixed budget"},
+                    <AllowedValueInfo>{"value": "disabled", "display_name": "Disabled",
+                        "short_desc": "Disable extended thinking"},
+                    <AllowedValueInfo>{"value": "adaptive", "display_name": "Adaptive",
+                        "short_desc": "Model decides whether to use thinking based on the task"},
+                ),
+            },
+            "thinking_budget_tokens": {
+                "display_name": "Thinking Budget Tokens",
+                "short_desc": "Maximum tokens for thinking",
+                "desc": "The maximum number of tokens to use for extended thinking. Must be at least `1024` "
+                    "and less than `max_tokens`. Only applicable when thinking mode is `enabled`",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            # Flattened skill option (transformed in prepareRequest)
+            "skill": {
+                "display_name": "Skill",
+                "short_desc": "An agent skill to use for this request",
+                "desc": "An agent skill to use for this request. Skills extend Claude's capabilities with "
+                    "specialized expertise for tasks like creating documents (pptx, xlsx, docx, pdf) or "
+                    "custom workflows. When a skill is selected, the required code execution tool and beta "
+                    "headers are automatically configured.\n\n"
+                    "Format: `{type}/{skill_id}` (e.g. `anthropic/pptx`, `custom/skill_abc123`). "
+                    "If no type prefix is given, `custom` is assumed",
+                "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "skills",
+                "allowed_values_creatable": True,
             },
             "container": {
                 "display_name": "Container",

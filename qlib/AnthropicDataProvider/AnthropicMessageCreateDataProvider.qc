@@ -87,7 +87,7 @@ public class AnthropicMessageCreateDataProvider inherits AnthropicDataProviderCo
         req = prepareRequest(req, ctx_store, \ctx_info);
         # ensure stream is False for non-streaming requests
         delete req.stream;
-        hash<auto> rv = doRestCommand("POST", "messages", req).body;
+        hash<auto> rv = doRestCommand("POST", "messages", req, ctx_info.extra_headers).body;
         # add convenience fields
         if (rv.content) {
             rv.output_text = getOutputText(rv.content);
@@ -112,6 +112,70 @@ public class AnthropicMessageCreateDataProvider inherits AnthropicDataProviderCo
     #! Prepares a request, loading conversation context if configured
     static hash<auto> prepareRequest(hash<auto> req, *AnthropicConversationContextStore ctx_store,
             reference<hash<auto>> ctx_info) {
+        # transform flattened action options into nested API format
+        *auto output_schema = remove req.output_schema;
+        *string effort = remove req.effort;
+        if (output_schema || effort) {
+            req.output_config = {};
+            if (output_schema) {
+                # normalize schema: convert simple string property values to {"type": "..."}
+                if (output_schema.properties) {
+                    hash<auto> props = output_schema.properties;
+                    foreach hash<auto> i in (props.pairIterator()) {
+                        if (i.value.typeCode() == NT_STRING) {
+                            props{i.key} = {"type": i.value};
+                        }
+                    }
+                    output_schema.properties = props;
+                }
+                # auto-set additionalProperties: false for object types (required by the API)
+                if (output_schema.type == "object" && !exists output_schema.additionalProperties) {
+                    output_schema.additionalProperties = False;
+                }
+                req.output_config.format = {
+                    "type": "json_schema",
+                    "schema": output_schema,
+                };
+            }
+            if (effort) {
+                req.output_config.effort = effort;
+            }
+        }
+        *string thinking_mode = remove req.thinking_mode;
+        *int thinking_budget = remove req.thinking_budget_tokens;
+        if (thinking_mode) {
+            req.thinking = {
+                "type": thinking_mode,
+            };
+            if (thinking_budget) {
+                req.thinking.budget_tokens = thinking_budget;
+            }
+        }
+        # transform skill string into container.skills + inject code execution tool
+        *string skill_val = remove req.skill;
+        if (skill_val.val()) {
+            # parse "{type}/{skill_id}" format; default to "custom" if no prefix
+            string skill_type;
+            string skill_id;
+            int slash = skill_val.find("/");
+            if (slash > 0) {
+                skill_type = skill_val.substr(0, slash);
+                skill_id = skill_val.substr(slash + 1);
+            } else {
+                skill_type = "custom";
+                skill_id = skill_val;
+            }
+            req.container = {"skills": ({"type": skill_type, "skill_id": skill_id, "version": "latest"},)};
+            # inject code execution tool (required for skills)
+            if (!req.tools) {
+                req.tools = ();
+            }
+            req.tools += {"type": "code_execution_20250825", "name": "code_execution"};
+            # store beta headers for the REST call
+            ctx_info.extra_headers = {
+                "anthropic-beta": "code-execution-2025-08-25,skills-2025-10-02",
+            };
+        }
         # extract and remove the conversation_key (not part of the API)
         *string ctx_key = remove req.conversation_key;
         ctx_info.ctx_key = ctx_key;

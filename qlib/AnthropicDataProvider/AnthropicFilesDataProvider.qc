@@ -94,6 +94,8 @@ public class AnthropicFileIdRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
                 "example_value": "file_abc123",
+                "ref_data": "files",
+                "allowed_values_creatable": True,
             },
         };
     }
@@ -255,14 +257,58 @@ public class AnthropicFileUploadDataProvider inherits AnthropicDataProviderCommo
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> file = req.file;
-        hash<auto> body = {
-            "file": file.content,
-            "filename": file.name,
-        };
-        if (file.mime_type && file.mime_type != "auto") {
-            body.mime_type = file.mime_type;
+        string filename = file.name ?? "upload";
+        string mime_type = file.mime_type ?? "application/octet-stream";
+        # decode base64 content to binary
+        binary content = file.content.typeCode() == NT_BINARY
+            ? file.content
+            : binary(parse_base64_string(file.content));
+
+        string mpboundary = replace(make_base64_string(string(now_us())), "=", "");
+        # build multipart body
+        binary msg = binary();
+        msg += binary(sprintf("--%s\r\nContent-Disposition: form-data; name=\"file\"; "
+            "filename=\"%s\"\r\nContent-Type: %s\r\n\r\n",
+            mpboundary, filename, mime_type));
+        msg += content;
+        msg += binary("\r\n");
+        msg += binary(sprintf("--%s--\r\n", mpboundary));
+
+        # build headers
+        hash<auto> hdr = map {$1.key.lwr(): $1.value}, rest.getDefaultHeaders().pairIterator();
+        hdr += FilesBetaHeader;
+        hdr."content-type" = sprintf("%s; boundary=\"%s\"", MimeTypeMultipartFormData, mpboundary);
+
+        # build full path with API version prefix
+        *string base = rest.getConnectionPath();
+        string full_path;
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            full_path = base + "/files";
+        } else {
+            full_path = "/files";
         }
-        return doRestCommand("POST", "files", body, FilesBetaHeader).body;
+
+        int retries = 0;
+        while (True) {
+            try {
+                hash<auto> raw = rest.getConnectionManager().request(rest.getUrl(),
+                    "POST", full_path, hdr, msg);
+                int status = raw.status_code;
+                if (status >= 400) {
+                    throw "ANTHROPIC-FILE-ERROR", sprintf("HTTP %d: %s", status, raw.body);
+                }
+                return parse_json(raw.body);
+            } catch (hash<ExceptionInfo> ex) {
+                if (retry(ex, \retries)) {
+                    continue;
+                }
+                rethrow;
+            }
+        }
     }
 }
 

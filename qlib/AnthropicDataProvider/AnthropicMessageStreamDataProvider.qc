@@ -238,7 +238,7 @@ public class AnthropicMessageStreamDataProvider inherits AnthropicDataProviderCo
             if (!rest_client) {
                 throw "SSE-ERROR", "no REST client available for streaming";
             }
-            stream = rest_client.openMessagesStream(req);
+            stream = rest_client.openMessagesStream(req, ctx_info.extra_headers);
 
             # accumulated message for context saving
             *hash<auto> full_message;
