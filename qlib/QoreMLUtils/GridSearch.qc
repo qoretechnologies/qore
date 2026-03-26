@@ -83,6 +83,9 @@ public class GridSearch {
 
         #! Random seed for reproducibility
         int seed;
+
+        #! Whether to use stratified k-fold (preserves class ratios in each fold)
+        bool stratify;
     }
 
     #! Creates a GridSearch instance
@@ -96,6 +99,8 @@ public class GridSearch {
         - \c n_folds (int): number of cross-validation folds (default: `5`)
         - \c shuffle (bool): whether to shuffle data before splitting (default: `True`)
         - \c seed (int): random seed for reproducibility (default: `0` = random)
+        - \c stratify (bool): if `True`, use stratified k-fold to preserve class ratios
+          in each fold; recommended for classification with imbalanced classes (default: `False`)
 
         @throw GRID-SEARCH-ERROR if required options are missing or param_grid is empty
     */
@@ -119,6 +124,7 @@ public class GridSearch {
         n_folds = options.n_folds ?? 5;
         shuffle = options.shuffle ?? True;
         seed = options.seed ?? 0;
+        stratify = options.stratify ?? False;
     }
 
     #! Runs grid search with matrix-format data
@@ -148,8 +154,13 @@ public class GridSearch {
         }
 
         # Create cross-validation splits
-        ML::CrossValidator cv({"n_folds": n_folds, "shuffle": shuffle, "seed": seed});
-        list<hash<auto>> folds = cv.split(X.size());
+        list<hash<auto>> folds;
+        if (stratify) {
+            folds = stratifiedSplit(y, n_folds, shuffle, seed);
+        } else {
+            ML::CrossValidator cv({"n_folds": n_folds, "shuffle": shuffle, "seed": seed});
+            folds = cv.split(X.size());
+        }
 
         # Evaluate each combination
         list<hash<auto>> cv_results();
@@ -239,6 +250,83 @@ public class GridSearch {
             sq_sum += (v - m) * (v - m);
         }
         return sqrt(sq_sum / values.size());
+    }
+
+    #! Creates stratified k-fold splits preserving class ratios
+    /** Groups indices by class label, then distributes each class's samples
+        proportionally across folds so each fold has approximately the same
+        class distribution as the full dataset.
+    */
+    static list<hash<auto>> stratifiedSplit(list<auto> y, int n_folds, bool do_shuffle, int seed) {
+        int n_samples = y.size();
+
+        # Group indices by class label
+        hash<string, list<int>> class_indices();
+        for (int i = 0; i < n_samples; ++i) {
+            string label = string(y[i]);
+            if (!exists class_indices{label}) {
+                class_indices{label} = ();
+            }
+            push class_indices{label}, i;
+        }
+
+        # Optionally shuffle within each class
+        if (do_shuffle) {
+            srand(seed > 0 ? seed : now_us().toInt());
+            foreach string label in (class_indices.keys()) {
+                list<int> indices = class_indices{label};
+                # Fisher-Yates shuffle
+                for (int i = indices.size() - 1; i > 0; --i) {
+                    int j = rand() % (i + 1);
+                    if (j != i) {
+                        int tmp = indices[i];
+                        indices[i] = indices[j];
+                        indices[j] = tmp;
+                    }
+                }
+                class_indices{label} = indices;
+            }
+        }
+
+        # Assign each class's samples to folds round-robin
+        list<list<int>> fold_test_indices();
+        for (int f = 0; f < n_folds; ++f) {
+            list<int> empty_fold();
+            push fold_test_indices, empty_fold;
+        }
+
+        foreach string label in (class_indices.keys()) {
+            list<int> indices = class_indices{label};
+            for (int i = 0; i < indices.size(); ++i) {
+                int fold_idx = i % n_folds;
+                push fold_test_indices[fold_idx], indices[i];
+            }
+        }
+
+        # Build fold structures matching CrossValidator output
+        list<hash<auto>> folds();
+        for (int f = 0; f < n_folds; ++f) {
+            # Test indices for this fold
+            list<int> test_idx = fold_test_indices[f];
+            # Train indices = all indices NOT in test
+            hash<string, bool> test_set();
+            foreach int idx in (test_idx) {
+                test_set{string(idx)} = True;
+            }
+            list<int> train_idx();
+            for (int i = 0; i < n_samples; ++i) {
+                if (!exists test_set{string(i)}) {
+                    push train_idx, i;
+                }
+            }
+            push folds, {
+                "fold": f,
+                "train_indices": train_idx,
+                "test_indices": test_idx,
+            };
+        }
+
+        return folds;
     }
 }
 

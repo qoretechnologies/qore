@@ -35,6 +35,9 @@
 // Sparse matrix type alias (row-major for efficient row slicing)
 using SparseMatrixXd = Eigen::SparseMatrix<double, Eigen::RowMajor>;
 
+// Column-major sparse matrix for efficient column access in coordinate descent
+using SparseMatrixXdCol = Eigen::SparseMatrix<double, Eigen::ColMajor>;
+
 //! Convert a dense Eigen matrix to sparse, treating values below threshold as zero
 /** @param dense the dense matrix
     @param threshold values with absolute value below this are treated as zero (default: 0.0)

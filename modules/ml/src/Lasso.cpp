@@ -33,9 +33,9 @@ extern const TypedHashDecl* hashdeclLassoResult;
 extern const TypedHashDecl* hashdeclLassoModelInfo;
 
 QoreLasso::QoreLasso(double alpha, bool fit_intercept, bool normalize,
-    int max_iter, double tol)
+    int max_iter, double tol, bool warm_start)
     : alpha(alpha), fit_intercept(fit_intercept), do_normalize(normalize),
-      max_iter(max_iter), tol(tol) {
+      max_iter(max_iter), tol(tol), warm_start(warm_start) {
 }
 
 double QoreLasso::softThreshold(double x, double lambda) {
@@ -89,23 +89,42 @@ void QoreLasso::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink) 
         y_c = y_c.array() - y_mean;
     }
 
-    // Precompute squared norms of each column
+    int n_samples = static_cast<int>(X.rows());
+
+    // Per-column L2 normalization for scale-invariant regularization
+    col_norms.resize(n_features);
+    for (int j = 0; j < n_features; ++j) {
+        col_norms(j) = X_c.col(j).norm();
+        if (col_norms(j) < 1e-10) {
+            col_norms(j) = 1.0;
+        } else {
+            X_c.col(j) /= col_norms(j);
+        }
+    }
+
+    // Precompute squared norms of each normalized column
     VectorXd X_col_sq(n_features);
     for (int j = 0; j < n_features; ++j) {
         X_col_sq(j) = X_c.col(j).squaredNorm();
     }
 
-    // Initialize coefficients to zero
-    coefficients = VectorXd::Zero(n_features);
+    // Initialize coefficients (warm start or zero)
+    if (!warm_start || !fitted || coefficients.size() != n_features) {
+        coefficients = VectorXd::Zero(n_features);
+    } else {
+        // Scale existing coefficients into normalized space
+        for (int j = 0; j < n_features; ++j) {
+            coefficients(j) *= col_norms(j);
+        }
+    }
 
-    // L1 penalty scaled by number of samples
-    double lambda = alpha * X.rows();
+    // L1 penalty base (per-feature adjustment applied in loop)
+    double lambda_base = alpha * n_samples;
 
     // Maintain residual vector: r = y_c - X_c * coefficients
-    // Updated incrementally when each coefficient changes: O(n) per feature instead of O(n*p)
-    VectorXd residual = y_c;
+    VectorXd residual = y_c - X_c * coefficients;
 
-    // Coordinate descent loop
+    // Coordinate descent loop with duality gap convergence
     int iter = 0;
     for (iter = 0; iter < max_iter; ++iter) {
         // Cancellation check every 10 iterations
@@ -113,20 +132,19 @@ void QoreLasso::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink) 
             return;
         }
 
-        VectorXd coef_old = coefficients;
-
         for (int j = 0; j < n_features; ++j) {
             double old_coef_j = coefficients(j);
 
             // rho_j = X_j^T * (residual + X_j * old_coef_j)
             double rho_j = X_c.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
 
-            // Apply soft-thresholding
+            // Apply soft-thresholding with per-feature penalty scaling
             double x_sq = X_col_sq(j);
             if (x_sq < 1e-10) {
                 coefficients(j) = 0.0;
             } else {
-                coefficients(j) = softThreshold(rho_j, lambda) / x_sq;
+                // Divide lambda by col_norm to penalize original-scale coefficients
+                coefficients(j) = softThreshold(rho_j, lambda_base / col_norms(j)) / x_sq;
             }
 
             // Update residual incrementally: r -= X_j * (new_coef_j - old_coef_j)
@@ -136,13 +154,29 @@ void QoreLasso::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink) 
             }
         }
 
-        // Check convergence
-        if ((coefficients - coef_old).lpNorm<Eigen::Infinity>() < tol) {
+        // Duality gap convergence check (using original-scale coefficients)
+        double l1_norm = 0.0;
+        for (int j = 0; j < n_features; ++j) {
+            l1_norm += std::abs(coefficients(j) / col_norms(j));
+        }
+        double primal = 0.5 * residual.squaredNorm() / n_samples + alpha * l1_norm;
+        VectorXd Xtr = X_c.transpose() * residual;
+        double dual_scale = std::max(1.0, Xtr.lpNorm<Eigen::Infinity>() / (alpha * n_samples));
+        VectorXd theta = residual / (n_samples * dual_scale);
+        double dual = 0.5 * y_c.squaredNorm() / n_samples
+            - 0.5 * n_samples * (theta - y_c / n_samples).squaredNorm();
+        double gap = primal - dual;
+        if (gap < tol) {
             ++iter;
             break;
         }
     }
     iterations_run = iter;
+
+    // Scale coefficients back from normalized space
+    for (int j = 0; j < n_features; ++j) {
+        coefficients(j) /= col_norms(j);
+    }
 
     // Compute intercept
     if (fit_intercept) {
@@ -355,6 +389,9 @@ void QoreLasso::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionS
     n_features = static_cast<int>(X.cols());
     int n_samples = static_cast<int>(X.rows());
 
+    // Convert to column-major for efficient column access in coordinate descent
+    SparseMatrixXdCol X_cm = X;
+
     // Note: normalization skipped for sparse data (centering destroys sparsity)
 
     // Center y if fit_intercept
@@ -365,49 +402,64 @@ void QoreLasso::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionS
         y_c = y.array() - y_mean;
     }
 
-    // Precompute sparse column squared norms
+    // Compute per-column L2 norms for scale-invariant regularization
+    col_norms.resize(n_features);
     VectorXd X_col_sq(n_features);
     for (int j = 0; j < n_features; ++j) {
-        X_col_sq(j) = X.col(j).squaredNorm();
+        col_norms(j) = X_cm.col(j).norm();
+        if (col_norms(j) < 1e-10) {
+            col_norms(j) = 1.0;
+        }
+        X_col_sq(j) = X_cm.col(j).squaredNorm();
     }
 
-    // Initialize coefficients to zero
-    coefficients = VectorXd::Zero(n_features);
+    // Initialize coefficients (warm start or zero)
+    if (!warm_start || !fitted || coefficients.size() != n_features) {
+        coefficients = VectorXd::Zero(n_features);
+    }
 
     // L1 penalty scaled by number of samples
     double lambda = alpha * n_samples;
 
     // Maintain residual vector (sparse col ops are O(nnz_j))
-    VectorXd residual = y_c;
+    VectorXd residual = y_c - X_cm * coefficients;
 
-    // Coordinate descent
+    // Coordinate descent with duality gap convergence
     int iter = 0;
     for (iter = 0; iter < max_iter; ++iter) {
         if (iter % 10 == 0 && qore_check_cancel(xsink, "Lasso fitSparse")) {
             return;
         }
 
-        VectorXd coef_old = coefficients;
-
         for (int j = 0; j < n_features; ++j) {
             double old_coef_j = coefficients(j);
-            double rho_j = X.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
+            double rho_j = X_cm.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
 
             double x_sq = X_col_sq(j);
             if (x_sq < 1e-10) {
                 coefficients(j) = 0.0;
             } else {
-                coefficients(j) = softThreshold(rho_j, lambda) / x_sq;
+                // Scale lambda by column norm for scale-invariant regularization
+                coefficients(j) = softThreshold(rho_j, lambda * col_norms(j)) / x_sq;
             }
 
             double delta = coefficients(j) - old_coef_j;
             if (delta != 0.0) {
-                // Sparse column * scalar → update residual efficiently
-                residual -= X.col(j) * delta;
+                // Sparse column * scalar -> update residual efficiently
+                residual -= X_cm.col(j) * delta;
             }
         }
 
-        if ((coefficients - coef_old).lpNorm<Eigen::Infinity>() < tol) {
+        // Duality gap convergence check
+        double primal = 0.5 * residual.squaredNorm() / n_samples
+            + alpha * coefficients.lpNorm<1>();
+        VectorXd Xtr = X_cm.transpose() * residual;
+        double dual_scale = std::max(1.0, Xtr.lpNorm<Eigen::Infinity>() / (alpha * n_samples));
+        VectorXd theta = residual / (n_samples * dual_scale);
+        double dual = 0.5 * y_c.squaredNorm() / n_samples
+            - 0.5 * n_samples * (theta - y_c / n_samples).squaredNorm();
+        double gap = primal - dual;
+        if (gap < tol) {
             ++iter;
             break;
         }
@@ -416,7 +468,7 @@ void QoreLasso::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionS
 
     // Compute intercept
     if (fit_intercept) {
-        VectorXd col_sums = X.transpose() * VectorXd::Ones(n_samples);
+        VectorXd col_sums = X_cm.transpose() * VectorXd::Ones(n_samples);
         VectorXd X_mean = col_sums / n_samples;
         intercept = y_mean - X_mean.dot(coefficients);
     } else {
@@ -424,7 +476,7 @@ void QoreLasso::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionS
     }
 
     // R-squared
-    VectorXd y_pred = (X * coefficients).array() + intercept;
+    VectorXd y_pred = (X_cm * coefficients).array() + intercept;
     double ss_res = (y - y_pred).squaredNorm();
     double ss_tot = (y.array() - y.mean()).square().sum();
     if (ss_tot > 1e-10) {
@@ -454,6 +506,7 @@ std::vector<uint8_t> QoreLasso::serializeState() const {
     MLSerialization::writeVector(buf, feature_stds);
     MLSerialization::writeStringVector(buf, field_names);
     MLSerialization::writeString(buf, target_field);
+    MLSerialization::writeBool(buf, warm_start);
     return buf;
 }
 
@@ -491,8 +544,15 @@ QoreLasso* QoreLasso::deserializeState(const uint8_t* data, size_t len,
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // warm_start added after initial serialization format; default to false for backward compat
+    bool warm_start = false;
+    if (remaining > 0) {
+        warm_start = MLSerialization::readBool(ptr, remaining, xsink);
+        if (*xsink) { return nullptr; }
+    }
+
     std::unique_ptr<QoreLasso> obj(new QoreLasso(alpha, fit_intercept, do_normalize,
-        max_iter, tol));
+        max_iter, tol, warm_start));
     obj->n_features = n_features;
     obj->iterations_run = iterations_run;
     obj->coefficients = std::move(coefficients);

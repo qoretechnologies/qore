@@ -90,6 +90,9 @@ public class RandomSearch {
 
         #! Random seed
         int seed;
+
+        #! Whether to use stratified k-fold
+        bool stratify;
     }
 
     #! Creates a RandomSearch instance
@@ -103,6 +106,7 @@ public class RandomSearch {
         - \c n_folds (int): number of cross-validation folds (default: `5`)
         - \c shuffle (bool): whether to shuffle data before splitting (default: `True`)
         - \c seed (int): random seed for reproducibility (default: `0` = random)
+        - \c stratify (bool): if `True`, use stratified k-fold for classification (default: `False`)
 
         @throw RANDOM-SEARCH-ERROR if required options are missing
     */
@@ -127,6 +131,7 @@ public class RandomSearch {
         n_folds = options.n_folds ?? 5;
         shuffle = options.shuffle ?? True;
         seed = options.seed ?? 0;
+        stratify = options.stratify ?? False;
     }
 
     #! Runs random search with matrix-format data
@@ -153,8 +158,13 @@ public class RandomSearch {
         list<hash<auto>> combinations = sampleCombinations(param_distributions, n_iter, seed);
 
         # Create cross-validation splits
-        ML::CrossValidator cv({"n_folds": n_folds, "shuffle": shuffle, "seed": seed});
-        list<hash<auto>> folds = cv.split(X.size());
+        list<hash<auto>> folds;
+        if (stratify) {
+            folds = GridSearch::stratifiedSplit(y, n_folds, shuffle, seed);
+        } else {
+            ML::CrossValidator cv({"n_folds": n_folds, "shuffle": shuffle, "seed": seed});
+            folds = cv.split(X.size());
+        }
 
         # Evaluate each combination
         list<hash<auto>> cv_results();
@@ -204,17 +214,15 @@ public class RandomSearch {
             int n_iter, int seed) {
         list<string> param_keys = distributions.keys();
 
-        # Use a deterministic sequence if seed > 0
-        int rng_state = seed > 0 ? seed : now_us().toInt();
+        # Seed the RNG for reproducibility
+        srand(seed > 0 ? seed : now_us().toInt());
 
         list<hash<auto>> result();
         for (int i = 0; i < n_iter; ++i) {
             hash<auto> combo();
             foreach string key in (param_keys) {
                 list<auto> candidates = distributions{key};
-                # Simple LCG-based index selection for determinism
-                rng_state = (rng_state * 1103515245 + 12345) & 0x7FFFFFFF;
-                int idx = rng_state % candidates.size();
+                int idx = rand() % candidates.size();
                 combo{key} = candidates[idx];
             }
             push result, combo;

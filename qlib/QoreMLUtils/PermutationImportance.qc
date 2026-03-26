@@ -110,8 +110,8 @@ public class PermutationImportance {
         list<auto> y_pred_base = predictor(X);
         float baseline_score = scorer(y, y_pred_base);
 
-        # Use a deterministic RNG
-        int rng_state = seed > 0 ? seed : now_us().toInt();
+        # Seed the RNG for reproducibility
+        srand(seed > 0 ? seed : now_us().toInt());
 
         # For each feature, shuffle and measure score drop
         hash<auto> importances();
@@ -121,7 +121,7 @@ public class PermutationImportance {
 
             for (int r = 0; r < n_repeats; ++r) {
                 # Create shuffled copy of X with column j permuted
-                list<auto> X_perm = shuffleColumn(X, j, n_samples, \rng_state);
+                list<auto> X_perm = shuffleColumn(X, j, n_samples);
                 list<auto> y_pred_perm = predictor(X_perm);
                 float perm_score = scorer(y, y_pred_perm);
                 push score_drops, baseline_score - perm_score;
@@ -140,15 +140,13 @@ public class PermutationImportance {
     }
 
     #! Shuffles column j of matrix X using Fisher-Yates
-    private static list<auto> shuffleColumn(list<auto> X, int j, int n_samples,
-            reference<int> rng_state) {
+    private static list<auto> shuffleColumn(list<auto> X, int j, int n_samples) {
         # Deep copy the column values
         list<auto> col_values = map $1[j], X;
 
-        # Fisher-Yates shuffle
+        # Fisher-Yates shuffle using Qore's built-in RNG
         for (int i = n_samples - 1; i > 0; --i) {
-            rng_state = (rng_state * 1103515245 + 12345) & 0x7FFFFFFF;
-            int swap_idx = rng_state % (i + 1);
+            int swap_idx = rand() % (i + 1);
             if (swap_idx != i) {
                 auto tmp = col_values[i];
                 col_values[i] = col_values[swap_idx];

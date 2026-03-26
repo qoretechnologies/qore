@@ -33,9 +33,9 @@ extern const TypedHashDecl* hashdeclElasticNetResult;
 extern const TypedHashDecl* hashdeclElasticNetModelInfo;
 
 QoreElasticNet::QoreElasticNet(double alpha, double l1_ratio, bool fit_intercept, bool normalize,
-    int max_iter, double tol)
+    int max_iter, double tol, bool warm_start)
     : alpha(alpha), l1_ratio(l1_ratio), fit_intercept(fit_intercept), do_normalize(normalize),
-      max_iter(max_iter), tol(tol) {
+      max_iter(max_iter), tol(tol), warm_start(warm_start) {
 }
 
 double QoreElasticNet::softThreshold(double x, double lambda) {
@@ -91,30 +91,49 @@ void QoreElasticNet::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xs
 
     int n_samples = static_cast<int>(X.rows());
 
-    // Precompute X_col_sq(j) = X_c.col(j).squaredNorm() for each feature
+    // Per-column L2 normalization for scale-invariant regularization
+    col_norms.resize(n_features);
+    for (int j = 0; j < n_features; ++j) {
+        col_norms(j) = X_c.col(j).norm();
+        if (col_norms(j) < 1e-10) {
+            col_norms(j) = 1.0;
+        } else {
+            X_c.col(j) /= col_norms(j);
+        }
+    }
+
+    // Precompute X_col_sq(j) = X_c.col(j).squaredNorm() for each normalized feature
     VectorXd X_col_sq(n_features);
     for (int j = 0; j < n_features; ++j) {
         X_col_sq(j) = X_c.col(j).squaredNorm();
     }
 
-    // Initialize coefficients to zero
-    coefficients = VectorXd::Zero(n_features);
+    // Initialize coefficients (warm start or zero)
+    if (!warm_start || !fitted || coefficients.size() != n_features) {
+        coefficients = VectorXd::Zero(n_features);
+    } else {
+        // Scale existing coefficients into normalized space
+        for (int j = 0; j < n_features; ++j) {
+            coefficients(j) *= col_norms(j);
+        }
+    }
 
     // Coordinate descent loop
-    double l1_term = alpha * l1_ratio * n_samples;
-    double l2_term = alpha * (1.0 - l1_ratio) * n_samples;
+    // L1 and L2 base terms (per-feature adjustment applied inside loop)
+    double l1_base = alpha * l1_ratio * n_samples;
+    double l2_base = alpha * (1.0 - l1_ratio) * n_samples;
 
     // Maintain residual vector: r = y_c - X_c * coefficients
-    // Updated incrementally when each coefficient changes: O(n) per feature instead of O(n*p)
-    VectorXd residual = y_c;
+    VectorXd residual = y_c - X_c * coefficients;
+
+    // Relative objective decrease convergence
+    double prev_obj = std::numeric_limits<double>::max();
 
     int iter = 0;
     for (iter = 0; iter < max_iter; ++iter) {
         if (iter % 100 == 0 && qore_check_cancel(xsink, "ElasticNet fit")) {
             return;
         }
-
-        VectorXd coef_old = coefficients;
 
         for (int j = 0; j < n_features; ++j) {
             double old_coef_j = coefficients(j);
@@ -126,8 +145,13 @@ void QoreElasticNet::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xs
             if (x_sq < 1e-10) {
                 coefficients(j) = 0.0;
             } else {
-                // Combined L1+L2: soft_threshold with L1 part, divide by (x_sq + L2 part)
-                coefficients(j) = softThreshold(rho_j, l1_term) / (x_sq + l2_term);
+                // Scale penalties by column norm for normalized-space CD
+                // L1: divide by col_norm (penalty on original-scale coefficients)
+                // L2: divide by col_norm^2
+                double cn = col_norms(j);
+                double l1_j = l1_base / cn;
+                double l2_j = l2_base / (cn * cn);
+                coefficients(j) = softThreshold(rho_j, l1_j) / (x_sq + l2_j);
             }
 
             // Update residual incrementally: r -= X_j * (new_coef_j - old_coef_j)
@@ -137,13 +161,30 @@ void QoreElasticNet::fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xs
             }
         }
 
-        // Check convergence
-        if ((coefficients - coef_old).lpNorm<Eigen::Infinity>() < tol) {
+        // Relative objective decrease convergence check (in original-scale coefficients)
+        // Compute original-scale coefs for objective
+        double l1_penalty = 0.0;
+        double l2_penalty = 0.0;
+        for (int j = 0; j < n_features; ++j) {
+            double w_orig = coefficients(j) / col_norms(j);
+            l1_penalty += std::abs(w_orig);
+            l2_penalty += w_orig * w_orig;
+        }
+        double obj = 0.5 * residual.squaredNorm() / n_samples
+            + alpha * l1_ratio * l1_penalty
+            + 0.5 * alpha * (1.0 - l1_ratio) * l2_penalty;
+        if (iter > 0 && std::abs(obj - prev_obj) / std::max(1.0, std::abs(obj)) < tol) {
             ++iter;
             break;
         }
+        prev_obj = obj;
     }
     iterations_run = iter;
+
+    // Scale coefficients back from normalized space
+    for (int j = 0; j < n_features; ++j) {
+        coefficients(j) /= col_norms(j);
+    }
 
     // Compute intercept
     if (fit_intercept) {
@@ -357,6 +398,9 @@ void QoreElasticNet::fitSparse(const SparseMatrixXd& X, const VectorXd& y, Excep
     n_features = static_cast<int>(X.cols());
     int n_samples = static_cast<int>(X.rows());
 
+    // Convert to column-major for efficient column access in coordinate descent
+    SparseMatrixXdCol X_cm = X;
+
     // Note: normalization skipped for sparse data (centering destroys sparsity)
 
     double y_mean = 0.0;
@@ -366,19 +410,30 @@ void QoreElasticNet::fitSparse(const SparseMatrixXd& X, const VectorXd& y, Excep
         y_c = y.array() - y_mean;
     }
 
-    // Precompute sparse column squared norms
+    // Compute per-column L2 norms for scale-invariant regularization
+    col_norms.resize(n_features);
     VectorXd X_col_sq(n_features);
     for (int j = 0; j < n_features; ++j) {
-        X_col_sq(j) = X.col(j).squaredNorm();
+        col_norms(j) = X_cm.col(j).norm();
+        if (col_norms(j) < 1e-10) {
+            col_norms(j) = 1.0;
+        }
+        X_col_sq(j) = X_cm.col(j).squaredNorm();
     }
 
-    coefficients = VectorXd::Zero(n_features);
+    // Initialize coefficients (warm start or zero)
+    if (!warm_start || !fitted || coefficients.size() != n_features) {
+        coefficients = VectorXd::Zero(n_features);
+    }
 
-    double l1_term = alpha * l1_ratio * n_samples;
-    double l2_term = alpha * (1.0 - l1_ratio) * n_samples;
+    double l1_base = alpha * l1_ratio * n_samples;
+    double l2_base = alpha * (1.0 - l1_ratio) * n_samples;
 
     // Maintain residual vector (sparse col ops are O(nnz_j))
-    VectorXd residual = y_c;
+    VectorXd residual = y_c - X_cm * coefficients;
+
+    // Relative objective decrease convergence
+    double prev_obj = std::numeric_limits<double>::max();
 
     int iter = 0;
     for (iter = 0; iter < max_iter; ++iter) {
@@ -386,41 +441,48 @@ void QoreElasticNet::fitSparse(const SparseMatrixXd& X, const VectorXd& y, Excep
             return;
         }
 
-        VectorXd coef_old = coefficients;
-
         for (int j = 0; j < n_features; ++j) {
             double old_coef_j = coefficients(j);
-            double rho_j = X.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
+            double rho_j = X_cm.col(j).dot(residual) + X_col_sq(j) * old_coef_j;
             double x_sq = X_col_sq(j);
 
             if (x_sq < 1e-10) {
                 coefficients(j) = 0.0;
             } else {
-                coefficients(j) = softThreshold(rho_j, l1_term) / (x_sq + l2_term);
+                // Scale penalties by column norm for scale-invariant regularization
+                double cn = col_norms(j);
+                double l1_j = l1_base * cn;
+                double l2_j = l2_base * cn * cn;
+                coefficients(j) = softThreshold(rho_j, l1_j) / (x_sq + l2_j);
             }
 
             double delta = coefficients(j) - old_coef_j;
             if (delta != 0.0) {
-                residual -= X.col(j) * delta;
+                residual -= X_cm.col(j) * delta;
             }
         }
 
-        if ((coefficients - coef_old).lpNorm<Eigen::Infinity>() < tol) {
+        // Relative objective decrease convergence check
+        double obj = 0.5 * residual.squaredNorm() / n_samples
+            + alpha * l1_ratio * coefficients.lpNorm<1>()
+            + 0.5 * alpha * (1.0 - l1_ratio) * coefficients.squaredNorm();
+        if (iter > 0 && std::abs(obj - prev_obj) / std::max(1.0, std::abs(obj)) < tol) {
             ++iter;
             break;
         }
+        prev_obj = obj;
     }
     iterations_run = iter;
 
     if (fit_intercept) {
-        VectorXd col_sums = X.transpose() * VectorXd::Ones(n_samples);
+        VectorXd col_sums = X_cm.transpose() * VectorXd::Ones(n_samples);
         VectorXd X_mean = col_sums / n_samples;
         intercept = y_mean - X_mean.dot(coefficients);
     } else {
         intercept = 0.0;
     }
 
-    VectorXd y_pred = (X * coefficients).array() + intercept;
+    VectorXd y_pred = (X_cm * coefficients).array() + intercept;
     double ss_res = (y - y_pred).squaredNorm();
     double ss_tot = (y.array() - y.mean()).square().sum();
     if (ss_tot > 1e-10) {
@@ -451,6 +513,7 @@ std::vector<uint8_t> QoreElasticNet::serializeState() const {
     MLSerialization::writeVector(buf, feature_stds);
     MLSerialization::writeStringVector(buf, field_names);
     MLSerialization::writeString(buf, target_field);
+    MLSerialization::writeBool(buf, warm_start);
     return buf;
 }
 
@@ -490,8 +553,15 @@ QoreElasticNet* QoreElasticNet::deserializeState(const uint8_t* data, size_t len
     std::string target_field = MLSerialization::readString(ptr, remaining, xsink);
     if (*xsink) { return nullptr; }
 
+    // warm_start added after initial serialization format; default to false for backward compat
+    bool warm_start = false;
+    if (remaining > 0) {
+        warm_start = MLSerialization::readBool(ptr, remaining, xsink);
+        if (*xsink) { return nullptr; }
+    }
+
     std::unique_ptr<QoreElasticNet> obj(new QoreElasticNet(alpha, l1_ratio, fit_intercept,
-        do_normalize, max_iter, tol));
+        do_normalize, max_iter, tol, warm_start));
     obj->n_features = n_features;
     obj->iterations_run = iterations_run;
     obj->coefficients = std::move(coefficients);

@@ -48,7 +48,7 @@ class QoreLasso : public AbstractPrivateData {
 public:
     //! Constructor with options
     DLLLOCAL QoreLasso(double alpha, bool fit_intercept, bool normalize,
-        int max_iter, double tol);
+        int max_iter, double tol, bool warm_start = false);
 
     //! Fit on feature matrix X and target vector y (thread-safe)
     DLLLOCAL void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
@@ -95,6 +95,9 @@ public:
     //! Whether the model was fitted with normalization
     DLLLOCAL bool isNormalized() const { return do_normalize; }
 
+    //! Whether warm starting is enabled
+    DLLLOCAL bool getWarmStart() const { return warm_start; }
+
     //! Get model info (coefficients, intercept, r_squared, n_features, alpha, iterations_run)
     DLLLOCAL QoreHashNode* getModelInfo(ExceptionSink* xsink) const;
 
@@ -119,6 +122,7 @@ private:
     bool do_normalize;
     int max_iter;
     double tol;
+    bool warm_start;
     bool fitted = false;
     int n_features = 0;
     int iterations_run = 0;
@@ -127,6 +131,9 @@ private:
     VectorXd coefficients;
     double intercept = 0.0;
     double r_squared = 0.0;
+
+    //! Per-column L2 norms for scale-invariant regularization
+    VectorXd col_norms;
 
     //! Normalization parameters (mean and std for each feature)
     VectorXd feature_means;

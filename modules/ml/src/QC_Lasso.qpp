@@ -67,7 +67,8 @@ qclass Lasso [arg=QoreLasso* lasso; ns=Qore::ML; flags=final];
     - \c fit_intercept (bool): whether to fit an intercept term (default: True)
     - \c normalize (bool): whether to normalize features before fitting (default: False)
     - \c max_iter (int): maximum number of coordinate descent iterations (default: 1000)
-    - \c tol (float): convergence tolerance; iteration stops when the maximum coefficient change is below this (default: 1e-4)
+    - \c tol (float): convergence tolerance for the duality gap (default: 1e-4)
+    - \c warm_start (bool): if True, reuse coefficients from a previous fit() as initialization (default: False)
 
     @par Example:
     @code{.py}
@@ -80,6 +81,7 @@ Lasso::constructor(*hash<auto> options) {
     bool normalize = false;
     int max_iter = 1000;
     double tol = 1e-4;
+    bool warm_start = false;
 
     if (options) {
         QoreValue v;
@@ -103,6 +105,10 @@ Lasso::constructor(*hash<auto> options) {
         if (!v.isNullOrNothing()) {
             tol = v.getAsFloat();
         }
+        v = options->getKeyValue("warm_start");
+        if (!v.isNullOrNothing()) {
+            warm_start = v.getAsBool();
+        }
     }
 
     if (alpha < 0.0) {
@@ -118,7 +124,7 @@ Lasso::constructor(*hash<auto> options) {
         return;
     }
 
-    self->setPrivate(CID_LASSO, new QoreLasso(alpha, fit_intercept, normalize, max_iter, tol));
+    self->setPrivate(CID_LASSO, new QoreLasso(alpha, fit_intercept, normalize, max_iter, tol, warm_start));
 }
 
 //! Creates a copy of the Lasso
