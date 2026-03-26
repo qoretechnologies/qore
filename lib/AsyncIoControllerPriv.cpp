@@ -302,6 +302,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             ExceptionSink cb_xsink;
             ValueHolder rv(async_item.callback->execValue(async_item.args, &cb_xsink), &cb_xsink);
             if (cb_xsink) {
+                printd(1, "QoreCallDispatcher::workerLoop() callback exception: %s: %s\n",
+                    cb_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
+                    cb_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
                 cb_xsink.clear();
             }
             async_item.callback->deref(xsink);
@@ -313,6 +316,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             ExceptionSink abort_xsink;
             ValueHolder rv(async_item.abort_obj->evalMethod("abort", nullptr, &abort_xsink), &abort_xsink);
             if (abort_xsink) {
+                printd(1, "QoreCallDispatcher::workerLoop() abort exception: %s: %s\n",
+                    abort_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
+                    abort_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
                 abort_xsink.clear();
             }
             async_item.abort_obj->deref(xsink);

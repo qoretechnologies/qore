@@ -3890,8 +3890,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             try {
                 load_module("RestClientIo");
                 return new RestClientIoPingPollOperation(self, ping_opts, logger);
-            } catch () {
-                # RestClientIo module not available; fall back to sync RestClient approach
+            } catch (hash<ExceptionInfo> ex) {
+                # RestClientIo module not available or construction failed; fall back
+                if (logger) {
+                    logger.log(LoggerLevel::DEBUG, "RestClientIo ping unavailable (%s); "
+                        "falling back to sync RestClient", ex.err);
+                }
             }
         }
 
