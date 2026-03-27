@@ -807,6 +807,7 @@ public:
     QoreIRValue result{};
     std::vector<QoreIRValue> operands;
     QoreIRBasicBlock* exception_target = nullptr;
+    const QoreTypeInfo* element_type = nullptr;  // For list/hash creation instructions
 };
 
 class QoreIRConstInstruction : public QoreIRInstruction {

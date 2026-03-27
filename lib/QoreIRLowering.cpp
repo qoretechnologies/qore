@@ -8316,6 +8316,13 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
 
+    // Get the element type of the map result list (extract from return type)
+    const QoreTypeInfo* expTypeInfo = nullptr;
+    const QoreTypeInfo* map_return_type = map->getMapReturnType();
+    if (map_return_type) {
+        expTypeInfo = QoreTypeInfo::getUniqueReturnComplexList(map_return_type);
+    }
+
     // Check if the input is actually a list or a single value
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
@@ -8390,7 +8397,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         // Preheader: create pre-sized result list (size 0 for empty input is fine)
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, map->loc)->result;
-        QoreIRValue result_list = builder.createSizedList(list_size, map->loc)->result;
+        QoreIRValue result_list = builder.createSizedList(list_size, map->loc, expTypeInfo)->result;
         builder.createBranch(header_block, map->loc);
 
         // Header block: check if index < size
@@ -8520,7 +8527,7 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
 
     // Preheader: create empty result list and proceed to loop
     builder.setBlock(preheader_block);
-    QoreIRValue result_list = builder.createEmptyList(map->loc)->result;
+    QoreIRValue result_list = builder.createEmptyList(map->loc, expTypeInfo)->result;
     QoreIRValue init_index = builder.createConstInt(0, map->loc)->result;
     builder.createBranch(header_block, map->loc);
 

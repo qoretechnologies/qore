@@ -171,18 +171,22 @@ QoreIRInstruction* QoreIRBuilder::createMakeHashConstKeys(std::vector<std::strin
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createEmptyList(const QoreProgramLocation* loc,
+        const QoreTypeInfo* element_type) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateEmptyList);
     inst->loc = loc;
     inst->result = func->createValue();
+    inst->element_type = element_type;
     return inst;
 }
 
-QoreIRInstruction* QoreIRBuilder::createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc) {
+QoreIRInstruction* QoreIRBuilder::createSizedList(QoreIRValue capacity, const QoreProgramLocation* loc,
+        const QoreTypeInfo* element_type) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::CreateSizedList);
     inst->loc = loc;
     inst->result = func->createValue();
     inst->operands.push_back(capacity);
+    inst->element_type = element_type;
     return inst;
 }
 

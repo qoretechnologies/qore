@@ -69,6 +69,11 @@ public:
         return true;
     }
 
+    // Public accessor for IR lowering to get the result list element type
+    DLLLOCAL const QoreTypeInfo* getMapReturnType() const {
+        return returnTypeInfo;
+    }
+
 protected:
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;

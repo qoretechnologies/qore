@@ -2472,7 +2472,9 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::CreateEmptyList: {
-                QoreListNode* list = new QoreListNode(autoTypeInfo);
+                const QoreTypeInfo* list_type = inst->element_type ?
+                    qore_get_complex_list_type(inst->element_type) : autoTypeInfo;
+                QoreListNode* list = new QoreListNode(list_type);
                 setValueSlotDirect(values, inst->result.id, QoreValue(list));
                 cleanup.push_back(inst->result.id);
                 ++ip;
@@ -2525,7 +2527,9 @@ next_instruction:
             case QoreIROpcode::CreateSizedList: {
                 QoreValue cap_val = getIRValue(values, inst->operands[0]);
                 int64_t capacity = cap_val.getAsBigInt();
-                QoreListNode* list = new QoreListNode(autoTypeInfo);
+                const QoreTypeInfo* list_type = inst->element_type ?
+                    qore_get_complex_list_type(inst->element_type) : autoTypeInfo;
+                QoreListNode* list = new QoreListNode(list_type);
                 if (capacity > 0) {
                     qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
                 }
@@ -7544,6 +7548,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SubAssignFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAssignAny: {
+            // Special handling for timeout type: stored as int (milliseconds), RHS may be date
+            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
+                // Treat as timeout arithmetic: int (ms) - date
+                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return QoreValue(left.getAsBigInt() - ms);
+            }
             bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);

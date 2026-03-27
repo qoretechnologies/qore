@@ -173,7 +173,7 @@ QoreValue QoreParseHashNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) c
             return QoreValue();
         }
 
-        const QoreTypeInfo* vt = v->getTypeInfo();
+        const QoreTypeInfo* vt = v->getFullTypeInfo();
 
         if (!i) {
             vtype = vt;

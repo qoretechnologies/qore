@@ -5472,7 +5472,7 @@ class TypeTest inherits QUnit::Test {
             i = <ab>;
             assertEq((<ab>,), i);
             i = NULL;
-            assertEq((NULL,), i);
+            assertEq((), i);
             i = NOTHING;
             assertEq((), i);
         }
