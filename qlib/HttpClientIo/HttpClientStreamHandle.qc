@@ -420,12 +420,11 @@ public class HttpClientStreamHandle {
             doSubmitAsyncImpl(method, path, headers, body, callback);
         } else {
             log(LoggerLevel::DEBUG, "deferring async request until connection ready: %s %s", method, path);
-            # callWhenReady runs on the I/O thread (trusted code with QDOM_PROCESS).
-            # doSubmitAsyncImpl is framework code safe for the I/O thread, and the
-            # user's callback fires later via the onComplete worker pool.
-            # However, the cancel and error paths below call the user's callback
-            # directly — dispatch those via background to keep user code off the
-            # I/O thread.
+            # callWhenReady fires on the I/O thread (trusted QDOM_PROCESS code).
+            # The normal path (doSubmitAsyncImpl) stays on the I/O thread for
+            # performance — the user's callback fires later via onComplete.
+            # Cancel/error paths dispatch via background because they invoke
+            # the user's callback directly and are not performance-critical.
             conn.callWhenReady(sub () {
                 try {
                     {
