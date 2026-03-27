@@ -63,6 +63,10 @@ public class PerplexitySearchDataProvider inherits PerplexityDataProviderCommon 
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # The Perplexity search API expects query as an array of strings
+        if (req.query.typeCode() == NT_STRING) {
+            req.query = (req.query,);
+        }
         return doRestCommand("POST", "search", req).body;
     }
 
@@ -137,7 +141,7 @@ public class PerplexitySearchRequestType inherits HashDataType {
             "query": {
                 "display_name": "Query",
                 "short_desc": "The search query",
-                "desc": "The search query string",
+                "desc": "The search query string; automatically wrapped in an array for the API",
                 "type": AbstractDataProviderTypeMap."string",
                 "example_value": "latest news about AI",
             },

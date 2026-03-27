@@ -27,9 +27,6 @@ public namespace PerplexityDataProvider {
 #! The Perplexity data provider common base class
 public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataProvider {
     public {
-        #! The default Perplexity URL
-        const DefaultPerplexityUrl = "https://api.perplexity.ai";
-
         #! Constructor options
         const ConstructorOptions = {
             "api_key": <DataProviderOptionInfo>{
@@ -91,7 +88,7 @@ public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataPro
             }
             hash<auto> opts;
             opts += copts.restclient_options + {
-                "token": copts.api_key,
+                "apikey": copts.api_key,
             };
             rest = new PerplexityRestClient::PerplexityRestClient(opts);
         }

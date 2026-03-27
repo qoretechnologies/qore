@@ -280,15 +280,9 @@ public class PerplexityChatCompletionRequestType inherits HashDataType {
                         "value": "sonar-pro",
                     },
                     <AllowedValueInfo>{
-                        "display_name": "Sonar Reasoning",
-                        "short_desc": "Chain of Thought reasoning model",
-                        "desc": "Chain of Thought reasoning model with multi-query search",
-                        "value": "sonar-reasoning",
-                    },
-                    <AllowedValueInfo>{
                         "display_name": "Sonar Reasoning Pro",
-                        "short_desc": "Advanced Chain of Thought reasoning model",
-                        "desc": "Advanced Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
+                        "short_desc": "Chain of Thought reasoning model",
+                        "desc": "Chain of Thought reasoning model based on DeepSeek-R1 with multi-query search",
                         "value": "sonar-reasoning-pro",
                     },
                     <AllowedValueInfo>{
@@ -431,21 +425,6 @@ public class PerplexityChatCompletionRequestType inherits HashDataType {
                     },
                 ),
             },
-            "frequency_penalty": {
-                "display_name": "Frequency Penalty",
-                "short_desc": "Penalty to reduce repeated tokens in the output",
-                "desc": "Number between `-2.0` and `2.0`. Positive values penalize new tokens based on their "
-                    "existing frequency in the text so far, decreasing the model's likelihood to repeat the same "
-                    "line verbatim",
-                "type": AbstractDataProviderTypeMap."*float",
-            },
-            "presence_penalty": {
-                "display_name": "Presence Penalty",
-                "short_desc": "Positive numbers increase the model's likelihood to talk about new topics",
-                "desc": "Number between `-2.0` and `2.0`. Positive values penalize new tokens based on whether they "
-                    "appear in the text so far, increasing the model's likelihood to talk about new topics",
-                "type": AbstractDataProviderTypeMap."*float",
-            },
             "response_format": {
                 "display_name": "Response Format",
                 "short_desc": "Specify the output format (e.g., JSON schema)",
@@ -528,6 +507,45 @@ public class PerplexityChatCompletionRequestType inherits HashDataType {
                 "display_name": "Search Before Date",
                 "short_desc": "Only include sources published before this date",
                 "desc": "Only include sources published before this date. Format: `MM/DD/YYYY`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "last_updated_after_filter": {
+                "display_name": "Last Updated After",
+                "short_desc": "Only include sources updated after this date",
+                "desc": "Only include sources that were last updated after this date. Format: `MM/DD/YYYY`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "last_updated_before_filter": {
+                "display_name": "Last Updated Before",
+                "short_desc": "Only include sources updated before this date",
+                "desc": "Only include sources that were last updated before this date. Format: `MM/DD/YYYY`",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "enable_search_classifier": {
+                "display_name": "Enable Search Classifier?",
+                "short_desc": "Use a classifier to determine if search is needed",
+                "desc": "If set to `True`, uses a classifier to determine whether a web search is needed for the "
+                    "query before performing one",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "image_format_filter": {
+                "display_name": "Image Format Filter",
+                "short_desc": "Filter image results by format",
+                "desc": "A list of image formats to include in image results (e.g., `png`, `jpg`). Only applies "
+                    "when `return_images` is set to `True`",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "image_domain_filter": {
+                "display_name": "Image Domain Filter",
+                "short_desc": "Limit image sources to specific domains",
+                "desc": "A list of domains to limit image search results to. Only applies when `return_images` is "
+                    "set to `True`",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "language_preference": {
+                "display_name": "Language Preference",
+                "short_desc": "ISO 639-1 language code for the response",
+                "desc": "An ISO 639-1 language code specifying the preferred language for the response",
                 "type": AbstractDataProviderTypeMap."*string",
             },
         };

@@ -70,7 +70,7 @@ public class PerplexityChatStreamEventDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("PerplexityChatStreamEvent") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
@@ -215,11 +215,14 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
         }
         try {
             hash<auto> req = stream_req + {"stream": True};
-            *RestClient::RestClient rest = getRestClient();
-            if (!(rest instanceof PerplexityRestClient::PerplexityRestClient)) {
-                throw "SSE-ERROR", "chat streaming requires PerplexityRestClient";
+            *object rest = getRestClient();
+            if (rest instanceof PerplexityRestClient::PerplexityRestClient) {
+                stream = cast<PerplexityRestClient::PerplexityRestClient>(rest).openChatStream(req);
+            } else if (rest instanceof PerplexityRestClient::PerplexityRestClientIo) {
+                stream = cast<PerplexityRestClient::PerplexityRestClientIo>(rest).openChatStream(req);
+            } else {
+                throw "SSE-ERROR", "chat streaming requires PerplexityRestClient or PerplexityRestClientIo";
             }
-            stream = rest.openChatStream(req);
             if (stop_flag) {
                 stream.close();
                 return;

@@ -222,6 +222,15 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("search_domain_filter"));
         assertTrue(fields.hasKey("disable_search"));
         assertTrue(fields.hasKey("web_search_options"));
+        assertTrue(fields.hasKey("enable_search_classifier"));
+        assertTrue(fields.hasKey("last_updated_after_filter"));
+        assertTrue(fields.hasKey("last_updated_before_filter"));
+        assertTrue(fields.hasKey("image_format_filter"));
+        assertTrue(fields.hasKey("image_domain_filter"));
+        assertTrue(fields.hasKey("language_preference"));
+        # Verify deprecated fields are removed
+        assertFalse(fields.hasKey("frequency_penalty"));
+        assertFalse(fields.hasKey("presence_penalty"));
 
         # Test chat completion response type
         PerplexityChatCompletionResponseType resp_type();
@@ -411,7 +420,8 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         hash<auto> resp = prov.doRequest(req);
         assertEq("POST", rest.last_method);
         assertEq("search", rest.last_path);
-        assertEq("test search", rest.last_request.query);
+        # Verify query was wrapped in an array for the API
+        assertEq(("test search",), rest.last_request.query);
         assertEq(5, rest.last_request.max_results);
         assertEq("search-test", resp.id);
         assertEq(1, resp.results.lsize());
