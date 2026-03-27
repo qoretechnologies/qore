@@ -125,7 +125,10 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             }
         }
 
-        if (QoreTypeInfo::isReference(ti)) {
+        // Dereference LHS if it's a reference type
+        // Check type name since isReference() seems unreliable
+        const char* ti_name = QoreTypeInfo::getName(ti);
+        if (ti_name && ti_name[0] == '*') {
             const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
             if (deref_ti) {
                 check_ti = deref_ti;
@@ -137,9 +140,11 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         // not a reference type — this catches invalid assignments like:
         //   softint i = \i;  (self-reference to uninitialized variable)
         //   softint x = \n;  (assigning reference creation to a non-reference variable)
-        if (QoreTypeInfo::isReference(check_rhs_ti)) {
+        const char* rhs_ti_name = QoreTypeInfo::getName(check_rhs_ti);
+        if (rhs_ti_name && rhs_ti_name[0] == '*') {
+            // Check if LHS is a reference type by checking if type name starts with '*'
             // Only dereference ParseReferenceNode (\expr) when LHS is also a reference type
-            if (right.getType() != NT_PARSEREFERENCE || QoreTypeInfo::isReference(ti)) {
+            if (right.getType() != NT_PARSEREFERENCE || (ti_name && ti_name[0] == '*')) {
                 const QoreTypeInfo* deref_rhs_ti = QoreTypeInfo::getReferenceTarget(check_rhs_ti);
                 if (deref_rhs_ti) {
                     check_rhs_ti = deref_rhs_ti;
@@ -156,9 +161,72 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             initial_assignment);
         // issue #2106 do not set the ident flag for any other type in case runtime types are more specific (complex)
         // than parse types and require filtering
-        //printd(5, "QoreAssignmentOperatorNode::parseInitImpl() '%s' <- '%s' res: %d may_not_match: %d "
-        //    "may_need_filter: %d ident: %d\n", QoreTypeInfo::getName(ti),
-        //    QoreTypeInfo::getName(parse_context.typeInfo), res, may_not_match, may_need_filter, ident);
+
+        // Special handling for hash type mismatches that parseAccepts treats as ambiguous
+        // When assigning untyped/auto hash to a specific typed hash, enforce strict checking
+        if (res == QTI_AMBIGUOUS && check_rhs_ti && check_ti != check_rhs_ti) {
+            // Check LHS type name for element types (looks like "hash<key, value>")
+            const char* lhs_name = QoreTypeInfo::getName(check_ti);
+            // Check RHS type name
+            const char* rhs_name = QoreTypeInfo::getName(check_rhs_ti);
+
+            // LHS is a specific typed hash if it contains "<" but not "<auto>"
+            bool lhs_is_typed_hash = false;
+            if (lhs_name) {
+                const char* bracket = strchr(lhs_name, '<');
+                if (bracket && bracket[1] != 'a') {  // Not "hash<auto>" or "*hash<auto>"
+                    lhs_is_typed_hash = true;
+                }
+            }
+
+            // RHS is an untyped hash if it's exactly "hash" (not "hash<auto>" or any specific type)
+            bool rhs_is_untyped_hash = false;
+            if (rhs_name) {
+                if (!strcmp(rhs_name, "hash")) {
+                    rhs_is_untyped_hash = true;
+                }
+            }
+
+            // Check if the RHS is a reference type variable
+            // Check for reference by looking at the type name (starts with '*')
+            bool rhs_is_ref_expr = (right.getType() == NT_PARSEREFERENCE);
+            if (right.getType() == NT_VARREF) {
+                VarRefNode* vrn = right.get<VarRefNode>();
+                qore_var_t vtype = vrn->getType();
+                if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+                    LocalVar* lvar = vrn->ref.id;
+                    if (lvar) {
+                        const QoreTypeInfo* lvar_ti = lvar->getTypeInfo();
+                        const char* type_name = QoreTypeInfo::getName(lvar_ti);
+                        // Check if type name starts with '*' indicating a reference
+                        if (type_name && type_name[0] == '*') {
+                            rhs_is_ref_expr = true;
+                        }
+                    }
+                } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+                    Var* gvar = vrn->ref.var;
+                    if (gvar) {
+                        const QoreTypeInfo* gvar_ti = gvar->getTypeInfo();
+                        const char* type_name = QoreTypeInfo::getName(gvar_ti);
+                        // Check if type name starts with '*' indicating a reference
+                        if (type_name && type_name[0] == '*') {
+                            rhs_is_ref_expr = true;
+                        }
+                    }
+                }
+            }
+
+            // Only apply special check if:
+            // - LHS is a specific typed hash (has element types like hash<string, int>)
+            // - RHS is an untyped/auto hash (plain "hash" or "hash<auto>")
+            // - RHS is not a reference expression or variable
+            // This catches: hash<string, int> <- hash or hash<string, int> <- hash<auto>
+            // But NOT: hash<string, int> <- *hash<string, int> or hash<string, int> <- \var
+            if (lhs_is_typed_hash && rhs_is_untyped_hash && !rhs_is_ref_expr) {
+                // LHS is typed hash, RHS is untyped/auto hash and not a reference
+                res = QTI_NOT_EQUAL;
+            }
+        }
 
         // Additional check for typed callable signature compatibility
         if (res && !QoreTypeInfo::checkComplexCodeCompatibility(check_ti, check_rhs_ti)) {
