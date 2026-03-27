@@ -124,20 +124,17 @@ public class HttpClientStreamHandle {
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
-    /** @par Contract
-        Implementations MUST call handleResponse() with the response/error before
-        invoking the user \c callback.  The synchronous request() API creates a
-        Promise that is resolved inside handleResponse(); failing to call it will
-        cause request() to hang indefinitely.  Exceptions from handleResponse()
-        should be caught, logged, and converted to an error passed to \c callback.
+    /** Submits the request and returns a hash with the stream ID and a Future
+        for the response. The Future is resolved by a C++ completion action on
+        the I/O thread (PromiseAction for request/response, ChannelAction for
+        streaming) — no user code runs on the I/O thread.
 
         @param method HTTP method
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
 
-        @return the stream ID assigned to this request
+        @return hash with "stream_id" (int) and "future" (Future)
     */
     abstract hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
         *data body);

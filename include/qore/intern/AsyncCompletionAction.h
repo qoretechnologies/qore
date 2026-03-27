@@ -147,7 +147,9 @@ public:
         ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
         err_hash->setKeyValue("err", new QoreStringNode(err), xsink);
         err_hash->setKeyValue("desc", new QoreStringNode(desc), xsink);
-        if (!channel->trySend(err_hash.release())) {
+        QoreHashNode* h = err_hash.release();
+        if (!channel->trySend(h)) {
+            h->deref(xsink);
             printd(0, "ChannelAction::executeError(): channel full, discarding error\n");
         }
         channel->close();
