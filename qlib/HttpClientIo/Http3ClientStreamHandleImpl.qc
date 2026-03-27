@@ -311,10 +311,32 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             # Completion is detected via CHANNEL-CLOSED from the recv() below.
         }
 
-        # Read from the channel — same pattern as H2.
-        # The callback puts body data and {"end_stream": True} into the channel.
+        # Read from the channel — the ChannelAction pushes response chunks
+        # directly from the I/O thread via trySend (pure C++).
         try {
-            return data_channel.recv(wait_timeout);
+            auto rv = data_channel.recv(wait_timeout);
+            # ChannelAction pushes the full response hash from the I/O thread.
+            # Extract body data for the streaming API, and detect end_stream.
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.err) {
+                    # Error response from ChannelAction::executeError
+                    {
+                        AutoLock al(lock);
+                        state = HttpClientStreamState::Error;
+                    }
+                    return {"error": rv};
+                }
+                if (rv.end_stream) {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Complete;
+                }
+                # Return body data if present, otherwise the end_stream sentinel
+                if (rv.body) {
+                    return rv.body;
+                }
+                return {"end_stream": True};
+            }
+            return rv;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;

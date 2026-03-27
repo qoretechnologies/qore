@@ -241,6 +241,17 @@ public class HttpClientStreamHandle {
             }
         }
 
+        # Check stream state — cancel may have fired during connection wait
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending
+                    && state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("cannot submit request in state: %y", state);
+            }
+        }
+
         # Submit request — returns {stream_id, future}
         # The Future is resolved by C++ PromiseAction on the I/O thread
         # (pure C++, no user code on I/O thread)

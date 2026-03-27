@@ -1060,22 +1060,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             mgr.closeAll();
         }
 
-        Counter counter(1);
-        *hash<auto> callback_response;
-        *hash<auto> callback_error;
+        # Use Future-based API instead of callback
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> result = stream.submitAsync("GET", "/simple");
+        hash<auto> resp = result.future.get(30s);
 
-        HttpClientIo::HttpClientStreamHandle stream = mgr.submitRequestAsync(
-            mSslUrl, "GET", "/simple", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                callback_response = resp;
-                callback_error = err;
-                counter.dec();
-            });
-
-        counter.waitForZero(30s);
-
-        assertNothing(callback_error, "controller callback should not have error");
-        assertEq(200, callback_response.status_code, "controller callback status code");
+        assertEq(200, resp.status_code, "controller Future status code");
     }
 
     testControllerModeTimeout() {
@@ -2160,11 +2150,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit mgr.closeAll();
 
         HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
-        hash<auto> result = stream.submitAsyncNonBlocking("GET", "/simple");
+        hash<auto> result = stream.submitAsync("GET", "/simple");
         Future f = result.future;
 
         hash<auto> resp = f.get(15s);
         assertTrue(exists resp, "should have response");
-        assertEq(200, resp.status_code, "non-blocking request should return 200");
+        assertEq(200, resp.status_code, "async Future request should return 200");
     }
 }
