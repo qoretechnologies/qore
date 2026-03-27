@@ -984,6 +984,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
+    lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
     lib/QoreTypeInfo.cpp
@@ -1285,6 +1286,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
