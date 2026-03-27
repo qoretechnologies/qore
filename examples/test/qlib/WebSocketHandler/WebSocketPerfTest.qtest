@@ -232,10 +232,6 @@ class WebSocketPerfTest inherits QUnit::Test {
         };
 
         WebSocketClient wsc = createWsClient(cb);
-        on_exit {
-            wsc.disconnect();
-            delete wsc;
-        }
 
         date start = now_us();
         for (int i = 0; i < msg_count; ++i) {
@@ -312,7 +308,6 @@ class WebSocketPerfTest inherits QUnit::Test {
             for (int c = 0; c < num_clients; ++c) {
                 try {
                     clients[c].disconnect();
-                    delete clients[c];
                 } catch () {
                     # ignore cleanup errors
                 }
@@ -388,10 +383,6 @@ class WebSocketPerfTest inherits QUnit::Test {
             };
 
             WebSocketClient wsc = createWsClient(cb);
-            on_exit {
-                wsc.disconnect();
-                delete wsc;
-            }
 
             date start = now_us();
             wsc.send(sent_payload);
@@ -445,10 +436,6 @@ class WebSocketPerfTest inherits QUnit::Test {
         };
 
         WebSocketClient wsc = createWsClient(cb);
-        on_exit {
-            wsc.disconnect();
-            delete wsc;
-        }
 
         date deadline = now_us() + seconds(duration_secs);
 
@@ -546,10 +533,6 @@ class WebSocketPerfTest inherits QUnit::Test {
         };
 
         WebSocketClient wsc = createWsClient(cb);
-        on_exit {
-            wsc.disconnect();
-            delete wsc;
-        }
 
         # Send from 2 threads concurrently
         int msgs_per_thread = msg_count / 2;
@@ -619,7 +602,6 @@ class WebSocketPerfTest inherits QUnit::Test {
                     ++success;
                 }
                 wsc.disconnect();
-                delete wsc;
             } catch (hash<ExceptionInfo> ex) {
                 # Connection errors during churn are expected
             }
