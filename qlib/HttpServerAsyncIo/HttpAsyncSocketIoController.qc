@@ -1722,6 +1722,15 @@ public class HttpAsyncSocketIoController {
             if (op instanceof HttpConnectionPollOperationBase) {
                 cast<HttpConnectionPollOperationBase>(op).setCompletionContext(self, uh, cinfo.state);
                 submit_op = op;
+            } else if (op instanceof Http3ServerPollOperation) {
+                # Http3ServerPollOperation manages its own completion via
+                # setCompletionContext/onComplete — no DelegatingPollOperation
+                # wrapper needed.  Using a wrapper would break result.spop
+                # (handleConnectionResult would receive the wrapper, not the
+                # h3op, and the cast to Http3ServerPollOperation would fail).
+                cast<Http3ServerPollOperation>(op).setConnectionCompletionContext(
+                    self, uh, cinfo.state);
+                submit_op = op;
             } else {
                 submit_op = new DelegatingPollOperation(op,
                     sub (hash<SocketPollResultInfo> result) {

@@ -123,6 +123,10 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
 
         #! Owner identifier for completion callback
         *string completion_owner;
+
+        #! Connection-level completion context (for resubmitted ops via submitConnectionOp)
+        *string conn_completion_uh;
+        *string conn_completion_state;
     }
 
     #! Creates the poll operation
@@ -570,11 +574,36 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         completion_owner = owner;
     }
 
+    #! Sets the connection-level completion context for resubmitted ops
+    /** Called by HttpAsyncSocketIoController::submitConnectionOpIntern() when the
+        h3op is resubmitted after processing a request. Uses the same abstract
+        API as HttpConnectionPollOperationBase — no DelegatingPollOperation wrapper
+        needed.
+
+        @param controller the controller to call handleConnectionResult() on
+        @param uh the connection unique hash
+        @param state the connection state when submitted
+    */
+    nothing setConnectionCompletionContext(HttpAsyncSocketIoController controller,
+            string uh, string state) {
+        completion_controller = controller;
+        conn_completion_uh = uh;
+        conn_completion_state = state;
+    }
+
     #! Called when the operation completes; dispatches result to the controller
+    /** Routes to handleConnectionResult() when a connection-level context is set
+        (resubmitted ops), or to handleQuicAcceptResult() for the initial accept.
+    */
     nothing onComplete(hash<SocketPollResultInfo> result) {
         if (completion_controller) {
-            completion_controller.handleQuicAcceptResult(result, completion_listener,
-                completion_target, completion_owner, self);
+            if (conn_completion_uh) {
+                completion_controller.handleConnectionResult(result, conn_completion_uh,
+                    conn_completion_state);
+            } else {
+                completion_controller.handleQuicAcceptResult(result, completion_listener,
+                    completion_target, completion_owner, self);
+            }
         }
     }
 

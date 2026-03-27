@@ -37,69 +37,26 @@ public namespace HttpClientIo {
     Unlike HTTP/2 which requires separate TCP connect + SSL upgrade + preface steps,
     QUIC handles all of this in a single handshake phase.
 
+    The C++ base class (Http3ClientPollOperationBase) provides the SocketPollOperationBase
+    fast path for the AsyncIoController, implementing the continuePoll() state machine
+    entirely in C++.
+
     @par Stream Callbacks
     When a response is complete, the registered callback for that stream ID is
     invoked with the response data. Callbacks are registered via submitRequest().
 */
-public class Http3ClientPollOperation inherits HttpClientPollOperation {
+public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, HttpClientPollOperation {
     public {
-        #! Maximum completed outputs to drain per continuePoll() call
-        const MAX_DRAIN_ITERATIONS = 100;
+        #! Maximum STREAM_ID_BLOCKED retries before signaling capacity error
+        const MaxStreamBlockedRetries = 3;
     }
 
     private {
-        #! Condition signaled when continuePoll() processes packets (may include MAX_STREAMS)
-        Condition stream_capacity_cond();
+        #! Target URL info (kept for submitRequest header generation)
+        hash<auto> h3_url_info;
 
-        #! Number of threads waiting on stream_capacity_cond (STREAM_ID_BLOCKED retry)
-        int stream_blocked_waiters = 0;
-
-        #! Discovered QUIC stream limit (set when STREAM_ID_BLOCKED is hit);
-        #! 0 means unknown/unlimited.  Used by canAcceptStream() via
-        #! getQuicStreamLimit() to steer subsequent callers to new connections.
-        int quic_stream_limit = 0;
-
-        #! Maximum STREAM_ID_BLOCKED retries before signaling capacity error
-        const MaxStreamBlockedRetries = 3;
-
-        #! QUIC session ID (set when connection becomes ready)
-        int session_id = 0;
-
-        #! Responses that arrived before callback registration (race between
-        #! submitRequest() phases 2 and 3).  Key: stream_id string, Value: list
-        #! of response hashes.  Accessed only under stream_lock.
-        hash<string, list<hash<auto>>> pending_responses();
-
-        #! Stream IDs currently between Phase 2 (QUIC submit, outside
-        #! stream_lock) and Phase 3 (callback registration, under stream_lock).
-        #! handleReading() buffers responses for these specific stream IDs.
-        #! Accessed only under stream_lock.
-        hash<string, bool> pending_stream_ids();
-
-        #! Number of threads currently inside the Phase 2 race window
-        #! (between entering Phase 2 and registering in pending_stream_ids).
-        #! When > 0, the I/O thread must buffer responses for unknown stream
-        #! IDs instead of discarding them, because the response may belong to
-        #! a stream whose pending_stream_ids entry has not yet been created.
-        #! Accessed only under stream_lock.
-        int submits_in_progress = 0;
-
-        #! True when a GOAWAY has been received from the server
-        bool goaway_received = False;
-
-        #! Set by migrate() on the app thread; consumed by continuePoll() on
-        #! the I/O thread so the fd swap happens on the thread that owns epoll
-        bool migration_pending = False;
-
-        #! Address family used for the QUIC socket (AF_INET or AF_INET6)
-        /** Stored from the constructor so startConnect() passes the same
-            family to startPollQuicConnect(), ensuring the DNS resolution
-            inside the C++ layer uses the same address family as the bound
-            socket.  A mismatch (e.g. IPv6 socket + AF_INET resolve) causes
-            ngtcp2 path-validation to silently drop server responses because
-            the received src_addr family differs from the stored remote_addr.
-        */
-        int addr_family = AF_INET;
+        #! Logger (kept for Qore-level logging)
+        *LoggerInterface h3_logger;
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -113,126 +70,20 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
-        self.url_info = url_info;
-        self.connect_timeout = connect_timeout;
-        self.logger = logger;
-
-        sock = new Socket();
-
-        # Apply SSL verification settings before connect
-        if (accept_all_certs) {
-            sock.setSslVerifyMode(SSL_VERIFY_NONE);
-        } else if (exists ssl_verify_mode) {
-            sock.setSslVerifyMode(ssl_verify_mode);
-        }
-
-        # Set client certificate and key for mTLS
-        if (client_cert) {
-            sock.setCertificate(client_cert);
-        }
-        if (client_pk) {
-            sock.setPrivateKey(client_pk);
-        }
-
-        # Resolve address family from hostname to support both IPv4 and IPv6
-        int family = AF_INET;
-        string bind_addr = "0.0.0.0";
-        string host = url_info.host;
-        if (host =~ /^\[.*\]$/) {
-            family = AF_INET6;
-            bind_addr = "::";
-        } else if (host =~ /:/) {
-            family = AF_INET6;
-            bind_addr = "::";
-        } else {
-            try {
-                list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, AI_ADDRCONFIG);
-                if (addrs) {
-                    family = addrs[0].family;
-                    bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
-                }
-            } catch () {
-                # Fall back to IPv4 if resolution fails
-            }
-        }
-        sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
-        addr_family = family;
-
-        # Start the QUIC connection
-        startConnect();
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk) :
+            Http3ClientPollOperationBase(
+                Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
+                    accept_all_certs, client_cert, client_pk),
+                url_info.host,
+                url_info.port,
+                Http3ClientPollOperation::resolveAddressFamily(url_info.host)) {
+        h3_url_info = url_info;
+        h3_logger = logger;
     }
 
     #! Copying is not supported
     private copy() {
         throw "COPY-ERROR", "Http3ClientPollOperation objects cannot be copied";
-    }
-
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "http3_client_multiplex";
-    }
-
-    #! Returns the current state
-    string getState() {
-        return state;
-    }
-
-    #! Always returns False; this is a long-running multiplexed operation
-    bool goalReached() {
-        return False;
-    }
-
-    #! Returns True if a GOAWAY has been received from the server
-    bool isGoawayReceived() {
-        return goaway_received;
-    }
-
-    #! Returns the QUIC session ID (0 if not yet connected)
-    int getSessionId() {
-        return session_id;
-    }
-
-    #! Returns the number of active streams (lock-free for performance)
-    /** Overrides the base class locked version for the HTTP/3 hot path.
-        The int type in Qore is atomic-read safe, and a stale-by-one value
-        is acceptable because callers (e.g., \c canAcceptStream()) use this
-        as an advisory check; the authoritative capacity check happens inside
-        \c submitRequest() under \c stream_lock.
-    */
-    int getActiveStreamCount() {
-        return active_stream_count;
-    }
-
-    #! Returns the discovered QUIC stream limit (0 = unknown/unlimited)
-    /** Set when STREAM_ID_BLOCKED is encountered.  Used by the connection
-        to override \c canAcceptStream() and steer new requests to fresh
-        QUIC connections.
-    */
-    int getQuicStreamLimit() {
-        return quic_stream_limit;
-    }
-
-    #! Returns True if the underlying QUIC session is still alive
-    /** Checks the C++ poll operation state.  Returns False when the poll
-        operation has no C++ operation (never connected), when the C++ state
-        is \c "closed" (session torn down), or when querying the state throws
-        (operation already destroyed).
-
-        @note This does not detect sessions in the QUIC closing/draining
-        period that have not yet been processed by the I/O thread — those
-        will still show state \c "reading" until the next \c continuePoll()
-        cycle.  Submit-time error handling (Phase 3) catches those cases.
-    */
-    bool isQuicSessionOpen() {
-        if (!current_op) {
-            return False;
-        }
-        try {
-            return current_op.getState() != "closed";
-        } catch () {
-            return False;
-        }
     }
 
     #! Submits a new HTTP/3 request on this connection
@@ -254,9 +105,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
             HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
             bool streaming = False) {
-        string current_state = state;
-        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
-            throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
 
         # Filter pseudo-headers — C++ layer handles them
@@ -269,20 +119,13 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
             }
         }
         if (!req_headers.host) {
-            req_headers.host = url_info.port == 443
-                ? url_info.host
-                : sprintf("%s:%d", url_info.host, url_info.port);
+            req_headers.host = h3_url_info.port == 443
+                ? h3_url_info.host
+                : sprintf("%s:%d", h3_url_info.host, h3_url_info.port);
         }
 
-        # Phase 1: advisory capacity check under lock
-        {
-            AutoLock al(stream_lock);
-            if (max_streams && active_stream_count >= max_streams) {
-                throw "HTTP3-CAPACITY-ERROR",
-                    sprintf("connection at capacity: %d/%d streams",
-                        active_stream_count, max_streams);
-            }
-        }
+        # Phase 1: advisory capacity check (C++ acquires stream_lock internally)
+        self.checkCapacity(max_streams);
 
         # Phase 2: submit to QUIC layer with STREAM_ID_BLOCKED retry.
         #
@@ -292,18 +135,9 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         # while calling submitQuicRequest() would therefore create a lock-order
         # inversion and risk deadlock.  submitQuicRequest() is intentionally
         # called outside stream_lock.
-        #
-        # Signal that a submit is in progress so the I/O thread buffers
-        # responses for unknown stream IDs instead of discarding them.
-        # This closes the race window between submitQuicRequest() returning
-        # (outside stream_lock) and adding to pending_stream_ids (under
-        # stream_lock): the I/O thread could receive and discard the response
-        # in that gap because neither stream_callbacks nor pending_stream_ids
-        # has been populated yet.
-        {
-            AutoLock al(stream_lock);
-            ++submits_in_progress;
-        }
+        self.beginSubmit();
+
+        Socket sock = self.getSocket();
         int stream_id;
         int retries = 0;
         try {
@@ -321,130 +155,70 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                         ++retries;
                         # Backoff: 1ms, 2ms, 4ms
                         int backoff_val = 1 << (retries - 1);
-                        timeout backoff_ms = backoff_val * 1ms;
                         log(LoggerLevel::DEBUG,
                             "STREAM_ID_BLOCKED retry %d/%d (backoff %dms)",
                             retries, MaxStreamBlockedRetries, backoff_val);
                         # Wait on condition — signaled when continuePoll()
                         # drains completed streams and frees stream slots.
-                        # Acquire stream_lock only for the wait, not around the submit.
-                        {
-                            AutoLock al(stream_lock);
-                            ++stream_blocked_waiters;
-                            stream_capacity_cond.wait(stream_lock, backoff_ms);
-                            --stream_blocked_waiters;
-                        }
-                        string retry_state = state;
-                        if (retry_state != STATE_READING && retry_state != STATE_WAIT_READ) {
+                        self.waitStreamCapacity(backoff_val);
+
+                        if (!self.isReady()) {
                             throw "HTTP3-STATE-ERROR",
                                 sprintf("connection closed during STREAM_ID_BLOCKED "
-                                    "retry (state: %y)", retry_state);
+                                    "retry (state: %y)", self.getState());
                         }
                         continue;
                     }
                     if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
-                        # Retries exhausted — record the limit so
-                        # canAcceptStream() steers subsequent callers
-                        # to a new QUIC connection
-                        int captured_active;
-                        int captured_limit;
-                        {
-                            AutoLock al(stream_lock);
-                            if (!max_streams || active_stream_count < max_streams) {
-                                quic_stream_limit = active_stream_count;
-                            }
-                            captured_active = active_stream_count;
-                            captured_limit = quic_stream_limit;
+                        # Retries exhausted — record the limit
+                        int captured_active = self.getActiveStreamCount();
+                        if (!max_streams || captured_active < max_streams) {
+                            self.setQuicStreamLimit(captured_active);
                         }
                         log(LoggerLevel::DEBUG,
                             "STREAM_ID_BLOCKED after %d retries — signaling "
                             "capacity error (active: %d, quic_limit: %d)",
-                            MaxStreamBlockedRetries, captured_active, captured_limit);
+                            MaxStreamBlockedRetries, captured_active,
+                            self.getQuicStreamLimit());
                         throw "HTTP3-CAPACITY-ERROR",
                             sprintf("QUIC stream limit reached on connection"
                                 " (active_streams: %d)", captured_active);
                     }
                     # Connection death errors — mark as closed immediately
-                    # so isClosed()/hasError() steer other callers away.
-                    # The I/O thread will notify remaining pending streams on
-                    # its next cycle.
                     if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
                             || ex.err == "QUIC-RECV-ERROR") {
-                        AutoLock al(stream_lock);
-                        error_info = {"err": ex.err, "desc": ex.desc};
-                        state = STATE_CLOSED;
-                        if (stream_blocked_waiters > 0) {
-                            stream_capacity_cond.broadcast();
-                        }
+                        self.setSubmitError(ex.err, ex.desc);
                     }
                     rethrow;
                 }
             }
         } catch () {
             # Ensure submits_in_progress is decremented on all failure paths
-            {
-                AutoLock al(stream_lock);
-                --submits_in_progress;
-            }
+            self.endSubmitFail();
             rethrow;
         }
 
-        # Mark this stream_id as awaiting registration and close the
-        # submits_in_progress race window atomically.
-        {
-            AutoLock al(stream_lock);
-            pending_stream_ids{string(stream_id)} = True;
-            --submits_in_progress;
-        }
+        # Mark this stream_id as awaiting registration
+        self.endSubmitOk(stream_id);
 
-        # Phase 3: register callback under lock; re-check state in case the
-        # connection died between the submit and this registration.
-        # Also check for responses that arrived during the race window
-        # between Phase 2 (submit outside lock) and this registration.
-        bool need_cancel = False;
-        string post_state;
-        *list<hash<auto>> buffered;
-        {
-            AutoLock al(stream_lock);
-            string sid = string(stream_id);
-            remove pending_stream_ids{sid};
-            post_state = state;
-            if (post_state != STATE_READING && post_state != STATE_WAIT_READ) {
-                # Stream was submitted to QUIC but connection is now dead;
-                # capture the need to cancel and release stream_lock first
-                # to avoid lock-order inversion (stream_lock → sock->priv->m
-                # vs I/O thread's sock->priv->m → stream_lock)
-                need_cancel = True;
-                # Clean up any buffered responses for this stream
-                remove pending_responses{sid};
-            } else {
-                stream_callbacks{sid} = callback;
-                if (ctx) {
-                    stream_ctxs{sid} = ctx;
-                }
-                ++active_stream_count;
-                # Check for responses that arrived before registration
-                if (pending_responses.hasKey(sid)) {
-                    buffered = pending_responses{sid};
-                    remove pending_responses{sid};
-                }
-            }
-        }
-        if (need_cancel) {
+        # Phase 3: register callback (C++ acquires stream_lock internally)
+        *hash<auto> reg_result = self.registerStream(stream_id, callback, ctx);
+        if (reg_result.need_cancel) {
             try {
-                if (session_id) {
-                    sock.cancelQuicStream(session_id, stream_id);
+                int sid = self.getSessionId();
+                if (sid) {
+                    sock.cancelQuicStream(sid, stream_id);
                 }
             } catch () {}
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
-                    post_state);
+                    self.getState());
         }
 
         # Deliver any buffered responses outside the lock
-        if (buffered) {
+        if (reg_result.buffered) {
             string sid = string(stream_id);
-            foreach hash<auto> resp in (buffered) {
+            foreach hash<auto> resp in (reg_result.buffered) {
                 try {
                     callback(resp + {"ctx": ctx}, NOTHING);
                 } catch (hash<ExceptionInfo> ex) {
@@ -452,10 +226,8 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
                         ex.err, ex.desc);
                 }
                 if (resp.end_stream.toBool()) {
-                    AutoLock al(stream_lock);
-                    remove stream_callbacks{sid};
-                    remove stream_ctxs{sid};
-                    --active_stream_count;
+                    *code<nothing(hash<auto>, *hash<auto>)> removed_cb = self.cancelStream(stream_id);
+                    # callback already dispatched inline; no need to call removed_cb
                 }
             }
         }
@@ -473,342 +245,106 @@ public class Http3ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP3-STATE-ERROR if not in ready state
     */
     int sendStreamData(int stream_id, *data data, bool end_stream = False) {
-        string current_state = state;
-        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
-            throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", current_state);
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", self.getState());
         }
 
         log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
             data ? data.size() : 0, stream_id, end_stream);
 
+        Socket sock = self.getSocket();
         return sock.sendQuicClientStreamData(stream_id, data, end_stream);
     }
 
     #! Cancels a pending request
     cancelRequest(int stream_id) {
-        string sid = string(stream_id);
-        *HttpResponseCallback cb;
-        {
-            AutoLock al(stream_lock);
-            # Clean up any buffered responses for this stream
-            remove pending_responses{sid};
-            if (!stream_callbacks.hasKey(sid)) {
-                log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
-                return;
-            }
-
-            if (session_id) {
-                sock.cancelQuicStream(session_id, stream_id);
-            } else {
-                log(LoggerLevel::DEBUG, "cancel stream %d: no session yet, skipping QUIC cancel", stream_id);
-            }
-
-            cb = stream_callbacks{sid};
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
-            --active_stream_count;
-            # Wake one thread waiting in STREAM_ID_BLOCKED retry — one stream slot freed
-            if (stream_blocked_waiters > 0) {
-                stream_capacity_cond.signal();
-            }
+        *code<nothing(hash<auto>, *hash<auto>)> cb = self.cancelStream(stream_id);
+        if (!cb) {
+            log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)",
+                stream_id);
+            return;
         }
 
-        if (cb) {
+        int sid = self.getSessionId();
+        if (sid) {
+            Socket sock = self.getSocket();
             try {
-                cb({}, {"err": "HTTP3-CANCELLED", "desc": "request cancelled"});
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "cancellation callback threw: %s: %s", ex.err, ex.desc);
-            }
+                sock.cancelQuicStream(sid, stream_id);
+            } catch () {}
+        }
+
+        try {
+            cb({}, {"err": "HTTP3-CANCELLED", "desc": "request cancelled"});
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "cancellation callback threw: %s: %s", ex.err, ex.desc);
         }
 
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
 
-    #! Continues the poll operation
-    *hash<SocketPollInfo> continuePoll() {
-        {
-            AutoLock al(stream_lock);
-            callback_dispatched = False;
-        }
-        while (True) {
-            switch (state) {
-                case STATE_CONNECTING: {
-                    return handleConnecting();
-                }
-
-                case STATE_READING: {
-                    return handleReading();
-                }
-
-                case STATE_WAIT_READ: {
-                    log(LoggerLevel::DEBUG, "resuming read after wait");
-                    state = STATE_READING;
-                    continue;
-                }
-
-                case STATE_CLOSED:
-                    return NOTHING;
-            }
-        }
-    }
-
     #! Initiates QUIC connection migration to a new network path
     migrate() {
-        string current_state = state;
-        if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
-            throw "HTTP3-STATE-ERROR", sprintf("cannot migrate in state: %y", current_state);
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot migrate in state: %y", self.getState());
         }
 
-        # Set flag for the I/O thread to perform the migration on the next
-        # continuePoll() cycle.  This ensures the fd swap happens on the same
-        # thread that owns the epoll registration, avoiding races where the
-        # old fd is closed while epoll is still using it.
         log(LoggerLevel::DEBUG, "requesting QUIC connection migration");
-        migration_pending = True;
+        self.setMigrationPending();
     }
 
-    #! Aborts the operation and closes the connection
-    /** @note Sets state to CLOSED first so any concurrent driver thread will
-        see the closed state on its next iteration. Does NOT delete current_op
-        to avoid use-after-free if a driver thread is still inside continuePoll().
-        The current_op member is cleaned up when the poll operation is destroyed.
+    #! Internal: creates and configures a UDP socket for QUIC
+    /** Called from the constructor initializer list before the C++ base constructor.
     */
-    abort() {
-        state = STATE_CLOSED;
-        if (current_op) {
-            try { current_op.abort(); } catch () {}
-        }
-        notifyPendingStreams({"err": "HTTP3-ABORT", "desc": "connection aborted"});
-        cleanupPendingState();
-        try { sock.close(); } catch () {}
-    }
+    private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
+            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
+        Socket sock();
 
-    #! Internal: starts the QUIC connection
-    private startConnect() {
-        log(LoggerLevel::DEBUG, "connecting to %s:%d via QUIC (family %d)", url_info.host, url_info.port,
-            addr_family);
-        current_op = sock.startPollQuicConnect(url_info.host, url_info.port, addr_family);
-        state = STATE_CONNECTING;
-    }
-
-    #! Internal: handles connecting state (QUIC handshake + HTTP/3 setup)
-    private *hash<SocketPollInfo> handleConnecting() {
-        if (!current_op) {
-            setError("HTTP3-CONNECT-ERROR", "connect operation not initialized");
-            return NOTHING;
+        # Apply SSL verification settings before connect
+        if (accept_all_certs) {
+            sock.setSslVerifyMode(SSL_VERIFY_NONE);
+        } else if (exists ssl_verify_mode) {
+            sock.setSslVerifyMode(ssl_verify_mode);
         }
 
+        # Set client certificate and key for mTLS
+        if (client_cert) {
+            sock.setCertificate(client_cert);
+        }
+        if (client_pk) {
+            sock.setPrivateKey(client_pk);
+        }
+
+        # Resolve address family and bind
+        int family = Http3ClientPollOperation::resolveAddressFamily(url_info.host);
+        string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
+        sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);
+
+        return sock;
+    }
+
+    #! Internal: resolves the address family for a hostname
+    private static int resolveAddressFamily(string host) {
+        if (host =~ /^\[.*\]$/) {
+            return AF_INET6;
+        }
+        if (host =~ /:/) {
+            return AF_INET6;
+        }
         try {
-            auto poll_info = current_op.continuePoll();
-
-            if (current_op.getState() == "reading") {
-                log(LoggerLevel::DEBUG, "QUIC connection established, HTTP/3 ready");
-                state = STATE_READING;
-                session_id = sock.getQuicSessionId();
-
-                fireReadyCallback();
-
-                return poll_info;
+            list<hash<auto>> addrs = getaddrinfo(host, NOTHING, AF_UNSPEC, AI_ADDRCONFIG);
+            if (addrs) {
+                return addrs[0].family;
             }
-
-            if (poll_info) {
-                return poll_info;
-            }
-
-            setError("HTTP3-CONNECT-ERROR",
-                sprintf("QUIC connection failed (state: %y)", current_op.getState()));
-            cleanupPendingState();
-            return NOTHING;
-        } catch (hash<ExceptionInfo> ex) {
-            setError(ex.err, ex.desc);
-            cleanupPendingState();
-            return NOTHING;
+        } catch () {
+            # Fall back to IPv4 if resolution fails
         }
+        return AF_INET;
     }
 
-    #! Internal: handles reading state (process HTTP/3 responses)
-    private *hash<SocketPollInfo> handleReading() {
-        if (!current_op) {
-            setError("HTTP3-READ-ERROR", "read operation not initialized");
-            return NOTHING;
-        }
-
-        # Perform deferred migration on the I/O thread (set by migrate())
-        if (migration_pending) {
-            migration_pending = False;
-            try {
-                current_op.migrateQuicConnection();
-                log(LoggerLevel::DEBUG, "QUIC migration completed on I/O thread");
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "QUIC migration failed: %s: %s", ex.err, ex.desc);
-            }
-        }
-
-        try {
-            # The C++ QUIC continuePoll() returns ONE completed stream at a
-            # time (caching it for getOutput()).  When multiple streams
-            # complete in the same packet batch, we must loop: call C++
-            # continuePoll, drain its single output, and repeat until no
-            # more completed streams remain.  Without this loop, the Qore
-            # layer returns SOCK_POLLIN after the first response and waits
-            # for socket readability — but the remaining completed streams
-            # are already buffered inside the QUIC library, so no new UDP
-            # data arrives and the remaining callbacks are never dispatched.
-            int total_drain_count = 0;
-            *hash<SocketPollInfo> last_poll_info;
-            while (True) {
-                *hash<SocketPollInfo> poll_info = current_op.continuePoll();
-                if (poll_info) {
-                    last_poll_info = poll_info;
-                }
-
-                # Check for GOAWAY from server
-                if (!goaway_received && session_id && sock.isQuicGoawayReceived(session_id)) {
-                    goaway_received = True;
-                    log(LoggerLevel::DEBUG, "GOAWAY received from server");
-                }
-
-                # Drain completed response(s) from this continuePoll call
-                bool had_output = False;
-                while (True) {
-                    *hash<auto> output = current_op.getOutput();
-                    if (!output) {
-                        break;
-                    }
-                    had_output = True;
-                    if (++total_drain_count > MAX_DRAIN_ITERATIONS) {
-                        log(LoggerLevel::ERROR, "output drain safety limit reached (%d)",
-                            total_drain_count);
-                        break;
-                    }
-                    empty_read_count = 0;
-
-                    int stream_id = output.stream_id;
-                    string sid = string(stream_id);
-                    bool is_end = output.end_stream.toBool();
-                    *HttpResponseCallback cb;
-                    *hash<auto> stream_ctx;
-                    {
-                        AutoLock al(stream_lock);
-                        cb = stream_callbacks{sid};
-                        stream_ctx = stream_ctxs{sid};
-                        if (cb) {
-                            callback_dispatched = True;
-                        } else if (pending_stream_ids{sid} || submits_in_progress > 0) {
-                            # Buffer response — either this stream_id is between
-                            # Phase 2 and Phase 3 (pending_stream_ids), or a submit
-                            # is in progress and the response may belong to a stream
-                            # whose pending_stream_ids entry hasn't been created yet
-                            if (!pending_responses.hasKey(sid)) {
-                                pending_responses{sid} = ();
-                            }
-                            push pending_responses{sid}, (output + {"protocol": "h3"});
-                        } else {
-                            log(LoggerLevel::DEBUG,
-                                "discarding response for completed/cancelled stream %d",
-                                stream_id);
-                        }
-                    }
-                    # Remove stream BEFORE the callback so that
-                    # active_stream_count is already decremented by the time the
-                    # callback resolves the caller's Promise.
-                    # For streaming responses (end_stream=false), keep the callback
-                    # registered so that subsequent body chunks can be delivered via
-                    # the stream's registered callback (into the Channel) and the
-                    # stream remains active for further data.
-                    if (is_end && cb) {
-                        AutoLock al(stream_lock);
-                        remove stream_callbacks{sid};
-                        remove stream_ctxs{sid};
-                        --active_stream_count;
-                    }
-                    if (cb) {
-                        try {
-                            cb(output + {"ctx": stream_ctx, "protocol": "h3"}, NOTHING);
-                        } catch (hash<ExceptionInfo> ex) {
-                            log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
-                                ex.err, ex.desc);
-                        }
-                    }
-                }
-
-                # If C++ returned nullptr (goal reached = cached one completed
-                # stream) and we got output, there may be more completed
-                # streams in the QUIC library — loop to fetch them.
-                # If C++ returned poll_info (no more completed streams, did
-                # I/O), or we got no output, we're done for this cycle.
-                if (!poll_info && had_output && total_drain_count < MAX_DRAIN_ITERATIONS) {
-                    continue;
-                }
-                break;
-            }
-
-            # Signal threads waiting on STREAM_ID_BLOCKED after draining
-            # responses and decrementing active_stream_count
-            if (total_drain_count > 0 && stream_blocked_waiters > 0) {
-                AutoLock al(stream_lock);
-                stream_capacity_cond.broadcast();
-            }
-
-            bool dispatched;
-            {
-                AutoLock al(stream_lock);
-                dispatched = callback_dispatched;
-            }
-            if (dispatched) {
-                state = STATE_WAIT_READ;
-                # Use C++ events when available — they include SOCK_POLLOUT if there
-                # are pending sends.  Fall back to SOCK_POLLIN when C++ returned null.
-                return last_poll_info ?? <SocketPollInfo>{
-                    "events": SOCK_POLLIN,
-                    "socket": sock,
-                };
-            }
-
-            if (last_poll_info) {
-                # Valid I/O activity even if no response output — reset counter
-                empty_read_count = 0;
-                return last_poll_info;
-            }
-
-            ++empty_read_count;
-            if (empty_read_count > MAX_EMPTY_READS) {
-                setError("HTTP3-EMPTY-READ",
-                    sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS));
-                cleanupPendingState();
-                return NOTHING;
-            }
-
-            state = STATE_WAIT_READ;
-            return <SocketPollInfo>{
-                "events": SOCK_POLLIN,
-                "socket": sock,
-            };
-        } catch (hash<ExceptionInfo> ex) {
-            setError(ex.err, ex.desc);
-            cleanupPendingState();
-            return NOTHING;
-        }
-    }
-
-    #! Internal: cleans up H3-specific state (pending responses, pending stream IDs)
-    /** Called on connection error or abort to prevent orphaned buffered responses
-        from leaking.  Safe to call multiple times.
-    */
-    private cleanupPendingState() {
-        AutoLock al(stream_lock);
-        remove pending_responses;
-        remove pending_stream_ids;
-        submits_in_progress = 0;
-        if (stream_blocked_waiters > 0) {
-            stream_capacity_cond.broadcast();
-        }
-    }
-
-    #! Internal: logging helper (override to use protocol-specific prefix)
+    #! Internal: logging helper
     private log(int level, string fmt) {
-        if (logger) {
-            call_function_args(\logger.log(), (level, "Http3ClientPollOperation: " + fmt) + argv);
+        if (h3_logger) {
+            call_function_args(\h3_logger.log(), (level, "Http3ClientPollOperation: " + fmt) + argv);
         }
     }
 }

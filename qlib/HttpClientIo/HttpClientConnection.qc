@@ -106,7 +106,7 @@ public class HttpClientConnection {
 
     #! Internal: called by poll operation when connection becomes ready
     private onConnectionReady() {
-        list<code<nothing()>> cbs;
+        *list<code<nothing()>> cbs;
         {
             AutoLock al(lock);
             if (state == HttpClientConnectionState::Connecting) {
@@ -117,7 +117,9 @@ public class HttpClientConnection {
             }
         }
         # Fire ready callbacks outside the lock
-        map $1(), cbs;
+        if (cbs) {
+            map $1(), cbs;
+        }
     }
 
     #! Registers a callback to fire when the connection becomes ready
@@ -354,7 +356,7 @@ public class HttpClientConnection {
         protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
     */
     handlePollResult() {
-        list<code<nothing()>> cbs;
+        *list<code<nothing()>> cbs;
         {
             AutoLock al(lock);
             last_activity = now_us();
@@ -372,7 +374,9 @@ public class HttpClientConnection {
             handlePollResultImpl();
         }
         # Fire ready callbacks outside the lock
-        map $1(), cbs;
+        if (cbs) {
+            map $1(), cbs;
+        }
     }
 
     #! Protocol-specific poll result hook, called under lock

@@ -207,16 +207,18 @@ l50Xb2GWQesIt9k5jF5IOw==
         HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
 
-        hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+        # Use the onComplete abstract API: set a completion handler on the
+        # poll operation so that handleControllerResult() fires when the
+        # controller marks the operation as completed.
+        op.setCompletionHandler(sub (hash<SocketPollResultInfo> result) {
+            handleControllerResult(conn, result);
+        });
+        mController.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": self.uniqueHash(),
             "to": -1s,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                handleControllerResult(conn, result);
-            },
-        };
-        mController.submit(info);
+        });
     }
 
     #! Callback: handle controller result for a connection

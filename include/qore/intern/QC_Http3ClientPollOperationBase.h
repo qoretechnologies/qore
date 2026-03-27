@@ -1,0 +1,293 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Http3ClientPollOperationBase.h
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#ifndef _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H
+
+#define _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H
+
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+
+#include <atomic>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+//! C++ base for Http3ClientPollOperation providing SocketPollOperationBase fast path
+/** This class implements the HTTP/3 client poll state machine (connecting, reading,
+    wait_read, closed) entirely in C++, enabling the AsyncIoController to use the
+    direct C++ continuePoll() fast path instead of evalMethod().
+
+    The inner SocketQuicClientPollOperation handles QUIC packet I/O (ngtcp2/nghttp3).
+    This class manages the HTTP/3 application-level state: stream callbacks, response
+    draining, connection readiness notification, and error handling.
+
+    Thread safety: continuePoll() runs on the I/O thread. submitRequest helper methods
+    (beginSubmit, endSubmitOk, registerStream, etc.) run on application threads.
+    Shared state is protected by stream_lock with careful lock ordering:
+    sock->priv->m (held by inner continuePoll) -> stream_lock.
+
+    @since %Qore 2.3
+*/
+class Http3ClientPollOperationPriv : public SocketPollOperationBase {
+public:
+    //! HTTP/3 client connection states
+    enum class H3State {
+        CONNECTING,
+        READING,
+        WAIT_READ,
+        CLOSED
+    };
+
+    //! Creates the poll operation wrapping an inner QUIC client operation
+    /** @param self the QoreObject wrapping this private data
+        @param sock the UDP socket (referenced by caller, ownership transferred)
+        @param inner the SocketQuicClientPollOperation (referenced by caller, ownership transferred)
+    */
+    DLLLOCAL Http3ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+            SocketQuicClientPollOperation* inner);
+
+    DLLLOCAL virtual ~Http3ClientPollOperationPriv();
+
+    // --- SocketPollOperationBase overrides ---
+
+    DLLLOCAL bool goalReached() const override {
+        return false;  // long-running multiplexed operation
+    }
+
+    DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+    DLLLOCAL void abort(ExceptionSink* xsink) override;
+    DLLLOCAL QoreValue getOutput() const override;
+
+    // --- Stream management (called from Qore app thread) ---
+
+    //! Phase 1: advisory capacity check under lock
+    DLLLOCAL void checkCapacity(int max_streams, ExceptionSink* xsink);
+
+    //! Phase 2 enter: increment submits_in_progress under lock
+    DLLLOCAL void beginSubmit();
+
+    //! Phase 2 exit (success): add to pending_stream_ids, decrement submits_in_progress
+    DLLLOCAL void endSubmitOk(int64_t stream_id);
+
+    //! Phase 2 exit (failure): decrement submits_in_progress
+    DLLLOCAL void endSubmitFail();
+
+    //! Phase 3: register callback; returns buffered responses (or nullptr)
+    /** @param stream_id the QUIC stream ID
+        @param cb the callback (will be ref'd if stored)
+        @param ctx optional context hash (will be ref'd if stored)
+        @param xsink for exception handling
+        @return list of buffered response hashes (ref'd), or nullptr; also sets
+                need_cancel to true via out param if connection died
+    */
+    DLLLOCAL QoreListNode* registerStream(int64_t stream_id, ResolvedCallReferenceNode* cb,
+        QoreHashNode* ctx, bool& need_cancel, ExceptionSink* xsink);
+
+    //! Cancel a stream: removes callback, returns the removed callback
+    /** @param stream_id the QUIC stream ID
+        @param out_cb receives the removed callback (ref'd) or nullptr
+        @param xsink for exception handling
+    */
+    DLLLOCAL void cancelStream(int64_t stream_id, ResolvedCallReferenceNode*& out_cb,
+        ExceptionSink* xsink);
+
+    //! Wait on stream_capacity_cond (for STREAM_ID_BLOCKED retry)
+    DLLLOCAL void waitStreamCapacity(int64_t timeout_ms);
+
+    //! Set error and close state (for connection death during submit)
+    DLLLOCAL void setSubmitError(const char* err, const char* desc);
+
+    // --- Accessors ---
+
+    DLLLOCAL bool isClosed() const {
+        return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
+    }
+
+    DLLLOCAL bool isReady() const {
+        H3State s = h3_state.load(std::memory_order_acquire);
+        return s == H3State::READING || s == H3State::WAIT_READ;
+    }
+
+    DLLLOCAL bool hasError() const {
+        return error_info != nullptr;
+    }
+
+    DLLLOCAL QoreHashNode* getErrorInfo() const {
+        if (error_info) {
+            error_info->ref();
+        }
+        return error_info;
+    }
+
+    DLLLOCAL int getActiveStreamCount() const {
+        return active_stream_count;
+    }
+
+    DLLLOCAL int getQuicStreamLimit() const {
+        return quic_stream_limit;
+    }
+
+    DLLLOCAL void setQuicStreamLimit(int limit) {
+        AutoLocker al(stream_lock);
+        quic_stream_limit = limit;
+    }
+
+    DLLLOCAL int64_t getSessionId() const {
+        return session_id.load(std::memory_order_acquire);
+    }
+
+    DLLLOCAL bool isQuicSessionOpen() const {
+        if (!inner_op) {
+            return false;
+        }
+        return inner_op->isOpen();
+    }
+
+    DLLLOCAL bool isGoawayReceived() const {
+        return goaway_received.load(std::memory_order_acquire);
+    }
+
+    DLLLOCAL void setMigrationPending() {
+        migration_pending.store(true, std::memory_order_release);
+    }
+
+    DLLLOCAL void setReadyCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+        if (ready_callback) {
+            ready_callback->deref(xsink);
+        }
+        ready_callback = cb;
+        if (ready_callback) {
+            ready_callback->ref();
+        }
+    }
+
+    DLLLOCAL void setCompletionHandler(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+        if (completion_handler) {
+            completion_handler->deref(xsink);
+        }
+        completion_handler = cb;
+        if (completion_handler) {
+            completion_handler->ref();
+        }
+    }
+
+    DLLLOCAL ResolvedCallReferenceNode* getCompletionHandler() const {
+        return completion_handler;
+    }
+
+    //! Get the socket object (returns a referenced QoreObject*)
+    DLLLOCAL QoreObject* getReferencedSocket() const {
+        if (self) {
+            ExceptionSink xsink;
+            return getReferencedSocketObject(&xsink);
+        }
+        return nullptr;
+    }
+
+    //! Cleanup all referenced objects (must be called before destructor)
+    DLLLOCAL void cleanup(ExceptionSink* xsink);
+
+protected:
+    DLLLOCAL const char* getStateImpl() const override;
+
+private:
+    //! Inner C++ QUIC client poll operation (ref'd)
+    SocketQuicClientPollOperation* inner_op;
+
+    //! The socket object (ref'd)
+    QoreSocketObject* sock_obj;
+
+    //! Connection state (atomic for lock-free reads from app threads)
+    std::atomic<H3State> h3_state{H3State::CONNECTING};
+
+    //! QUIC session ID (set when handshake completes)
+    std::atomic<int64_t> session_id{0};
+
+    //! True when GOAWAY received from server
+    std::atomic<bool> goaway_received{false};
+
+    //! Set by app thread, consumed by I/O thread
+    std::atomic<bool> migration_pending{false};
+
+    //! Consecutive empty reads counter
+    int empty_read_count = 0;
+
+    //! Set when a stream callback was dispatched during the current continuePoll
+    bool callback_dispatched = false;
+
+    // --- Shared data (under stream_lock) ---
+
+    mutable QoreThreadLock stream_lock;
+    QoreCondition stream_capacity_cond;
+    int stream_blocked_waiters = 0;
+    int active_stream_count = 0;
+    int submits_in_progress = 0;
+    int quic_stream_limit = 0;
+
+    //! Stream callbacks: stream_id string -> ref'd callback
+    std::unordered_map<std::string, ResolvedCallReferenceNode*> stream_callbacks;
+
+    //! Stream contexts: stream_id string -> ref'd hash
+    std::unordered_map<std::string, QoreHashNode*> stream_ctxs;
+
+    //! Pending responses buffered during submit race window: stream_id -> ref'd hashes
+    std::unordered_map<std::string, std::vector<QoreHashNode*>> pending_responses;
+
+    //! Stream IDs between Phase 2 and Phase 3 of submit
+    std::unordered_set<std::string> pending_stream_ids;
+
+    //! Error info (ref'd or nullptr)
+    QoreHashNode* error_info = nullptr;
+
+    //! Ready callback (ref'd or nullptr)
+    ResolvedCallReferenceNode* ready_callback = nullptr;
+
+    //! Completion handler (ref'd or nullptr)
+    ResolvedCallReferenceNode* completion_handler = nullptr;
+
+    static constexpr int MAX_DRAIN_ITERATIONS = 100;
+    static constexpr int MAX_EMPTY_READS = 100;
+
+    // --- Internal methods (I/O thread only) ---
+
+    DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleReading(ExceptionSink* xsink);
+    DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
+    DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
+    DLLLOCAL void cleanupPendingState();
+    DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+};
+
+DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& qorens);
+
+#endif // _QORE_CLASS_HTTP3CLIENTPOLLOPERATIONBASE_H

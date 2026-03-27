@@ -97,7 +97,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                 try {
                     handleResponse(resp, err);
                 } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
                     if (!err) {
                         err = {"err": ex.err, "desc": ex.desc};
                     }

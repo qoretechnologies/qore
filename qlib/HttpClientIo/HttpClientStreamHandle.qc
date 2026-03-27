@@ -263,7 +263,8 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-TIMEOUT",
                     sprintf("request timed out after %d ms", wait_timeout);
             }
-            return f.get(remaining) ?? {};
+            auto rv = f.get(remaining);
+            return rv ?? {};
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
