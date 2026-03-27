@@ -832,10 +832,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return new RestFuture(raw_future, stream, builder);
         }
 
-        #! Submits a non-blocking REST request with a completion callback
+        #! Submits a non-blocking REST request and returns a Future
         /** Prepares the request (OAuth2 token, serialization, auth headers) and submits it
-            via the multiplexed connection manager. The callback is invoked from the callback
-            worker pool (off the I/O thread) when the response arrives.
+            via the multiplexed connection manager. The result is delivered via the returned
+            Future — resolved by a C++ PromiseAction on the I/O thread (no user code on I/O
+            thread).
 
             @note This method may block for OAuth2 token refresh unless
             \a skip_ensure_token is \c True.
@@ -844,31 +845,26 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @param path request path
             @param body request body (optional)
             @param hdr request headers (optional)
-            @param callback called from the callback worker pool with \c (hash<auto> resp, *hash<auto> err)
             @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
+
+            @return a Future that resolves to the response hash
 
             @since %RestClientIo 1.1
         */
-        nothing restDoRequestWithCallback(string method, string path, auto body, *hash<auto> hdr,
-                HttpClientIo::HttpResponseCallback callback, *bool skip_ensure_token) {
+        Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
+                *bool skip_ensure_token) {
             if (!skip_ensure_token) {
                 ensureToken();
             }
 
             hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
 
-            log(LoggerLevel::DEBUG, "restDoRequestWithCallback() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
 
-            # Each call acquires its own stream — concurrent requests are safe because
-            # acquireStream() returns independent handles. The closure capture keeps
-            # each stream alive until its callback fires, preventing premature GC.
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
-            stream.submitAsyncNonBlocking(method, path, hdr, prepared.serialized_body,
-                sub (hash<auto> resp, *hash<auto> err) {
-                    remove stream;
-                    callback(resp, err);
-                },
-            );
+            hash<auto> result = stream.submitAsync(method, path, hdr,
+                prepared.serialized_body);
+            return result.future;
         }
 
         #! Sends a signed REST request

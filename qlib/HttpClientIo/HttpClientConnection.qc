@@ -323,9 +323,13 @@ public class HttpClientConnection {
             ctl.wake();
         }
 
+        # Return the Promise alongside the Future so the caller keeps it alive
+        # until the Future is consumed. The Promise must not be destroyed before
+        # the I/O thread resolves it.
         return {
             "stream_id": stream_id,
             "future": f,
+            "promise": p,
         };
     }
 

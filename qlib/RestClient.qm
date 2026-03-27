@@ -4998,21 +4998,28 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
         state = SPS_IO_WAITING;
 
-        # Submit with callback — non-blocking; skip_ensure_token avoids blocking OAuth2 refresh
-        call_object_method(rcio, "restDoRequestWithCallback", method, path, body, hdr,
-            sub (hash<auto> resp, *hash<auto> err) {
+        # Submit and get Future — resolved by C++ PromiseAction on I/O thread
+        Future f = call_object_method(rcio, "restDoRequestAsync", method, path, body, hdr,
+            True);  # skip_ensure_token
+
+        # Background thread waits on the Future and notifies the EventNotifier
+        # when the result arrives. This keeps the I/O thread free while the
+        # ping response is in flight.
+        background sub () {
+            try {
+                hash<auto> resp = f.get(30s);
                 {
                     AutoLock al(m);
-                    if (err) {
-                        bg_ex = err;
-                    } else {
-                        result = resp;
-                    }
+                    result = resp;
                 }
-                notifier.notify();
-            },
-            True,  # skip_ensure_token
-        );
+            } catch (hash<ExceptionInfo> ex) {
+                {
+                    AutoLock al(m);
+                    bg_ex = {"err": ex.err, "desc": ex.desc};
+                }
+            }
+            notifier.notify();
+        }();
     }
 }
 
