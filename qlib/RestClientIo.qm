@@ -835,7 +835,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Submits a non-blocking REST request with a completion callback
         /** Prepares the request (OAuth2 token, serialization, auth headers) and submits it
             via the multiplexed connection manager. The callback is invoked from the callback
-            worker pool (off the I/O thread) when the response arrives. This method never blocks.
+            worker pool (off the I/O thread) when the response arrives.
+
+            @note This method may block for OAuth2 token refresh unless
+            \a skip_ensure_token is \c True.
 
             @param method HTTP method
             @param path request path

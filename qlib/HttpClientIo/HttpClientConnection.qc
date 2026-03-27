@@ -364,6 +364,8 @@ public class HttpClientConnection {
             if (getPollOperation().isClosed()) {
                 state = HttpClientConnectionState::Closed;
                 ready_cond.broadcast();
+                # Drain ready_callbacks so deferred streams don't hang
+                cbs = remove ready_callbacks;
             } else if (getPollOperation().isReady() && state == HttpClientConnectionState::Connecting) {
                 state = HttpClientConnectionState::Ready;
                 ready_cond.broadcast();
