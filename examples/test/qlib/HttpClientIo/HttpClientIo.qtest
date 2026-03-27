@@ -1210,6 +1210,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stream = mgr.acquireStream(mQuicUrl);
         response = stream.request("GET", "/error/404");
         assertEq(404, response.status_code, "H3 error status code");
+
+        mgr.closeAll();
     }
 
     testH3EndToEndConcurrent() {
