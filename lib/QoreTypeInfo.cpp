@@ -2430,6 +2430,10 @@ const QoreTypeInfo* QoreParseTypeInfo::resolveSubtype(const QoreProgramLocation*
             if (hd) {
                 return hd->getTypeInfo(or_nothing);
             }
+            // Unknown hashdecl - raise parse error
+            parseException(*loc, "PARSE-EXCEPTION", "illegal access to unknown member in undefined hashdecl '%s'",
+                subtypes[0]->cscope->ostr);
+            err = -1;
             return hashTypeInfo;
         }
         if (subtypes.size() == 2) {
