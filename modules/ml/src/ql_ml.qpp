@@ -31,6 +31,9 @@
 
 #include "QC_KMeans.h"
 #include "QC_LinearRegression.h"
+#include "QC_Ridge.h"
+#include "QC_Lasso.h"
+#include "QC_ElasticNet.h"
 #include "QC_LogisticRegression.h"
 #include "QC_PCA.h"
 #include "QC_IsolationForest.h"
@@ -55,6 +58,7 @@
 #include "QC_RFE.h"
 #include "QC_DateTimeFeatures.h"
 #include "QC_TextFeatures.h"
+#include "QC_SparseMatrix.h"
 
 #include <Eigen/Dense>
 #ifdef HAVE_ONNXRUNTIME
@@ -70,6 +74,12 @@ extern const TypedHashDecl* hashdeclPCAResult;
 extern const TypedHashDecl* hashdeclSeasonalDecompositionResult;
 extern const TypedHashDecl* hashdeclLinearRegressionResult;
 extern const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+extern const TypedHashDecl* hashdeclRidgeResult;
+extern const TypedHashDecl* hashdeclRidgeModelInfo;
+extern const TypedHashDecl* hashdeclLassoResult;
+extern const TypedHashDecl* hashdeclLassoModelInfo;
+extern const TypedHashDecl* hashdeclElasticNetResult;
+extern const TypedHashDecl* hashdeclElasticNetModelInfo;
 extern const TypedHashDecl* hashdeclLogisticRegressionResult;
 extern const TypedHashDecl* hashdeclLOFResult;
 extern const TypedHashDecl* hashdeclGMMResult;
@@ -195,6 +205,102 @@ hashdecl Qore::ML::LinearRegressionModelInfo {
     float r_squared;
     //! number of features the model was trained with
     int n_features;
+}
+
+//! Result of Ridge (L2-regularized) regression prediction
+/** Result of Ridge regression prediction
+*/
+hashdecl Qore::ML::RidgeResult {
+    //! predicted target value
+    float prediction;
+    //! model coefficients (one per feature)
+    list<float> coefficients;
+    //! intercept (bias) term
+    float intercept;
+    //! R-squared (coefficient of determination) from training
+    float r_squared;
+}
+
+//! Ridge regression model information
+/** Use getModelInfo() to retrieve model parameters once.
+*/
+hashdecl Qore::ML::RidgeModelInfo {
+    //! model coefficients (one per feature)
+    list<float> coefficients;
+    //! intercept (bias) term; 0.0 if fit_intercept was False
+    float intercept;
+    //! R-squared (coefficient of determination) from training; 1.0 = perfect fit
+    float r_squared;
+    //! number of features the model was trained with
+    int n_features;
+    //! L2 regularization strength
+    float alpha;
+}
+
+//! Result of Lasso (L1-regularized) regression prediction
+/** Result of Lasso regression prediction
+*/
+hashdecl Qore::ML::LassoResult {
+    //! predicted target value
+    float prediction;
+    //! model coefficients (one per feature; some may be exactly zero)
+    list<float> coefficients;
+    //! intercept (bias) term
+    float intercept;
+    //! R-squared (coefficient of determination) from training
+    float r_squared;
+}
+
+//! Lasso regression model information
+/** Use getModelInfo() to retrieve model parameters once.
+*/
+hashdecl Qore::ML::LassoModelInfo {
+    //! model coefficients (one per feature; some may be exactly zero)
+    list<float> coefficients;
+    //! intercept (bias) term; 0.0 if fit_intercept was False
+    float intercept;
+    //! R-squared (coefficient of determination) from training; 1.0 = perfect fit
+    float r_squared;
+    //! number of features the model was trained with
+    int n_features;
+    //! L1 regularization strength
+    float alpha;
+    //! number of coordinate descent iterations executed
+    int iterations_run;
+}
+
+//! Result of ElasticNet (L1+L2 regularized) regression prediction
+/** Result of ElasticNet regression prediction
+*/
+hashdecl Qore::ML::ElasticNetResult {
+    //! predicted target value
+    float prediction;
+    //! model coefficients (one per feature; some may be exactly zero)
+    list<float> coefficients;
+    //! intercept (bias) term
+    float intercept;
+    //! R-squared (coefficient of determination) from training
+    float r_squared;
+}
+
+//! ElasticNet regression model information
+/** Use getModelInfo() to retrieve model parameters once.
+*/
+hashdecl Qore::ML::ElasticNetModelInfo {
+    //! model coefficients (one per feature; some may be exactly zero)
+    list<float> coefficients;
+    //! intercept (bias) term; 0.0 if fit_intercept was False
+    float intercept;
+    //! R-squared (coefficient of determination) from training; 1.0 = perfect fit
+    float r_squared;
+    //! number of features the model was trained with
+    int n_features;
+    //! regularization strength
+    float alpha;
+    //! L1/L2 mixing ratio (0 = pure Ridge, 1 = pure Lasso)
+    float l1_ratio;
+    //! number of coordinate descent iterations executed
+    int iterations_run;
 }
 
 //! Result of logistic regression prediction
@@ -969,6 +1075,57 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreRidge* ridgep = dynamic_cast<QoreRidge*>(
+        model->getReferencedPrivateData(CID_RIDGE, xsink));
+    if (ridgep) {
+        if (!ridgep->isFitted()) {
+            ridgep->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "Ridge model has not been fitted");
+            return QoreValue();
+        }
+        algorithm = "Ridge";
+        model_data = ridgep->serializeState();
+        field_names = ridgep->getFieldNames();
+        ridgep->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreLasso* lassop = dynamic_cast<QoreLasso*>(
+        model->getReferencedPrivateData(CID_LASSO, xsink));
+    if (lassop) {
+        if (!lassop->isFitted()) {
+            lassop->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "Lasso model has not been fitted");
+            return QoreValue();
+        }
+        algorithm = "Lasso";
+        model_data = lassop->serializeState();
+        field_names = lassop->getFieldNames();
+        lassop->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
+    QoreElasticNet* enetp = dynamic_cast<QoreElasticNet*>(
+        model->getReferencedPrivateData(CID_ELASTICNET, xsink));
+    if (enetp) {
+        if (!enetp->isFitted()) {
+            enetp->deref(xsink);
+            xsink->raiseException("ML-SERIALIZE-ERROR",
+                "ElasticNet model has not been fitted");
+            return QoreValue();
+        }
+        algorithm = "ElasticNet";
+        model_data = enetp->serializeState();
+        field_names = enetp->getFieldNames();
+        enetp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     QoreLogisticRegression* logr = dynamic_cast<QoreLogisticRegression*>(
         model->getReferencedPrivateData(CID_LOGISTICREGRESSION, xsink));
     if (logr) {
@@ -1353,6 +1510,16 @@ binary ml_serialize(object model) [dom=DEFAULT] {
     }
     if (*xsink) { xsink->clear(); }
 
+    QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
+        model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
+    if (smp) {
+        algorithm = "SparseMatrix";
+        model_data = smp->serializeState();
+        smp->deref(xsink);
+        return MLSerialization::serializeModel(algorithm, model_data, "{}", field_names, xsink);
+    }
+    if (*xsink) { xsink->clear(); }
+
     xsink->raiseException("ML-SERIALIZE-ERROR",
         "unknown model type: object is not a supported ML algorithm");
     return QoreValue();
@@ -1399,6 +1566,15 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "LinearRegression") {
         obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
         obj->setPrivate(CID_LINEARREGRESSION, priv);
+    } else if (header.algorithm == "Ridge") {
+        obj = new QoreObject(QC_RIDGE, getProgram());
+        obj->setPrivate(CID_RIDGE, priv);
+    } else if (header.algorithm == "Lasso") {
+        obj = new QoreObject(QC_LASSO, getProgram());
+        obj->setPrivate(CID_LASSO, priv);
+    } else if (header.algorithm == "ElasticNet") {
+        obj = new QoreObject(QC_ELASTICNET, getProgram());
+        obj->setPrivate(CID_ELASTICNET, priv);
     } else if (header.algorithm == "LogisticRegression") {
         obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
         obj->setPrivate(CID_LOGISTICREGRESSION, priv);
@@ -1468,6 +1644,9 @@ object ml_deserialize(binary data) [dom=DEFAULT] {
     } else if (header.algorithm == "TextFeatures") {
         obj = new QoreObject(QC_TEXTFEATURES, getProgram());
         obj->setPrivate(CID_TEXTFEATURES, priv);
+    } else if (header.algorithm == "SparseMatrix") {
+        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
+        obj->setPrivate(CID_SPARSEMATRIX, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",
@@ -1523,6 +1702,9 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
 
     TRY_SERIALIZE_ALGO(CID_KMEANS, QoreKMeans, "KMeans")
     TRY_SERIALIZE_ALGO(CID_LINEARREGRESSION, QoreLinearRegression, "LinearRegression")
+    TRY_SERIALIZE_ALGO(CID_RIDGE, QoreRidge, "Ridge")
+    TRY_SERIALIZE_ALGO(CID_LASSO, QoreLasso, "Lasso")
+    TRY_SERIALIZE_ALGO(CID_ELASTICNET, QoreElasticNet, "ElasticNet")
     TRY_SERIALIZE_ALGO(CID_LOGISTICREGRESSION, QoreLogisticRegression, "LogisticRegression")
     TRY_SERIALIZE_ALGO(CID_PCA, QorePCA, "PCA")
     TRY_SERIALIZE_ALGO(CID_ISOLATIONFOREST, QoreIsolationForest, "IsolationForest")
@@ -1544,6 +1726,18 @@ nothing ml_save_model(object model, string path, *hash<auto> options) [dom=FILES
     TRY_SERIALIZE_ALGO(CID_SELECTKBEST, QoreSelectKBest, "SelectKBest")
     TRY_SERIALIZE_ALGO(CID_RFE, QoreRFE, "RFE")
     TRY_SERIALIZE_ALGO(CID_TEXTFEATURES, QoreTextFeatures, "TextFeatures")
+
+    // SparseMatrix has no field_names/isFitted pattern
+    if (!found) {
+        QoreSparseMatrix* smp = dynamic_cast<QoreSparseMatrix*>(
+            model->getReferencedPrivateData(CID_SPARSEMATRIX, xsink));
+        if (smp) {
+            algorithm = "SparseMatrix";
+            model_data = smp->serializeState();
+            smp->deref(xsink);
+            found = true;
+        } else if (*xsink) { xsink->clear(); }
+    }
 
     // HoltWinters has no field_names getter in the pattern above
     if (!found) {
@@ -1653,6 +1847,15 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "LinearRegression") {
         obj = new QoreObject(QC_LINEARREGRESSION, getProgram());
         obj->setPrivate(CID_LINEARREGRESSION, priv);
+    } else if (header.algorithm == "Ridge") {
+        obj = new QoreObject(QC_RIDGE, getProgram());
+        obj->setPrivate(CID_RIDGE, priv);
+    } else if (header.algorithm == "Lasso") {
+        obj = new QoreObject(QC_LASSO, getProgram());
+        obj->setPrivate(CID_LASSO, priv);
+    } else if (header.algorithm == "ElasticNet") {
+        obj = new QoreObject(QC_ELASTICNET, getProgram());
+        obj->setPrivate(CID_ELASTICNET, priv);
     } else if (header.algorithm == "LogisticRegression") {
         obj = new QoreObject(QC_LOGISTICREGRESSION, getProgram());
         obj->setPrivate(CID_LOGISTICREGRESSION, priv);
@@ -1722,6 +1925,9 @@ object ml_load_model(string path) [dom=FILESYSTEM] {
     } else if (header.algorithm == "TextFeatures") {
         obj = new QoreObject(QC_TEXTFEATURES, getProgram());
         obj->setPrivate(CID_TEXTFEATURES, priv);
+    } else if (header.algorithm == "SparseMatrix") {
+        obj = new QoreObject(QC_SPARSEMATRIX, getProgram());
+        obj->setPrivate(CID_SPARSEMATRIX, priv);
     } else {
         priv->deref(xsink);
         xsink->raiseException("ML-DESERIALIZE-ERROR",

@@ -31,7 +31,7 @@
 %requires Util
 
 module QoreOnnxExport {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing ONNX model export for trained ML models";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -62,6 +62,9 @@ module QoreOnnxExport {
     |@ref ML::LogisticRegression "LogisticRegression"|\c MatMul → \c Add → \c Sigmoid/\c Softmax|Classification
     |@ref ML::PCA "PCA"|\c Sub [→ \c Div] → \c MatMul|Dimensionality reduction
     |@ref ML::KMeans "KMeans"|Distance computation → \c ArgMin|Cluster assignment
+    |@ref ML::DecisionTree "DecisionTree"|\c TreeEnsembleClassifier or \c TreeEnsembleRegressor|Classification and regression
+    |@ref ML::RandomForest "RandomForest"|\c TreeEnsembleClassifier or \c TreeEnsembleRegressor|Ensemble with averaging
+    |@ref ML::GradientBoostedTrees "GradientBoostedTrees"|\c TreeEnsembleRegressor → \c Sigmoid/\c Softmax|Boosted ensemble with post-processing
     |@ref ML::IsolationForest "IsolationForest"|\c TreeEnsembleRegressor → score|Anomaly detection
 
     @note All tensor data is exported as \c float (32-bit). Qore ML models use
@@ -97,6 +100,14 @@ list<auto> predictions = onnx_model.predict(test_X);
     @endcode
 
     @section qoreonnxexportrelnotes QoreOnnxExport Module Release Notes
+
+    @subsection qoreonnxexport_1_1 QoreOnnxExport Module Version 1.1
+    - Added ONNX export for DecisionTree, RandomForest, and GradientBoostedTrees
+    - DecisionTree and RandomForest use TreeEnsembleClassifier (classification)
+      or TreeEnsembleRegressor (regression)
+    - GBT regression uses TreeEnsembleRegressor with learning rate baked into leaves
+    - GBT binary classification uses TreeEnsembleRegressor with Sigmoid post-processing
+    - GBT multiclass classification uses TreeEnsembleRegressor with Softmax post-processing
 
     @subsection qoreonnxexport_1_0 QoreOnnxExport Module Version 1.0
     - Initial release with ONNX export for 8 ML algorithms

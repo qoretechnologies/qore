@@ -35,7 +35,7 @@
 #include "qore/intern/QoreFuture.h"
 
 DLLEXPORT extern qore_classid_t CID_FUTURE;
-DLLLOCAL extern QoreClass* QC_FUTURE;
+DLLEXPORT extern QoreClass* QC_FUTURE;
 
 DLLLOCAL QoreClass* initFutureClass(QoreNamespace& ns);
 

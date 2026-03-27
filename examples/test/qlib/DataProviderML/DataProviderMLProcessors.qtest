@@ -1849,9 +1849,13 @@ class DataProviderMLProcessorsTest inherits QUnit::Test {
         assertTrue(children.contains("ewma"));
         assertTrue(children.contains("data-profile"));
         assertTrue(children.contains("schema-validation"));
+        assertTrue(children.contains("text-normalize"));
+        assertTrue(children.contains("tokenize"));
+        assertTrue(children.contains("chunk-text"));
+        assertTrue(children.contains("embed-text"));
 
         hash<ML::MLCapabilities> caps = ML::ml_get_capabilities();
-        int expected_count = 28;
+        int expected_count = 32;
         if (caps.has_onnx) {
             assertTrue(children.contains("onnx-model"));
             ++expected_count;

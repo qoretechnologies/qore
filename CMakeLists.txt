@@ -986,6 +986,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
+    lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
     lib/QoreTypeInfo.cpp
@@ -1287,6 +1288,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
@@ -1886,6 +1888,8 @@ qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
 qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
+qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
+qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
@@ -1969,6 +1973,7 @@ qore_user_module("qlib/CloseRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ElevenLabsRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/FreshBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/GeminiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/WaveRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/WooCommerceRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2025,6 +2030,7 @@ qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProv
 qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider;WebSocketClient" "discord-logo.svg")
 qore_user_module("qlib/ElevenLabsDataProvider" "ElevenLabsRestClient;RestClientIo;DataProvider" "elevenlabs-logo.svg")
 qore_user_module("qlib/FreshBooksDataProvider" "FreshBooksRestClient;RestClient;DataProvider" "freshbooks-logo.svg")
+qore_user_module("qlib/GeminiDataProvider" "GeminiRestClient;RestClientIo;DataProvider" "gemini-logo.svg")
 qore_user_module("qlib/LinearDataProvider" "LinearRestClient;RestClient;DataProvider" "linear-logo.svg")
 qore_user_module("qlib/WaveDataProvider" "WaveRestClient;RestClient;DataProvider" "wave-logo.svg")
 qore_user_module("qlib/WooCommerceDataProvider" "WooCommerceRestClient;RestClient;DataProvider" "woocommerce-logo.svg")

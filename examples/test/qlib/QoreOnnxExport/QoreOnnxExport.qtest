@@ -45,6 +45,13 @@ class OnnxExportTest inherits QUnit::Test {
         addTestCase("exportLogisticRegression", \exportLogisticRegressionTest());
         addTestCase("exportKMeans", \exportKMeansTest());
         addTestCase("exportIsolationForest", \exportIsolationForestTest());
+        addTestCase("exportDecisionTreeClassification", \exportDecisionTreeClassificationTest());
+        addTestCase("exportDecisionTreeRegression", \exportDecisionTreeRegressionTest());
+        addTestCase("exportRandomForestClassification", \exportRandomForestClassificationTest());
+        addTestCase("exportRandomForestRegression", \exportRandomForestRegressionTest());
+        addTestCase("exportGBTRegression", \exportGBTRegressionTest());
+        addTestCase("exportGBTBinaryClassification", \exportGBTBinaryClassificationTest());
+        addTestCase("exportGBTMulticlassClassification", \exportGBTMulticlassClassificationTest());
         addTestCase("exportToFile", \exportToFileTest());
         addTestCase("errorCases", \errorCasesTest());
 
@@ -182,6 +189,148 @@ class OnnxExportTest inherits QUnit::Test {
         assertTrue(has_ml_opset, "should import ai.onnx.ml opset");
     }
 
+    exportDecisionTreeClassificationTest() {
+        ML::DecisionTree dt({"task": "classification", "max_depth": 3});
+        dt.fitMatrix(
+            ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0),
+             (1.1, 2.1), (3.1, 4.1), (5.1, 6.1), (7.1, 8.1)),
+            (0, 0, 1, 1, 0, 0, 1, 1),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(dt, "test_dt_cls");
+        hash<auto> model = verifyOnnxBinary(data, "DecisionTree-Classification");
+
+        # Should use TreeEnsembleClassifier
+        assertEq("TreeEnsembleClassifier", model.graph.node[0].op_type,
+            "classification DT should use TreeEnsembleClassifier");
+
+        # Should import ai.onnx.ml opset
+        bool has_ml_opset = False;
+        foreach hash<auto> opset in (model.opset_import) {
+            if (opset.domain == "ai.onnx.ml") {
+                has_ml_opset = True;
+            }
+        }
+        assertTrue(has_ml_opset, "DT classification should import ai.onnx.ml opset");
+
+        # Should have scalar Y output and Y_probs output
+        assertEq(2, model.graph.output.size(),
+            "classifier should have Y and Y_probs outputs");
+    }
+
+    exportDecisionTreeRegressionTest() {
+        ML::DecisionTree dt({"task": "regression", "max_depth": 3});
+        dt.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(dt, "test_dt_reg");
+        hash<auto> model = verifyOnnxBinary(data, "DecisionTree-Regression");
+
+        # Should use TreeEnsembleRegressor
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "regression DT should use TreeEnsembleRegressor");
+        assertEq(1, model.graph.node.size(),
+            "regression DT should have exactly 1 node");
+    }
+
+    exportRandomForestClassificationTest() {
+        ML::RandomForest rf({"task": "classification", "n_trees": 5,
+            "max_depth": 3, "seed": 42});
+        rf.fitMatrix(
+            ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0),
+             (1.1, 2.1), (3.1, 4.1), (5.1, 6.1), (7.1, 8.1)),
+            (0, 0, 1, 1, 0, 0, 1, 1),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(rf, "test_rf_cls");
+        hash<auto> model = verifyOnnxBinary(data, "RandomForest-Classification");
+
+        assertEq("TreeEnsembleClassifier", model.graph.node[0].op_type,
+            "classification RF should use TreeEnsembleClassifier");
+        assertEq(2, model.graph.output.size(),
+            "RF classifier should have Y and Y_probs outputs");
+    }
+
+    exportRandomForestRegressionTest() {
+        ML::RandomForest rf({"task": "regression", "n_trees": 5,
+            "max_depth": 3, "seed": 42});
+        rf.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(rf, "test_rf_reg");
+        hash<auto> model = verifyOnnxBinary(data, "RandomForest-Regression");
+
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "regression RF should use TreeEnsembleRegressor");
+        assertEq(1, model.graph.node.size(),
+            "regression RF should have exactly 1 node");
+    }
+
+    exportGBTRegressionTest() {
+        ML::GradientBoostedTrees gbt({"task": "regression", "n_trees": 10,
+            "max_depth": 3, "learning_rate": 0.1, "seed": 42});
+        gbt.fitMatrix(
+            ((1.0,), (2.0,), (3.0,), (4.0,), (5.0,)),
+            (2.0, 4.0, 6.0, 8.0, 10.0),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(gbt, "test_gbt_reg");
+        hash<auto> model = verifyOnnxBinary(data, "GBT-Regression");
+
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "GBT regression should use TreeEnsembleRegressor");
+        assertEq(1, model.graph.node.size(),
+            "GBT regression should have exactly 1 node (tree ensemble)");
+    }
+
+    exportGBTBinaryClassificationTest() {
+        ML::GradientBoostedTrees gbt({"task": "classification", "n_trees": 10,
+            "max_depth": 3, "learning_rate": 0.1, "seed": 42});
+        gbt.fitMatrix(
+            ((1.0, 2.0), (3.0, 4.0), (5.0, 6.0), (7.0, 8.0),
+             (1.1, 2.1), (3.1, 4.1), (5.1, 6.1), (7.1, 8.1)),
+            (0, 0, 1, 1, 0, 0, 1, 1),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(gbt, "test_gbt_bin");
+        hash<auto> model = verifyOnnxBinary(data, "GBT-BinaryClassification");
+
+        # Should have TreeEnsembleRegressor + Sigmoid
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "GBT binary should start with TreeEnsembleRegressor");
+        assertEq("Sigmoid", model.graph.node[1].op_type,
+            "GBT binary should end with Sigmoid");
+        assertEq(2, model.graph.node.size(),
+            "GBT binary should have exactly 2 nodes");
+    }
+
+    exportGBTMulticlassClassificationTest() {
+        ML::GradientBoostedTrees gbt({"task": "classification", "n_trees": 15,
+            "max_depth": 3, "learning_rate": 0.1, "seed": 42});
+        gbt.fitMatrix(
+            ((1.0, 0.0), (0.0, 1.0), (1.0, 1.0),
+             (2.0, 0.0), (0.0, 2.0), (2.0, 2.0),
+             (3.0, 0.0), (0.0, 3.0), (3.0, 3.0),
+             (1.1, 0.1), (0.1, 1.1), (1.1, 1.1)),
+            (0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2),
+        );
+
+        binary data = QoreOnnxExport::OnnxExporter::export(gbt, "test_gbt_multi");
+        hash<auto> model = verifyOnnxBinary(data, "GBT-MulticlassClassification");
+
+        # Should have TreeEnsembleRegressor + Softmax
+        assertEq("TreeEnsembleRegressor", model.graph.node[0].op_type,
+            "GBT multiclass should start with TreeEnsembleRegressor");
+        assertEq("Softmax", model.graph.node[1].op_type,
+            "GBT multiclass should end with Softmax");
+        assertEq(2, model.graph.node.size(),
+            "GBT multiclass should have exactly 2 nodes");
+    }
+
     exportToFileTest() {
         string path = tmp_location() + DirSep + "onnx_test_"
             + get_random_bytes(4).toHex() + ".onnx";
@@ -211,6 +360,21 @@ class OnnxExportTest inherits QUnit::Test {
         ML::StandardScaler unfitted();
         assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
             (unfitted,));
+
+        # Unfitted DecisionTree
+        ML::DecisionTree unfitted_dt({"task": "classification"});
+        assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
+            (unfitted_dt,));
+
+        # Unfitted RandomForest
+        ML::RandomForest unfitted_rf({"task": "classification", "n_trees": 5});
+        assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
+            (unfitted_rf,));
+
+        # Unfitted GradientBoostedTrees
+        ML::GradientBoostedTrees unfitted_gbt({"task": "classification", "n_trees": 5});
+        assertThrows("ONNX-EXPORT-ERROR", \QoreOnnxExport::OnnxExporter::export(),
+            (unfitted_gbt,));
 
         # Unsupported algorithm
         ML::HoltWinters hw({"alpha": 0.5, "beta": 0.1, "gamma": 0.1, "period": 4});

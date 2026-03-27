@@ -64,6 +64,21 @@ public:
         return target_field;
     }
 
+    //! Get all tree data for ONNX export
+    DLLLOCAL QoreListNode* getTreesData(ExceptionSink* xsink) const;
+
+    //! Get number of trees
+    DLLLOCAL int getNumTrees() const { return n_trees; }
+
+    //! Get number of features
+    DLLLOCAL int getNumFeatures() const { return n_features; }
+
+    //! Get number of classes (0 for regression)
+    DLLLOCAL int getNumClasses() const { return n_classes; }
+
+    //! Get class labels
+    DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
+
     DLLLOCAL std::vector<uint8_t> serializeState() const;
     DLLLOCAL static QoreRandomForest* deserializeState(const uint8_t* data,
         size_t len, ExceptionSink* xsink);

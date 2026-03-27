@@ -28,13 +28,13 @@
 
 %requires(reexport) DataProvider
 %requires ml
+%requires json
 
-%try-module QoreModelRegistry
-%define NoModelRegistry
-%endtry
+%requires QoreModelRegistry
+%requires QoreTokenizerUtils
 
 module DataProviderML {
-    version = "1.1.0";
+    version = "1.0";
     desc = "user module providing ML-based data pipeline processors wrapping the ml binary module";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -381,8 +381,7 @@ module DataProviderML {
             });
         }
 
-        # register registry-model action (only when QoreModelRegistry is available)
-%ifndef NoModelRegistry
+        # register registry-model action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MLApp::AppName,
             "path": "/registry-model",
@@ -415,7 +414,6 @@ module DataProviderML {
                 }
             ),
         });
-%endif
 
         # register seasonal-decomposition action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
@@ -1134,6 +1132,126 @@ module DataProviderML {
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreSchemaValidationProcessor::ConstructorOptions{"on_violation",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register text-normalize action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/text-normalize",
+            "action": "text-normalize",
+            "display_name": "Clean Up Text",
+            "short_desc": "Standardizes text by removing noise, HTML, and inconsistent formatting",
+            "desc": "Cleans messy text before further processing — for example, stripping HTML "
+                "from web-scraped content, lowercasing product descriptions for consistent "
+                "search, or collapsing extra whitespace in imported data.\n\n"
+                "Pick one or more cleanup steps and they run in order. Each record passes "
+                "through with a new `{field}_normalized` field containing the cleaned result.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreTextNormalizeProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreTextNormalizeProcessor::ConstructorOptions{"text_field", "operations"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register tokenize action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/tokenize",
+            "action": "tokenize",
+            "display_name": "Count Tokens in Text",
+            "short_desc": "Measures how many tokens a text field contains for a given AI model",
+            "desc": "Counts tokens in a text field using the same tokenizer your AI model uses. "
+                "Each record passes through with a new `{field}_token_count` field.\n\n"
+                "Common uses:\n"
+                "- **Cost control** — estimate API costs before sending text to an LLM\n"
+                "- **Size filtering** — drop records that are too short or too long\n"
+                "- **Context budgeting** — check whether a prompt fits the model's limit",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreTokenizeProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreTokenizeProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreTokenizeProcessor::ConstructorOptions{"add_special_tokens",}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register chunk-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/chunk-text",
+            "action": "chunk-text",
+            "display_name": "Split Text into Searchable Chunks",
+            "short_desc": "Breaks documents into overlapping pieces sized for AI search",
+            "desc": "Splits long text into overlapping pieces that fit within an AI model's "
+                "input limit. Each input record produces one or more output records with "
+                "`chunk_text`, `chunk_index`, and `chunk_token_count` fields.\n\n"
+                "This is the first step in making documents searchable with AI: split them "
+                "into chunks, then embed each chunk as a vector.\n\n"
+                "For example, a 20-page contract becomes ~80 chunks of ~512 tokens each, "
+                "with slight overlap so no sentence is lost at a boundary.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreChunkTextProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreChunkTextProcessor::ConstructorOptions{"text_field", "tokenizer_config_path"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreChunkTextProcessor::ConstructorOptions{"chunk_size", "chunk_overlap"}, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register embed-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/embed-text",
+            "action": "embed-text",
+            "display_name": "Convert Text to Search Vectors",
+            "short_desc": "Turns text into numeric vectors for AI-powered similarity search",
+            "desc": "Converts text into numeric vectors (embeddings) that capture its meaning, "
+                "so similar texts end up close together in vector space. Records are batched "
+                "for efficiency, and each record gets an `embedding` field with the vector.\n\n"
+                "Use this after chunking to make documents searchable: store the vectors in a "
+                "database like Qdrant or pgvector, then find relevant passages by comparing "
+                "vectors.\n\n"
+                "Supports any OpenAI-compatible embedding endpoint (SGLang, vLLM, OpenAI, "
+                "Azure OpenAI) or a local ONNX model.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreEmbedTextProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEmbedTextProcessor::ConstructorOptions{"text_field", "embedding_mode"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreEmbedTextProcessor::ConstructorOptions{
+                    "embedding_url", "embedding_model", "embedding_api_key", "window_size",
+                }, {
                     "loc": "constructor",
                 }
             ),

@@ -1232,10 +1232,21 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+    - @ref qoremlutilsintro "QoreMLUtils" module
+      - new module providing hyperparameter optimization and model explainability
+      - GridSearch: exhaustive parameter grid search with k-fold cross-validation
+      - RandomSearch: random parameter sampling with k-fold cross-validation
+      - PermutationImportance: model-agnostic feature importance via column shuffling
+      - MLScoringUtils: default R², negative MSE, and accuracy scoring functions
     - @ref qoreonnxexportintro "QoreOnnxExport" module
-      - new module that exports trained ML models to ONNX format (8 algorithms: StandardScaler, MinMaxScaler,
-        Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)
+      - exports trained ML models to ONNX format (11 algorithms including tree ensembles)
+      - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
+      - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
+      - new module providing document chunking and token counting for RAG pipelines
+      - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
+      - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
@@ -1736,6 +1747,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - <a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>
       - <a href="../../modules/ElevenLabsDataProvider/html/index.html#elevenlabsdataproviderintro">ElevenLabsDataProvider</a>
       - <a href="../../modules/ElevenLabsRestClient/html/index.html#elevenlabsrestclientintro">ElevenLabsRestClient</a>
+      - <a href="../../modules/GeminiDataProvider/html/index.html#geminidataproviderintro">GeminiDataProvider</a>
+      - <a href="../../modules/GeminiRestClient/html/index.html#geminirestclientintro">GeminiRestClient</a>
       - <a href="../../modules/GmailDataProvider/html/index.html#gmaildataproviderintro">GmailDataProvider</a>
       - <a href="../../modules/GoogleCalendarDataProvider/html/index.html#googlecalendardataproviderintro">GoogleCalendarDataProvider</a>
       - <a href="../../modules/GoogleDataProvider/html/index.html#googledataproviderintro">GoogleDataProvider</a>

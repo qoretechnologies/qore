@@ -27,6 +27,7 @@
 
 #include "qore/Qore.h"
 #include "QC_LogisticRegression.h"
+#include "QC_SparseMatrix.h"
 
 extern const TypedHashDecl* hashdeclLogisticRegressionResult;
 
@@ -62,9 +63,9 @@ qclass LogisticRegression [arg=QoreLogisticRegression* lr; ns=Qore::ML; flags=fi
 
 //! Creates a LogisticRegression with the given options
 /** @param options a hash with the following optional keys:
-    - \c learning_rate (float, default 0.01): step size for gradient descent
-    - \c max_iterations (int, default 100): maximum number of gradient descent iterations
-    - \c tolerance (float, default 1e-4): convergence tolerance on weight changes
+    - \c learning_rate (float, default 0.01): step size for online SGD updates via `update()`
+    - \c max_iterations (int, default 100): maximum number of L-BFGS iterations
+    - \c tolerance (float, default 1e-4): convergence tolerance for L-BFGS gradient norm
     - \c regularization (float, default 1.0): regularization strength (only used when penalty is "l2")
     - \c penalty (string, default "l2"): regularization type; "l2" or "none"
     - \c fit_intercept (bool, default True): whether to fit an intercept (bias) term
@@ -83,7 +84,6 @@ LogisticRegression::constructor(*hash<auto> options) {
     double regularization_val = 1.0;
     const char* penalty_str = "l2";
     bool fit_intercept = true;
-
     if (options) {
         QoreValue v;
         v = options->getKeyValue("learning_rate");
@@ -137,7 +137,6 @@ LogisticRegression::constructor(*hash<auto> options) {
             "penalty must be 'l2' or 'none'; got '%s'", penalty_str);
         return;
     }
-
     self->setPrivate(CID_LOGISTICREGRESSION,
         new QoreLogisticRegression(learning_rate, static_cast<int>(max_iterations),
             tolerance, regularization_val, penalty_str, fit_intercept));
@@ -418,4 +417,24 @@ list<float> LogisticRegression::getClasses() {
 */
 bool LogisticRegression::isBinary() [flags=CONSTANT] {
     return lr->isBinaryClassification();
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse matrix-vector products in gradient descent for memory-efficient
+    fitting on high-dimensional sparse data (e.g., text classification with TF-IDF).
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of class labels
+
+    @note Feature normalization is not applied when fitting with sparse data.
+
+    @throw ML-LOGISTIC-REGRESSION-ERROR if fitting fails
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing LogisticRegression::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    lr->fitSparse(X->getMatrix(), target, xsink);
 }

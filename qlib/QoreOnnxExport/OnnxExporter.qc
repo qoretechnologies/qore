@@ -37,6 +37,9 @@ public namespace QoreOnnxExport {
     - @ref ML::LogisticRegression "LogisticRegression"
     - @ref ML::PCA "PCA"
     - @ref ML::KMeans "KMeans"
+    - @ref ML::DecisionTree "DecisionTree"
+    - @ref ML::RandomForest "RandomForest"
+    - @ref ML::GradientBoostedTrees "GradientBoostedTrees"
     - @ref ML::IsolationForest "IsolationForest"
 
     @par Example:
@@ -83,6 +86,15 @@ public class OnnxExporter {
         }
         if (model instanceof ML::KMeans) {
             return exportKMeans(cast<ML::KMeans>(model), model_name);
+        }
+        if (model instanceof ML::DecisionTree) {
+            return exportDecisionTree(cast<ML::DecisionTree>(model), model_name);
+        }
+        if (model instanceof ML::RandomForest) {
+            return exportRandomForest(cast<ML::RandomForest>(model), model_name);
+        }
+        if (model instanceof ML::GradientBoostedTrees) {
+            return exportGBT(cast<ML::GradientBoostedTrees>(model), model_name);
         }
         if (model instanceof ML::IsolationForest) {
             return exportIsolationForest(cast<ML::IsolationForest>(model), model_name);
@@ -583,6 +595,477 @@ public class OnnxExporter {
             (OnnxGraphBuilder::makeOutput("Y", 1),),
             initializers,
             # Both default opset and ai.onnx.ml opset
+            (
+                {"domain": "", "version": OnnxGraphBuilder::DefaultOpsetVersion},
+                {"domain": "ai.onnx.ml", "version": 1},
+            ),
+        );
+        return OnnxGraphBuilder::serialize(model_proto);
+    }
+
+    #! Exports a DecisionTree to ONNX
+    /** Uses TreeEnsembleClassifier for classification, TreeEnsembleRegressor for regression.
+    */
+    private static binary exportDecisionTree(ML::DecisionTree dt, *string model_name) {
+        if (!dt.isFitted()) {
+            throw "ONNX-EXPORT-ERROR", "DecisionTree has not been fitted";
+        }
+
+        list<hash<auto>> tree_nodes = dt.getTreeData();
+        string task = dt.getTask();
+        int n_features = dt.getNumFeatures();
+        string name = model_name ?? "decision_tree";
+
+        if (task == "regression") {
+            return exportTreeEnsembleRegressor((tree_nodes,), n_features, name,
+                "SUM", NOTHING, NOTHING);
+        }
+        # Classification
+        int n_classes = dt.getNumClasses();
+        list<auto> class_labels = dt.getClasses();
+        return exportTreeEnsembleClassifier((tree_nodes,), n_features, n_classes,
+            class_labels, name, "NONE");
+    }
+
+    #! Exports a RandomForest to ONNX
+    /** Uses TreeEnsembleClassifier for classification, TreeEnsembleRegressor for regression.
+    */
+    private static binary exportRandomForest(ML::RandomForest rf, *string model_name) {
+        if (!rf.isFitted()) {
+            throw "ONNX-EXPORT-ERROR", "RandomForest has not been fitted";
+        }
+
+        list<list<hash<auto>>> all_trees = rf.getTreesData();
+        string task = rf.getTask();
+        int n_features = rf.getNumFeatures();
+        string name = model_name ?? "random_forest";
+
+        if (task == "regression") {
+            return exportTreeEnsembleRegressor(all_trees, n_features, name,
+                "AVERAGE", NOTHING, NOTHING);
+        }
+        int n_classes = rf.getNumClasses();
+        list<auto> class_labels = rf.getClasses();
+        return exportTreeEnsembleClassifier(all_trees, n_features, n_classes,
+            class_labels, name, "NONE");
+    }
+
+    #! Exports a GradientBoostedTrees to ONNX
+    /** Uses TreeEnsembleRegressor with post-processing.
+        Regression: SUM with base_values and learning rate baked into leaves.
+        Binary classification: TreeEnsembleRegressor -> Sigmoid.
+        Multiclass: TreeEnsembleRegressor -> Softmax.
+    */
+    private static binary exportGBT(ML::GradientBoostedTrees gbt, *string model_name) {
+        if (!gbt.isFitted()) {
+            throw "ONNX-EXPORT-ERROR", "GradientBoostedTrees has not been fitted";
+        }
+
+        list<list<hash<auto>>> all_trees = gbt.getTreesData();
+        string task = gbt.getTask();
+        int n_features = gbt.getNumFeatures();
+        float lr = gbt.getLearningRate();
+        string name = model_name ?? "gradient_boosted_trees";
+
+        if (task == "regression") {
+            float init_pred = gbt.getInitialPrediction();
+            # Bake learning rate into leaf values by scaling them
+            return exportTreeEnsembleRegressor(all_trees, n_features, name,
+                "SUM", (init_pred,), lr);
+        }
+
+        int n_classes = gbt.getNumClasses();
+        list<auto> class_labels = gbt.getClasses();
+
+        if (n_classes == 2) {
+            # Binary classification: trees predict log-odds residuals
+            # F(x) = init + lr * sum(tree_i(x)), then sigmoid
+            float init_pred = gbt.getInitialPrediction();
+            return exportGBTBinaryClassification(all_trees, n_features, n_classes,
+                class_labels, name, init_pred, lr);
+        }
+
+        # Multiclass: K trees per round, one per class
+        list<float> init_preds = gbt.getInitialPredictions();
+        return exportGBTMulticlassClassification(all_trees, n_features, n_classes,
+            class_labels, name, init_preds, lr);
+    }
+
+    #! Shared helper: exports tree ensemble as ONNX TreeEnsembleRegressor
+    /** Used by DecisionTree (regression), RandomForest (regression), GBT (regression),
+        and IsolationForest (via separate method).
+
+        @param all_trees list of trees, each tree is a list of node hashes
+        @param n_features number of input features
+        @param name model name for ONNX graph
+        @param aggregate aggregation function ("SUM", "AVERAGE")
+        @param base_values optional base values (e.g., initial predictions for GBT)
+        @param learning_rate optional learning rate to bake into leaf values
+    */
+    private static binary exportTreeEnsembleRegressor(list<list<hash<auto>>> all_trees,
+            int n_features, string name, string aggregate, *list<float> base_values,
+            *float learning_rate) {
+        # Flatten all trees into ONNX attribute arrays
+        list<int> nodes_treeids();
+        list<int> nodes_nodeids();
+        list<int> nodes_featureids();
+        list<float> nodes_values();
+        list<string> nodes_modes();
+        list<int> nodes_truenodeids();
+        list<int> nodes_falsenodeids();
+        list<int> target_ids();
+        list<int> target_nodeids();
+        list<int> target_treeids();
+        list<float> target_weights();
+
+        for (int t = 0; t < all_trees.size(); ++t) {
+            list<hash<auto>> tree_nodes = all_trees[t];
+            for (int n = 0; n < tree_nodes.size(); ++n) {
+                hash<auto> node = tree_nodes[n];
+                push nodes_treeids, t;
+                push nodes_nodeids, n;
+
+                bool is_leaf = (node.feature_index == -1);
+                if (is_leaf) {
+                    push nodes_featureids, 0;
+                    push nodes_values, 0.0;
+                    push nodes_modes, "LEAF";
+                    push nodes_truenodeids, 0;
+                    push nodes_falsenodeids, 0;
+
+                    float leaf_val = float(node.value);
+                    if (exists learning_rate) {
+                        leaf_val *= learning_rate;
+                    }
+                    push target_ids, 0;
+                    push target_nodeids, n;
+                    push target_treeids, t;
+                    push target_weights, leaf_val;
+                } else {
+                    push nodes_featureids, int(node.feature_index);
+                    push nodes_values, float(node.threshold);
+                    push nodes_modes, "BRANCH_LEQ";
+                    push nodes_truenodeids, int(node.left);
+                    push nodes_falsenodeids, int(node.right);
+                }
+            }
+        }
+
+        list<hash<auto>> nodes();
+        list<hash<auto>> initializers();
+
+        list<hash<auto>> attrs = (
+            OnnxGraphBuilder::makeAttrInts("nodes_treeids", nodes_treeids),
+            OnnxGraphBuilder::makeAttrInts("nodes_nodeids", nodes_nodeids),
+            OnnxGraphBuilder::makeAttrInts("nodes_featureids", nodes_featureids),
+            OnnxGraphBuilder::makeAttrFloats("nodes_values", nodes_values),
+            OnnxGraphBuilder::makeAttrStrings("nodes_modes", nodes_modes),
+            OnnxGraphBuilder::makeAttrInts("nodes_truenodeids", nodes_truenodeids),
+            OnnxGraphBuilder::makeAttrInts("nodes_falsenodeids", nodes_falsenodeids),
+            OnnxGraphBuilder::makeAttrInts("target_ids", target_ids),
+            OnnxGraphBuilder::makeAttrInts("target_nodeids", target_nodeids),
+            OnnxGraphBuilder::makeAttrInts("target_treeids", target_treeids),
+            OnnxGraphBuilder::makeAttrFloats("target_weights", target_weights),
+            OnnxGraphBuilder::makeAttrInt("n_targets", 1),
+            OnnxGraphBuilder::makeAttrString("aggregate_function", aggregate),
+            OnnxGraphBuilder::makeAttrString("post_transform", "NONE"),
+        );
+        if (exists base_values) {
+            attrs += OnnxGraphBuilder::makeAttrFloats("base_values", base_values);
+        }
+
+        nodes += OnnxGraphBuilder::makeNode("TreeEnsembleRegressor", ("X",),
+            ("Y",), attrs, NOTHING, "ai.onnx.ml");
+
+        hash<auto> model_proto = OnnxGraphBuilder::buildModel(name, nodes,
+            (OnnxGraphBuilder::makeInput("X", n_features),),
+            (OnnxGraphBuilder::makeOutput("Y", 1),),
+            initializers,
+            (
+                {"domain": "", "version": OnnxGraphBuilder::DefaultOpsetVersion},
+                {"domain": "ai.onnx.ml", "version": 1},
+            ),
+        );
+        return OnnxGraphBuilder::serialize(model_proto);
+    }
+
+    #! Shared helper: exports tree ensemble as ONNX TreeEnsembleClassifier
+    /** Used by DecisionTree (classification) and RandomForest (classification).
+
+        @param all_trees list of trees, each tree is a list of node hashes
+        @param n_features number of input features
+        @param n_classes number of target classes
+        @param class_labels list of class label values
+        @param name model name for ONNX graph
+        @param post_transform post-transform function (e.g., "NONE")
+    */
+    private static binary exportTreeEnsembleClassifier(list<list<hash<auto>>> all_trees,
+            int n_features, int n_classes, list<auto> class_labels,
+            string name, string post_transform) {
+        list<int> nodes_treeids();
+        list<int> nodes_nodeids();
+        list<int> nodes_featureids();
+        list<float> nodes_values();
+        list<string> nodes_modes();
+        list<int> nodes_truenodeids();
+        list<int> nodes_falsenodeids();
+        list<int> class_treeids();
+        list<int> class_nodeids();
+        list<int> class_ids();
+        list<float> class_weights();
+
+        for (int t = 0; t < all_trees.size(); ++t) {
+            list<hash<auto>> tree_nodes = all_trees[t];
+            for (int n = 0; n < tree_nodes.size(); ++n) {
+                hash<auto> node = tree_nodes[n];
+                push nodes_treeids, t;
+                push nodes_nodeids, n;
+
+                bool is_leaf = (node.feature_index == -1);
+                if (is_leaf) {
+                    push nodes_featureids, 0;
+                    push nodes_values, 0.0;
+                    push nodes_modes, "LEAF";
+                    push nodes_truenodeids, 0;
+                    push nodes_falsenodeids, 0;
+
+                    # Add class probabilities for this leaf
+                    list<auto> probs = node.class_probs ?? ();
+                    for (int c = 0; c < n_classes; ++c) {
+                        push class_treeids, t;
+                        push class_nodeids, n;
+                        push class_ids, c;
+                        push class_weights, (c < probs.size()) ? float(probs[c]) : 0.0;
+                    }
+                } else {
+                    push nodes_featureids, int(node.feature_index);
+                    push nodes_values, float(node.threshold);
+                    push nodes_modes, "BRANCH_LEQ";
+                    push nodes_truenodeids, int(node.left);
+                    push nodes_falsenodeids, int(node.right);
+                }
+            }
+        }
+
+        list<hash<auto>> nodes();
+        list<hash<auto>> initializers();
+
+        # Build class labels as int64
+        list<int> class_labels_int = map int($1), class_labels;
+
+        nodes += OnnxGraphBuilder::makeNode("TreeEnsembleClassifier", ("X",),
+            ("Y", "Y_probs"),
+            (
+                OnnxGraphBuilder::makeAttrInts("nodes_treeids", nodes_treeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_nodeids", nodes_nodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_featureids", nodes_featureids),
+                OnnxGraphBuilder::makeAttrFloats("nodes_values", nodes_values),
+                OnnxGraphBuilder::makeAttrStrings("nodes_modes", nodes_modes),
+                OnnxGraphBuilder::makeAttrInts("nodes_truenodeids", nodes_truenodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_falsenodeids", nodes_falsenodeids),
+                OnnxGraphBuilder::makeAttrInts("class_treeids", class_treeids),
+                OnnxGraphBuilder::makeAttrInts("class_nodeids", class_nodeids),
+                OnnxGraphBuilder::makeAttrInts("class_ids", class_ids),
+                OnnxGraphBuilder::makeAttrFloats("class_weights", class_weights),
+                OnnxGraphBuilder::makeAttrInts("classlabels_int64s", class_labels_int),
+                OnnxGraphBuilder::makeAttrString("post_transform", post_transform),
+            ),
+            NOTHING,
+            "ai.onnx.ml",
+        );
+
+        hash<auto> model_proto = OnnxGraphBuilder::buildModel(name, nodes,
+            (OnnxGraphBuilder::makeInput("X", n_features),),
+            (
+                OnnxGraphBuilder::makeScalarOutput("Y", ONNX_INT64),
+                OnnxGraphBuilder::makeOutput("Y_probs", n_classes),
+            ),
+            initializers,
+            (
+                {"domain": "", "version": OnnxGraphBuilder::DefaultOpsetVersion},
+                {"domain": "ai.onnx.ml", "version": 1},
+            ),
+        );
+        return OnnxGraphBuilder::serialize(model_proto);
+    }
+
+    #! Exports GBT binary classification to ONNX
+    /** Uses TreeEnsembleRegressor for raw logit, then Sigmoid for probability.
+        Learning rate is baked into leaf values; initial prediction is in base_values.
+    */
+    private static binary exportGBTBinaryClassification(list<list<hash<auto>>> all_trees,
+            int n_features, int n_classes, list<auto> class_labels,
+            string name, float init_pred, float lr) {
+        # Use TreeEnsembleRegressor to get raw logit, then sigmoid
+        # Bake learning_rate into leaf values and init_pred into base_values
+        list<int> nodes_treeids();
+        list<int> nodes_nodeids();
+        list<int> nodes_featureids();
+        list<float> nodes_values();
+        list<string> nodes_modes();
+        list<int> nodes_truenodeids();
+        list<int> nodes_falsenodeids();
+        list<int> target_ids();
+        list<int> target_nodeids();
+        list<int> target_treeids();
+        list<float> target_weights();
+
+        for (int t = 0; t < all_trees.size(); ++t) {
+            list<hash<auto>> tree_nodes = all_trees[t];
+            for (int n = 0; n < tree_nodes.size(); ++n) {
+                hash<auto> node = tree_nodes[n];
+                push nodes_treeids, t;
+                push nodes_nodeids, n;
+
+                if (node.feature_index == -1) {
+                    push nodes_featureids, 0;
+                    push nodes_values, 0.0;
+                    push nodes_modes, "LEAF";
+                    push nodes_truenodeids, 0;
+                    push nodes_falsenodeids, 0;
+
+                    push target_ids, 0;
+                    push target_nodeids, n;
+                    push target_treeids, t;
+                    push target_weights, float(node.value) * lr;
+                } else {
+                    push nodes_featureids, int(node.feature_index);
+                    push nodes_values, float(node.threshold);
+                    push nodes_modes, "BRANCH_LEQ";
+                    push nodes_truenodeids, int(node.left);
+                    push nodes_falsenodeids, int(node.right);
+                }
+            }
+        }
+
+        list<hash<auto>> nodes();
+        list<hash<auto>> initializers();
+
+        # TreeEnsembleRegressor for raw logit score
+        nodes += OnnxGraphBuilder::makeNode("TreeEnsembleRegressor", ("X",),
+            ("raw_logit",),
+            (
+                OnnxGraphBuilder::makeAttrInts("nodes_treeids", nodes_treeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_nodeids", nodes_nodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_featureids", nodes_featureids),
+                OnnxGraphBuilder::makeAttrFloats("nodes_values", nodes_values),
+                OnnxGraphBuilder::makeAttrStrings("nodes_modes", nodes_modes),
+                OnnxGraphBuilder::makeAttrInts("nodes_truenodeids", nodes_truenodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_falsenodeids", nodes_falsenodeids),
+                OnnxGraphBuilder::makeAttrInts("target_ids", target_ids),
+                OnnxGraphBuilder::makeAttrInts("target_nodeids", target_nodeids),
+                OnnxGraphBuilder::makeAttrInts("target_treeids", target_treeids),
+                OnnxGraphBuilder::makeAttrFloats("target_weights", target_weights),
+                OnnxGraphBuilder::makeAttrInt("n_targets", 1),
+                OnnxGraphBuilder::makeAttrString("aggregate_function", "SUM"),
+                OnnxGraphBuilder::makeAttrString("post_transform", "NONE"),
+                OnnxGraphBuilder::makeAttrFloats("base_values", (init_pred,)),
+            ),
+            NOTHING,
+            "ai.onnx.ml",
+        );
+
+        # Sigmoid to convert logit to probability
+        nodes += OnnxGraphBuilder::makeNode("Sigmoid", ("raw_logit",), ("Y_prob_1",));
+
+        hash<auto> model_proto = OnnxGraphBuilder::buildModel(name, nodes,
+            (OnnxGraphBuilder::makeInput("X", n_features),),
+            (OnnxGraphBuilder::makeOutput("Y_prob_1", 1),),
+            initializers,
+            (
+                {"domain": "", "version": OnnxGraphBuilder::DefaultOpsetVersion},
+                {"domain": "ai.onnx.ml", "version": 1},
+            ),
+        );
+        return OnnxGraphBuilder::serialize(model_proto);
+    }
+
+    #! Exports GBT multiclass classification to ONNX
+    /** Uses TreeEnsembleRegressor with n_targets = n_classes, then Softmax.
+        Trees are interleaved: K trees per round, one per class.
+    */
+    private static binary exportGBTMulticlassClassification(list<list<hash<auto>>> all_trees,
+            int n_features, int n_classes, list<auto> class_labels,
+            string name, list<float> init_preds, float lr) {
+        # GBT multiclass: trees are interleaved, K trees per round
+        # Use TreeEnsembleRegressor with n_targets = n_classes
+        list<int> nodes_treeids();
+        list<int> nodes_nodeids();
+        list<int> nodes_featureids();
+        list<float> nodes_values();
+        list<string> nodes_modes();
+        list<int> nodes_truenodeids();
+        list<int> nodes_falsenodeids();
+        list<int> target_ids();
+        list<int> target_nodeids();
+        list<int> target_treeids();
+        list<float> target_weights();
+
+        for (int t = 0; t < all_trees.size(); ++t) {
+            # Tree t corresponds to class (t % n_classes)
+            int class_idx = t % n_classes;
+            list<hash<auto>> tree_nodes = all_trees[t];
+            for (int n = 0; n < tree_nodes.size(); ++n) {
+                hash<auto> node = tree_nodes[n];
+                push nodes_treeids, t;
+                push nodes_nodeids, n;
+
+                if (node.feature_index == -1) {
+                    push nodes_featureids, 0;
+                    push nodes_values, 0.0;
+                    push nodes_modes, "LEAF";
+                    push nodes_truenodeids, 0;
+                    push nodes_falsenodeids, 0;
+
+                    push target_ids, class_idx;
+                    push target_nodeids, n;
+                    push target_treeids, t;
+                    push target_weights, float(node.value) * lr;
+                } else {
+                    push nodes_featureids, int(node.feature_index);
+                    push nodes_values, float(node.threshold);
+                    push nodes_modes, "BRANCH_LEQ";
+                    push nodes_truenodeids, int(node.left);
+                    push nodes_falsenodeids, int(node.right);
+                }
+            }
+        }
+
+        list<hash<auto>> nodes();
+        list<hash<auto>> initializers();
+
+        # TreeEnsembleRegressor with n_targets = n_classes
+        nodes += OnnxGraphBuilder::makeNode("TreeEnsembleRegressor", ("X",),
+            ("raw_logits",),
+            (
+                OnnxGraphBuilder::makeAttrInts("nodes_treeids", nodes_treeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_nodeids", nodes_nodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_featureids", nodes_featureids),
+                OnnxGraphBuilder::makeAttrFloats("nodes_values", nodes_values),
+                OnnxGraphBuilder::makeAttrStrings("nodes_modes", nodes_modes),
+                OnnxGraphBuilder::makeAttrInts("nodes_truenodeids", nodes_truenodeids),
+                OnnxGraphBuilder::makeAttrInts("nodes_falsenodeids", nodes_falsenodeids),
+                OnnxGraphBuilder::makeAttrInts("target_ids", target_ids),
+                OnnxGraphBuilder::makeAttrInts("target_nodeids", target_nodeids),
+                OnnxGraphBuilder::makeAttrInts("target_treeids", target_treeids),
+                OnnxGraphBuilder::makeAttrFloats("target_weights", target_weights),
+                OnnxGraphBuilder::makeAttrInt("n_targets", n_classes),
+                OnnxGraphBuilder::makeAttrString("aggregate_function", "SUM"),
+                OnnxGraphBuilder::makeAttrString("post_transform", "NONE"),
+                OnnxGraphBuilder::makeAttrFloats("base_values", init_preds),
+            ),
+            NOTHING,
+            "ai.onnx.ml",
+        );
+
+        # Softmax to convert raw logits to probabilities
+        nodes += OnnxGraphBuilder::makeNode("Softmax", ("raw_logits",), ("Y",),
+            (OnnxGraphBuilder::makeAttrInt("axis", 1),));
+
+        hash<auto> model_proto = OnnxGraphBuilder::buildModel(name, nodes,
+            (OnnxGraphBuilder::makeInput("X", n_features),),
+            (OnnxGraphBuilder::makeOutput("Y", n_classes),),
+            initializers,
             (
                 {"domain": "", "version": OnnxGraphBuilder::DefaultOpsetVersion},
                 {"domain": "ai.onnx.ml", "version": 1},

@@ -77,6 +77,18 @@ public:
     //! Access to internal tree (for RandomForest/GBT)
     DLLLOCAL const FlatTree& getTree() const { return tree; }
 
+    //! Get tree node data for ONNX export
+    DLLLOCAL QoreListNode* getTreeData(ExceptionSink* xsink) const;
+
+    //! Get number of features
+    DLLLOCAL int getNumFeatures() const { return n_features; }
+
+    //! Get number of classes (0 for regression)
+    DLLLOCAL int getNumClasses() const { return tree.n_classes; }
+
+    //! Get class labels
+    DLLLOCAL QoreListNode* getClasses(ExceptionSink* xsink) const;
+
 private:
     int max_depth;
     int min_samples_split;

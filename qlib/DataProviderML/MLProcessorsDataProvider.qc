@@ -74,12 +74,15 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
     constructor(*hash<auto> options) {
         checkOptions("CONSTRUCTOR-ERROR", NOTHING, options);
         Children = CoreChildren;
+        # text-normalize works without QoreTokenizerUtils
+        Children."text-normalize" = "QoreTextNormalizeProcessor";
         if (ML::ml_get_capabilities().has_onnx) {
             Children."onnx-model" = "QoreOnnxModelProcessor";
         }
-%ifndef NoModelRegistry
         Children."registry-model" = "QoreRegistryModelProcessor";
-%endif
+        Children."tokenize" = "QoreTokenizeProcessor";
+        Children."chunk-text" = "QoreChunkTextProcessor";
+        Children."embed-text" = "QoreEmbedTextProcessor";
     }
 
     #! Returns the name of this data provider
@@ -162,15 +165,21 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreDataProfileProcessor();
             case "schema-validation":
                 return new QoreSchemaValidationProcessor();
+            case "text-normalize":
+                return new QoreTextNormalizeProcessor();
             case "onnx-model":
                 if (ML::ml_get_capabilities().has_onnx) {
                     return new QoreOnnxModelProcessor();
                 }
                 break;
-%ifndef NoModelRegistry
             case "registry-model":
                 return new QoreRegistryModelProcessor();
-%endif
+            case "tokenize":
+                return new QoreTokenizeProcessor();
+            case "chunk-text":
+                return new QoreChunkTextProcessor();
+            case "embed-text":
+                return new QoreEmbedTextProcessor();
         }
     }
 }

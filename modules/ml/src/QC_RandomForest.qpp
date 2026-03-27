@@ -250,3 +250,51 @@ bool RandomForest::isFitted() [flags=CONSTANT] {
 hash<auto> RandomForest::getFeatureImportances() {
     return rf->getFeatureImportances(xsink);
 }
+
+//! Returns all tree structures for ONNX export
+/** @return a list of trees, where each tree is a list of node hashes.
+    Each node hash has keys: \c feature_index (-1 for leaf), \c threshold,
+    \c value, \c class_probs, \c n_samples, \c left, \c right
+
+    @throw ML-RANDOM-FOREST-ERROR if the model has not been fitted
+*/
+list<list<hash<auto>>> RandomForest::getTreesData() [flags=RET_VALUE_ONLY] {
+    return rf->getTreesData(xsink);
+}
+
+//! Returns the number of trees in the forest
+/** @return number of trees
+*/
+int RandomForest::getNumTrees() [flags=CONSTANT] {
+    return rf->getNumTrees();
+}
+
+//! Returns the number of features the model was trained with
+/** @return the number of features
+*/
+int RandomForest::getNumFeatures() [flags=CONSTANT] {
+    return rf->getNumFeatures();
+}
+
+//! Returns the number of classes (0 for regression tasks)
+/** @return the number of unique class labels
+*/
+int RandomForest::getNumClasses() [flags=CONSTANT] {
+    return rf->getNumClasses();
+}
+
+//! Returns the class labels used for classification
+/** @return list of class label values; empty for regression tasks
+
+    @throw ML-RANDOM-FOREST-ERROR if the model has not been fitted
+*/
+list<auto> RandomForest::getClasses() [flags=RET_VALUE_ONLY] {
+    return rf->getClasses(xsink);
+}
+
+//! Returns the task type ("classification" or "regression")
+/** @return the task type string
+*/
+string RandomForest::getTask() [flags=CONSTANT] {
+    return new QoreStringNode(rf->getTask().c_str());
+}

@@ -225,6 +225,49 @@ QoreHashNode* QoreDecisionTree::getFeatureImportances(ExceptionSink* xsink) cons
     return rv.release();
 }
 
+QoreListNode* QoreDecisionTree::getTreeData(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (const auto& node : tree.nodes) {
+        ReferenceHolder<QoreHashNode> nh(new QoreHashNode(autoTypeInfo), xsink);
+        nh->setKeyValue("feature_index", static_cast<int64>(node.feature_index), xsink);
+        nh->setKeyValue("threshold", node.threshold, xsink);
+        nh->setKeyValue("value", node.value, xsink);
+        nh->setKeyValue("n_samples", static_cast<int64>(node.n_samples), xsink);
+        nh->setKeyValue("left", static_cast<int64>(node.left), xsink);
+        nh->setKeyValue("right", static_cast<int64>(node.right), xsink);
+        // Add class_probs for classification trees
+        if (!node.class_probs.empty()) {
+            ReferenceHolder<QoreListNode> probs(new QoreListNode(autoTypeInfo), xsink);
+            for (double p : node.class_probs) {
+                probs->push(p, xsink);
+            }
+            nh->setKeyValue("class_probs", probs.release(), xsink);
+        }
+        rv->push(nh.release(), xsink);
+    }
+    return rv.release();
+}
+
+QoreListNode* QoreDecisionTree::getClasses(ExceptionSink* xsink) const {
+    std::lock_guard<std::mutex> lk(mtx);
+    if (!fitted) {
+        xsink->raiseException("ML-DECISION-TREE-ERROR",
+            "model has not been fitted: call fit() or fitMatrix() first");
+        return nullptr;
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (double c : tree.classes) {
+        rv->push(c, xsink);
+    }
+    return rv.release();
+}
+
 // --- Serialization ---
 
 std::vector<uint8_t> QoreDecisionTree::serializeState() const {

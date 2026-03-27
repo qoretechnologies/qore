@@ -1,0 +1,360 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreMLUtils.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreMLUtils
+%requires ml
+%requires QUnit
+
+%exec-class QoreMLUtilsTest
+
+public class QoreMLUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreMLUtilsTest", "1.0") {
+        addTestCase("GridSearch basic regression", \gridSearchBasicTest());
+        addTestCase("GridSearch best params", \gridSearchBestParamsTest());
+        addTestCase("GridSearch reproducibility", \gridSearchReproducibilityTest());
+        addTestCase("GridSearch error cases", \gridSearchErrorTest());
+        addTestCase("RandomSearch basic", \randomSearchBasicTest());
+        addTestCase("RandomSearch reproducibility", \randomSearchReproducibilityTest());
+        addTestCase("RandomSearch error cases", \randomSearchErrorTest());
+        addTestCase("PermutationImportance regression", \permImpRegressionTest());
+        addTestCase("PermutationImportance feature ranking", \permImpRankingTest());
+        addTestCase("PermutationImportance reproducibility", \permImpReproducibilityTest());
+        addTestCase("PermutationImportance error cases", \permImpErrorTest());
+        addTestCase("MLScoringUtils r2", \scoringR2Test());
+        addTestCase("MLScoringUtils accuracy", \scoringAccuracyTest());
+        set_return_value(main());
+    }
+
+    private {
+        # Shared test data: y = 2*x1 + 3*x2 + 1
+        list<list<float>> X_reg;
+        list<float> y_reg;
+    }
+
+    globalSetUp() {
+        X_reg = ();
+        y_reg = ();
+        for (int i = 0; i < 50; ++i) {
+            float x1 = (i % 10) * 1.0;
+            float x2 = ((i * 3) % 10) * 1.0;
+            push X_reg, (x1, x2);
+            push y_reg, 2.0 * x1 + 3.0 * x2 + 1.0;
+        }
+    }
+
+    #! Model factory for Ridge regression tests
+    static object ridgeFactory(hash<auto> params, list<auto> X_train, list<auto> y_train) {
+        ML::Ridge model(params);
+        model.fitMatrix(X_train, y_train);
+        return model;
+    }
+
+    #! Predictor that extracts Ridge predictions
+    static list<auto> ridgePredictor(object model, list<auto> X_test) {
+        return map $1.prediction, cast<ML::Ridge>(model).predictMatrix(X_test);
+    }
+
+    #! Predictor for LinearRegression
+    static list<auto> lrPredictor(list<auto> X_data, object model) {
+        return map $1.prediction, cast<ML::LinearRegression>(model).predictMatrix(X_data);
+    }
+
+    # ===================== GridSearch Tests =====================
+
+    gridSearchBasicTest() {
+        QoreMLUtils::GridSearch gs({
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_grid": {"alpha": (0.1, 1.0)},
+            "scorer": \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            "n_folds": 3,
+            "seed": 42,
+        });
+
+        hash<auto> result = gs.fitMatrix(X_reg, y_reg);
+
+        assertTrue(exists result.best_params, "best_params should exist");
+        assertTrue(exists result.best_score, "best_score should exist");
+        assertTrue(exists result.cv_results, "cv_results should exist");
+
+        # 2 alpha values => 2 combinations
+        assertEq(2, result.cv_results.size());
+
+        # Best score should be high (perfect linear relationship)
+        assertTrue(result.best_score > 0.9,
+            sprintf("best_score should be > 0.9; got %f", result.best_score));
+
+        # Each cv_result should have fold_scores
+        assertEq(3, result.cv_results[0].fold_scores.size());
+    }
+
+    gridSearchBestParamsTest() {
+        QoreMLUtils::GridSearch gs({
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_grid": {"alpha": (0.001, 100.0)},
+            "scorer": \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            "n_folds": 3,
+            "seed": 42,
+        });
+
+        hash<auto> result = gs.fitMatrix(X_reg, y_reg);
+
+        # Small alpha should be better for clean linear data
+        assertTrue(abs(float(result.best_params.alpha) - 0.001) < 0.01,
+            sprintf("best alpha should be 0.001; got %y", result.best_params.alpha));
+    }
+
+    gridSearchReproducibilityTest() {
+        hash<auto> opts = {
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_grid": {"alpha": (0.1, 1.0, 10.0)},
+            "scorer": \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            "n_folds": 3,
+            "seed": 42,
+        };
+
+        QoreMLUtils::GridSearch gs1(opts);
+        QoreMLUtils::GridSearch gs2(opts);
+
+        hash<auto> r1 = gs1.fitMatrix(X_reg, y_reg);
+        hash<auto> r2 = gs2.fitMatrix(X_reg, y_reg);
+
+        assertEq(r1.best_params, r2.best_params);
+        assertTrue(abs(r1.best_score - r2.best_score) < 1e-10);
+    }
+
+    gridSearchErrorTest() {
+        code<float(list<auto>, list<auto>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
+
+        # Missing model_factory
+        assertThrows("GRID-SEARCH-ERROR", sub() {
+            new QoreMLUtils::GridSearch({
+                "param_grid": {"a": (1,)},
+                "scorer": scorer,
+                "predictor": \ridgePredictor(),
+            });
+        });
+
+        # Missing predictor
+        assertThrows("GRID-SEARCH-ERROR", sub() {
+            new QoreMLUtils::GridSearch({
+                "model_factory": \ridgeFactory(),
+                "param_grid": {"a": (1,)},
+                "scorer": scorer,
+            });
+        });
+
+        # Empty param_grid
+        assertThrows("GRID-SEARCH-ERROR", sub() {
+            new QoreMLUtils::GridSearch({
+                "model_factory": \ridgeFactory(),
+                "predictor": \ridgePredictor(),
+                "param_grid": {},
+                "scorer": scorer,
+            });
+        });
+
+        # Empty data
+        QoreMLUtils::GridSearch gs({
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_grid": {"alpha": (1.0,)},
+            "scorer": scorer,
+        });
+        assertThrows("GRID-SEARCH-ERROR", sub() {
+            gs.fitMatrix((), ());
+        });
+    }
+
+    # ===================== RandomSearch Tests =====================
+
+    randomSearchBasicTest() {
+        QoreMLUtils::RandomSearch rs({
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_distributions": {"alpha": (0.01, 0.1, 1.0, 10.0)},
+            "scorer": \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            "n_iter": 3,
+            "n_folds": 3,
+            "seed": 42,
+        });
+
+        hash<auto> result = rs.fitMatrix(X_reg, y_reg);
+
+        assertTrue(exists result.best_params);
+        assertTrue(exists result.best_score);
+        # 3 iterations
+        assertEq(3, result.cv_results.size());
+        assertTrue(result.best_score > 0.9,
+            sprintf("best_score should be > 0.9; got %f", result.best_score));
+    }
+
+    randomSearchReproducibilityTest() {
+        hash<auto> opts = {
+            "model_factory": \ridgeFactory(),
+            "predictor": \ridgePredictor(),
+            "param_distributions": {"alpha": (0.01, 0.1, 1.0, 10.0, 100.0)},
+            "scorer": \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            "n_iter": 5,
+            "n_folds": 3,
+            "seed": 123,
+        };
+
+        QoreMLUtils::RandomSearch rs1(opts);
+        QoreMLUtils::RandomSearch rs2(opts);
+
+        hash<auto> r1 = rs1.fitMatrix(X_reg, y_reg);
+        hash<auto> r2 = rs2.fitMatrix(X_reg, y_reg);
+
+        assertEq(r1.best_params, r2.best_params);
+        assertTrue(abs(r1.best_score - r2.best_score) < 1e-10);
+    }
+
+    randomSearchErrorTest() {
+        code<float(list<auto>, list<auto>)> scorer = \QoreMLUtils::MLScoringUtils::r2Scorer();
+
+        # Missing model_factory
+        assertThrows("RANDOM-SEARCH-ERROR", sub() {
+            new QoreMLUtils::RandomSearch({
+                "param_distributions": {"a": (1,)},
+                "scorer": scorer,
+                "predictor": \ridgePredictor(),
+            });
+        });
+
+        # Empty distributions
+        assertThrows("RANDOM-SEARCH-ERROR", sub() {
+            new QoreMLUtils::RandomSearch({
+                "model_factory": \ridgeFactory(),
+                "predictor": \ridgePredictor(),
+                "param_distributions": {},
+                "scorer": scorer,
+            });
+        });
+    }
+
+    # ===================== PermutationImportance Tests =====================
+
+    permImpRegressionTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(X_reg, y_reg);
+
+        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
+            return map $1.prediction, lr.predictMatrix(X_data);
+        };
+
+        QoreMLUtils::PermutationImportance pi({"n_repeats": 5, "seed": 42});
+        hash<auto> result = pi.compute(predictor, X_reg, y_reg,
+            \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            ("x1", "x2"));
+
+        assertTrue(exists result.baseline_score);
+        assertTrue(result.baseline_score > 0.99,
+            sprintf("baseline R2 should be ~1.0; got %f", result.baseline_score));
+
+        assertTrue(exists result.importances);
+        assertTrue(exists result.importances.x1);
+        assertTrue(exists result.importances.x2);
+        assertTrue(result.importances.x1.importance_mean >= 0.0,
+            "shuffling x1 should hurt score");
+        assertTrue(result.importances.x2.importance_mean >= 0.0,
+            "shuffling x2 should hurt score");
+    }
+
+    permImpRankingTest() {
+        # y depends on x1 strongly, x2 weakly, x3 is noise
+        list<list<float>> X;
+        list<float> y;
+        for (int i = 0; i < 100; ++i) {
+            float x1 = (i % 10) * 1.0;
+            float x2 = ((i * 3) % 10) * 0.1;  # small coefficient
+            float x3 = ((i * 7) % 10) * 1.0;  # noise
+            push X, (x1, x2, x3);
+            push y, 10.0 * x1 + 0.1 * x2 + 5.0;
+        }
+
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(X, y);
+
+        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
+            return map $1.prediction, lr.predictMatrix(X_data);
+        };
+
+        QoreMLUtils::PermutationImportance pi({"n_repeats": 10, "seed": 42});
+        hash<auto> result = pi.compute(predictor, X, y,
+            \QoreMLUtils::MLScoringUtils::r2Scorer(),
+            ("strong", "weak", "noise"));
+
+        # Strong feature should have highest importance
+        assertTrue(result.importances.strong.importance_mean >
+            result.importances.noise.importance_mean,
+            sprintf("strong (%.4f) should be more important than noise (%.4f)",
+                result.importances.strong.importance_mean,
+                result.importances.noise.importance_mean));
+    }
+
+    permImpReproducibilityTest() {
+        ML::LinearRegression lr({"fit_intercept": True});
+        lr.fitMatrix(X_reg, y_reg);
+
+        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
+            return map $1.prediction, lr.predictMatrix(X_data);
+        };
+
+        QoreMLUtils::PermutationImportance pi1({"n_repeats": 5, "seed": 99});
+        QoreMLUtils::PermutationImportance pi2({"n_repeats": 5, "seed": 99});
+
+        hash<auto> r1 = pi1.compute(predictor, X_reg, y_reg,
+            \QoreMLUtils::MLScoringUtils::r2Scorer());
+        hash<auto> r2 = pi2.compute(predictor, X_reg, y_reg,
+            \QoreMLUtils::MLScoringUtils::r2Scorer());
+
+        assertTrue(abs(r1.baseline_score - r2.baseline_score) < 1e-10);
+        assertTrue(abs(r1.importances.feature_0.importance_mean -
+            r2.importances.feature_0.importance_mean) < 1e-10);
+    }
+
+    permImpErrorTest() {
+        code<list<auto>(list<auto>)> predictor = list<auto> sub (list<auto> X_data) {
+            return ();
+        };
+
+        QoreMLUtils::PermutationImportance pi();
+
+        # Empty data
+        assertThrows("PERMUTATION-IMPORTANCE-ERROR", sub() {
+            pi.compute(predictor, (), (), \QoreMLUtils::MLScoringUtils::r2Scorer());
+        });
+
+        # Mismatched feature_names
+        assertThrows("PERMUTATION-IMPORTANCE-ERROR", sub() {
+            pi.compute(predictor, ((1.0, 2.0),), (1.0,),
+                \QoreMLUtils::MLScoringUtils::r2Scorer(), ("a",));
+        });
+    }
+
+    # ===================== MLScoringUtils Tests =====================
+
+    scoringR2Test() {
+        float r2 = QoreMLUtils::MLScoringUtils::r2Scorer((1.0, 2.0, 3.0), (1.0, 2.0, 3.0));
+        assertTrue(abs(r2 - 1.0) < 1e-10, sprintf("perfect R2 should be 1.0; got %f", r2));
+
+        float r2_mean = QoreMLUtils::MLScoringUtils::r2Scorer((1.0, 2.0, 3.0), (2.0, 2.0, 2.0));
+        assertTrue(abs(r2_mean) < 0.01, sprintf("mean-only R2 should be ~0; got %f", r2_mean));
+    }
+
+    scoringAccuracyTest() {
+        float acc = QoreMLUtils::MLScoringUtils::accuracyScorer((0, 1, 1, 0), (0, 1, 0, 0));
+        assertTrue(abs(acc - 0.75) < 0.01, sprintf("accuracy should be 0.75; got %f", acc));
+
+        float perfect = QoreMLUtils::MLScoringUtils::accuracyScorer((1, 2, 3), (1, 2, 3));
+        assertTrue(abs(perfect - 1.0) < 1e-10, sprintf("perfect accuracy should be 1.0; got %f", perfect));
+    }
+}
