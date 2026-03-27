@@ -249,6 +249,40 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return stream_id;
     }
 
+    #! Submits a streaming request with Channel-based response delivery
+    /** Each response chunk is pushed to the Channel via ChannelAction (pure C++).
+        @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param channel Channel to push response chunks to
+        @param streaming if True, enable bidirectional streaming mode
+        @return the stream ID
+    */
+    int submitRequestStreamingWithChannel(string method, string path, *hash<auto> headers,
+            *data body, Channel channel, bool streaming = False) {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            if (state != HttpClientConnectionState::Ready) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("connection not ready: state=%y", state);
+            }
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting streaming request: %s %s (streaming=%y)", method, path, streaming);
+        int stream_id = poll_op.submitRequestWithChannel(method, path, headers, body,
+            channel, max_concurrent_streams, streaming);
+
+        if (ctl) {
+            ctl.wake();
+        }
+
+        return stream_id;
+    }
+
     #! Protocol-specific poll result hook, called under lock
     /** Checks for GOAWAY received from server atomically with the base state update.
         @note Called while \c lock is held — do not re-acquire.

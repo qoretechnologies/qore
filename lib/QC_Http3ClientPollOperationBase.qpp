@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Channel.h"
 
 /** @cond INTERNAL */
 
@@ -834,6 +835,42 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
     if (!*xsink) {
         action.release();  // ownership transferred to priv
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("need_cancel", need_cancel, xsink);
+    if (buffered) {
+        rv->setKeyValue("buffered", buffered, xsink);
+    }
+    return rv.release();
+}
+
+//! Phase 3: register stream with a Channel for streaming delivery
+/** Each response chunk is pushed to the Channel via trySend() on the I/O
+    thread (non-blocking). The user reads via recv() on their own thread.
+
+    @param stream_id the QUIC stream ID
+    @param channel the Channel to push response chunks to
+
+    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+*/
+*hash<auto> Http3ClientPollOperationBase::registerStreamWithChannel(int stream_id, object channel) {
+    // Extract QoreChannel private data from the Channel object
+    QoreChannel* ch = static_cast<QoreChannel*>(
+        const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
+    if (!ch) {
+        if (!*xsink) {
+            xsink->raiseException("CHANNEL-ERROR", "invalid Channel object");
+        }
+        return QoreValue();
+    }
+    ReferenceHolder<QoreChannel> ch_holder(ch, xsink);
+
+    bool need_cancel = false;
+    ReferenceHolder<ChannelAction> action(new ChannelAction(ch), xsink);
+    QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+    if (!*xsink) {
+        action.release();
     }
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);

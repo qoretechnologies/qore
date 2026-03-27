@@ -203,11 +203,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
-            # Create a Promise for streaming response delivery
-            Promise streaming_promise();
-            # TODO: streaming should use Channel, not Promise (Phase 3)
-            stream_id = h3conn.submitRequestStreaming(method, path, headers, body,
-                streaming_promise, body_streaming);
+            # Submit the streaming request — register the data_channel as the
+            # completion action so each response chunk is pushed to it via
+            # ChannelAction::trySend (pure C++ on I/O thread)
+            stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
+                body, data_channel, body_streaming);
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();

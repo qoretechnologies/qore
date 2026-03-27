@@ -228,6 +228,72 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         return stream_id;
     }
 
+    #! Submits a streaming request with Channel-based response delivery
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param channel Channel for response chunks
+        @param max_streams maximum concurrent streams
+        @param streaming if True, bidirectional streaming mode
+        @return the stream ID
+    */
+    int submitRequestWithChannel(string method, string path, *hash<auto> headers, *data body,
+            Channel channel, int max_streams, bool streaming = False) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
+        }
+
+        # Filter pseudo-headers
+        hash<auto> req_headers = {};
+        if (headers) {
+            foreach string key in (keys headers) {
+                if (key[0] != ":") {
+                    req_headers{key} = headers{key};
+                }
+            }
+        }
+        if (!req_headers.host) {
+            req_headers.host = h3_url_info.port == 443
+                ? h3_url_info.host
+                : sprintf("%s:%d", h3_url_info.host, h3_url_info.port);
+        }
+
+        self.checkCapacity(max_streams);
+        self.beginSubmit();
+
+        Socket sock = self.getSocket();
+        int stream_id;
+        try {
+            if (streaming) {
+                stream_id = sock.submitQuicRequestStreaming(method, path, req_headers);
+            } else {
+                stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+            }
+        } catch () {
+            self.endSubmitFail();
+            rethrow;
+        }
+
+        self.endSubmitOk(stream_id);
+
+        # Register Channel as the completion action
+        *hash<auto> reg_result = self.registerStreamWithChannel(stream_id, channel);
+        if (reg_result.need_cancel) {
+            try {
+                int sid = self.getSessionId();
+                if (sid) {
+                    sock.cancelQuicStream(sid, stream_id);
+                }
+            } catch () {}
+            throw "HTTP3-STATE-ERROR",
+                sprintf("connection closed during request submission (state: %y)",
+                    self.getState());
+        }
+
+        return stream_id;
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)
