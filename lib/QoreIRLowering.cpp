@@ -4321,11 +4321,14 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     // Force lvalue path for types where load-compute-store produces wrong result types:
     // - float/number: NOTHING - int = int (needs coercion to float/number)
     // - References: need lvalue semantics for write-through
+    // - Hash/Object: -= has special semantics (key removal), not arithmetic
     if (left_var && left_var->getTypeInfo()) {
         const QoreTypeInfo* ti = left_var->getTypeInfo();
         if (QoreTypeInfo::getBaseType(ti) == NT_FLOAT
                 || QoreTypeInfo::getBaseType(ti) == NT_NUMBER
-                || QoreTypeInfo::isReference(ti)) {
+                || QoreTypeInfo::isReference(ti)
+                || QoreTypeInfo::isHashType(ti)
+                || QoreTypeInfo::getBaseType(ti) == NT_OBJECT) {
             left_var = nullptr;
         }
     }

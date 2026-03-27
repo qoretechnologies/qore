@@ -138,11 +138,11 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     // If type was not set during parsing, try to get it from the expression itself
     // This handles cases where parse_init_value doesn't set typeInfo (e.g., literal values)
     if (!QoreTypeInfo::hasType(expTypeInfo)) {
-        if (left.isValue()) {
-            // For literal/constant values, get type from the value itself
-            expTypeInfo = left.getFullTypeInfo();
-        }
-        if (!QoreTypeInfo::hasType(expTypeInfo)) {
+        // Try to get type info from the expression value or node
+        const QoreTypeInfo* valueTypeInfo = left.getFullTypeInfo();
+        if (QoreTypeInfo::hasType(valueTypeInfo)) {
+            expTypeInfo = valueTypeInfo;
+        } else {
             expTypeInfo = autoTypeInfo;
         }
     }
