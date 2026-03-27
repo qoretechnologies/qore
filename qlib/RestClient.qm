@@ -4866,8 +4866,14 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         #! Logger
         *Logger::LoggerInterface logger;
 
-        #! EventNotifier bridges the I/O thread callback to the poll loop
+        #! EventNotifier bridges the I/O completion to the poll loop
         EventNotifier notifier();
+
+        #! Channel for receiving the ping response from the I/O thread
+        /** The I/O thread resolves the Future, the background waiter pushes
+            the result to this Channel, and continuePoll reads it non-blockingly.
+        */
+        Channel result_channel(1);
 
         #! Schema loading poller (non-blocking)
         *AbstractPollOperation schema_poller;
@@ -4883,15 +4889,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
         #! Goal reached
         bool goal_reached = False;
-
-        #! Mutex protecting result/error
-        Mutex m();
-
-        #! Response from I/O callback
-        *hash<auto> result;
-
-        #! Error from I/O callback
-        *hash<auto> bg_ex;
     }
 
     #! Creates the poll operation
@@ -4940,28 +4937,24 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
             doSubmitPing();
         }
 
-        # Stage 2: waiting for response via EventNotifier
+        # Stage 2: waiting for response via EventNotifier + Channel
         if (state == SPS_IO_WAITING) {
-            hash<auto> resp;
-            *hash<auto> err;
-            {
-                AutoLock al(m);
-                if (!result && !bg_ex) {
-                    return <SocketPollInfo>{
-                        "events": SOCK_POLLIN,
-                        "socket": notifier,
-                    };
-                }
-                resp = result;
-                err = bg_ex;
+            # Non-blocking check: is the result available?
+            *hash<auto> recv_result = result_channel.tryRecv();
+            if (!recv_result.has_value) {
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": notifier,
+                };
             }
 
             notifier.acknowledge();
             state = SPS_COMPLETE;
 
-            if (err) {
+            hash<auto> resp = recv_result.value;
+            if (resp._error) {
                 conn.authFailure();
-                throw err.err, err.desc;
+                throw resp.err, resp.desc;
             }
 
             int status_code = resp.status_code.toInt();
@@ -5002,21 +4995,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         Future f = call_object_method(rcio, "restDoRequestAsync", method, path, body, hdr,
             True);  # skip_ensure_token
 
-        # Background thread waits on the Future and notifies the EventNotifier
-        # when the result arrives. This keeps the I/O thread free while the
-        # ping response is in flight.
+        # Background waiter: blocks on the Future (off the I/O thread), then
+        # pushes the result to the Channel and notifies the EventNotifier.
+        # The I/O thread's continuePoll reads the Channel non-blockingly.
         background sub () {
             try {
-                hash<auto> resp = f.get(30s);
-                {
-                    AutoLock al(m);
-                    result = resp;
-                }
+                hash<auto> resp = f.get();
+                result_channel.send(resp);
             } catch (hash<ExceptionInfo> ex) {
-                {
-                    AutoLock al(m);
-                    bg_ex = {"err": ex.err, "desc": ex.desc};
-                }
+                result_channel.send({"err": ex.err, "desc": ex.desc, "_error": True});
             }
             notifier.notify();
         }();
