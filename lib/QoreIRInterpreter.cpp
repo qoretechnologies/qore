@@ -7410,6 +7410,24 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AddFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
+            // issue #3157: timeout (int ms) + date → convert int to relative date first
+            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
+                int64_t lms = left.getAsBigInt();
+                int64_t secs = lms / 1000;
+                int64_t ms = lms - (secs * 1000);
+                DateTime l;
+                l.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                return right.get<const DateTimeNode>()->add(l);
+            }
+            // issue #3157: date + timeout (int ms) → convert int to relative date first
+            if (left.getType() == NT_DATE && right.getType() == NT_INT) {
+                int64_t rms = right.getAsBigInt();
+                int64_t secs = rms / 1000;
+                int64_t ms = rms - (secs * 1000);
+                DateTime r;
+                r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                return left.get<const DateTimeNode>()->add(r);
+            }
             bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);
@@ -7442,6 +7460,23 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SubFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
+            // issue #3157: timeout (int ms) - date → convert int to relative date first
+            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
+                int64_t lms = left.getAsBigInt();
+                int64_t secs = lms / 1000;
+                int64_t ms = lms - (secs * 1000);
+                SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms)));
+                return l->subtractBy(right.get<const DateTimeNode>());
+            }
+            // issue #3157: date - timeout (int ms) → convert int to relative date first
+            if (left.getType() == NT_DATE && right.getType() == NT_INT) {
+                int64_t rms = right.getAsBigInt();
+                int64_t secs = rms / 1000;
+                int64_t ms = rms - (secs * 1000);
+                DateTime r;
+                r.setRelativeDateSeconds(secs, static_cast<int>(ms));
+                return left.get<const DateTimeNode>()->subtractBy(r);
+            }
             bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);
@@ -7538,6 +7573,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
             // to avoid NOTHING being treated as a list element in concatenation
             if (left.isNothing()) {
                 return right.refSelf();
+            }
+            // issue #3157: timeout (int ms) += date → integer ms arithmetic
+            if (left.getType() == NT_INT && right.getType() == NT_DATE) {
+                int64_t ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return QoreValue(left.getAsBigInt() + ms);
             }
             bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
