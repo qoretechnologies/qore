@@ -143,6 +143,13 @@ QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(*new_right, "<-= operator>");
     } else if (vtype == NT_DATE) {
+        // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
+        if (new_right->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
+            // do minus-equals with milliseconds
+            return v.minusEqualsBigInt(ms);
+        }
+        // Regular date arithmetic
         if (new_right->getType() == NT_DATE) {
             v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*new_right->get<DateTimeNode>()));
         } else {
