@@ -8895,6 +8895,18 @@ static QoreValue evalMinusEquals(const QoreValue& lvalue, const QoreValue& right
     } else if (vtype == NT_NUMBER) {
         v.minusEqualsNumber(right, "<-= operator>");
     } else if (vtype == NT_DATE) {
+        // Check if this is a timeout type, which uses integer arithmetic
+        if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+            // if the right side is also a date/timeout, convert to milliseconds
+            if (right.getType() == NT_DATE) {
+                int64 ms = right.get<const DateTimeNode>()->getRelativeMilliseconds();
+                return v.minusEqualsBigInt(ms);
+            } else {
+                // Regular integer minus for timeout
+                return v.minusEqualsBigInt(right.getAsBigInt());
+            }
+        }
+        // Regular date arithmetic
         if (right.getType() == NT_DATE) {
             v.assign(v.getValue().get<DateTimeNode>()->subtractBy(*right.get<const DateTimeNode>()));
         } else {
