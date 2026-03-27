@@ -75,8 +75,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
                     accept_all_certs, client_cert, client_pk),
                 url_info.host,
-                url_info.port,
-                Http3ClientPollOperation::resolveAddressFamily(url_info.host)) {
+                url_info.port) {
         h3_url_info = url_info;
         h3_logger = logger;
     }
@@ -314,7 +313,6 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             sock.setPrivateKey(client_pk);
         }
 
-        # Resolve address family and bind
         int family = Http3ClientPollOperation::resolveAddressFamily(url_info.host);
         string bind_addr = family == AF_INET6 ? "::" : "0.0.0.0";
         sock.bindINET(bind_addr, "0", True, family, SOCK_DGRAM);

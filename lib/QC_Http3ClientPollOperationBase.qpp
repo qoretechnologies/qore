@@ -48,12 +48,13 @@ Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
 }
 
 Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
-    // cleanup() must have been called before destructor
-    assert(!inner_op);
-    assert(!sock_obj);
-    assert(!ready_callback);
-    assert(!completion_handler);
-    assert(!error_info);
+    // cleanup() should have been called before destructor via QPP destructor.
+    // In program shutdown paths the QPP destructor may not run; clean up
+    // defensively to avoid leaks.
+    if (inner_op || sock_obj || ready_callback || completion_handler || error_info) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
 }
 
 void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
@@ -672,10 +673,11 @@ qclass Http3ClientPollOperationBase [
 /** @param sock the UDP socket (must be bound via bindINET())
     @param host the remote hostname
     @param port the remote port (1-65535)
-    @param family the address family (AF_INET or AF_INET6)
+    @param family the address family (AF_INET or AF_INET6); default AF_UNSPEC
+        resolves from hostname
 */
 Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string host, int port,
-        int family = AF_INET) {
+        int family = AF_UNSPEC) {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
         return;
