@@ -291,9 +291,18 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
             }
         } else {
             // Not a direct auto assignment - use normal logic
-            raise_exception = parse_context.pgm->getParseExceptionSink() ||
-                (has_narrowed_type &&
-                 !(parse_context.pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES));
+            if (has_narrowed_type && !(parse_context.pgm->getParseOptions() & PO_BROKEN_NARROWED_TYPES)) {
+                // For narrowed types assigned to soft types, defer to runtime
+                // because soft types perform runtime conversion and the auto variable's
+                // actual runtime type may be different from the narrowed parse type
+                const char* lhs_name = QoreTypeInfo::getName(ti);
+                bool lhs_is_soft = lhs_name && !strncmp(lhs_name, "soft", 4);
+                if (!lhs_is_soft) {
+                    raise_exception = true;
+                }
+            } else {
+                raise_exception = (bool)parse_context.pgm->getParseExceptionSink();
+            }
         }
     }
 
