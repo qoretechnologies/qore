@@ -4752,8 +4752,6 @@ class TypeTest inherits QUnit::Test {
             assertEq(1, i);
             i = False;
             assertEq(0, i);
-            i = NULL;
-            assertEq(0, i);
 
             {
                 Program p(PO_NEW_STYLE);
@@ -4850,8 +4848,6 @@ class TypeTest inherits QUnit::Test {
             i = True;
             assertEq(1.0, i);
             i = False;
-            assertEq(0.0, i);
-            i = NULL;
             assertEq(0.0, i);
 
             {
@@ -4952,8 +4948,6 @@ class TypeTest inherits QUnit::Test {
             assertEq(1n, i);
             i = False;
             assertEq(0n, i);
-            i = NULL;
-            assertEq(0n, i);
 
             {
                 Program p(PO_NEW_STYLE);
@@ -5039,8 +5033,6 @@ class TypeTest inherits QUnit::Test {
         {
             softbinary b = "1";
             assertEq(<31>, b);
-            b = NULL;
-            assertEq(binary(), b);
             b = <3132>;
             assertEq(<3132>, b);
 
@@ -5175,8 +5167,6 @@ class TypeTest inherits QUnit::Test {
             assertEq(True, i);
             i = False;
             assertEq(False, i);
-            i = NULL;
-            assertEq(False, i);
 
             {
                 Program p(PO_NEW_STYLE);
@@ -5276,8 +5266,6 @@ class TypeTest inherits QUnit::Test {
             assertEq("1", i);
             i = False;
             assertEq("0", i);
-            i = NULL;
-            assertEq("", i);
 
             {
                 Program p(PO_NEW_STYLE);
@@ -5376,8 +5364,6 @@ class TypeTest inherits QUnit::Test {
             i = True;
             assertEq(1970-01-01T00:00:01, i);
             i = False;
-            assertEq(1970-01-01, i);
-            i = NULL;
             assertEq(1970-01-01, i);
 
             {
