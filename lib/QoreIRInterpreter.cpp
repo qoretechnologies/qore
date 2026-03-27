@@ -2472,9 +2472,9 @@ next_instruction:
                 break;
             }
             case QoreIROpcode::CreateEmptyList: {
-                const QoreTypeInfo* list_type = inst->element_type ?
-                    qore_get_complex_list_type(inst->element_type) : autoTypeInfo;
-                QoreListNode* list = new QoreListNode(list_type);
+                // element_type is the element type (e.g., bool); QoreListNode wraps it to list<bool>
+                const QoreTypeInfo* elem_type = inst->element_type ? inst->element_type : autoTypeInfo;
+                QoreListNode* list = new QoreListNode(elem_type);
                 setValueSlotDirect(values, inst->result.id, QoreValue(list));
                 cleanup.push_back(inst->result.id);
                 ++ip;
@@ -2527,9 +2527,9 @@ next_instruction:
             case QoreIROpcode::CreateSizedList: {
                 QoreValue cap_val = getIRValue(values, inst->operands[0]);
                 int64_t capacity = cap_val.getAsBigInt();
-                const QoreTypeInfo* list_type = inst->element_type ?
-                    qore_get_complex_list_type(inst->element_type) : autoTypeInfo;
-                QoreListNode* list = new QoreListNode(list_type);
+                // element_type is the element type (e.g., bool); QoreListNode wraps it to list<bool>
+                const QoreTypeInfo* elem_type = inst->element_type ? inst->element_type : autoTypeInfo;
+                QoreListNode* list = new QoreListNode(elem_type);
                 if (capacity > 0) {
                     qore_list_private::get(*list)->reserve(static_cast<size_t>(capacity));
                 }

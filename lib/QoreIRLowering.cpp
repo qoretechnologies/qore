@@ -8316,11 +8316,14 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
         return QoreIRValue();
     }
 
-    // Get the element type of the map result list (extract from return type)
-    const QoreTypeInfo* expTypeInfo = nullptr;
-    const QoreTypeInfo* map_return_type = map->getMapReturnType();
-    if (map_return_type) {
-        expTypeInfo = QoreTypeInfo::getUniqueReturnComplexList(map_return_type);
+    // Get the element type of the map result list directly from the map expression type
+    const QoreTypeInfo* expTypeInfo = map->getMapExpType();
+    // Fallback: extract from return type if expression type not available
+    if (!expTypeInfo) {
+        const QoreTypeInfo* map_return_type = map->getMapReturnType();
+        if (map_return_type) {
+            expTypeInfo = QoreTypeInfo::getUniqueReturnComplexList(map_return_type);
+        }
     }
 
     // Check if the input is actually a list or a single value
