@@ -112,11 +112,19 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                 check_ti = deref_ti;
             }
         }
-        // Also dereference RHS if it's a reference (for initial binding: ref = \var)
+        // Dereference RHS if it's a reference — for transparent reference variable access
+        // and for initial binding (reference<T> r = \var).
+        // Exception: do NOT dereference a reference-creation expression (\expr) when LHS is
+        // not a reference type — this catches invalid assignments like:
+        //   softint i = \i;  (self-reference to uninitialized variable)
+        //   softint x = \n;  (assigning reference creation to a non-reference variable)
         if (QoreTypeInfo::isReference(check_rhs_ti)) {
-            const QoreTypeInfo* deref_rhs_ti = QoreTypeInfo::getReferenceTarget(check_rhs_ti);
-            if (deref_rhs_ti) {
-                check_rhs_ti = deref_rhs_ti;
+            // Only dereference ParseReferenceNode (\expr) when LHS is also a reference type
+            if (right.getType() != NT_PARSEREFERENCE || QoreTypeInfo::isReference(ti)) {
+                const QoreTypeInfo* deref_rhs_ti = QoreTypeInfo::getReferenceTarget(check_rhs_ti);
+                if (deref_rhs_ti) {
+                    check_rhs_ti = deref_rhs_ti;
+                }
             }
         }
 
