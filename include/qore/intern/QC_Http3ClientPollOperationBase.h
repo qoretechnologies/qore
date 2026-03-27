@@ -35,6 +35,7 @@
 
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/AsyncCompletionAction.h"
 
 #include <atomic>
 #include <string>
@@ -102,24 +103,22 @@ public:
     //! Phase 2 exit (failure): decrement submits_in_progress
     DLLLOCAL void endSubmitFail();
 
-    //! Phase 3: register callback; returns buffered responses (or nullptr)
+    //! Phase 3: register completion action; returns buffered responses (or nullptr)
     /** @param stream_id the QUIC stream ID
-        @param cb the callback (will be ref'd if stored)
-        @param ctx optional context hash (will be ref'd if stored)
+        @param action the completion action (will be ref'd if stored)
+        @param need_cancel set to true if connection died
         @param xsink for exception handling
-        @return list of buffered response hashes (ref'd), or nullptr; also sets
-                need_cancel to true via out param if connection died
+        @return list of buffered response hashes (ref'd), or nullptr
     */
-    DLLLOCAL QoreListNode* registerStream(int64_t stream_id, ResolvedCallReferenceNode* cb,
-        QoreHashNode* ctx, bool& need_cancel, ExceptionSink* xsink);
+    DLLLOCAL QoreListNode* registerStream(int64_t stream_id, AbstractAsyncAction* action,
+        bool& need_cancel, ExceptionSink* xsink);
 
-    //! Cancel a stream: removes callback, returns the removed callback
+    //! Cancel a stream: removes and derefs the action
     /** @param stream_id the QUIC stream ID
-        @param out_cb receives the removed callback (ref'd) or nullptr
         @param xsink for exception handling
+        @return true if the stream was found and cancelled
     */
-    DLLLOCAL void cancelStream(int64_t stream_id, ResolvedCallReferenceNode*& out_cb,
-        ExceptionSink* xsink);
+    DLLLOCAL bool cancelStream(int64_t stream_id, ExceptionSink* xsink);
 
     //! Wait on stream_capacity_cond (for STREAM_ID_BLOCKED retry)
     DLLLOCAL void waitStreamCapacity(int64_t timeout_ms);
@@ -254,11 +253,11 @@ private:
     int submits_in_progress = 0;
     int quic_stream_limit = 0;
 
-    //! Stream callbacks: stream_id string -> ref'd callback
-    std::unordered_map<std::string, ResolvedCallReferenceNode*> stream_callbacks;
-
-    //! Stream contexts: stream_id string -> ref'd hash
-    std::unordered_map<std::string, QoreHashNode*> stream_ctxs;
+    //! Stream completion actions: stream_id string -> ref'd action
+    /** Actions are pure C++ (no Qore interpreter) — execute/executeError
+        are called directly on the I/O thread without execValue().
+    */
+    std::unordered_map<std::string, AbstractAsyncAction*> stream_actions;
 
     //! Pending responses buffered during submit race window: stream_id -> ref'd hashes
     std::unordered_map<std::string, std::vector<QoreHashNode*>> pending_responses;

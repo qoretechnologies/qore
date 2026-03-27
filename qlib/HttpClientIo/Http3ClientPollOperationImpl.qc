@@ -90,8 +90,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback callback to invoke when response is ready
-        @param ctx optional context to pass to callback
+        @param promise Promise to resolve with the response (pure C++ dispatch on I/O thread)
         @param max_streams maximum concurrent streams allowed on this connection
         @param streaming if True, submit without END_STREAM (for bidirectional streaming);
         the caller sends body data incrementally via sendStreamData()
@@ -102,8 +101,7 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         @throw HTTP3-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
-            bool streaming = False) {
+            Promise promise, int max_streams, bool streaming = False) {
         if (!self.isReady()) {
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
@@ -200,8 +198,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         # Mark this stream_id as awaiting registration
         self.endSubmitOk(stream_id);
 
-        # Phase 3: register callback (C++ acquires stream_lock internally)
-        *hash<auto> reg_result = self.registerStream(stream_id, callback, ctx);
+        # Phase 3: register Promise (C++ creates PromiseAction internally)
+        *hash<auto> reg_result = self.registerStreamWithPromise(stream_id, promise);
         if (reg_result.need_cancel) {
             try {
                 int sid = self.getSessionId();
@@ -214,19 +212,15 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                     self.getState());
         }
 
-        # Deliver any buffered responses outside the lock
+        # Deliver any buffered responses by resolving the Promise directly
         if (reg_result.buffered) {
-            string sid = string(stream_id);
             foreach hash<auto> resp in (reg_result.buffered) {
-                try {
-                    callback(resp + {"ctx": ctx}, NOTHING);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "buffered callback exception: %s: %s",
-                        ex.err, ex.desc);
-                }
+                resp.protocol = "h3";
                 if (resp.end_stream.toBool()) {
-                    *code<nothing(hash<auto>, *hash<auto>)> removed_cb = self.cancelStream(stream_id);
-                    # callback already dispatched inline; no need to call removed_cb
+                    # Final response — resolve the Promise and clean up
+                    try { promise.set(resp); } catch () {}
+                    self.cancelStream(stream_id);
+                    break;
                 }
             }
         }
