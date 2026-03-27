@@ -34,6 +34,7 @@
 #include "qore/intern/QoreDir.h"
 
 #include <qore/Qore.h>
+#include <chrono>
 #include <qore/QoreEnumDecl.h>
 
 #include <sys/stat.h>
@@ -237,9 +238,11 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassInstrumentation.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
@@ -835,6 +838,11 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 QoreIRToLLVM lowerer(ctx);
                 lowerer.setAOTMode(&slots);
                 lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                // Enable deferred exception checking to reduce BasicBlock count.
+                // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
+                // Safe: only defers checks for code outside try blocks; code inside try blocks
+                // still gets immediate checks via emitExceptionCheck's !inst->exception_target condition.
+                lowerer.setDeferredExceptionChecking(true);
                 if (!fast_entry_name.empty()) {
                     lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
                 }
@@ -882,6 +890,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                    fast_lowerer.setDeferredExceptionChecking(true);  // See comment above
                     fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
                     fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
                     std::string fast_error;
@@ -1011,6 +1020,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                    lowerer.setDeferredExceptionChecking(true);  // See comment in function compilation above
                     std::string llvm_error;
                     // Count total IR instructions and warn for large functions
                     size_t total_ir_insts = 0;
@@ -1401,7 +1411,39 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         llvm::FunctionAnalysisManager FAM;
         llvm::CGSCCAnalysisManager CGAM;
         llvm::ModuleAnalysisManager MAM;
-        llvm::PassBuilder PB(tm);
+
+        // Add per-pass timing instrumentation if requested
+        bool pass_timing = getenv("QORE_PASS_TIMING") != nullptr;
+        llvm::PassInstrumentationCallbacks PIC;
+        llvm::StandardInstrumentations SI(module.getContext(), false);
+        SI.registerCallbacks(PIC, &MAM);
+
+        if (pass_timing) {
+            using clock = std::chrono::steady_clock;
+            auto timings = std::make_shared<std::map<std::string, clock::time_point>>();
+
+            PIC.registerBeforeNonSkippedPassCallback(
+                [timings](llvm::StringRef PassID, llvm::Any) {
+                    (*timings)[PassID.str()] = clock::now();
+                });
+            PIC.registerAfterPassCallback(
+                [timings](llvm::StringRef PassID, llvm::Any,
+                          const llvm::PreservedAnalyses&) {
+                    auto it = timings->find(PassID.str());
+                    if (it != timings->end()) {
+                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            clock::now() - it->second).count();
+                        if (ms >= 50) {  // only print passes >= 50ms
+                            fprintf(stderr, "PASS: %s = %ld ms\n",
+                                    PassID.str().c_str(), ms);
+                            fflush(stderr);
+                        }
+                        timings->erase(it);
+                    }
+                });
+        }
+
+        llvm::PassBuilder PB(tm, llvm::PipelineTuningOptions{}, std::nullopt, &PIC);
         PB.registerModuleAnalyses(MAM);
         PB.registerCGSCCAnalyses(CGAM);
         PB.registerFunctionAnalyses(FAM);
@@ -1425,7 +1467,23 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
         }
 
         auto MPM = PB.buildPerModuleDefaultPipeline(llvm_opt);
+
+        // Time the optimization pass
+        auto opt_start = std::chrono::high_resolution_clock::now();
+        if (debug_opt) {
+            fprintf(stderr, "AOT: Starting optimization passes\n");
+            fflush(stderr);
+        }
+
         MPM.run(module, MAM);
+
+        auto opt_end = std::chrono::high_resolution_clock::now();
+        auto opt_duration = std::chrono::duration_cast<std::chrono::milliseconds>(opt_end - opt_start).count();
+
+        if (debug_opt || getenv("QORE_SHOW_OPT_TIME")) {
+            fprintf(stderr, "AOT: Optimization passes completed in %ld ms\n", opt_duration);
+            fflush(stderr);
+        }
 
         if (debug_opt) {
             fprintf(stderr, "AOT: Optimization completed successfully\n");
@@ -1850,6 +1908,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
                 llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
+                llvm_lowerer.setDeferredExceptionChecking(true);  // See comment in function compilation above
                 std::string llvm_error;
                 if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
                     AOTCompiledFunc cf;
