@@ -234,7 +234,7 @@ test-macos:
   stage: test
   needs: []
   tags:
-    - macos-host
+    - macos
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'
