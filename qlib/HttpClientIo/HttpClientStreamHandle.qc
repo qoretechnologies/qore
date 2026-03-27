@@ -421,17 +421,18 @@ public class HttpClientStreamHandle {
         } else {
             log(LoggerLevel::DEBUG, "deferring async request until connection ready: %s %s", method, path);
             # callWhenReady runs on the I/O thread (trusted code with QDOM_PROCESS).
-            # This is intentional: HttpClientIo is framework code that runs in the
-            # I/O loop for performance (particularly important for QUIC timer-sensitive
-            # paths). The callback chain (doSubmitAsyncImpl → submitRequest) is all
-            # trusted framework code that doesn't block.
+            # doSubmitAsyncImpl is framework code safe for the I/O thread, and the
+            # user's callback fires later via the onComplete worker pool.
+            # However, the cancel and error paths below call the user's callback
+            # directly — dispatch those via background to keep user code off the
+            # I/O thread.
             conn.callWhenReady(sub () {
                 try {
                     {
                         AutoLock al(lock);
                         if (state != HttpClientStreamState::Open) {
                             releaseReservationIfHeld();
-                            callback(NOTHING, {
+                            background callback(NOTHING, {
                                 "err": "HTTPCLIENT-CANCELLED",
                                 "desc": "stream was cancelled during connection setup",
                             });
@@ -440,7 +441,7 @@ public class HttpClientStreamHandle {
                     }
                     doSubmitAsyncImpl(method, path, headers, body, callback);
                 } catch (hash<ExceptionInfo> ex) {
-                    callback(NOTHING, ex);
+                    background callback(NOTHING, ex);
                 }
             });
         }
