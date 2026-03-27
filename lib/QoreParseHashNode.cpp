@@ -87,13 +87,6 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
         vtypes[i] = parse_context.typeInfo;
 
-        // For unassigned variables that return nullptr type info, use nothingTypeInfo
-        // so the hash literal gets a concrete type (e.g., hash<string, nothing>)
-        // instead of falling through to hash<auto>
-        if (!vtypes[i]) {
-            vtypes[i] = nothingTypeInfo;
-        }
-
         //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d '%s': '%s'\n", this, i,
         //    keys[i].getType() == NT_STRING ? keys[i].get<const QoreStringNode>()->c_str() : keys[i].getFullTypeName(),
         //    values[i].getFullTypeName());
