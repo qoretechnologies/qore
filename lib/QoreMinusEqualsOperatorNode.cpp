@@ -205,10 +205,17 @@ QoreValue QoreMinusEqualsOperatorNode::evalImpl(bool& needs_deref, ExceptionSink
         }
     } else {
         // issue #3157: if the lvalue is a timeout, then convert any date/time value as if it were a timeout too
-        if (new_right->getType() == NT_DATE && QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
-            int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
-            // do minus-equals with milliseconds
-            return v.minusEqualsBigInt(ms);
+        // Note: timeout type stores its value as an int (milliseconds), so vtype will be NT_INT
+        if (new_right->getType() == NT_DATE) {
+            // For timeout variables (which store int but have timeoutTypeInfo),
+            // convert the right operand (date/time) to milliseconds for subtraction
+            if (QoreTypeInfo::equal(v.getTypeInfo(), timeoutTypeInfo)) {
+                int64 ms = new_right->get<const DateTimeNode>()->getRelativeMilliseconds();
+                // do minus-equals with milliseconds
+                return v.minusEqualsBigInt(ms);
+            }
+            // For non-timeout int types, convert date to int (for compatibility)
+            return v.minusEqualsBigInt(new_right->get<const DateTimeNode>()->getRelativeSeconds());
         }
 
         // do integer minus-equals
