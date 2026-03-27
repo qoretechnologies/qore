@@ -135,8 +135,16 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
     }
 
     // issue #4318: make sure complex types are not stripped from the iterand
+    // If type was not set during parsing, try to get it from the expression itself
+    // This handles cases where parse_init_value doesn't set typeInfo (e.g., literal values)
     if (!QoreTypeInfo::hasType(expTypeInfo)) {
-        expTypeInfo = autoTypeInfo;
+        if (left.isValue()) {
+            // For literal/constant values, get type from the value itself
+            expTypeInfo = left.getFullTypeInfo();
+        }
+        if (!QoreTypeInfo::hasType(expTypeInfo)) {
+            expTypeInfo = autoTypeInfo;
+        }
     }
 
     // use lazy evaluation if the iterator expression supports it
