@@ -53,6 +53,37 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
     }
     const QoreTypeInfo* lti = parse_context.typeInfo;
 
+    // For unassigned variables whose type was narrowed to hash<auto>, use the declared type
+    // to preserve hashdecl and complex hash type information for member access validation
+    if (left.getType() == NT_VARREF) {
+        // Check if the parsed type is less specific than the declared type
+        const char* lti_name = QoreTypeInfo::getName(lti);
+        bool is_auto_hash = lti_name && (!strcmp(lti_name, "hash<auto>") || !strcmp(lti_name, "hash"));
+        if (!lti || is_auto_hash) {
+            VarRefNode* vrn = left.get<VarRefNode>();
+            qore_var_t vtype = vrn->getType();
+            const QoreTypeInfo* decl_ti = nullptr;
+            if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+                LocalVar* lvar = vrn->ref.id;
+                if (lvar) {
+                    decl_ti = lvar->getTypeInfo();
+                }
+            } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
+                Var* gvar = vrn->ref.var;
+                if (gvar) {
+                    decl_ti = gvar->getTypeInfo();
+                }
+            }
+            // Use declared type if it's more specific (hashdecl or complex hash)
+            if (decl_ti) {
+                const char* decl_name = QoreTypeInfo::getName(decl_ti);
+                if (decl_name && strcmp(decl_name, "hash") && strcmp(decl_name, "hash<auto>")) {
+                    lti = decl_ti;
+                }
+            }
+        }
+    }
+
     // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
     fh.preserveFlags(PF_NARROWED_TYPE);
 
