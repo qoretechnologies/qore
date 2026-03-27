@@ -157,8 +157,8 @@ public class Http3ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
+            *data body, Promise promise) {
+        return poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
     }
 
@@ -217,8 +217,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback response callback
-        @param ctx optional context
+        @param promise Promise to resolve with the response
         @param streaming if True, enable streaming mode (HEADERS without END_STREAM)
 
         @return the stream ID
@@ -227,7 +226,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
+            Promise promise, bool streaming = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -240,7 +239,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx,
+        int stream_id = poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams, streaming);
 
         if (ctl) {

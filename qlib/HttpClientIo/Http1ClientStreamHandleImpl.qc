@@ -211,24 +211,10 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             "bidirectional body streaming is not supported over HTTP/1.1";
     }
 
-    #! Protocol-specific async request submission
-    /** @note The implementation calls handleResponse() to resolve the
-        Promise used by the synchronous request() API.
-    */
-    int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback) {
-        return conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            });
+    #! Protocol-specific async request submission — returns {stream_id, future}
+    hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+            *data body) {
+        return conn.submitRequest(method, path, headers, body);
     }
 
     #! Internal: handles incremental streaming response callbacks from the poll operation

@@ -251,8 +251,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
     #! Cancels a pending request
     cancelRequest(int stream_id) {
-        *code<nothing(hash<auto>, *hash<auto>)> cb = self.cancelStream(stream_id);
-        if (!cb) {
+        # cancelStream notifies the action with executeError (pure C++)
+        if (!self.cancelStream(stream_id)) {
             log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)",
                 stream_id);
             return;
@@ -264,12 +264,6 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             try {
                 sock.cancelQuicStream(sid, stream_id);
             } catch () {}
-        }
-
-        try {
-            cb({}, {"err": "HTTP3-CANCELLED", "desc": "request cancelled"});
-        } catch (hash<ExceptionInfo> ex) {
-            log(LoggerLevel::DEBUG, "cancellation callback threw: %s: %s", ex.err, ex.desc);
         }
 
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);

@@ -102,9 +102,17 @@ public class Http1ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
-        int sid = poll_op.submitRequest(method, path, headers, body, callback, ctx,
-            max_concurrent_streams);
+            *data body, Promise promise) {
+        # H1 poll op still uses callback API — adapter resolves the Promise
+        # TODO: port Http1ClientPollOperation to actions (Phase 3)
+        int sid = poll_op.submitRequest(method, path, headers, body,
+            sub (hash<auto> resp, *hash<auto> err) {
+                if (err) {
+                    try { promise.setError(err.err, err.desc); } catch () {}
+                } else {
+                    try { promise.set(resp); } catch () {}
+                }
+            }, NOTHING, max_concurrent_streams);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {

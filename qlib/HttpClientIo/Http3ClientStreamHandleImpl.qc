@@ -89,20 +89,13 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         throw "COPY-ERROR", "Http3ClientStreamHandle objects cannot be copied";
     }
 
-    #! Protocol-specific async request submission
-    int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback) {
-        return conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            });
+    #! Protocol-specific async request submission — returns {stream_id, future}
+    /** The Future is resolved by a C++ PromiseAction on the I/O thread.
+        No user code runs on the I/O thread.
+    */
+    hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+            *data body) {
+        return conn.submitRequest(method, path, headers, body);
     }
 
     #! Protocol-specific async request + datagram submission for HTTP/3
@@ -122,21 +115,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @see HttpClientStreamHandle::submitAsyncWithDatagram() for the public
         wrapper with state management
     */
-    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, binary datagram) {
+    private hash<auto> submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, binary datagram) {
         # Submit the HTTP/3 request without waking the I/O controller
-        int sid = conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            }, NOTHING, True);
+        hash<auto> result = conn.submitRequest(method, path, headers, body, True);
+        int sid = result.stream_id;
 
         # Queue the datagram (both request and datagram are now pending)
         int qsid = h3conn.getSessionId();
@@ -220,8 +203,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
+            # Create a Promise for streaming response delivery
+            Promise streaming_promise();
+            # TODO: streaming should use Channel, not Promise (Phase 3)
             stream_id = h3conn.submitRequestStreaming(method, path, headers, body,
-                \handleStreamingResponse(), NOTHING, body_streaming);
+                streaming_promise, body_streaming);
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();

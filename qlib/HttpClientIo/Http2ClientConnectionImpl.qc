@@ -96,9 +96,17 @@ public class Http2ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
-            max_concurrent_streams);
+            *data body, Promise promise) {
+        # H2 poll op still uses callback API — adapter resolves the Promise
+        # TODO: port Http2ClientPollOperation to actions (Phase 2)
+        return poll_op.submitRequest(method, path, headers, body,
+            sub (hash<auto> resp, *hash<auto> err) {
+                if (err) {
+                    try { promise.setError(err.err, err.desc); } catch () {}
+                } else {
+                    try { promise.set(resp); } catch () {}
+                }
+            }, NOTHING, max_concurrent_streams);
     }
 
     #! Cancels a request (protocol-specific)

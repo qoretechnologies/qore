@@ -95,8 +95,10 @@ public class HttpClientConnection {
     abstract Socket getSocket();
 
     #! Submits a request on this connection (protocol-specific)
+    /** @param promise Promise to resolve with the response (pure C++ dispatch)
+    */
     abstract int submitRequestImpl(string method, string path, *hash<auto> headers,
-        *data body, HttpResponseCallback callback, *hash<auto> ctx);
+        *data body, Promise promise);
 
     #! Cancels a request (protocol-specific)
     abstract cancelRequestImpl(int stream_id);
@@ -262,29 +264,22 @@ public class HttpClientConnection {
 
     #! Submits a new request on this connection
     /** Validates state and delegates to the protocol-specific submitRequestImpl().
+        The result is delivered via the returned Future (pure C++ Promise resolution
+        on the I/O thread — no user code executes on the I/O thread).
 
         @param method HTTP method (e.g., \c "GET", \c "POST")
         @param path request path (e.g., \c "/api/users")
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback invoked when the response is complete
-        @param ctx optional context hash passed through to submitRequestImpl()
         @param suppress_wake if True, suppresses the I/O controller wake after
-        submitting the request.  This allows the caller to queue additional data
-        (e.g., a QUIC datagram) before waking the controller, ensuring both are
-        sent in the same write cycle.  The caller MUST call notifyPendingData()
-        after queuing the additional data to trigger the write.
+        submitting the request.
 
-        @return the stream ID assigned to this request
+        @return a hash with "stream_id" (int) and "future" (Future) keys
 
         @throw HTTPCLIENT-STATE-ERROR if the connection is not ready
-
-        @note The capacity check is performed atomically inside the poll operation's
-        submitRequest() under stream_lock, so there is no TOCTOU gap between the
-        check and the actual stream creation.
     */
-    int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool suppress_wake = False) {
+    hash<auto> submitRequest(string method, string path, *hash<auto> headers, *data body,
+            bool suppress_wake = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -297,9 +292,11 @@ public class HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
+        Promise p();
+        Future f = p.getFuture();
         int stream_id;
         try {
-            stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+            stream_id = submitRequestImpl(method, path, headers, body, p);
         } catch (hash<ExceptionInfo> ex) {
             # Mark connection Closed only for connection-fatal errors so the
             # pool evicts it immediately; transient errors leave it Ready
@@ -326,7 +323,10 @@ public class HttpClientConnection {
             ctl.wake();
         }
 
-        return stream_id;
+        return {
+            "stream_id": stream_id,
+            "future": f,
+        };
     }
 
     #! Cancels a pending request

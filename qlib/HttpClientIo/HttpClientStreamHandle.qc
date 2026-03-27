@@ -139,8 +139,8 @@ public class HttpClientStreamHandle {
 
         @return the stream ID assigned to this request
     */
-    abstract int submitAsyncImpl(string method, string path, *hash<auto> headers,
-        *data body, HttpResponseCallback callback);
+    abstract hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+        *data body);
 
     #! Returns the stream ID (NOTHING if not yet submitted)
     *int getStreamId() {
@@ -241,20 +241,13 @@ public class HttpClientStreamHandle {
             }
         }
 
-        # Create Promise/Future for this request
-        Promise p();
-        {
-            AutoLock al(lock);
-            request_promise = p;
-        }
-        on_exit {
-            AutoLock al(lock);
-            request_promise = NOTHING;
-        }
-        Future f = p.getFuture();
-
-        submitAsync(method, path, headers, body, \handleAsyncResponse());
-        @assert(exists stream_id);
+        # Submit request — returns {stream_id, future}
+        # The Future is resolved by C++ PromiseAction on the I/O thread
+        # (pure C++, no user code on I/O thread)
+        hash<auto> submit_result = conn.submitRequest(method, path, headers, body);
+        stream_id = submit_result.stream_id;
+        Future f = submit_result.future;
+        reservation_held = False;
 
         try {
             date remaining = end_time - now_us();
@@ -264,7 +257,12 @@ public class HttpClientStreamHandle {
                     sprintf("request timed out after %d ms", wait_timeout);
             }
             auto rv = f.get(remaining);
-            return rv ?? {};
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Complete;
+                response = rv;
+            }
+            return normalizeResponseBody(rv ?? {});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
