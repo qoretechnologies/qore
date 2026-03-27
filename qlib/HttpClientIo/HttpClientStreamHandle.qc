@@ -300,41 +300,15 @@ public class HttpClientStreamHandle {
         until the response is received.
     */
     Future requestAsync(string method, string path, *hash<auto> headers, *data body) {
-        # Wait for connection to become ready
-        if (!conn.isReady()) {
-            if (!conn.waitForReady(request_timeout)) {
-                releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-            }
-        }
-
-        # Create Promise/Future — store Promise as member to keep it alive
-        # through the submitAsyncImpl closure chain (which captures self)
-        Promise p();
-        {
-            AutoLock al(lock);
-            request_promise = p;
-        }
-        Future f = p.getFuture();
-
-        try {
-            submitAsync(method, path, headers, body, \handleAsyncResponse());
-        } catch () {
-            # Clear request_promise on failure so the Promise is not leaked;
-            # handleResponse() will never be called for a failed submission
-            {
-                AutoLock al(lock);
-                remove request_promise;
-            }
-            rethrow;
-        }
-
-        return f;
+        hash<auto> result = submitAsync(method, path, headers, body);
+        return result.future;
     }
 
     #! Submits an asynchronous request with a callback
-    int submitAsync(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback) {
+    #! Submits an async request and returns a Future for the response
+    /** @return hash with "stream_id" (int) and "future" (Future)
+    */
+    hash<auto> submitAsync(string method, string path, *hash<auto> headers, *data body) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -369,10 +343,11 @@ public class HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
 
+        hash<auto> result;
         try {
-            stream_id = submitAsyncImpl(method, path, headers, body, callback);
+            result = submitAsyncImpl(method, path, headers, body);
+            stream_id = result.stream_id;
             @assert(stream_id >= 0);
-            # Reservation converted to active stream
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -385,26 +360,21 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return stream_id;
+        return result;
     }
 
     #! Submits an asynchronous request without blocking on connection establishment
-    /** If the connection is already ready, the request is submitted immediately.
-        Otherwise, submission is deferred until the connection becomes ready via
-        @ref HttpClientConnection::callWhenReady().
+    /** If the connection is not ready, throws HTTPCLIENT-STATE-ERROR.
+        Use waitForReady() first if needed, or use submitAsync() which blocks.
 
-        @param method HTTP method
-        @param path request path
-        @param headers request headers (optional)
-        @param body request body (optional)
-        @param callback user callback invoked when the response is complete
+        @return hash with "stream_id" (int) and "future" (Future)
 
-        @note This method never blocks. Safe to call from event loop threads.
+        @note This method never blocks. The Future is resolved by a C++ PromiseAction
+        on the I/O thread (pure C++, no user code on I/O thread).
 
         @since %HttpClientIo 1.1
     */
-    submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback) {
+    hash<auto> submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -414,42 +384,20 @@ public class HttpClientStreamHandle {
             state = HttpClientStreamState::Open;
         }
 
-        if (conn.isReady()) {
-            doSubmitAsyncImpl(method, path, headers, body, callback);
-        } else {
-            log(LoggerLevel::DEBUG, "deferring async request until connection ready: %s %s", method, path);
-            # callWhenReady fires on the I/O thread (trusted QDOM_PROCESS code).
-            # The normal path (doSubmitAsyncImpl) stays on the I/O thread for
-            # performance — the user's callback fires later via onComplete.
-            # Cancel/error paths dispatch via background because they invoke
-            # the user's callback directly and are not performance-critical.
-            conn.callWhenReady(sub () {
-                try {
-                    {
-                        AutoLock al(lock);
-                        if (state != HttpClientStreamState::Open) {
-                            releaseReservationIfHeld();
-                            background callback(NOTHING, {
-                                "err": "HTTPCLIENT-CANCELLED",
-                                "desc": "stream was cancelled during connection setup",
-                            });
-                            return;
-                        }
-                    }
-                    doSubmitAsyncImpl(method, path, headers, body, callback);
-                } catch (hash<ExceptionInfo> ex) {
-                    background callback(NOTHING, ex);
-                }
-            });
+        if (!conn.isReady()) {
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Pending;
+            }
+            releaseReservationIfHeld();
+            throw "HTTPCLIENT-STATE-ERROR", "connection not ready; use submitAsync() or waitForReady()";
         }
-    }
 
-    #! Internal: performs the actual async submission
-    private doSubmitAsyncImpl(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback) {
-        log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
+        log(LoggerLevel::DEBUG, "submitting async request (non-blocking): %s %s", method, path);
+        hash<auto> result;
         try {
-            stream_id = submitAsyncImpl(method, path, headers, body, callback);
+            result = submitAsyncImpl(method, path, headers, body);
+            stream_id = result.stream_id;
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -462,6 +410,7 @@ public class HttpClientStreamHandle {
             releaseReservationIfHeld();
             rethrow;
         }
+        return result;
     }
 
     #! Submits an asynchronous request with a QUIC datagram atomically
@@ -486,8 +435,8 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-CANCELLED if the stream was cancelled during connection setup
         @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
     */
-    int submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, binary datagram) {
+    hash<auto> submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
+            binary datagram) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -522,11 +471,11 @@ public class HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request with datagram: %s %s", method, path);
 
+        hash<auto> result;
         try {
-            stream_id = submitAsyncWithDatagramImpl(method, path, headers, body,
-                callback, datagram);
+            result = submitAsyncWithDatagramImpl(method, path, headers, body, datagram);
+            stream_id = result.stream_id;
             @assert(stream_id >= 0);
-            # Reservation converted to active stream
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -539,7 +488,7 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return stream_id;
+        return result;
     }
 
     #! Protocol-specific async request + datagram submission (subclasses override)
@@ -558,8 +507,8 @@ public class HttpClientStreamHandle {
 
         @see submitAsyncWithDatagram() for the public wrapper with state management
     */
-    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, binary datagram) {
+    private hash<auto> submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, binary datagram) {
         throw "QUIC-DATAGRAM-NOT-SUPPORTED",
             "QUIC datagrams are only supported over HTTP/3; this stream uses "
             + conn.getProtocol();

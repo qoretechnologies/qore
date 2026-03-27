@@ -139,7 +139,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # Single wake for both request and datagram
         conn.notifyPendingData();
 
-        return sid;
+        return result;
     }
 
     #! Starts a streaming request (for bidirectional streaming over HTTP/3)
