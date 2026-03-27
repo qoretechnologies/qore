@@ -419,6 +419,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("proxy with h1 protocol", \testProxyWithH1Protocol());
         addTestCase("proxy with h2 protocol", \testProxyWithH2Protocol());
 
+        # Callback API tests
+        addTestCase("restDoRequestWithCallback basic", \testRestDoRequestWithCallback());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -2438,5 +2441,24 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit mgr.closeAll();
         hash<auto> stats = mgr.getStats();
         assertEq("h2", stats.protocol);
+    }
+
+    testRestDoRequestWithCallback() {
+        RestClientIo::RestClientIo client = createClient();
+        Counter done(1);
+        *hash<auto> captured_resp;
+        *hash<auto> captured_err;
+
+        client.restDoRequestWithCallback("GET", "/api/test", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                captured_resp = resp;
+                captured_err = err;
+                done.dec();
+            }, True);  # skip_ensure_token=True
+
+        int rc = done.waitForZero(15s);
+        assertEq(0, rc, "callback should fire within timeout");
+        assertFalse(exists captured_err, sprintf("should not have error: %y", captured_err));
+        assertTrue(exists captured_resp, "should have response");
     }
 }

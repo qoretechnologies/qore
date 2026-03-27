@@ -420,6 +420,11 @@ public class HttpClientStreamHandle {
             doSubmitAsyncImpl(method, path, headers, body, callback);
         } else {
             log(LoggerLevel::DEBUG, "deferring async request until connection ready: %s %s", method, path);
+            # callWhenReady runs on the I/O thread (trusted code with QDOM_PROCESS).
+            # This is intentional: HttpClientIo is framework code that runs in the
+            # I/O loop for performance (particularly important for QUIC timer-sensitive
+            # paths). The callback chain (doSubmitAsyncImpl → submitRequest) is all
+            # trusted framework code that doesn't block.
             conn.callWhenReady(sub () {
                 try {
                     {

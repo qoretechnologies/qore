@@ -355,10 +355,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
 
         if (work_xsink) {
-            printd(1, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
-                method_name,
-                work_xsink.getExceptionErr().get<const QoreStringNode>()->c_str(),
-                work_xsink.getExceptionDesc().get<const QoreStringNode>()->c_str());
+            const QoreStringNode* err_str = work_xsink.getExceptionErr().get<const QoreStringNode>();
+            const QoreStringNode* desc_str = work_xsink.getExceptionDesc().get<const QoreStringNode>();
+            printd(0, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
+                method_name ? method_name : "unknown",
+                err_str ? err_str->c_str() : "?",
+                desc_str ? desc_str->c_str() : "?");
             work_xsink.clear();
         }
 

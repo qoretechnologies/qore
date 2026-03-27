@@ -859,7 +859,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             log(LoggerLevel::DEBUG, "restDoRequestWithCallback() %s %s%s", method, url, path);
 
-            # Closure capture keeps stream alive until callback fires, preventing premature GC
+            # Single-flight: one stream per call. Concurrent requests each get their
+            # own stream via acquireStream(). The closure capture keeps the stream
+            # alive until the callback fires, preventing premature GC.
             HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
             stream.submitAsyncNonBlocking(method, path, hdr, prepared.serialized_body,
                 sub (hash<auto> resp, *hash<auto> err) {

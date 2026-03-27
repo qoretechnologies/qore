@@ -329,6 +329,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # HTTP/3 callback ordering (stream removal after callback)
         addTestCase("H3 callback ordering", \testH3CallbackOrdering());
 
+        # Non-blocking deferred submit test
+        addTestCase("submitAsyncNonBlocking deferred path", \testSubmitAsyncNonBlockingDeferred());
+
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -2170,5 +2173,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, resp.status_code,
                 sprintf("iteration %d: H3 response should be 200", i));
         }
+    }
+
+    testSubmitAsyncNonBlockingDeferred() {
+        # Test that submitAsyncNonBlocking works when the connection isn't ready yet
+        # (the deferred callWhenReady path)
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        Counter done(1);
+        *hash<auto> captured_resp;
+        *hash<auto> captured_err;
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        stream.submitAsyncNonBlocking("GET", "/simple", NOTHING, NOTHING,
+            sub (hash<auto> resp, *hash<auto> err) {
+                captured_resp = resp;
+                captured_err = err;
+                done.dec();
+            });
+
+        int rc = done.waitForZero(15s);
+        assertEq(0, rc, "deferred callback should fire within timeout");
+        assertFalse(exists captured_err, sprintf("should not have error: %y", captured_err));
+        assertTrue(exists captured_resp, "should have response");
+        assertEq(200, captured_resp.status_code, "deferred request should return 200");
     }
 }
