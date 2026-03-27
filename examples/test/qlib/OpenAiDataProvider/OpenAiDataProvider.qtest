@@ -16,7 +16,7 @@
 
 %exec-class OpenAiDataProviderTest
 
-class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClient {
+class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
     public {
         hash<auto> last_request;
         string last_method;
@@ -26,17 +26,13 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClient {
         list<hash<SseMessageInfo>> stream_events;
     }
 
-    constructor() : OpenAiRestClient::OpenAiRestClient({"token": "x"}, True) {
+    constructor() : OpenAiRestClientIo({"token": "x"}) {
     }
 
-    hash<auto> doRequest(string method, string path, auto body, *reference<hash<auto>> info,
-            softbool decode_errors = True, *hash<auto> hdr) {
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         last_method = method;
         last_path = path;
         last_request = body;
-        if (info) {
-            info = {};
-        }
         if (!response_body) {
             response_body = {
                 "id": "resp_test",
@@ -52,7 +48,8 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClient {
                 ),
             };
         }
-        return {
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
             "body": response_body,
         };
     }
@@ -197,7 +194,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             "token": "x",
         };
         OpenAiRestConnection rc("test", "test", NOTHING, NOTHING, fake_opts);
-        OpenAiDataProvider prov(rc.get(True));
+        OpenAiDataProvider prov(rc.getAsync(True));
         assertEq("openai", prov.getName());
 %endif
     }
@@ -219,7 +216,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
             testSkip("no connection");
         }
 
-        AbstractDataProvider prov = new OpenAiDataProvider(rc.get());
+        AbstractDataProvider prov = new OpenAiDataProvider(rc.getAsync());
         prov = prov.getChildProvider("models");
         assertGt(0, prov.getChildProviderNames().size());
 %endif
