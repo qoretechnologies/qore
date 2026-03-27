@@ -3095,6 +3095,25 @@ const QoreTypeInfo* QoreTypeInfo::getImplicitArgTypeForIterator(const QoreValue&
         }
     }
 
+    // If not a list or iterator, check if it's a hash type (for "map expr, hash")
+    // When iterating over a hash, $1 gets the hash value type
+    if (!implicitArgType && iteratorTypeInfo) {
+        // Check for hashdecl types: hash<HashdeclName> → the value is the hashdecl type itself
+        // Only for non-list, non-iterator types (direct hash iteration)
+        if (parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL) {
+            const TypedHashDecl* thd = getUniqueReturnHashDecl(iteratorTypeInfo);
+            if (thd) {
+                implicitArgType = iteratorTypeInfo;
+            } else {
+                // For typed complex hashes: hash<string, T> → $1 is T
+                const QoreTypeInfo* hashValueType = getUniqueReturnComplexHash(iteratorTypeInfo);
+                if (hashValueType) {
+                    implicitArgType = hashValueType;
+                }
+            }
+        }
+    }
+
     // If we still don't have an element type, but know the iterator is list-like or an iterator class,
     // return autoTypeInfo instead of null. This ensures $1 gets a definite type (auto) for hash literal
     // type inference, allowing "map {$1: $1}, untyped_list" to produce hash<auto> instead of plain hash.
