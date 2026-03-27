@@ -37,11 +37,11 @@ public namespace HttpClientIo {
     Unlike the server-side Http2PollOperation which processes one request at a time,
     this operation supports multiple concurrent streams on the same connection.
 
-    @par Stream Callbacks
-    When a response is complete, the registered callback for that stream ID is
-    invoked with the response data. Callbacks are registered via submitRequest().
-    After callback dispatch, call continueReading() to resume frame reading
-    without recreating the underlying C++ poll operation.
+    @par Response Delivery
+    For request/response: a Promise is registered per stream and resolved when
+    the response arrives (pure Qore — no user closures on the I/O thread).
+    For streaming: a Channel is registered per stream; each response chunk is
+    pushed to the Channel, which is closed on end-of-stream.
 */
 public class Http2ClientPollOperation inherits HttpClientPollOperation {
     public {
@@ -86,6 +86,12 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             with valid H2 data.
         */
         int reading_cycle_count = 0;
+
+        #! Pending stream promises: stream_id -> Promise (request/response pattern)
+        hash<string, Promise> stream_promises;
+
+        #! Pending stream channels: stream_id -> Channel (streaming pattern)
+        hash<string, Channel> stream_channels;
     }
 
     #! Creates the poll operation for a new connection
@@ -121,7 +127,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         startConnect();
     }
 
-    #! Prevent copying — shared socket/mutex/callbacks would corrupt state
+    #! Prevent copying — shared socket/mutex/state would corrupt
     private copy() {
         throw "COPY-ERROR", "Http2ClientPollOperation cannot be copied";
     }
@@ -149,15 +155,13 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         return False;
     }
 
-    #! Submits a new request on this connection
+    #! Submits a new request on this connection (request/response pattern)
     /** @param method HTTP method (GET, POST, etc.)
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback callback to invoke when response is ready
-        @param ctx optional context to pass to callback
+        @param promise Promise to resolve with the response
         @param max_streams maximum concurrent streams allowed on this connection
-        @param streaming if True, enable streaming mode for this request
 
         @return the stream ID assigned to this request
 
@@ -165,7 +169,34 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP2-CAPACITY-ERROR if the connection is at capacity
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams, bool streaming = False) {
+            Promise promise, int max_streams) {
+        return submitRequestIntern(method, path, headers, body, promise, NOTHING,
+            max_streams, False);
+    }
+
+    #! Submits a new streaming request on this connection
+    /** @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param channel Channel for incremental response delivery
+        @param max_streams maximum concurrent streams allowed on this connection
+        @param streaming if True, keep the request body stream open (bidirectional)
+
+        @return the stream ID assigned to this request
+
+        @throw HTTP2-STATE-ERROR if the connection is not ready for requests
+        @throw HTTP2-CAPACITY-ERROR if the connection is at capacity
+    */
+    int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
+            Channel channel, int max_streams, bool streaming = False) {
+        return submitRequestIntern(method, path, headers, body, NOTHING, channel,
+            max_streams, streaming);
+    }
+
+    #! Internal: common request submission logic
+    private int submitRequestIntern(string method, string path, *hash<auto> headers, *data body,
+            *Promise promise, *Channel channel, int max_streams, bool streaming) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -189,7 +220,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                 : sprintf("%s:%d", url_info.host, url_info.port);
         }
 
-        # Submit request AND register callback atomically under stream_lock
+        # Submit request AND register promise/channel atomically under stream_lock
         # Capacity check is also under stream_lock to prevent TOCTOU races
         int stream_id;
         {
@@ -201,14 +232,17 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             }
             stream_id = sock.submitHttp2Request(req_headers, body, streaming);
             string sid = string(stream_id);
-            stream_callbacks{sid} = callback;
-            if (ctx) {
-                stream_ctxs{sid} = ctx;
+            if (promise) {
+                stream_promises{sid} = promise;
+            }
+            if (channel) {
+                stream_channels{sid} = channel;
             }
             ++active_stream_count;
         }
 
-        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d", method, path, stream_id);
+        log(LoggerLevel::DEBUG, "submitted request: method=%y path=%y stream_id=%d streaming=%y",
+            method, path, stream_id, streaming);
 
         return stream_id;
     }
@@ -234,7 +268,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
 
         # Send directly via C++ — the stream may still be open for writing even
         # after the server sent END_STREAM (half-closed remote per RFC 7540 §5.1).
-        # The stream_callbacks check was removed because callbacks track response
+        # The stream_promises check is not needed because Promises track response
         # delivery, not stream existence.  If the stream doesn't exist at the
         # nghttp2 level, sendHttp2StreamData() will raise an appropriate error.
         sock.sendHttp2StreamData(stream_id, bin_data, end_stream);
@@ -243,28 +277,28 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     #! Cancels a pending request
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
-        *HttpResponseCallback cb;
+        *Promise p;
+        *Channel ch;
         {
             AutoLock al(stream_lock);
-            if (!stream_callbacks.hasKey(sid)) {
+            if (!stream_promises.hasKey(sid) && !stream_channels.hasKey(sid)) {
                 log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)", stream_id);
                 return;
             }
 
             sock.cancelHttp2Stream(stream_id);
 
-            cb = stream_callbacks{sid};
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
+            p = remove stream_promises{sid};
+            ch = remove stream_channels{sid};
             --active_stream_count;
         }
 
-        if (cb) {
-            try {
-                cb({}, {"err": "HTTP2-CANCELLED", "desc": "request cancelled"});
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "cancellation callback threw: %s: %s", ex.err, ex.desc);
-            }
+        if (p) {
+            try { p.setError("HTTP2-CANCELLED", "request cancelled"); } catch () {}
+        }
+        if (ch) {
+            try { ch.send({"error": {"err": "HTTP2-CANCELLED", "desc": "request cancelled"}}); } catch () {}
+            try { ch.close(); } catch () {}
         }
 
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
@@ -274,7 +308,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
     *hash<SocketPollInfo> continuePoll() {
         {
             AutoLock al(stream_lock);
-            callback_dispatched = False;
+            response_dispatched = False;
         }
         while (True) {
             switch (state) {
@@ -322,16 +356,36 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             try { current_op.abort(); } catch () {}
         }
 
-        hash<auto> err = {
+        notifyPendingStreams({
             "err": "HTTP2-ABORT",
             "desc": "connection aborted",
-        };
-        notifyPendingStreams(err);
+        });
 
         try {
             sock.close();
         } catch () {
             # Ignore close errors
+        }
+    }
+
+    #! Override: notifies all pending streams of an error via Promise/Channel
+    private notifyPendingStreams(hash<auto> err) {
+        *hash<string, Promise> promises_copy;
+        *hash<string, Channel> channels_copy;
+        {
+            AutoLock al(stream_lock);
+            promises_copy = stream_promises;
+            channels_copy = stream_channels;
+            remove stream_promises;
+            remove stream_channels;
+            active_stream_count = 0;
+        }
+        foreach string sid in (keys promises_copy) {
+            try { promises_copy{sid}.setError(err.err, err.desc); } catch () {}
+        }
+        foreach string sid in (keys channels_copy) {
+            try { channels_copy{sid}.send({"error": err}); } catch () {}
+            try { channels_copy{sid}.close(); } catch () {}
         }
     }
 
@@ -559,36 +613,44 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
                         stream_id, output.body.size());
                 }
 
-                # Dispatch to callback if registered
+                # Dispatch to Promise (request/response) or Channel (streaming)
                 bool is_end = output.end_stream.toBool();
-                *HttpResponseCallback cb;
-                *hash<auto> stream_ctx;
+                *Promise p;
+                *Channel ch;
                 {
                     AutoLock al(stream_lock);
-                    cb = stream_callbacks{sid};
-                    stream_ctx = stream_ctxs{sid};
-                    if (cb) {
-                        callback_dispatched = True;
+                    p = stream_promises{sid};
+                    ch = stream_channels{sid};
+                    if (p || ch) {
+                        response_dispatched = True;
                     }
-                    # Remove stream BEFORE the callback so that
+                    # Remove stream BEFORE resolving the Promise so that
                     # active_stream_count is already decremented by the time the
-                    # callback resolves the caller's Promise — otherwise
-                    # request() can return while getActiveStreamCount() still
-                    # reports the old value (race in cleanupIdleConnections).
-                    # cb and stream_ctx are captured above, so the callback can
-                    # still be invoked after removal.
-                    if (is_end && cb) {
-                        remove stream_callbacks{sid};
-                        remove stream_ctxs{sid};
+                    # Future resolves — otherwise request() can return while
+                    # getActiveStreamCount() still reports the old value (race in
+                    # cleanupIdleConnections).
+                    if (is_end) {
+                        remove stream_promises{sid};
+                        remove stream_channels{sid};
                         --active_stream_count;
                     }
                 }
-                if (cb) {
-                    try {
-                        cb(output + {"ctx": stream_ctx}, NOTHING);
-                    } catch (hash<ExceptionInfo> ex) {
-                        log(LoggerLevel::ERROR, "stream callback exception: %s: %s",
-                            ex.err, ex.desc);
+                if (p) {
+                    # Request/response — resolve Promise with the complete response
+                    try { p.set(output); } catch () {}
+                } else if (ch) {
+                    # Streaming — push each chunk to the Channel.
+                    # When body and end_stream arrive in the same output, send
+                    # them as separate items so readData() can return body first
+                    # and end_stream on the next call.
+                    if (output.body && is_end) {
+                        try { ch.send(output - "end_stream"); } catch () {}
+                        try { ch.send({"end_stream": True, "stream_id": stream_id}); } catch () {}
+                    } else {
+                        try { ch.send(output); } catch () {}
+                    }
+                    if (is_end) {
+                        try { ch.close(); } catch () {}
                     }
                 } else {
                     log(LoggerLevel::DEBUG, "discarding response for cancelled stream %d", stream_id);
@@ -598,7 +660,7 @@ public class Http2ClientPollOperation inherits HttpClientPollOperation {
             bool dispatched;
             {
                 AutoLock al(stream_lock);
-                dispatched = callback_dispatched;
+                dispatched = response_dispatched;
             }
             if (dispatched) {
                 state = STATE_WAIT_READ;

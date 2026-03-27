@@ -56,7 +56,7 @@ module HttpClientIo {
     - **Connection pooling**: Shared connections across multiple clients
     - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
       blocks the caller via Future while the controller event loop handles actual I/O
-    - **Sync and async APIs**: Blocking and callback-based interfaces
+    - **Sync and async APIs**: Blocking and Future-based interfaces
     - **Streaming support**: WebSocket and SSE over HTTP/2
     - **Connection migration**: QUIC connection migration for HTTP/3
 
@@ -95,23 +95,17 @@ printf("Status: %d, Protocol: %s\n", resp.status_code, resp.protocol);
 manager.closeAll();
     @endcode
 
-    @par Async Usage (callback API)
+    @par Async Usage (Future API)
     @code{.py}
 %requires HttpClientIo
 
 # Create manager (controller auto-created)
 HttpClientConnectionManager manager();
 
-# Submit async request with callback
-manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
-    NOTHING, NOTHING,
-    sub (hash<auto> response, *hash<auto> error) {
-        if (error) {
-            printf("Error: %y\n", error);
-        } else {
-            printf("Response: %y\n", response);
-        }
-    });
+# Submit async request — returns a Future
+hash<auto> result = manager.submitRequestAsync("https://example.com", "GET", "/api/resource");
+hash<auto> response = result.future.get(30s);
+printf("Status: %d\n", response.status_code);
 
 manager.closeAll();
     @endcode
@@ -218,14 +212,6 @@ public namespace HttpClientIo {
         HttpClientProtocol::H3: "h3",
         HttpClientProtocol::H1: "h1",
     };
-
-    #! Callback type for async HTTP response handling
-    /** @param response the HTTP response hash
-        @param error optional error info hash (set on error)
-
-        @since HttpClientIo 1.0
-    */
-    public typedef HttpResponseCallback = code<nothing(hash<auto>, *hash<auto>)>;
 
     #! Connection state enum
     public enum HttpClientConnectionState {

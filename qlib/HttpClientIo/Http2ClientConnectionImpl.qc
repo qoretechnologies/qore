@@ -73,7 +73,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info);
-        poll_op.setReadyCallback(\onConnectionReady());
+        poll_op.setConnection(self);
     }
 
     #! Returns the protocol identifier
@@ -97,16 +97,8 @@ public class Http2ClientConnection inherits HttpClientConnection {
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise) {
-        # H2 poll op still uses callback API — adapter resolves the Promise
-        # TODO: port Http2ClientPollOperation to actions (Phase 2)
-        return poll_op.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                if (err) {
-                    try { promise.setError(err.err, err.desc); } catch () {}
-                } else {
-                    try { promise.set(resp); } catch () {}
-                }
-            }, NOTHING, max_concurrent_streams);
+        return poll_op.submitRequest(method, path, headers, body, promise,
+            max_concurrent_streams);
     }
 
     #! Cancels a request (protocol-specific)
@@ -161,17 +153,16 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback response callback
-        @param ctx optional context
+        @param channel Channel for incremental response delivery
         @param streaming if True, enable streaming mode
 
         @return the stream ID
 
         @note The capacity check is performed atomically inside
-        poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
+        poll_op.submitRequestStreaming() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
+            Channel channel, bool streaming = False) {
         *object ctl;
         {
             AutoLock al(lock);
@@ -184,7 +175,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx,
+        int stream_id = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming);
 
         if (ctl) {

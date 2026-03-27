@@ -36,13 +36,12 @@ hash<auto> response = stream.request("GET", "/api/users");
 printf("Status: %d\n", response.status_code);
     @endcode
 
-    @par Asynchronous Usage
+    @par Asynchronous Usage (Future API)
     @code{.py}
 HttpClientStreamHandle stream = manager.acquireStream("https://example.com");
-stream.submitAsync("GET", "/api/users", NOTHING, NOTHING,
-    sub (hash<auto> response, *hash<auto> error) {
-        printf("Response: %y\n", response);
-    });
+hash<auto> result = stream.submitAsync("GET", "/api/users");
+hash<auto> response = result.future.get(30s);
+printf("Status: %d\n", response.status_code);
     @endcode
 
     @par Streaming Usage (SSE, gRPC, etc.)
@@ -86,9 +85,6 @@ public class HttpClientStreamHandle {
 
         #! Lock for thread safety
         Mutex lock();
-
-        #! Promise for synchronous request() -- set/cleared per call
-        *Promise request_promise;
 
         #! The response when complete
         *hash<auto> response;
@@ -312,7 +308,6 @@ public class HttpClientStreamHandle {
         return result.future;
     }
 
-    #! Submits an asynchronous request with a callback
     #! Submits an async request and returns a Future for the response
     /** @return hash with "stream_id" (int) and "future" (Future)
     */
@@ -433,7 +428,6 @@ public class HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback invoked when the response is complete
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -506,7 +500,6 @@ public class HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -525,7 +518,6 @@ public class HttpClientStreamHandle {
     #! Cancels the request
     cancel() {
         *int sid;
-        *Promise p;
         {
             AutoLock al(lock);
             if (state == HttpClientStreamState::Complete
@@ -535,7 +527,6 @@ public class HttpClientStreamHandle {
             }
             state = HttpClientStreamState::Cancelled;
             sid = stream_id;
-            p = request_promise;
         }
 
         # Release reservation if the stream was never submitted
@@ -549,52 +540,8 @@ public class HttpClientStreamHandle {
                 log(LoggerLevel::DEBUG, "cancel stream %d: %s: %s", sid, ex.err, ex.desc);
             }
         }
-
-        # Note: cancelRequest() above may have already resolved the Promise via
-        # the poll operation's callback → handleResponse().  The try/catch
-        # silently handles the double-resolve race (Promise.setError throws if
-        # already resolved).  Either resolution carries a cancellation error.
-        if (p) {
-            try { p.setError("HTTPCLIENT-CANCELLED", "stream cancelled"); } catch () {}
-        }
-    }
-
-    #! Internal: placeholder callback for the sync request() path
-    /** This is intentionally a no-op.  The actual response handling is done by
-        handleResponse(), which concrete submitAsyncImpl() implementations call
-        before invoking this callback.  The Promise is already resolved by the
-        time this method runs.
-    */
-    private handleAsyncResponse(hash<auto> resp, *hash<auto> err) {
-    }
-
-    #! Internal: handles response (called from protocol-specific submit callback)
-    private handleResponse(hash<auto> resp, *hash<auto> err) {
-        if (!err) {
-            resp = normalizeResponseBody(resp);
-        }
-        *Promise p;
-        {
-            AutoLock al(lock);
-            if (err) {
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            } else {
-                response = resp;
-                state = HttpClientStreamState::Complete;
-            }
-            p = request_promise;
-            # Clear the member reference so the Promise is not leaked in the
-            # async path (the sync request() path has its own on_exit cleanup)
-            remove request_promise;
-        }
-        if (p) {
-            if (err) {
-                try { p.setError(err.err, err.desc, err.arg); } catch () {}
-            } else {
-                try { p.set(resp); } catch () {}
-            }
-        }
+        # Note: cancelRequest() above rejects the Promise in the poll operation,
+        # which resolves the Future with a cancellation error.
     }
 
     #! Internal: converts binary body to string for text-based content types

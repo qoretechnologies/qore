@@ -41,9 +41,9 @@ public namespace HttpClientIo {
     fast path for the AsyncIoController, implementing the continuePoll() state machine
     entirely in C++.
 
-    @par Stream Callbacks
-    When a response is complete, the registered callback for that stream ID is
-    invoked with the response data. Callbacks are registered via submitRequest().
+    @par Response Delivery
+    Responses are delivered via C++ completion actions (PromiseAction for
+    request/response, ChannelAction for streaming) — no closures on the I/O thread.
 */
 public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, HttpClientPollOperation {
     public {

@@ -52,7 +52,7 @@ Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
     // cleanup() should have been called before destructor via QPP destructor.
     // In program shutdown paths the QPP destructor may not run; clean up
     // defensively to avoid leaks.
-    if (inner_op || sock_obj || ready_callback || completion_handler || error_info) {
+    if (inner_op || sock_obj || connection_ref || error_info) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
@@ -91,13 +91,9 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         error_info->deref(xsink);
         error_info = nullptr;
     }
-    if (ready_callback) {
-        ready_callback->deref(xsink);
-        ready_callback = nullptr;
-    }
-    if (completion_handler) {
-        completion_handler->deref(xsink);
-        completion_handler = nullptr;
+    if (connection_ref) {
+        connection_ref->deref(xsink);
+        connection_ref = nullptr;
     }
     if (inner_op) {
         inner_op->deref(xsink);
@@ -131,7 +127,7 @@ QoreValue Http3ClientPollOperationPriv::getOutput() const {
 QoreHashNode* Http3ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     {
         AutoLocker al(stream_lock);
-        callback_dispatched = false;
+        response_dispatched = false;
     }
 
     while (true) {
@@ -293,7 +289,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 if (it != stream_actions.end()) {
                     action = it->second;
                     action->ref();
-                    callback_dispatched = true;
+                    response_dispatched = true;
                 } else if (pending_stream_ids.count(sid) || submits_in_progress > 0) {
                     need_buffer = true;
                 }
@@ -349,7 +345,7 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     bool dispatched;
     {
         AutoLocker al(stream_lock);
-        dispatched = callback_dispatched;
+        dispatched = response_dispatched;
     }
     if (dispatched) {
         h3_state.store(H3State::WAIT_READ, std::memory_order_release);
@@ -440,12 +436,12 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
-    if (!ready_callback) {
+    if (!connection_ref) {
         return;
     }
     ExceptionSink cb_xsink;
     ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &cb_xsink);
-    ValueHolder rv(ready_callback->execValue(*args, &cb_xsink), &cb_xsink);
+    ValueHolder rv(connection_ref->evalMethod("onConnectionReady", *args, &cb_xsink), &cb_xsink);
     if (cb_xsink) {
         cb_xsink.clear();
     }
@@ -692,14 +688,14 @@ auto Http3ClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
 }
 
 //! Called when the operation completes
-/** Invokes the completion handler if set.
+/** Dispatches to connection_ref.handleCompletion() for deterministic result delivery.
 */
 nothing Http3ClientPollOperationBase::onComplete(hash<SocketPollResultInfo> result) {
-    ResolvedCallReferenceNode* handler = priv->getCompletionHandler();
-    if (handler) {
+    QoreObject* conn = priv->getConnectionRef();
+    if (conn) {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
         args->push(result->refSelf(), xsink);
-        ValueHolder rv(handler->execValue(*args, xsink), xsink);
+        ValueHolder rv(conn->evalMethod("handleCompletion", *args, xsink), xsink);
     }
 }
 
@@ -773,18 +769,12 @@ bool Http3ClientPollOperationBase::isGoawayReceived() [flags=RET_VALUE_ONLY] {
     return priv->isGoawayReceived();
 }
 
-//! Sets the ready callback
-/** @param callback the callback to invoke when the connection becomes ready
+//! Sets the owning connection reference for ready/completion dispatch
+/** @param conn the HttpClientConnection object that owns this poll operation
+    @note Must be called during construction, before any continuePoll().
 */
-nothing Http3ClientPollOperationBase::setReadyCallback(code<nothing()> callback) {
-    priv->setReadyCallback(const_cast<ResolvedCallReferenceNode*>(callback), xsink);
-}
-
-//! Sets the completion handler
-/** @param handler the handler to invoke on completion
-*/
-nothing Http3ClientPollOperationBase::setCompletionHandler(code<nothing(hash<SocketPollResultInfo>)> handler) {
-    priv->setCompletionHandler(const_cast<ResolvedCallReferenceNode*>(handler), xsink);
+nothing Http3ClientPollOperationBase::setConnection(object conn) {
+    priv->setConnection(conn, xsink);
 }
 
 //! Requests connection migration (consumed by I/O thread on next continuePoll)

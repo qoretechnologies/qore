@@ -146,7 +146,7 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
 
         try {
             stream_id = h1conn.submitRequestStreaming(method, path, headers, body,
-                \handleStreamingResponse());
+                data_channel);
             @assert(stream_id >= 0);
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
@@ -188,9 +188,51 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
             }
         }
 
+        if (data_channel.isClosed() && data_channel.empty()) {
+            throw "HTTPCLIENT-STREAM-CLOSED",
+                sprintf("stream %d has been closed", stream_id);
+        }
+
         try {
             timeout wait_timeout = timeout_ms ?? -1;
-            return data_channel.recv(wait_timeout);
+            auto rv = data_channel.recv(wait_timeout);
+            # The poll operation pushes raw output hashes to the channel.
+            # Extract body data and detect end_stream/error for the caller.
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.error) {
+                    {
+                        AutoLock al(lock);
+                        error_info = rv.error;
+                        state = HttpClientStreamState::Error;
+                    }
+                    return {"error": rv.error};
+                }
+                # State transitions (monotonically forward)
+                {
+                    AutoLock al(lock);
+                    if (rv.headers && state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::HeadersReceived;
+                        response = rv;
+                    }
+                    if (rv.body && state != HttpClientStreamState::Complete) {
+                        state = HttpClientStreamState::ReceivingBody;
+                    }
+                    if (rv.end_stream) {
+                        state = HttpClientStreamState::Complete;
+                    }
+                }
+                # Return body data extracted from the hash
+                if (rv.body) {
+                    return rv.body;
+                }
+                # Return end_stream sentinel
+                if (rv.end_stream) {
+                    return {"end_stream": True};
+                }
+                # Headers-only or other metadata — return the hash as-is
+                return rv;
+            }
+            return rv;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;
@@ -217,68 +259,6 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         return conn.submitRequest(method, path, headers, body);
     }
 
-    #! Internal: handles incremental streaming response callbacks from the poll operation
-    /** Called by the poll operation for each phase of the streaming response:
-        - Headers: \c resp.status_code and \c resp.headers set
-        - Body data: \c resp.body set (binary chunk)
-        - End of stream: \c resp.end_stream set to \c True
-    */
-    private handleStreamingResponse(hash<auto> resp, *hash<auto> err) {
-        if (err) {
-            {
-                AutoLock al(lock);
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            }
-            try {
-                data_channel.send({"error": err});
-            } catch () {}
-            try {
-                data_channel.close();
-            } catch () {}
-            return;
-        }
-
-        bool end = resp.end_stream.toBool();
-
-        # State transitions (monotonically forward)
-        {
-            AutoLock al(lock);
-            if (resp.headers && state == HttpClientStreamState::Open) {
-                response = resp;
-                state = HttpClientStreamState::HeadersReceived;
-            }
-            if (resp.body && state != HttpClientStreamState::Complete) {
-                state = HttpClientStreamState::ReceivingBody;
-            }
-        }
-
-        # Queue body data
-        if (resp.body) {
-            try {
-                data_channel.send(resp.body);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "CHANNEL-CLOSED") {
-                    return;
-                }
-                rethrow;
-            }
-        }
-
-        # Handle completion
-        if (end) {
-            {
-                AutoLock al(lock);
-                state = HttpClientStreamState::Complete;
-            }
-            try {
-                data_channel.send({"end_stream": True});
-            } catch () {}
-            try {
-                data_channel.close();
-            } catch () {}
-        }
-    }
 }
 
 } # namespace HttpClientIo

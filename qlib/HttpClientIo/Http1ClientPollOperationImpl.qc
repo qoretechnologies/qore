@@ -32,7 +32,7 @@ public namespace HttpClientIo {
     2. Send a serialized HTTP/1.1 request
     3. Read and parse the response header
     4. Read the response body (Content-Length, chunked, or connection-close)
-    5. Dispatch the response callback and return to idle
+    5. Resolve the response Promise (or push to Channel for streaming) and return to idle
 
     HTTP/1.1 is a serial protocol: only one request is in flight at a time.
     The connection manager creates multiple connections for concurrent requests.
@@ -128,6 +128,12 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
 
         #! Streaming read chunk size (16 KB)
         const StreamingChunkSize = 16384;
+
+        #! Pending stream promises: stream_id -> Promise (request/response pattern)
+        hash<string, Promise> stream_promises;
+
+        #! Pending stream channels: stream_id -> Channel (streaming pattern)
+        hash<string, Channel> stream_channels;
     }
 
     #! Creates the poll operation for a new HTTP/1.1 connection
@@ -161,7 +167,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         startConnect();
     }
 
-    #! Prevent copying — shared socket/mutex/callbacks would corrupt state
+    #! Prevent copying — shared socket/mutex/state would corrupt
     private copy() {
         throw "COPY-ERROR", "Http1ClientPollOperation cannot be copied";
     }
@@ -181,7 +187,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         return False;
     }
 
-    #! Submits a new request on this connection
+    #! Submits a new request on this connection (request/response pattern)
     /** Builds the HTTP/1.1 wire-format request, assigns a stream ID, and
         queues the request for the I/O loop to send.
 
@@ -189,8 +195,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback callback to invoke when response is ready
-        @param ctx optional context to pass to callback
+        @param promise Promise to resolve with the response
         @param max_streams maximum concurrent streams (should be 1 for HTTP/1.1)
 
         @return the stream ID assigned to this request
@@ -199,8 +204,32 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         @throw HTTP1-CAPACITY-ERROR if the connection already has a request in flight
     */
     int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, int max_streams,
-            bool streaming = False) {
+            Promise promise, int max_streams) {
+        return submitRequestIntern(method, path, headers, body, promise, NOTHING,
+            max_streams, False);
+    }
+
+    #! Submits a new streaming request on this connection
+    /** @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param channel Channel for incremental response delivery
+        @param max_streams maximum concurrent streams
+        @param streaming if True, keep the request body stream open (bidirectional)
+
+        @return the stream ID assigned to this request
+    */
+    int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
+            Channel channel, int max_streams, bool streaming = True) {
+        return submitRequestIntern(method, path, headers, body, NOTHING, channel,
+            max_streams, streaming);
+    }
+
+    #! Internal: common request submission logic
+    private int submitRequestIntern(string method, string path, *hash<auto> headers,
+            *data body, *Promise promise, *Channel channel, int max_streams,
+            bool streaming) {
         string current_state = state;
         if (current_state != STATE_READING && current_state != STATE_WAIT_READ) {
             throw "HTTP1-STATE-ERROR", sprintf("cannot submit request in state: %y", current_state);
@@ -252,7 +281,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             request_data += body_data;
         }
 
-        # Assign stream ID and register callback atomically under stream_lock
+        # Assign stream ID and register promise/channel atomically under stream_lock
         int stream_id;
         {
             AutoLock al(stream_lock);
@@ -263,9 +292,11 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             }
             stream_id = ++next_stream_id;
             string sid = string(stream_id);
-            stream_callbacks{sid} = callback;
-            if (ctx) {
-                stream_ctxs{sid} = ctx;
+            if (promise) {
+                stream_promises{sid} = promise;
+            }
+            if (channel) {
+                stream_channels{sid} = channel;
             }
             ++active_stream_count;
             pending_request_data = request_data;
@@ -287,19 +318,19 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
     */
     cancelRequest(int stream_id) {
         string sid = string(stream_id);
-        *HttpResponseCallback cb;
+        *Promise p;
+        *Channel ch;
         bool in_flight = False;
         {
             AutoLock al(stream_lock);
-            if (!stream_callbacks.hasKey(sid)) {
+            if (!stream_promises.hasKey(sid) && !stream_channels.hasKey(sid)) {
                 log(LoggerLevel::DEBUG, "cancel ignored: stream %d not found (already completed)",
                     stream_id);
                 return;
             }
 
-            cb = stream_callbacks{sid};
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
+            p = remove stream_promises{sid};
+            ch = remove stream_channels{sid};
             --active_stream_count;
             if (active_sid == stream_id) {
                 if (req_state == REQ_IDLE) {
@@ -316,12 +347,12 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             }
         }
 
-        if (cb) {
-            try {
-                cb({}, {"err": "HTTP1-CANCELLED", "desc": "request cancelled"});
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::DEBUG, "cancellation callback threw: %s: %s", ex.err, ex.desc);
-            }
+        if (p) {
+            try { p.setError("HTTP1-CANCELLED", "request cancelled"); } catch () {}
+        }
+        if (ch) {
+            try { ch.send({"error": {"err": "HTTP1-CANCELLED", "desc": "request cancelled"}}); } catch () {}
+            try { ch.close(); } catch () {}
         }
 
         if (in_flight) {
@@ -336,7 +367,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
     *hash<SocketPollInfo> continuePoll() {
         {
             AutoLock al(stream_lock);
-            callback_dispatched = False;
+            response_dispatched = False;
         }
         while (True) {
             switch (state) {
@@ -379,16 +410,36 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
             try { current_op.abort(); } catch () {}
         }
 
-        hash<auto> err = {
+        notifyPendingStreams({
             "err": "HTTP1-ABORT",
             "desc": "connection aborted",
-        };
-        notifyPendingStreams(err);
+        });
 
         try {
             sock.close();
         } catch () {
             # Ignore close errors
+        }
+    }
+
+    #! Override: notifies all pending streams of an error via Promise/Channel
+    private notifyPendingStreams(hash<auto> err) {
+        *hash<string, Promise> promises_copy;
+        *hash<string, Channel> channels_copy;
+        {
+            AutoLock al(stream_lock);
+            promises_copy = stream_promises;
+            channels_copy = stream_channels;
+            remove stream_promises;
+            remove stream_channels;
+            active_stream_count = 0;
+        }
+        foreach string sid in (keys promises_copy) {
+            try { promises_copy{sid}.setError(err.err, err.desc); } catch () {}
+        }
+        foreach string sid in (keys channels_copy) {
+            try { channels_copy{sid}.send({"error": err}); } catch () {}
+            try { channels_copy{sid}.close(); } catch () {}
         }
     }
 
@@ -924,21 +975,19 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         return streaming_active ? dispatchStreamingEnd() : dispatchResponse();
     }
 
-    #! Internal: dispatches the response to the registered callback and returns to idle
+    #! Internal: dispatches the response to the registered Promise and returns to idle
     private *hash<SocketPollInfo> dispatchResponse() {
         empty_read_count = 0;
 
         int stream_id;
-        *HttpResponseCallback cb;
-        *hash<auto> stream_ctx;
+        *Promise p;
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
             string sid = string(stream_id);
-            cb = stream_callbacks{sid};
-            stream_ctx = stream_ctxs{sid};
-            if (cb) {
-                callback_dispatched = True;
+            p = stream_promises{sid};
+            if (p) {
+                response_dispatched = True;
             }
         }
 
@@ -978,8 +1027,8 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         log(LoggerLevel::DEBUG, "dispatching response: stream_id=%d status=%d body_size=%d",
             stream_id, response_status_code, response_body ? response_body.size() : 0);
 
-        # Clean up ALL per-request state BEFORE the callback so that by the
-        # time the callback resolves the caller's Promise:
+        # Clean up ALL per-request state BEFORE resolving the Promise so that by
+        # the time the Future resolves:
         #   1. active_stream_count is already decremented
         #   2. req_state is IDLE (ready for the next request)
         #   3. response accumulators are cleared
@@ -989,8 +1038,7 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         {
             AutoLock al(stream_lock);
             string sid = string(stream_id);
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
+            remove stream_promises{sid};
             --active_stream_count;
             remove active_sid;
             remove active_method;
@@ -999,12 +1047,8 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         remove current_op;
         resetResponseState();
 
-        if (cb) {
-            try {
-                cb(resp + {"ctx": stream_ctx}, NOTHING);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "stream callback exception: %s: %s", ex.err, ex.desc);
-            }
+        if (p) {
+            try { p.set(resp); } catch () {}
         }
 
         # Check if server requested connection close
@@ -1022,62 +1066,60 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         };
     }
 
-    #! Internal: dispatches response headers to the streaming callback (without body or end_stream)
+    #! Internal: dispatches response headers to the streaming Channel
     private dispatchStreamingHeaders() {
-        *HttpResponseCallback cb;
+        *Channel ch;
         int stream_id;
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
-            cb = stream_callbacks{string(stream_id)};
+            ch = stream_channels{string(stream_id)};
         }
-        if (cb) {
+        if (ch) {
             try {
-                cb({
+                ch.send({
                     "status_code": response_status_code,
                     "headers": response_headers,
                     "protocol": "h1",
                     "stream_id": stream_id,
-                }, NOTHING);
+                });
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "streaming headers callback exception: %s: %s", ex.err, ex.desc);
+                log(LoggerLevel::ERROR, "streaming headers channel send exception: %s: %s",
+                    ex.err, ex.desc);
             }
         }
     }
 
-    #! Internal: dispatches a body data chunk to the streaming callback
+    #! Internal: dispatches a body data chunk to the streaming Channel
     private dispatchStreamingData(binary data) {
-        *HttpResponseCallback cb;
+        *Channel ch;
         {
             AutoLock al(stream_lock);
-            cb = stream_callbacks{string(active_sid)};
+            ch = stream_channels{string(active_sid)};
         }
-        if (cb) {
+        if (ch) {
             try {
-                cb({"body": data}, NOTHING);
+                ch.send({"body": data});
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "streaming data callback exception: %s: %s", ex.err, ex.desc);
+                log(LoggerLevel::ERROR, "streaming data channel send exception: %s: %s",
+                    ex.err, ex.desc);
             }
         }
     }
 
-    #! Internal: dispatches end-of-stream to the streaming callback and cleans up
+    #! Internal: dispatches end-of-stream to the streaming Channel and cleans up
     private *hash<SocketPollInfo> dispatchStreamingEnd() {
         empty_read_count = 0;
 
         int stream_id;
-        *HttpResponseCallback cb;
-        *hash<auto> stream_ctx;
-        # Clean up ALL per-request state BEFORE callback (same rationale as normal response path)
+        *Channel ch;
+        # Clean up ALL per-request state BEFORE channel send (same rationale as normal response path)
         bool close = connection_close;
         {
             AutoLock al(stream_lock);
             stream_id = active_sid;
             string sid = string(stream_id);
-            cb = stream_callbacks{sid};
-            stream_ctx = stream_ctxs{sid};
-            remove stream_callbacks{sid};
-            remove stream_ctxs{sid};
+            ch = remove stream_channels{sid};
             --active_stream_count;
             remove active_sid;
             remove active_method;
@@ -1086,12 +1128,9 @@ public class Http1ClientPollOperation inherits HttpClientPollOperation {
         remove current_op;
         resetResponseState();
 
-        if (cb) {
-            try {
-                cb({"end_stream": True, "stream_id": stream_id, "ctx": stream_ctx}, NOTHING);
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "streaming end callback exception: %s: %s", ex.err, ex.desc);
-            }
+        if (ch) {
+            try { ch.send({"end_stream": True, "stream_id": stream_id}); } catch () {}
+            try { ch.close(); } catch () {}
         }
 
         if (close) {

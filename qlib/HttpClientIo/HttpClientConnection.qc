@@ -81,8 +81,11 @@ public class HttpClientConnection {
         #! Proxy connection info (if using a proxy)
         *hash<auto> proxy_info;
 
-        #! Callbacks to fire when the connection becomes ready (for non-blocking submit)
-        list<code<nothing()>> ready_callbacks;
+        #! Reference to the connection manager (for completion dispatch)
+        *HttpClientConnectionManager manager_ref;
+
+        #! Pool key in the connection manager
+        *string pool_key;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -106,41 +109,38 @@ public class HttpClientConnection {
     #! Closes the connection (protocol-specific)
     abstract closeImpl(*timeout close_timeout);
 
-    #! Internal: called by poll operation when connection becomes ready
-    private onConnectionReady() {
-        *list<code<nothing()>> cbs;
-        {
-            AutoLock al(lock);
-            if (state == HttpClientConnectionState::Connecting) {
-                state = HttpClientConnectionState::Ready;
-                log(LoggerLevel::DEBUG, "connection ready (notified via callback)");
-                ready_cond.broadcast();
-                cbs = remove ready_callbacks;
-            }
-        }
-        # Fire ready callbacks outside the lock
-        if (cbs) {
-            map $1(), cbs;
+    #! Sets the connection manager context for completion dispatch
+    /** @param mgr the connection manager that owns this connection
+        @param key the pool key for this connection
+        @note Called once during connection setup, before submission to the controller.
+    */
+    setManagerContext(HttpClientConnectionManager mgr, string key) {
+        manager_ref = mgr;
+        pool_key = key;
+    }
+
+    #! Called by the poll operation when the connection becomes ready
+    /** @note Called from the I/O thread via poll op's fireReadyCallback().
+        Acquires its own lock — no external synchronization needed.
+    */
+    onConnectionReady() {
+        AutoLock al(lock);
+        if (state == HttpClientConnectionState::Connecting) {
+            state = HttpClientConnectionState::Ready;
+            log(LoggerLevel::DEBUG, "connection ready");
+            ready_cond.broadcast();
         }
     }
 
-    #! Registers a callback to fire when the connection becomes ready
-    /** If already ready, calls the callback immediately (outside the lock).
-
-        @param cb callback with no arguments
-
-        @since %HttpClientIo 1.1
+    #! Called by the poll operation when onComplete fires
+    /** Forwards to the connection manager's handleConnectionResult().
+        @param result the poll result hash
+        @note Called from a worker thread (dispatched by AsyncIoControllerPriv).
     */
-    bool callWhenReady(code<nothing()> cb) {
-        {
-            AutoLock al(lock);
-            if (!isReadyLocked()) {
-                ready_callbacks += cb;
-                return True;
-            }
+    handleCompletion(hash<SocketPollResultInfo> result) {
+        if (manager_ref) {
+            manager_ref.handleConnectionResult(pool_key, self, result);
         }
-        cb();
-        return False;
     }
 
     #! Returns True if the connection is ready for new requests
@@ -360,29 +360,19 @@ public class HttpClientConnection {
         protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
     */
     handlePollResult() {
-        *list<code<nothing()>> cbs;
-        {
-            AutoLock al(lock);
-            last_activity = now_us();
+        AutoLock al(lock);
+        last_activity = now_us();
 
-            if (getPollOperation().isClosed()) {
-                state = HttpClientConnectionState::Closed;
-                ready_cond.broadcast();
-                # Drain ready_callbacks so deferred streams don't hang
-                cbs = remove ready_callbacks;
-            } else if (getPollOperation().isReady() && state == HttpClientConnectionState::Connecting) {
-                state = HttpClientConnectionState::Ready;
-                ready_cond.broadcast();
-                cbs = remove ready_callbacks;
-            }
+        if (getPollOperation().isClosed()) {
+            state = HttpClientConnectionState::Closed;
+            ready_cond.broadcast();
+        } else if (getPollOperation().isReady() && state == HttpClientConnectionState::Connecting) {
+            state = HttpClientConnectionState::Ready;
+            ready_cond.broadcast();
+        }
 
-            # Protocol-specific hook called under lock
-            handlePollResultImpl();
-        }
-        # Fire ready callbacks outside the lock
-        if (cbs) {
-            map $1(), cbs;
-        }
+        # Protocol-specific hook called under lock
+        handlePollResultImpl();
     }
 
     #! Protocol-specific poll result hook, called under lock

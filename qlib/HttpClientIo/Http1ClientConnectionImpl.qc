@@ -79,7 +79,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
 
         poll_op = new Http1ClientPollOperation(url_info, connect_timeout, logger,
             ssl_verify_mode, accept_all_certs, proxy_info);
-        poll_op.setReadyCallback(\onConnectionReady());
+        poll_op.setConnection(self);
     }
 
     #! Returns the protocol identifier
@@ -103,16 +103,8 @@ public class Http1ClientConnection inherits HttpClientConnection {
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
             *data body, Promise promise) {
-        # H1 poll op still uses callback API — adapter resolves the Promise
-        # TODO: port Http1ClientPollOperation to actions (Phase 3)
-        int sid = poll_op.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                if (err) {
-                    try { promise.setError(err.err, err.desc); } catch () {}
-                } else {
-                    try { promise.set(resp); } catch () {}
-                }
-            }, NOTHING, max_concurrent_streams);
+        int sid = poll_op.submitRequest(method, path, headers, body, promise,
+            max_concurrent_streams);
         # Wake the I/O controller so it processes the queued request
         *object ctl;
         {
@@ -126,17 +118,16 @@ public class Http1ClientConnection inherits HttpClientConnection {
     }
 
     #! Submits a streaming request on this connection
-    /** The callback will be called multiple times:
-        - First with response headers (\c status_code, \c headers)
-        - Then with body chunks (\c body)
-        - Finally with \c end_stream: \c True
+    /** Each response phase is pushed to the Channel:
+        - Headers: hash with \c status_code and \c headers
+        - Body data: hash with \c body (binary chunk)
+        - End of stream: hash with \c end_stream: \c True
 
         @param method HTTP method
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback callback invoked for headers, data chunks, and end-of-stream
-        @param ctx optional context passed through to the callback
+        @param channel Channel for incremental response delivery
         @param streaming if \c True, enable streaming mode (incremental body delivery)
 
         @return the stream ID
@@ -144,9 +135,8 @@ public class Http1ClientConnection inherits HttpClientConnection {
         @see submitRequestImpl()
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, *hash<auto> ctx,
-            bool streaming = True) {
-        int sid = poll_op.submitRequest(method, path, headers, body, callback, ctx,
+            *data body, Channel channel, bool streaming = True) {
+        int sid = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming);
         # Wake the I/O controller so it processes the queued request
         *object ctl;

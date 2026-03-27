@@ -298,46 +298,31 @@ public class HttpClientConnectionManager {
         }
     }
 
-    #! Submits an async request and returns immediately
+    #! Submits an async request and returns a Future for the response
     /** @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
         @param method HTTP method
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback callback invoked with response or error
 
-        @return the stream handle (can be used to cancel)
+        @return a hash with "stream" (HttpClientStreamHandle, for cancellation) and
+        "future" (Future, resolves to the response hash)
+
+        @since %HttpClientIo 1.2
     */
-    HttpClientStreamHandle submitRequestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body, HttpResponseCallback callback) {
+    hash<auto> submitRequestAsync(string url, string method, string path,
+            *hash<auto> headers, *data body) {
         int retries = 0;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                # Wrap callback to capture Alt-Svc for deferred processing.
-                # The callback runs on the I/O thread, so we must NOT acquire
-                # pool_lock or do any blocking work.  Instead, push the
-                # alt-svc value to a lock-free queue; drainPendingAltSvc()
-                # processes it on the next user-thread call.
-                HttpResponseCallback wrapped_cb = sub (hash<auto> resp, *hash<auto> err) {
-                    if (!err && resp.headers) {
-                        # NOTE: multiple Alt-Svc headers are collected into a list
-                        # by Qore's HTTP parser — join them per RFC 7838 §3
-                        auto alt_svc_raw = resp.headers."alt-svc"
-                            ?? resp.headers."Alt-Svc";
-                        *string alt_svc = alt_svc_raw.typeCode() == NT_LIST
-                            ? (foldl $1 + ", " + $2, alt_svc_raw)
-                            : alt_svc_raw;
-                        if (alt_svc) {
-                            pending_alt_svc.push({"url": url, "alt_svc": alt_svc});
-                        }
-                    }
-                    callback(resp, err);
+                hash<auto> result = stream.submitAsync(method, path, headers, body);
+                return {
+                    "stream": stream,
+                    "future": result.future,
                 };
-                stream.submitAsync(method, path, headers, body, wrapped_cb);
-                return stream;
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed here — submitAsync()
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
@@ -865,11 +850,11 @@ public class HttpClientConnectionManager {
         if (initial) {
             log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
                 conn.getProtocol(), conn.getConnectionId(), key);
+            # Set manager context once — connection_ref is already set in the
+            # connection impl constructor via poll_op.setConnection(self)
+            conn.setManagerContext(self, key);
         }
 
-        op.setCompletionHandler(sub (hash<SocketPollResultInfo> result) {
-            handleConnectionResult(key, conn, result);
-        });
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
@@ -878,8 +863,8 @@ public class HttpClientConnectionManager {
         });
     }
 
-    #! Internal: handles connection result from controller callback
-    private handleConnectionResult(string key, HttpClientConnection conn,
+    #! Internal: handles connection result from poll operation completion
+    handleConnectionResult(string key, HttpClientConnection conn,
             hash<SocketPollResultInfo> result) {
         if (result.canceled) {
             log(LoggerLevel::DEBUG, "connection %d canceled", conn.getConnectionId());
@@ -920,7 +905,7 @@ public class HttpClientConnectionManager {
             }
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
             # Close the connection to notify pending streams — their
-            # callbacks fire with an error so threads in f.get() wake up
+            # Promises are rejected so threads in f.get() wake up
             # instead of waiting until request_timeout
             try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);

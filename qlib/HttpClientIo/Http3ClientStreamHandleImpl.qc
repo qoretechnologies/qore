@@ -107,7 +107,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -306,8 +305,8 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
-            # NOTE: do NOT check Complete state here — handleStreamingResponse()
-            # sets state to Complete BEFORE sending body data to the channel.
+            # NOTE: do NOT check Complete state here — the C++ ChannelAction
+            # may have set Complete before all data is delivered to the channel.
             # Completion is detected via CHANNEL-CLOSED from the recv() below.
         }
 
@@ -352,83 +351,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     *hash<string, string> getTrailers() {
         AutoLock al(lock);
         return response.trailers;
-    }
-
-    #! Internal: handles streaming response from the poll operation
-    /** This callback is invoked by the poll operation when a response is
-        available for a streaming request.  Body data and the end_stream
-        sentinel are forwarded through the data channel so that readData()
-        can consume them (same pattern as HTTP/2 streaming).
-
-        @param resp the response hash from getOutput() (includes headers, status_code, body, end_stream)
-        @param err error info if an error occurred
-    */
-    private handleStreamingResponse(hash<auto> resp, *hash<auto> err) {
-        if (err) {
-            {
-                AutoLock al(lock);
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            }
-            try {
-                data_channel.send({"error": err});
-            } catch (hash<ExceptionInfo> ex2) {
-                # Ignore CHANNEL-CLOSED and any other send errors in error path;
-                # propagating here would crash the poll operation callback thread
-                log(LoggerLevel::DEBUG, "error channel send failed: %s: %s", ex2.err, ex2.desc);
-            }
-            data_channel.close();
-            return;
-        }
-
-        bool is_end = resp.end_stream.toBool();
-
-        # Update non-terminal states immediately (reader doesn't react to these)
-        {
-            AutoLock al(lock);
-            # Guard state transitions to be monotonically forward only
-            if (resp.headers && state == HttpClientStreamState::Open) {
-                state = HttpClientStreamState::HeadersReceived;
-                response = resp;
-            }
-            if (resp.body && state < HttpClientStreamState::Complete) {
-                state = HttpClientStreamState::ReceivingBody;
-            }
-        }
-
-        # Send data to channel BEFORE setting Complete state, so readers
-        # cannot see Complete + empty channel and throw HTTPCLIENT-STREAM-CLOSED
-        if (resp.body) {
-            try {
-                data_channel.send(resp.body);
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-        }
-
-        if (is_end) {
-            # Set Complete state BEFORE enqueuing end_stream so that isDone()
-            # returns True as soon as the reader consumes end_stream from the
-            # channel (avoiding a race where the reader sees end_stream before
-            # the state transition completes)
-            {
-                AutoLock al(lock);
-                if (state < HttpClientStreamState::Complete) {
-                    state = HttpClientStreamState::Complete;
-                    response = resp;
-                }
-            }
-            try {
-                data_channel.send({"end_stream": True});
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-            data_channel.close();
-        }
     }
 
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)

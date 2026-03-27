@@ -180,28 +180,18 @@ public:
         migration_pending.store(true, std::memory_order_release);
     }
 
-    DLLLOCAL void setReadyCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
-        if (ready_callback) {
-            ready_callback->deref(xsink);
+    DLLLOCAL void setConnection(QoreObject* conn, ExceptionSink* xsink) {
+        if (connection_ref) {
+            connection_ref->deref(xsink);
         }
-        ready_callback = cb;
-        if (ready_callback) {
-            ready_callback->ref();
-        }
-    }
-
-    DLLLOCAL void setCompletionHandler(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
-        if (completion_handler) {
-            completion_handler->deref(xsink);
-        }
-        completion_handler = cb;
-        if (completion_handler) {
-            completion_handler->ref();
+        connection_ref = conn;
+        if (connection_ref) {
+            connection_ref->ref();
         }
     }
 
-    DLLLOCAL ResolvedCallReferenceNode* getCompletionHandler() const {
-        return completion_handler;
+    DLLLOCAL QoreObject* getConnectionRef() const {
+        return connection_ref;
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
@@ -242,7 +232,7 @@ private:
     int empty_read_count = 0;
 
     //! Set when a stream callback was dispatched during the current continuePoll
-    bool callback_dispatched = false;
+    bool response_dispatched = false;
 
     // --- Shared data (under stream_lock) ---
 
@@ -268,11 +258,8 @@ private:
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
-    //! Ready callback (ref'd or nullptr)
-    ResolvedCallReferenceNode* ready_callback = nullptr;
-
-    //! Completion handler (ref'd or nullptr)
-    ResolvedCallReferenceNode* completion_handler = nullptr;
+    //! Owning connection object (ref'd or nullptr) — for ready/completion dispatch
+    QoreObject* connection_ref = nullptr;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

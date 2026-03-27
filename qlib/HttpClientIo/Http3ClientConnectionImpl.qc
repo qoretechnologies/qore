@@ -69,7 +69,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
             accept_all_certs, client_cert, client_pk);
-        poll_op.setReadyCallback(\onConnectionReady());
+        poll_op.setConnection(self);
     }
 
     #! Copying is not supported
