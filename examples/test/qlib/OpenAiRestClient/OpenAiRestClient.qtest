@@ -140,6 +140,10 @@ public class Main inherits QUnit::Test {
             # issue #3321: check default timeouts
             assertEq(45000, client.getTimeout());
             assertEq(45000, client.getConnectTimeout());
+
+            # verify async client can be created
+            OpenAiRestClientIo async_client = rc.getAsync(False);
+            assertEq(True, async_client instanceof OpenAiRestClientIo);
         }
     }
 

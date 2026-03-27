@@ -48,7 +48,7 @@ public class OpenAiSimpleChatCompletionDataProvider inherits OpenAiDataProviderC
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
     }
 
     #! Returns the data provider name
@@ -68,7 +68,7 @@ public class OpenAiSimpleChatCompletionDataProvider inherits OpenAiDataProviderC
             "content": remove req.content,
             "name": remove req.name,
         },);
-        hash<auto> rv = rest.post("chat/completions", req).body;
+        hash<auto> rv = rest.restPost("chat/completions", req).body;
         rv.choice = remove rv.choices[0];
         return rv;
     }

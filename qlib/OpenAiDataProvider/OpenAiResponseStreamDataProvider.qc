@@ -127,7 +127,7 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
     }
 
     #! Creates the object from constructor options
@@ -165,6 +165,16 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
     #! Returns the description of a response message, if this object represents a response message
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() {
         return ResponseType;
+    }
+
+    #! Returns the event types supported by this provider
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            EVENT_OPENAI_RESPONSE_STREAM: <DataProviderMessageInfo>{
+                "desc": "Server-Sent Event from the OpenAI Responses API stream",
+                "type": ResponseType,
+            },
+        };
     }
 
     #! Returns data provider static info
@@ -219,9 +229,10 @@ public class OpenAiResponseStreamDataProvider inherits OpenAiDataProviderCommon,
             *hash<auto> req = OpenAiModelCreateResponseDataProvider::prepareRequest(stream_req, NOTHING,
                 ctx_store, \ctx_info);
             req.stream = True;
-            *OpenAiRestClient::OpenAiRestClient rest = getRestClient();
-            if (!(rest instanceof OpenAiRestClient::OpenAiRestClient)) {
-                throw "SSE-ERROR", "response streaming requires OpenAiRestClient";
+            *OpenAiRestClient::OpenAiRestClientIo rest =
+                cast<*OpenAiRestClient::OpenAiRestClientIo>(getRestClient());
+            if (!rest) {
+                throw "SSE-ERROR", "response streaming requires OpenAiRestClientIo";
             }
             stream = rest.openResponsesStream(req);
 

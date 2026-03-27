@@ -51,7 +51,7 @@ public class OpenAiRunCreateDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
     }
 
     #! Returns the data provider name

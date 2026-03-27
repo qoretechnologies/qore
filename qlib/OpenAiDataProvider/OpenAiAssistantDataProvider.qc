@@ -61,7 +61,7 @@ public class OpenAiAssistantDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest, hash<auto> assistant) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest, hash<auto> assistant) : OpenAiDataProviderCommon(rest) {
         self.assistant = assistant;
         assistant.created_at = localtime(assistant.created_at);
     }
