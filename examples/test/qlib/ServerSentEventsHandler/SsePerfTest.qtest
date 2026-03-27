@@ -233,7 +233,7 @@ class SsePerfTest inherits QUnit::Test {
 
         PerfObserver observer();
         ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-        on_exit delete client;
+        on_exit client.disconnect();
         client.registerObserver(observer);
         client.observersReady();
 
@@ -300,7 +300,7 @@ class SsePerfTest inherits QUnit::Test {
         on_exit {
             for (int i = 0; i < num_clients; ++i) {
                 try {
-                    delete clients[i];
+                    clients[i].disconnect();
                 } catch () {
                     # ignore cleanup errors
                 }
@@ -379,7 +379,7 @@ class SsePerfTest inherits QUnit::Test {
         foreach int size in (sizes) {
             PerfObserver observer();
             ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-            on_exit delete client;
+            on_exit client.disconnect();
             client.registerObserver(observer);
             client.observersReady();
 
@@ -414,7 +414,7 @@ class SsePerfTest inherits QUnit::Test {
 
             # Disconnect current client before the loop reconnects for the next size
             # The server tracks connections, so we need a clean state
-            delete client;
+            client.disconnect();
             # Wait for server to deregister
             int retries = 0;
             while (srv.sse.getConnectionIds().size() > 0 && retries < 100) {
@@ -436,7 +436,7 @@ class SsePerfTest inherits QUnit::Test {
 
         PerfObserver observer();
         ServerSentEventClient client({"url": "sse://localhost:" + srv.port});
-        on_exit delete client;
+        on_exit client.disconnect();
         client.registerObserver(observer);
         client.observersReady();
 
@@ -524,7 +524,7 @@ class SsePerfTest inherits QUnit::Test {
         on_exit {
             for (int i = 0; i < 2; ++i) {
                 try {
-                    delete stable_clients[i];
+                    stable_clients[i].disconnect();
                 } catch () {
                     # ignore cleanup errors
                 }
@@ -552,7 +552,7 @@ class SsePerfTest inherits QUnit::Test {
                     client.observersReady();
                     obs.waitForConnected(5s);
                     usleep(50ms);
-                    delete client;
+                    client.disconnect();
                     ++churn_count;
                 } catch (hash<ExceptionInfo> ex) {
                     if (stop_churn) {
@@ -649,7 +649,7 @@ class SsePerfTest inherits QUnit::Test {
         on_exit {
             for (int i = 0; i < num_clients; ++i) {
                 try {
-                    delete clients[i];
+                    clients[i].disconnect();
                 } catch () {
                     # ignore cleanup errors
                 }
