@@ -106,19 +106,20 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         const QoreTypeInfo* check_ti = ti;
         const QoreTypeInfo* check_rhs_ti = parse_context.typeInfo;
 
-        // For unassigned variables, use declared type instead of parse-time nullptr
+        // For unassigned non-auto variables, use declared type instead of parse-time nullptr
         // This ensures type mismatches are caught in assignment checking
+        // But skip for auto types - they need runtime checking
         if (!check_rhs_ti && right.getType() == NT_VARREF) {
             VarRefNode* vrn = right.get<VarRefNode>();
             qore_var_t vtype = vrn->getType();
             if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
                 LocalVar* lvar = vrn->ref.id;
-                if (lvar) {
+                if (lvar && !lvar->isAutoType()) {
                     check_rhs_ti = lvar->getTypeInfo();
                 }
             } else if (vtype == VT_GLOBAL || vtype == VT_THREAD_LOCAL) {
                 Var* gvar = vrn->ref.var;
-                if (gvar) {
+                if (gvar && !gvar->isAutoType()) {
                     check_rhs_ti = gvar->getTypeInfo();
                 }
             }
