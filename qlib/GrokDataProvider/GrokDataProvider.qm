@@ -1,0 +1,303 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GrokDataProvider module definition
+
+/*  GrokDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) GrokRestClient
+%requires RestClientIo
+
+module GrokDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for xAI Grok services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new GrokDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GrokDataProvider::AppName,
+            "display_name": "Grok AI Services",
+            "short_desc": "xAI Grok AI services",
+            "desc": "xAI Grok AI services providing chat completions, responses API, and streaming",
+            "scheme": "grok",
+            "logo": GrokLogo,
+            "logo_file_name": "grok-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/multi-chat",
+            "action": "multi-chat",
+            "display_name": "Multi Chat",
+            "short_desc": "Chat with Grok by sending multiple messages at once and potentially getting "
+                "multiple replies",
+            "desc": "Chat with Grok by sending multiple messages at once and potentially getting multiple "
+                "replies",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokChatCompletionRequestType.getFields(){"model", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokChatCompletionRequestType.getFields() - ("model", "messages")
+            ),
+            "output_type": GrokChatCompletionDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/simple-chat",
+            "action": "simple-chat",
+            "display_name": "Simple Chat",
+            "short_desc": "Chat with Grok by sending a single message and receiving a single reply",
+            "desc": "Chat with Grok by sending a single message and receiving a single reply",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokSimpleChatCompletionRequestType.getFields(){"model", "role", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokSimpleChatCompletionRequestType.getFields() - ("model", "role", "content")
+            ),
+            "output_type": GrokChatCompletionDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/models/{model}/create-response",
+            "action": "create-response",
+            "display_name": "Process Request With a Model",
+            "short_desc": "Process a request with a Grok model via the Responses API",
+            "desc": "Process a request with a Grok model via the Responses API with optional tool calling "
+                "and conversation continuation",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "model": <DataProviderPathVarInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The Grok model to use",
+                    "desc": "The Grok model to use (e.g., grok-3, grok-4)",
+                    "example_value": "grok-3",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - "input"
+            ),
+            "output_type": GrokModelCreateResponseDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/models/{model}/create-response/stream",
+            "action": "stream-response",
+            "display_name": "Stream Response",
+            "short_desc": "Stream a response from a Grok model with Server-Sent Events",
+            "desc": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_GROK_RESPONSE_STREAM,
+            "path_vars": {
+                "model": <DataProviderPathVarInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The Grok model to use",
+                    "desc": "The Grok model to use (e.g., grok-3, grok-4)",
+                    "example_value": "grok-3",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields{"input",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - "input"
+            ),
+            "output_type": GrokResponseStreamEventDataType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/responses/create",
+            "action": "create-response-direct",
+            "display_name": "Create Response",
+            "short_desc": "Create a response via the Responses API without model context",
+            "desc": "Create a response via the Responses API with full control over model selection and options",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields{"input", "model"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - ("input", "model")
+            ),
+            "output_type": GrokModelCreateResponseDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/responses/{response}/get",
+            "action": "get-response",
+            "display_name": "Get Response",
+            "short_desc": "Retrieve a previously stored response by ID",
+            "desc": "Retrieve a previously stored response by its unique identifier",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "response": <DataProviderPathVarInfo>{
+                    "display_name": "Response",
+                    "short_desc": "The ID of the response to retrieve",
+                    "desc": "The unique identifier of the response to retrieve",
+                    "example_value": "resp_abc123",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseGetRequestType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": GrokResponseGetDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/responses/{response}/delete",
+            "action": "delete-response",
+            "display_name": "Delete Response",
+            "short_desc": "Delete a stored response by ID",
+            "desc": "Delete a previously stored response by its unique identifier",
+            "action_code": DPAT_API,
+            "path_vars": {
+                "response": <DataProviderPathVarInfo>{
+                    "display_name": "Response",
+                    "short_desc": "The ID of the response to delete",
+                    "desc": "The unique identifier of the response to delete",
+                    "example_value": "resp_abc123",
+                },
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseDeleteRequestType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": GrokResponseDeleteDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GrokDataProvider::AppName,
+            "path": "/deferred-completion",
+            "action": "deferred-completion",
+            "display_name": "Get Deferred Completion",
+            "short_desc": "Retrieve a deferred chat completion result by request ID",
+            "desc": "Retrieve the result of a deferred chat completion request using the request ID",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GrokDeferredCompletionRequestType::Fields{"request_id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": GrokDeferredCompletionDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage GrokDataProvider Module
+
+    @tableofcontents
+
+    @section grokdataproviderintro Introduction to the GrokDataProvider Module
+
+    The %GrokDataProvider module provides a @ref dataproviderintro "data provider" API for xAI Grok services.
+
+    This module uses the async-capable @ref RestClientIo for HTTP communication, supporting HTTP/2 and HTTP/3
+    multiplexed connections.
+
+    @section grokdataprovider_examples Examples
+
+    @subsection grokdataprovider_simple_chat Simple Chat
+
+    @code{.py}
+%requires GrokDataProvider
+
+GrokRestConnection rc = get_connection("grok");
+GrokDataProvider::GrokDataProvider prov(rc.getAsync());
+
+AbstractDataProvider chat = prov.getChildProvider("simple-chat");
+hash<auto> result = chat.doRequest({
+    "model": "grok-3",
+    "role": "user",
+    "content": "What is the capital of France?",
+});
+printf("Response: %s\n", result.choice.message.content);
+    @endcode
+
+    @subsection grokdataprovider_stream_example Streaming Responses
+
+    @code{.py}
+%requires GrokDataProvider
+
+GrokRestConnection rc = get_connection("grok");
+GrokDataProvider::GrokDataProvider prov(rc.getAsync());
+
+AbstractDataProvider stream = prov.getChildProvider("models").getChildProvider("grok-3").getChildProvider("stream");
+stream.registerObserver(myObserver);
+stream.observersReady();
+stream.doRequest({
+    "input": "Stream a response about quantum computing",
+});
+    @endcode
+
+    @section grokdataprovider_relnotes Release Notes
+
+    @subsection grokdataprovider_v1_0 GrokDataProvider v1.0
+    - initial release of the module
+    - chat completions (multi and simple)
+    - responses API (create, get, delete)
+    - SSE streaming via DelayedObservable pattern
+    - deferred completion retrieval
+    - conversation context store for response continuation
+    - built with RestClientIo for async HTTP/2 and HTTP/3 support
+*/
+
+#! contains all public definitions in the GrokDataProvider module
+public namespace GrokDataProvider {
+#! Grok app name
+public const AppName = "Grok";
+
+#! Logo file
+const GrokLogo = File::readTextFile(get_script_dir() + "/grok-logo.svg");
+}

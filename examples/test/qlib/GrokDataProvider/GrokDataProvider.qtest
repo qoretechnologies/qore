@@ -1,0 +1,611 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/GrokDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class GrokDataProviderTest
+
+class FakeGrokRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.x.ai", "token": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        if (!response_body) {
+            response_body = {
+                "id": "resp_test",
+                "object": "response",
+                "status": "completed",
+                "created_at": 1700000000,
+                "model": "grok-3",
+                "output": (
+                    {
+                        "type": "message",
+                        "role": "assistant",
+                        "content": (
+                            {
+                                "type": "output_text",
+                                "text": "ok",
+                            },
+                        ),
+                    },
+                ),
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("DELETE", path, body, hdr);
+    }
+
+    string getSafeUrl() {
+        return "https://api.x.ai";
+    }
+}
+
+class TestGrokConversationStore inherits GrokConversationContextStore {
+    public {
+        hash<auto> stored;
+        string last_load_key;
+        string last_save_key;
+        hash<auto> last_saved;
+    }
+
+    *hash<auto> loadContext(string key) {
+        last_load_key = key;
+        return stored{key};
+    }
+
+    nothing saveContext(string key, hash<auto> ctxt) {
+        last_save_key = key;
+        last_saved = ctxt;
+        stored{key} = ctxt;
+    }
+}
+
+class FakeGrokSseStream {
+    public {
+        list<hash<SseMessageInfo>> events;
+        int idx;
+    }
+
+    constructor(*list<hash<SseMessageInfo>> events) {
+        self.events = events ?? ();
+    }
+
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (idx >= events.lsize()) {
+            return;
+        }
+        return events[idx++];
+    }
+
+    close() {
+    }
+}
+
+class StreamObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += data_;
+        m.lock();
+        on_exit m.unlock();
+        cond.broadcast();
+    }
+
+    wait(int count) {
+        date start = now_us();
+        m.lock();
+        on_exit m.unlock();
+        while (events.lsize() < count) {
+            cond.wait(m, 1s);
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", "no stream events in timeout";
+            }
+        }
+    }
+}
+
+public class GrokDataProviderTest inherits QUnit::Test {
+    public {
+%ifndef NoJson
+        *GrokRestClient::GrokRestConnection rc;
+%endif
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("GrokDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("chat completion", \chatCompletionTest());
+        addTestCase("simple chat completion", \simpleChatCompletionTest());
+        addTestCase("create response", \createResponseTest());
+        addTestCase("get response", \getResponseTest());
+        addTestCase("delete response", \deleteResponseTest());
+        addTestCase("deferred completion", \deferredCompletionTest());
+        addTestCase("conversation context", \conversationContextTest());
+        addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("live test", \liveTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private setupConnection() {
+%ifndef NoJson
+        string conn_name = m_options.conn ?? ENV.GROK_CONNECTION ?? "grok";
+        *string api_key = ENV.GROK_API_KEY;
+        if (api_key) {
+            rc = new GrokRestClient::GrokRestConnection("test", "test", NOTHING, NOTHING, {
+                "apikey": api_key,
+            });
+        }
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        GrokDataProvider prov(rest);
+        assertEq("grok", prov.getName());
+
+        # verify child providers exist
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("multi-chat"));
+        assertTrue(children.contains("simple-chat"));
+        assertTrue(children.contains("models"));
+        assertTrue(children.contains("responses"));
+        assertTrue(children.contains("deferred-completion"));
+%endif
+    }
+
+    actionCatalogTest() {
+        # verify stream action is registered
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "stream-response"
+        );
+        assertEq("/models/{model}/create-response/stream", action.path);
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(GrokDataProvider::EVENT_GROK_RESPONSE_STREAM, action.action_val);
+        assertEq(GrokResponseStreamEventDataType, action.output_type);
+
+        # verify multi-chat action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "multi-chat"
+        );
+        assertEq("/multi-chat", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify simple-chat action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "simple-chat"
+        );
+        assertEq("/simple-chat", action.path);
+        assertEq(DPAT_API, action.action_code);
+    }
+
+    chatCompletionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        rest.response_body = {
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "grok-3",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Hello!",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+            },
+        };
+        GrokChatCompletionDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "model": "grok-3",
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "Hello",
+                },
+            ),
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        assertEq("chatcmpl-test", result.id);
+        assertEq("Hello!", result.choices[0].message.content);
+        assertEq(15, result.usage.total_tokens);
+%endif
+    }
+
+    simpleChatCompletionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        rest.response_body = {
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "grok-3",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Paris is the capital of France.",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 8,
+                "total_tokens": 18,
+            },
+        };
+        GrokSimpleChatCompletionDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "model": "grok-3",
+            "role": "user",
+            "content": "What is the capital of France?",
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        # verify single message was wrapped in messages array
+        assertEq("user", rest.last_request.messages[0].role);
+        assertEq("What is the capital of France?", rest.last_request.messages[0].content);
+        # verify single choice extracted
+        assertEq("Paris is the capital of France.", result.choice.message.content);
+%endif
+    }
+
+    createResponseTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        GrokModelCreateResponseDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "model": "grok-3",
+            "input": "Hello, what can you do?",
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("responses", rest.last_path);
+        assertEq("resp_test", result.id);
+        assertEq("completed", result.status);
+        assertEq("ok", result.output_text);
+%endif
+    }
+
+    getResponseTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        rest.response_body = {
+            "id": "resp_abc123",
+            "object": "response",
+            "status": "completed",
+            "model": "grok-3",
+        };
+        GrokResponseGetDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "id": "resp_abc123",
+        });
+        assertEq("GET", rest.last_method);
+        assertEq("responses/resp_abc123", rest.last_path);
+        assertEq("resp_abc123", result.id);
+%endif
+    }
+
+    deleteResponseTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        rest.response_body = {
+            "id": "resp_abc123",
+            "object": "response",
+            "deleted": True,
+        };
+        GrokResponseDeleteDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "id": "resp_abc123",
+        });
+        assertEq("DELETE", rest.last_method);
+        assertEq("responses/resp_abc123", rest.last_path);
+        assertEq(True, result.deleted);
+%endif
+    }
+
+    deferredCompletionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        rest.response_body = {
+            "id": "chatcmpl-test",
+            "object": "chat.completion",
+            "created": 1700000000,
+            "model": "grok-3",
+            "choices": (
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": "Deferred result",
+                    },
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 10,
+                "completion_tokens": 5,
+                "total_tokens": 15,
+            },
+        };
+        GrokDeferredCompletionDataProvider prov(rest);
+        hash<auto> result = prov.doRequest({
+            "request_id": "req_xyz",
+        });
+        assertEq("GET", rest.last_method);
+        assertEq("chat/deferred-completion/req_xyz", rest.last_path);
+        assertEq("Deferred result", result.choices[0].message.content);
+%endif
+    }
+
+    conversationContextTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        GrokModelCreateResponseDataProvider prov(rest);
+
+        # Set up context store
+        TestGrokConversationStore store();
+        prov.setConversationContextStore(store);
+
+        # First request with context key
+        hash<auto> result = prov.doRequest({
+            "model": "grok-3",
+            "input": "Hello",
+            "context_key": "session-1",
+        });
+
+        # Verify context was saved
+        assertEq("session-1", store.last_save_key);
+        assertEq("resp_test", store.last_saved.previous_response_id);
+
+        # Second request should load context
+        rest.response_body = {
+            "id": "resp_test_2",
+            "object": "response",
+            "status": "completed",
+            "model": "grok-3",
+            "output": (
+                {
+                    "type": "message",
+                    "role": "assistant",
+                    "content": (
+                        {
+                            "type": "output_text",
+                            "text": "continued",
+                        },
+                    ),
+                },
+            ),
+        };
+        result = prov.doRequest({
+            "model": "grok-3",
+            "input": "Continue",
+            "context_key": "session-1",
+        });
+
+        # Verify previous_response_id was loaded from context
+        assertEq("resp_test", rest.last_request.previous_response_id);
+        assertEq("resp_test_2", store.last_saved.previous_response_id);
+%endif
+    }
+
+    exampleEventDataTest() {
+        checkModule();
+%ifndef NoJson
+        FakeGrokRestClientIo rest();
+        GrokResponseStreamDataProvider prov(rest, {"id": "grok-3"});
+        auto example = prov.getExampleEventData(EVENT_GROK_RESPONSE_STREAM);
+        assertEq(Type::Hash, example.type());
+        assertTrue(example.type.val());
+%endif
+    }
+
+    dataTypesTest() {
+        # Verify request/response type classes can be instantiated and have expected fields
+        assertEq(Type::Hash, GrokChatCompletionRequestType.getFields().type());
+        assertTrue(GrokChatCompletionRequestType.getFields().hasKey("messages"));
+        assertTrue(GrokChatCompletionRequestType.getFields().hasKey("model"));
+        assertTrue(GrokChatCompletionRequestType.getFields().hasKey("temperature"));
+
+        assertEq(Type::Hash, GrokSimpleChatCompletionRequestType.getFields().type());
+        assertTrue(GrokSimpleChatCompletionRequestType.getFields().hasKey("content"));
+        assertTrue(GrokSimpleChatCompletionRequestType.getFields().hasKey("role"));
+
+        assertEq(Type::Hash, GrokChatCompletionResponseType.getFields().type());
+        assertTrue(GrokChatCompletionResponseType.getFields().hasKey("choices"));
+        assertTrue(GrokChatCompletionResponseType.getFields().hasKey("usage"));
+
+        assertEq(Type::Hash, GrokResponseCreateRequestType.getFields().type());
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("input"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("reasoning"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("tools"));
+
+        assertEq(Type::Hash, GrokResponseType.getFields().type());
+        assertTrue(GrokResponseType.getFields().hasKey("output"));
+        assertTrue(GrokResponseType.getFields().hasKey("usage"));
+        assertTrue(GrokResponseType.getFields().hasKey("conversation_context"));
+
+        # Verify nested type classes
+        assertEq(Type::Hash, GrokMessageDataType.getFields().type());
+        assertTrue(GrokMessageDataType.getFields().hasKey("role"));
+        assertTrue(GrokMessageDataType.getFields().hasKey("content"));
+
+        assertEq(Type::Hash, GrokReasoningConfigDataType.getFields().type());
+        assertTrue(GrokReasoningConfigDataType.getFields().hasKey("effort"));
+        assertTrue(GrokReasoningConfigDataType.getFields().hasKey("summary"));
+
+        assertEq(Type::Hash, GrokResponseUsageDataType.getFields().type());
+        assertTrue(GrokResponseUsageDataType.getFields().hasKey("input_tokens"));
+        assertTrue(GrokResponseUsageDataType.getFields().hasKey("output_tokens"));
+
+        assertEq(Type::Hash, GrokResponseStreamEventDataType.getFields().type());
+        assertTrue(GrokResponseStreamEventDataType.getFields().hasKey("type"));
+    }
+
+    liveTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no connection; set GROK_API_KEY to run live tests");
+        }
+
+        # Test listing models
+        AbstractDataProvider prov = new GrokDataProvider(rc.getAsync(True));
+        AbstractDataProvider models = prov.getChildProvider("models");
+        *list<string> model_names = models.getChildProviderNames();
+        assertGt(0, model_names.size());
+
+        # Test simple chat
+        AbstractDataProvider chat = prov.getChildProvider("simple-chat");
+        hash<auto> result = chat.doRequest({
+            "model": "grok-3",
+            "role": "user",
+            "content": "Reply with exactly one word: hello",
+        });
+        assertTrue(result.choice.message.content.val());
+
+        # Test multi-chat
+        AbstractDataProvider multi_chat = prov.getChildProvider("multi-chat");
+        hash<auto> mc_result = multi_chat.doRequest({
+            "model": "grok-3",
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "Reply with exactly one word: world",
+                },
+            ),
+        });
+        assertTrue(mc_result.choices[0].message.content.val());
+        assertEq("assistant", mc_result.choices[0].message.role);
+        assertTrue(mc_result.usage.total_tokens > 0);
+
+        # Test conversation context with responses API
+        AbstractDataProvider responses_create = prov.getChildProvider("responses").getChildProvider("create");
+        hash<auto> ctx_resp = responses_create.doRequest({
+            "model": "grok-3",
+            "input": "Reply with exactly one word: alpha",
+            "store": True,
+        });
+        assertTrue(ctx_resp.id.val());
+        assertTrue(ctx_resp.conversation_context.previous_response_id.val());
+
+        # Continue conversation using previous_response_id
+        hash<auto> ctx_resp2 = responses_create.doRequest({
+            "model": "grok-3",
+            "input": "Reply with exactly one word: beta",
+            "previous_response_id": ctx_resp.id,
+            "store": True,
+        });
+        assertTrue(ctx_resp2.id.val());
+
+        # Clean up context test responses
+        AbstractDataProvider responses_del = prov.getChildProvider("responses").getChildProvider("delete");
+        responses_del.doRequest({"id": ctx_resp.id});
+        responses_del.doRequest({"id": ctx_resp2.id});
+
+        # Test data persistence: create response with store, get it back, then delete
+        hash<auto> resp = responses_create.doRequest({
+            "model": "grok-3",
+            "input": "Reply with exactly one word: test",
+            "store": True,
+        });
+        assertTrue(resp.id.val());
+        assertEq("completed", resp.status);
+        assertTrue(resp.output_text.val());
+
+        # Retrieve the stored response and verify persistence
+        AbstractDataProvider responses_get = prov.getChildProvider("responses").getChildProvider("get");
+        hash<auto> fetched = responses_get.doRequest({"id": resp.id});
+        assertEq(resp.id, fetched.id);
+
+        # Delete the stored response
+        hash<auto> del_result = responses_del.doRequest({"id": resp.id});
+        assertEq(True, del_result.deleted);
+%endif
+    }
+}
