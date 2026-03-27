@@ -58,7 +58,7 @@
 %endtry
 
 module RestClient {
-    version = "2.4";
+    version = "2.5";
     desc = "user module for calling REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -149,6 +149,12 @@ printf("%N\n", ans.body);
       @ref DataSerializationOptions for possible values when used with the null REST schema validator
 
     @section restclientrelnotes Release Notes
+
+    @subsection restclientv2_5 RestClient v2.5
+    - added \c deserialized_body member to @ref RestResponseInfo "RestResponseInfo" hashdecl
+      to fix \c INVALID-MEMBER crashes when error responses from \c RestClientIo-based data
+      providers are accessed
+      (<a href="https://github.com/qoretechnologies/qorus/issues/69">issue 69</a>)
 
     @subsection restclientv2_4 RestClient v2.4
     - added CBOR serialization support (\c "cbor" data option) when the \c json module
@@ -396,6 +402,11 @@ public hashdecl RestResponseInfo {
     /** @since RestClient 2.4
     */
     *string protocol;
+
+    #! The deserialized response body from error responses
+    /** @since RestClient 2.5
+    */
+    *auto deserialized_body;
 }
 
 #! Abstract interface for REST clients
