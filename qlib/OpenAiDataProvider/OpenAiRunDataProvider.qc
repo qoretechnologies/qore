@@ -64,7 +64,7 @@ public class OpenAiRunDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest, string thread_id, hash<auto> run) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest, string thread_id, hash<auto> run) : OpenAiDataProviderCommon(rest) {
         self.thread_id = thread_id;
         self.run = run;
         if (run.size() > 1) {

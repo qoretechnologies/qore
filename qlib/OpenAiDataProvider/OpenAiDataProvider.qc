@@ -59,7 +59,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : OpenAiDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiDataProviderCommon(rest) {
     }
 
     #! Creates the object from constructor options
