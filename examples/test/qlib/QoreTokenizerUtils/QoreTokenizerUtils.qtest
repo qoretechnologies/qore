@@ -48,6 +48,17 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         addTestCase("TokenCounter fits in context", \counterFitsTest());
         addTestCase("TokenCounter truncate", \counterTruncateTest());
         addTestCase("TokenCounter empty text", \counterEmptyTest());
+        addTestCase("StructuredDocumentChunker basic", \structuredBasicTest());
+        addTestCase("StructuredDocumentChunker metadata propagation", \structuredMetadataTest());
+        addTestCase("StructuredDocumentChunker empty input", \structuredEmptyTest());
+        addTestCase("StructuredDocumentChunker sentence splitting", \structuredSentenceSplitTest());
+        addTestCase("StructuredDocumentChunker overlap", \structuredOverlapTest());
+        addTestCase("StructuredDocumentChunker single block no split", \structuredSingleBlockTest());
+        addTestCase("StructuredDocumentChunker paragraph merging", \structuredParagraphMergeTest());
+        addTestCase("EmbeddingModel config validation", \embeddingConfigTest());
+        addTestCase("EmbeddingModel empty batch", \embeddingEmptyBatchTest());
+        addTestCase("CrossEncoderReranker config validation", \rerankerConfigTest());
+        addTestCase("CrossEncoderReranker empty input", \rerankerEmptyTest());
         set_return_value(main());
     }
 
@@ -205,5 +216,288 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         assertEq(0, tc.countTokens(""));
         assertEq("", tc.truncateToTokens("", 100));
         assertTrue(tc.fitsInContext("", 0));
+    }
+
+    # ============== StructuredDocumentChunker Tests ==============
+
+    structuredBasicTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 30,
+            "chunk_overlap": 5,
+        });
+
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "The quick brown fox jumps over the lazy dog. "
+                    "Machine learning algorithms process data efficiently.",
+                "metadata": {"page": 1},
+            },
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "Natural language processing enables computers to understand text. "
+                    "Retrieval augmented generation combines search with language models.",
+                "metadata": {"page": 2},
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        # should produce at least 1 chunk
+        assertTrue(chunks.size() >= 1,
+            sprintf("should produce at least 1 chunk; got %d", chunks.size()));
+
+        # each chunk should have the expected fields
+        foreach hash<QoreTokenizerUtils::StructuredChunkInfo> chunk in (chunks) {
+            assertTrue(chunk.text.val(), "chunk should have non-empty text");
+            assertTrue(exists chunk.input_ids, "chunk should have input_ids");
+            assertTrue(chunk.token_count > 0,
+                sprintf("chunk should have positive token_count; got %d", chunk.token_count));
+            assertTrue(exists chunk.chunk_index, "chunk should have chunk_index");
+        }
+
+        # chunk indices should be sequential starting from 0
+        for (int i = 0; i < chunks.size(); ++i) {
+            assertEq(i, chunks[i].chunk_index,
+                sprintf("chunk_index should be %d; got %d", i, chunks[i].chunk_index));
+        }
+    }
+
+    structuredMetadataTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 512,
+            "chunk_overlap": 10,
+        });
+
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "Short text on page one.",
+                "metadata": {"page": 1, "heading_path": ("Introduction",)},
+            },
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "Short text on page two.",
+                "metadata": {"page": 2, "heading_path": ("Methods",)},
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        # with 512-token limit, both short texts should fit in one chunk
+        # metadata should come from the first block
+        assertTrue(chunks.size() >= 1, "should produce at least 1 chunk");
+        assertEq(1, chunks[0].metadata.page,
+            "first chunk should inherit page metadata from first block");
+    }
+
+    structuredEmptyTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config);
+
+        # empty block list
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks =
+            chunker.chunkTextBlocks(());
+        assertEq(0, chunks.size(), "empty input should produce no chunks");
+
+        # blocks with only whitespace
+        chunks = chunker.chunkTextBlocks((
+            <QoreTokenizerUtils::TextBlockInfo>{"content": "  \n\n  "},
+        ));
+        assertEq(0, chunks.size(), "whitespace-only blocks should produce no chunks");
+    }
+
+    structuredSentenceSplitTest() {
+        # use a very small chunk size to force sentence splitting
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 15,
+            "chunk_overlap": 0,
+        });
+
+        # a single block with one long paragraph that exceeds 15 tokens
+        string long_para = "The quick brown fox jumps over the lazy dog. "
+            "Machine learning algorithms can process large volumes of data very efficiently. "
+            "Natural language processing enables computers to understand human language.";
+
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": long_para,
+                "metadata": {"source": "test"},
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        # should produce multiple chunks from the oversized paragraph
+        assertTrue(chunks.size() > 1,
+            sprintf("oversized paragraph should be split; got %d chunks", chunks.size()));
+
+        # all chunks should carry the source metadata
+        foreach hash<QoreTokenizerUtils::StructuredChunkInfo> chunk in (chunks) {
+            assertEq("test", chunk.metadata.source,
+                "all chunks should inherit metadata from source block");
+        }
+
+        # chunk indices should be sequential
+        for (int i = 0; i < chunks.size(); ++i) {
+            assertEq(i, chunks[i].chunk_index);
+        }
+    }
+
+    structuredOverlapTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 15,
+            "chunk_overlap": 5,
+        });
+
+        assertEq(15, chunker.getChunkSize());
+        assertEq(5, chunker.getChunkOverlap());
+
+        # create paragraphs that exceed 15 tokens to force multiple chunks
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "The quick brown fox jumps over the lazy dog in the park.\n\n"
+                    "Machine learning algorithms can process very large volumes of data.\n\n"
+                    "Natural language processing enables sophisticated text understanding.\n\n"
+                    "Deep learning uses artificial neural networks with many hidden layers.",
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        # with 15-token chunks, should get multiple chunks from these paragraphs
+        assertTrue(chunks.size() > 1,
+            sprintf("should produce multiple overlapping chunks; got %d", chunks.size()));
+    }
+
+    structuredSingleBlockTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 512,
+            "chunk_overlap": 50,
+        });
+
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "Hello world.",
+                "metadata": {"page": 1},
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        assertEq(1, chunks.size(), "short single block should produce 1 chunk");
+        assertEq("Hello world.", chunks[0].text);
+        assertEq(0, chunks[0].chunk_index);
+        assertEq(1, chunks[0].metadata.page);
+        assertTrue(chunks[0].token_count > 0);
+        assertTrue(chunks[0].input_ids.size() > 0);
+    }
+
+    structuredParagraphMergeTest() {
+        QoreTokenizerUtils::StructuredDocumentChunker chunker(tokenizer_config, {
+            "chunk_size": 100,
+            "chunk_overlap": 0,
+        });
+
+        # multiple small paragraphs that should be merged into one chunk
+        list<hash<QoreTokenizerUtils::TextBlockInfo>> blocks = (
+            <QoreTokenizerUtils::TextBlockInfo>{
+                "content": "First.\n\nSecond.\n\nThird.",
+                "metadata": {"section": "intro"},
+            },
+        );
+
+        list<hash<QoreTokenizerUtils::StructuredChunkInfo>> chunks = chunker.chunkTextBlocks(blocks);
+
+        # three tiny paragraphs should fit in 100-token chunk
+        assertEq(1, chunks.size(), "small paragraphs should merge into one chunk");
+        # verify the merged text contains all paragraphs joined by double newlines
+        assertTrue(chunks[0].text.find("First.") >= 0, "merged text should contain First.");
+        assertTrue(chunks[0].text.find("Second.") >= 0, "merged text should contain Second.");
+        assertTrue(chunks[0].text.find("Third.") >= 0, "merged text should contain Third.");
+    }
+
+    # ===================== EmbeddingModel Tests =====================
+
+    embeddingConfigTest() {
+        # invalid mode
+        assertThrows("EMBEDDING-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{"mode": "invalid"});
+        });
+
+        # HTTP mode without URL
+        assertThrows("EMBEDDING-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{"mode": "http"});
+        });
+
+        # ONNX mode without model_path
+        assertThrows("EMBEDDING-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{"mode": "onnx"});
+        });
+
+        # valid HTTP config should create successfully (won't connect until embed())
+        auto emb = new QoreTokenizerUtils::EmbeddingModel(
+            <QoreTokenizerUtils::EmbeddingConfig>{
+                "mode": "http",
+                "url": "http://localhost:1",
+                "model": "test-model",
+            });
+        assertEq(-1, emb.getDimension(), "dimension should be -1 before first embed");
+    }
+
+    embeddingEmptyBatchTest() {
+        auto emb = new QoreTokenizerUtils::EmbeddingModel(
+            <QoreTokenizerUtils::EmbeddingConfig>{
+                "mode": "http",
+                "url": "http://localhost:1",
+                "model": "test-model",
+            });
+
+        # empty batch should return empty list without making HTTP call
+        list<list<float>> result = emb.embedBatch(());
+        assertEq(0, result.size(), "empty batch should return empty list");
+    }
+
+    # =============== CrossEncoderReranker Tests ===============
+
+    rerankerConfigTest() {
+        # invalid mode
+        assertThrows("RERANKER-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "invalid"});
+        });
+
+        # HTTP mode without URL
+        assertThrows("RERANKER-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "http"});
+        });
+
+        # ONNX mode without model_path
+        assertThrows("RERANKER-CONFIG-ERROR", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "onnx"});
+        });
+
+        # valid HTTP config should create successfully
+        auto rr = new QoreTokenizerUtils::CrossEncoderReranker(
+            <QoreTokenizerUtils::RerankerConfig>{
+                "mode": "http",
+                "url": "http://localhost:1",
+            });
+        assertTrue(exists rr, "reranker should be created");
+    }
+
+    rerankerEmptyTest() {
+        auto rr = new QoreTokenizerUtils::CrossEncoderReranker(
+            <QoreTokenizerUtils::RerankerConfig>{
+                "mode": "http",
+                "url": "http://localhost:1",
+            });
+
+        # empty passages should return empty without HTTP call
+        list<float> scores = rr.score("test query", ());
+        assertEq(0, scores.size(), "empty passages should return empty scores");
+
+        list<int> indices = rr.rerank("test query", (), 3);
+        assertEq(0, indices.size(), "empty passages should return empty indices");
     }
 }

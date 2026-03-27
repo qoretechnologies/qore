@@ -28,9 +28,22 @@
 
 %requires tokenizer
 
+%try-module RestClient
+%define NoRestClient
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module ml
+%define NoMl
+%endtry
+
 module QoreTokenizerUtils {
-    version = "1.0.0";
-    desc = "user module providing document chunking and token counting for RAG pipelines";
+    version = "1.1.0";
+    desc = "user module providing document chunking, token counting, embeddings, and "
+        "re-ranking for RAG pipelines";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -47,10 +60,19 @@ module QoreTokenizerUtils {
 
     - @ref QoreTokenizerUtils::DocumentChunker "DocumentChunker" — splits documents into
       overlapping token-bounded chunks for embedding and vector store ingestion
+    - @ref QoreTokenizerUtils::StructuredDocumentChunker "StructuredDocumentChunker" —
+      structure-aware chunker that preserves paragraph boundaries and propagates metadata
+      from format-specific extractors
     - @ref QoreTokenizerUtils::TokenCounter "TokenCounter" — counts tokens and manages
       LLM context window limits with truncation support
+    - @ref QoreTokenizerUtils::EmbeddingModel "EmbeddingModel" — calls dense embedding
+      endpoints (HTTP or ONNX) for vector generation
+    - @ref QoreTokenizerUtils::CrossEncoderReranker "CrossEncoderReranker" — re-ranks
+      retrieval candidates using a cross-encoder model for improved precision
+    - @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker" — chunks
+      documents at semantic boundaries detected by embedding similarity
 
-    Both classes accept a HuggingFace `tokenizer.json` configuration and produce output
+    All classes accept a HuggingFace `tokenizer.json` configuration and produce output
     compatible with any ONNX embedding model or LLM API.
 
     @par Example: Chunk a document for RAG
@@ -70,6 +92,16 @@ foreach hash<auto> chunk in (chunks) {
     @endcode
 
     @section qoretokenizerutilsrelnotes QoreTokenizerUtils Module Release Notes
+
+    @subsection qoretokenizerutils_1_1 QoreTokenizerUtils Module Version 1.1
+    - Added @ref QoreTokenizerUtils::StructuredDocumentChunker "StructuredDocumentChunker"
+      for structure-aware chunking with metadata propagation
+    - Added @ref QoreTokenizerUtils::EmbeddingModel "EmbeddingModel" for HTTP and ONNX
+      dense embedding support
+    - Added @ref QoreTokenizerUtils::CrossEncoderReranker "CrossEncoderReranker" for
+      two-stage retrieval with re-ranking
+    - Added @ref QoreTokenizerUtils::SemanticDocumentChunker "SemanticDocumentChunker"
+      for embedding-similarity-based semantic chunking
 
     @subsection qoretokenizerutils_1_0 QoreTokenizerUtils Module Version 1.0
     - Initial release with DocumentChunker and TokenCounter
