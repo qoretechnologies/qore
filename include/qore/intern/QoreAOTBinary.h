@@ -819,7 +819,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::GENERIC_EVAL; //!< expression kind
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
-    const QoreListNode* constructor_args = nullptr; //!< constructor args for NEW_OBJECT/SCOPED_NEW_OBJECT
+    const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
 };
 

@@ -6037,6 +6037,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             }
         }
         id.ref2 = call->getName();
+        id.call_args = call->getArgs();
         return id;
     }
 
@@ -6045,7 +6046,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::NEW_OBJECT;
         const QoreClass* qc = no->getClass();
         id.ref1 = qc ? qc->getPath() : "";
-        id.constructor_args = no->getArgs();
+        id.call_args = no->getArgs();
         return id;
     }
 
@@ -6065,7 +6066,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (qc) {
             id.kind = AOTExprKind::NEW_OBJECT;
             id.ref1 = qc->getPath();
-            id.constructor_args = vrn->getArgs();
+            id.call_args = vrn->getArgs();
             return id;
         }
         // Complex hash construction (e.g., hash<string, int> h())
@@ -6192,7 +6193,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (sc->oc) {
             id.ref1 = sc->oc->getPath();
         }
-        id.constructor_args = sc->getArgs();
+        id.call_args = sc->getArgs();
         return id;
     }
 

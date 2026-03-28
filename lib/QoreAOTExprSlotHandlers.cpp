@@ -45,10 +45,10 @@ static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
     // like VarRefNode and hash literals are serialized with slot indices
     // and reconstructed correctly at load time.
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    if (ctx.expr.constructor_args && ctx.expr.constructor_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.constructor_args->size()));
-        for (size_t j = 0; j < ctx.expr.constructor_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.constructor_args->retrieveEntry(j),
+    if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
+        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
                 ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
         }
     } else {
@@ -163,6 +163,16 @@ static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
 static bool write_slot_STATIC_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
     ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    // Serialize method args (may contain sub-expressions like string constants)
+    if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
+        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
     return true;
 }
 

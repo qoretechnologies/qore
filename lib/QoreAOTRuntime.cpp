@@ -1083,9 +1083,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // The list must have value=false (needs_eval=true) so evalList() evaluates VarRefNodes.
                 ref1 = reader.readStringRef(ptr);
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
-                QoreListNode* constructor_args = nullptr;
+                QoreListNode* call_args = nullptr;
                 if (num_args > 0) {
-                    constructor_args = qore_list_private::newList(true);
+                    call_args = qore_list_private::newList(true);
                     for (uint8_t j = 0; j < num_args; ++j) {
                         std::string arg_err;
                         QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
@@ -1094,9 +1094,9 @@ static QoreAOTContext* buildContextFromSlotMap(
                             printd(0, "AOT v2: error reading constructor arg %d for '%s': %s\n",
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
-                            constructor_args->push(QoreValue(), nullptr);
+                            call_args->push(QoreValue(), nullptr);
                         } else {
-                            constructor_args->push(arg, nullptr);
+                            call_args->push(arg, nullptr);
                         }
                     }
                 }
@@ -1122,19 +1122,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 }
                             }
                         }
-                        NewObjectCallNode* nocn = new NewObjectCallNode(qc, constructor_args);
+                        NewObjectCallNode* nocn = new NewObjectCallNode(qc, call_args);
                         printd(5, "  nocn->variant=%p\n", (void*)nocn->getVariant());
                         ctx->exprs[i] = toBitsNB(QoreValue(nocn));
                     } else {
                         printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
-                        if (constructor_args) {
-                            constructor_args->deref(nullptr);
+                        if (call_args) {
+                            call_args->deref(nullptr);
                         }
                         has_unsupported = true;
                     }
                 } else {
-                    if (constructor_args) {
-                        constructor_args->deref(nullptr);
+                    if (call_args) {
+                        call_args->deref(nullptr);
                     }
                     has_unsupported = true;
                 }
@@ -1154,12 +1154,72 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ref1 = reader.readStringRef(ptr);
                 break;
             case AOTExprKind::SELF_METHOD_CALL:
-            case AOTExprKind::STATIC_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
                 ref1 = reader.readStringRef(ptr);
                 ref2 = reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::STATIC_METHOD_CALL: {
+                // ref1 = class path, ref2 = method name, followed by serialized args
+                ref1 = reader.readStringRef(ptr);
+                ref2 = reader.readStringRef(ptr);
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreListNode* call_args = nullptr;
+                if (num_args > 0) {
+                    call_args = qore_list_private::newList(true);
+                    for (uint8_t j = 0; j < num_args; ++j) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
+                            printd(0, "AOT v2: error reading static method arg %d for '%s::%s': %s\n",
+                                j, ref1 ? ref1 : "", ref2 ? ref2 : "", arg_err.c_str());
+                            arg.discard(nullptr);
+                            call_args->push(QoreValue(), nullptr);
+                        } else {
+                            call_args->push(arg, nullptr);
+                        }
+                    }
+                }
+                // Resolve class and method, create node with args
+                if (ref1 && ref2) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, ref1, found_ns);
+                    if (qc) {
+                        const QoreMethod* m = qc->findStaticMethod(ref2);
+                        if (!m) {
+                            qore_class_private* qcp = qore_class_private::get(
+                                *const_cast<QoreClass*>(qc));
+                            m = qcp->parseFindLocalStaticMethod(ref2);
+                        }
+                        if (m) {
+                            // Create StaticMethodCallNode with parse args + resolveParseArgs
+                            QoreParseListNode* pln = nullptr;
+                            if (call_args) {
+                                pln = new QoreParseListNode(&loc_builtin);
+                                ConstListIterator li(call_args);
+                                while (li.next()) {
+                                    QoreValue v = li.getValue();
+                                    v.refSelf();
+                                    pln->add(v, &loc_builtin);
+                                }
+                                call_args->deref(nullptr);
+                                call_args = nullptr;
+                            }
+                            StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
+                            smcn->resolveParseArgs();
+                            ctx->exprs[i] = toBitsNB(QoreValue(smcn));
+                            continue;
+                        }
+                    }
+                }
+                if (call_args) {
+                    call_args->deref(nullptr);
+                }
+                has_unsupported = true;
+                continue;
+            }
             case AOTExprKind::EXPR_TREE: {
                 // Defer EXPR_TREE deserialization until after all other slots
                 // (especially CLOSURE_CREATE) are resolved, since EXPR_TREEs
