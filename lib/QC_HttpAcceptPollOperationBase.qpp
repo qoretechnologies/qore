@@ -1,0 +1,593 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpAcceptPollOperationBase.qpp
+
+    HttpAcceptPollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_HttpAcceptPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_SSLCertificate.h"
+#include "qore/intern/QC_SSLPrivateKey.h"
+#include "qore/intern/qore_socket_private.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// HttpAcceptPollOperationPriv implementation
+// ============================================================
+
+HttpAcceptPollOperationPriv::HttpAcceptPollOperationPriv(QoreObject* self,
+        SocketPollOperationBase* accept_op,
+        QoreObject* accept_op_obj,
+        QoreSocketObject* listener,
+        bool ssl,
+        QoreSSLCertificate* cert,
+        QoreSSLPrivateKey* key,
+        int ssl_verify_flags,
+        bool ssl_accept_all_certs,
+        const char* http_version,
+        bool do_ssl_handshake)
+    : SocketPollOperationBase(self),
+      listener_sock(listener),
+      current_op(accept_op),
+      current_op_obj(accept_op_obj),
+      client_sock(nullptr),
+      client_sock_obj(nullptr),
+      accept_state(AcceptState::ACCEPTING),
+      ssl(ssl),
+      do_ssl_handshake(do_ssl_handshake),
+      is_http2(false),
+      ssl_verify_flags(ssl_verify_flags),
+      ssl_accept_all_certs(ssl_accept_all_certs),
+      http_version(http_version ? http_version : "auto"),
+      cert(cert),
+      key(key) {
+    // listener, accept_op, accept_op_obj, cert, key are already ref'd by the QPP caller
+}
+
+HttpAcceptPollOperationPriv::~HttpAcceptPollOperationPriv() {
+    if (current_op || current_op_obj || client_sock || client_sock_obj || listener_sock || cert || key) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+bool HttpAcceptPollOperationPriv::goalReached() const {
+    return accept_state == AcceptState::COMPLETE;
+}
+
+QoreHashNode* HttpAcceptPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    if (goalReached()) {
+        return nullptr;
+    }
+
+    while (true) {
+        // Drive the current inner operation
+        QoreHashNode* info = current_op->continuePoll(xsink);
+        if (*xsink) {
+            accept_state = AcceptState::COMPLETE;
+            return nullptr;
+        }
+
+        if (info) {
+            // Inner op needs more polling
+            return info;
+        }
+
+        // Inner op completed (returned nullptr) — transition based on state
+        switch (accept_state) {
+            case AcceptState::ACCEPTING:
+                return handleAcceptComplete(xsink);
+
+            case AcceptState::SSL_HANDSHAKE:
+                return handleSslComplete(xsink);
+
+            default:
+                assert(false);
+                return nullptr;
+        }
+    }
+}
+
+void HttpAcceptPollOperationPriv::abort(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->abort(xsink);
+    }
+    if (client_sock_obj) {
+        // Close via the QoreSocketObject to ensure proper cleanup
+        client_sock->close();
+    }
+    accept_state = AcceptState::COMPLETE;
+}
+
+QoreValue HttpAcceptPollOperationPriv::getOutput() const {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+
+    if (client_sock_obj) {
+        client_sock_obj->ref();
+        h->setKeyValue("sock", client_sock_obj, &xsink);
+    } else {
+        h->setKeyValue("sock", QoreValue(), &xsink);
+    }
+    h->setKeyValue("ssl", ssl, &xsink);
+    h->setKeyValue("is_http2", is_http2, &xsink);
+    if (!negotiated_protocol.empty()) {
+        h->setKeyValue("negotiated_protocol", new QoreStringNode(negotiated_protocol), &xsink);
+    } else {
+        h->setKeyValue("negotiated_protocol", QoreValue(), &xsink);
+    }
+    h->setKeyValue("http_version", new QoreStringNode(http_version), &xsink);
+
+    return h.release();
+}
+
+void HttpAcceptPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+
+    if (client_sock) {
+        client_sock->deref(xsink);
+        client_sock = nullptr;
+    }
+    if (client_sock_obj) {
+        client_sock_obj->deref(xsink);
+        client_sock_obj = nullptr;
+    }
+    if (listener_sock) {
+        listener_sock->deref(xsink);
+        listener_sock = nullptr;
+    }
+    if (cert) {
+        cert->deref(xsink);
+        cert = nullptr;
+    }
+    if (key) {
+        key->deref(xsink);
+        key = nullptr;
+    }
+}
+
+const char* HttpAcceptPollOperationPriv::getStateImpl() const {
+    return getAcceptState();
+}
+
+QoreHashNode* HttpAcceptPollOperationPriv::handleAcceptComplete(ExceptionSink* xsink) {
+    // Get the accepted socket from the inner accept operation
+    QoreValue output = current_op->getOutput();
+    if (output.isNullOrNothing()) {
+        // Listener was closed — operation aborted
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+
+    // The accept op returns a QoreObject wrapping a Socket
+    // CRITICAL: We must keep the QoreObject alive — the Socket destructor closes
+    // the file descriptor, so if the QoreObject is destroyed, the socket is closed.
+    client_sock_obj = output.getType() == NT_OBJECT
+        ? output.get<QoreObject>() : nullptr;
+    if (!client_sock_obj) {
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+
+    // Extract the QoreSocketObject from the Socket QoreObject
+    client_sock = reinterpret_cast<QoreSocketObject*>(
+        client_sock_obj->getReferencedPrivateData(CID_SOCKET, xsink));
+    if (*xsink || !client_sock) {
+        client_sock_obj->deref(xsink);
+        client_sock_obj = nullptr;
+        accept_state = AcceptState::COMPLETE;
+        return nullptr;
+    }
+
+    // Set TCP_NODELAY for immediate response sending
+    client_sock->setNoDelay(1);
+
+    printd(5, "HttpAcceptPollOperationPriv::handleAcceptComplete() client_sock=%p ssl=%d\n",
+        client_sock, (int)ssl);
+
+    if (ssl) {
+        // Check if SSL handshake was already performed during accept
+        // (happens when the listener socket has SSL configured — startPollAccept()
+        // automatically upgrades the accepted socket to SSL)
+        if (client_sock->isSecure()) {
+            if (checkAlpn(xsink)) {
+                return nullptr;
+            }
+            accept_state = AcceptState::COMPLETE;
+            return nullptr;
+        }
+
+        if (!do_ssl_handshake) {
+            // Defer SSL handshake to the caller
+            accept_state = AcceptState::COMPLETE;
+            return nullptr;
+        }
+
+        // Start the SSL handshake
+        if (startSslHandshake(xsink)) {
+            return nullptr;
+        }
+        // Continue loop to drive the new SSL operation
+        return continuePoll(xsink);
+    }
+
+    // No SSL
+    if (http_version == "h2c") {
+        // h2c direct mode — HTTP/2 with prior knowledge
+        is_http2 = true;
+        negotiated_protocol = "h2c";
+    }
+
+    accept_state = AcceptState::COMPLETE;
+    return nullptr;
+}
+
+QoreHashNode* HttpAcceptPollOperationPriv::handleSslComplete(ExceptionSink* xsink) {
+    if (checkAlpn(xsink)) {
+        return nullptr;
+    }
+
+    printd(5, "HttpAcceptPollOperationPriv::handleSslComplete() alpn=%s http2=%d\n",
+        negotiated_protocol.c_str(), (int)is_http2);
+
+    accept_state = AcceptState::COMPLETE;
+    return nullptr;
+}
+
+int HttpAcceptPollOperationPriv::startSslHandshake(ExceptionSink* xsink) {
+    printd(5, "HttpAcceptPollOperationPriv::startSslHandshake() client_sock=%p\n", client_sock);
+
+    // Configure SSL on the client socket before starting the handshake
+    if (cert) {
+        // setCertificate takes ownership of the reference
+        client_sock->setCertificate(cert);
+        cert = nullptr;
+    }
+    if (key) {
+        // setPrivateKey takes ownership of the reference
+        client_sock->setPrivateKey(key);
+        key = nullptr;
+    }
+
+    // Set SSL verify mode and enable certificate capture for client certs
+    if (ssl_verify_flags != SSL_VERIFY_NONE) {
+        client_sock->setSslVerifyMode(ssl_verify_flags);
+        client_sock->captureRemoteCertificates(true);
+    }
+
+    // Configure client certificate acceptance behavior
+    client_sock->acceptAllCertificates(ssl_accept_all_certs);
+
+    // Set ALPN protocols based on http_version mode
+    ReferenceHolder<QoreListNode> alpn(buildAlpnList(), xsink);
+    if (alpn) {
+        client_sock->setAlpnProtocols(*alpn, xsink);
+        if (*xsink) {
+            accept_state = AcceptState::COMPLETE;
+            return -1;
+        }
+    }
+
+    // Release the accept operation before starting the SSL operation
+    releaseCurrentOp(xsink);
+
+    // Transition to SSL handshake state
+    accept_state = AcceptState::SSL_HANDSHAKE;
+
+    // Create the SSL upgrade operation — ref the socket for it
+    client_sock->ref();
+    SocketUpgradeServerSslPollOperation* ssl_op =
+        new SocketUpgradeServerSslPollOperation(xsink, client_sock);
+    if (*xsink) {
+        ssl_op->deref(xsink);
+        accept_state = AcceptState::COMPLETE;
+        return -1;
+    }
+
+    // Wrap in a QoreObject for DGC visibility
+    current_op_obj = new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), ssl_op);
+    ssl_op->setSelf(current_op_obj);
+    current_op = ssl_op;
+
+    return 0;
+}
+
+int HttpAcceptPollOperationPriv::checkAlpn(ExceptionSink* xsink) {
+    // Get the negotiated ALPN protocol from the client socket
+    SimpleRefHolder<QoreStringNode> proto(client_sock->getAlpnProtocol());
+    if (proto && proto->size()) {
+        negotiated_protocol = proto->c_str();
+        is_http2 = (negotiated_protocol == "h2");
+    }
+
+    // If HTTP/2 is required but not negotiated, reject the connection
+    if ((http_version == "2.0" || http_version == "2") && !is_http2) {
+        if (client_sock) {
+            client_sock->close();
+        }
+        xsink->raiseException("HTTP2-REQUIRED-ERROR",
+            "HTTP/2 required but client negotiated: %s",
+            negotiated_protocol.empty() ? "none" : negotiated_protocol.c_str());
+        accept_state = AcceptState::COMPLETE;
+        return -1;
+    }
+
+    return 0;
+}
+
+QoreListNode* HttpAcceptPollOperationPriv::buildAlpnList() const {
+    QoreListNode* list = new QoreListNode(stringTypeInfo);
+    if (http_version == "auto") {
+        // Prefer HTTP/2, fall back to HTTP/1.1
+        list->push(new QoreStringNode("h2"), nullptr);
+        list->push(new QoreStringNode("http/1.1"), nullptr);
+    } else if (http_version == "2.0" || http_version == "2") {
+        // HTTP/2 only
+        list->push(new QoreStringNode("h2"), nullptr);
+    } else {
+        // HTTP/1.x only
+        list->push(new QoreStringNode("http/1.1"), nullptr);
+    }
+    return list;
+}
+
+void HttpAcceptPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        // current_op is owned by current_op_obj — deref the object releases both
+        current_op = nullptr;
+    }
+    if (current_op_obj) {
+        current_op_obj->deref(xsink);
+        current_op_obj = nullptr;
+    }
+}
+
+/** @endcond */
+
+//! C++ base class for composite TCP accept + SSL handshake poll operation
+/** This class implements the core poll logic for accepting a TCP connection
+    and optionally performing an SSL/TLS handshake in pure C++, enabling the
+    AsyncIoController I/O thread to drive the poll without Qore interpreter
+    overhead.
+
+    State machine:
+    - ACCEPTING: delegates to SocketAcceptPollOperation
+    - SSL_HANDSHAKE: delegates to SocketUpgradeServerSslPollOperation
+    - COMPLETE: operation finished
+
+    The Qore wrapper (HttpAcceptPollOperation) adds setCompletionContext() and
+    onComplete() for dispatching the result to the async I/O controller.
+
+    @since %Qore 2.3
+*/
+qclass HttpAcceptPollOperationBase [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=HttpAcceptPollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the accept poll operation
+/** @param listener the server Socket to accept connections from
+    @param accept_op the SocketPollOperation from listener.startPollAccept() (already started)
+    @param ssl if True, SSL is required for this listener
+    @param cert SSL certificate (SSLCertificate object, or NOTHING)
+    @param key SSL private key (SSLPrivateKey object, or NOTHING)
+    @param ssl_verify_flags SSL verification flags for client certificate verification
+    @param ssl_accept_all_certs if True, accept all client certificates including self-signed
+    @param http_version HTTP version mode: "auto", "1.0", "1.1", "2.0", "2", or "h2c"
+    @param do_ssl_handshake if False, defer SSL handshake to the caller
+*/
+HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, object accept_op,
+        bool ssl, *object cert, *object key, int ssl_verify_flags,
+        bool ssl_accept_all_certs, string http_version, bool do_ssl_handshake) {
+    // Extract the SocketPollOperationBase from the accept_op QoreObject
+    const QoreClass* accept_cls = accept_op->getClass();
+    if (!accept_cls || !accept_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+        xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
+            "accept_op must be a SocketPollOperationBase subclass");
+        return;
+    }
+
+    ReferenceHolder<SocketPollOperationBase> accept_priv(reinterpret_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(accept_op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink)),
+        xsink);
+    if (*xsink || !accept_priv) {
+        return;
+    }
+
+    // Store listener as Qore member for DGC visibility
+    QoreValue listener_arg = args->retrieveEntry(0);
+    QoreObject* listener_qobj = listener_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(listener_arg.get<const QoreObject>()) : nullptr;
+    if (listener_qobj) {
+        self->setMemberValue("sock", QC_HTTPACCEPTPOLLOPERATIONBASE, listener_qobj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTPACCEPTPOLLOPERATIONBASE,
+        new QoreStringNode("http_accept"), xsink);
+
+    // Extract SSLCertificate from the cert QoreObject (if provided)
+    QoreSSLCertificate* cert_ptr = nullptr;
+    if (cert) {
+        cert_ptr = reinterpret_cast<QoreSSLCertificate*>(
+            const_cast<QoreObject*>(cert)->getReferencedPrivateData(CID_SSLCERTIFICATE, xsink));
+        if (*xsink) {
+            return;
+        }
+        if (!cert_ptr) {
+            xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
+                "cert must be an SSLCertificate object");
+            return;
+        }
+    }
+
+    // Extract SSLPrivateKey from the key QoreObject (if provided)
+    QoreSSLPrivateKey* key_ptr = nullptr;
+    if (key) {
+        key_ptr = reinterpret_cast<QoreSSLPrivateKey*>(
+            const_cast<QoreObject*>(key)->getReferencedPrivateData(CID_SSLPRIVATEKEY, xsink));
+        if (*xsink) {
+            if (cert_ptr) {
+                cert_ptr->deref(xsink);
+            }
+            return;
+        }
+        if (!key_ptr) {
+            if (cert_ptr) {
+                cert_ptr->deref(xsink);
+            }
+            xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-ERROR",
+                "key must be an SSLPrivateKey object");
+            return;
+        }
+    }
+
+    // Ref the listener socket
+    QoreSocketObject* listener_ptr = *listener;
+    listener_ptr->ref();
+
+    // Ref the accept_op QoreObject for DGC (the priv takes ownership)
+    const_cast<QoreObject*>(accept_op)->ref();
+
+    self->setPrivate(CID_HTTPACCEPTPOLLOPERATIONBASE,
+        new HttpAcceptPollOperationPriv(self, accept_priv.release(),
+            const_cast<QoreObject*>(accept_op),
+            listener_ptr, ssl, cert_ptr, key_ptr, ssl_verify_flags,
+            ssl_accept_all_certs, http_version->c_str(), do_ssl_handshake));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+HttpAcceptPollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPACCEPTPOLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+HttpAcceptPollOperationBase::copy() {
+    xsink->raiseException("HTTPACCEPTPOLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return "http_accept"
+*/
+string HttpAcceptPollOperationBase::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return one of "accepting", "ssl_handshake", or "complete"
+*/
+string HttpAcceptPollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the operation is complete
+/** @return True when the accept (+ optional SSL handshake) is done
+*/
+bool HttpAcceptPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> HttpAcceptPollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Aborts any inner poll operation and closes the client socket if open.
+*/
+nothing HttpAcceptPollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output of the operation
+/** @return a hash with keys: sock, ssl, is_http2, negotiated_protocol, http_version
+*/
+auto HttpAcceptPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if this is an SSL connection
+/** @return True if SSL is configured for this listener
+*/
+bool HttpAcceptPollOperationBase::isSsl() [flags=RET_VALUE_ONLY] {
+    return priv->isSsl();
+}
+
+//! Returns True if HTTP/2 was negotiated
+/** @return True if HTTP/2 was negotiated via ALPN or h2c prior knowledge
+*/
+bool HttpAcceptPollOperationBase::isHttp2() [flags=RET_VALUE_ONLY] {
+    return priv->isHttp2();
+}
+
+//! Returns the negotiated ALPN protocol
+/** @return the negotiated protocol string (e.g. "h2", "http/1.1"), or @ref nothing
+*/
+*string HttpAcceptPollOperationBase::getNegotiatedProtocol() [flags=RET_VALUE_ONLY] {
+    const char* proto = priv->getNegotiatedProtocol();
+    return proto ? new QoreStringNode(proto) : QoreValue();
+}
+
+//! Returns the current accept state as a string
+/** @return "accepting", "ssl_handshake", or "complete"
+*/
+string HttpAcceptPollOperationBase::getAcceptState() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(priv->getAcceptState());
+}
+
+//! Returns the accepted client socket
+/** @return the accepted Socket object
+    @throw OPERATION-NOT-COMPLETE if the accept operation has not completed yet
+*/
+Socket HttpAcceptPollOperationBase::getSocket() {
+    if (!priv->goalReached()) {
+        xsink->raiseException("OPERATION-NOT-COMPLETE",
+            "Cannot get socket: accept operation not complete (state: %s)", priv->getAcceptState());
+        return QoreValue();
+    }
+    QoreObject* sock_obj = priv->getReferencedClientSocketObj();
+    if (!sock_obj) {
+        xsink->raiseException("OPERATION-NOT-COMPLETE", "No client socket available");
+        return QoreValue();
+    }
+    return sock_obj;
+}
