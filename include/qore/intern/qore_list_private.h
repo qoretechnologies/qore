@@ -61,7 +61,11 @@ struct qore_list_private {
     }
 
     DLLLOCAL static QoreListNode* newList(bool needs_eval) {
-        QoreListNode* l = new QoreListNode;
+        // Use autoTypeInfo to prevent type stripping when entries are evaluated.
+        // Without it, push() → stripVal() → copy_strip_complex_types() strips
+        // hashdecl types from evaluated hash entries (e.g., hash<PipelineOptionInfo>
+        // becomes plain hash).
+        QoreListNode* l = new QoreListNode(autoTypeInfo);
         if (needs_eval) {
             l->value = false;
             l->needs_eval_flag = true;
