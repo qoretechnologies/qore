@@ -5434,6 +5434,40 @@ void SocketReadHttpHeaderPollOperation::abort(ExceptionSink* xsink) {
     SocketRecvPollOperationBase::abort(xsink);
 }
 
+// --- Factory functions for public API (AsyncCompletionAction.h) ---
+
+#include "qore/intern/AsyncCompletionAction.h"
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreEventNotifier.h"
+
+AbstractAsyncAction* createChannelAction(QoreObject* channel_obj, ExceptionSink* xsink) {
+    QoreChannel* ch = static_cast<QoreChannel*>(
+        const_cast<QoreObject*>(channel_obj)->getReferencedPrivateData(CID_CHANNEL, xsink));
+    if (!ch) {
+        if (!*xsink) {
+            xsink->raiseException("CHANNEL-ERROR", "invalid Channel object");
+        }
+        return nullptr;
+    }
+    ChannelAction* action = new ChannelAction(ch);
+    ch->deref(xsink);  // ChannelAction refs internally; release getReferencedPrivateData ref
+    return action;
+}
+
+AbstractAsyncAction* createEventNotifierAction(QoreObject* notifier_obj, ExceptionSink* xsink) {
+    QoreEventNotifier* en = static_cast<QoreEventNotifier*>(
+        const_cast<QoreObject*>(notifier_obj)->getReferencedPrivateData(CID_EVENTNOTIFIER, xsink));
+    if (!en) {
+        if (!*xsink) {
+            xsink->raiseException("EVENTNOTIFIER-ERROR", "invalid EventNotifier object");
+        }
+        return nullptr;
+    }
+    EventNotifierAction* action = new EventNotifierAction(en);
+    en->deref(xsink);  // EventNotifierAction refs internally; release getReferencedPrivateData ref
+    return action;
+}
+
 // --- End of out-of-line implementations ---
 
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,

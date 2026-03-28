@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2026 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,117 +32,10 @@
 #ifndef _QORE_INTERN_ASYNCCOMPLETIONACTION_H
 #define _QORE_INTERN_ASYNCCOMPLETIONACTION_H
 
-#include <qore/Qore.h>
-#include <qore/QoreFuture.h>
-#include <qore/QoreCounter.h>
+#include "qore/AsyncCompletionAction.h"
 
 #include "qore/intern/QoreChannel.h"
 #include "qore/intern/QoreEventNotifier.h"
-
-#include <vector>
-
-//! Abstract base for I/O completion actions — pure C++, no Qore interpreter
-/** Completion actions describe WHAT to do with the result of an async I/O
-    operation. They are executed on the I/O thread by the poll operation's
-    continuePoll() — but since they are pure C++ (no execValue()), they
-    cannot block the I/O thread or run untrusted user code.
-
-    Actions are ref-counted. The poll operation holds a ref; deref when the
-    stream completes or the operation is cancelled.
-
-    @since %Qore 2.3
-*/
-class AbstractAsyncAction : public QoreReferenceCounter {
-public:
-    DLLLOCAL virtual ~AbstractAsyncAction() = default;
-
-    //! Called on the I/O thread when the operation produces a successful result
-    /** @param output the result value (ref'd — action must deref or transfer ownership)
-        @param xsink exception sink
-    */
-    DLLLOCAL virtual void execute(QoreValue output, ExceptionSink* xsink) = 0;
-
-    //! Called on the I/O thread when the operation fails
-    /** @param err error string
-        @param desc error description
-        @param xsink exception sink
-    */
-    DLLLOCAL virtual void executeError(const char* err, const char* desc,
-        ExceptionSink* xsink) = 0;
-
-    //! Release all held references
-    DLLLOCAL virtual void cleanup(ExceptionSink* xsink) = 0;
-
-    //! Returns true if this is a streaming action (e.g., ChannelAction)
-    /** Used by H2/H1 dispatch to decide whether to split body+end_stream
-        into separate items for the consumer.
-    */
-    DLLLOCAL virtual bool isStreaming() const { return false; }
-
-    //! Called when the stream is complete (end_stream received)
-    /** Streaming actions override this to close the channel.
-        Default is a no-op for non-streaming actions (e.g., PromiseAction).
-    */
-    DLLLOCAL virtual void complete(ExceptionSink* xsink) {}
-
-    DLLLOCAL void ref() { ROreference(); }
-    DLLLOCAL void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            cleanup(xsink);
-            delete this;
-        }
-    }
-};
-
-//! Resolves a QorePromise with the result
-/** Used for synchronous request() calls — the user thread blocks on
-    Future::get() and receives the result when the I/O thread resolves
-    the Promise.
-
-    @since %Qore 2.3
-*/
-class PromiseAction : public AbstractAsyncAction {
-public:
-    //! Creates a PromiseAction from a QorePromise and optional QoreObject
-    /** @param promise the QorePromise private data (will be ref'd)
-        @param promise_obj the Promise QoreObject — if provided, a strong ref is
-            held to prevent the QoreObject from being garbage collected (which would
-            trigger Promise::destructor() → promiseDestroyed() and invalidate the
-            promise before the I/O thread resolves it)
-    */
-    DLLLOCAL PromiseAction(QorePromise* promise, QoreObject* promise_obj = nullptr)
-        : promise(promise), promise_obj(promise_obj) {
-        assert(promise);
-        promise->ref();
-        if (promise_obj) {
-            promise_obj->ref();
-        }
-    }
-
-    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
-        promise->set(output, xsink);
-    }
-
-    DLLLOCAL void executeError(const char* err, const char* desc,
-            ExceptionSink* xsink) override {
-        promise->setError(err, desc, QoreValue(), xsink);
-    }
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        if (promise) {
-            promise->deref(xsink);
-            promise = nullptr;
-        }
-        if (promise_obj) {
-            promise_obj->deref(xsink);
-            promise_obj = nullptr;
-        }
-    }
-
-private:
-    QorePromise* promise;
-    QoreObject* promise_obj = nullptr;
-};
 
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
 /** Used for streaming responses (SSE, gRPC, WebSocket, A2A). The I/O thread
@@ -234,84 +127,6 @@ public:
 
 private:
     QoreEventNotifier* notifier;
-};
-
-//! Decrements a QoreCounter
-/** Used for synchronization — e.g., wait for N operations to complete.
-
-    @since %Qore 2.3
-*/
-class CounterAction : public AbstractAsyncAction {
-public:
-    DLLLOCAL CounterAction(QoreCounter* counter) : counter(counter) {
-        assert(counter);
-        // QoreCounter doesn't have ref/deref — it's typically stack-allocated
-        // or member-owned. The caller must ensure it outlives this action.
-    }
-
-    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
-        output.discard(xsink);
-        counter->dec(xsink);
-    }
-
-    DLLLOCAL void executeError(const char* err, const char* desc,
-            ExceptionSink* xsink) override {
-        counter->dec(xsink);
-    }
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        counter = nullptr;
-    }
-
-private:
-    QoreCounter* counter;
-};
-
-//! Executes multiple actions in sequence
-/** Used to combine actions — e.g., PromiseAction + CounterAction for
-    synchronous request with completion signaling.
-
-    @since %Qore 2.3
-*/
-class CompositeAction : public AbstractAsyncAction {
-public:
-    DLLLOCAL CompositeAction() = default;
-
-    //! Add an action (takes ownership — ref'd by caller)
-    DLLLOCAL void add(AbstractAsyncAction* action) {
-        assert(action);
-        action->ref();
-        actions.push_back(action);
-    }
-
-    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
-        for (size_t i = 0; i < actions.size(); ++i) {
-            if (i < actions.size() - 1) {
-                // All but last get a ref'd copy
-                actions[i]->execute(output.refSelf(), xsink);
-            } else {
-                // Last action takes ownership
-                actions[i]->execute(output, xsink);
-            }
-        }
-    }
-
-    DLLLOCAL void executeError(const char* err, const char* desc,
-            ExceptionSink* xsink) override {
-        for (auto* action : actions) {
-            action->executeError(err, desc, xsink);
-        }
-    }
-
-    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
-        for (auto* action : actions) {
-            action->deref(xsink);
-        }
-        actions.clear();
-    }
-
-private:
-    std::vector<AbstractAsyncAction*> actions;
 };
 
 #endif // _QORE_INTERN_ASYNCCOMPLETIONACTION_H

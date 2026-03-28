@@ -1,6 +1,6 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QC_PollPipeline.h
+    QorePollOperation.h
 
     Qore Programming Language
 
@@ -29,12 +29,14 @@
     information.
 */
 
-#ifndef _QORE_CLASS_POLLPIPELINE_H
+#ifndef _QORE_QOREPOLLOPERATION_H
 
-#define _QORE_CLASS_POLLPIPELINE_H
+#define _QORE_QOREPOLLOPERATION_H
 
-#include "qore/PollPipeline.h"
+#include <qore/SocketPollOperationBase.h>
+#include <qore/SocketPollOperation.h>
+#include <qore/AsyncCompletionAction.h>
+#include <qore/PollPipeline.h>
+#include <qore/AbstractHttpPollConnection.h>
 
-DLLLOCAL QoreClass* initPollPipelineClass(QoreNamespace& qorens);
-
-#endif // _QORE_CLASS_POLLPIPELINE_H
+#endif // _QORE_QOREPOLLOPERATION_H
