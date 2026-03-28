@@ -1,0 +1,382 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpKeepAlivePollOperationBase.qpp
+
+    HttpKeepAlivePollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_HttpKeepAlivePollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/qore_socket_private.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// HttpKeepAlivePollOperationPriv implementation
+// ============================================================
+
+HttpKeepAlivePollOperationPriv::HttpKeepAlivePollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+        int64_t ttl_ms)
+    : SocketPollOperationBase(self), sock_obj(sock), header_op(nullptr), header_output(nullptr),
+      phase(Phase::IDLE), op_state(State::IDLE), header_deadline_us(0), ttl_us(ttl_ms * 1000LL) {
+    // sock is already ref'd by the QPP caller
+    // ttl_ms comes from Qore's "timeout" type which is milliseconds; convert to microseconds
+    deadline_us = nowUs() + ttl_us;
+}
+
+HttpKeepAlivePollOperationPriv::~HttpKeepAlivePollOperationPriv() {
+    if (sock_obj || header_op || header_output) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+bool HttpKeepAlivePollOperationPriv::goalReached() const {
+    return op_state == State::HEADER_COMPLETE
+        || op_state == State::CLOSED
+        || op_state == State::TIMEOUT;
+}
+
+QoreHashNode* HttpKeepAlivePollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    if (goalReached()) {
+        return nullptr;
+    }
+
+    if (phase == Phase::IDLE) {
+        return continueIdlePoll(xsink);
+    }
+    return continueHeaderPoll(xsink);
+}
+
+void HttpKeepAlivePollOperationPriv::abort(ExceptionSink* xsink) {
+    op_state = State::CLOSED;
+    if (header_op) {
+        header_op->abort(xsink);
+    }
+}
+
+QoreValue HttpKeepAlivePollOperationPriv::getOutput() const {
+    if (header_output) {
+        header_output->ref();
+        return header_output;
+    }
+
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+    h->setKeyValue("sock", getReferencedSocketObject(&xsink), &xsink);
+
+    const char* state_str;
+    switch (op_state) {
+        case State::IDLE:               state_str = "idle"; break;
+        case State::HEADER_READING:     state_str = "header_reading"; break;
+        case State::HEADER_COMPLETE:    state_str = "header_complete"; break;
+        case State::CLOSED:             state_str = "closed"; break;
+        case State::TIMEOUT:            state_str = "timeout"; break;
+        default:                        state_str = "unknown"; break;
+    }
+    h->setKeyValue("state", new QoreStringNode(state_str), &xsink);
+    return h.release();
+}
+
+void HttpKeepAlivePollOperationPriv::resetForIdle() {
+    phase = Phase::IDLE;
+    op_state = State::IDLE;
+    deadline_us = nowUs() + ttl_us;
+    header_deadline_us = 0;
+    if (header_op) {
+        ExceptionSink xsink;
+        header_op->deref(&xsink);
+        header_op = nullptr;
+    }
+    if (header_output) {
+        header_output->deref(nullptr);
+        header_output = nullptr;
+    }
+}
+
+void HttpKeepAlivePollOperationPriv::cleanup(ExceptionSink* xsink) {
+    if (header_op) {
+        header_op->deref(xsink);
+        header_op = nullptr;
+    }
+    if (header_output) {
+        header_output->deref(xsink);
+        header_output = nullptr;
+    }
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+}
+
+const char* HttpKeepAlivePollOperationPriv::getStateImpl() const {
+    switch (op_state) {
+        case State::IDLE:               return "idle";
+        case State::HEADER_READING:     return "header_reading";
+        case State::HEADER_COMPLETE:    return "header_complete";
+        case State::CLOSED:             return "closed";
+        case State::TIMEOUT:            return "timeout";
+        default:                        return "unknown";
+    }
+}
+
+QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xsink) {
+    // Check for timeout
+    if (nowUs() > deadline_us) {
+        op_state = State::TIMEOUT;
+        return nullptr;
+    }
+
+    // Check if socket is still connected
+    if (!sock_obj->isOpen()) {
+        op_state = State::CLOSED;
+        return nullptr;
+    }
+
+    // Check for data immediately available (non-blocking)
+    if (sock_obj->isDataAvailable(xsink, 0)) {
+        // Transition to header reading phase inline
+        return transitionToHeaderPhase(xsink);
+    }
+    if (*xsink) {
+        op_state = State::CLOSED;
+        return nullptr;
+    }
+
+    // Need to wait for data; include poll_timeout_ms so the EventLoop wakes up
+    // when the idle deadline expires, not just when the full operation timeout expires
+    int64_t remaining_us = deadline_us - nowUs();
+    int remaining_ms = static_cast<int>(remaining_us / 1000);
+    if (remaining_ms <= 0) {
+        remaining_ms = 1;
+    }
+
+    ReferenceHolder<QoreHashNode> info(new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+    info->setKeyValue("events", SOCK_POLLIN, xsink);
+    info->setKeyValue("socket", getReferencedSocketObject(xsink), xsink);
+    info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
+    return info.release();
+}
+
+QoreHashNode* HttpKeepAlivePollOperationPriv::transitionToHeaderPhase(ExceptionSink* xsink) {
+    phase = Phase::HEADER;
+    op_state = State::HEADER_READING;
+    header_deadline_us = nowUs() + DEFAULT_HEADER_READ_TIMEOUT_US;
+
+    // Create the inner header read operation — ref the socket for it
+    sock_obj->ref();
+    header_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+    if (*xsink) {
+        // Construction failed; the SocketReadHttpHeaderPollOperation constructor
+        // handles socket cleanup on error internally
+        header_op->deref(xsink);
+        header_op = nullptr;
+        op_state = State::CLOSED;
+        return nullptr;
+    }
+    // Set our QoreObject as the inner op's self so that getSocketPollInfoHash()
+    // can resolve the "sock" member for poll info hashes
+    assert(self);
+    header_op->setSelf(*self);
+
+    // Immediately continue the header poll to drive it forward
+    return continueHeaderPoll(xsink);
+}
+
+QoreHashNode* HttpKeepAlivePollOperationPriv::continueHeaderPoll(ExceptionSink* xsink) {
+    // Enforce header read timeout to prevent slow-loris on keep-alive connections
+    if (nowUs() > header_deadline_us) {
+        op_state = State::TIMEOUT;
+        return nullptr;
+    }
+
+    QoreHashNode* info = header_op->continuePoll(xsink);
+    if (*xsink) {
+        op_state = State::CLOSED;
+        return nullptr;
+    }
+    if (!info) {
+        // Header reading complete
+        op_state = State::HEADER_COMPLETE;
+        QoreValue output = header_op->getOutput();
+        header_output = output.getType() == NT_HASH
+            ? output.get<QoreHashNode>() : nullptr;
+        return nullptr;
+    }
+    return info;
+}
+
+/** @endcond */
+
+//! C++ base class for combined idle + header read HTTP keep-alive poll operation
+/** This class implements the core poll logic for a two-phase keep-alive
+    connection operation in pure C++, enabling the AsyncIoController I/O
+    thread to drive the poll without Qore interpreter overhead.
+
+    Phase 1 (idle): monitors for incoming data, connection close, or timeout.
+    Phase 2 (header): delegates to SocketReadHttpHeaderPollOperation with its
+    own timeout for slow-loris protection.
+
+    When data arrives during idle, transitions to header reading inline
+    (no return to controller).
+
+    @since %Qore 2.3
+*/
+qclass HttpKeepAlivePollOperationBase [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=HttpKeepAlivePollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the keep-alive poll operation
+/** @param sock the Socket to monitor
+    @param ttl_us keep-alive timeout in microseconds
+*/
+HttpKeepAlivePollOperationBase::constructor(Socket[QoreSocketObject] sock, int ttl_us) {
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Store socket as Qore member for DGC visibility
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_qobj) {
+        self->setMemberValue("sock", QC_HTTPKEEPALIVEPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTPKEEPALIVEPOLLOPERATIONBASE,
+        new QoreStringNode("keep_alive_idle"), xsink);
+
+    sock_ptr->ref();
+    self->setPrivate(CID_HTTPKEEPALIVEPOLLOPERATIONBASE,
+        new HttpKeepAlivePollOperationPriv(self, sock_ptr, ttl_us));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+HttpKeepAlivePollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPKEEPALIVEPOLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+HttpKeepAlivePollOperationBase::copy() {
+    xsink->raiseException("HTTPKEEPALIVEPOLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return "keep_alive_idle" or "keep_alive_header" depending on the current phase
+*/
+string HttpKeepAlivePollOperationBase::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return one of "idle", "header_reading", "header_complete", "closed", or "timeout"
+*/
+string HttpKeepAlivePollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the operation is complete
+/** @return True when headers are read, connection closed, or timeout expired
+*/
+bool HttpKeepAlivePollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> HttpKeepAlivePollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Sets the state to "closed" and aborts any inner header read operation.
+*/
+nothing HttpKeepAlivePollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output of the operation
+/** @return the parsed HTTP header hash if headers were read, or a state hash otherwise
+*/
+auto HttpKeepAlivePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if the operation timed out (idle or header phase)
+/** @return True if the idle timeout or header read timeout expired
+*/
+bool HttpKeepAlivePollOperationBase::timedOut() [flags=RET_VALUE_ONLY] {
+    return priv->timedOut();
+}
+
+//! Returns True if headers were successfully read
+/** @return True if the header phase completed successfully
+*/
+bool HttpKeepAlivePollOperationBase::headersReady() [flags=RET_VALUE_ONLY] {
+    return priv->headersReady();
+}
+
+//! Returns True if the connection was closed
+/** @return True if the socket was closed by peer or the operation was aborted
+*/
+bool HttpKeepAlivePollOperationBase::wasClosed() [flags=RET_VALUE_ONLY] {
+    return priv->wasClosed();
+}
+
+//! Returns the current phase
+/** @return "idle" or "header"
+*/
+string HttpKeepAlivePollOperationBase::getPhase() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(priv->getPhase());
+}
+
+//! Resets the operation for another idle cycle (persistent registration)
+/** Resets phase to idle, clears header state, and sets a new deadline.
+*/
+nothing HttpKeepAlivePollOperationBase::resetForIdle() {
+    priv->resetForIdle();
+    // Update the goal member
+    self->setMemberValue("goal", QC_HTTPKEEPALIVEPOLLOPERATIONBASE,
+        new QoreStringNode("keep_alive_idle"), xsink);
+}
+
+//! Returns the socket being monitored
+/** @return the Socket object
+*/
+Socket HttpKeepAlivePollOperationBase::getSocket() {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}
