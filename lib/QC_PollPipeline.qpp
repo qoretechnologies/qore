@@ -422,6 +422,47 @@ int PollPipelinePriv::addCheckContains(const char* source_key, const char* subst
     });
 }
 
+int PollPipelinePriv::addSetContextBool(const char* key, bool value) {
+    std::string k(key);
+    return addTransform([k, value](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        ctx.extra->setKeyValue(k.c_str(), value, xsink);
+    });
+}
+
+int PollPipelinePriv::addSelectContextValue(const char* result_key, const char* condition_key,
+        const char* true_source_key, const char* false_source_key) {
+    std::string res(result_key);
+    std::string cond(condition_key);
+    std::string t_src(true_source_key);
+    std::string f_src(false_source_key);
+    return addTransform([res, cond, t_src, f_src](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        bool cond_val = ctx.extra->getKeyValue(cond.c_str()).getAsBool();
+        const char* src_key = cond_val ? t_src.c_str() : f_src.c_str();
+        QoreValue src_val = ctx.extra->getKeyValue(src_key);
+        ctx.extra->setKeyValue(res.c_str(), src_val.refSelf(), xsink);
+    });
+}
+
+int PollPipelinePriv::addContextOr(const char* result_key, const char* key_a, const char* key_b) {
+    std::string res(result_key);
+    std::string ka(key_a);
+    std::string kb(key_b);
+    return addTransform([res, ka, kb](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        bool a = ctx.extra->getKeyValue(ka.c_str()).getAsBool();
+        bool b = ctx.extra->getKeyValue(kb.c_str()).getAsBool();
+        ctx.extra->setKeyValue(res.c_str(), a || b, xsink);
+    });
+}
+
 void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
     assert(action);
     if (result_action) {
@@ -1479,6 +1520,50 @@ int PollPipeline::addSetContextBinary(string key, data value) {
 int PollPipeline::addCheckContains(string source_key, string substring, string result_key) {
     return priv->addCheckContains(source_key->c_str(), substring->c_str(),
         result_key->c_str());
+}
+
+//! Adds a transform step that sets a boolean value in the context extra hash
+/** @param key the context extra key to set
+    @param value the boolean value to store
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSetContextBool(string key, bool value) {
+    return priv->addSetContextBool(key->c_str(), value);
+}
+
+//! Adds a transform step that selects between two context values based on a condition
+/** If ctx.extra[condition_key] is truthy, copies ctx.extra[true_source_key] to
+    ctx.extra[result_key]; otherwise copies ctx.extra[false_source_key] to
+    ctx.extra[result_key].
+
+    @param result_key the context extra key for the result
+    @param condition_key the context extra key with a boolean condition
+    @param true_source_key the context extra key to copy from when condition is truthy
+    @param false_source_key the context extra key to copy from when condition is falsy
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSelectContextValue(string result_key, string condition_key,
+        string true_source_key, string false_source_key) {
+    return priv->addSelectContextValue(result_key->c_str(), condition_key->c_str(),
+        true_source_key->c_str(), false_source_key->c_str());
+}
+
+//! Adds a transform step that stores the logical OR of two boolean context keys
+/** Sets ctx.extra[result_key] = ctx.extra[key_a] || ctx.extra[key_b]
+
+    @param result_key the context extra key for the boolean result
+    @param key_a the first boolean operand key
+    @param key_b the second boolean operand key
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addContextOr(string result_key, string key_a, string key_b) {
+    return priv->addContextOr(result_key->c_str(), key_a->c_str(), key_b->c_str());
 }
 
 //! Sets a Promise as the result action

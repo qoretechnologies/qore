@@ -226,6 +226,21 @@ public:
     //! Checks if a context string contains a substring (case-insensitive) and stores bool result
     DLLEXPORT int addCheckContains(const char* source_key, const char* substring, const char* result_key);
 
+    //! Sets a boolean value in context extra
+    DLLEXPORT int addSetContextBool(const char* key, bool value);
+
+    //! Selects one of two context values based on a boolean condition key
+    /** If ctx.extra[condition_key] is truthy, copies ctx.extra[true_source_key] to ctx.extra[result_key];
+        otherwise copies ctx.extra[false_source_key] to ctx.extra[result_key].
+    */
+    DLLEXPORT int addSelectContextValue(const char* result_key, const char* condition_key,
+        const char* true_source_key, const char* false_source_key);
+
+    //! Stores the logical OR of two boolean context keys into a result key
+    /** Sets ctx.extra[result_key] = ctx.extra[key_a] || ctx.extra[key_b]
+    */
+    DLLEXPORT int addContextOr(const char* result_key, const char* key_a, const char* key_b);
+
     //! Adds a result delivery step
     DLLEXPORT int addDeliverResult();
 
