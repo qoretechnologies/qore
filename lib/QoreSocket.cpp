@@ -5295,6 +5295,147 @@ void QoreSocketThroughputHelper::finalize(int64 bytes) {
     priv->finalize(bytes);
 }
 
+// --- Out-of-line implementations for public DLLEXPORT methods ---
+// These were previously inline in QC_SocketPollOperation.h but are now declared
+// in the public header include/qore/SocketPollOperation.h without bodies.
+
+// SocketPollSocketOperationBase constructors/destructor
+SocketPollSocketOperationBase::SocketPollSocketOperationBase(QoreObject* self)
+    : SocketPollOperationBase(self) {
+}
+
+SocketPollSocketOperationBase::SocketPollSocketOperationBase(QoreSocketObject* sock)
+    : sock(sock) {
+}
+
+SocketPollSocketOperationBase::SocketPollSocketOperationBase(QoreSocketObject* sock, unsigned direction)
+    : sock(sock), non_block_direction(direction) {
+}
+
+SocketPollSocketOperationBase::~SocketPollSocketOperationBase() {
+}
+
+// SocketRecvPollOperationBase constructor
+SocketRecvPollOperationBase::SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string)
+    : SocketPollSocketOperationBase(sock, NB_RECV), to_string(to_string) {
+}
+
+void SocketPollSocketOperationBase::abort(ExceptionSink* xsink) {
+    poll_state.reset();
+    if (set_non_block) {
+        AutoLocker al(sock->priv->m);
+        sock->priv->clearNonBlock(non_block_direction);
+        if (abortNeedsClose()) {
+            sock->priv->socket->close();
+        }
+        set_non_block = false;
+        state = SPS_NONE;
+    }
+}
+
+bool SocketPollSocketOperationBase::abortNeedsClose() const {
+    return true;
+}
+
+void SocketConnectPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (set_non_block) {
+            sock->clearNonBlock();
+        }
+        sock->deref(xsink);
+        delete this;
+    }
+}
+
+bool SocketConnectPollOperation::goalReached() const {
+    return state == SPS_CONNECTED;
+}
+
+int SocketConnectPollOperation::preVerify(ExceptionSink* xsink) {
+    return 0;
+}
+
+const char* SocketConnectPollOperation::getStateImpl() const {
+    switch (state) {
+        case SPS_NONE: return "none";
+        case SPS_CONNECTING: return "connecting";
+        case SPS_CONNECTING_SSL: return "connecting-ssl";
+        case SPS_CONNECTED: return "connected";
+        default: assert(false);
+    }
+    return "";
+}
+
+void SocketSendPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (set_non_block) {
+            sock->clearNonBlock(NB_SEND);
+        }
+        sock->deref(xsink);
+        delete this;
+    }
+}
+
+bool SocketSendPollOperation::goalReached() const {
+    return sent;
+}
+
+const char* SocketSendPollOperation::getStateImpl() const {
+    return sent ? "sent" : "sending";
+}
+
+void SocketRecvPollOperationBase::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (set_non_block) {
+            sock->clearNonBlock(NB_RECV);
+        }
+        sock->deref(xsink);
+        delete this;
+    }
+}
+
+void SocketRecvPollOperationBase::abort(ExceptionSink* xsink) {
+    data.discard();
+    SocketPollSocketOperationBase::abort(xsink);
+}
+
+bool SocketRecvPollOperationBase::goalReached() const {
+    return received;
+}
+
+const char* SocketRecvPollOperationBase::getStateImpl() const {
+    return received ? "received" : "receiving";
+}
+
+QoreValue SocketRecvPollOperationBase::getOutput() const {
+    return data ? data->refSelf() : QoreValue();
+}
+
+void SocketUpgradeClientSslPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        if (set_non_block) {
+            sock->clearNonBlock();
+        }
+        sock->deref(xsink);
+        delete this;
+    }
+}
+
+bool SocketUpgradeClientSslPollOperation::goalReached() const {
+    return done;
+}
+
+const char* SocketUpgradeClientSslPollOperation::getStateImpl() const {
+    return "connecting-ssl";
+}
+
+void SocketReadHttpHeaderPollOperation::abort(ExceptionSink* xsink) {
+    out = nullptr;
+    SocketRecvPollOperationBase::abort(xsink);
+}
+
+// --- End of out-of-line implementations ---
+
 SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target,
         QoreSocketObject* sock) : SocketPollSocketOperationBase(sock) {
     sgoal = ssl ? SPG_CONNECT_SSL : SPG_CONNECT;
@@ -6311,6 +6452,17 @@ const char* SocketReadHttpBodyPollOperation::getStateImpl() const {
         case BodyState::RECV_CLOSE: return "recv_body_close";
         case BodyState::DONE: return "done";
         default: return "unknown";
+    }
+}
+
+bool SocketReadHttpBodyPollOperation::goalReached() const {
+    return body_state == BodyState::DONE;
+}
+
+void SocketReadHttpBodyPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        cleanup(xsink);
+        delete this;
     }
 }
 
