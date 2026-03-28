@@ -107,6 +107,7 @@ public class DataProvider {
 
             # provided by the jni module
             "excelread": "ExcelDataProvider",
+            "excelwrite": "ExcelDataProvider",
 
             "file": "FileDataProvider",
             "filepoller": "FilePoller",
@@ -164,11 +165,21 @@ public class DataProvider {
             "natsjetstream": "NatsJetStreamDataProvider",
 
             # provided by the jni module
+            "odpread": "OdpDataProvider",
+            "odpwrite": "OdpDataProvider",
+            "odsread": "OdsDataProvider",
+            "odswrite": "OdsDataProvider",
+            "odtread": "OdtDataProvider",
+            "odtwrite": "OdtDataProvider",
             "opcua": "OpcUaDataProvider",
 
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
+
+            # provided by the jni module
+            "powerpointread": "PowerPointDataProvider",
+            "powerpointwrite": "PowerPointDataProvider",
             "qdrant": "QdrantDataProvider",
             "redis": "RedisDataProvider",
             "restclient": "RestClientDataProvider",
@@ -219,6 +230,11 @@ public class DataProvider {
             "unleashed": "UnleashedDataProvider",
 
             "wave": "WaveDataProvider",
+
+            # provided by the jni module
+            "wordread": "WordDataProvider",
+            "wordwrite": "WordDataProvider",
+
             "woocommerce": "WooCommerceDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
