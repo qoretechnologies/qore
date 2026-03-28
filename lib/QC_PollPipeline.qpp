@@ -358,6 +358,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 } else {
                     ++current_step;
                 }
+            } else if (steps[current_step].type == StepType::DELEGATE) {
+                // DELEGATE ops may return nullptr between internal phases without
+                // goalReached. This is not an error — just needs another poll cycle.
+                // Return nullptr to let the caller re-invoke us.
+                return nullptr;
             } else {
                 setError("POLL-PIPELINE-ERROR", "step did not reach goal", xsink);
                 return nullptr;
