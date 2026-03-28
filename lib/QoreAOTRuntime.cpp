@@ -526,7 +526,9 @@ static uint64_t resolveCastExprSlot(AOTExprKind kind, const char* ref1, bool or_
                 printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
                 return 0;
             }
-            auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(), or_nothing);
+            // Use empty hash as inner expression (default for top-level slot resolution)
+            auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd,
+                QoreValue(new QoreHashNode(autoTypeInfo)), or_nothing);
             return toBitsNB(QoreValue(node));
         }
         case AOTExprKind::CAST_COMPLEX_HASH: {
@@ -1540,18 +1542,39 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CAST_HASHDECL: {
                 ref1 = reader.readStringRef(ptr);
                 uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                // Read inner expression (may be serialized inline)
+                uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue inner;
+                if (has_inner) {
+                    std::string inner_err;
+                    inner = readOneExpr(reader, ptr, end, inner_err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    if (!inner_err.empty()) {
+                        printd(0, "AOT v2: error reading cast inner expr for '%s': %s\n",
+                            ref1 ? ref1 : "", inner_err.c_str());
+                        inner.discard(nullptr);
+                        has_unsupported = true;
+                        continue;
+                    }
+                }
                 if (ref1 && *ref1) {
                     const qore_ns_private* found_ns = nullptr;
                     const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
                         *pp->RootNS, ref1, found_ns);
                     if (hd) {
-                        auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(), or_nothing != 0);
+                        // If no inner expression, use empty hash
+                        if (!inner.hasNode()) {
+                            inner = QoreValue(new QoreHashNode(autoTypeInfo));
+                        }
+                        auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0);
                         ctx->exprs[i] = toBitsNB(QoreValue(node));
                     } else {
                         printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
+                        inner.discard(nullptr);
                         has_unsupported = true;
                     }
                 } else {
+                    inner.discard(nullptr);
                     has_unsupported = true;
                 }
                 continue;

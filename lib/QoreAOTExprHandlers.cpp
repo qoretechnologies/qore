@@ -918,6 +918,15 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
             ctx.writer.writeStringRef(hd->getNamespacePath().c_str());
             ctx.writer.writeU8(hdc->isOrNothing() ? 1 : 0);
+            // Serialize the inner expression being cast
+            QoreValue inner = hdc->getExp();
+            if (inner.hasNode()) {
+                ctx.writer.writeU8(1);
+                ::classifyAndWriteExpr(ctx.writer, inner,
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            } else {
+                ctx.writer.writeU8(0);
+            }
             return true;
         }
     }
@@ -927,7 +936,20 @@ static bool write_expr_cast_hashdecl(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
     const char* hashdecl_path = ctx.reader.readStringRef(ctx.ptr);
     uint8_t or_nothing = QoreAOTBinaryReader::readU8(ctx.ptr);
+    // Read inner expression (added for sub-expression serialization)
+    uint8_t has_inner = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue inner;
+    if (has_inner) {
+        std::string inner_err;
+        inner = readOneExpr(ctx.reader, ctx.ptr, ctx.end, inner_err, ctx.pgm,
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        if (!inner_err.empty()) {
+            ctx.error = inner_err;
+            return QoreValue();
+        }
+    }
     if (!hashdecl_path || !*hashdecl_path) {
+        inner.discard(nullptr);
         return QoreValue();
     }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
@@ -935,9 +957,14 @@ static QoreValue read_expr_cast_hashdecl(AOTExprReadCtx& ctx) {
     const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
         *pp->RootNS, hashdecl_path, found_ns);
     if (!hd) {
+        inner.discard(nullptr);
         return QoreValue();
     }
-    auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, QoreValue(), or_nothing != 0);
+    // If no inner expression, use empty hash for the cast (common case: <HashdeclType>{})
+    if (!inner.hasNode()) {
+        inner = QoreValue(new QoreHashNode(autoTypeInfo));
+    }
+    auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0);
     return QoreValue(node);
 }
 

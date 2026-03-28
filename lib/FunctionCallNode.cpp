@@ -741,6 +741,12 @@ NewObjectCallNode::NewObjectCallNode(const QoreClass* qc, QoreListNode* args)
         }
         return;
     }
+    // Skip variant resolution when args contain unevaluated expressions (AOT deserialization).
+    // runtimeFindVariant inspects arg types, but unevaluated AST nodes (e.g., cast expressions)
+    // have node types, not result types. Variant resolution happens at eval time via CodeEvaluationHelper.
+    if (args && args->needs_eval()) {
+        return;
+    }
     ExceptionSink xsink;
     variant = qore_method_private::get(*constructor)->getFunction()->runtimeFindVariant(&xsink, args, false, nullptr);
 

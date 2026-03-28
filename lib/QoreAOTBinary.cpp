@@ -2163,6 +2163,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     // QoreHashNode: already-evaluated hash (e.g., {}, {"key": "val"}) — serialize as HASH_LITERAL
     // Only handles string-keyed hashes with simple values for safety; empty hash is the common case.
     if (auto* qhn = dynamic_cast<const QoreHashNode*>(node)) {
+        // If this is a hashdecl-typed hash, serialize as HASHDECL_NEW to preserve the type.
+        // The reader creates a NewHashDeclNode which evaluates to a properly typed hash.
+        const TypedHashDecl* qhd = qhn->getHashDecl();
+        if (qhd && qhn->empty()) {
+            // For empty hashdecl hashes (common case: <HashdeclType>{}), use HASHDECL_NEW
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
+            writer.writeStringRef(qhd->getNamespacePath().c_str());
+            return true;
+        }
         if (qhn->size() <= 255) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
             writer.writeU8(static_cast<uint8_t>(qhn->size()));
@@ -2256,6 +2265,14 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::CAST_HASHDECL));
             writer.writeStringRef(hd->getNamespacePath().c_str());
             writer.writeU8(hdc->isOrNothing() ? 1 : 0);
+            // Serialize the inner expression being cast
+            QoreValue inner = hdc->getExp();
+            if (inner.hasNode()) {
+                writer.writeU8(1);  // has inner expression
+                classifyAndWriteExpr(writer, inner, parent_locals, parent_globals, const_reverse_map);
+            } else {
+                writer.writeU8(0);  // no inner expression (cast from nothing)
+            }
             return true;
         }
     }
