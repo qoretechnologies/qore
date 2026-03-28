@@ -141,6 +141,10 @@ public class DataProvider {
 
             "jotform": "JotformDataProvider",
 
+            # provided by the json module
+            "jsonread": "JsonFileDataProvider",
+            "jsonwrite": "JsonFileDataProvider",
+
             # provided by the jni module
             "kafka": "KafkaDataProvider",
 
@@ -159,6 +163,9 @@ public class DataProvider {
 
             # provided by the jni module
             "mqtt": "MqttDataProvider",
+
+            # provided by the json module
+            "ndjson": "NdjsonDataProvider",
 
             # provided by the nats module
             "nats": "NatsDataProvider",
@@ -236,6 +243,10 @@ public class DataProvider {
             "wordwrite": "WordDataProvider",
 
             "woocommerce": "WooCommerceDataProvider",
+
+            # provided by the yaml module
+            "yamldoc": "YamlDocumentDataProvider",
+            "yamlwrite": "YamlDocumentDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
             "zohoinventory": "ZohoInventoryDataProvider",
