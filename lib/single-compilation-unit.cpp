@@ -383,6 +383,7 @@
 #include "QC_SocketPollOperation.cpp"
 #include "QC_FilePollOperation.cpp"
 #include "QC_DelegatingPollOperation.cpp"
+#include "QC_HttpIdlePollOperationBase.cpp"
 
 #include "QorePseudoMethods.cpp"
 

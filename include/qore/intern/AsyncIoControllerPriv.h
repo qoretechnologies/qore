@@ -76,6 +76,7 @@ public:
         DT_ON_COMPLETE,     //!< Call onComplete(result) on spop_obj
         DT_CALLBACK,        //!< Call a code reference with args (timer callbacks)
         DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
+        DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -87,6 +88,7 @@ public:
         DispatchType type;                   //!< What method to call
         AsyncIoControllerPriv* controller;   //!< For DT_CONTINUE_POLL: controller (referenced)
         std::string key;                     //!< For DT_CONTINUE_POLL: operation key
+        int32_t stream_id = 0;               //!< For DT_STREAM_DATA_NOTIFY: stream ID
     };
 
     //! Creates the dispatcher
@@ -121,6 +123,16 @@ public:
     */
     DLLLOCAL void dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key);
+
+    //! Dispatch onStreamData(stream_id) asynchronously (fire-and-forget)
+    /** Called by the I/O thread after Http2PollOperationBase::drainStreamQueues()
+        pushes data to a stream's Queue. The worker thread calls onStreamData()
+        which the Qore subclass overrides to wake the handler thread.
+
+        @param spop_obj the Http2PollOperationBase object (referenced — ownership transferred)
+        @param stream_id the HTTP/2 stream ID that received data
+    */
+    DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, int32_t stream_id);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);

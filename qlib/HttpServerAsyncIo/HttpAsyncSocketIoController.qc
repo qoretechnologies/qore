@@ -2639,11 +2639,11 @@ public class HttpAsyncSocketIoController {
         Queue stream_data_queue();
         h2op.registerStreamQueue(stream_id, stream_data_queue);
 
-        # Closure for handlers to register a notification callback after the
-        # handler thread starts (e.g., after creating the WebSocketConnection).
-        # The callback is called on the I/O thread when data is drained to the Queue.
-        code<nothing(code<nothing()>)> register_stream_notify = sub (code<nothing()> notify) {
-            h2op.registerStreamQueue(stream_id, stream_data_queue, notify);
+        # Closure for handlers to register a stream data listener.
+        # The listener's notifyIo() method is called from the controller's
+        # worker pool when the I/O thread drains data to the Queue.
+        code<nothing(object)> register_stream_listener = sub (object listener) {
+            h2op.registerStreamListener(stream_id, listener);
         };
 
         # Continue reading on h2op immediately — the CONNECT stream coexists
@@ -2723,7 +2723,7 @@ public class HttpAsyncSocketIoController {
                 "accept-encoding": accept_encoding,
                 "body": request.body,
                 "stream_data_queue": stream_data_queue,
-                "register_stream_notify": register_stream_notify,
+                "register_stream_listener": register_stream_listener,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wake(); },
             },

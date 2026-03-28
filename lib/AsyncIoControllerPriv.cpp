@@ -35,6 +35,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -192,7 +193,11 @@ void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, Qore
 
 void QoreCallDispatcher::dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key) {
-    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key});
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key, 0});
+}
+
+void QoreCallDispatcher::dispatchStreamDataAsync(QoreObject* spop_obj, int32_t stream_id) {
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_STREAM_DATA_NOTIFY, nullptr, std::string(), stream_id});
 }
 
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
@@ -350,6 +355,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     async_item.key, new_poll_info, ex_hash, completed);
                 async_item.controller->deref(&work_xsink);
                 async_item.controller = nullptr;
+                break;
+            }
+            case DT_STREAM_DATA_NOTIFY: {
+                method_name = "onStreamData";
+                ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+                args->push(async_item.stream_id, xsink);
+                ValueHolder rv(async_item.spop_obj->evalMethod("onStreamData", *args,
+                    &work_xsink), &work_xsink);
                 break;
             }
         }
@@ -1502,6 +1515,24 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     result.completed = true;
                 } else {
                     result.new_poll_info = new_info;
+                }
+
+                // Check for stream data notifications (HTTP/2 CONNECT streams)
+                // After the C++ drain pushes data to Queues, dispatch onStreamData()
+                // to the worker pool so the handler thread wakes up.
+                auto* h2_op = dynamic_cast<Http2PollOperationPriv*>(op.spop_base);
+                if (h2_op) {
+                    std::vector<int32_t> ready = h2_op->getAndClearDataReadyStreams();
+                    if (!ready.empty()) {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        for (int32_t sid : ready) {
+                            op.spop_obj->ref();
+                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj, sid);
+                        }
+                    }
                 }
             } else {
                 // Qore poll operation — check trust level via QDOM_PROCESS.

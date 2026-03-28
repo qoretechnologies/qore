@@ -1431,12 +1431,13 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
             wsc.setStreamContext(
                 new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, h2_data_queue));
-            # Register notification callback so the I/O controller signals
-            # this connection when data arrives for this stream
-            *code<nothing(code<nothing()>)> register_notify =
-                cx."header-info".register_stream_notify;
-            if (register_notify) {
-                register_notify(sub () { wsc.notifyIo(); });
+            # Register as a stream data listener — the controller's worker pool
+            # will call wsc.notifyIo() (via h2op.onStreamData()) when the I/O
+            # thread drains data to the Queue. No callbacks on the I/O thread.
+            *code<nothing(object)> register_listener =
+                cx."header-info".register_stream_listener;
+            if (register_listener) {
+                register_listener(wsc);
             }
         } else if (is_http3) {
             @assert(h3_session_id > 0, "missing HTTP/3 session id for WebSocket");
