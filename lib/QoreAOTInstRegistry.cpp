@@ -32,6 +32,7 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/CaseNodeRegex.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions

@@ -30,6 +30,7 @@
 */
 
 #include "qore/intern/QoreJITIncludes.h"
+#include "qore/intern/QoreJIT.h"
 #include "qore/intern/QoreIRToLLVM.h"
 
 #include "qore/intern/LocalVar.h"

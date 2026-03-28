@@ -30,6 +30,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
+#include "qore/intern/QoreParseHashNode.h"
 
 // ============================================================================
 // Expression Kind Handlers (Phase 3.2 - Extracted from serialization code)

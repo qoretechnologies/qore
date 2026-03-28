@@ -1,3 +1,4 @@
+#include <qore/Qore.h>
 #include <qore/intern/QoreLibIntern.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreTypeInfo.h>

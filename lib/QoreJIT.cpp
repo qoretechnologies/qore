@@ -29,6 +29,7 @@
     information.
 */
 
+#include <qore/Qore.h>
 #include "qore/intern/QoreJIT.h"
 #include "qore/intern/qore_thread_intern.h"
 

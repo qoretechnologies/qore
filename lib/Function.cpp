@@ -2256,8 +2256,8 @@ static void collectBlockLocals(const LVList* lvars, std::vector<LocalVar*>& loca
     }
 }
 
-// forward declaration
-static void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
+// forward declaration — non-static for non-SCU visibility
+void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
 // helper: collect all locals from a single statement and recurse into nested blocks.
 // Recurses into statement types that are fully lowered to IR (if/for/while/try/switch/block/on_block_exit).

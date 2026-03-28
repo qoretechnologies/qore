@@ -38,6 +38,7 @@
 
 // forward declarations
 class qore_enum_decl_private;
+class QoreExternalProgramLocation;
 class QoreNamespace;
 class QoreTypeInfo;
 class QoreValue;

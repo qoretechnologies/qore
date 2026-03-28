@@ -19,6 +19,9 @@
 #include "qore/intern/QoreIR.h"
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
+#include "qore/intern/OnBlockExitStatement.h"
+#include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/JITRuntime.h"
 
 #include <cstring>
 

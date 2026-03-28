@@ -29,13 +29,13 @@
     information.
 */
 
+#include "qore/intern/QoreJITIncludes.h"
+
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
-
-#include "qore/intern/QoreJITIncludes.h"
+#include <iostream>
 #include <chrono>
-#include <qore/QoreEnumDecl.h>
 
 #include <sys/stat.h>
 #include <algorithm>
@@ -53,6 +53,7 @@
 #include "qore/intern/QoreIRToLLVM.h"
 #include "qore/intern/QoreIRPrinter.h"
 #include "qore/intern/StatementBlock.h"
+#include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/SelfVarrefNode.h"

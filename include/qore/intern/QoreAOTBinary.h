@@ -52,6 +52,7 @@ class QoreTypeInfo;
 class qore_ns_private;
 class QoreIRFunction;
 class LocalVar;
+class Var;
 
 //! Reverse map from constant value node pointer to fully-qualified constant name
 typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;

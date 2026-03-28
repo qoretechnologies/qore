@@ -1050,6 +1050,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreAOTExprSlotRegistry.cpp
     lib/QoreAOTExprNodeRegistry.cpp
     lib/QoreIRPrinter.cpp
+    lib/QoreJIT.cpp
+    lib/QoreParseContext.cpp
     lib/QoreDeleteOperatorNode.cpp
     lib/QoreRemoveOperatorNode.cpp
     lib/QoreSpliceOperatorNode.cpp

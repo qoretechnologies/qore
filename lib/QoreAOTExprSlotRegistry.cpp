@@ -31,6 +31,9 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
 
+class UserClosureVariant;
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);
+
 // ============================================================================
 // Expression Slot Metadata Handlers (Phase 3.3)
 // ============================================================================

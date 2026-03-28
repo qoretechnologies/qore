@@ -1861,12 +1861,14 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
     writer.endSection(sec_idx);
 }
 
+} // anonymous namespace
+
 //! Lower a closure variant to IR for serialization
 /** Follows the same pattern as buildContextForVariant() in QoreAOTRuntime.cpp.
     @param variant the closure variant to lower
     @return heap-allocated IR function, or nullptr on failure (caller owns)
 */
-static QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) {
+QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) {
     StatementBlock* sb = const_cast<UserClosureVariant*>(variant)->getStatementBlock();
     if (!sb) {
         return nullptr;
@@ -1925,7 +1927,6 @@ static QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* va
     return ir;
 }
 
-} // anonymous namespace
 
 //! Classify and write a QoreValue expression in AOTExprKind format
 /** Used by handler IR serialization to classify expression nodes inline.
@@ -2764,7 +2765,7 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
 }
 
 //! Get type path string for a LocalVar, handling nullptr typeInfo
-static const char* getLocalTypePath(const LocalVar* lv) {
+const char* getLocalTypePath(const LocalVar* lv) {
     const QoreTypeInfo* ti = lv->getTypeInfo();
     return ti ? QoreTypeInfo::getPath(ti) : "";
 }
