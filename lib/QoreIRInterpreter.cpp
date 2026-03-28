@@ -6633,9 +6633,23 @@ load_local_done:
                     }
                 } else {
                     called_external = true;
-                    res = fromBits(qore_rt_dot_eval_method_direct(
-                        toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    if (direct_inst->method && direct_inst->qc) {
+                        res = fromBits(qore_rt_dot_eval_method_direct(
+                            toBits(base), direct_inst->method, direct_inst->qc, direct_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    } else {
+                        // Abstract/unresolved method: use name-based dispatch
+                        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                            direct_inst->expr.getInternalNode());
+                        const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
+                        if (mname) {
+                            res = fromBits(dot_eval_fallback_with_args(base, mname,
+                                nanboxed_args, nargs, xsink));
+                        } else {
+                            xsink->raiseException("IR-ERROR",
+                                "DotEvalMethodDirect: null method pointer and no method name");
+                        }
+                    }
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 
@@ -6760,9 +6774,23 @@ load_local_done:
                     }
                 } else {
                     called_external = true;
-                    res = fromBits(qore_rt_dot_eval_method_direct(
-                        toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
-                        nanboxed_args, nargs, xsink));
+                    if (de_invoke_inst->method && de_invoke_inst->qc) {
+                        res = fromBits(qore_rt_dot_eval_method_direct(
+                            toBits(base), de_invoke_inst->method, de_invoke_inst->qc, de_invoke_inst->variant,
+                            nanboxed_args, nargs, xsink));
+                    } else {
+                        // Abstract/unresolved method: use name-based dispatch
+                        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                            de_invoke_inst->expr.getInternalNode());
+                        const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
+                        if (mname) {
+                            res = fromBits(dot_eval_fallback_with_args(base, mname,
+                                nanboxed_args, nargs, xsink));
+                        } else {
+                            xsink->raiseException("IR-ERROR",
+                                "InvokeDotEvalMethodDirect: null method pointer and no method name");
+                        }
+                    }
                 }
                 if (nargs > SMALL_BUF) { delete[] nanboxed_args; }
 

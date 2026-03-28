@@ -5525,7 +5525,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), base_boxed, args_array,
                         llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
-            } else {
+            } else if (direct_inst->method && direct_inst->qc) {
                 llvm::Value* method_ptr = builder->CreateIntToPtr(
                         llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(direct_inst->method)), ptr_type);
@@ -5545,6 +5545,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 call_result = builder->CreateCall(helper, {base_boxed, method_ptr, qc_ptr,
                         variant_ptr, args_array, llvm::ConstantInt::get(i32_type, nargs),
                         xsink_arg});
+            } else {
+                // Unresolved method (abstract/dynamic): use name-based dispatch with
+                // pre-evaluated args via the embedded expression's method name
+                auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
+                        direct_inst->expr.getInternalNode());
+                const char* method_name = dot_eval ? dot_eval->getMethodCall()->getName() : "";
+                llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
+                auto helper = module.getOrInsertFunction(
+                        "qore_rt_dot_eval_method_by_name",
+                        llvm::FunctionType::get(i64_type,
+                            {i64_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
+                call_result = builder->CreateCall(helper, {base_boxed, name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, nargs), xsink_arg});
             }
 
             // Qore's scoping allows callees to access the caller's non-IR-only

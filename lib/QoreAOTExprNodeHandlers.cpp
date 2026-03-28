@@ -314,7 +314,9 @@ static QoreValue read_node_EN_FUNC_CALL(AOTExprNodeReadCtx& ctx) {
         ctx.failed = true;
         return QoreValue();
     }
-    return QoreValue(new FunctionCallNode(&loc_builtin, fe, pln.release()));
+    FunctionCallNode* fcn = new FunctionCallNode(&loc_builtin, fe, pln.release());
+    fcn->resolveParseArgs();
+    return QoreValue(fcn);
 }
 
 static QoreValue read_node_EN_SELF_CALL(AOTExprNodeReadCtx& ctx) {
@@ -416,6 +418,7 @@ static QoreValue read_node_EN_STATIC_CALL(AOTExprNodeReadCtx& ctx) {
         return QoreValue();
     }
     StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, pln.release());
+    smcn->resolveParseArgs();
     return QoreValue(smcn);
 }
 
@@ -441,6 +444,10 @@ static QoreValue read_node_EN_DOT_EVAL(AOTExprNodeReadCtx& ctx) {
     }
     MethodCallNode* mc = new MethodCallNode(&loc_builtin,
         strdup(method_name.c_str()), pln.release());
+    // AOT deserialization: parse_args contain already-evaluated constants from the
+    // serialized EXPR_TREE.  Resolve them into evaluated args so that exec() finds
+    // them — exec() uses args (QoreListNode), not parse_args (QoreParseListNode).
+    mc->resolveParseArgs();
     if (!class_path.empty()) {
         const QoreClass* dot_qc = en_resolveClass(ctx.pgm, class_path);
         if (dot_qc) {
@@ -460,7 +467,11 @@ static QoreValue read_node_EN_NEW(AOTExprNodeReadCtx& ctx) {
     uint16_t num_children = readU16(ctx.ptr, ctx.end);
     ReferenceHolder<QoreListNode> args_list(nullptr, nullptr);
     if (num_children > 0) {
-        args_list = new QoreListNode(autoTypeInfo);
+        // Use newList(true) to create a list that needs evaluation — deserialized args
+        // may contain AST sub-expression nodes (e.g., StaticMethodCallNode) that must be
+        // evaluated at runtime by CodeEvaluationHelper::evalList().
+        // Matches the pattern in read_node_EN_SELF_CALL.
+        args_list = qore_list_private::newList(true);
         for (uint16_t i = 0; i < num_children && !ctx.failed; ++i) {
             QoreValue v = ctx.recurse(ctx);
             args_list->push(v, nullptr);
@@ -510,7 +521,9 @@ static QoreValue read_node_EN_SCOPED_NEW(AOTExprNodeReadCtx& ctx) {
         ctx.failed = true;
         return QoreValue();
     }
-    return QoreValue(new ScopedObjectCallNode(&loc_builtin, qc, pln.release()));
+    ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln.release());
+    socn->resolveParseArgs();
+    return QoreValue(socn);
 }
 
 static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
@@ -530,7 +543,9 @@ static QoreValue read_node_EN_CALLREF_CALL(AOTExprNodeReadCtx& ctx) {
         callref_expr.discard(nullptr);
         return QoreValue();
     }
-    return QoreValue(new CallReferenceCallNode(&loc_builtin, callref_expr, pln.release()));
+    CallReferenceCallNode* crcn = new CallReferenceCallNode(&loc_builtin, callref_expr, pln.release());
+    crcn->resolveParseArgs();
+    return QoreValue(crcn);
 }
 
 // ============================================================================

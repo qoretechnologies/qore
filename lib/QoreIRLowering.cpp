@@ -6833,11 +6833,14 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
         return QoreIRValue();
     }
 
-    // Check if the method is resolved at parse time — if so, pre-evaluate args
-    // and use DotEvalMethodDirect to avoid AST round-trip at runtime.
+    // Pre-evaluate args and use DotEvalMethodDirect to avoid AST round-trip at runtime.
+    // This handles both resolved methods (class+method set) and abstract/unresolved methods
+    // (null class/method). For unresolved methods, the runtime dispatches by name using the
+    // embedded expression. This is essential for AOT correctness: DotEvalAny evaluates args
+    // from the EXPR_TREE which reads locals from TLS, but IR-only locals aren't on TLS.
     // Exclude copy() calls (getRawName() == nullptr means it's a copy call).
     MethodCallNode* m = op->getMethodCall();
-    if (m->getClass() && m->getMethod() && m->getRawName()) {
+    if (m->getRawName()) {
         // Lower arguments
         std::vector<QoreIRValue> lowered_args;
         if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {

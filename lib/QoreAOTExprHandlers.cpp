@@ -135,6 +135,17 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef("");
         }
         ctx.writer.writeStringRef(call->getName());
+        // Serialize constructor args (may contain sub-expressions like TypedHash::forName("StatInfo"))
+        const QoreListNode* args = call->getArgs();
+        if (args && args->size() > 0) {
+            ctx.writer.writeU8(static_cast<uint8_t>(args->size()));
+            for (size_t j = 0; j < args->size(); ++j) {
+                ::classifyAndWriteExpr(ctx.writer, args->retrieveEntry(j),
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            }
+        } else {
+            ctx.writer.writeU8(0);
+        }
         return true;
     }
     return false;
@@ -143,7 +154,26 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
 static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreListNode* args_list = nullptr;
+    if (num_args > 0) {
+        args_list = qore_list_private::newList(true);
+        for (uint8_t j = 0; j < num_args; ++j) {
+            std::string arg_err;
+            QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            if (!arg_err.empty()) {
+                ctx.error = arg_err;
+                args_list->deref(nullptr);
+                return QoreValue();
+            }
+            args_list->push(arg, nullptr);
+        }
+    }
     if (!class_path || !method_name) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
         return QoreValue();
     }
     qore_program_private* pp = qore_program_private::get(*ctx.pgm);
@@ -151,6 +181,9 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
         *pp->RootNS, class_path, found_ns);
     if (!qc) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
         return QoreValue();
     }
     const QoreMethod* m = qc->findStaticMethod(method_name);
@@ -159,9 +192,38 @@ static QoreValue read_expr_static_method_call(AOTExprReadCtx& ctx) {
         m = qcp->parseFindLocalStaticMethod(method_name);
     }
     if (!m) {
+        if (args_list) {
+            args_list->deref(nullptr);
+        }
         return QoreValue();
     }
+    // Create with evaluated args list directly via the copy constructor pattern
+    // StaticMethodCallNode needs QoreParseListNode for its primary constructor,
+    // so we create a minimal node and set the args list for evaluation
     StaticMethodCallNode* smcn = new StaticMethodCallNode(&loc_builtin, m, (QoreParseListNode*)nullptr);
+    if (args_list) {
+        // Set the args as a member; since StaticMethodCallNode inherits FunctionCallBase,
+        // we use resolveParseArgs after setting parse_args, or set args directly.
+        // The args_list already has needs_eval_flag=true for proper evaluation.
+        // We need to set the args field directly — create a temporary parse_args list
+        // from the args, then resolve.
+        // Actually, just delete the smcn and use NewObjectCallNode approach:
+        // The simplest correct path is to create a wrapper that holds the args.
+        delete smcn;
+
+        // Create a new StaticMethodCallNode by first building a QoreParseListNode
+        // from the evaluated args (they may contain AST nodes needing evaluation)
+        QoreParseListNode* pln = new QoreParseListNode(&loc_builtin);
+        ConstListIterator li(args_list);
+        while (li.next()) {
+            QoreValue v = li.getValue();
+            v.refSelf();
+            pln->add(v, &loc_builtin);
+        }
+        args_list->deref(nullptr);
+        smcn = new StaticMethodCallNode(&loc_builtin, m, pln);
+        smcn->resolveParseArgs();
+    }
     return QoreValue(smcn);
 }
 

@@ -39,6 +39,11 @@
 // eval method against an object where the assumed qoreclass and method were saved at parse time
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
+    // Assert: if parse_args is set but args is null, resolveParseArgs() was not called.
+    // This catches AOT deserialization bugs where parse_init was skipped.
+    assert(!parse_args || args || tmp_args
+        || !"AbstractMethodCallNode::exec(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     //QORE_TRACE("AbstractMethodCallNode::exec()");
     /* the class and method saved at parse time are used here for this run-time
         optimization: the method pointer saved at parse time is used to execute the
@@ -161,6 +166,33 @@ static void check_flags(const QoreProgramLocation* loc, QoreFunction* func, int6
     }
     if (flags & QCF_DEPRECATED) {
         warn_deprecated(loc, func);
+    }
+}
+
+void FunctionCallBase::resolveParseArgs() {
+    if (!parse_args || args) {
+        return;
+    }
+    // Check if any parse_args entry contains an AST node that needs evaluation.
+    // AOT EXPR_TREE deserialization may produce sub-expression nodes (e.g.,
+    // StaticMethodCallNode for TypedHash::forName("StatInfo")) as argument values.
+    // When such nodes exist, create the args list with needs_eval_flag=true so that
+    // CodeEvaluationHelper::evalList() properly evaluates each entry at runtime.
+    // This matches the pattern used by read_node_EN_SELF_CALL.
+    bool has_eval_entries = false;
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        if (parse_args->get(i).needsEval()) {
+            has_eval_entries = true;
+            break;
+        }
+    }
+    args = has_eval_entries
+        ? qore_list_private::newList(true)
+        : new QoreListNode(autoTypeInfo);
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        QoreValue v = parse_args->get(i);
+        v.refSelf();
+        args->push(v, nullptr);
     }
 }
 
@@ -513,6 +545,9 @@ QoreValue FunctionCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) co
 }
 
 QoreValue FunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(!parse_args || args || tmp_args
+        || !"FunctionCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     QoreFunction* func = fe->getFunction();
     QoreProgram* call_pgm = pgm ? pgm : rc.getProgram();
     if (!call_pgm) {
@@ -805,6 +840,9 @@ QoreValue ScopedObjectCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 }
 
 QoreValue ScopedObjectCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(!parse_args || args || tmp_args
+        || !"ScopedObjectCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     return qore_class_private::execConstructor(*oc, rc, variant, args, xsink);
 }
 
@@ -971,6 +1009,9 @@ QoreValue StaticMethodCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink
 }
 
 QoreValue StaticMethodCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
+    assert(!parse_args || args || tmp_args
+        || !"StaticMethodCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     // Pass the class context so that private static methods called from within the same class are visible
     const qore_class_private* cctx = method ? qore_class_private::get(*qore_method_private::get(*method)->parent_class) : nullptr;
 

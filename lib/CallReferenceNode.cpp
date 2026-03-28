@@ -89,6 +89,27 @@ const char* CallReferenceCallNode::getTypeName() const {
     return "call reference call";
 }
 
+void CallReferenceCallNode::resolveParseArgs() {
+    if (!parse_args || args) {
+        return;
+    }
+    bool has_eval_entries = false;
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        if (parse_args->get(i).needsEval()) {
+            has_eval_entries = true;
+            break;
+        }
+    }
+    args = has_eval_entries
+        ? qore_list_private::newList(true)
+        : new QoreListNode(autoTypeInfo);
+    for (size_t i = 0; i < parse_args->size(); ++i) {
+        QoreValue v = parse_args->get(i);
+        v.refSelf();
+        args->push(v, nullptr);
+    }
+}
+
 // evalImpl(): return value requires a deref(xsink) if not 0
 QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
     RuntimeConfig& rc = rc_get_current_ref();
@@ -97,6 +118,9 @@ QoreValue CallReferenceCallNode::evalImpl(bool& needs_deref, ExceptionSink* xsin
 
 QoreValue CallReferenceCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, ExceptionSink* xsink) const {
     assert(needs_deref);
+    assert(!parse_args || args
+        || !"CallReferenceCallNode::evalImpl(): parse_args set but args is null; "
+           "call resolveParseArgs() after AOT deserialization");
     ValueEvalRefHolder lv(rc, exp, xsink);
     if (*xsink) {
         return QoreValue();
