@@ -34,8 +34,11 @@ public namespace HttpServerAsyncIo {
     When data arrives, the operation completes with state "data_available"
     and the connection should transition to header reading.
 
+    The core poll logic (continuePoll) runs in pure C++ via the
+    HttpIdlePollOperationBase parent class.
+
 */
-public class HttpIdlePollOperation inherits HttpConnectionPollOperationBase {
+public class HttpIdlePollOperation inherits HttpIdlePollOperationBase, HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_IDLE = "idle";
@@ -44,117 +47,12 @@ public class HttpIdlePollOperation inherits HttpConnectionPollOperationBase {
         const STATE_TIMEOUT = "timeout";
     }
 
-    private {
-        #! The socket being monitored
-        Socket sock;
-
-        #! Current state
-        string state = STATE_IDLE;
-
-        #! Timeout deadline
-        date deadline;
-
-        #! Keep-alive timeout duration
-        timeout ttl;
-    }
-
     #! Creates the poll operation
     /** @param sock the socket to monitor for new data
         @param ttl keep-alive timeout duration (default: DefaultIdleTimeout)
     */
-    constructor(Socket sock, timeout ttl = DefaultIdleTimeout) {
-        self.sock = sock;
-        self.ttl = ttl;
-        self.deadline = now_us() + ttl;
-    }
-
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "idle_monitor";
-    }
-
-    #! Returns the current state
-    string getState() {
-        return state;
-    }
-
-    #! Returns True when the operation is complete
-    bool goalReached() {
-        return state != STATE_IDLE;
-    }
-
-    #! Continues the poll operation
-    /** @return poll info for the next poll() call, or NOTHING if complete
-    */
-    *hash<SocketPollInfo> continuePoll() {
-        if (state != STATE_IDLE) {
-            return NOTHING;
-        }
-
-        # Check for timeout
-        if (now_us() > deadline) {
-            state = STATE_TIMEOUT;
-            return NOTHING;
-        }
-
-        # Check if socket is still connected
-        if (!sock.isOpen()) {
-            state = STATE_CLOSED;
-            return NOTHING;
-        }
-
-        # Check for data immediately available (non-blocking)
-        if (sock.isDataAvailable(0ms)) {
-            state = STATE_DATA_AVAILABLE;
-            return NOTHING;
-        }
-
-        # Need to wait for data - return poll info
-        return <SocketPollInfo>{
-            "events": SOCK_POLLIN,
-            "socket": sock,
-        };
-    }
-
-    #! Returns the socket
-    Socket getSocket() {
-        return sock;
-    }
-
-    #! Returns the output of the operation
-    auto getOutput() {
-        return {
-            "sock": sock,
-            "state": state,
-            "timed_out": state == STATE_TIMEOUT,
-            "closed": state == STATE_CLOSED,
-            "data_available": state == STATE_DATA_AVAILABLE,
-        };
-    }
-
-    #! Returns True if the connection timed out
-    bool timedOut() {
-        return state == STATE_TIMEOUT;
-    }
-
-    #! Returns True if data is available for reading
-    bool hasData() {
-        return state == STATE_DATA_AVAILABLE;
-    }
-
-    #! Returns True if the connection was closed
-    bool wasClosed() {
-        return state == STATE_CLOSED;
-    }
-
-    #! Resets the timeout deadline
-    resetTimeout() {
-        deadline = now_us() + ttl;
-    }
-
-    #! Aborts the operation
-    abort() {
-        state = STATE_CLOSED;
+    constructor(Socket sock, timeout ttl = DefaultIdleTimeout) :
+            HttpIdlePollOperationBase(sock, int(ttl)) {
     }
 }
 
