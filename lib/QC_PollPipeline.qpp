@@ -473,6 +473,14 @@ int PollPipelinePriv::addSelectContextValue(const char* result_key, const char* 
     });
 }
 
+int PollPipelinePriv::addGoto(int target_step) {
+    Step s;
+    s.type = StepType::GOTO;
+    s.true_step = target_step;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
 int PollPipelinePriv::addContextOr(const char* result_key, const char* key_a, const char* key_b) {
     std::string res(result_key);
     std::string ka(key_a);
@@ -657,6 +665,11 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             case StepType::BRANCH: {
                 bool result = step.condition(ctx);
                 current_step = result ? step.true_step : step.false_step;
+                continue;
+            }
+
+            case StepType::GOTO: {
+                current_step = step.true_step;
                 continue;
             }
 
@@ -1089,6 +1102,7 @@ const char* PollPipelinePriv::getStateImpl() const {
         case StepType::RECV_LINE_RESPONSE: return "recv-line-response";
         case StepType::BRANCH:      return "branch";
         case StepType::TRANSFORM:   return "transform";
+        case StepType::GOTO:        return "goto";
         case StepType::DELIVER_RESULT: return "deliver-result";
     }
     return "unknown";
@@ -1606,6 +1620,16 @@ int PollPipeline::addSelectContextValue(string result_key, string condition_key,
 */
 int PollPipeline::addContextOr(string result_key, string key_a, string key_b) {
     return priv->addContextOr(result_key->c_str(), key_a->c_str(), key_b->c_str());
+}
+
+//! Adds an unconditional jump to a target step (enables loops)
+/** @param target_step the step index to jump to
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addGoto(int target_step) {
+    return priv->addGoto((int)target_step);
 }
 
 //! Sets a Promise as the result action

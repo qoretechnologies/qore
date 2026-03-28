@@ -77,6 +77,7 @@ public:
         RECV_LINE_RESPONSE,
         BRANCH,
         TRANSFORM,
+        GOTO,
         DELIVER_RESULT
     };
 
@@ -247,6 +248,9 @@ public:
     */
     DLLEXPORT int addSelectContextValue(const char* result_key, const char* condition_key,
         const char* true_source_key, const char* false_source_key);
+
+    //! Unconditional jump to a target step (enables loops)
+    DLLEXPORT int addGoto(int target_step);
 
     //! Stores the logical OR of two boolean context keys into a result key
     /** Sets ctx.extra[result_key] = ctx.extra[key_a] || ctx.extra[key_b]
