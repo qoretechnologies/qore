@@ -272,6 +272,14 @@ static std::string getLibqoreDir() {
     // Use a known symbol from libqore
     if (dladdr(reinterpret_cast<void*>(&qore_aot_run), &info) && info.dli_fname) {
         std::string path(info.dli_fname);
+        // Resolve to absolute path if relative (e.g., when libqore.so is in CWD)
+        if (!path.empty() && path[0] != '/') {
+            char* abs = realpath(path.c_str(), nullptr);
+            if (abs) {
+                path = abs;
+                free(abs);
+            }
+        }
         size_t pos = path.rfind('/');
         if (pos != std::string::npos) {
             return path.substr(0, pos);

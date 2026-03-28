@@ -6705,7 +6705,12 @@ QoreIRValue QoreIRLowering::lowerParseHash(const QoreValue& expr, std::string& e
     }
 
     // Get parse-time type info from the QoreParseHashNode
+    // Pass nullptr for auto types so the IR interpreter computes from runtime values
+    // (lvalues can return NOTHING despite their declared type)
     const QoreTypeInfo* parse_ti = hash->getParseTypeInfo();
+    if (parse_ti == autoHashTypeInfo) {
+        parse_ti = nullptr;
+    }
 
     if (all_const_keys) {
         // Optimized path: only value operands, key names embedded in instruction
@@ -6755,7 +6760,19 @@ QoreIRValue QoreIRLowering::lowerParseList(const QoreValue& expr, std::string& e
         values.push_back(value);
     }
     // Get parse-time type info from the QoreParseListNode
+    // Pass nullptr for auto/unspecific types so the IR interpreter computes from runtime values
+    // (lvalues can return NOTHING despite their declared type)
     const QoreTypeInfo* parse_ti = list->getParseTypeInfo();
+    if (parse_ti == autoListTypeInfo) {
+        parse_ti = nullptr;
+    } else if (parse_ti) {
+        // Also clear for list types with auto element types (e.g., list<hash<auto>>)
+        const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(parse_ti);
+        if (elem_type && (elem_type == autoTypeInfo || elem_type == autoHashTypeInfo
+            || elem_type == autoHashOrNothingTypeInfo)) {
+            parse_ti = nullptr;
+        }
+    }
     return builder.createMakeList(values, list->loc, parse_ti)->result;
 }
 
@@ -7981,6 +7998,14 @@ QoreIRValue QoreIRLowering::lowerMap(const QoreValue& expr, std::string& error) 
     auto* map = dynamic_cast<const QoreMapOperatorNode*>(node);
     if (!map) {
         return QoreIRValue();
+    }
+
+    // If the iterator expression is known to be nothing, return NOTHING directly
+    {
+        const QoreTypeInfo* iter_type = getExprTypeInfo(map->getRight());
+        if (QoreTypeInfo::isType(iter_type, NT_NOTHING)) {
+            return builder.createConstNothing(map->loc)->result;
+        }
     }
 
     // For typed lists with known element types, prefer native LLVM IR lowering

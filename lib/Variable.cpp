@@ -2670,12 +2670,18 @@ void LocalVar::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLoc
         return;
     }
 
-    // Handle assignment of NOTHING (or other untyped values) by resetting narrowing
-    // This includes both nullptr (untyped) and specific untyped literal types like nothing/null
-    if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
+    // Handle assignment of untyped values by resetting narrowing
+    if (!QoreTypeInfo::hasType(ti)) {
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
         QORE_DEBUG_NARROW_RESET(name.c_str(), "untyped assignment");
+        return;
+    }
+    // For NOTHING/NULL assignments, set narrowed type to nothingTypeInfo so branch
+    // merging can produce proper nullable types (e.g., int | nothing = *int)
+    if (ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nothingTypeInfo;
+        narrowedLoc = loc;
         return;
     }
     // Don't narrow if the new type is also auto
@@ -2772,12 +2778,18 @@ void Var::parseSetNarrowedType(const QoreTypeInfo* ti, const QoreProgramLocation
     if (no_narrowing) {
         return;
     }
-    // Handle assignment of NOTHING (or other untyped values) by resetting narrowing
-    // This includes both nullptr (untyped) and specific untyped literal types like nothing/null
-    if (!QoreTypeInfo::hasType(ti) || ti == nothingTypeInfo || ti == nullTypeInfo) {
+    // Handle assignment of untyped values by resetting narrowing
+    if (!QoreTypeInfo::hasType(ti)) {
         narrowedTypeInfo = nullptr;
         narrowedLoc = nullptr;
         QORE_DEBUG_NARROW_RESET(getName(), "untyped assignment");
+        return;
+    }
+    // For NOTHING/NULL assignments, set narrowed type to nothingTypeInfo so branch
+    // merging can produce proper nullable types (e.g., int | nothing = *int)
+    if (ti == nothingTypeInfo || ti == nullTypeInfo) {
+        narrowedTypeInfo = nothingTypeInfo;
+        narrowedLoc = loc;
         return;
     }
     // Don't narrow if the new type is also auto

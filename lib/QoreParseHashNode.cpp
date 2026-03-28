@@ -87,6 +87,19 @@ int QoreParseHashNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_con
         }
         vtypes[i] = parse_context.typeInfo;
 
+        // For unassigned non-auto typed variables, clear type info to prevent
+        // baking the declared type into the hash literal; the actual runtime value
+        // may be NOTHING, so the type must be determined at runtime
+        if (vtypes[i] && values[i].getType() == NT_VARREF) {
+            VarRefNode* vr = values[i].get<VarRefNode>();
+            qore_var_t vt = vr->getType();
+            if ((vt == VT_LOCAL || vt == VT_CLOSURE || vt == VT_LOCAL_TS)
+                && vr->ref.id && !vr->ref.id->isAutoType()
+                && !vr->ref.id->isAssigned()) {
+                vtypes[i] = nullptr;
+            }
+        }
+
         //printd(5, "QoreParseHashNode::parseInitImpl() this: %p i: %d '%s': '%s'\n", this, i,
         //    keys[i].getType() == NT_STRING ? keys[i].get<const QoreStringNode>()->c_str() : keys[i].getFullTypeName(),
         //    values[i].getFullTypeName());

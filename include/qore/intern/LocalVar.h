@@ -587,17 +587,16 @@ public:
         return typeInfo;
     }
 
+    //! Returns the type info for this variable at parse time
+    /** Always returns the declared type (or narrowed type for auto variables).
+        For unassigned variables, returns the declared type — callers that need
+        to distinguish assigned vs unassigned should check isAssigned() separately.
+    */
     DLLLOCAL const QoreTypeInfo* parseGetTypeInfo() const {
-        // If the variable is not definitely assigned at parse time, return nullptr to indicate
-        // that we don't have reliable type information. This forces runtime matching for function
-        // calls, allowing unassigned variables to match no-argument variants instead of their
-        // declared types. An unassigned variable could be NOTHING at runtime.
-        if (!parse_assigned) {
-            QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), nullptr, "not assigned");
-            return nullptr;
-        }
         // If this is a reference type with a target type, return that
-        if (refTypeInfo) {
+        // but only if the reference has been assigned (bound); an unbound reference
+        // should not have type info since it's not yet pointing at anything
+        if (refTypeInfo && parse_assigned) {
             QORE_DEBUG_NARROW_GET_TYPE(name.c_str(), refTypeInfo, "reference type");
             return refTypeInfo;
         }

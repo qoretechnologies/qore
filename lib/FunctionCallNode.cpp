@@ -186,6 +186,28 @@ int FunctionCallBase::parseArgsVariant(const QoreProgramLocation* loc, QoreParse
             arg_analysis = parse_context.analysis;
         }
         parse_args = nullptr;
+
+        // For unassigned non-auto local variables, clear type info in the argument list
+        // to force runtime matching in overload resolution. An unassigned variable could
+        // hold NOTHING at runtime, so parse-time type matching against the declared type
+        // would be incorrect. (Note: parseGetTypeInfo() returns declared type for all vars
+        // to support assignment type-checking; we override for call args here.)
+        if (args && func) {
+            for (unsigned i = 0; i < argTypeInfo.size(); ++i) {
+                if (argTypeInfo[i]) {
+                    QoreValue v = args->retrieveEntry(i);
+                    if (v.getType() == NT_VARREF) {
+                        VarRefNode* vr = v.get<VarRefNode>();
+                        qore_var_t vtype = vr->getType();
+                        if ((vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
+                            && vr->ref.id && !vr->ref.id->isAutoType()
+                            && !vr->ref.id->isAssigned()) {
+                            argTypeInfo[i] = nullptr;
+                        }
+                    }
+                }
+            }
+        }
     }
     parse_context.typeInfo = nullptr;
 

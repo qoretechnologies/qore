@@ -203,17 +203,14 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
 
     bool is_assignment = parse_context.pflag & PF_FOR_ASSIGNMENT;
 
-    // this expression returns nothing if it's a new local variable
-    // so if we're not assigning we return nothingTypeInfo as the
-    // return type
+    // this expression returns nothing if it's a new local variable declaration
+    // so if we're not assigning we return nothingTypeInfo as the return type
     if (!is_assignment && new_decl) {
         parse_context.typeInfo = nothingTypeInfo;
+    } else if (is_assignment && new_decl) {
+        parse_context.typeInfo = parseGetTypeInfoForInitialAssignment();
     } else {
-        if (is_assignment && new_decl) {
-            parse_context.typeInfo = parseGetTypeInfoForInitialAssignment();
-        } else {
-            parse_context.typeInfo = parseGetTypeInfo();
-        }
+        parse_context.typeInfo = parseGetTypeInfo();
     }
 
     // Set PF_NARROWED_TYPE flag if this variable has a narrowed type
@@ -491,17 +488,26 @@ int VarRefNewObjectNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
             parse_context.typeInfo = ti;
             err = parseInitComplexHashInitialization(loc, parse_context);
             vrn_type = VRN_COMPLEXHASH;
+            if (!err && ref.id) {
+                ref.id->parseAssigned();
+            }
         } else {
             ti = typeInfo == autoListTypeInfo ? autoTypeInfo : QoreTypeInfo::getUniqueReturnComplexList(typeInfo);
             if (ti) {
                 parse_context.typeInfo = ti;
                 err = parseInitComplexListInitialization(loc, parse_context);
                 vrn_type = VRN_COMPLEXLIST;
+                if (!err && ref.id) {
+                    ref.id->parseAssigned();
+                }
             } else {
                 const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
                 if (hd) {
                     err = parseInitHashDeclInitialization(loc, parse_context, hd);
                     vrn_type = VRN_HASHDECL;
+                    if (!err && ref.id) {
+                        ref.id->parseAssigned();
+                    }
                 } else {
                     parse_error(*loc, "type '%s' does not support implied constructor instantiation",
                         QoreTypeInfo::getName(typeInfo));

@@ -185,9 +185,16 @@ static qore_type_result_e match_QTS_COMPLEXLIST(const QoreTypeSpec& self, QoreTy
             break;
         }
         case QTS_TYPE: {
-            if (ctx.t.getType() == NT_LIST && self.getComplexList() == autoTypeInfo) {
+            if (ctx.t.getType() == NT_LIST) {
+                if (self.getComplexList() == autoTypeInfo) {
+                    ctx.max_result = QTI_IDENT;
+                    return QTI_NEAR;
+                }
+                // An untyped list is ambiguously compatible with any typed list;
+                // it may or may not contain elements of the required type
+                ctx.may_not_match = true;
                 ctx.max_result = QTI_IDENT;
-                return QTI_NEAR;
+                return QTI_AMBIGUOUS;
             }
             if (ctx.t.getType() == NT_ALL) {
                 ctx.may_not_match = true;
