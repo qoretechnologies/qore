@@ -173,6 +173,7 @@ DLLLOCAL QoreClass* initPollPipelineClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp1ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpClientPingPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
 
 DLLLOCAL void init_type_constants(QoreNamespace& ns);
@@ -1322,6 +1323,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initHttp1ClientPollOperationBaseClass(qns));
     qns.addSystemClass(initHttp3ClientPollOperationBaseClass(qns));
     qns.addSystemClass(initHttp2ClientPollOperationBaseClass(qns));
+    // HttpClientPingPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpClientPingPollOperationBaseClass(qns));
 
     qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));

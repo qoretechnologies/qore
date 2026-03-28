@@ -3391,41 +3391,55 @@ class MyObserver inherits Observer {
 #! Poll operation for WebSocket connection ping
 /** Performs a WebSocket handshake to verify the connection is working.
 
+    Uses the C++ HttpClientPingPollOperationBase for I/O thread fast path.
+    The constructor creates the HTTPClient, builds WebSocket upgrade headers,
+    starts the inner poll operation, and passes it to the C++ base which
+    handles delegation and response validation (status 101, Sec-WebSocket-Accept).
+
+    Use the static @ref create() factory method to construct this object:
+    @code{.py}
+    auto op = WebSocketPingPollOperation::create(url, http_opts, headers, logger);
+    @endcode
+
     @since WebSocketClient 2.4
 */
-public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketPingPollOperation inherits Qore::HttpClientPingPollOperationBase {
     private {
-        #! The underlying poll operation
-        *AbstractPollOperation poller;
-
         #! Logger for this operation
         *Logger::LoggerInterface logger;
-
-        #! WebSocket key for handshake validation
-        string ws_key;
-
-        #! Whether the goal has been reached
-        bool goal_reached = False;
-
-        #! Output from the operation
-        auto output;
-
-        #! Current state
-        string state = "ws-handshake";
     }
 
-    #! Creates the poll operation
+    #! Creates the poll operation from pre-computed inner op and WebSocket key
+    /** @param inner_op the inner poll operation from HTTPClient.startPollSendRecv()
+        @param ws_key the WebSocket key used in the Sec-WebSocket-Key header
+        @param logger optional logger
+
+        @note Use the static @ref create() method to construct this object; it handles
+        creating the HTTPClient, generating the key, and starting the inner op.
+
+        @since WebSocketClient 2.4
+    */
+    constructor(AbstractPollOperation inner_op, string ws_key,
+            *Logger::LoggerInterface logger) :
+            HttpClientPingPollOperationBase(inner_op, 101, 101,
+                "WEBSOCKET-PING-ERROR", NOTHING, NOTHING, ws_key) {
+        self.logger = logger;
+        # Override the default goal from the base class
+        goal = "ws-ping";
+    }
+
+    #! Creates a WebSocket ping poll operation
     /** @param base_url the WebSocket URL (ws:// or wss://)
         @param http_opts HTTP client options
         @param headers additional headers for the request
         @param logger optional logger
 
+        @return a new WebSocketPingPollOperation
+
         @since WebSocketClient 2.4
     */
-    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers,
-            *Logger::LoggerInterface logger) {
-        self.logger = logger;
-
+    static WebSocketPingPollOperation create(string base_url, *hash<auto> http_opts,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
         # Convert ws:// to http:// and wss:// to https://
         string http_url = base_url;
         if (http_url =~ /^wss:/) {
@@ -3435,7 +3449,7 @@ public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
         }
 
         # Generate WebSocket key
-        ws_key = get_random_string(16).toBase64();
+        string ws_key = get_random_string(16).toBase64();
 
         # Build WebSocket upgrade headers
         hash<auto> ws_headers = {
@@ -3447,84 +3461,11 @@ public class WebSocketPingPollOperation inherits Qore::AbstractPollOperation {
         ws_headers += headers;
 
         HTTPClient hc((http_opts ?? {}) + {"url": http_url});
-        log("INFO", "WebSocketConnection async ping start: url=%y", base_url);
-        poller = hc.startPollSendRecv("GET", "", NOTHING, ws_headers);
-    }
-
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "ws-ping";
-    }
-
-    #! Returns the current state
-    string getState() {
-        return state + (poller ? ("-" + poller.getState()) : "");
-    }
-
-    #! Returns True if the goal has been reached
-    bool goalReached() {
-        return goal_reached;
-    }
-
-    #! Continues the poll operation
-    *hash<SocketPollInfo> continuePoll() {
-        if (!poller) {
-            return;
-        }
-        *hash<SocketPollInfo> info = poller.continuePoll();
-        if (info) {
-            return info;
-        }
-
-        # Operation complete - validate the response
-        # Response format from startPollSendRecv:
-        # - code: HTTP response code
-        # - info.response-headers: hash of headers with lowercase keys
-        hash<auto> resp = poller.getOutput();
-        if (resp.code != 101) {
-            *string status_message = resp.info."response-headers".status_message;
-            log("ERROR", "WebSocketConnection async ping failed: expected 101, got code=%y", resp.code);
-            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: expected 101 Switching Protocols, "
-                "got %d %s", resp.code, status_message ?? "");
-        }
-
-        # Validate Sec-WebSocket-Accept from response-headers
-        *hash<auto> response_headers = resp.info."response-headers";
-        *string accept_key = response_headers."sec-websocket-accept";
-        if (!accept_key) {
-            log("ERROR", "WebSocketConnection async ping failed: missing Sec-WebSocket-Accept header");
-            throw "WEBSOCKET-PING-ERROR", "WebSocket handshake failed: missing Sec-WebSocket-Accept header";
-        }
-        string expected_key = ws_get_response_key(ws_key);
-        if (accept_key != expected_key) {
-            log("ERROR", "WebSocketConnection async ping failed: invalid Sec-WebSocket-Accept: got %y, expected %y",
-                accept_key, expected_key);
-            throw "WEBSOCKET-PING-ERROR", sprintf("WebSocket handshake failed: invalid Sec-WebSocket-Accept "
-                "header: got %y, expected %y", accept_key, expected_key);
-        }
-
-        output = resp;
-        log("INFO", "WebSocketConnection async ping complete: code=%d", resp.code);
-        goal_reached = True;
-    }
-
-    #! Returns the output of the operation
-    auto getOutput() {
-        return output;
-    }
-
-    #! Aborts the operation
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    #! Internal logging helper
-    private log(string level, string msg, ...) {
         if (logger) {
-            logger.logArgs(level, msg, argv);
+            logger.logArgs("INFO", "WebSocketConnection async ping start: url=%y", base_url);
         }
+        auto inner_op = hc.startPollSendRecv("GET", "", NOTHING, ws_headers);
+        return new WebSocketPingPollOperation(inner_op, ws_key, logger);
     }
 }
 
@@ -3718,7 +3659,7 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         if (opts.token && !headers.Authorization) {
             headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
         }
-        return new WebSocketPingPollOperation(url, http_opts, headers, logger ?? self.logger);
+        return WebSocketPingPollOperation::create(url, http_opts, headers, logger ?? self.logger);
     }
 
     private hash<PingInfo> pingIntern(hash<PingInfo> rv) {
