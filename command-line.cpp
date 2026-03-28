@@ -1765,8 +1765,11 @@ int qore_main_intern(int argc, char* argv[], int other_po) {
                    aot_include_source ? "" : ", source-stripped", output_path.c_str());
             }
          } else {
+            // Use the program's parse options (includes %modern, %new-style, etc.)
+            // merged with command-line options, not just command-line options alone
+            QoreParseOptions aot_po = qpgm->getParseOptions() | parse_options;
             if (!QoreAOT::compile(*qpgm, source_text.c_str(), (int)source_text.size(),
-                     source_label.c_str(), output_path, parse_options, error,
+                     source_label.c_str(), output_path, aot_po, error,
                      aot_opt_level, aot_target, aot_static, aot_include_source)) {
                fprintf(stderr, "AOT compilation failed: %s\n", error.c_str());
                rc = 1;
