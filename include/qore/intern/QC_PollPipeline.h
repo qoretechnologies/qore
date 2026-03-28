@@ -189,6 +189,16 @@ public:
     //! Adds a branch based on status code range
     DLLLOCAL int addBranchOnStatus(int lo, int hi, int true_step, int false_step);
 
+    //! Adds a header value validation transform (throws if header doesn't match prefix)
+    DLLLOCAL int addValidateHeaderPrefix(const char* header_name, const char* expected_prefix,
+        const char* err_code);
+
+    //! Adds a transform that extracts a field from last_output into last_output
+    DLLLOCAL int addExtractOutputField(const char* field_name);
+
+    //! Adds a WebSocket Sec-WebSocket-Accept key validation transform
+    DLLLOCAL int addValidateWebSocketAccept(const char* ws_key, const char* err_code);
+
     //! Adds a result delivery step
     DLLLOCAL int addDeliverResult();
 

@@ -37,6 +37,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/ql_crypto.h"
 
 /** @cond INTERNAL */
 
@@ -226,6 +227,85 @@ int PollPipelinePriv::addBranchOnStatus(int lo, int hi, int true_step, int false
             return ctx.status_code >= lo && ctx.status_code <= hi;
         },
         true_step, false_step);
+}
+
+int PollPipelinePriv::addValidateHeaderPrefix(const char* header_name, const char* expected_prefix,
+        const char* err_code) {
+    std::string hdr(header_name);
+    std::string prefix(expected_prefix);
+    std::string err(err_code);
+    return addTransform([hdr, prefix, err](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.headers) {
+            xsink->raiseException(err.c_str(), "no response headers available");
+            return;
+        }
+        QoreValue val = ctx.headers->getKeyValue(hdr.c_str());
+        if (val.getType() != NT_STRING) {
+            xsink->raiseException(err.c_str(), "missing '%s' header in response", hdr.c_str());
+            return;
+        }
+        const char* actual = val.get<const QoreStringNode>()->c_str();
+        if (strncasecmp(actual, prefix.c_str(), prefix.size()) != 0) {
+            xsink->raiseException(err.c_str(),
+                "expected '%s' header starting with '%s', got '%s'",
+                hdr.c_str(), prefix.c_str(), actual);
+        }
+    });
+}
+
+int PollPipelinePriv::addValidateWebSocketAccept(const char* ws_key, const char* err_code) {
+    // Compute expected accept key: base64(SHA-1(key + GUID))
+    // Per RFC 6455 Section 4.2.2
+    static const char* WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    QoreString concat(ws_key);
+    concat.concat(WS_GUID);
+
+    // SHA-1 via OpenSSL
+    DigestHelper dh(concat);
+    ExceptionSink xsink;
+    if (dh.doDigest(SHA1_ERR, EVP_sha1(), &xsink)) {
+        return addTransform([](Context& ctx, ExceptionSink* xs) {
+            xs->raiseException("WEBSOCKET-INTERNAL-ERROR", "failed to compute SHA-1 for key validation");
+        });
+    }
+
+    // Base64 encode the SHA-1 digest
+    SimpleRefHolder<BinaryNode> sha1_bin(dh.getBinary());
+    QoreString tmp;
+    tmp.concatBase64(*sha1_bin);
+    std::string expected_str(tmp.c_str());
+
+    std::string err(err_code);
+    return addTransform([expected_str, err](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.headers) {
+            xsink->raiseException(err.c_str(), "no response headers available");
+            return;
+        }
+        QoreValue val = ctx.headers->getKeyValue("sec-websocket-accept");
+        if (val.getType() != NT_STRING) {
+            xsink->raiseException(err.c_str(), "missing Sec-WebSocket-Accept header");
+            return;
+        }
+        const char* actual = val.get<const QoreStringNode>()->c_str();
+        if (strcmp(actual, expected_str.c_str()) != 0) {
+            xsink->raiseException(err.c_str(),
+                "invalid Sec-WebSocket-Accept: got '%s', expected '%s'",
+                actual, expected_str.c_str());
+        }
+    });
+}
+
+int PollPipelinePriv::addExtractOutputField(const char* field_name) {
+    std::string field(field_name);
+    return addTransform([field](Context& ctx, ExceptionSink* xsink) {
+        if (ctx.last_output.getType() == NT_HASH) {
+            QoreHashNode* h = ctx.last_output.get<QoreHashNode>();
+            QoreValue val = h->getKeyValue(field.c_str());
+            val.refSelf();
+            ctx.last_output.discard(xsink);
+            ctx.last_output = val;
+        }
+    });
 }
 
 int PollPipelinePriv::addDeliverResult() {
@@ -548,7 +628,7 @@ void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
     }
 
     // For DELEGATE: extract HTTP response fields if the output is a response hash
-    // HTTPClient.startPollSendRecv returns {code, body, hdr, info, ...}
+    // HTTPClient.startPollSendRecv returns {code, info: {response-headers: {...}}, ...}
     if (steps[current_step].type == StepType::DELEGATE
             && out.getType() == NT_HASH) {
         QoreHashNode* h = out.get<QoreHashNode>();
@@ -556,12 +636,22 @@ void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
         if (!code_val.isNullOrNothing()) {
             ctx.status_code = (int)code_val.getAsBigInt();
         }
-        QoreValue hdr_val = h->getKeyValue("hdr");
-        if (hdr_val.getType() == NT_HASH) {
-            if (ctx.headers) {
-                ctx.headers->deref(xsink);
+        // Try info."response-headers" first (HTTPClient format), then "hdr" (raw format)
+        QoreValue info_val = h->getKeyValue("info");
+        if (info_val.getType() == NT_HASH) {
+            QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
+            if (resp_hdr.getType() == NT_HASH) {
+                if (ctx.headers) {
+                    ctx.headers->deref(xsink);
+                }
+                ctx.headers = resp_hdr.get<QoreHashNode>()->hashRefSelf();
             }
-            ctx.headers = hdr_val.get<QoreHashNode>()->hashRefSelf();
+        }
+        if (!ctx.headers) {
+            QoreValue hdr_val = h->getKeyValue("hdr");
+            if (hdr_val.getType() == NT_HASH) {
+                ctx.headers = hdr_val.get<QoreHashNode>()->hashRefSelf();
+            }
         }
         QoreValue body_val = h->getKeyValue("body");
         if (body_val.getType() == NT_BINARY) {
@@ -740,11 +830,13 @@ PollPipeline::constructor(Socket[QoreSocketObject] sock) {
 /** Use this constructor when the pipeline only contains DELEGATE steps that
     wrap existing poll operations. The delegate ops manage their own sockets.
 
+    @param goal optional goal string (default "poll_pipeline")
+
     @since %Qore 2.3
 */
-PollPipeline::constructor() {
+PollPipeline::constructor(*string goal) {
     self->setMemberValue("goal", QC_POLLPIPELINE,
-        new QoreStringNode("poll_pipeline"), xsink);
+        goal ? new QoreStringNode(goal->c_str()) : new QoreStringNode("poll_pipeline"), xsink);
 
     self->setPrivate(CID_POLLPIPELINE,
         new PollPipelinePriv(self, nullptr));
@@ -914,6 +1006,48 @@ int PollPipeline::addRecvData(bool as_string = False) [dom=NETWORK] {
 */
 int PollPipeline::addDeliverResult() {
     return priv->addDeliverResult();
+}
+
+//! Adds a header validation step (throws if header doesn't start with expected prefix)
+/** Checks a response header value against an expected prefix. Useful for
+    validating Content-Type, Accept, etc.
+
+    @param header_name the header name (case-sensitive key in context headers)
+    @param expected_prefix the expected value prefix (case-insensitive comparison)
+    @param err the Qore exception error code to throw on mismatch
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addValidateHeaderPrefix(string header_name, string expected_prefix, string err) {
+    return priv->addValidateHeaderPrefix(header_name->c_str(), expected_prefix->c_str(), err->c_str());
+}
+
+//! Adds an output field extraction step
+/** Replaces the pipeline's last_output with the value of a specific field
+    from the current output hash. Useful for unwrapping response envelopes.
+
+    @param field_name the hash key to extract
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addExtractOutputField(string field_name) {
+    return priv->addExtractOutputField(field_name->c_str());
+}
+
+//! Adds a WebSocket Sec-WebSocket-Accept key validation step
+/** Computes the expected accept key per RFC 6455 and validates the
+    response header matches. Throws if validation fails.
+
+    @param ws_key the Sec-WebSocket-Key sent in the request
+    @param err the exception error code on failure
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addValidateWebSocketAccept(string ws_key, string err) {
+    return priv->addValidateWebSocketAccept(ws_key->c_str(), err->c_str());
 }
 
 //! Adds a status-code validation step that throws if the code is out of range
