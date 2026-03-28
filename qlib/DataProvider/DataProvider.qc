@@ -118,6 +118,8 @@ public class DataProvider {
             "generator": "GeneratorDataProvider",
 
             # provided by the geos module
+            "geosgeojsonread": "GEOSDataProvider",
+            "geosgeojsonwrite": "GEOSDataProvider",
             "geoswkbread": "GEOSDataProvider",
             "geoswkbwrite": "GEOSDataProvider",
             "geoswktread": "GEOSDataProvider",
@@ -156,6 +158,10 @@ public class DataProvider {
 
             # provided by the jni module
             "mqtt": "MqttDataProvider",
+
+            # provided by the nats module
+            "nats": "NatsDataProvider",
+            "natsjetstream": "NatsJetStreamDataProvider",
 
             # provided by the jni module
             "opcua": "OpcUaDataProvider",
