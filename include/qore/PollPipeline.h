@@ -88,6 +88,7 @@ public:
         BinaryNode* body = nullptr;         //!< ref'd, accumulated body data
         QoreValue last_output;              //!< output from previous step
         QoreHashNode* extra = nullptr;      //!< ref'd, arbitrary step data
+        QoreStringNode* line_accum = nullptr; //!< RECV_LINE_RESPONSE accumulator (dedicated field)
 
         DLLEXPORT void cleanup(ExceptionSink* xsink) {
             if (headers) { headers->deref(xsink); headers = nullptr; }
@@ -95,6 +96,7 @@ public:
             last_output.discard(xsink);
             last_output = QoreValue();
             if (extra) { extra->deref(xsink); extra = nullptr; }
+            if (line_accum) { line_accum->deref(xsink); line_accum = nullptr; }
         }
     };
 

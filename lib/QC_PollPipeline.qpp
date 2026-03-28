@@ -547,16 +547,12 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                             --len;
                         }
 
-                        // Accumulate line text
-                        QoreValue accum_val = ctx.extra->getKeyValue("_line_response_accum");
-                        if (accum_val.getType() == NT_STRING) {
-                            // NOTE: accum is owned by the hash; modify via copy-on-write
-                            QoreStringNode* accum =
-                                const_cast<QoreStringNode*>(accum_val.get<const QoreStringNode>());
-                            if (accum->size() > 0) {
-                                accum->concat('\n');
+                        // Accumulate line text in dedicated context field
+                        if (ctx.line_accum) {
+                            if (ctx.line_accum->size() > 0) {
+                                ctx.line_accum->concat('\n');
                             }
-                            accum->concat(str, len);
+                            ctx.line_accum->concat(str, len);
                         }
 
                         // Check continuation: line[3] == '-' means more lines follow
@@ -584,6 +580,9 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                         }
 
                         // Store code in ctx.extra[code_key]
+                        if (!ctx.extra) {
+                            ctx.extra = new QoreHashNode(autoTypeInfo);
+                        }
                         ctx.extra->setKeyValue(step.target.c_str(), code, xsink);
                         if (*xsink) {
                             return nullptr;
@@ -591,17 +590,14 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
 
                         // Store accumulated text in ctx.extra[text_key]
                         if (step.pattern_idx >= 0
-                                && step.pattern_idx < (int)string_data.size()) {
-                            QoreValue accum_val2 =
-                                ctx.extra->getKeyValue("_line_response_accum");
-                            if (accum_val2.getType() == NT_STRING) {
-                                ctx.extra->setKeyValue(
-                                    string_data[step.pattern_idx]->c_str(),
-                                    accum_val2.get<const QoreStringNode>()->stringRefSelf(),
-                                    xsink);
-                                if (*xsink) {
-                                    return nullptr;
-                                }
+                                && step.pattern_idx < (int)string_data.size()
+                                && ctx.line_accum) {
+                            ctx.extra->setKeyValue(
+                                string_data[step.pattern_idx]->c_str(),
+                                ctx.line_accum->stringRefSelf(),
+                                xsink);
+                            if (*xsink) {
+                                return nullptr;
                             }
                         }
 
@@ -609,10 +605,8 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                         if (step.data_idx >= 0
                                 && step.data_idx < (int)string_data.size()) {
                             if (code >= 400 || code < 100) {
-                                QoreValue text_val =
-                                    ctx.extra->getKeyValue("_line_response_accum");
-                                const char* text = text_val.getType() == NT_STRING
-                                    ? text_val.get<const QoreStringNode>()->c_str()
+                                const char* text = ctx.line_accum
+                                    ? ctx.line_accum->c_str()
                                     : "unknown error";
                                 xsink->raiseException(
                                     string_data[step.data_idx]->c_str(),
@@ -621,10 +615,10 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                             }
                         }
 
-                        // Clean up the internal accumulator key
-                        ctx.extra->removeKey("_line_response_accum", xsink);
-                        if (*xsink) {
-                            return nullptr;
+                        // Clean up the accumulator
+                        if (ctx.line_accum) {
+                            ctx.line_accum->deref(xsink);
+                            ctx.line_accum = nullptr;
                         }
                     }
 
@@ -912,13 +906,11 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
 
         case StepType::RECV_LINE_RESPONSE: {
             // Initialize accumulator in ctx.extra
-            if (!ctx.extra) {
-                ctx.extra = new QoreHashNode(autoTypeInfo);
+            // Initialize dedicated accumulator field (no hash lookup needed)
+            if (ctx.line_accum) {
+                ctx.line_accum->deref(xsink);
             }
-            ctx.extra->setKeyValue("_line_response_accum", new QoreStringNode(), xsink);
-            if (*xsink) {
-                return nullptr;
-            }
+            ctx.line_accum = new QoreStringNode();
 
             sock_obj->ref();
             SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
