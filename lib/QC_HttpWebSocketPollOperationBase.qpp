@@ -1,0 +1,822 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpWebSocketPollOperationBase.qpp
+
+    HttpWebSocketPollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_HttpWebSocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/intern/qore_socket_private.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// HttpWebSocketPollOperationPriv implementation
+// ============================================================
+
+HttpWebSocketPollOperationPriv::HttpWebSocketPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, Queue* recv_queue, QoreObject* recv_queue_obj,
+        Queue* send_queue, QoreObject* send_queue_obj)
+    : SocketPollOperationBase(self),
+      sock(sock),
+      recv_queue(recv_queue),
+      recv_queue_obj(recv_queue_obj),
+      send_queue(send_queue),
+      send_queue_obj(send_queue_obj) {
+    // All pointers are already ref'd by the QPP constructor
+}
+
+HttpWebSocketPollOperationPriv::~HttpWebSocketPollOperationPriv() {
+    if (sock || recv_queue || send_queue || send_op || recv_op || error_info) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+bool HttpWebSocketPollOperationPriv::goalReached() const {
+    return ws_state == WsState::CLOSED || ws_state == WsState::ERROR;
+}
+
+QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    printd(5, "HttpWebSocketPollOp::continuePoll() state: %s send_op=%p recv_op=%p\n",
+        getWsState(), send_op, recv_op);
+    if (goalReached()) {
+        return nullptr;
+    }
+
+    // Check if socket is still open
+    if (!sock->isOpen()) {
+        setClosed(1006, "Connection lost");
+        return nullptr;
+    }
+
+    int poll_events = 0;
+
+    // --- Phase 1: Drive active send operation ---
+    if (send_op) {
+        QoreHashNode* send_info = send_op->continuePoll(xsink);
+        if (*xsink) {
+            setError(xsink);
+            return nullptr;
+        }
+        if (!send_info) {
+            // Send complete or failed
+            if (send_op->goalReached()) {
+                releaseSendOp(xsink);
+            } else {
+                // Send failed
+                releaseSendOp(xsink);
+                setError(xsink);
+                return nullptr;
+            }
+        } else {
+            // Send needs more I/O
+            send_info->deref(xsink);
+            poll_events |= SOCK_POLLOUT;
+        }
+    }
+
+    // --- Phase 2: Drive active recv operation ---
+    if (recv_op) {
+        QoreHashNode* recv_info = recv_op->continuePoll(xsink);
+        if (*xsink) {
+            releaseRecvOp(xsink);
+            // Recv errors on EAGAIN/TIMEOUT are not fatal — clear and continue
+            xsink->clear();
+        } else if (!recv_info) {
+            // Recv complete — process the data
+            if (recv_op->goalReached()) {
+                QoreValue output = recv_op->getOutput();
+                if (output.getType() == NT_BINARY) {
+                    const BinaryNode* bin = output.get<const BinaryNode>();
+                    if (bin && bin->size() > 0) {
+                        decoder.appendData(bin->getPtr(), bin->size());
+                    }
+                    output.discard(xsink);
+                } else if (output.getType() == NT_STRING) {
+                    const QoreStringNode* str = output.get<const QoreStringNode>();
+                    if (str && str->size() > 0) {
+                        decoder.appendData(str->c_str(), str->size());
+                    }
+                    output.discard(xsink);
+                } else {
+                    output.discard(xsink);
+                }
+            }
+            releaseRecvOp(xsink);
+
+            // Process any complete frames in the decoder buffer
+            processDecodedFrames(xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            if (goalReached()) {
+                return nullptr;
+            }
+        } else {
+            // Recv needs more I/O
+            recv_info->deref(xsink);
+            poll_events |= SOCK_POLLIN;
+        }
+    }
+
+    // --- Phase 3: Check for incoming data and start recv if needed ---
+    if (!recv_op && !goalReached()) {
+        printd(5, "HttpWebSocketPollOp::continuePoll() checking isDataAvailable\n");
+        // Non-blocking check if data is available on the socket
+        if (sock->isDataAvailable(xsink, 0)) {
+            if (startRecvOp(xsink)) {
+                return nullptr;
+            }
+            // Don't return POLLIN yet — drive the recv op immediately on next continuePoll
+            poll_events |= SOCK_POLLIN;
+        }
+        if (*xsink) {
+            // isDataAvailable error — likely connection issue
+            setError(xsink);
+            return nullptr;
+        }
+    }
+
+    // --- Phase 4: Check for queued frames to send ---
+    if (!send_op && !goalReached()) {
+        drainSendQueue(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (pending_send && pending_send->size() > 0) {
+            if (startSendOp(xsink)) {
+                return nullptr;
+            }
+            poll_events |= SOCK_POLLOUT;
+        }
+    }
+
+    // If we're in CLOSED/ERROR after processing, we're done
+    if (goalReached()) {
+        return nullptr;
+    }
+
+    // Always poll for incoming data at minimum
+    poll_events |= SOCK_POLLIN;
+
+    return getSocketPollInfoHash(xsink, poll_events);
+}
+
+void HttpWebSocketPollOperationPriv::abort(ExceptionSink* xsink) {
+    ws_state = WsState::CLOSED;
+    releaseSendOp(xsink);
+    releaseRecvOp(xsink);
+}
+
+QoreValue HttpWebSocketPollOperationPriv::getOutput() const {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+    h->setKeyValue("sock", getReferencedSocketObject(&xsink), &xsink);
+    h->setKeyValue("state", new QoreStringNode(getWsState()), &xsink);
+    h->setKeyValue("close_code", static_cast<int64>(close_code), &xsink);
+    h->setKeyValue("close_reason", new QoreStringNode(close_reason), &xsink);
+    if (error_info) {
+        error_info->ref();
+        h->setKeyValue("error_info", error_info, &xsink);
+    }
+    return h.release();
+}
+
+const char* HttpWebSocketPollOperationPriv::getStateImpl() const {
+    return getWsState();
+}
+
+void HttpWebSocketPollOperationPriv::processDecodedFrames(ExceptionSink* xsink) {
+    while (decoder.hasCompleteFrame()) {
+        WsFrame frame = decoder.nextFrame(xsink);
+        if (*xsink) {
+            // Protocol error — transition to error state
+            ws_state = WsState::ERROR;
+            if (frame.payload) {
+                frame.payload->deref(xsink);
+            }
+            return;
+        }
+
+        // Check frame size limit
+        if (frame.payload && frame.payload->size() > max_frame_size) {
+            if (frame.payload) {
+                frame.payload->deref(xsink);
+            }
+            // Send close with 1009 (Message Too Big)
+            queueSendClose(WSCC_MessageTooBig, "Message too big", xsink);
+            return;
+        }
+
+        handleFrame(frame, xsink);
+
+        // Deref the frame payload — handleFrame copies what it needs
+        if (frame.payload) {
+            frame.payload->deref(xsink);
+        }
+
+        if (*xsink || goalReached()) {
+            return;
+        }
+    }
+}
+
+void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, ExceptionSink* xsink) {
+    // Control frames (PING, PONG, CLOSE) are never fragmented per RFC 6455
+    if (frame.opcode >= WSOP_CLOSE) {
+        switch (frame.opcode) {
+            case WSOP_PING: {
+                // Auto-pong: encode a PONG with the same payload and queue it
+                SimpleRefHolder<BinaryNode> pong(
+                    WebSocketFrameEncoder::encodePong(
+                        frame.payload ? frame.payload->getPtr() : nullptr,
+                        frame.payload ? frame.payload->size() : 0,
+                        false  // server->client: no masking
+                    )
+                );
+                send_queue->push(xsink, pong.release());
+                if (*xsink) {
+                    return;
+                }
+                // Also push to recv_queue so the Qore handler sees the ping
+                pushRecvFrame("ping", frame.payload ? frame.payload->refSelf() : nullptr, xsink);
+                break;
+            }
+
+            case WSOP_PONG: {
+                pushRecvFrame("pong", frame.payload ? frame.payload->refSelf() : nullptr, xsink);
+                break;
+            }
+
+            case WSOP_CLOSE: {
+                // Parse close code and reason from payload
+                uint16_t code = WSCC_NormalClosure;
+                std::string reason;
+                if (frame.payload && frame.payload->size() >= 2) {
+                    const uint8_t* data = static_cast<const uint8_t*>(frame.payload->getPtr());
+                    code = (static_cast<uint16_t>(data[0]) << 8) | data[1];
+                    if (frame.payload->size() > 2) {
+                        reason.assign(reinterpret_cast<const char*>(data + 2),
+                            frame.payload->size() - 2);
+                    }
+                }
+
+                close_code = code;
+                close_reason = reason;
+
+                // Push close frame to recv_queue
+                pushRecvCloseFrame(code, reason.c_str(), xsink);
+                if (*xsink) {
+                    return;
+                }
+
+                if (!close_initiated) {
+                    // Peer initiated close — echo the close frame
+                    SimpleRefHolder<BinaryNode> close_frame(
+                        WebSocketFrameEncoder::encodeClose(code,
+                            reason.empty() ? nullptr : reason.c_str(), false)
+                    );
+                    send_queue->push(xsink, close_frame.release());
+                    if (*xsink) {
+                        return;
+                    }
+                }
+                ws_state = WsState::CLOSING;
+                break;
+            }
+
+            default:
+                break;
+        }
+        return;
+    }
+
+    // Data frames: use reassembler for fragmentation support
+    bool complete = reassembler.processFrame(frame, xsink);
+    if (*xsink) {
+        ws_state = WsState::ERROR;
+        return;
+    }
+
+    if (complete) {
+        if (reassembler.isFragmenting() || frame.opcode == WSOP_CONTINUATION) {
+            // Reassembled fragmented message
+            WsOpcode msg_opcode;
+            uint8_t msg_rsv;
+            SimpleRefHolder<BinaryNode> msg_payload(reassembler.getCompleteMessage(msg_opcode, msg_rsv));
+            if (msg_payload) {
+                if (msg_opcode == WSOP_TEXT) {
+                    QoreStringNode* text = new QoreStringNode(
+                        reinterpret_cast<const char*>(msg_payload->getPtr()),
+                        msg_payload->size(), QCS_UTF8);
+                    pushRecvFrame("text", text, xsink);
+                } else {
+                    pushRecvFrame("binary", msg_payload.release(), xsink);
+                }
+            }
+        } else {
+            // Non-fragmented frame
+            if (frame.opcode == WSOP_TEXT) {
+                QoreStringNode* text = nullptr;
+                if (frame.payload && frame.payload->size() > 0) {
+                    text = new QoreStringNode(
+                        reinterpret_cast<const char*>(frame.payload->getPtr()),
+                        frame.payload->size(), QCS_UTF8);
+                } else {
+                    text = new QoreStringNode(QCS_UTF8);
+                }
+                pushRecvFrame("text", text, xsink);
+            } else if (frame.opcode == WSOP_BINARY) {
+                pushRecvFrame("binary", frame.payload ? frame.payload->refSelf() : new BinaryNode(), xsink);
+            }
+        }
+    }
+    // If not complete, more fragments expected — nothing to push yet
+}
+
+void HttpWebSocketPollOperationPriv::pushRecvFrame(const char* type, AbstractQoreNode* data,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("type", new QoreStringNode(type), xsink);
+    if (data) {
+        h->setKeyValue("data", data, xsink);
+    }
+    recv_queue->push(xsink, h.release());
+}
+
+void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
+        ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("type", new QoreStringNode("close"), xsink);
+    h->setKeyValue("code", static_cast<int64>(code), xsink);
+    h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), xsink);
+    recv_queue->push(xsink, h.release());
+}
+
+void HttpWebSocketPollOperationPriv::queueSendText(const QoreStringNode* text, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> frame(
+        WebSocketFrameEncoder::encode(WSOP_TEXT,
+            text->c_str(), text->size(), true, false)
+    );
+    send_queue->push(xsink, frame.release());
+}
+
+void HttpWebSocketPollOperationPriv::queueSendBinary(const BinaryNode* data, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> frame(
+        WebSocketFrameEncoder::encode(WSOP_BINARY,
+            data->getPtr(), data->size(), true, false)
+    );
+    send_queue->push(xsink, frame.release());
+}
+
+void HttpWebSocketPollOperationPriv::queueSendPing(const BinaryNode* data, ExceptionSink* xsink) {
+    SimpleRefHolder<BinaryNode> frame(
+        WebSocketFrameEncoder::encode(WSOP_PING,
+            data ? data->getPtr() : nullptr,
+            data ? data->size() : 0,
+            true, false)
+    );
+    send_queue->push(xsink, frame.release());
+}
+
+void HttpWebSocketPollOperationPriv::queueSendClose(uint16_t code, const char* reason,
+        ExceptionSink* xsink) {
+    close_initiated = true;
+    close_code = code;
+    if (reason) {
+        close_reason = reason;
+    }
+
+    SimpleRefHolder<BinaryNode> frame(
+        WebSocketFrameEncoder::encodeClose(code, reason, false)
+    );
+    send_queue->push(xsink, frame.release());
+    if (!*xsink) {
+        ws_state = WsState::CLOSING;
+    }
+}
+
+QoreValue HttpWebSocketPollOperationPriv::getReceivedFrame(ExceptionSink* xsink) {
+    if (recv_queue->empty()) {
+        return QoreValue();
+    }
+    bool timed_out = false;
+    QoreValue val = recv_queue->shift(xsink, -1, &timed_out);
+    if (*xsink || timed_out) {
+        if (*xsink) {
+            xsink->clear();
+        }
+        return QoreValue();
+    }
+    return val;
+}
+
+void HttpWebSocketPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
+    // Drain all available frames from the send queue into pending_send
+    // Note: Queue::shift(xsink, 0) waits forever; use negative timeout for non-blocking
+    while (!send_queue->empty()) {
+        bool timed_out = false;
+        QoreValue val = send_queue->shift(xsink, -1, &timed_out);
+        if (*xsink) {
+            return;
+        }
+        if (timed_out || val.isNothing()) {
+            break;
+        }
+        if (val.getType() == NT_BINARY) {
+            const BinaryNode* bin = val.get<const BinaryNode>();
+            if (bin && bin->size() > 0) {
+                if (!pending_send) {
+                    pending_send = new BinaryNode();
+                }
+                pending_send->append(bin->getPtr(), bin->size());
+            }
+        }
+        val.discard(xsink);
+    }
+}
+
+int HttpWebSocketPollOperationPriv::startRecvOp(ExceptionSink* xsink) {
+    assert(!recv_op);
+    sock->ref();
+    recv_op = new SocketRecvDataPollOperation(xsink, sock, false);
+    if (*xsink) {
+        recv_op->deref(xsink);
+        recv_op = nullptr;
+        setError(xsink);
+        return -1;
+    }
+    // Set our QoreObject as the inner op's self for poll info resolution
+    assert(self);
+    recv_op->setSelf(*self);
+    return 0;
+}
+
+int HttpWebSocketPollOperationPriv::startSendOp(ExceptionSink* xsink) {
+    assert(!send_op);
+    assert(pending_send);
+    assert(pending_send->size() > 0);
+
+    // Transfer ownership of pending_send to the send operation
+    BinaryNode* data = pending_send.release();
+    sock->ref();
+    send_op = new SocketSendPollOperation(xsink, data, sock);
+    if (*xsink) {
+        send_op->deref(xsink);
+        send_op = nullptr;
+        setError(xsink);
+        return -1;
+    }
+    // Set our QoreObject as the inner op's self for poll info resolution
+    assert(self);
+    send_op->setSelf(*self);
+    return 0;
+}
+
+void HttpWebSocketPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
+    if (send_op) {
+        send_op->deref(xsink);
+        send_op = nullptr;
+    }
+}
+
+void HttpWebSocketPollOperationPriv::releaseRecvOp(ExceptionSink* xsink) {
+    if (recv_op) {
+        recv_op->deref(xsink);
+        recv_op = nullptr;
+    }
+}
+
+void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
+    ws_state = WsState::ERROR;
+    if (!error_info) {
+        error_info = new QoreHashNode(autoTypeInfo);
+        ExceptionSink save_xsink;
+        const QoreValue err_val = xsink->getExceptionErr();
+        if (err_val.getType() == NT_STRING) {
+            error_info->setKeyValue("err",
+                err_val.get<const QoreStringNode>()->stringRefSelf(), &save_xsink);
+        }
+        const QoreValue desc_val = xsink->getExceptionDesc();
+        if (desc_val.getType() == NT_STRING) {
+            error_info->setKeyValue("desc",
+                desc_val.get<const QoreStringNode>()->stringRefSelf(), &save_xsink);
+        }
+    }
+}
+
+void HttpWebSocketPollOperationPriv::setClosed(uint16_t code, const char* reason) {
+    ws_state = WsState::CLOSED;
+    close_code = code;
+    if (reason) {
+        close_reason = reason;
+    }
+}
+
+void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    releaseSendOp(xsink);
+    releaseRecvOp(xsink);
+    reassembler.clear(xsink);
+    decoder.clear();
+
+    if (recv_queue) {
+        recv_queue->deref(xsink);
+        recv_queue = nullptr;
+    }
+    if (recv_queue_obj) {
+        recv_queue_obj->deref(xsink);
+        recv_queue_obj = nullptr;
+    }
+    if (send_queue) {
+        send_queue->deref(xsink);
+        send_queue = nullptr;
+    }
+    if (send_queue_obj) {
+        send_queue_obj->deref(xsink);
+        send_queue_obj = nullptr;
+    }
+    if (error_info) {
+        error_info->deref(xsink);
+        error_info = nullptr;
+    }
+    if (sock) {
+        sock->deref(xsink);
+        sock = nullptr;
+    }
+}
+
+/** @endcond */
+
+//! C++ base class for WebSocket server-side poll operation
+/** This class implements the core WebSocket frame I/O state machine in pure
+    C++, enabling the AsyncIoController I/O thread to drive the poll without
+    Qore interpreter overhead.
+
+    The C++ base handles:
+    - Frame decoding via WebSocketFrameDecoder and fragment reassembly
+    - Frame encoding via WebSocketFrameEncoder
+    - Automatic PONG responses to PING frames
+    - Close handshake per RFC 6455
+    - Non-blocking send/recv via inner SocketSendPollOperation and
+      SocketRecvDataPollOperation
+
+    State machine: CONNECTED -> CLOSING -> CLOSED / ERROR
+
+    Communication between the Qore handler and the I/O thread uses two
+    thread-safe Queues:
+    - recv_queue: decoded frames pushed by C++ (I/O thread), read by handler
+    - send_queue: pre-encoded frame bytes pushed by handler, sent by C++ (I/O thread)
+
+    The Qore wrapper (HttpWebSocketPollOperation) adds:
+    - High-level API (sendText, sendBinary, sendPing, sendClose, getReceivedFrame)
+    - Completion context for HttpConnectionPollOperationBase
+    - Channel integration for the WebSocket handler
+
+    @since %Qore 2.3
+*/
+qclass HttpWebSocketPollOperationBase [
+    private_members=object sock,string goal,object recv_queue,object send_queue;
+    ns=Qore;
+    arg=HttpWebSocketPollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the WebSocket poll operation base
+/** @param sock the WebSocket Socket (after upgrade handshake complete)
+
+    Creates internal recv and send Queues for communication between the I/O
+    thread and handler threads.
+*/
+HttpWebSocketPollOperationBase::constructor(Socket[QoreSocketObject] sock) {
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Store socket as Qore member for DGC visibility
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_qobj) {
+        self->setMemberValue("sock", QC_HTTPWEBSOCKETPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTPWEBSOCKETPOLLOPERATIONBASE,
+        new QoreStringNode("websocket"), xsink);
+
+    // Create recv and send queues (unlimited)
+    Queue* recv_q = new Queue(-1);
+    QoreObject* recv_q_obj = new QoreObject(QC_QUEUE, getProgram(), recv_q);
+    recv_q->ref();  // Extra ref for the C++ priv
+
+    Queue* send_q = new Queue(-1);
+    QoreObject* send_q_obj = new QoreObject(QC_QUEUE, getProgram(), send_q);
+    send_q->ref();  // Extra ref for the C++ priv
+
+    // Store queue objects as members for DGC visibility
+    self->setMemberValue("recv_queue", QC_HTTPWEBSOCKETPOLLOPERATIONBASE, recv_q_obj->refSelf(), xsink);
+    self->setMemberValue("send_queue", QC_HTTPWEBSOCKETPOLLOPERATIONBASE, send_q_obj->refSelf(), xsink);
+
+    sock_ptr->ref();
+
+    self->setPrivate(CID_HTTPWEBSOCKETPOLLOPERATIONBASE,
+        new HttpWebSocketPollOperationPriv(self, sock_ptr,
+            recv_q, recv_q_obj, send_q, send_q_obj));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+HttpWebSocketPollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPWEBSOCKETPOLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+HttpWebSocketPollOperationBase::copy() {
+    xsink->raiseException("HTTPWEBSOCKETPOLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return "websocket"
+*/
+string HttpWebSocketPollOperationBase::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return one of "connected", "closing", "closed", or "error"
+*/
+string HttpWebSocketPollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the connection is closed or in error
+/** @return True when the state is CLOSED or ERROR
+*/
+bool HttpWebSocketPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** Drives the WebSocket I/O state machine: receives frames, processes
+    control frames, sends queued frames.
+
+    @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> HttpWebSocketPollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Transitions to CLOSED state and releases all inner operations.
+*/
+nothing HttpWebSocketPollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output of the operation
+/** @return hash with sock, state, close_code, close_reason, error_info
+*/
+auto HttpWebSocketPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Sends a text message
+/** The text is encoded as a WebSocket TEXT frame and queued for sending.
+    Thread-safe: can be called from any thread.
+
+    @param text the UTF-8 text to send
+*/
+nothing HttpWebSocketPollOperationBase::sendText(string text) {
+    priv->queueSendText(text, xsink);
+}
+
+//! Sends a binary message
+/** The data is encoded as a WebSocket BINARY frame and queued for sending.
+    Thread-safe: can be called from any thread.
+
+    @param data the binary data to send
+*/
+nothing HttpWebSocketPollOperationBase::sendBinary(binary data) {
+    priv->queueSendBinary(data, xsink);
+}
+
+//! Sends a ping frame
+/** The ping is encoded as a WebSocket PING frame and queued for sending.
+    Thread-safe: can be called from any thread.
+
+    @param data optional ping payload
+*/
+nothing HttpWebSocketPollOperationBase::sendPing(*binary data) {
+    priv->queueSendPing(data, xsink);
+}
+
+//! Initiates the close handshake
+/** Sends a WebSocket CLOSE frame with the given code and reason.
+    Transitions the state to CLOSING.
+    Thread-safe: can be called from any thread.
+
+    @param code the close code (default 1000 = normal closure)
+    @param reason the close reason string (default empty)
+*/
+nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") {
+    priv->queueSendClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
+}
+
+//! Gets the next received frame (non-blocking)
+/** Returns the next frame from the recv queue, or @ref nothing if none available.
+    Thread-safe: can be called from any thread.
+
+    The frame hash has the following keys:
+    - \c type: "text", "binary", "ping", "pong", or "close"
+    - \c data: string for text frames, binary for binary/ping/pong frames
+    - \c code: int close code (only for close frames)
+    - \c reason: string close reason (only for close frames)
+
+    @return frame info hash or @ref nothing
+*/
+*hash<auto> HttpWebSocketPollOperationBase::getReceivedFrame() {
+    return priv->getReceivedFrame(xsink);
+}
+
+//! Returns True if there are received frames waiting
+/** Thread-safe: can be called from any thread.
+
+    @return True if the recv queue has frames available
+*/
+bool HttpWebSocketPollOperationBase::hasReceivedFrames() [flags=RET_VALUE_ONLY] {
+    return priv->hasReceivedFrames();
+}
+
+//! Returns True if the connection is closed
+/** @return True if the state is CLOSED or ERROR
+*/
+bool HttpWebSocketPollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if an error occurred
+/** @return True if error information is available
+*/
+bool HttpWebSocketPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
+    return priv->hasError();
+}
+
+//! Returns error information if an error occurred
+/** @return hash with "err" and "desc" keys, or @ref nothing
+*/
+*hash<auto> HttpWebSocketPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+    return priv->getErrorInfo();
+}
+
+//! Returns the WebSocket close code
+/** @return the close code (default 1000)
+*/
+int HttpWebSocketPollOperationBase::getCloseCode() [flags=RET_VALUE_ONLY] {
+    return priv->getCloseCode();
+}
+
+//! Returns the WebSocket close reason
+/** @return the close reason string
+*/
+string HttpWebSocketPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(priv->getCloseReason());
+}
+
+//! Returns the socket being monitored
+/** @return the Socket object
+*/
+Socket HttpWebSocketPollOperationBase::getSocket() {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}

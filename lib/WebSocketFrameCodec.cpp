@@ -208,7 +208,6 @@ BinaryNode* WebSocketFrameEncoder::encode(WsOpcode opcode, const void* payload,
     }
 
     SimpleRefHolder<BinaryNode> result(new BinaryNode());
-    result->preallocate(header_size + payload_len);
 
     // Byte 0: FIN + RSV + Opcode
     uint8_t b0 = static_cast<uint8_t>(opcode) | ((rsv & 0x07) << 4);
