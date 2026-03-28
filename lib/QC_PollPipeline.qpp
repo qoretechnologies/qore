@@ -399,6 +399,30 @@ int PollPipelinePriv::addSetContextBinary(const char* key, BinaryNode* data) {
     });
 }
 
+int PollPipelinePriv::addValidateResponsePrefix(const char* prefix, const char* err_code) {
+    std::string pfx(prefix);
+    std::string err(err_code);
+    return addTransform([pfx, err](Context& ctx, ExceptionSink* xsink) {
+        if (ctx.last_output.getType() == NT_STRING) {
+            const QoreStringNode* str_node = ctx.last_output.get<const QoreStringNode>();
+            const char* str = str_node->c_str();
+            // Trim trailing whitespace for comparison
+            size_t len = str_node->size();
+            while (len > 0 && (str[len - 1] == '\n' || str[len - 1] == '\r')) {
+                --len;
+            }
+            if (strncmp(str, pfx.c_str(), pfx.size()) == 0) {
+                return;  // OK — prefix matches
+            }
+            // Build a trimmed copy for the error message
+            QoreString trimmed(str, len);
+            xsink->raiseException(err.c_str(), "unexpected response: %s", trimmed.c_str());
+        } else {
+            xsink->raiseException(err.c_str(), "no response received");
+        }
+    });
+}
+
 int PollPipelinePriv::addCheckContains(const char* source_key, const char* substring,
         const char* result_key) {
     std::string src(source_key);
@@ -1520,6 +1544,24 @@ int PollPipeline::addSetContextBinary(string key, data value) {
 int PollPipeline::addCheckContains(string source_key, string substring, string result_key) {
     return priv->addCheckContains(source_key->c_str(), substring->c_str(),
         result_key->c_str());
+}
+
+//! Adds a response prefix validation step
+/** Checks that the pipeline's last output (a string from a preceding receive
+    step) starts with the given prefix. If the prefix does not match, throws
+    an exception with the given error code and the response text.
+
+    Used for POP3 and similar line-oriented protocols that use +OK/-ERR
+    prefixes instead of numeric status codes.
+
+    @param prefix the expected prefix (e.g., "+OK")
+    @param err_code the Qore exception error code to throw on mismatch
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addValidateResponsePrefix(string prefix, string err_code) {
+    return priv->addValidateResponsePrefix(prefix->c_str(), err_code->c_str());
 }
 
 //! Adds a transform step that sets a boolean value in the context extra hash

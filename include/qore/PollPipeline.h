@@ -223,6 +223,18 @@ public:
     //! Sets binary data in context extra (for SEND_FROM_CONTEXT)
     DLLEXPORT int addSetContextBinary(const char* key, BinaryNode* data);
 
+    //! Validates that the last output starts with the given prefix; throws if not
+    /** Checks ctx.last_output (as string) for the expected prefix. If the
+        output does not start with the prefix, an exception is raised with
+        the given error code and the response text.
+
+        Used for POP3 and similar protocols that use +OK/-ERR line prefixes.
+
+        @param prefix the expected prefix (e.g., "+OK")
+        @param err_code the exception error code on mismatch
+    */
+    DLLEXPORT int addValidateResponsePrefix(const char* prefix, const char* err_code);
+
     //! Checks if a context string contains a substring (case-insensitive) and stores bool result
     DLLEXPORT int addCheckContains(const char* source_key, const char* substring, const char* result_key);
 
