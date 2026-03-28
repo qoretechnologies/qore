@@ -2014,6 +2014,17 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef("");
         }
         writer.writeStringRef(call->getName());
+        // Serialize method args (must match read_expr_static_method_call format)
+        const QoreListNode* args = call->getArgs();
+        if (args && args->size() > 0) {
+            writer.writeU8(static_cast<uint8_t>(args->size()));
+            for (size_t j = 0; j < args->size(); ++j) {
+                classifyAndWriteExpr(writer, args->retrieveEntry(j),
+                    parent_locals, parent_globals, const_reverse_map);
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 

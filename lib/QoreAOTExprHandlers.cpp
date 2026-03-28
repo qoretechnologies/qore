@@ -135,7 +135,7 @@ static bool write_expr_static_method_call(AOTExprWriteCtx& ctx) {
             ctx.writer.writeStringRef("");
         }
         ctx.writer.writeStringRef(call->getName());
-        // Serialize constructor args (may contain sub-expressions like TypedHash::forName("StatInfo"))
+        // Serialize method args
         const QoreListNode* args = call->getArgs();
         if (args && args->size() > 0) {
             ctx.writer.writeU8(static_cast<uint8_t>(args->size()));

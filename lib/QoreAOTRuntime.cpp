@@ -1067,8 +1067,6 @@ static QoreAOTContext* buildContextFromSlotMap(
         // Validate expression kind is known (Phase 1 validation)
         bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 33) || kind_byte == 0xFE || kind_byte == 0xFF;
         if (!kind_is_valid) {
-            printd(0, "AOT buildCtx: '%s' expr slot %d: invalid kind byte 0x%02x\n",
-                name, i, (int)kind_byte);
             has_unsupported = true;
             break;
         }
