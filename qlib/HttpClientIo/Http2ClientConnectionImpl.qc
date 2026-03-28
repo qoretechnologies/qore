@@ -72,8 +72,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING);
 
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info);
-        poll_op.setConnection(self);
+            ssl_verify_mode, accept_all_certs, proxy_info, self);
     }
 
     #! Returns the protocol identifier
@@ -108,11 +107,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
-        {
-            AutoLock al(lock);
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
-        }
+        self.setClosed();
         try {
             poll_op.abort();
         } catch () {
@@ -129,13 +124,13 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @throw HTTP2-STATE-ERROR if not in ready state
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
+        if (!self.isReady()) {
+            throw "HTTP2-STATE-ERROR",
+                sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTP2-STATE-ERROR",
-                    sprintf("cannot send data in state: %y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
@@ -163,13 +158,13 @@ public class Http2ClientConnection inherits HttpClientConnection {
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
             Channel channel, bool streaming = False) {
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }

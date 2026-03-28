@@ -35,6 +35,8 @@
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
 
 /** @cond INTERNAL */
 
@@ -43,16 +45,20 @@
 // ============================================================
 
 Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
-        QoreSocketObject* sock, SocketQuicClientPollOperation* inner)
-    : SocketPollOperationBase(self), inner_op(inner), sock_obj(sock) {
+        QoreSocketObject* sock, SocketQuicClientPollOperation* inner,
+        AbstractHttpPollConnectionPriv* conn_priv)
+    : SocketPollOperationBase(self), inner_op(inner), sock_obj(sock),
+      connection_priv(conn_priv) {
     // Both sock and inner are already ref'd by the caller; ownership transferred
+    // connection_priv is a raw (unrefed) pointer to the C++ priv data;
+    // the internal_members Qore member holds the only strong QoreObject ref
 }
 
 Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
     // cleanup() should have been called before destructor via QPP destructor.
     // In program shutdown paths the QPP destructor may not run; clean up
     // defensively to avoid leaks.
-    if (inner_op || sock_obj || connection_ref || error_info) {
+    if (inner_op || sock_obj || error_info) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
@@ -91,10 +97,7 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         error_info->deref(xsink);
         error_info = nullptr;
     }
-    if (connection_ref) {
-        connection_ref->deref(xsink);
-        connection_ref = nullptr;
-    }
+    connection_priv = nullptr;  // raw pointer — Qore internal_members handles ref
     if (inner_op) {
         inner_op->deref(xsink);
         inner_op = nullptr;
@@ -155,19 +158,15 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
         return nullptr;
     }
 
-    QoreHashNode* poll_info = inner_op->continuePoll(xsink);
-    if (*xsink) {
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = inner_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
         // Extract error details before clearing
-        QoreException* ex_obj = xsink->getException();
-        if (ex_obj) {
-            const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
-            const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
-            setError(err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
-                desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
-        } else {
-            setError("HTTP3-CONNECT-ERROR", "QUIC connection failed", xsink);
-        }
-        xsink->clear();
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP3-CONNECT-ERROR",
+            desc_str ? desc_str->c_str() : "QUIC connection failed", xsink);
+        poll_xsink.clear();
         cleanupPendingState();
         return nullptr;
     }
@@ -202,6 +201,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
 }
 
 QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
+    // Defensive: if state was set to CLOSED (e.g. by abort() on another thread),
+    // do not drain — return immediately to avoid buffering orphaned responses
+    if (h3_state.load(std::memory_order_acquire) == H3State::CLOSED) {
+        return nullptr;
+    }
+
     if (!inner_op) {
         setError("HTTP3-READ-ERROR", "read operation not initialized", xsink);
         return nullptr;
@@ -380,6 +385,7 @@ void Http3ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         inner_op->abort(xsink);
     }
     notifyPendingStreams("HTTP3-ABORT", "connection aborted", xsink);
+    connection_priv = nullptr;
     cleanupPendingState();
     // Note: do NOT close socket or delete inner_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
@@ -396,6 +402,7 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
     notifyPendingStreams(err, desc, xsink);
+    connection_priv = nullptr;
 }
 
 void Http3ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
@@ -436,14 +443,8 @@ void Http3ClientPollOperationPriv::cleanupPendingState() {
 }
 
 void Http3ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
-    if (!connection_ref) {
-        return;
-    }
-    ExceptionSink cb_xsink;
-    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &cb_xsink);
-    ValueHolder rv(connection_ref->evalMethod("onConnectionReady", *args, &cb_xsink), &cb_xsink);
-    if (cb_xsink) {
-        cb_xsink.clear();
+    if (connection_priv) {
+        connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
 }
 
@@ -583,6 +584,7 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
 */
 qclass Http3ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
+    internal_members=AbstractHttpPollConnection connection;
     ns=Qore;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase
@@ -596,6 +598,7 @@ qclass Http3ClientPollOperationBase [
         resolves from hostname
 */
 Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string host, int port,
+        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection,
         int family = AF_UNSPEC) {
     if (port < 1 || port > 65535) {
         xsink->raiseException("QUIC-ERROR", "port %d is out of range (1-65535)", (int)port);
@@ -626,15 +629,24 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     self->setMemberValue("goal", QC_HTTP3CLIENTPOLLOPERATIONBASE,
         new QoreStringNode("http3_client_multiplex"), xsink);
 
+    // Store the connection as an internal member (single ref, DGC-visible)
+    {
+        qore_object_private* o = qore_object_private::get(*self);
+        const qore_class_private* cls = qore_class_private::get(*QC_HTTP3CLIENTPOLLOPERATIONBASE);
+        o->setValueIntern(cls, "connection", static_cast<QoreObject*>(obj_connection->refSelf()), xsink);
+    }
+
     // Set self on the inner op so it can build SocketPollInfo hashes
     // (getSocketPollInfoHash reads "sock" from self)
     SocketQuicClientPollOperation* inner_ptr = inner.release();
     inner_ptr->setSelf(self);
 
     // Create the private data — ref sock for private data ownership
+    // Extract the raw C++ priv pointer for direct I/O-thread calls
+    AbstractHttpPollConnectionPriv* conn_priv = *connection;
     sock_ptr->ref();
     self->setPrivate(CID_HTTP3CLIENTPOLLOPERATIONBASE,
-        new Http3ClientPollOperationPriv(self, sock_ptr, inner_ptr));
+        new Http3ClientPollOperationPriv(self, sock_ptr, inner_ptr, conn_priv));
 }
 
 //! Destroys the object
@@ -691,11 +703,13 @@ auto Http3ClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
 /** Dispatches to connection_ref.handleCompletion() for deterministic result delivery.
 */
 nothing Http3ClientPollOperationBase::onComplete(hash<SocketPollResultInfo> result) {
-    QoreObject* conn = priv->getConnectionRef();
-    if (conn) {
-        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-        args->push(result->refSelf(), xsink);
-        ValueHolder rv(conn->evalMethod("handleCompletion", *args, xsink), xsink);
+    // Read connection from internal_members (Qore member, DGC-visible)
+    ValueHolder conn_val(self->getReferencedMemberNoMethod("connection", xsink), xsink);
+    if (!*xsink && conn_val->getType() == NT_OBJECT) {
+        QoreObject* conn = conn_val->get<QoreObject>();
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(result->refSelf(), xsink);
+        ValueHolder rv(conn->evalMethod("handleCompletion", *call_args, xsink), xsink);
     }
 }
 
@@ -769,14 +783,6 @@ bool Http3ClientPollOperationBase::isGoawayReceived() [flags=RET_VALUE_ONLY] {
     return priv->isGoawayReceived();
 }
 
-//! Sets the owning connection reference for ready/completion dispatch
-/** @param conn the HttpClientConnection object that owns this poll operation
-    @note Must be called during construction, before any continuePoll().
-*/
-nothing Http3ClientPollOperationBase::setConnection(object conn) {
-    priv->setConnection(conn, xsink);
-}
-
 //! Requests connection migration (consumed by I/O thread on next continuePoll)
 /** Sets the migration pending flag.
 */
@@ -821,7 +827,9 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
 *hash<auto> Http3ClientPollOperationBase::registerStreamWithPromise(int stream_id, Promise[QorePromise] promise) {
     bool need_cancel = false;
     // Create a PromiseAction — pure C++ dispatch, no execValue on I/O thread
-    ReferenceHolder<PromiseAction> action(new PromiseAction(*promise), xsink);
+    QoreObject* promise_obj = const_cast<QoreObject*>(
+        get_param_value(args, 1).get<const QoreObject>());
+    ReferenceHolder<PromiseAction> action(new PromiseAction(*promise, promise_obj), xsink);
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
     if (!*xsink) {
         action.release();  // ownership transferred to priv

@@ -73,6 +73,18 @@ public:
     //! Release all held references
     DLLLOCAL virtual void cleanup(ExceptionSink* xsink) = 0;
 
+    //! Returns true if this is a streaming action (e.g., ChannelAction)
+    /** Used by H2/H1 dispatch to decide whether to split body+end_stream
+        into separate items for the consumer.
+    */
+    DLLLOCAL virtual bool isStreaming() const { return false; }
+
+    //! Called when the stream is complete (end_stream received)
+    /** Streaming actions override this to close the channel.
+        Default is a no-op for non-streaming actions (e.g., PromiseAction).
+    */
+    DLLLOCAL virtual void complete(ExceptionSink* xsink) {}
+
     DLLLOCAL void ref() { ROreference(); }
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -91,9 +103,20 @@ public:
 */
 class PromiseAction : public AbstractAsyncAction {
 public:
-    DLLLOCAL PromiseAction(QorePromise* promise) : promise(promise) {
+    //! Creates a PromiseAction from a QorePromise and optional QoreObject
+    /** @param promise the QorePromise private data (will be ref'd)
+        @param promise_obj the Promise QoreObject — if provided, a strong ref is
+            held to prevent the QoreObject from being garbage collected (which would
+            trigger Promise::destructor() → promiseDestroyed() and invalidate the
+            promise before the I/O thread resolves it)
+    */
+    DLLLOCAL PromiseAction(QorePromise* promise, QoreObject* promise_obj = nullptr)
+        : promise(promise), promise_obj(promise_obj) {
         assert(promise);
         promise->ref();
+        if (promise_obj) {
+            promise_obj->ref();
+        }
     }
 
     DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
@@ -110,10 +133,15 @@ public:
             promise->deref(xsink);
             promise = nullptr;
         }
+        if (promise_obj) {
+            promise_obj->deref(xsink);
+            promise_obj = nullptr;
+        }
     }
 
 private:
     QorePromise* promise;
+    QoreObject* promise_obj = nullptr;
 };
 
 //! Pushes the result to a QoreChannel (non-blocking trySend for I/O thread)
@@ -138,6 +166,14 @@ public:
             // Backpressure: channel full — discard and log
             output.discard(xsink);
             printd(0, "ChannelAction::execute(): channel full, discarding value\n");
+        }
+    }
+
+    DLLLOCAL bool isStreaming() const override { return true; }
+
+    DLLLOCAL void complete(ExceptionSink* xsink) override {
+        if (channel) {
+            channel->close();
         }
     }
 

@@ -1,0 +1,823 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_PollPipeline.qpp
+
+    PollPipeline class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_PollPipeline.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// PollPipelinePriv implementation
+// ============================================================
+
+PollPipelinePriv::PollPipelinePriv(QoreObject* self, QoreSocketObject* sock)
+    : SocketPollOperationBase(self), sock_obj(sock) {
+    // sock is already ref'd by the QPP caller
+}
+
+PollPipelinePriv::~PollPipelinePriv() {
+    if (current_op || sock_obj || result_action) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+void PollPipelinePriv::cleanup(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+
+    ctx.cleanup(xsink);
+    output.discard(xsink);
+
+    if (result_action) {
+        result_action->deref(xsink);
+        result_action = nullptr;
+    }
+
+    for (auto* bin : binary_data) {
+        bin->deref(xsink);
+    }
+    binary_data.clear();
+
+    for (auto* str : string_data) {
+        str->deref(xsink);
+    }
+    string_data.clear();
+
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+}
+
+// --- Builder methods ---
+
+int PollPipelinePriv::addConnect(const char* target) {
+    Step s;
+    s.type = StepType::CONNECT;
+    s.target = target;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addConnectSsl(const char* target) {
+    Step s;
+    s.type = StepType::CONNECT_SSL;
+    s.target = target;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addSslUpgrade() {
+    Step s;
+    s.type = StepType::SSL_UPGRADE;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addSend(BinaryNode* data) {
+    // data is already ref'd by the caller — store in binary_data table
+    int idx = (int)binary_data.size();
+    binary_data.push_back(data);
+
+    Step s;
+    s.type = StepType::SEND;
+    s.data_idx = idx;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addRecvHeader() {
+    Step s;
+    s.type = StepType::RECV_HEADER;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addRecvExact(size_t size, bool as_string) {
+    Step s;
+    s.type = StepType::RECV_EXACT;
+    s.recv_size = size;
+    s.recv_as_string = as_string;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addRecvUntil(const char* pattern, bool as_string) {
+    QoreStringNode* pat = new QoreStringNode(pattern);
+    int idx = (int)string_data.size();
+    string_data.push_back(pat);
+
+    Step s;
+    s.type = StepType::RECV_UNTIL;
+    s.pattern_idx = idx;
+    s.recv_as_string = as_string;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addRecvData(bool as_string) {
+    Step s;
+    s.type = StepType::RECV_DATA;
+    s.recv_as_string = as_string;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addBranch(BranchCondition condition, int true_step, int false_step) {
+    Step s;
+    s.type = StepType::BRANCH;
+    s.condition = std::move(condition);
+    s.true_step = true_step;
+    s.false_step = false_step;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addTransform(TransformFn transform) {
+    Step s;
+    s.type = StepType::TRANSFORM;
+    s.transform = std::move(transform);
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addDeliverResult() {
+    Step s;
+    s.type = StepType::DELIVER_RESULT;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
+    assert(action);
+    if (result_action) {
+        ExceptionSink xsink;
+        result_action->deref(&xsink);
+    }
+    result_action = action;
+}
+
+// --- continuePoll state machine (I/O thread) ---
+
+QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
+    while (true) {
+        // If we have an active inner op, delegate to it
+        if (current_op) {
+            ExceptionSink poll_xsink;
+            QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+            if (poll_xsink) {
+                const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+                const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+                setError(err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
+                    desc_str ? desc_str->c_str() : "step failed", xsink);
+                poll_xsink.clear();
+                return nullptr;
+            }
+
+            if (poll_info) {
+                return poll_info;  // Need more I/O
+            }
+
+            if (current_op->goalReached()) {
+                extractOutput(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                releaseCurrentOp(xsink);
+                // Advance to next step
+                if (steps[current_step].next_step >= 0) {
+                    current_step = steps[current_step].next_step;
+                } else {
+                    ++current_step;
+                }
+            } else {
+                setError("POLL-PIPELINE-ERROR", "step did not reach goal", xsink);
+                return nullptr;
+            }
+        }
+
+        // Check if we're done
+        if (current_step >= (int)steps.size()) {
+            deliverResult(xsink);
+            return nullptr;
+        }
+
+        const Step& step = steps[current_step];
+        switch (step.type) {
+            case StepType::BRANCH: {
+                bool result = step.condition(ctx);
+                current_step = result ? step.true_step : step.false_step;
+                continue;
+            }
+
+            case StepType::TRANSFORM: {
+                step.transform(ctx, xsink);
+                if (*xsink) {
+                    closed = true;
+                    return nullptr;
+                }
+                if (step.next_step >= 0) {
+                    current_step = step.next_step;
+                } else {
+                    ++current_step;
+                }
+                continue;
+            }
+
+            case StepType::DELIVER_RESULT: {
+                deliverResult(xsink);
+                return nullptr;
+            }
+
+            default: {
+                // I/O step — create inner op
+                current_op = createInnerOp(step, xsink);
+                if (*xsink || !current_op) {
+                    if (!*xsink) {
+                        setError("POLL-PIPELINE-ERROR",
+                            "failed to create inner operation", xsink);
+                    }
+                    return nullptr;
+                }
+                current_op->setSelf(*self);
+                // Immediately try the new op (loop back to top)
+                continue;
+            }
+        }
+    }
+}
+
+// --- Inner operation factory ---
+
+SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
+        ExceptionSink* xsink) {
+    switch (step.type) {
+        case StepType::CONNECT: {
+            sock_obj->ref();
+            ReferenceHolder<SocketConnectPollOperation> op(
+                new SocketConnectPollOperation(xsink, false, step.target.c_str(),
+                    sock_obj),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::CONNECT_SSL: {
+            sock_obj->ref();
+            ReferenceHolder<SocketConnectPollOperation> op(
+                new SocketConnectPollOperation(xsink, true, step.target.c_str(),
+                    sock_obj),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::SSL_UPGRADE: {
+            sock_obj->ref();
+            ReferenceHolder<SocketUpgradeClientSslPollOperation> op(
+                new SocketUpgradeClientSslPollOperation(xsink, sock_obj),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::SEND: {
+            if (step.data_idx < 0 || step.data_idx >= (int)binary_data.size()) {
+                xsink->raiseException("POLL-PIPELINE-ERROR",
+                    "invalid send data index %d (have %d entries)",
+                    step.data_idx, (int)binary_data.size());
+                return nullptr;
+            }
+            BinaryNode* data = binary_data[step.data_idx];
+            data->ref();
+            sock_obj->ref();
+            ReferenceHolder<SocketSendPollOperation> op(
+                new SocketSendPollOperation(xsink, data, sock_obj),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::RECV_HEADER: {
+            sock_obj->ref();
+            ReferenceHolder<SocketReadHttpHeaderPollOperation> op(
+                new SocketReadHttpHeaderPollOperation(xsink, sock_obj),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::RECV_EXACT: {
+            sock_obj->ref();
+            ReferenceHolder<SocketRecvPollOperation> op(
+                new SocketRecvPollOperation(xsink, (ssize_t)step.recv_size,
+                    sock_obj, step.recv_as_string),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::RECV_UNTIL: {
+            if (step.pattern_idx < 0
+                    || step.pattern_idx >= (int)string_data.size()) {
+                xsink->raiseException("POLL-PIPELINE-ERROR",
+                    "invalid pattern index %d (have %d entries)",
+                    step.pattern_idx, (int)string_data.size());
+                return nullptr;
+            }
+            QoreStringNode* pattern = string_data[step.pattern_idx];
+            sock_obj->ref();
+            // SocketRecvUntilBytesPollOperation takes const QoreStringNode*
+            // and calls stringRefSelf() internally
+            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
+                new SocketRecvUntilBytesPollOperation(xsink, pattern,
+                    sock_obj, step.recv_as_string),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::RECV_DATA: {
+            sock_obj->ref();
+            ReferenceHolder<SocketRecvDataPollOperation> op(
+                new SocketRecvDataPollOperation(xsink, sock_obj,
+                    step.recv_as_string),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        default:
+            xsink->raiseException("POLL-PIPELINE-ERROR",
+                "step type %d is not an I/O operation", (int)step.type);
+            return nullptr;
+    }
+}
+
+// --- Output extraction ---
+
+void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
+    QoreValue out = current_op->getOutput();
+    if (out.isNullOrNothing()) {
+        return;
+    }
+
+    ctx.last_output.discard(xsink);
+    ctx.last_output = out;  // takes ownership
+
+    // For RECV_HEADER: also extract status_code and headers
+    if (steps[current_step].type == StepType::RECV_HEADER
+            && out.getType() == NT_HASH) {
+        QoreHashNode* h = out.get<QoreHashNode>();
+        QoreValue hdr_val = h->getKeyValue("hdr");
+        if (hdr_val.getType() == NT_HASH) {
+            QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
+            ctx.status_code = (int)hdr->getKeyValue("status_code").getAsBigInt();
+            if (ctx.headers) {
+                ctx.headers->deref(xsink);
+            }
+            ctx.headers = hdr->hashRefSelf();
+        }
+    }
+}
+
+// --- Current op release ---
+
+void PollPipelinePriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+// --- Result delivery ---
+
+void PollPipelinePriv::deliverResult(ExceptionSink* xsink) {
+    completed = true;
+    if (result_action) {
+        ReferenceHolder<QoreHashNode> result(buildResultHash(xsink), xsink);
+        if (*xsink) {
+            return;
+        }
+        result_action->execute(result.release(), xsink);
+    }
+}
+
+QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) {
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    if (ctx.status_code) {
+        h->setKeyValue("status_code", ctx.status_code, xsink);
+    }
+    if (ctx.headers) {
+        h->setKeyValue("hdr", ctx.headers->hashRefSelf(), xsink);
+    }
+    if (ctx.body) {
+        h->setKeyValue("body", ctx.body->refSelf(), xsink);
+    }
+    if (!ctx.last_output.isNullOrNothing()) {
+        h->setKeyValue("output", ctx.last_output.refSelf(), xsink);
+    }
+    return h.release();
+}
+
+// --- Abort ---
+
+void PollPipelinePriv::abort(ExceptionSink* xsink) {
+    closed = true;
+    if (current_op) {
+        current_op->abort(xsink);
+    }
+    if (result_action) {
+        result_action->executeError("POLL-PIPELINE-ABORT",
+            "pipeline aborted", xsink);
+        result_action->deref(xsink);
+        result_action = nullptr;
+    }
+}
+
+// --- Output access ---
+
+QoreValue PollPipelinePriv::getOutput() const {
+    if (!ctx.last_output.isNullOrNothing()) {
+        return ctx.last_output.refSelf();
+    }
+    return QoreValue();
+}
+
+// --- State reporting ---
+
+const char* PollPipelinePriv::getStateImpl() const {
+    if (closed) {
+        return "closed";
+    }
+    if (completed) {
+        return "completed";
+    }
+    if (current_step >= (int)steps.size()) {
+        return "done";
+    }
+    switch (steps[current_step].type) {
+        case StepType::CONNECT:     return "connecting";
+        case StepType::CONNECT_SSL: return "connecting-ssl";
+        case StepType::SSL_UPGRADE: return "ssl-upgrade";
+        case StepType::SEND:        return "sending";
+        case StepType::RECV_HEADER: return "recv-header";
+        case StepType::RECV_EXACT:  return "recv-exact";
+        case StepType::RECV_UNTIL:  return "recv-until";
+        case StepType::RECV_DATA:   return "recv-data";
+        case StepType::BRANCH:      return "branch";
+        case StepType::TRANSFORM:   return "transform";
+        case StepType::DELIVER_RESULT: return "deliver-result";
+    }
+    return "unknown";
+}
+
+// --- Error handling ---
+
+void PollPipelinePriv::setError(const char* err, const char* desc,
+        ExceptionSink* xsink) {
+    closed = true;
+    if (result_action) {
+        result_action->executeError(err, desc, xsink);
+        result_action->deref(xsink);
+        result_action = nullptr;
+    }
+}
+
+/** @endcond */
+
+//! Declarative poll pipeline — chains I/O operations as steps on the I/O thread
+/** This class provides a builder API for constructing a sequence of I/O
+    operations (connect, SSL upgrade, send, receive) plus pure-C++ steps
+    (branch, transform) that execute entirely on the I/O thread through
+    continuePoll(). Only the final result is delivered via an
+    AbstractAsyncAction (Promise, Channel, etc.).
+
+    The pipeline is constructed on the application thread by calling builder
+    methods (addConnect, addSend, addReadHttpHeader, etc.), then submitted
+    to the AsyncIoController. The I/O thread drives the pipeline by calling
+    continuePoll() repeatedly until all steps complete.
+
+    @par Example:
+    @code{.py}
+    Socket sock();
+    PollPipeline pipeline(sock);
+    pipeline.addConnect("example.com:443");
+    pipeline.addSslUpgrade();
+    pipeline.addSend(request_data);
+    pipeline.addReadHttpHeader();
+    pipeline.addDeliverResult();
+    pipeline.setResultPromise(promise);
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass PollPipeline [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=PollPipelinePriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates a new poll pipeline for the given socket
+/** @param sock the Socket object to use for I/O operations
+
+    @throw POLL-PIPELINE-ERROR if the socket is invalid
+*/
+PollPipeline::constructor(Socket[QoreSocketObject] sock) {
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Store socket as Qore member for DGC visibility
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_obj) {
+        self->setMemberValue("sock", QC_POLLPIPELINE, sock_obj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_POLLPIPELINE,
+        new QoreStringNode("poll_pipeline"), xsink);
+
+    sock_ptr->ref();
+    self->setPrivate(CID_POLLPIPELINE,
+        new PollPipelinePriv(self, sock_ptr));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+PollPipeline::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw POLLPIPELINE-COPY-ERROR objects of this class cannot be copied
+*/
+PollPipeline::copy() {
+    xsink->raiseException("POLLPIPELINE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Adds a TCP connect step
+/** @param target the connect target ("host:port")
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addConnect(string target) [dom=NETWORK] {
+    return priv->addConnect(target->c_str());
+}
+
+//! Adds a TCP connect + SSL step
+/** @param target the connect target ("host:port")
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addConnectSsl(string target) [dom=NETWORK] {
+    return priv->addConnectSsl(target->c_str());
+}
+
+//! Adds an SSL upgrade step (for an existing TCP connection)
+/** @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSslUpgrade() [dom=NETWORK] {
+    return priv->addSslUpgrade();
+}
+
+//! Adds a send step
+/** @param d the data to send (string or binary)
+    @return the step index
+
+    @throw POLL-PIPELINE-ERROR if the data type is invalid
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSend(data d) [dom=NETWORK] {
+    BinaryNode* bin;
+    if (d.getType() == NT_BINARY) {
+        bin = d.get<BinaryNode>()->binRefSelf();
+    } else if (d.getType() == NT_STRING) {
+        const QoreStringNode* str = d.get<const QoreStringNode>();
+        bin = new BinaryNode();
+        bin->append(str->c_str(), str->size());
+    } else {
+        xsink->raiseException("POLL-PIPELINE-ERROR",
+            "send data must be string or binary, got type '%s'",
+            d.getFullTypeName());
+        return -1;
+    }
+    return priv->addSend(bin);
+}
+
+//! Adds an HTTP header read step
+/** @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addReadHttpHeader() [dom=NETWORK] {
+    return priv->addRecvHeader();
+}
+
+//! Adds a fixed-size receive step
+/** @param size the number of bytes to receive
+    @param as_string if True, return the data as a string
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addRecvExact(int size, bool as_string = False) [dom=NETWORK] {
+    return priv->addRecvExact((size_t)size, as_string);
+}
+
+//! Adds a receive-until-pattern step
+/** @param pattern the byte pattern to match
+    @param as_string if True, return the data as a string (default True)
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addRecvUntilBytes(string pattern, bool as_string = True) [dom=NETWORK] {
+    return priv->addRecvUntil(pattern->c_str(), as_string);
+}
+
+//! Adds a receive-available-data step
+/** @param as_string if True, return the data as a string
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addRecvData(bool as_string = False) [dom=NETWORK] {
+    return priv->addRecvData(as_string);
+}
+
+//! Adds a result delivery step
+/** When the pipeline reaches this step, it delivers the accumulated
+    result via the configured result action (Promise, Channel, etc.).
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addDeliverResult() {
+    return priv->addDeliverResult();
+}
+
+//! Adds a conditional branch step based on HTTP status code range
+/** @param lo the lower bound of the status code range (inclusive)
+    @param hi the upper bound of the status code range (inclusive)
+    @param true_step the step index to jump to if the status code is in range
+    @param false_step the step index to jump to if the status code is out of range
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
+    return priv->addBranch(
+        [lo, hi](const PollPipelinePriv::Context& ctx) {
+            return ctx.status_code >= lo && ctx.status_code <= hi;
+        },
+        (int)true_step, (int)false_step);
+}
+
+//! Sets a Promise as the result action
+/** When the pipeline completes (via addDeliverResult or end of steps),
+    the result hash is used to resolve the Promise.
+
+    @param promise the Promise to resolve with the result
+
+    @since %Qore 2.3
+*/
+nothing PollPipeline::setResultPromise(Promise[QorePromise] promise) {
+    QoreObject* promise_obj = const_cast<QoreObject*>(
+        get_param_value(args, 0).get<const QoreObject>());
+    priv->setResultAction(new PromiseAction(*promise, promise_obj));
+}
+
+//! Sets a Channel as the result action (streaming)
+/** When the pipeline completes, the result hash is pushed to the Channel.
+
+    @param channel the Channel for result delivery
+
+    @since %Qore 2.3
+*/
+nothing PollPipeline::setResultChannel(object channel) {
+    QoreChannel* ch = static_cast<QoreChannel*>(
+        const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
+    if (!ch) {
+        if (!*xsink) {
+            xsink->raiseException("CHANNEL-ERROR", "invalid Channel object");
+        }
+        return QoreValue();
+    }
+    ReferenceHolder<QoreChannel> ch_holder(ch, xsink);
+    priv->setResultAction(new ChannelAction(ch));
+}
+
+//! Returns the goal
+/** @return the goal string ("poll_pipeline")
+*/
+string PollPipeline::getGoal() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return the current state string
+*/
+string PollPipeline::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the pipeline has completed all steps
+/** @return True when the pipeline is complete
+*/
+bool PollPipeline::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or NOTHING if complete
+*/
+*hash<SocketPollInfo> PollPipeline::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the pipeline
+/** Closes the pipeline and notifies the result action with an error.
+*/
+nothing PollPipeline::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output from the most recent step
+/** @return any output data from the last completed step
+*/
+auto PollPipeline::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if the pipeline is closed (error or abort)
+/** @return True if closed
+*/
+bool PollPipeline::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns the number of steps in the pipeline
+/** @return the step count
+*/
+int PollPipeline::getStepCount() [flags=RET_VALUE_ONLY] {
+    return priv->getStepCount();
+}

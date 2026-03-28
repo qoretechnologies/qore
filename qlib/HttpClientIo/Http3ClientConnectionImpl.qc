@@ -68,8 +68,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             url_info.host, url_info.port, max_streams);
 
         poll_op = new Http3ClientPollOperation(url_info, connect_timeout, logger, ssl_verify_mode,
-            accept_all_certs, client_cert, client_pk);
-        poll_op.setConnection(self);
+            accept_all_certs, client_cert, client_pk, self);
     }
 
     #! Copying is not supported
@@ -103,8 +102,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     bool canAcceptStream() {
         AutoLock al(lock);
-        if (state != HttpClientConnectionState::Ready
-                && state != HttpClientConnectionState::Connecting) {
+        int cs = self.getConnectionState();
+        if (cs != HttpClientConnectionState::Ready
+                && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
         # Check if the underlying QUIC session is still alive
@@ -127,8 +127,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     bool tryReserveStream() {
         AutoLock al(lock);
-        if (state != HttpClientConnectionState::Ready
-                && state != HttpClientConnectionState::Connecting) {
+        int cs = self.getConnectionState();
+        if (cs != HttpClientConnectionState::Ready
+                && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
         if (!poll_op.isQuicSessionOpen()) {
@@ -144,7 +145,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
         # Cap pending reservations on Connecting connections to limit
         # blast radius of a handshake failure
-        if (state == HttpClientConnectionState::Connecting
+        if (cs == HttpClientConnectionState::Connecting
                 && pending_stream_count >= DefaultMaxPendingPerConnection) {
             return False;
         }
@@ -169,11 +170,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
-        {
-            AutoLock al(lock);
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
-        }
+        self.setClosed();
         try {
             poll_op.abort();
         } catch () {
@@ -191,13 +188,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @throw HTTP3-STATE-ERROR if the connection is not ready
     */
     int sendStreamData(int stream_id, *data data, bool end_stream = False) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR",
+                sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTP3-STATE-ERROR",
-                    sprintf("cannot send data in state: %y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
@@ -228,12 +225,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
             Promise promise, bool streaming = False) {
         *object ctl;
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
@@ -261,13 +258,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
     */
     int submitRequestStreamingWithChannel(string method, string path, *hash<auto> headers,
             *data body, Channel channel, bool streaming = False) {
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
@@ -288,10 +285,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @note Called while \c lock is held — do not re-acquire.
     */
     private handlePollResultImpl() {
-        if (poll_op.isGoawayReceived() && state == HttpClientConnectionState::Ready) {
-            state = HttpClientConnectionState::Draining;
+        if (poll_op.isGoawayReceived() && self.isReady()) {
+            self.setDraining();
             log(LoggerLevel::DEBUG, "GOAWAY detected, transitioning to Draining");
-            ready_cond.broadcast();
         }
     }
 
@@ -307,13 +303,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
         @throw HTTP3-STATE-ERROR if the connection is not in Ready state
     */
     bool migrate(*timeout migration_timeout) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR",
+                sprintf("cannot migrate: connection not ready (state=%y)", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTP3-STATE-ERROR",
-                    sprintf("cannot migrate: connection not ready (state=%y)", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }

@@ -1,0 +1,999 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Http2ClientPollOperationBase.qpp
+
+    Http2ClientPollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// Http2ClientPollOperationPriv implementation
+// ============================================================
+
+Http2ClientPollOperationPriv::Http2ClientPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, SocketPollOperationBase* connect_op,
+        bool ssl_required, bool proxy_tunnel,
+        std::string target_host, int target_port,
+        AbstractHttpPollConnectionPriv* conn_priv)
+    : SocketPollOperationBase(self), current_op(connect_op), sock_obj(sock),
+      ssl_required(ssl_required), proxy_tunnel(proxy_tunnel),
+      target_host(std::move(target_host)), target_port(target_port),
+      connection_priv(conn_priv) {
+    // sock and connect_op are ref'd by the caller; ownership transferred
+    // connection_priv is a raw (unrefed) pointer to the C++ priv data;
+    // the internal_members Qore member holds the only strong QoreObject ref
+    // (visible to DGC for cycle detection)
+}
+
+Http2ClientPollOperationPriv::~Http2ClientPollOperationPriv() {
+    if (current_op || sock_obj || error_info) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    // Clean up stream actions
+    {
+        AutoLocker al(stream_lock);
+        for (auto& [sid, action] : stream_actions) {
+            if (action) {
+                action->deref(xsink);
+            }
+        }
+        stream_actions.clear();
+        active_stream_count = 0;
+    }
+
+    if (error_info) {
+        error_info->deref(xsink);
+        error_info = nullptr;
+    }
+    connection_priv = nullptr;  // raw pointer — Qore internal_members handles ref
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+}
+
+const char* Http2ClientPollOperationPriv::getStateImpl() const {
+    switch (h2_state.load(std::memory_order_acquire)) {
+        case H2State::CONNECTING: return "connecting";
+        case H2State::SSL_UPGRADE: return "ssl_upgrade";
+        case H2State::PROXY_CONNECT_SEND: return "proxy_connect_send";
+        case H2State::PROXY_CONNECT_RECV: return "proxy_connect_recv";
+        case H2State::READING: return "reading";
+        case H2State::WAIT_READ: return "wait_read";
+        case H2State::CLOSED: return "closed";
+        default: return "unknown";
+    }
+}
+
+QoreValue Http2ClientPollOperationPriv::getOutput() const {
+    if (current_op) {
+        return current_op->getOutput();
+    }
+    return QoreValue();
+}
+
+void Http2ClientPollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+// --- continuePoll state machine (I/O thread) ---
+
+QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    {
+        AutoLocker al(stream_lock);
+        response_dispatched = false;
+    }
+
+    while (true) {
+        H2State state = h2_state.load(std::memory_order_acquire);
+        switch (state) {
+            case H2State::CONNECTING:
+                return handleConnecting(xsink);
+
+            case H2State::SSL_UPGRADE:
+                return handleSslUpgrade(xsink);
+
+            case H2State::PROXY_CONNECT_SEND:
+                return handleProxyConnectSend(xsink);
+
+            case H2State::PROXY_CONNECT_RECV:
+                return handleProxyConnectRecv(xsink);
+
+            case H2State::READING:
+                return handleReading(xsink);
+
+            case H2State::WAIT_READ:
+                h2_state.store(H2State::READING, std::memory_order_release);
+                continue;
+
+            case H2State::CLOSED:
+                return nullptr;
+        }
+    }
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP2-CONNECT-ERROR", "connect operation not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    if (current_op->goalReached()) {
+        printd(5, "Http2ClientPollOperationPriv::handleConnecting() TCP connection established\n");
+        if (proxy_tunnel) {
+            startProxyConnect(xsink);
+        } else if (ssl_required) {
+            startSslUpgrade(xsink);
+        } else {
+            startMultiplex(xsink);
+        }
+        if (*xsink) {
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    setError("HTTP2-CONNECT-ERROR", "TCP connection failed", xsink);
+    return nullptr;
+}
+
+void Http2ClientPollOperationPriv::startProxyConnect(ExceptionSink* xsink) {
+    // Build CONNECT request: "CONNECT host:port HTTP/1.1\r\nHost: host:port\r\n\r\n"
+    QoreStringNode* connect_req = new QoreStringNode();
+    connect_req->sprintf("CONNECT %s:%d HTTP/1.1\r\nHost: %s:%d\r\n\r\n",
+        target_host.c_str(), target_port, target_host.c_str(), target_port);
+
+    releaseCurrentOp(xsink);
+    sock_obj->ref();
+    // SocketSendPollOperation takes ownership of the string ref
+    current_op = new SocketSendPollOperation(xsink, connect_req, sock_obj);
+    if (*xsink) {
+        // Must deref — the op was created but errored; it owns the sock ref
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return;
+    }
+    current_op->setSelf(*self);
+    h2_state.store(H2State::PROXY_CONNECT_SEND, std::memory_order_release);
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectSend(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            desc_str ? desc_str->c_str() : "proxy CONNECT send failed", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    if (current_op->goalReached()) {
+        printd(5, "Http2ClientPollOperationPriv::handleProxyConnectSend() CONNECT sent, reading response\n");
+        releaseCurrentOp(xsink);
+        sock_obj->ref();
+        current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
+        if (*xsink) {
+            current_op->deref(xsink);
+            current_op = nullptr;
+            return nullptr;
+        }
+        current_op->setSelf(*self);
+        h2_state.store(H2State::PROXY_CONNECT_RECV, std::memory_order_release);
+        return handleProxyConnectRecv(xsink);
+    }
+
+    setError("HTTP2-CONNECT-ERROR", "proxy CONNECT send failed", xsink);
+    return nullptr;
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleProxyConnectRecv(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP2-CONNECT-ERROR", "proxy CONNECT recv not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
+            desc_str ? desc_str->c_str() : "proxy CONNECT response read failed", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    if (current_op->goalReached()) {
+        ValueHolder output_val(current_op->getOutput(), xsink);
+        if (output_val->getType() == NT_HASH) {
+            QoreHashNode* output = output_val->get<QoreHashNode>();
+            QoreValue hdr_val = output->getKeyValue("hdr");
+            if (hdr_val.getType() == NT_HASH) {
+                QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
+                int status = (int)hdr->getKeyValue("status_code").getAsBigInt();
+                if (status < 200 || status >= 300) {
+                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
+                    QoreValue msg_val = hdr->getKeyValue("status_message");
+                    const char* msg = msg_val.getType() == NT_STRING
+                        ? msg_val.get<const QoreStringNode>()->c_str() : "unknown";
+                    desc->sprintf("proxy CONNECT failed with HTTP %d: %s", status, msg);
+                    setError("HTTP2-CONNECT-ERROR", desc->c_str(), xsink);
+                    return nullptr;
+                }
+            }
+        }
+        printd(5, "Http2ClientPollOperationPriv::handleProxyConnectRecv() tunnel established\n");
+        startSslUpgrade(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    setError("HTTP2-CONNECT-ERROR", "proxy CONNECT response read failed", xsink);
+    return nullptr;
+}
+
+void Http2ClientPollOperationPriv::startSslUpgrade(ExceptionSink* xsink) {
+    printd(5, "Http2ClientPollOperationPriv::startSslUpgrade()\n");
+    releaseCurrentOp(xsink);
+    sock_obj->ref();
+    current_op = new SocketUpgradeClientSslPollOperation(xsink, sock_obj);
+    if (*xsink) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return;
+    }
+    current_op->setSelf(*self);
+    h2_state.store(H2State::SSL_UPGRADE, std::memory_order_release);
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP2-SSL-ERROR", "SSL operation not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP2-SSL-ERROR",
+            desc_str ? desc_str->c_str() : "SSL upgrade failed", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    if (current_op->goalReached()) {
+        // Check ALPN negotiated protocol
+        SimpleRefHolder<QoreStringNode> alpn(sock_obj->getAlpnProtocol());
+        if (!alpn || strcmp(alpn->c_str(), "h2") != 0) {
+            SimpleRefHolder<QoreStringNode> desc(new QoreStringNode());
+            desc->sprintf("HTTP/2 not negotiated via ALPN: got %s",
+                alpn ? alpn->c_str() : "null");
+            setError("HTTP2-ALPN-ERROR", desc->c_str(), xsink);
+            return nullptr;
+        }
+        printd(5, "Http2ClientPollOperationPriv::handleSslUpgrade() SSL done, ALPN=h2\n");
+        startMultiplex(xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    setError("HTTP2-SSL-ERROR", "SSL upgrade failed", xsink);
+    return nullptr;
+}
+
+void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
+    printd(5, "Http2ClientPollOperationPriv::startMultiplex()\n");
+    releaseCurrentOp(xsink);
+    sock_obj->ref();
+    current_op = new SocketHttp2ClientMultiplexPollOperation(xsink, sock_obj);
+    if (*xsink) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+        return;
+    }
+    current_op->setSelf(*self);
+    h2_state.store(H2State::READING, std::memory_order_release);
+
+    if (ssl_required) {
+        // HTTPS: ALPN already confirmed H2 during TLS handshake
+        h2_confirmed.store(true, std::memory_order_release);
+        fireReadyCallback(xsink);
+    }
+    // Plain HTTP (h2c): defer readyCallback until we see valid H2 output
+    // from the server, confirming it supports HTTP/2 prior knowledge
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
+    if (!current_op) {
+        setError("HTTP2-READ-ERROR", "read operation not initialized", xsink);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP2-READ-ERROR",
+            desc_str ? desc_str->c_str() : "HTTP/2 read error", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    // h2c confirmation: after the initial preface send (cycle 0), if we get
+    // a successful poll cycle with valid poll_info, the server has responded
+    // with valid H2 data (SETTINGS frame)
+    if (!h2_confirmed.load(std::memory_order_acquire) && poll_info) {
+        ++reading_cycle_count;
+        if (reading_cycle_count > 1) {
+            h2_confirmed.store(true, std::memory_order_release);
+            printd(5, "Http2ClientPollOperationPriv::handleReading() h2c confirmed\n");
+            fireReadyCallback(xsink);
+        }
+    }
+
+    // Drain completed responses
+    int drain_count = 0;
+    while (true) {
+        ValueHolder output_val(current_op->getOutput(), xsink);
+        if (output_val->isNullOrNothing()) {
+            break;
+        }
+        if (++drain_count > MAX_DRAIN_ITERATIONS) {
+            break;
+        }
+        empty_read_count = 0;
+
+        QoreHashNode* output = output_val->get<QoreHashNode>();
+        int64_t stream_id_val = output->getKeyValue("stream_id").getAsBigInt();
+        std::string sid = std::to_string(stream_id_val);
+        bool is_end = output->getKeyValue("end_stream").getAsBool();
+
+        AbstractAsyncAction* action = nullptr;
+        {
+            AutoLocker al(stream_lock);
+            auto it = stream_actions.find(sid);
+            if (it != stream_actions.end()) {
+                action = it->second;
+                action->ref();
+                response_dispatched = true;
+
+                // Remove stream BEFORE dispatching so active_stream_count is
+                // decremented by the time the action resolves the caller's Future
+                if (is_end) {
+                    it->second->deref(xsink);
+                    stream_actions.erase(it);
+                    --active_stream_count;
+                }
+            }
+        }
+
+        if (action) {
+            if (is_end && action->isStreaming()) {
+                // Streaming (ChannelAction) with end_stream: split body + end marker
+                // for readData() consumer, then close the channel
+                QoreValue body_val = output->getKeyValue("body");
+                if (!body_val.isNullOrNothing()) {
+                    // Send body without end_stream
+                    QoreHashNode* body_resp = output->hashRefSelf();
+                    QoreValue removed = body_resp->takeKeyValue("end_stream");
+                    removed.discard(xsink);
+                    action->execute(body_resp, xsink);
+
+                    // Send end_stream marker
+                    ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
+                    end_resp->setKeyValue("end_stream", true, xsink);
+                    end_resp->setKeyValue("stream_id", stream_id_val, xsink);
+                    action->execute(end_resp.release(), xsink);
+                } else {
+                    // Just end_stream, no body
+                    action->execute(output->hashRefSelf(), xsink);
+                }
+                action->complete(xsink);
+            } else {
+                // Non-streaming (PromiseAction): send complete output
+                action->execute(output->hashRefSelf(), xsink);
+            }
+            action->deref(xsink);
+        }
+    }
+
+    // Check dispatched flag
+    bool dispatched;
+    {
+        AutoLocker al(stream_lock);
+        dispatched = response_dispatched;
+    }
+    if (dispatched) {
+        h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+        // Use C++ events when available — they include SOCK_POLLOUT if there
+        // are pending sends (e.g., WINDOW_UPDATE after receiving data)
+        if (poll_info) {
+            return poll_info;
+        }
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    if (poll_info) {
+        // Valid I/O activity (e.g., WINDOW_UPDATE, PING) even if no
+        // response output — reset the empty read counter
+        empty_read_count = 0;
+        return poll_info;
+    }
+
+    ++empty_read_count;
+    // Use a much shorter limit during h2c probing — if the server
+    // doesn't respond with valid H2 frames quickly, it likely doesn't
+    // support HTTP/2 prior knowledge
+    int max_reads = h2_confirmed.load(std::memory_order_acquire)
+        ? MAX_EMPTY_READS : H2C_PROBE_MAX_EMPTY_READS;
+    if (empty_read_count > max_reads) {
+        std::string msg = "max consecutive empty reads (" + std::to_string(max_reads) + ") exceeded";
+        if (!h2_confirmed.load(std::memory_order_acquire)) {
+            msg += " (h2c probe failed — server likely doesn't support HTTP/2)";
+        }
+        setError("HTTP2-EMPTY-READ", msg.c_str(), xsink);
+        return nullptr;
+    }
+
+    h2_state.store(H2State::WAIT_READ, std::memory_order_release);
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+}
+
+void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
+    h2_state.store(H2State::CLOSED, std::memory_order_release);
+    if (current_op) {
+        current_op->abort(xsink);
+    }
+    notifyPendingStreams("HTTP2-ABORT", "connection aborted", xsink);
+    connection_priv = nullptr;
+    // Note: do NOT close socket or delete current_op here to avoid
+    // Note: do NOT close socket or delete current_op here to avoid
+    // use-after-free if a driver thread is still inside continuePoll
+}
+
+void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
+        ExceptionSink* xsink) {
+    {
+        AutoLocker al(stream_lock);
+        if (!error_info) {
+            error_info = new QoreHashNode(autoTypeInfo);
+            error_info->setKeyValue("err", new QoreStringNode(err), xsink);
+            error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+        }
+    }
+    h2_state.store(H2State::CLOSED, std::memory_order_release);
+    notifyPendingStreams(err, desc, xsink);
+    connection_priv = nullptr;
+}
+
+void Http2ClientPollOperationPriv::notifyPendingStreams(const char* err, const char* desc,
+        ExceptionSink* xsink) {
+    std::unordered_map<std::string, AbstractAsyncAction*> actions_copy;
+    {
+        AutoLocker al(stream_lock);
+        actions_copy = std::move(stream_actions);
+        stream_actions.clear();
+        active_stream_count = 0;
+    }
+
+    // Pure C++ error dispatch — no execValue()
+    for (auto& [sid, action] : actions_copy) {
+        if (action) {
+            action->executeError(err, desc, xsink);
+            action->deref(xsink);
+        }
+    }
+}
+
+void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
+    if (connection_priv) {
+        connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
+    }
+}
+
+// --- Stream management (app thread) ---
+
+int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const char* path,
+        const QoreHashNode* user_headers, const void* body, size_t body_len,
+        bool streaming, AbstractAsyncAction* action, int max_streams,
+        ExceptionSink* xsink) {
+    // State check
+    H2State cur_state = h2_state.load(std::memory_order_acquire);
+    if (cur_state != H2State::READING && cur_state != H2State::WAIT_READ) {
+        action->deref(xsink);
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot submit request in state: %s", getStateImpl());
+        return -1;
+    }
+
+    // Build complete header hash with pseudo-headers
+    ReferenceHolder<QoreHashNode> req_headers(new QoreHashNode(autoTypeInfo), xsink);
+    if (user_headers) {
+        ConstHashIterator hi(user_headers);
+        while (hi.next()) {
+            req_headers->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
+    }
+
+    // Set pseudo-headers if not present
+    if (req_headers->getKeyValue(":method").isNullOrNothing()) {
+        req_headers->setKeyValue(":method", new QoreStringNode(method), xsink);
+    }
+    if (req_headers->getKeyValue(":path").isNullOrNothing()) {
+        req_headers->setKeyValue(":path",
+            new QoreStringNode(path && *path ? path : "/"), xsink);
+    }
+    if (req_headers->getKeyValue(":scheme").isNullOrNothing()) {
+        req_headers->setKeyValue(":scheme",
+            new QoreStringNode(ssl_required ? "https" : "http"), xsink);
+    }
+    if (req_headers->getKeyValue(":authority").isNullOrNothing()) {
+        int default_port = ssl_required ? 443 : 80;
+        if (target_port == default_port) {
+            req_headers->setKeyValue(":authority",
+                new QoreStringNode(target_host.c_str()), xsink);
+        } else {
+            QoreStringNode* authority = new QoreStringNode();
+            authority->sprintf("%s:%d", target_host.c_str(), target_port);
+            req_headers->setKeyValue(":authority", authority, xsink);
+        }
+    }
+
+    // Check for errors from header construction before acquiring lock
+    if (*xsink) {
+        action->deref(xsink);
+        return -1;
+    }
+
+    AutoLocker al(stream_lock);
+
+    // Capacity check
+    if (max_streams && active_stream_count >= max_streams) {
+        action->deref(xsink);
+        xsink->raiseException("HTTP2-CAPACITY-ERROR",
+            "connection at capacity: %d/%d streams",
+            active_stream_count, max_streams);
+        return -1;
+    }
+
+    // Submit to socket (acquires socket internal lock)
+    int32_t stream_id = sock_obj->submitHttp2Request(*req_headers, body, body_len, xsink,
+        streaming);
+    if (*xsink || stream_id < 0) {
+        action->deref(xsink);
+        return -1;
+    }
+
+    // Register action (take ownership — action was created with refcount 1 by caller)
+    std::string sid = std::to_string(stream_id);
+    stream_actions[sid] = action;
+    ++active_stream_count;
+
+    return stream_id;
+}
+
+bool Http2ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink* xsink) {
+    std::string sid = std::to_string(stream_id);
+
+    AutoLocker al(stream_lock);
+    auto it = stream_actions.find(sid);
+    if (it == stream_actions.end()) {
+        return false;  // already completed
+    }
+
+    // Notify the action of cancellation, then release
+    it->second->executeError("HTTP2-CANCELLED", "request cancelled", xsink);
+    it->second->deref(xsink);
+    stream_actions.erase(it);
+    --active_stream_count;
+    return true;
+}
+
+void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id, const BinaryNode* data,
+        bool end_stream, ExceptionSink* xsink) {
+    H2State cur_state = h2_state.load(std::memory_order_acquire);
+    if (cur_state != H2State::READING && cur_state != H2State::WAIT_READ) {
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot send data in state: %s", getStateImpl());
+        return;
+    }
+    sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
+}
+
+/** @endcond */
+
+//! C++ base class for HTTP/2 client poll operations
+/** This class provides the SocketPollOperationBase fast path for the
+    AsyncIoController, implementing the HTTP/2 client poll state machine
+    (connecting, ssl_upgrade, proxy_connect_send/recv, reading, wait_read,
+    closed) entirely in C++.
+
+    The Qore Http2ClientPollOperation class inherits from this base to get
+    the C++ fast path while providing the high-level HTTP/2 API.
+
+    @since %Qore 2.3
+*/
+qclass Http2ClientPollOperationBase [
+    private_members=object sock,string goal,auto data_save;
+    internal_members=AbstractHttpPollConnection connection;
+    ns=Qore;
+    arg=Http2ClientPollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the HTTP/2 client poll operation base
+/** @param sock the TCP socket (must not be connected yet)
+    @param connect_target the TCP connect target ("host:port")
+    @param target_host the target hostname for :authority and proxy CONNECT
+    @param target_port the target port number
+    @param ssl_required True if SSL/TLS is required (HTTPS)
+    @param proxy_tunnel True if a proxy CONNECT tunnel is needed
+    @param connection the owning HttpClientConnection object
+*/
+Http2ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string connect_target,
+        string target_host, int target_port, bool ssl_required, bool proxy_tunnel,
+        AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection) {
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Create initial TCP connect operation
+    sock_ptr->ref();
+    ReferenceHolder<SocketConnectPollOperation> connect_op(
+        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr),
+        xsink);
+    if (*xsink) {
+        return;
+    }
+
+    // Set up Qore object members
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_obj) {
+        self->setMemberValue("sock", QC_HTTP2CLIENTPOLLOPERATIONBASE,
+            sock_obj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTP2CLIENTPOLLOPERATIONBASE,
+        new QoreStringNode("http2_client_multiplex"), xsink);
+
+    // Store the connection as an internal member (single ref, DGC-visible)
+    {
+        qore_object_private* o = qore_object_private::get(*self);
+        const qore_class_private* cls = qore_class_private::get(*QC_HTTP2CLIENTPOLLOPERATIONBASE);
+        o->setValueIntern(cls, "connection", static_cast<QoreObject*>(obj_connection->refSelf()), xsink);
+    }
+
+    // Set self on the connect op so it can build SocketPollInfo hashes
+    SocketConnectPollOperation* connect_ptr = connect_op.release();
+    connect_ptr->setSelf(self);
+
+    // Create the private data — ref sock for private data ownership
+    // Extract the raw C++ priv pointer for direct I/O-thread calls;
+    // the internal_members slot holds the only strong QoreObject ref
+    AbstractHttpPollConnectionPriv* conn_priv = *connection;
+    sock_ptr->ref();
+    self->setPrivate(CID_HTTP2CLIENTPOLLOPERATIONBASE,
+        new Http2ClientPollOperationPriv(self, sock_ptr, connect_ptr,
+            ssl_required, proxy_tunnel,
+            target_host->c_str(), (int)target_port, conn_priv));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+Http2ClientPollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Returns the goal
+/** @return the goal string
+*/
+string Http2ClientPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return the current state string
+*/
+string Http2ClientPollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the goal has been reached
+/** @return always False (long-running multiplexed operation)
+*/
+bool Http2ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or NOTHING if complete
+*/
+*hash<SocketPollInfo> Http2ClientPollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Closes the HTTP/2 connection and notifies all pending streams.
+*/
+nothing Http2ClientPollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns output from the inner operation
+/** @return any output data from the inner operation
+*/
+auto Http2ClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Called when the operation completes
+/** Dispatches to connection_ref.handleCompletion() for deterministic result delivery.
+*/
+nothing Http2ClientPollOperationBase::onComplete(hash<SocketPollResultInfo> result) {
+    // Read connection from internal_members (Qore member, DGC-visible)
+    ValueHolder conn_val(self->getReferencedMemberNoMethod("connection", xsink), xsink);
+    if (!*xsink && conn_val->getType() == NT_OBJECT) {
+        QoreObject* conn = conn_val->get<QoreObject>();
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(result->refSelf(), xsink);
+        ValueHolder rv(conn->evalMethod("handleCompletion", *call_args, xsink), xsink);
+    }
+}
+
+//! Returns True if the connection is closed
+/** @return True if closed
+*/
+bool Http2ClientPollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if the connection is ready for requests
+/** @return True if ready (in reading state and H2 protocol confirmed)
+*/
+bool Http2ClientPollOperationBase::isReady() [flags=RET_VALUE_ONLY] {
+    return priv->isReady();
+}
+
+//! Returns True if an error occurred
+/** @return True if error
+*/
+bool Http2ClientPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
+    return priv->hasError();
+}
+
+//! Returns error information if an error occurred
+/** @return error hash or NOTHING
+*/
+*hash<auto> Http2ClientPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+    return priv->getErrorInfo();
+}
+
+//! Returns the number of active streams (lock-free)
+/** @return active stream count
+*/
+int Http2ClientPollOperationBase::getActiveStreamCount() [flags=RET_VALUE_ONLY] {
+    return priv->getActiveStreamCount();
+}
+
+//! Submits an HTTP/2 request with Promise-based response delivery
+/** @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers (may include pseudo-headers)
+    @param body optional request body (string or binary)
+    @param promise Promise to resolve with the response
+    @param max_streams maximum concurrent streams (0 = unlimited)
+    @return the stream ID assigned to this request
+*/
+int Http2ClientPollOperationBase::submitRequest(string method, string path,
+        *hash<auto> headers, *data body, Promise[QorePromise] promise, int max_streams) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Get the Promise QoreObject to prevent GC (which triggers promiseDestroyed())
+    QoreObject* promise_obj = const_cast<QoreObject*>(
+        get_param_value(args, 4).get<const QoreObject>());
+
+    // Create PromiseAction — caller creates with refcount 1,
+    // priv->submitRequest takes ownership (stores or derefs on failure)
+    PromiseAction* action = new PromiseAction(*promise, promise_obj);
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, false, action, (int)max_streams, xsink);
+}
+
+//! Submits an HTTP/2 streaming request with Channel-based response delivery
+/** @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers
+    @param body optional request body
+    @param channel Channel for incremental response delivery
+    @param max_streams maximum concurrent streams (0 = unlimited)
+    @param streaming if True, keep the request body stream open (bidirectional)
+    @return the stream ID assigned to this request
+*/
+int Http2ClientPollOperationBase::submitRequestStreaming(string method, string path,
+        *hash<auto> headers, *data body, object channel, int max_streams,
+        bool streaming = False) {
+    // Extract QoreChannel private data from the Channel object
+    QoreChannel* ch = static_cast<QoreChannel*>(
+        const_cast<QoreObject*>(channel)->getReferencedPrivateData(CID_CHANNEL, xsink));
+    if (!ch) {
+        if (!*xsink) {
+            xsink->raiseException("CHANNEL-ERROR", "invalid Channel object");
+        }
+        return -1;
+    }
+    ReferenceHolder<QoreChannel> ch_holder(ch, xsink);
+
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP2-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Create ChannelAction — priv takes ownership
+    ChannelAction* action = new ChannelAction(ch);
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, streaming, action, (int)max_streams, xsink);
+}
+
+//! Cancel a stream
+/** @param stream_id the stream to cancel
+    @return True if the stream was found and cancelled
+*/
+bool Http2ClientPollOperationBase::cancelStream(int stream_id) {
+    return priv->cancelStream(stream_id, xsink);
+}
+
+//! Send data on a streaming HTTP/2 request
+/** @param stream_id the stream ID to send data on
+    @param data the data to send (string or binary)
+    @param end_stream if True, signals end of stream
+*/
+nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
+        bool end_stream = False) {
+    if (data.getType() == NT_BINARY) {
+        priv->sendStreamData(stream_id, data.get<const BinaryNode>(), end_stream, xsink);
+    } else if (data.getType() == NT_STRING) {
+        const QoreStringNode* str = data.get<const QoreStringNode>();
+        SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+        bin->append(str->c_str(), str->size());
+        priv->sendStreamData(stream_id, *bin, end_stream, xsink);
+    } else {
+        xsink->raiseException("HTTP2-ERROR",
+            "data must be string or binary, got type '%s'",
+            data.getFullTypeName());
+    }
+}
+
+//! Returns the socket object
+/** @return the socket
+*/
+Socket Http2ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}

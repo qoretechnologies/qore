@@ -70,12 +70,14 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
-            *SSLCertificate client_cert, *SSLPrivateKey client_pk) :
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk,
+            HttpClientConnection connection) :
             Http3ClientPollOperationBase(
                 Http3ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
                     accept_all_certs, client_cert, client_pk),
                 url_info.host,
-                url_info.port) {
+                url_info.port,
+                connection) {
         h3_url_info = url_info;
         h3_logger = logger;
     }

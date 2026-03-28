@@ -1456,11 +1456,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         // --- PHASE 2: continuePoll outside lock ---
-        // All continuePoll() calls run on the I/O thread. This is safe because:
-        // - C++ built-in implementations are trusted and non-blocking by design
-        // - Qore framework overrides (Http2PollOperation, etc.) are trusted and require
-        //   thread affinity for stream objects (BinaryInputStream, FileInputStream)
-        // Only callbacks are dispatched to worker threads (those are user code).
+        // C++ poll operations (SocketPollOperationBase subclasses) run directly
+        // on the I/O thread via spop_base->continuePoll() — pure C++, no Qore
+        // interpreter. All HTTP client protocol ops (H1/H2/H3) are C++.
+        // Qore-language poll operations run on the I/O thread for trusted code
+        // or are dispatched to workers for sandboxed code. Server-side Qore
+        // poll ops will be migrated to PollPipeline or C++ in follow-on work.
         struct PollResult {
             std::string key;
             QoreHashNode* new_poll_info;  // Refed or nullptr
@@ -1504,14 +1505,16 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 }
             } else {
                 // Qore poll operation — check trust level via QDOM_PROCESS.
-                // Trusted code (modules, framework) runs on I/O thread like
-                // nginx runs socket handlers on the event loop.
+                // Trusted code (modules, framework) runs on I/O thread.
                 // Sandboxed code (without QDOM_PROCESS) is dispatched to the
                 // worker pool to prevent blocking the event loop.
+                // NOTE: server-side Qore poll ops (Http2PollOperation, etc.)
+                // still require I/O thread execution for correct timing.
+                // These will be migrated to PollPipeline or C++ in follow-on work.
                 QoreProgram* pgm = op.spop_obj->getProgram();
                 bool trusted = pgm && !(pgm->getParseOptions() & PO_NO_PROCESS_CONTROL);
                 if (trusted) {
-                    // Trusted Qore code — safe to call on I/O thread
+                    // Trusted Qore code — run on I/O thread
                     ExceptionSink poll_xsink;
                     ValueHolder rv(op.spop_obj->evalMethod("continuePoll", nullptr,
                         &poll_xsink), &poll_xsink);

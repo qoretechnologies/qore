@@ -37,19 +37,16 @@ public namespace HttpClientIo {
     acquired before \c HttpClientPollOperation.stream_lock.  Never acquire
     in reverse order or a deadlock will result.
 */
-public class HttpClientConnection {
+public class HttpClientConnection inherits AbstractHttpPollConnection {
     private {
         #! URL info (host, port, scheme)
         hash<auto> url_info;
 
-        #! Connection state
-        HttpClientConnectionState state = HttpClientConnectionState::Connecting;
-
-        #! Connection lock for thread safety
+        #! Lock for Qore-level shared members (last_activity, controller_ref, pending_stream_count)
+        /** @note Connection state (state, ready_cond) is in the C++ base class
+            AbstractHttpPollConnection. This lock only protects Qore members.
+        */
         Mutex lock();
-
-        #! Condition for waiting on connection ready
-        Condition ready_cond();
 
         #! Maximum concurrent streams
         int max_concurrent_streams = DefaultMaxStreamsPerConnection;
@@ -119,19 +116,6 @@ public class HttpClientConnection {
         pool_key = key;
     }
 
-    #! Called by the poll operation when the connection becomes ready
-    /** @note Called from the I/O thread via poll op's fireReadyCallback().
-        Acquires its own lock — no external synchronization needed.
-    */
-    onConnectionReady() {
-        AutoLock al(lock);
-        if (state == HttpClientConnectionState::Connecting) {
-            state = HttpClientConnectionState::Ready;
-            log(LoggerLevel::DEBUG, "connection ready");
-            ready_cond.broadcast();
-        }
-    }
-
     #! Called by the poll operation when onComplete fires
     /** Forwards to the connection manager's handleConnectionResult().
         @param result the poll result hash
@@ -141,29 +125,6 @@ public class HttpClientConnection {
         if (manager_ref) {
             manager_ref.handleConnectionResult(pool_key, self, result);
         }
-    }
-
-    #! Returns True if the connection is ready for new requests
-    bool isReady() {
-        AutoLock al(lock);
-        return isReadyLocked();
-    }
-
-    #! Internal: check ready state when lock is already held
-    private bool isReadyLocked() {
-        return state == HttpClientConnectionState::Ready && getPollOperation().isReady();
-    }
-
-    #! Returns True if the connection is closed
-    bool isClosed() {
-        AutoLock al(lock);
-        return state == HttpClientConnectionState::Closed;
-    }
-
-    #! Returns True if the connection is draining (GOAWAY received)
-    bool isDraining() {
-        AutoLock al(lock);
-        return state == HttpClientConnectionState::Draining;
     }
 
     #! Returns True if the connection can accept a new stream (advisory, no side effects)
@@ -177,8 +138,9 @@ public class HttpClientConnection {
     */
     bool canAcceptStream() {
         AutoLock al(lock);
-        return (state == HttpClientConnectionState::Ready
-                || state == HttpClientConnectionState::Connecting)
+        int cs = self.getConnectionState();
+        return (cs == HttpClientConnectionState::Ready
+                || cs == HttpClientConnectionState::Connecting)
             && (!max_concurrent_streams
                 || (getPollOperation().getActiveStreamCount() + pending_stream_count)
                     < max_concurrent_streams);
@@ -198,8 +160,9 @@ public class HttpClientConnection {
     */
     bool tryReserveStream() {
         AutoLock al(lock);
-        if (state != HttpClientConnectionState::Ready
-                && state != HttpClientConnectionState::Connecting) {
+        int cs = self.getConnectionState();
+        if (cs != HttpClientConnectionState::Ready
+                && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
         int total = getPollOperation().getActiveStreamCount() + pending_stream_count;
@@ -253,7 +216,7 @@ public class HttpClientConnection {
         return <HttpClientConnectionInfo>{
             "host": url_info.host,
             "port": url_info.port,
-            "state": state,
+            "state": cast<HttpClientConnectionState>(self.getConnectionState()),
             "active_streams": getPollOperation().getActiveStreamCount(),
             "max_concurrent_streams": max_concurrent_streams,
             "connection_id": connection_id,
@@ -283,9 +246,9 @@ public class HttpClientConnection {
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
+            if (!self.isReady()) {
                 throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
+                    sprintf("connection not ready: state=%y", self.getConnectionState());
             }
             last_activity = now_us();
             ctl = controller_ref;
@@ -301,9 +264,7 @@ public class HttpClientConnection {
             # Mark connection Closed only for connection-fatal errors so the
             # pool evicts it immediately; transient errors leave it Ready
             if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
-                AutoLock al(lock);
-                state = HttpClientConnectionState::Closed;
-                ready_cond.broadcast();
+                self.setClosed();
             }
             rethrow;
         }
@@ -360,18 +321,16 @@ public class HttpClientConnection {
         protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
     */
     handlePollResult() {
-        AutoLock al(lock);
-        last_activity = now_us();
-
-        if (getPollOperation().isClosed()) {
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
-        } else if (getPollOperation().isReady() && state == HttpClientConnectionState::Connecting) {
-            state = HttpClientConnectionState::Ready;
-            ready_cond.broadcast();
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
         }
 
-        # Protocol-specific hook called under lock
+        if (getPollOperation().isClosed()) {
+            self.setClosed();
+        }
+
+        # Protocol-specific hook (not called under Qore lock — C++ base handles state)
         handlePollResultImpl();
     }
 
@@ -383,40 +342,27 @@ public class HttpClientConnection {
     }
 
     #! Waits for the connection to become ready
+    /** Delegates to the C++ base class waitForReady() for the condition wait,
+        then checks for errors (the C++ base returns False for both timeout
+        and closed-with-error).
+    */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
-        date end_time = now_us() + timeout_ms;
+        bool ready = AbstractHttpPollConnection::waitForReady(timeout_ms);
 
-        AutoLock al(lock);
-        while (state == HttpClientConnectionState::Connecting) {
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
-                return False;
-            }
-            ready_cond.wait(lock, remaining);
-
-            if (getPollOperation().isClosed() || getPollOperation().hasError()) {
-                state = HttpClientConnectionState::Closed;
-                break;
-            }
-        }
-
-        if (state == HttpClientConnectionState::Closed) {
+        if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
         }
 
-        return state == HttpClientConnectionState::Ready;
+        return ready;
     }
 
     #! Sets the connection to draining state (GOAWAY received)
     setDraining() {
-        AutoLock al(lock);
-        if (state == HttpClientConnectionState::Ready) {
-            log(LoggerLevel::DEBUG, "connection draining");
-            state = HttpClientConnectionState::Draining;
-        }
+        log(LoggerLevel::DEBUG, "connection draining");
+        AbstractHttpPollConnection::setDraining();
     }
 
     #! Closes the connection

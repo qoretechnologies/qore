@@ -36,6 +36,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/AsyncCompletionAction.h"
+#include "qore/intern/QC_AbstractHttpPollConnection.h"
 
 #include <atomic>
 #include <string>
@@ -75,7 +76,8 @@ public:
         @param inner the SocketQuicClientPollOperation (referenced by caller, ownership transferred)
     */
     DLLLOCAL Http3ClientPollOperationPriv(QoreObject* self, QoreSocketObject* sock,
-            SocketQuicClientPollOperation* inner);
+            SocketQuicClientPollOperation* inner,
+            AbstractHttpPollConnectionPriv* connection_priv);
 
     DLLLOCAL virtual ~Http3ClientPollOperationPriv();
 
@@ -180,18 +182,9 @@ public:
         migration_pending.store(true, std::memory_order_release);
     }
 
-    DLLLOCAL void setConnection(QoreObject* conn, ExceptionSink* xsink) {
-        if (connection_ref) {
-            connection_ref->deref(xsink);
-        }
-        connection_ref = conn;
-        if (connection_ref) {
-            connection_ref->ref();
-        }
-    }
-
-    DLLLOCAL QoreObject* getConnectionRef() const {
-        return connection_ref;
+    //! Returns the raw connection priv pointer (for I/O-thread calls)
+    DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
+        return connection_priv;
     }
 
     //! Get the socket object (returns a referenced QoreObject*)
@@ -258,8 +251,13 @@ private:
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
-    //! Owning connection object (ref'd or nullptr) — for ready/completion dispatch
-    QoreObject* connection_ref = nullptr;
+    //! Connection C++ priv (raw pointer — Qore internal_members "connection" holds the ref)
+    /** Not ref'd in C++ to avoid GC-invisible reference cycles.
+        The QPP constructor stores the strong QoreObject ref in a Qore
+        internal_members slot where the DGC can see and break cycles.
+        This raw pointer is used for direct I/O-thread calls (onConnectionReady).
+    */
+    AbstractHttpPollConnectionPriv* connection_priv = nullptr;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

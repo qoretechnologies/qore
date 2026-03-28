@@ -1,0 +1,135 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_AbstractHttpPollConnection.qpp
+
+    AbstractHttpPollConnection class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_AbstractHttpPollConnection.h"
+
+//! C++ base class for HTTP client connection state management
+/** This class provides the connection state machine (CONNECTING → READY →
+    DRAINING/CLOSED) entirely in C++, enabling:
+
+    - Pure C++ onConnectionReady() safe for I/O thread calls
+    - Lock-free atomic state reads (isReady, isClosed, isDraining)
+    - DGC-compatible ownership when used with internal_members in poll ops
+
+    Qore HttpClientConnection inherits from this class. HTTP/2 and HTTP/3
+    poll operations store a raw C++ pointer to this priv data for direct
+    I/O-thread calls, while the Qore internal_members slot holds the single
+    strong ref visible to the DGC.
+
+    State values match the Qore HttpClientConnectionState enum (0-3).
+
+    @since %Qore 2.3
+*/
+qclass AbstractHttpPollConnection [
+    ns=Qore;
+    arg=AbstractHttpPollConnectionPriv* priv
+];
+
+//! Creates the connection state object in CONNECTING state
+/** The connection starts in CONNECTING state (0).
+*/
+AbstractHttpPollConnection::constructor() {
+    self->setPrivate(CID_ABSTRACTHTTPPOLLCONNECTION, new AbstractHttpPollConnectionPriv());
+}
+
+//! Called when the connection becomes ready
+/** Transitions from CONNECTING to READY and broadcasts to waiters.
+    This method is safe to call from the I/O thread (pure C++ internally).
+
+    @note HTTP/2 and HTTP/3 poll operations bypass this QPP method and call
+    the C++ priv directly for zero-overhead I/O-thread notification. This
+    QPP method exists for Qore-only poll operations (HTTP/1.1).
+*/
+nothing AbstractHttpPollConnection::onConnectionReady() {
+    priv->onConnectionReady();
+}
+
+//! Waits for the connection to become ready
+/** Blocks until the state leaves CONNECTING or the timeout expires.
+
+    @param timeout_ms maximum time to wait (default 30s)
+    @return True if the connection is in READY state after the wait
+
+    @note Does not throw on CLOSED — the caller should check isClosed()
+    and getConnectionState() to determine the reason for a False return.
+*/
+bool AbstractHttpPollConnection::waitForReady(timeout timeout_ms = 30s) {
+    return priv->waitForReady((int64_t)timeout_ms);
+}
+
+//! Returns True if the connection is in READY state
+/** Lock-free atomic read — safe to call from any thread without contention.
+    @return True if ready for requests
+*/
+bool AbstractHttpPollConnection::isReady() [flags=RET_VALUE_ONLY] {
+    return priv->isReady();
+}
+
+//! Returns True if the connection is in CLOSED state
+/** Lock-free atomic read — safe to call from any thread without contention.
+    @return True if closed
+*/
+bool AbstractHttpPollConnection::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if the connection is in DRAINING state
+/** Lock-free atomic read — safe to call from any thread without contention.
+    @return True if draining (GOAWAY received)
+*/
+bool AbstractHttpPollConnection::isDraining() [flags=RET_VALUE_ONLY] {
+    return priv->isDraining();
+}
+
+//! Returns the current connection state as an int matching HttpClientConnectionState
+/** @return 0=CONNECTING, 1=READY, 2=DRAINING, 3=CLOSED
+*/
+int AbstractHttpPollConnection::getConnectionState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Transitions the connection to CLOSED state
+/** Broadcasts to any threads waiting in waitForReady().
+*/
+nothing AbstractHttpPollConnection::setClosed() {
+    priv->setClosed();
+}
+
+//! Transitions the connection to DRAINING state (GOAWAY received)
+/** Only transitions if currently in READY state. Broadcasts to any
+    threads waiting in waitForReady().
+*/
+nothing AbstractHttpPollConnection::setDraining() {
+    priv->setDraining();
+}
