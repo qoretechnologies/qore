@@ -409,3 +409,5 @@
 #include "QoreLoggerBridge.cpp"
 #include "QoreAsyncIoLogger.cpp"
 #include "AsyncIoControllerPriv.cpp"
+// WebSocket frame codec (RFC 6455)
+#include "WebSocketFrameCodec.cpp"

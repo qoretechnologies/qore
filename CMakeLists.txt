@@ -1139,6 +1139,11 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/QuicPollOperations.cpp
 )
 
+# WebSocket frame codec (RFC 6455)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/WebSocketFrameCodec.cpp
+)
+
 # get list of header files
 file(GLOB LIBQORE_SOURCE_HEADERS "include/qore/*.h" "include/qore/intern/*.h")
 set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/qore/safe_dslist include/qore/vector_map include/qore/vector_set)
@@ -1561,6 +1566,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicSession.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicSessionTicketCache.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QuicPollOperations.cpp\"
+// WebSocket frame codec (RFC 6455)
+#include \"${CMAKE_SOURCE_DIR}/lib/WebSocketFrameCodec.cpp\"
 ")
     # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
     # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)
