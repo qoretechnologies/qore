@@ -72,6 +72,8 @@ public:
         RECV_EXACT,
         RECV_UNTIL,
         RECV_DATA,
+        READ_HTTP_BODY,
+        DELEGATE,
         BRANCH,
         TRANSFORM,
         DELIVER_RESULT
@@ -107,6 +109,7 @@ public:
         // Config per type
         std::string target;         //!< CONNECT/CONNECT_SSL: "host:port"
         int data_idx = -1;          //!< SEND: index into binary_data table
+        int delegate_idx = -1;      //!< DELEGATE: index into delegate_ops table
         size_t recv_size = 0;       //!< RECV_EXACT: byte count
         int pattern_idx = -1;       //!< RECV_UNTIL: index into string_data table
         bool recv_as_string = false;//!< RECV_EXACT/RECV_UNTIL/RECV_DATA: return as string
@@ -150,6 +153,21 @@ public:
     //! Adds an HTTP header read step
     DLLLOCAL int addRecvHeader();
 
+    //! Adds an HTTP body read step (auto-detects mode from context headers)
+    /** Uses the status_code and headers from the preceding RECV_HEADER step
+        to determine Content-Length, chunked, or connection-close mode.
+        @param method the HTTP method (for HEAD no-body detection), empty = not HEAD
+    */
+    DLLLOCAL int addReadHttpBody(const char* method = "");
+
+    //! Adds a delegate step that wraps an existing SocketPollOperationBase
+    /** The pipeline delegates continuePoll to the wrapped operation until it
+        completes, then extracts its output into the pipeline context.
+        @param op the poll operation to delegate to (ref will be taken)
+        @param op_obj the QoreObject wrapping the op (ref'd for lifecycle)
+    */
+    DLLLOCAL int addDelegate(SocketPollOperationBase* op, QoreObject* op_obj);
+
     //! Adds a fixed-size recv step
     DLLLOCAL int addRecvExact(size_t size, bool as_string = false);
 
@@ -164,6 +182,12 @@ public:
 
     //! Adds a transform step (C++ function modifies context)
     DLLLOCAL int addTransform(TransformFn transform);
+
+    //! Adds a status-code validation transform (throws if not in range)
+    DLLLOCAL int addValidateStatus(int lo, int hi, const char* err_code);
+
+    //! Adds a branch based on status code range
+    DLLLOCAL int addBranchOnStatus(int lo, int hi, int true_step, int false_step);
 
     //! Adds a result delivery step
     DLLLOCAL int addDeliverResult();
@@ -207,6 +231,13 @@ private:
 
     //! String data table (ref'd, for RECV_UNTIL patterns)
     std::vector<QoreStringNode*> string_data;
+
+    //! Delegate ops table (ref'd op + ref'd QoreObject pairs, for DELEGATE steps)
+    struct DelegateOp {
+        SocketPollOperationBase* op;  //!< ref'd
+        QoreObject* obj;              //!< ref'd (keeps the op alive)
+    };
+    std::vector<DelegateOp> delegate_ops;
 
     //! Output value (from final step or error)
     mutable QoreValue output;

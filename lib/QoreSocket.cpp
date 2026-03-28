@@ -5993,6 +5993,327 @@ bool SocketReadHttpHeaderPollOperation::abortNeedsClose() const {
     return true;
 }
 
+// SocketReadHttpBodyPollOperation implementation
+
+SocketReadHttpBodyPollOperation::SocketReadHttpBodyPollOperation(ExceptionSink* xsink,
+        QoreSocketObject* sock, int status_code, int64_t content_length,
+        bool chunked, bool connection_close, bool is_head)
+        : SocketPollOperationBase(nullptr), sock_obj(sock), body_state(BodyState::DONE) {
+    // sock is ref'd by caller
+
+    // Determine if body exists
+    bool no_body = is_head
+        || (status_code >= 100 && status_code < 200)
+        || status_code == 204
+        || status_code == 304;
+
+    if (no_body || (content_length == 0 && !chunked && !connection_close)) {
+        return;
+    }
+
+    body = new BinaryNode();
+
+    if (chunked) {
+        body_state = BodyState::RECV_CHUNK_SIZE;
+        startBodyRead(xsink);
+    } else if (content_length > 0) {
+        body_state = BodyState::RECV_LENGTH;
+        remaining = content_length;
+        startBodyRead(xsink);
+    } else if (connection_close) {
+        body_state = BodyState::RECV_CLOSE;
+        startBodyRead(xsink);
+    }
+    // else: no Content-Length, not chunked, not connection-close = no body (already DONE)
+}
+
+SocketReadHttpBodyPollOperation::~SocketReadHttpBodyPollOperation() {
+    // cleanup() should have been called via deref()
+}
+
+void SocketReadHttpBodyPollOperation::cleanup(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+    if (body) {
+        body->deref(xsink);
+        body = nullptr;
+    }
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+}
+
+void SocketReadHttpBodyPollOperation::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+void SocketReadHttpBodyPollOperation::startBodyRead(ExceptionSink* xsink) {
+    sock_obj->ref();
+    switch (body_state) {
+        case BodyState::RECV_LENGTH:
+            current_op = new SocketRecvPollOperation(xsink, (ssize_t)remaining, sock_obj, false);
+            break;
+        case BodyState::RECV_CHUNK_SIZE: {
+            SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+            current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+            break;
+        }
+        case BodyState::RECV_CLOSE:
+            current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+            break;
+        default:
+            sock_obj->deref(xsink);
+            break;
+    }
+    if (*xsink && current_op) {
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::continuePoll(ExceptionSink* xsink) {
+    if (body_state == BodyState::DONE) {
+        return nullptr;
+    }
+
+    while (true) {
+        if (!current_op) {
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+
+        ExceptionSink poll_xsink;
+        QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+        if (poll_xsink) {
+            if (body_state == BodyState::RECV_CLOSE) {
+                // Read error in connection-close mode means EOF — body is complete
+                poll_xsink.clear();
+                body_state = BodyState::DONE;
+                return nullptr;
+            }
+            xsink->assimilate(poll_xsink);
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+
+        if (poll_info) {
+            return poll_info;
+        }
+
+        if (!current_op->goalReached()) {
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+
+        switch (body_state) {
+            case BodyState::RECV_LENGTH:
+                return handleRecvLength(xsink);
+            case BodyState::RECV_CHUNK_SIZE:
+                return handleRecvChunkSize(xsink);
+            case BodyState::RECV_CHUNK_DATA:
+                return handleRecvChunkData(xsink);
+            case BodyState::RECV_CHUNK_CRLF:
+                return handleRecvChunkCrlf(xsink);
+            case BodyState::RECV_CLOSE:
+                return handleRecvClose(xsink);
+            default:
+                return nullptr;
+        }
+    }
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvLength(ExceptionSink* xsink) {
+    ValueHolder data(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (data->getType() == NT_BINARY) {
+        const BinaryNode* bin = data->get<const BinaryNode>();
+        if (bin->size() > 0) {
+            body->append(bin->getPtr(), bin->size());
+        }
+    }
+
+    body_state = BodyState::DONE;
+    return nullptr;
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkSize(ExceptionSink* xsink) {
+    ValueHolder line_val(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (line_val->getType() != NT_STRING) {
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+
+    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    const char* str = line->c_str();
+    size_t len = line->size();
+
+    // Strip trailing \r\n
+    if (len >= 2) {
+        len -= 2;
+    }
+
+    // Find semicolon (chunk extensions)
+    const char* semi = (const char*)memchr(str, ';', len);
+    size_t hex_len = semi ? (size_t)(semi - str) : len;
+
+    // Parse hex chunk size
+    char hex_buf[32];
+    if (hex_len >= sizeof(hex_buf)) {
+        hex_len = sizeof(hex_buf) - 1;
+    }
+    memcpy(hex_buf, str, hex_len);
+    hex_buf[hex_len] = '\0';
+    int64_t chunk_size = strtol(hex_buf, nullptr, 16);
+
+    printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkSize() chunk_size=%lld\n",
+        (long long)chunk_size);
+
+    if (chunk_size == 0) {
+        // Last chunk — read trailing CRLF (or trailers followed by CRLF)
+        body_state = BodyState::RECV_CHUNK_CRLF;
+        sock_obj->ref();
+        SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+        current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+        if (*xsink) {
+            releaseCurrentOp(xsink);
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    // Read chunk data + trailing CRLF (chunk_size + 2 bytes)
+    body_state = BodyState::RECV_CHUNK_DATA;
+    sock_obj->ref();
+    current_op = new SocketRecvPollOperation(xsink, (ssize_t)(chunk_size + 2), sock_obj, false);
+    if (*xsink) {
+        releaseCurrentOp(xsink);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    return continuePoll(xsink);
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkData(ExceptionSink* xsink) {
+    ValueHolder data_val(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (data_val->getType() == NT_BINARY) {
+        const BinaryNode* bin = data_val->get<const BinaryNode>();
+        // Remove trailing CRLF (last 2 bytes)
+        if (bin->size() > 2) {
+            body->append(bin->getPtr(), bin->size() - 2);
+        }
+    }
+
+    // Read next chunk size
+    body_state = BodyState::RECV_CHUNK_SIZE;
+    sock_obj->ref();
+    SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+    current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+    if (*xsink) {
+        releaseCurrentOp(xsink);
+        body_state = BodyState::DONE;
+        return nullptr;
+    }
+    return continuePoll(xsink);
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvChunkCrlf(ExceptionSink* xsink) {
+    ValueHolder line_val(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    if (line_val->getType() == NT_STRING) {
+        const QoreStringNode* line = line_val->get<const QoreStringNode>();
+        if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
+            // Empty line — chunked transfer complete
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        // Trailer line — read next line
+        printd(5, "SocketReadHttpBodyPollOperation::handleRecvChunkCrlf() trailer line\n");
+        sock_obj->ref();
+        SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+        current_op = new SocketRecvUntilBytesPollOperation(xsink, pattern.release(), sock_obj, true);
+        if (*xsink) {
+            releaseCurrentOp(xsink);
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    // Unexpected output type — treat as complete
+    body_state = BodyState::DONE;
+    return nullptr;
+}
+
+QoreHashNode* SocketReadHttpBodyPollOperation::handleRecvClose(ExceptionSink* xsink) {
+    ValueHolder data_val(current_op->getOutput(), xsink);
+    releaseCurrentOp(xsink);
+
+    bool has_data = false;
+    if (data_val->getType() == NT_BINARY) {
+        const BinaryNode* bin = data_val->get<const BinaryNode>();
+        if (bin->size() > 0) {
+            has_data = true;
+            body->append(bin->getPtr(), bin->size());
+        }
+    }
+
+    if (has_data) {
+        // Read more data
+        sock_obj->ref();
+        current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+        if (*xsink) {
+            releaseCurrentOp(xsink);
+            body_state = BodyState::DONE;
+            return nullptr;
+        }
+        return continuePoll(xsink);
+    }
+
+    // Empty read = EOF — server closed connection
+    body_state = BodyState::DONE;
+    return nullptr;
+}
+
+void SocketReadHttpBodyPollOperation::abort(ExceptionSink* xsink) {
+    if (current_op) {
+        current_op->abort(xsink);
+    }
+    body_state = BodyState::DONE;
+}
+
+QoreValue SocketReadHttpBodyPollOperation::getOutput() const {
+    if (body) {
+        body->ref();
+        return body;
+    }
+    return QoreValue();
+}
+
+const char* SocketReadHttpBodyPollOperation::getStateImpl() const {
+    switch (body_state) {
+        case BodyState::RECV_LENGTH: return "recv_body_length";
+        case BodyState::RECV_CHUNK_SIZE: return "recv_chunk_size";
+        case BodyState::RECV_CHUNK_DATA: return "recv_chunk_data";
+        case BodyState::RECV_CHUNK_CRLF: return "recv_chunk_crlf";
+        case BodyState::RECV_CLOSE: return "recv_body_close";
+        case BodyState::DONE: return "done";
+        default: return "unknown";
+    }
+}
+
 // SocketSendAndReadHeaderPollOperation implementation
 
 SocketSendAndReadHeaderPollOperation::SocketSendAndReadHeaderPollOperation(ExceptionSink* xsink,

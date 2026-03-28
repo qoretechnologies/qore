@@ -296,6 +296,89 @@ private:
     DLLLOCAL virtual bool abortNeedsClose() const;
 };
 
+//! Non-blocking HTTP body reader — auto-selects Content-Length, chunked TE, or connection-close
+/** This operation reads the body of an HTTP response based on transfer parameters
+    extracted from the response headers. It encapsulates the entire body-reading
+    state machine (Content-Length fixed reads, chunked transfer encoding with
+    trailer support, and connection-close EOF reads) as a single reusable
+    inner poll operation.
+
+    @par Usage
+    After SocketReadHttpHeaderPollOperation completes, extract the transfer
+    parameters from the headers and create this operation:
+    @code
+    auto* body_op = new SocketReadHttpBodyPollOperation(xsink, sock,
+        status_code, content_length, chunked, connection_close, is_head);
+    @endcode
+
+    @since %Qore 2.3
+*/
+class SocketReadHttpBodyPollOperation : public SocketPollOperationBase {
+public:
+    //! Body reading sub-states
+    enum class BodyState {
+        RECV_LENGTH,        //!< Reading fixed-length body (Content-Length)
+        RECV_CHUNK_SIZE,    //!< Reading chunk size line
+        RECV_CHUNK_DATA,    //!< Reading chunk payload + CRLF
+        RECV_CHUNK_CRLF,    //!< Reading trailer lines after last chunk
+        RECV_CLOSE,         //!< Reading until EOF (Connection: close)
+        DONE                //!< Body reading complete
+    };
+
+    //! Creates the body reader
+    /** @param xsink exception sink
+        @param sock the socket (will be ref'd)
+        @param status_code HTTP response status code (for no-body detection)
+        @param content_length Content-Length value (-1 = not present)
+        @param chunked true if Transfer-Encoding: chunked
+        @param connection_close true if Connection: close
+        @param is_head true if the request method was HEAD (no body)
+    */
+    DLLLOCAL SocketReadHttpBodyPollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
+            int status_code, int64_t content_length, bool chunked,
+            bool connection_close, bool is_head);
+
+    DLLLOCAL virtual ~SocketReadHttpBodyPollOperation();
+
+    DLLLOCAL void deref(ExceptionSink* xsink) {
+        if (ROdereference()) {
+            cleanup(xsink);
+            delete this;
+        }
+    }
+
+    DLLLOCAL virtual bool goalReached() const override {
+        return body_state == BodyState::DONE;
+    }
+
+    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
+    DLLLOCAL virtual void abort(ExceptionSink* xsink) override;
+    DLLLOCAL virtual QoreValue getOutput() const override;
+
+protected:
+    DLLLOCAL virtual const char* getStateImpl() const override;
+
+private:
+    QoreSocketObject* sock_obj;                     //!< ref'd socket
+    SocketPollOperationBase* current_op = nullptr;   //!< ref'd inner op
+    BinaryNode* body = nullptr;                      //!< accumulated body (ref'd)
+    BodyState body_state;
+    int64_t remaining = 0;                           //!< bytes remaining for Content-Length
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink);
+    DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);
+
+    // Sub-state handlers
+    DLLLOCAL QoreHashNode* handleRecvLength(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleRecvChunkSize(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleRecvChunkData(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleRecvChunkCrlf(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleRecvClose(ExceptionSink* xsink);
+
+    //! Create the initial inner op based on body mode
+    DLLLOCAL void startBodyRead(ExceptionSink* xsink);
+};
+
 class SocketUpgradeClientSslPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);

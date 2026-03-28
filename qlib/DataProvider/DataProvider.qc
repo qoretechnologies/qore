@@ -74,6 +74,9 @@ public class DataProvider {
     public {
         #! Map of known data provider factory names to modules
         const FactoryMap = {
+            # provided by the amqp module
+            "amqp": "AmqpDataProvider",
+
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
@@ -126,9 +129,6 @@ public class DataProvider {
             "geoswktwrite": "GEOSDataProvider",
 
             "gmail": "GmailDataProvider",
-
-            # provided by the amqp module
-            "amqp": "AmqpDataProvider",
 
             # provided by the grpc module
             "grpc": "GrpcDataProvider",

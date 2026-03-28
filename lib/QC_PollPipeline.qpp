@@ -77,6 +77,16 @@ void PollPipelinePriv::cleanup(ExceptionSink* xsink) {
     }
     string_data.clear();
 
+    for (auto& dop : delegate_ops) {
+        if (dop.op) {
+            dop.op->deref(xsink);
+        }
+        if (dop.obj) {
+            dop.obj->deref(xsink);
+        }
+    }
+    delegate_ops.clear();
+
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -127,6 +137,30 @@ int PollPipelinePriv::addRecvHeader() {
     return (int)steps.size() - 1;
 }
 
+int PollPipelinePriv::addReadHttpBody(const char* method) {
+    Step s;
+    s.type = StepType::READ_HTTP_BODY;
+    if (method && *method) {
+        s.target = method;  // reuse target field for HTTP method
+    }
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addDelegate(SocketPollOperationBase* op, QoreObject* op_obj) {
+    // Store the delegate op (ref'd)
+    op->ROreference();
+    op_obj->ref();
+    int idx = (int)delegate_ops.size();
+    delegate_ops.push_back({op, op_obj});
+
+    Step s;
+    s.type = StepType::DELEGATE;
+    s.delegate_idx = idx;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
 int PollPipelinePriv::addRecvExact(size_t size, bool as_string) {
     Step s;
     s.type = StepType::RECV_EXACT;
@@ -173,6 +207,25 @@ int PollPipelinePriv::addTransform(TransformFn transform) {
     s.transform = std::move(transform);
     steps.push_back(std::move(s));
     return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addValidateStatus(int lo, int hi, const char* err_code) {
+    std::string err(err_code);
+    return addTransform([lo, hi, err](Context& ctx, ExceptionSink* xsink) {
+        if (ctx.status_code < lo || ctx.status_code > hi) {
+            xsink->raiseException(err.c_str(),
+                "request failed with HTTP code %d (expected %d-%d)",
+                ctx.status_code, lo, hi);
+        }
+    });
+}
+
+int PollPipelinePriv::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
+    return addBranch(
+        [lo, hi](const Context& ctx) {
+            return ctx.status_code >= lo && ctx.status_code <= hi;
+        },
+        true_step, false_step);
 }
 
 int PollPipelinePriv::addDeliverResult() {
@@ -397,6 +450,61 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             return op.release();
         }
 
+        case StepType::READ_HTTP_BODY: {
+            // Extract transfer parameters from context (populated by RECV_HEADER)
+            bool chunked = false;
+            int64_t content_length = -1;
+            bool conn_close = false;
+            bool is_head = !step.target.empty()
+                && !strcasecmp(step.target.c_str(), "HEAD");
+
+            if (ctx.headers) {
+                // Check Transfer-Encoding: chunked
+                QoreValue te_val = ctx.headers->getKeyValue("transfer-encoding");
+                if (te_val.getType() == NT_STRING) {
+                    const char* te = te_val.get<const QoreStringNode>()->c_str();
+                    if (strcasestr(te, "chunked")) {
+                        chunked = true;
+                    }
+                }
+                // Check Content-Length
+                if (!chunked) {
+                    QoreValue cl_val = ctx.headers->getKeyValue("content-length");
+                    if (!cl_val.isNullOrNothing()) {
+                        content_length = cl_val.getAsBigInt();
+                    }
+                }
+                // Check Connection: close
+                QoreValue conn_val = ctx.headers->getKeyValue("connection");
+                if (conn_val.getType() == NT_STRING) {
+                    const char* conn = conn_val.get<const QoreStringNode>()->c_str();
+                    if (!strcasecmp(conn, "close")) {
+                        conn_close = true;
+                    }
+                }
+            }
+
+            sock_obj->ref();
+            ReferenceHolder<SocketReadHttpBodyPollOperation> op(
+                new SocketReadHttpBodyPollOperation(xsink, sock_obj,
+                    ctx.status_code, content_length, chunked, conn_close, is_head),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::DELEGATE: {
+            if (step.delegate_idx < 0 || step.delegate_idx >= (int)delegate_ops.size()) {
+                xsink->raiseException("POLL-PIPELINE-ERROR", "invalid delegate index");
+                return nullptr;
+            }
+            DelegateOp& dop = delegate_ops[step.delegate_idx];
+            dop.op->ROreference();  // extra ref for pipeline's current_op ownership
+            return dop.op;
+        }
+
         default:
             xsink->raiseException("POLL-PIPELINE-ERROR",
                 "step type %d is not an I/O operation", (int)step.type);
@@ -415,7 +523,7 @@ void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
     ctx.last_output.discard(xsink);
     ctx.last_output = out;  // takes ownership
 
-    // For RECV_HEADER: also extract status_code and headers
+    // For RECV_HEADER: extract status_code and headers into context
     if (steps[current_step].type == StepType::RECV_HEADER
             && out.getType() == NT_HASH) {
         QoreHashNode* h = out.get<QoreHashNode>();
@@ -427,6 +535,40 @@ void PollPipelinePriv::extractOutput(ExceptionSink* xsink) {
                 ctx.headers->deref(xsink);
             }
             ctx.headers = hdr->hashRefSelf();
+        }
+    }
+
+    // For READ_HTTP_BODY: store the body binary in context
+    if (steps[current_step].type == StepType::READ_HTTP_BODY
+            && out.getType() == NT_BINARY) {
+        if (ctx.body) {
+            ctx.body->deref(xsink);
+        }
+        ctx.body = out.get<BinaryNode>()->binRefSelf();
+    }
+
+    // For DELEGATE: extract HTTP response fields if the output is a response hash
+    // HTTPClient.startPollSendRecv returns {code, body, hdr, info, ...}
+    if (steps[current_step].type == StepType::DELEGATE
+            && out.getType() == NT_HASH) {
+        QoreHashNode* h = out.get<QoreHashNode>();
+        QoreValue code_val = h->getKeyValue("code");
+        if (!code_val.isNullOrNothing()) {
+            ctx.status_code = (int)code_val.getAsBigInt();
+        }
+        QoreValue hdr_val = h->getKeyValue("hdr");
+        if (hdr_val.getType() == NT_HASH) {
+            if (ctx.headers) {
+                ctx.headers->deref(xsink);
+            }
+            ctx.headers = hdr_val.get<QoreHashNode>()->hashRefSelf();
+        }
+        QoreValue body_val = h->getKeyValue("body");
+        if (body_val.getType() == NT_BINARY) {
+            if (ctx.body) {
+                ctx.body->deref(xsink);
+            }
+            ctx.body = body_val.get<BinaryNode>()->binRefSelf();
         }
     }
 }
@@ -515,6 +657,8 @@ const char* PollPipelinePriv::getStateImpl() const {
         case StepType::RECV_EXACT:  return "recv-exact";
         case StepType::RECV_UNTIL:  return "recv-until";
         case StepType::RECV_DATA:   return "recv-data";
+        case StepType::READ_HTTP_BODY: return "recv-body";
+        case StepType::DELEGATE:    return "delegate";
         case StepType::BRANCH:      return "branch";
         case StepType::TRANSFORM:   return "transform";
         case StepType::DELIVER_RESULT: return "deliver-result";
@@ -590,6 +734,20 @@ PollPipeline::constructor(Socket[QoreSocketObject] sock) {
     sock_ptr->ref();
     self->setPrivate(CID_POLLPIPELINE,
         new PollPipelinePriv(self, sock_ptr));
+}
+
+//! Creates a delegate-only pipeline (no socket required)
+/** Use this constructor when the pipeline only contains DELEGATE steps that
+    wrap existing poll operations. The delegate ops manage their own sockets.
+
+    @since %Qore 2.3
+*/
+PollPipeline::constructor() {
+    self->setMemberValue("goal", QC_POLLPIPELINE,
+        new QoreStringNode("poll_pipeline"), xsink);
+
+    self->setPrivate(CID_POLLPIPELINE,
+        new PollPipelinePriv(self, nullptr));
 }
 
 //! Destroys the object
@@ -671,6 +829,49 @@ int PollPipeline::addReadHttpHeader() [dom=NETWORK] {
     return priv->addRecvHeader();
 }
 
+//! Adds an HTTP body read step
+/** Auto-detects the body transfer mode from the context populated by a
+    preceding addReadHttpHeader() step (Content-Length, chunked TE, or
+    connection-close). Handles HEAD and no-body status codes automatically.
+
+    @param method the HTTP method (pass "HEAD" to skip body reading); default empty
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addReadHttpBody(*string method) [dom=NETWORK] {
+    return priv->addReadHttpBody(method ? method->c_str() : "");
+}
+
+//! Adds a delegate step that wraps an existing poll operation
+/** The pipeline delegates continuePoll to the wrapped operation until it
+    completes, then extracts its output into the pipeline context.
+
+    This enables composing high-level operations (like HTTPClient.startPollSendRecv)
+    as pipeline steps while keeping the I/O thread pure C++.
+
+    @param op the poll operation object (must have C++ SocketPollOperationBase private data)
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addDelegate(object op) [dom=NETWORK] {
+    // Extract the C++ SocketPollOperationBase from the Qore object
+    SocketPollOperationBase* spop = static_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(op)->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!spop) {
+        if (!*xsink) {
+            xsink->raiseException("POLL-PIPELINE-ERROR",
+                "delegate object does not have SocketPollOperationBase private data");
+        }
+        return -1;
+    }
+    // addDelegate takes its own refs; release the getReferencedPrivateData ref
+    int rv = priv->addDelegate(spop, const_cast<QoreObject*>(op));
+    spop->deref(xsink);
+    return rv;
+}
+
 //! Adds a fixed-size receive step
 /** @param size the number of bytes to receive
     @param as_string if True, return the data as a string
@@ -715,6 +916,22 @@ int PollPipeline::addDeliverResult() {
     return priv->addDeliverResult();
 }
 
+//! Adds a status-code validation step that throws if the code is out of range
+/** Checks the pipeline context's status_code (populated by DELEGATE or
+    RECV_HEADER steps). If the status code is not in the given range,
+    throws an exception with the given error code.
+
+    @param lo the lower bound (inclusive)
+    @param hi the upper bound (inclusive)
+    @param err_code the Qore exception error code
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addValidateStatus(int lo, int hi, string err) [dom=NETWORK] {
+    return priv->addValidateStatus((int)lo, (int)hi, err->c_str());
+}
+
 //! Adds a conditional branch step based on HTTP status code range
 /** @param lo the lower bound of the status code range (inclusive)
     @param hi the upper bound of the status code range (inclusive)
@@ -725,11 +942,7 @@ int PollPipeline::addDeliverResult() {
     @since %Qore 2.3
 */
 int PollPipeline::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
-    return priv->addBranch(
-        [lo, hi](const PollPipelinePriv::Context& ctx) {
-            return ctx.status_code >= lo && ctx.status_code <= hi;
-        },
-        (int)true_step, (int)false_step);
+    return priv->addBranchOnStatus((int)lo, (int)hi, (int)true_step, (int)false_step);
 }
 
 //! Sets a Promise as the result action
