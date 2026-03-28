@@ -32,7 +32,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreIR.h"
 
-#include <qore/Qore.h>
+#include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/qore_program_private.h"

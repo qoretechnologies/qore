@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
 
 #include <cstring>
@@ -141,17 +142,7 @@ static_assert(sizeof(QoreValue) == sizeof(uint64_t), "QoreValue must be 64 bits 
     #define QORE_ALWAYS_INLINE __attribute__((always_inline)) inline
 #endif
 
-static QORE_ALWAYS_INLINE QoreValue fromBits(uint64_t bits) {
-    QoreValue v;
-    std::memcpy(&v, &bits, sizeof(v));
-    return v;
-}
-
-static QORE_ALWAYS_INLINE uint64_t toBits(const QoreValue& v) {
-    uint64_t bits;
-    std::memcpy(&bits, &v, sizeof(bits));
-    return bits;
-}
+// toBits/fromBits are defined in QoreJITIncludes.h (shared with QoreIRInterpreter.cpp)
 
 // --- Reference counting helpers ---
 
@@ -358,7 +349,7 @@ extern "C" DLLEXPORT void qore_rt_request_jit_deopt(void* deopt_counter_ptr) {
     }
 }
 
-bool qore_jit_deopt_requested() {
+DLLLOCAL bool qore_jit_deopt_requested() {
     bool val = tl_jit_deopt_requested;
     tl_jit_deopt_requested = false;
     return val;
@@ -5209,7 +5200,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t bas
 
 // Fallback for unresolved method calls: use the pre-evaluated args
 // from LLVM with a name-based runtime method dispatch
-static uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
+DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method_name,
         uint64_t* args, int nargs, ExceptionSink* xsink) {
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     if (*xsink) {

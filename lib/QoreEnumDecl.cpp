@@ -200,7 +200,9 @@ int qore_enum_decl_private::parseInit() {
             ExceptionSink xsink;
             ValueEvalOptimizedRefHolder v(val, &xsink);
             if (xsink) {
-                qore_program_private::addParseException(getProgram(), xsink);
+                // Use parse_error since qore_program_private.h has circular include deps
+                parse_error(QoreProgramLocation(), "enum member expression evaluation failed");
+                xsink.clear();
                 err = -1;
                 continue;
             }

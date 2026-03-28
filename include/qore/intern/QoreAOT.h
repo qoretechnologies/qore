@@ -40,6 +40,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <qore/QoreParseOptions.h>
+#include "qore/intern/AbstractStatement.h"
 #include "qore/intern/QoreAOTBinary.h"
 
 class AbstractQoreFunctionVariant;

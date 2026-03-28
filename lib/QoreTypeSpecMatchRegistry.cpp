@@ -28,8 +28,13 @@
     LICENSE.LGPL and LICENSE.MIT in the source code directory for details.
 */
 
+#include <qore/Qore.h>
 #include "qore/intern/QoreTypeInfo.h"
 #include "qore/intern/QoreTypeSpecMatchRegistry.h"
+
+// Defined in QoreTypeInfo.cpp — used by match handlers
+DLLLOCAL qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
+    bool& may_not_match, bool& may_need_filter);
 
 // Include all handler functions
 #include "QoreTypeSpecMatchHandlers.cpp"

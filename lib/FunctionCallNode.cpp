@@ -33,6 +33,7 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/RuntimeConfig.h"
+#include "qore/intern/qore_list_private.h"
 
 #include <vector>
 

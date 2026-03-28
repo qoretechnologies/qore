@@ -41,6 +41,9 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <qore/QoreValue.h>
+#include <qore/QoreEnumDecl.h>
+#include <qore/TypedHashDecl.h>
 
 class AbstractQoreNode;
 class QoreValue;

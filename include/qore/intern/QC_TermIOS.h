@@ -32,6 +32,11 @@
 #ifndef _QORE_QC_TERMIOS_H
 #define _QORE_QC_TERMIOS_H
 
+#include <qore/common.h>
+
+class QoreClass;
+class QoreNamespace;
+
 DLLLOCAL extern QoreClass *QC_TERMIOS;
 DLLEXPORT extern qore_classid_t CID_TERMIOS;
 DLLLOCAL QoreClass *initTermIOSClass(QoreNamespace& ns);

@@ -1324,7 +1324,7 @@ const char* getBuiltinTypeName(qore_type_t type) {
 }
 
 // only called for complex hashes and lists
-static qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
+qore_type_result_e match_type(const QoreTypeInfo* this_type, const QoreTypeInfo* that_type,
         bool& may_not_match, bool& may_need_filter) {
     //printd(5, "match_type() '%s' <- '%s'\n", QoreTypeInfo::getName(this_type), QoreTypeInfo::getName(that_type));
     qore_type_result_e res = QoreTypeInfo::parseAccepts(this_type, that_type, may_not_match, may_need_filter);

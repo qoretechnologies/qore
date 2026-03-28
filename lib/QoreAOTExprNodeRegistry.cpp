@@ -29,6 +29,7 @@
 */
 
 // Include all handler implementations
+#include "qore/intern/QoreJITIncludes.h"
 #include "QoreAOTExprNodeHandlers.cpp"
 
 // 256-entry registry table (one entry per possible uint8_t value)

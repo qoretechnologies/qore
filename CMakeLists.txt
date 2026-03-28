@@ -1036,6 +1036,20 @@ set(LIBQORE_CPP_SRC
     lib/QoreTypeInfo.cpp
     lib/QoreTypeSpecMatchRegistry.cpp
     lib/QoreIRExprRegistry.cpp
+    lib/JITRuntime.cpp
+    lib/QoreIRInterpreter.cpp
+    lib/QoreIRBuilder.cpp
+    lib/QoreIRLowering.cpp
+    lib/QoreIRToLLVM.cpp
+    lib/QoreIRVerifier.cpp
+    lib/QoreAOT.cpp
+    lib/QoreAOTRuntime.cpp
+    lib/QoreAOTBinary.cpp
+    lib/QoreAOTInstRegistry.cpp
+    lib/QoreAOTExprRegistry.cpp
+    lib/QoreAOTExprSlotRegistry.cpp
+    lib/QoreAOTExprNodeRegistry.cpp
+    lib/QoreIRPrinter.cpp
     lib/QoreDeleteOperatorNode.cpp
     lib/QoreRemoveOperatorNode.cpp
     lib/QoreSpliceOperatorNode.cpp

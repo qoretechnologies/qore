@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRPrinter.h>
 
 #include <ostream>

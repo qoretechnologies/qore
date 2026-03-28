@@ -33,7 +33,7 @@
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreDir.h"
 
-#include <qore/Qore.h>
+#include "qore/intern/QoreJITIncludes.h"
 #include <chrono>
 #include <qore/QoreEnumDecl.h>
 

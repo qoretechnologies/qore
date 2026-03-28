@@ -29,6 +29,7 @@
   information.
 */
 
+#include <qore/Qore.h>
 #include "qore/intern/QC_TermIOS.h"
 
 #ifdef HAVE_TERMIOS_H

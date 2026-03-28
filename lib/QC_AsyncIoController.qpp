@@ -35,6 +35,7 @@
 #include "qore/intern/QC_Socket.h"
 
 extern qore_classid_t CID_QUEUE;
+extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_QUEUE;
 
 // Helper: get the singleton's priv data and QoreObject (both ref'd); caller must deref both

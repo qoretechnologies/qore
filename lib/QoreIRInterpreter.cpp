@@ -5,6 +5,7 @@
     Qore Programming Language
 */
 
+#include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRInterpreter.h>
 
 #include <algorithm>

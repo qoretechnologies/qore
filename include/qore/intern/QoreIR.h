@@ -42,12 +42,19 @@
 #include <utility>
 #include <vector>
 
-#include <qore/QoreValue.h>
+#include <qore/Qore.h>
 
-class QoreProgramLocation;
 class LocalVar;
 class Var;
+class VarRefNode;
+class VarRefNewObjectNode;
 class OnBlockExitStatement;
+class QoreFunction;
+class UserVariantBase;
+class StatementBlock;
+class CaseNodeRegex;
+class QoreIRFunction;
+class FunctionalOperator;
 class ContextStatement;
 class SummarizeStatement;
 class CaseNode;

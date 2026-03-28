@@ -42,6 +42,10 @@
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 
+#ifndef QORE_IO_POLL_INTERVAL_MS
+#define QORE_IO_POLL_INTERVAL_MS 500
+#endif
+
 #include <pthread.h>
 #include <thread>
 #include <random>

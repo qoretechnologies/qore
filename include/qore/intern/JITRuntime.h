@@ -661,6 +661,15 @@ uint64_t qore_rt_switch_case_match(const void* case_node_ptr, uint64_t switch_va
 //! Returns address of thread-local pointer (cast to void** for C ABI compatibility)
 void** qore_rt_get_ir_slot_cache_ptr();
 
+//! Call a closure/call reference with 0 arguments
+uint64_t qore_rt_call_closure_0(uint64_t ref_bits, ExceptionSink* xsink);
+
+//! Call a closure/call reference with 1 argument
+uint64_t qore_rt_call_closure_1(uint64_t ref_bits, uint64_t arg0_bits, ExceptionSink* xsink);
+
+//! Call a closure/call reference with N arguments (fast path, pre-evaluated args)
+uint64_t qore_rt_call_closure_fast(uint64_t ref_bits, uint64_t* args, int nargs, ExceptionSink* xsink);
+
 } // extern "C"
 
 #endif

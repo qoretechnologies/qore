@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRBuilder.h>
 
 QoreIRBuilder::QoreIRBuilder(QoreIRFunction* n_func) : func(n_func) {

@@ -29,7 +29,7 @@
     information.
 */
 
-#include <qore/Qore.h>
+#include "qore/intern/QoreJITIncludes.h"
 
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
@@ -170,12 +170,7 @@ extern std::string getVariantKey(const char* name, const AbstractQoreFunctionVar
 
 // ---- Slot Map Context Builder (V2 — no IR re-lowering) ----
 
-//! Helper to convert a QoreValue to NaN-boxed bits
-static inline uint64_t toBitsNB(QoreValue v) {
-    uint64_t bits;
-    memcpy(&bits, &v, sizeof(bits));
-    return bits;
-}
+// toBitsNB is defined in QoreJITIncludes.h (shared with other JIT files)
 
 
 //! Resolve an expression slot identity to NaN-boxed QoreValue bits

@@ -30,6 +30,8 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSSLCertificate.h>
+#include <qore/QoreSSLPrivateKey.h>
 
 #include "qore/intern/QuicSession.h"
 

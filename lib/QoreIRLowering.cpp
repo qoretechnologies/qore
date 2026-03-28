@@ -6,6 +6,7 @@
 */
 
 
+#include "qore/intern/QoreJITIncludes.h"
 #include <qore/intern/QoreIRLowering.h>
 #include <qore/intern/QoreOpcodeRegistry.h>
 

@@ -29,6 +29,7 @@
     information.
 */
 
+#include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/QoreValue.h"
