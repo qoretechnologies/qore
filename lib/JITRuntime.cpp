@@ -4939,6 +4939,10 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     if (!variant) {
         return false;
     }
+    // copy() must go through dispatch_method_on_object → execCopy to create a new object
+    if (!strcmp(method->getName(), "copy")) {
+        return false;
+    }
     const UserVariantBase* uvb = variant->getUserVariantBase();
     if (!uvb) {
         // Builtin method — fall back to slow path for proper soft type coercion
@@ -5085,6 +5089,11 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
 static uint64_t dispatch_method_on_object(QoreObject* o, const QoreMethod* method,
         const QoreClass* qc, const AbstractQoreFunctionVariant* variant,
         QoreListNode* arg_list, ExceptionSink* xsink) {
+    // copy() is a special operation that creates a new object — must use execCopy,
+    // not regular method dispatch which would call the copy variant as a normal method
+    if (!strcmp(method->getName(), "copy")) {
+        return toBits(o->getClass()->execCopy(o, xsink));
+    }
     if (o->getClass() == qc || o->getClass() == method->getClass()) {
         if (!o->isValid()) {
             xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call %s::%s() on an object that has "
@@ -5210,6 +5219,10 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
     // For objects, use name-based method lookup with evalTmpArgs to preserve references
     if (base.getType() == NT_OBJECT) {
         QoreObject* o = const_cast<QoreObject*>(reinterpret_cast<const QoreObject*>(base.getInternalNode()));
+        // copy() must go through execCopy to create a new object
+        if (!strcmp(method_name, "copy")) {
+            return toBits(o->getClass()->execCopy(o, xsink));
+        }
         const qore_class_private* class_ctx = runtime_get_class();
         const qore_class_private* priv = qore_class_private::get(*o->getClass());
         const QoreMethod* w = priv->getMethodForEval(method_name, o->getProgram(), class_ctx, xsink);

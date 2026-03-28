@@ -6839,7 +6839,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // (null class/method). For unresolved methods, the runtime dispatches by name using the
     // embedded expression. This is essential for AOT correctness: DotEvalAny evaluates args
     // from the EXPR_TREE which reads locals from TLS, but IR-only locals aren't on TLS.
-    // Exclude copy() calls (getRawName() == nullptr means it's a copy call).
+    // copy() calls have getRawName() == nullptr but DO have method+class resolved.
     MethodCallNode* m = op->getMethodCall();
     if (m->getRawName()) {
         // Lower arguments
