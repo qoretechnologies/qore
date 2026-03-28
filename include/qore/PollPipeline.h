@@ -73,6 +73,8 @@ public:
         RECV_DATA,
         READ_HTTP_BODY,
         DELEGATE,
+        SEND_FROM_CONTEXT,
+        RECV_LINE_RESPONSE,
         BRANCH,
         TRANSFORM,
         DELIVER_RESULT
@@ -197,6 +199,32 @@ public:
 
     //! Adds a WebSocket Sec-WebSocket-Accept key validation transform
     DLLEXPORT int addValidateWebSocketAccept(const char* ws_key, const char* err_code);
+
+    // --- Context-reactive steps ---
+
+    //! Sends data from a named context slot (ctx.extra[key])
+    DLLEXPORT int addSendFromContext(const char* context_key);
+
+    //! Reads lines until a non-continuation response (e.g., "250 " not "250-")
+    /** Stores reply code and accumulated text in named context slots.
+        Used for SMTP/POP3 multi-line responses.
+    */
+    DLLEXPORT int addRecvLineResponse(const char* code_key, const char* text_key, const char* err_code);
+
+    //! Branches on whether a context extra key is truthy
+    DLLEXPORT int addBranchOnContextKey(const char* key, int true_step, int false_step);
+
+    //! Branches on whether a context extra string key equals a value
+    DLLEXPORT int addBranchOnContextValue(const char* key, const char* value, int true_step, int false_step);
+
+    //! Sets a string value in context extra
+    DLLEXPORT int addSetContextValue(const char* key, const char* value);
+
+    //! Sets binary data in context extra (for SEND_FROM_CONTEXT)
+    DLLEXPORT int addSetContextBinary(const char* key, BinaryNode* data);
+
+    //! Checks if a context string contains a substring (case-insensitive) and stores bool result
+    DLLEXPORT int addCheckContains(const char* source_key, const char* substring, const char* result_key);
 
     //! Adds a result delivery step
     DLLEXPORT int addDeliverResult();

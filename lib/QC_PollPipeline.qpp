@@ -316,6 +316,112 @@ int PollPipelinePriv::addDeliverResult() {
     return (int)steps.size() - 1;
 }
 
+int PollPipelinePriv::addSendFromContext(const char* context_key) {
+    Step s;
+    s.type = StepType::SEND_FROM_CONTEXT;
+    s.target = context_key;  // reuse target field for context key name
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addRecvLineResponse(const char* code_key, const char* text_key,
+        const char* err_code) {
+    // Store text_key and err_code in the string_data table
+    int text_idx = (int)string_data.size();
+    string_data.push_back(new QoreStringNode(text_key));
+    int err_idx = (int)string_data.size();
+    string_data.push_back(new QoreStringNode(err_code));
+
+    Step s;
+    s.type = StepType::RECV_LINE_RESPONSE;
+    s.target = code_key;       // reuse target for code_key
+    s.pattern_idx = text_idx;  // reuse pattern_idx for text_key index
+    s.data_idx = err_idx;      // reuse data_idx for err_code index
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addBranchOnContextKey(const char* key, int true_step, int false_step) {
+    std::string k(key);
+    return addBranch(
+        [k](const Context& ctx) {
+            if (!ctx.extra) {
+                return false;
+            }
+            QoreValue v = ctx.extra->getKeyValue(k.c_str());
+            return v.getAsBool();
+        },
+        true_step, false_step);
+}
+
+int PollPipelinePriv::addBranchOnContextValue(const char* key, const char* value,
+        int true_step, int false_step) {
+    std::string k(key);
+    std::string val(value);
+    return addBranch(
+        [k, val](const Context& ctx) {
+            if (!ctx.extra) {
+                return false;
+            }
+            QoreValue v = ctx.extra->getKeyValue(k.c_str());
+            if (v.getType() != NT_STRING) {
+                return false;
+            }
+            return strcmp(v.get<const QoreStringNode>()->c_str(), val.c_str()) == 0;
+        },
+        true_step, false_step);
+}
+
+int PollPipelinePriv::addSetContextValue(const char* key, const char* value) {
+    std::string k(key);
+    std::string val(value);
+    return addTransform([k, val](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        ctx.extra->setKeyValue(k.c_str(), new QoreStringNode(val.c_str()), xsink);
+    });
+}
+
+int PollPipelinePriv::addSetContextBinary(const char* key, BinaryNode* data) {
+    std::string k(key);
+    data->ref();  // take a ref for the lambda capture
+    // Use shared_ptr to manage the binary in the lambda
+    auto data_ptr = std::shared_ptr<BinaryNode>(data, [](BinaryNode* b) {
+        ExceptionSink xsink;
+        b->deref(&xsink);
+    });
+    return addTransform([k, data_ptr](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        ctx.extra->setKeyValue(k.c_str(), data_ptr->binRefSelf(), xsink);
+    });
+}
+
+int PollPipelinePriv::addCheckContains(const char* source_key, const char* substring,
+        const char* result_key) {
+    std::string src(source_key);
+    std::string sub(substring);
+    std::string res(result_key);
+    return addTransform([src, sub, res](Context& ctx, ExceptionSink* xsink) {
+        if (!ctx.extra) {
+            ctx.extra = new QoreHashNode(autoTypeInfo);
+        }
+        bool found = false;
+        QoreValue v = ctx.extra->getKeyValue(src.c_str());
+        if (v.getType() == NT_STRING) {
+            found = strcasestr(v.get<const QoreStringNode>()->c_str(), sub.c_str()) != nullptr;
+        }
+        // Also check ctx.last_output if source not in extra
+        if (!found && ctx.last_output.getType() == NT_STRING) {
+            found = strcasestr(ctx.last_output.get<const QoreStringNode>()->c_str(),
+                sub.c_str()) != nullptr;
+        }
+        ctx.extra->setKeyValue(res.c_str(), found, xsink);
+    });
+}
+
 void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
     assert(action);
     if (result_action) {
@@ -352,7 +458,113 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                     return nullptr;
                 }
                 releaseCurrentOp(xsink);
-                // Advance to next step
+
+                // Special handling for RECV_LINE_RESPONSE: check for continuation lines
+                if (steps[current_step].type == StepType::RECV_LINE_RESPONSE) {
+                    if (ctx.last_output.getType() == NT_STRING) {
+                        const QoreStringNode* line = ctx.last_output.get<const QoreStringNode>();
+                        const char* str = line->c_str();
+                        size_t len = line->size();
+
+                        // Strip trailing \r\n
+                        if (len >= 1 && str[len - 1] == '\n') {
+                            --len;
+                        }
+                        if (len >= 1 && str[len - 1] == '\r') {
+                            --len;
+                        }
+
+                        // Accumulate line text
+                        QoreValue accum_val = ctx.extra->getKeyValue("_line_response_accum");
+                        if (accum_val.getType() == NT_STRING) {
+                            // NOTE: accum is owned by the hash; modify via copy-on-write
+                            QoreStringNode* accum =
+                                const_cast<QoreStringNode*>(accum_val.get<const QoreStringNode>());
+                            if (accum->size() > 0) {
+                                accum->concat('\n');
+                            }
+                            accum->concat(str, len);
+                        }
+
+                        // Check continuation: line[3] == '-' means more lines follow
+                        bool continuation = (len >= 4 && str[3] == '-');
+
+                        if (continuation) {
+                            // Read another line without advancing the step
+                            sock_obj->ref();
+                            SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+                            current_op = new SocketRecvUntilBytesPollOperation(
+                                xsink, *pattern, sock_obj, true);
+                            if (*xsink) {
+                                return nullptr;
+                            }
+                            current_op->setSelf(*self);
+                            continue;  // loop back to delegate to new inner op
+                        }
+
+                        // Final line — extract reply code and store results
+                        const Step& step = steps[current_step];
+                        int code = 0;
+                        if (len >= 3) {
+                            char code_buf[4] = {str[0], str[1], str[2], '\0'};
+                            code = atoi(code_buf);
+                        }
+
+                        // Store code in ctx.extra[code_key]
+                        ctx.extra->setKeyValue(step.target.c_str(), code, xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+
+                        // Store accumulated text in ctx.extra[text_key]
+                        if (step.pattern_idx >= 0
+                                && step.pattern_idx < (int)string_data.size()) {
+                            QoreValue accum_val2 =
+                                ctx.extra->getKeyValue("_line_response_accum");
+                            if (accum_val2.getType() == NT_STRING) {
+                                ctx.extra->setKeyValue(
+                                    string_data[step.pattern_idx]->c_str(),
+                                    accum_val2.get<const QoreStringNode>()->stringRefSelf(),
+                                    xsink);
+                                if (*xsink) {
+                                    return nullptr;
+                                }
+                            }
+                        }
+
+                        // Check for error response (code >= 400 or < 100)
+                        if (step.data_idx >= 0
+                                && step.data_idx < (int)string_data.size()) {
+                            if (code >= 400 || code < 100) {
+                                QoreValue text_val =
+                                    ctx.extra->getKeyValue("_line_response_accum");
+                                const char* text = text_val.getType() == NT_STRING
+                                    ? text_val.get<const QoreStringNode>()->c_str()
+                                    : "unknown error";
+                                xsink->raiseException(
+                                    string_data[step.data_idx]->c_str(),
+                                    "server returned error code %d: %s", code, text);
+                                return nullptr;
+                            }
+                        }
+
+                        // Clean up the internal accumulator key
+                        ctx.extra->removeKey("_line_response_accum", xsink);
+                        if (*xsink) {
+                            return nullptr;
+                        }
+                    }
+
+                    // Advance past RECV_LINE_RESPONSE step
+                    if (steps[current_step].next_step >= 0) {
+                        current_step = steps[current_step].next_step;
+                    } else {
+                        ++current_step;
+                    }
+                    continue;
+                }
+
+                // Normal step advance
                 if (steps[current_step].next_step >= 0) {
                     current_step = steps[current_step].next_step;
                 } else {
@@ -591,6 +803,56 @@ SocketPollOperationBase* PollPipelinePriv::createInnerOp(const Step& step,
             return dop.op;
         }
 
+        case StepType::SEND_FROM_CONTEXT: {
+            if (!ctx.extra) {
+                xsink->raiseException("POLL-PIPELINE-ERROR",
+                    "no context data for SEND_FROM_CONTEXT");
+                return nullptr;
+            }
+            QoreValue data = ctx.extra->getKeyValue(step.target.c_str());
+            BinaryNode* bin = nullptr;
+            if (data.getType() == NT_BINARY) {
+                bin = data.get<BinaryNode>()->binRefSelf();
+            } else if (data.getType() == NT_STRING) {
+                const QoreStringNode* str = data.get<const QoreStringNode>();
+                bin = new BinaryNode();
+                bin->append(str->c_str(), str->size());
+            } else {
+                xsink->raiseException("POLL-PIPELINE-ERROR",
+                    "context key '%s' has type '%s', expected string or binary",
+                    step.target.c_str(), data.getFullTypeName());
+                return nullptr;
+            }
+            sock_obj->ref();
+            ReferenceHolder<SocketSendPollOperation> op(
+                new SocketSendPollOperation(xsink, bin, sock_obj), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
+        case StepType::RECV_LINE_RESPONSE: {
+            // Initialize accumulator in ctx.extra
+            if (!ctx.extra) {
+                ctx.extra = new QoreHashNode(autoTypeInfo);
+            }
+            ctx.extra->setKeyValue("_line_response_accum", new QoreStringNode(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+
+            sock_obj->ref();
+            SimpleRefHolder<QoreStringNode> pattern(new QoreStringNode("\r\n"));
+            ReferenceHolder<SocketRecvUntilBytesPollOperation> op(
+                new SocketRecvUntilBytesPollOperation(xsink, *pattern, sock_obj, true),
+                xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            return op.release();
+        }
+
         default:
             xsink->raiseException("POLL-PIPELINE-ERROR",
                 "step type %d is not an I/O operation", (int)step.type);
@@ -705,6 +967,9 @@ QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) {
     if (!ctx.last_output.isNullOrNothing()) {
         h->setKeyValue("output", ctx.last_output.refSelf(), xsink);
     }
+    if (ctx.extra) {
+        h->setKeyValue("extra", ctx.extra->hashRefSelf(), xsink);
+    }
     return h.release();
 }
 
@@ -755,6 +1020,8 @@ const char* PollPipelinePriv::getStateImpl() const {
         case StepType::RECV_DATA:   return "recv-data";
         case StepType::READ_HTTP_BODY: return "recv-body";
         case StepType::DELEGATE:    return "delegate";
+        case StepType::SEND_FROM_CONTEXT: return "send-context";
+        case StepType::RECV_LINE_RESPONSE: return "recv-line-response";
         case StepType::BRANCH:      return "branch";
         case StepType::TRANSFORM:   return "transform";
         case StepType::DELIVER_RESULT: return "deliver-result";
@@ -1083,6 +1350,135 @@ int PollPipeline::addValidateStatus(int lo, int hi, string err) [dom=NETWORK] {
 */
 int PollPipeline::addBranchOnStatus(int lo, int hi, int true_step, int false_step) {
     return priv->addBranchOnStatus((int)lo, (int)hi, (int)true_step, (int)false_step);
+}
+
+//! Adds a send step that sends data from a named context extra slot
+/** The context extra hash must contain the named key with a string or
+    binary value. This enables sending dynamic data computed by earlier
+    steps (e.g., EHLO command with a dynamic hostname).
+
+    @param context_key the key in ctx.extra whose value to send
+    @return the step index
+
+    @throw POLL-PIPELINE-ERROR if the context key is missing or has wrong type
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSendFromContext(string context_key) [dom=NETWORK] {
+    return priv->addSendFromContext(context_key->c_str());
+}
+
+//! Adds a multi-line protocol response reader step
+/** Reads lines terminated by CRLF until a non-continuation line is found.
+    Continuation lines have a '-' at position 3 (e.g., "250-PIPELINING"),
+    while the final line has a space (e.g., "250 OK").
+
+    The reply code (first 3 chars as int) is stored in ctx.extra[code_key],
+    and the accumulated text in ctx.extra[text_key]. If the code indicates
+    an error (>= 400 or < 100), an exception is raised with the given
+    error code.
+
+    Used for SMTP, POP3, and similar line-oriented protocols.
+
+    @param code_key the context extra key for the numeric reply code
+    @param text_key the context extra key for the accumulated response text
+    @param err_code the exception error code for error responses
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addRecvLineResponse(string code_key, string text_key, string err_code) [dom=NETWORK] {
+    return priv->addRecvLineResponse(code_key->c_str(), text_key->c_str(), err_code->c_str());
+}
+
+//! Adds a branch step based on whether a context extra key is truthy
+/** Evaluates the value in ctx.extra[key] as a boolean. Jumps to true_step
+    if truthy, false_step otherwise.
+
+    @param key the context extra key to check
+    @param true_step the step index if the value is truthy
+    @param false_step the step index if the value is falsy
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnContextKey(string key, int true_step, int false_step) {
+    return priv->addBranchOnContextKey(key->c_str(), (int)true_step, (int)false_step);
+}
+
+//! Adds a branch step based on whether a context extra string equals a value
+/** Compares ctx.extra[key] (must be a string) against the expected value
+    using exact string comparison. Jumps to true_step on match, false_step
+    otherwise.
+
+    @param key the context extra key to check
+    @param value the expected string value
+    @param true_step the step index on match
+    @param false_step the step index on mismatch
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnContextValue(string key, string value, int true_step, int false_step) {
+    return priv->addBranchOnContextValue(key->c_str(), value->c_str(),
+        (int)true_step, (int)false_step);
+}
+
+//! Adds a transform step that sets a string value in the context extra hash
+/** @param key the context extra key to set
+    @param value the string value to store
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSetContextValue(string key, string value) {
+    return priv->addSetContextValue(key->c_str(), value->c_str());
+}
+
+//! Adds a transform step that sets binary data in the context extra hash
+/** The data can be string or binary. Strings are stored as binary.
+    Use with addSendFromContext() to prepare dynamic send data.
+
+    @param key the context extra key to set
+    @param value the data to store (string or binary)
+    @return the step index
+
+    @throw POLL-PIPELINE-ERROR if the data type is invalid
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addSetContextBinary(string key, data value) {
+    BinaryNode* bin;
+    if (value.getType() == NT_BINARY) {
+        bin = value.get<BinaryNode>()->binRefSelf();
+    } else if (value.getType() == NT_STRING) {
+        const QoreStringNode* str = value.get<const QoreStringNode>();
+        bin = new BinaryNode();
+        bin->append(str->c_str(), str->size());
+    } else {
+        xsink->raiseException("POLL-PIPELINE-ERROR",
+            "data must be string or binary, got type '%s'",
+            value.getFullTypeName());
+        return -1;
+    }
+    return priv->addSetContextBinary(key->c_str(), bin);
+}
+
+//! Adds a transform step that checks if a context string contains a substring
+/** Performs a case-insensitive search for @a substring in the value at
+    ctx.extra[source_key] (or ctx.last_output as fallback). Stores the
+    boolean result in ctx.extra[result_key].
+
+    @param source_key the context extra key containing the string to search
+    @param substring the substring to search for (case-insensitive)
+    @param result_key the context extra key for the boolean result
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addCheckContains(string source_key, string substring, string result_key) {
+    return priv->addCheckContains(source_key->c_str(), substring->c_str(),
+        result_key->c_str());
 }
 
 //! Sets a Promise as the result action
