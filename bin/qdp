@@ -1585,7 +1585,7 @@ class QdpCmd {
         }
 
         auto resp = provider.doRequest(req, options);
-        if (!opts.verbose && resp.info."response-uri" && exists resp.body) {
+        if (!opts.verbose && resp.hasKey("info") && resp.info."response-uri" && exists resp.body) {
             if (opts.json || opts.yaml) {
                 output(resp.body);
             } else {
