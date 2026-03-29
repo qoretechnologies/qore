@@ -119,6 +119,9 @@ public class DataProvider {
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            # provided by the jni module
+            "flyway": "FlywayDataProvider",
+
             "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "gemini": "GeminiDataProvider",
