@@ -4667,7 +4667,6 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     */
     #! @cond nodoc
     public onPollComplete() {
-        @debug(stderr.printf("WS onPollComplete: hasReceivedFrames=%y\n", hasReceivedFrames()));
         drainRecvQueue();
     }
     #! @endcond

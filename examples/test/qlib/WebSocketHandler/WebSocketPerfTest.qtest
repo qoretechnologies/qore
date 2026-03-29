@@ -558,6 +558,10 @@ class WebSocketPerfTest inherits QUnit::Test {
 
         senders_done.waitForZero(10s);
 
+        # Disconnect before assertions to ensure the delivery thread exits
+        # before local variables (Mutex m) go out of scope
+        wsc.disconnect();
+
         assertEq(msg_count, received,
             sprintf("all %d echoes should be received", msg_count));
 
