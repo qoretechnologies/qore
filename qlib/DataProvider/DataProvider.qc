@@ -253,6 +253,8 @@ public class DataProvider {
             "unleashed": "UnleashedDataProvider",
 
             # provided by the jni module
+            "avroread": "AvroDataProvider",
+            "avrowrite": "AvroDataProvider",
             "vcfread": "VcfDataProvider",
             "vcfwrite": "VcfDataProvider",
 
