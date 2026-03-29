@@ -125,6 +125,14 @@ public class HttpClientConnectionManager {
             lookup.  This avoids acquiring pool_lock from the I/O thread.
         */
         Queue pending_alt_svc();
+
+        #! Counter tracking in-flight I/O callbacks
+        /** Incremented before submitting a poll operation, decremented when
+            the callback completes (or on submission failure).  closeAll()
+            waits for this counter to reach zero so that the destructor does
+            not destroy pool_lock while a callback still holds it.
+        */
+        Counter callback_counter();
     }
 
     #! Creates a new connection manager with the given options
@@ -453,6 +461,11 @@ public class HttpClientConnectionManager {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
+
+        # Wait for any in-flight I/O callbacks to complete before
+        # destroying pool_lock; without this, a callback on the I/O
+        # thread can still hold pool_lock when the destructor runs
+        callback_counter.waitForZero();
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
@@ -867,22 +880,30 @@ public class HttpClientConnectionManager {
                 conn.getProtocol(), conn.getConnectionId(), key);
         }
 
-        controller.submit(<SocketPollOperationInfo>{
-            "sock": sock,
-            "spop": op,
-            "owner": owner,
-            "to": -1s,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                handleConnectionResult(key, conn, result);
-            },
-        });
+        callback_counter.inc();
+        try {
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": sock,
+                "spop": op,
+                "owner": owner,
+                "to": -1s,
+                "callback": sub (hash<SocketPollResultInfo> result) {
+                    on_exit callback_counter.dec();
+                    handleConnectionResult(key, conn, result);
+                },
+            });
+        } catch () {
+            callback_counter.dec();
+            rethrow;
+        }
     }
 
     #! Internal: handles connection result from controller callback
     private handleConnectionResult(string key, HttpClientConnection conn,
             hash<SocketPollResultInfo> result) {
-        if (result.canceled) {
-            log(LoggerLevel::DEBUG, "connection %d canceled", conn.getConnectionId());
+        if (result.canceled || shutdown) {
+            log(LoggerLevel::DEBUG, "connection %d %s", conn.getConnectionId(),
+                result.canceled ? "canceled" : "shutdown");
             return;
         }
 
@@ -929,6 +950,12 @@ public class HttpClientConnectionManager {
 
         if (conn.isDraining()) {
             log(LoggerLevel::DEBUG, "connection %d is draining (GOAWAY received)", conn.getConnectionId());
+        }
+
+        if (shutdown) {
+            try { conn.close(); } catch () {}
+            removeConnectionFromPool(key, conn);
+            return;
         }
 
         try {
