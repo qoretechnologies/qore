@@ -174,6 +174,7 @@ DLLLOCAL QoreClass* initHttpKeepAlivePollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpAcceptPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp2PollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpWebSocketPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initWebSocketClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initPollPipelineClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp1ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& ns);
@@ -1332,6 +1333,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initHttp2PollOperationBaseClass(qns));
     // HttpWebSocketPollOperationBase must be after SocketPollOperationBase
     qns.addSystemClass(initHttpWebSocketPollOperationBaseClass(qns));
+    // WebSocketClientPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initWebSocketClientPollOperationBaseClass(qns));
     // PollPipeline must be after SocketPollOperationBase
     qns.addSystemClass(initPollPipelineClass(qns));
     // Http{1,2,3}ClientPollOperationBase must be after SocketPollOperationBase and AbstractHttpPollConnection

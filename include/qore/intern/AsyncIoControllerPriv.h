@@ -77,6 +77,7 @@ public:
         DT_CALLBACK,        //!< Call a code reference with args (timer callbacks)
         DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
         DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
+        DT_POLL_COMPLETE_NOTIFY, //!< Call onPollComplete() on spop_obj (WebSocket frame arrival notification)
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -133,6 +134,15 @@ public:
         @param stream_id the HTTP/2 stream ID that received data
     */
     DLLLOCAL void dispatchStreamDataAsync(QoreObject* spop_obj, int32_t stream_id);
+
+    //! Dispatch onPollComplete() asynchronously (fire-and-forget)
+    /** Called by the I/O thread after WebSocketClientPollOperationBase::continuePoll()
+        pushes frames to the recv_queue. The worker thread calls onPollComplete()
+        which the Qore subclass overrides to schedule delivery.
+
+        @param spop_obj the WebSocketClientPollOperationBase object (referenced — ownership transferred)
+    */
+    DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);

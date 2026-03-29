@@ -173,4 +173,7 @@ private:
     uint8_t first_rsv = 0;
 };
 
+//! Default maximum WebSocket frame/message payload size (16 MB)
+constexpr size_t WS_DEFAULT_MAX_FRAME_SIZE = 16 * 1024 * 1024;
+
 #endif // _QORE_WEBSOCKETFRAMECODEC_H

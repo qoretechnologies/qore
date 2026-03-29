@@ -35,6 +35,7 @@
 
 #include <qore/SocketPollOperationBase.h>
 #include <qore/AsyncCompletionAction.h>
+#include <qore/QoreQueue.h>
 
 #include <string>
 #include <vector>
@@ -78,7 +79,11 @@ public:
         BRANCH,
         TRANSFORM,
         GOTO,
-        DELIVER_RESULT
+        DELIVER_RESULT,
+        RECV_FRAMED,       //!< Non-blocking framed receive with persistent buffer
+        PUSH_QUEUE,        //!< Push ctx.last_output to an internal Queue
+        DRAIN_QUEUE_SEND,  //!< Drain an internal Queue and send via socket
+        YIELD              //!< Return to event loop, resume at target step
     };
 
     //! Pipeline execution context — accumulated across steps on I/O thread
@@ -89,6 +94,9 @@ public:
         QoreValue last_output;              //!< output from previous step
         QoreHashNode* extra = nullptr;      //!< ref'd, arbitrary step data
         QoreStringNode* line_accum = nullptr; //!< RECV_LINE_RESPONSE accumulator (dedicated field)
+        BinaryNode* frame_buf = nullptr;    //!< RECV_FRAMED persistent buffer (ref'd)
+        bool has_frame = false;             //!< set by RECV_FRAMED when a complete frame is available
+        bool eof = false;                   //!< set by RECV_FRAMED on EOF (empty recv)
 
         DLLEXPORT void cleanup(ExceptionSink* xsink) {
             if (headers) { headers->deref(xsink); headers = nullptr; }
@@ -97,6 +105,9 @@ public:
             last_output = QoreValue();
             if (extra) { extra->deref(xsink); extra = nullptr; }
             if (line_accum) { line_accum->deref(xsink); line_accum = nullptr; }
+            if (frame_buf) { frame_buf->deref(xsink); frame_buf = nullptr; }
+            has_frame = false;
+            eof = false;
         }
     };
 
@@ -105,6 +116,13 @@ public:
 
     //! Transform function — modifies context in place
     using TransformFn = std::function<void(Context&, ExceptionSink*)>;
+
+    //! Frame size detection function for RECV_FRAMED
+    /** @param data pointer to buffer start
+        @param len buffer length in bytes
+        @return frame size in bytes if a complete frame is available, or 0 if incomplete
+    */
+    using FrameSizeFunc = std::function<size_t(const void* data, size_t len)>;
 
     //! A single pipeline step
     struct Step {
@@ -126,6 +144,12 @@ public:
         // TRANSFORM config
         TransformFn transform;
 
+        // RECV_FRAMED config
+        int frame_sizer_idx = -1;   //!< index into frame_sizer_table
+
+        // PUSH_QUEUE / DRAIN_QUEUE_SEND config
+        int queue_idx = -1;         //!< index into queue_table
+
         int next_step = -1;         //!< override next step (-1 = sequential)
     };
 
@@ -139,6 +163,7 @@ public:
     DLLEXPORT QoreHashNode* continuePoll(ExceptionSink* xsink) override;
     DLLEXPORT void abort(ExceptionSink* xsink) override;
     DLLEXPORT QoreValue getOutput() const override;
+    DLLEXPORT int getAndClearItemsPushed() override;
 
     // --- Builder methods (app thread, before submit) ---
 
@@ -265,8 +290,122 @@ public:
     //! Sets the result action (Promise/Channel) for DELIVER_RESULT steps
     DLLEXPORT void setResultAction(AbstractAsyncAction* action);
 
+    // --- New composable primitives for persistent I/O loops ---
+
+    //! Adds a non-blocking framed receive step with persistent buffer
+    /** Reads available data from the socket into a persistent buffer, then checks
+        for a complete frame using the provided size function. If a complete frame
+        is available, extracts it as ctx.last_output and sets ctx.has_frame = true.
+        If no data is available or no complete frame yet, sets ctx.has_frame = false.
+        On EOF (empty recv), sets ctx.eof = true.
+
+        Reusable for WebSocket, HTTP/2, AMQP, or any framed protocol.
+
+        @param sizer function that returns frame size (bytes) or 0 if incomplete
+        @return the step index
+        @since %Qore 2.3
+    */
+    DLLEXPORT int addRecvFramed(FrameSizeFunc sizer);
+
+    //! Creates an internal Queue and returns its ID
+    /** The Queue is owned by the pipeline and cleaned up automatically.
+        Used with addPushQueue() and addDrainQueueSend().
+        @return the queue ID (index into internal queue table)
+        @since %Qore 2.3
+    */
+    DLLEXPORT int addQueue();
+
+    //! Adds a step that pushes ctx.last_output to an internal Queue
+    /** @param queue_id the queue ID returned by addQueue()
+        @return the step index
+        @since %Qore 2.3
+    */
+    DLLEXPORT int addPushQueue(int queue_id);
+
+    //! Adds a step that drains an internal Queue and sends via socket
+    /** Non-blocking: drains all available items, concatenates as binary,
+        sends via SocketSendPollOperation. If queue is empty, completes immediately.
+        @param queue_id the queue ID returned by addQueue()
+        @return the step index
+        @since %Qore 2.3
+    */
+    DLLEXPORT int addDrainQueueSend(int queue_id);
+
+    //! Adds a yield step that returns to the event loop
+    /** Ends the current continuePoll cycle, returning poll info to the controller.
+        On the next continuePoll call, execution resumes at the target step.
+        Enables persistent I/O loops (e.g., WebSocket bidirectional I/O).
+        @param resume_step the step index to resume at on next continuePoll
+        @return the step index
+        @since %Qore 2.3
+    */
+    DLLEXPORT int addYield(int resume_step);
+
+    // --- Queue access methods (thread-safe, for user threads) ---
+
+    //! Gets the next item from an internal Queue (non-blocking)
+    /** @param queue_id the queue ID
+        @param xsink exception sink
+        @return the item or QoreValue() if empty
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue getQueueItem(int queue_id, ExceptionSink* xsink);
+
+    //! Gets the next item from an internal Queue (blocking with timeout)
+    /** @param queue_id the queue ID
+        @param timeout_ms timeout in milliseconds (0 = wait forever)
+        @param xsink exception sink
+        @return the item or QoreValue() if timed out
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreValue getQueueItemBlocking(int queue_id, int timeout_ms, ExceptionSink* xsink);
+
+    //! Pushes an item to an internal Queue (thread-safe)
+    /** @param queue_id the queue ID
+        @param item the value to push (ref taken)
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLEXPORT void pushQueueItem(int queue_id, QoreValue item, ExceptionSink* xsink);
+
+    //! Returns true if an internal Queue has items
+    /** @param queue_id the queue ID
+        @return true if items are available
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool queueHasItems(int queue_id) const;
+
+    //! Returns the size of an internal Queue
+    /** @param queue_id the queue ID
+        @return number of items in the queue
+        @since %Qore 2.3
+    */
+    DLLEXPORT int getQueueSize(int queue_id) const;
+
+    //! Sets the branch targets for a BRANCH step after construction
+    /** Useful when branch targets are steps that haven't been added yet.
+        @param step_idx the BRANCH step index
+        @param true_step the step index for the true condition
+        @param false_step the step index for the false condition
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setStepTarget(int step_idx, int true_step, int false_step) {
+        assert(step_idx >= 0 && step_idx < (int)steps.size());
+        steps[step_idx].true_step = true_step;
+        steps[step_idx].false_step = false_step;
+    }
+
     //! Returns the number of steps
     DLLEXPORT int getStepCount() const { return (int)steps.size(); }
+
+    //! Returns a Queue pointer from the internal queue table
+    /** @param queue_id the queue ID
+        @return the Queue pointer (not ref'd, valid for pipeline lifetime)
+    */
+    DLLEXPORT Queue* getQueuePtr(int queue_id) const {
+        assert(queue_id >= 0 && queue_id < (int)queue_table.size());
+        return queue_table[queue_id];
+    }
 
     // --- Accessors ---
 
@@ -308,6 +447,15 @@ private:
         QoreObject* obj;              //!< ref'd (keeps the op alive)
     };
     std::vector<DelegateOp> delegate_ops;
+
+    //! Frame size function table (for RECV_FRAMED steps)
+    std::vector<FrameSizeFunc> frame_sizer_table;
+
+    //! Internal queue table — owned Queues for PUSH_QUEUE/DRAIN_QUEUE_SEND
+    std::vector<Queue*> queue_table;
+
+    //! Per-continuePoll counter for items pushed to queues via PUSH_QUEUE
+    int items_pushed_in_cycle = 0;
 
     //! Output value (from final step or error)
     mutable QoreValue output;

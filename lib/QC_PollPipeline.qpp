@@ -39,8 +39,259 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/ql_crypto.h"
+#include "qore/WebSocketFrameCodec.h"
 
 /** @cond INTERNAL */
+
+// --- WebSocket FrameSizeFunc for RECV_FRAMED ---
+// Returns the size of a complete WebSocket frame, or 0 if incomplete
+static size_t wsFrameSizer(const void* data, size_t len) {
+    if (len < 2) {
+        return 0;
+    }
+    const uint8_t* buf = static_cast<const uint8_t*>(data);
+    bool masked = (buf[1] & 0x80) != 0;
+    uint64_t payload_len = buf[1] & 0x7F;
+    size_t header_size = 2;
+
+    if (payload_len == 126) {
+        if (len < 4) {
+            return 0;
+        }
+        payload_len = (static_cast<uint64_t>(buf[2]) << 8) | buf[3];
+        header_size = 4;
+    } else if (payload_len == 127) {
+        if (len < 10) {
+            return 0;
+        }
+        payload_len = 0;
+        for (int i = 0; i < 8; ++i) {
+            payload_len = (payload_len << 8) | buf[2 + i];
+        }
+        header_size = 10;
+    }
+    if (masked) {
+        header_size += 4;
+    }
+    size_t total = header_size + static_cast<size_t>(payload_len);
+    if (len < total) {
+        return 0;
+    }
+    return total;
+}
+
+// --- WebSocket frame decode transform ---
+// Parses raw WebSocket frame bytes in ctx.last_output into a decoded hash
+static void wsDecodeFrame(PollPipelinePriv::Context& ctx, ExceptionSink* xsink) {
+    if (ctx.last_output.getType() != NT_BINARY) {
+        xsink->raiseException("WEBSOCKET-DECODE-ERROR", "expected binary frame data");
+        return;
+    }
+    const BinaryNode* raw = ctx.last_output.get<const BinaryNode>();
+    if (!raw || raw->size() < 2) {
+        xsink->raiseException("WEBSOCKET-DECODE-ERROR", "frame data too short");
+        return;
+    }
+
+    const uint8_t* buf = static_cast<const uint8_t*>(raw->getPtr());
+    uint8_t b0 = buf[0];
+    uint8_t b1 = buf[1];
+
+    bool fin = (b0 & 0x80) != 0;
+    uint8_t rsv = (b0 >> 4) & 0x07;
+    uint8_t opcode = b0 & 0x0F;
+    bool masked = (b1 & 0x80) != 0;
+
+    uint64_t payload_len = b1 & 0x7F;
+    size_t header_size = 2;
+    if (payload_len == 126) {
+        payload_len = (static_cast<uint64_t>(buf[2]) << 8) | buf[3];
+        header_size = 4;
+    } else if (payload_len == 127) {
+        payload_len = 0;
+        for (int i = 0; i < 8; ++i) {
+            payload_len = (payload_len << 8) | buf[2 + i];
+        }
+        header_size = 10;
+    }
+    const uint8_t* mask_key = nullptr;
+    if (masked) {
+        mask_key = buf + header_size;
+        header_size += 4;
+    }
+
+    // Extract and optionally unmask payload
+    SimpleRefHolder<BinaryNode> payload(new BinaryNode());
+    if (payload_len > 0) {
+        const uint8_t* src = buf + header_size;
+        if (masked && mask_key) {
+            // Unmask into a temp buffer, then append
+            std::vector<uint8_t> tmp(payload_len);
+            for (size_t i = 0; i < payload_len; ++i) {
+                tmp[i] = src[i] ^ mask_key[i & 3];
+            }
+            payload->append(tmp.data(), payload_len);
+        } else {
+            payload->append(src, payload_len);
+        }
+    }
+
+    // Build result hash
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+    h->setKeyValue("opcode", static_cast<int64>(opcode), xsink);
+    h->setKeyValue("fin", fin, xsink);
+    h->setKeyValue("rsv1", (rsv & 0x04) ? true : false, xsink);
+    h->setKeyValue("rsv2", (rsv & 0x02) ? true : false, xsink);
+    h->setKeyValue("rsv3", (rsv & 0x01) ? true : false, xsink);
+
+    // Determine type and format payload
+    const char* type;
+    if (opcode == WSOP_TEXT) {
+        type = "text";
+        QoreStringNode* text = new QoreStringNode(
+            reinterpret_cast<const char*>(payload->getPtr()), payload->size(), QCS_UTF8);
+        h->setKeyValue("data", text, xsink);
+    } else if (opcode == WSOP_BINARY) {
+        type = "binary";
+        h->setKeyValue("data", payload.release(), xsink);
+    } else if (opcode == WSOP_CLOSE) {
+        type = "close";
+        uint16_t close_code = 1005;  // No Status Rcvd
+        if (payload->size() >= 2) {
+            const uint8_t* p = static_cast<const uint8_t*>(payload->getPtr());
+            close_code = (static_cast<uint16_t>(p[0]) << 8) | p[1];
+        }
+        h->setKeyValue("close_code", static_cast<int64>(close_code), xsink);
+        if (payload->size() > 2) {
+            h->setKeyValue("data", new QoreStringNode(
+                reinterpret_cast<const char*>(payload->getPtr()) + 2,
+                payload->size() - 2, QCS_UTF8), xsink);
+        }
+    } else if (opcode == WSOP_PING) {
+        type = "ping";
+        h->setKeyValue("data", payload.release(), xsink);
+    } else if (opcode == WSOP_PONG) {
+        type = "pong";
+        h->setKeyValue("data", payload.release(), xsink);
+    } else {
+        type = "unknown";
+        h->setKeyValue("data", payload.release(), xsink);
+    }
+    h->setKeyValue("type", new QoreStringNode(type), xsink);
+
+    ctx.last_output.discard(xsink);
+    ctx.last_output = h.release();
+}
+
+// --- WebSocket control frame branch condition ---
+// Only PING and CLOSE require special handling; PONG is a data frame for delivery
+static bool wsIsControlFrame(const PollPipelinePriv::Context& ctx) {
+    if (ctx.last_output.getType() != NT_HASH) {
+        return false;
+    }
+    const QoreHashNode* h = ctx.last_output.get<const QoreHashNode>();
+    QoreValue type_val = h->getKeyValue("type");
+    if (type_val.getType() != NT_STRING) {
+        return false;
+    }
+    const char* type = type_val.get<const QoreStringNode>()->c_str();
+    return (strcmp(type, "ping") == 0 || strcmp(type, "close") == 0);
+}
+
+// --- WebSocket control frame handler factory ---
+// Returns a TransformFn that handles ping/pong/close frames
+// Captures send_queue and client_mask for auto-pong and close echo
+static PollPipelinePriv::TransformFn makeWsControlFrameHandler(
+        Queue* send_queue, bool client_mask) {
+    return [send_queue, client_mask](PollPipelinePriv::Context& ctx, ExceptionSink* xsink) {
+        if (ctx.last_output.getType() != NT_HASH) {
+            return;
+        }
+        const QoreHashNode* h = ctx.last_output.get<const QoreHashNode>();
+        QoreValue type_val = h->getKeyValue("type");
+        if (type_val.getType() != NT_STRING) {
+            return;
+        }
+        const char* type = type_val.get<const QoreStringNode>()->c_str();
+
+        if (strcmp(type, "ping") == 0) {
+            // Auto-pong: encode PONG with same payload and push to send queue
+            QoreValue data_val = h->getKeyValue("data");
+            const void* payload = nullptr;
+            size_t payload_len = 0;
+            if (data_val.getType() == NT_BINARY) {
+                const BinaryNode* bin = data_val.get<const BinaryNode>();
+                if (bin && bin->size() > 0) {
+                    payload = bin->getPtr();
+                    payload_len = bin->size();
+                }
+            }
+            SimpleRefHolder<BinaryNode> pong(
+                WebSocketFrameEncoder::encodePong(payload, payload_len, client_mask));
+            send_queue->push(xsink, pong.release());
+        } else if (strcmp(type, "close") == 0) {
+            // Close handshake
+            QoreValue code_val = h->getKeyValue("close_code");
+            uint16_t code = code_val.getType() == NT_INT
+                ? static_cast<uint16_t>(code_val.getAsBigInt()) : 1000;
+
+            // Check if we initiated close
+            bool we_initiated = false;
+            if (ctx.extra) {
+                QoreValue init_val = ctx.extra->getKeyValue("ws_close_initiated");
+                we_initiated = init_val.getAsBool();
+            }
+
+            // Store close info
+            if (!ctx.extra) {
+                ctx.extra = new QoreHashNode(autoTypeInfo);
+            }
+            ctx.extra->setKeyValue("ws_close_code", static_cast<int64>(code), xsink);
+            QoreValue reason_val = h->getKeyValue("data");
+            if (reason_val.getType() == NT_STRING) {
+                ctx.extra->setKeyValue("ws_close_reason",
+                    reason_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+            }
+
+            if (we_initiated) {
+                // We sent close, received echo — handshake complete
+                ctx.extra->setKeyValue("ws_closed", true, xsink);
+            } else {
+                // Peer initiated close — echo back
+                const char* reason = nullptr;
+                if (reason_val.getType() == NT_STRING) {
+                    reason = reason_val.get<const QoreStringNode>()->c_str();
+                }
+                SimpleRefHolder<BinaryNode> close_frame(
+                    WebSocketFrameEncoder::encodeClose(code, reason, client_mask));
+                send_queue->push(xsink, close_frame.release());
+                if (!*xsink) {
+                    ctx.extra->setKeyValue("ws_close_initiated", true, xsink);
+                    ctx.extra->setKeyValue("ws_closing", true, xsink);
+                }
+            }
+        }
+        // Pong: no action needed (just passes through to recv_queue via PUSH_QUEUE)
+    };
+}
+
+// --- WebSocket closed branch condition ---
+static bool wsIsClosed(const PollPipelinePriv::Context& ctx) {
+    if (!ctx.extra) {
+        return false;
+    }
+    return ctx.extra->getKeyValue("ws_closed").getAsBool();
+}
+
+// --- WebSocket closing-done condition (close echo fully sent) ---
+static bool wsIsClosingDone(const PollPipelinePriv::Context& ctx) {
+    if (!ctx.extra) {
+        return false;
+    }
+    // Check if we're closing AND the close echo should have been sent
+    // (after DRAIN_QUEUE_SEND completes, the echo is sent)
+    return ctx.extra->getKeyValue("ws_closing").getAsBool();
+}
 
 // ============================================================
 // PollPipelinePriv implementation
@@ -88,6 +339,13 @@ void PollPipelinePriv::cleanup(ExceptionSink* xsink) {
         }
     }
     delegate_ops.clear();
+
+    for (auto* q : queue_table) {
+        q->deref(xsink);
+    }
+    queue_table.clear();
+    frame_sizer_table.clear();
+    items_pushed_in_cycle = 0;
 
     if (sock_obj) {
         sock_obj->deref(xsink);
@@ -495,6 +753,120 @@ int PollPipelinePriv::addContextOr(const char* result_key, const char* key_a, co
     });
 }
 
+// --- New composable primitives ---
+
+int PollPipelinePriv::addRecvFramed(FrameSizeFunc sizer) {
+    int idx = (int)frame_sizer_table.size();
+    frame_sizer_table.push_back(std::move(sizer));
+    Step s;
+    s.type = StepType::RECV_FRAMED;
+    s.frame_sizer_idx = idx;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addQueue() {
+    Queue* q = new Queue(-1);
+    queue_table.push_back(q);
+    return (int)queue_table.size() - 1;
+}
+
+int PollPipelinePriv::addPushQueue(int queue_id) {
+    assert(queue_id >= 0 && queue_id < (int)queue_table.size());
+    Step s;
+    s.type = StepType::PUSH_QUEUE;
+    s.queue_idx = queue_id;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addDrainQueueSend(int queue_id) {
+    assert(queue_id >= 0 && queue_id < (int)queue_table.size());
+    Step s;
+    s.type = StepType::DRAIN_QUEUE_SEND;
+    s.queue_idx = queue_id;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+int PollPipelinePriv::addYield(int resume_step) {
+    Step s;
+    s.type = StepType::YIELD;
+    s.true_step = resume_step;
+    steps.push_back(std::move(s));
+    return (int)steps.size() - 1;
+}
+
+// --- Queue access methods (thread-safe) ---
+
+QoreValue PollPipelinePriv::getQueueItem(int queue_id, ExceptionSink* xsink) {
+    if (queue_id < 0 || queue_id >= (int)queue_table.size()) {
+        xsink->raiseException("PIPELINE-QUEUE-ERROR", "invalid queue ID %d", queue_id);
+        return QoreValue();
+    }
+    Queue* q = queue_table[queue_id];
+    if (q->empty()) {
+        return QoreValue();
+    }
+    bool timed_out = false;
+    QoreValue val = q->shift(xsink, -1, &timed_out);
+    if (*xsink || timed_out) {
+        if (*xsink) {
+            xsink->clear();
+        }
+        return QoreValue();
+    }
+    return val;
+}
+
+QoreValue PollPipelinePriv::getQueueItemBlocking(int queue_id, int timeout_ms,
+        ExceptionSink* xsink) {
+    if (queue_id < 0 || queue_id >= (int)queue_table.size()) {
+        xsink->raiseException("PIPELINE-QUEUE-ERROR", "invalid queue ID %d", queue_id);
+        return QoreValue();
+    }
+    Queue* q = queue_table[queue_id];
+    bool timed_out = false;
+    QoreValue val = q->shift(xsink, timeout_ms, &timed_out);
+    if (*xsink || timed_out) {
+        if (*xsink) {
+            xsink->clear();
+        }
+        return QoreValue();
+    }
+    return val;
+}
+
+void PollPipelinePriv::pushQueueItem(int queue_id, QoreValue item, ExceptionSink* xsink) {
+    if (queue_id < 0 || queue_id >= (int)queue_table.size()) {
+        xsink->raiseException("PIPELINE-QUEUE-ERROR", "invalid queue ID %d", queue_id);
+        item.discard(xsink);
+        return;
+    }
+    // item ownership transferred to queue (ref already held from caller)
+    queue_table[queue_id]->push(xsink, item);
+}
+
+bool PollPipelinePriv::queueHasItems(int queue_id) const {
+    if (queue_id < 0 || queue_id >= (int)queue_table.size()) {
+        return false;
+    }
+    return !queue_table[queue_id]->empty();
+}
+
+int PollPipelinePriv::getQueueSize(int queue_id) const {
+    if (queue_id < 0 || queue_id >= (int)queue_table.size()) {
+        return 0;
+    }
+    return queue_table[queue_id]->size();
+}
+
+int PollPipelinePriv::getAndClearItemsPushed() {
+    int result = items_pushed_in_cycle;
+    items_pushed_in_cycle = 0;
+    return result;
+}
+
 void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
     assert(action);
     if (result_action) {
@@ -507,6 +879,7 @@ void PollPipelinePriv::setResultAction(AbstractAsyncAction* action) {
 // --- continuePoll state machine (I/O thread) ---
 
 QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
+    items_pushed_in_cycle = 0;
     while (true) {
         // If we have an active inner op, delegate to it
         if (current_op) {
@@ -631,6 +1004,75 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                     continue;
                 }
 
+                // Special handling for RECV_FRAMED: append data to frame_buf
+                if (steps[current_step].type == StepType::RECV_FRAMED) {
+                    // ctx.last_output has the recv'd data — append to frame_buf
+                    bool got_data = false;
+                    if (ctx.last_output.getType() == NT_BINARY) {
+                        const BinaryNode* bin = ctx.last_output.get<const BinaryNode>();
+                        if (bin && bin->size() > 0) {
+                            if (!ctx.frame_buf) {
+                                ctx.frame_buf = new BinaryNode();
+                            }
+                            ctx.frame_buf->append(bin->getPtr(), bin->size());
+                            got_data = true;
+                        }
+                    } else if (ctx.last_output.getType() == NT_STRING) {
+                        const QoreStringNode* str = ctx.last_output.get<const QoreStringNode>();
+                        if (str && str->size() > 0) {
+                            if (!ctx.frame_buf) {
+                                ctx.frame_buf = new BinaryNode();
+                            }
+                            ctx.frame_buf->append(str->c_str(), str->size());
+                            got_data = true;
+                        }
+                    }
+                    ctx.last_output.discard(xsink);
+                    ctx.last_output = QoreValue();
+
+                    if (!got_data) {
+                        // EOF — empty recv
+                        ctx.eof = true;
+                        if (steps[current_step].next_step >= 0) {
+                            current_step = steps[current_step].next_step;
+                        } else {
+                            ++current_step;
+                        }
+                        continue;
+                    }
+
+                    // Check for complete frame in the buffer
+                    const FrameSizeFunc& sizer =
+                        frame_sizer_table[steps[current_step].frame_sizer_idx];
+                    size_t frame_size = sizer(ctx.frame_buf->getPtr(),
+                        ctx.frame_buf->size());
+                    if (frame_size > 0 && ctx.frame_buf->size() >= frame_size) {
+                        // Extract complete frame
+                        SimpleRefHolder<BinaryNode> frame(new BinaryNode());
+                        frame->append(ctx.frame_buf->getPtr(), frame_size);
+                        if (ctx.frame_buf->size() > frame_size) {
+                            SimpleRefHolder<BinaryNode> remaining(new BinaryNode());
+                            remaining->append(
+                                static_cast<const char*>(ctx.frame_buf->getPtr()) + frame_size,
+                                ctx.frame_buf->size() - frame_size);
+                            ctx.frame_buf->deref(xsink);
+                            ctx.frame_buf = remaining.release();
+                        } else {
+                            ctx.frame_buf->deref(xsink);
+                            ctx.frame_buf = nullptr;
+                        }
+                        ctx.last_output = frame.release();
+                        ctx.has_frame = true;
+                    }
+                    // Advance (has_frame set or not — BRANCH decides next)
+                    if (steps[current_step].next_step >= 0) {
+                        current_step = steps[current_step].next_step;
+                    } else {
+                        ++current_step;
+                    }
+                    continue;
+                }
+
                 // Normal step advance
                 if (steps[current_step].next_step >= 0) {
                     current_step = steps[current_step].next_step;
@@ -684,6 +1126,151 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             case StepType::DELIVER_RESULT: {
                 deliverResult(xsink);
                 return nullptr;
+            }
+
+            case StepType::RECV_FRAMED: {
+                // Non-blocking framed receive with persistent buffer
+                ctx.has_frame = false;
+                // Check if we already have a complete frame in the buffer
+                if (ctx.frame_buf && ctx.frame_buf->size() > 0) {
+                    const FrameSizeFunc& sizer = frame_sizer_table[step.frame_sizer_idx];
+                    size_t frame_size = sizer(ctx.frame_buf->getPtr(), ctx.frame_buf->size());
+                    if (frame_size > 0 && ctx.frame_buf->size() >= frame_size) {
+                        // Extract complete frame as last_output
+                        SimpleRefHolder<BinaryNode> frame(new BinaryNode());
+                        frame->append(ctx.frame_buf->getPtr(), frame_size);
+                        // Remove consumed bytes from buffer
+                        if (ctx.frame_buf->size() > frame_size) {
+                            SimpleRefHolder<BinaryNode> remaining(new BinaryNode());
+                            remaining->append(
+                                static_cast<const char*>(ctx.frame_buf->getPtr()) + frame_size,
+                                ctx.frame_buf->size() - frame_size);
+                            ctx.frame_buf->deref(xsink);
+                            ctx.frame_buf = remaining.release();
+                        } else {
+                            ctx.frame_buf->deref(xsink);
+                            ctx.frame_buf = nullptr;
+                        }
+                        ctx.last_output.discard(xsink);
+                        ctx.last_output = frame.release();
+                        ctx.has_frame = true;
+                        // Advance to next step
+                        if (step.next_step >= 0) {
+                            current_step = step.next_step;
+                        } else {
+                            ++current_step;
+                        }
+                        continue;
+                    }
+                }
+                // No complete frame in buffer — need to read from socket
+                // Use a non-blocking recv via inner op
+                if (!current_op) {
+                    // Check if data is available on the socket
+                    if (!sock_obj->isDataAvailable(xsink, 0)) {
+                        if (*xsink) {
+                            closed = true;
+                            return nullptr;
+                        }
+                        // No data available — complete without frame
+                        if (step.next_step >= 0) {
+                            current_step = step.next_step;
+                        } else {
+                            ++current_step;
+                        }
+                        continue;
+                    }
+                    // Data available — create recv op
+                    sock_obj->ref();
+                    current_op = new SocketRecvDataPollOperation(xsink, sock_obj, false);
+                    if (*xsink) {
+                        current_op->deref(xsink);
+                        current_op = nullptr;
+                        closed = true;
+                        return nullptr;
+                    }
+                    current_op->setSelf(*self);
+                }
+                // Drive the recv op (loops back to top where current_op is handled)
+                continue;
+            }
+
+            case StepType::PUSH_QUEUE: {
+                // Push ctx.last_output to the specified queue
+                Queue* q = queue_table[step.queue_idx];
+                q->push(xsink, ctx.last_output.refSelf());
+                if (*xsink) {
+                    closed = true;
+                    return nullptr;
+                }
+                ++items_pushed_in_cycle;
+                if (step.next_step >= 0) {
+                    current_step = step.next_step;
+                } else {
+                    ++current_step;
+                }
+                continue;
+            }
+
+            case StepType::DRAIN_QUEUE_SEND: {
+                // Non-blocking drain from queue + send
+                Queue* q = queue_table[step.queue_idx];
+                if (q->empty()) {
+                    // Queue empty — no-op, advance
+                    if (step.next_step >= 0) {
+                        current_step = step.next_step;
+                    } else {
+                        ++current_step;
+                    }
+                    continue;
+                }
+                // Drain all available items and concatenate
+                SimpleRefHolder<BinaryNode> send_data(new BinaryNode());
+                while (!q->empty()) {
+                    bool timed_out = false;
+                    QoreValue val = q->shift(xsink, -1, &timed_out);
+                    if (*xsink) {
+                        closed = true;
+                        return nullptr;
+                    }
+                    if (timed_out || val.isNothing()) {
+                        break;
+                    }
+                    if (val.getType() == NT_BINARY) {
+                        const BinaryNode* bin = val.get<const BinaryNode>();
+                        if (bin && bin->size() > 0) {
+                            send_data->append(bin->getPtr(), bin->size());
+                        }
+                    }
+                    val.discard(xsink);
+                }
+                if (send_data->size() == 0) {
+                    // Nothing to send
+                    if (step.next_step >= 0) {
+                        current_step = step.next_step;
+                    } else {
+                        ++current_step;
+                    }
+                    continue;
+                }
+                // Create send inner op
+                sock_obj->ref();
+                current_op = new SocketSendPollOperation(xsink, send_data.release(), sock_obj);
+                if (*xsink) {
+                    current_op->deref(xsink);
+                    current_op = nullptr;
+                    closed = true;
+                    return nullptr;
+                }
+                current_op->setSelf(*self);
+                // Drive send op (loops back to top)
+                continue;
+            }
+
+            case StepType::YIELD: {
+                // Return to event loop, resume at target step on next continuePoll
+                current_step = step.true_step;
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
             }
 
             default: {
@@ -1047,6 +1634,7 @@ QoreHashNode* PollPipelinePriv::buildResultHash(ExceptionSink* xsink) {
 
 void PollPipelinePriv::abort(ExceptionSink* xsink) {
     closed = true;
+    completed = true;
     if (current_op) {
         current_op->abort(xsink);
     }
@@ -1622,6 +2210,238 @@ int PollPipeline::addContextOr(string result_key, string key_a, string key_b) {
 */
 int PollPipeline::addGoto(int target_step) {
     return priv->addGoto((int)target_step);
+}
+
+//! Creates an internal Queue and returns its ID
+/** The Queue is owned by the pipeline and cleaned up automatically.
+    Used with addPushQueue() and addDrainQueueSend().
+
+    @return the queue ID (index)
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addQueue() {
+    return priv->addQueue();
+}
+
+//! Adds a step that pushes ctx.last_output to an internal Queue
+/** @param queue_id the queue ID returned by addQueue()
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addPushQueue(int queue_id) {
+    return priv->addPushQueue((int)queue_id);
+}
+
+//! Adds a non-blocking drain-and-send step from an internal Queue
+/** Drains all available items from the Queue, concatenates as binary,
+    and sends via the socket. If the queue is empty, completes immediately.
+
+    @param queue_id the queue ID returned by addQueue()
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addDrainQueueSend(int queue_id) [dom=NETWORK] {
+    return priv->addDrainQueueSend((int)queue_id);
+}
+
+//! Adds a yield step that returns to the event loop
+/** Ends the current continuePoll cycle, returning poll info to the controller.
+    On the next continuePoll call, execution resumes at the target step.
+
+    @param resume_step the step index to resume at
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addYield(int resume_step) {
+    return priv->addYield((int)resume_step);
+}
+
+//! Sets the branch targets for a BRANCH step after construction
+/** Useful when branch targets reference steps that were added later.
+
+    @param step_idx the BRANCH step index to update
+    @param true_step the step index for the true condition
+    @param false_step the step index for the false condition
+
+    @since %Qore 2.3
+*/
+nothing PollPipeline::setStepTarget(int step_idx, int true_step, int false_step) {
+    priv->setStepTarget((int)step_idx, (int)true_step, (int)false_step);
+}
+
+//! Adds a non-blocking WebSocket framed receive step
+/** Reads available data from the socket, accumulates in a persistent buffer,
+    and extracts complete WebSocket frames using RFC 6455 frame boundary detection.
+
+    After this step:
+    - If a frame is available: \c ctx.has_frame is True, \c ctx.last_output has the raw frame bytes
+    - If no data/no complete frame: \c ctx.has_frame is False
+    - If EOF (connection closed): \c ctx.eof is True
+
+    Use addBranchOnHasFrame() and addBranchOnEof() to branch on these conditions.
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addRecvWsFrame() [dom=NETWORK] {
+    return priv->addRecvFramed(wsFrameSizer);
+}
+
+//! Adds a WebSocket frame decode transform step
+/** Parses raw WebSocket frame bytes (from addRecvWsFrame) into a hash with:
+    - \c type: "text", "binary", "ping", "pong", "close", "unknown"
+    - \c opcode: integer opcode
+    - \c fin: boolean FIN flag
+    - \c rsv1, rsv2, rsv3: boolean RSV flags (for extension processing)
+    - \c data: string (text), binary (binary/ping/pong), or string (close reason)
+    - \c close_code: integer close code (close frames only)
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addWsDecodeFrame() {
+    return priv->addTransform(wsDecodeFrame);
+}
+
+//! Adds a WebSocket control frame handler transform step
+/** Handles PING, PONG, and CLOSE frames automatically:
+    - PING: encodes a PONG response with optional client masking and pushes to the send queue
+    - CLOSE: echoes the close frame back (if not already initiated) and updates close state
+    - PONG: no action (passes through for delivery)
+
+    @param send_queue_id the queue ID for sending response frames
+    @param client_mask if True, apply client masking to outgoing frames (RFC 6455 Section 5.3)
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addWsControlFrameHandler(int send_queue_id, bool client_mask = True) {
+    Queue* q = priv->getQueuePtr((int)send_queue_id);
+    return priv->addTransform(makeWsControlFrameHandler(q, client_mask));
+}
+
+//! Adds a branch that tests if the current frame is a WebSocket control frame
+/** Branches to true_step if ctx.last_output is a PING, PONG, or CLOSE frame.
+
+    @param true_step step index for control frames
+    @param false_step step index for data frames
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnWsControlFrame(int true_step, int false_step) {
+    return priv->addBranch(wsIsControlFrame, (int)true_step, (int)false_step);
+}
+
+//! Adds a branch that tests if the WebSocket close handshake is complete
+/** @param true_step step index if closed
+    @param false_step step index if still open
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnWsClosed(int true_step, int false_step) {
+    return priv->addBranch(wsIsClosed, (int)true_step, (int)false_step);
+}
+
+//! Adds a branch that tests if the WebSocket is in closing state (close echo sent)
+/** @param true_step step index if closing done
+    @param false_step step index if not closing
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnWsClosingDone(int true_step, int false_step) {
+    return priv->addBranch(wsIsClosingDone, (int)true_step, (int)false_step);
+}
+
+//! Adds a branch that tests if EOF was detected by the last RECV_FRAMED step
+/** @param true_step step index if EOF detected
+    @param false_step step index if not EOF
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnEof(int true_step, int false_step) {
+    return priv->addBranch([](const PollPipelinePriv::Context& ctx) {
+        return ctx.eof;
+    }, (int)true_step, (int)false_step);
+}
+
+//! Adds a branch that tests if a frame was extracted by the last RECV_FRAMED step
+/** @param true_step step index if frame available
+    @param false_step step index if no frame
+
+    @return the step index
+
+    @since %Qore 2.3
+*/
+int PollPipeline::addBranchOnHasFrame(int true_step, int false_step) {
+    return priv->addBranch([](const PollPipelinePriv::Context& ctx) {
+        return ctx.has_frame;
+    }, (int)true_step, (int)false_step);
+}
+
+//! Gets the next item from an internal Queue (non-blocking)
+/** @param queue_id the queue ID
+    @return the item or @ref nothing if empty
+
+    @since %Qore 2.3
+*/
+auto PollPipeline::getQueueItem(int queue_id) {
+    return priv->getQueueItem((int)queue_id, xsink);
+}
+
+//! Gets the next item from an internal Queue (blocking with timeout)
+/** @param queue_id the queue ID
+    @param timeout_ms timeout in milliseconds (0 = wait forever)
+    @return the item or @ref nothing if timed out
+
+    @since %Qore 2.3
+*/
+auto PollPipeline::getQueueItemBlocking(int queue_id, timeout timeout_ms) {
+    return priv->getQueueItemBlocking((int)queue_id, (int)timeout_ms, xsink);
+}
+
+//! Pushes an item to an internal Queue (thread-safe)
+/** @param queue_id the queue ID
+    @param item the value to push
+
+    @since %Qore 2.3
+*/
+nothing PollPipeline::pushQueueItem(int queue_id, auto item) {
+    priv->pushQueueItem((int)queue_id, item.refSelf(), xsink);
+}
+
+//! Returns True if an internal Queue has items
+/** @param queue_id the queue ID
+    @return True if items are available
+
+    @since %Qore 2.3
+*/
+bool PollPipeline::queueHasItems(int queue_id) [flags=RET_VALUE_ONLY] {
+    return priv->queueHasItems((int)queue_id);
+}
+
+//! Returns the number of items in an internal Queue
+/** @param queue_id the queue ID
+    @return the number of items
+
+    @since %Qore 2.3
+*/
+int PollPipeline::getQueueSize(int queue_id) [flags=RET_VALUE_ONLY] {
+    return priv->getQueueSize((int)queue_id);
 }
 
 //! Sets a Promise as the result action

@@ -287,6 +287,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_HttpAcceptPollOperationBase.qpp
     lib/QC_Http2PollOperationBase.qpp
     lib/QC_HttpWebSocketPollOperationBase.qpp
+    lib/QC_WebSocketClientPollOperationBase.qpp
     lib/QC_PollPipeline.qpp
     lib/QC_Http1ClientPollOperationBase.qpp
     lib/QC_Http3ClientPollOperationBase.qpp
@@ -1533,6 +1534,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2PollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpWebSocketPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WebSocketClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_PollPipeline.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http1ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http3ClientPollOperationBase.cpp\"

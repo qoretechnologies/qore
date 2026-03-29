@@ -200,6 +200,10 @@ void QoreCallDispatcher::dispatchStreamDataAsync(QoreObject* spop_obj, int32_t s
     enqueue({spop_obj, nullptr, nullptr, nullptr, DT_STREAM_DATA_NOTIFY, nullptr, std::string(), stream_id});
 }
 
+void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj) {
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_POLL_COMPLETE_NOTIFY, nullptr, std::string(), 0});
+}
+
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     AutoLocker al(m);
 
@@ -362,6 +366,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
                 args->push(async_item.stream_id, xsink);
                 ValueHolder rv(async_item.spop_obj->evalMethod("onStreamData", *args,
+                    &work_xsink), &work_xsink);
+                break;
+            }
+            case DT_POLL_COMPLETE_NOTIFY: {
+                method_name = "onPollComplete";
+                ValueHolder rv(async_item.spop_obj->evalMethod("onPollComplete", nullptr,
                     &work_xsink), &work_xsink);
                 break;
             }
@@ -1532,6 +1542,20 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             op.spop_obj->ref();
                             call_dispatcher->dispatchStreamDataAsync(op.spop_obj, sid);
                         }
+                    }
+                }
+
+                // Generic notification for any C++ op that pushed items to queues
+                // (WebSocket frame I/O, PollPipeline PUSH_QUEUE, etc.)
+                {
+                    int pushed = op.spop_base->getAndClearItemsPushed();
+                    if (pushed > 0) {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        op.spop_obj->ref();
+                        call_dispatcher->dispatchPollCompleteAsync(op.spop_obj);
                     }
                 }
             } else {

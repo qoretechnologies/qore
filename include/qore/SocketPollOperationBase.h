@@ -123,6 +123,21 @@ public:
         return QoreValue();
     }
 
+    //! Returns the number of items pushed to output queues in the last continuePoll() cycle
+    /** Override this in subclasses that push data to queues during continuePoll()
+        (e.g., WebSocket frame I/O, pipeline PUSH_QUEUE steps). The controller calls this
+        after each continuePoll() and dispatches onPollComplete() to the worker pool if > 0.
+
+        The default implementation returns 0 (no notification needed).
+        Implementations must reset the counter to 0 when called.
+
+        @return the number of items pushed since the last call
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual int getAndClearItemsPushed() {
+        return 0;
+    }
+
 protected:
     //! Weak reference to the QoreObject wrapping this private data
     QoreObjectWeakRefHolder self;

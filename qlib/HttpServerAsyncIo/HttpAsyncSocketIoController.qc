@@ -538,7 +538,32 @@ public class HttpAsyncSocketIoController {
     removeListener(Socket listener) {
         string lhash = listener.uniqueHash();
         @debug(log(LoggerLevel::DEBUG, "removeListener: removing listener %s", lhash));
+        # Cancel accept operations (owned by the listener hash)
         controller.cancelByOwner(lhash);
+
+        # Cancel all connection operations on this listener
+        # Connection ops use the connection unique hash (uh) as owner,
+        # not the listener hash, so cancelByOwner(lhash) doesn't reach them.
+        # Match connections by comparing the listener object identity.
+        list<string> conn_keys;
+        {
+            AutoReadLock al(m);
+            string listener_obj_hash = listener.uniqueHash();
+            foreach string uh in (keys connections) {
+                *HttpServer::HttpListenerInterface li = connections{uh}.listener;
+                if (li && li.uniqueHash() == listener_obj_hash) {
+                    conn_keys += uh;
+                }
+            }
+        }
+        foreach string uh in (conn_keys) {
+            try {
+                controller.cancelByOwner(uh);
+            } catch () {
+                # ignore errors for already-cancelled ops
+            }
+        }
+
         {
             AutoWriteLock al(m);
             remove listeners{lhash};
@@ -1763,6 +1788,19 @@ public class HttpAsyncSocketIoController {
             string orig_state) {
         if (result.canceled) {
             log(LoggerLevel::DEBUG, "connection op canceled: %s state=%y", uh, orig_state);
+            # Close the socket so the remote peer detects the disconnection
+            *hash<HttpActiveConnectionInfo> cancel_cinfo;
+            {
+                AutoWriteLock al(m);
+                cancel_cinfo = remove connections{uh};
+            }
+            if (cancel_cinfo && cancel_cinfo.sock) {
+                try {
+                    cancel_cinfo.sock.close();
+                } catch () {
+                    # ignore close errors
+                }
+            }
             return;
         }
 
