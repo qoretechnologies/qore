@@ -244,6 +244,9 @@ public class DataProvider {
             # provided by the tar module
             "tar": "TarDataProvider",
 
+            # provided by the jni module
+            "tikaread": "TikaDataProvider",
+
             # provided by the xml module
             "webdavclient": "WebDavClientDataProvider",
 
