@@ -94,27 +94,6 @@ class TestGrokConversationStore inherits GrokConversationContextStore {
     }
 }
 
-class FakeGrokSseStream {
-    public {
-        list<hash<SseMessageInfo>> events;
-        int idx;
-    }
-
-    constructor(*list<hash<SseMessageInfo>> events) {
-        self.events = events ?? ();
-    }
-
-    *hash<SseMessageInfo> readEvent(*timeout to) {
-        if (idx >= events.lsize()) {
-            return;
-        }
-        return events[idx++];
-    }
-
-    close() {
-    }
-}
-
 class StreamObserver inherits Observer {
     public {
         list<hash<auto>> events = ();
@@ -244,6 +223,41 @@ public class GrokDataProviderTest inherits QUnit::Test {
             GrokDataProvider::AppName, "simple-chat"
         );
         assertEq("/simple-chat", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify create-response action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "create-response"
+        );
+        assertEq("/models/{model}/create-response", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify create-response-direct action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "create-response-direct"
+        );
+        assertEq("/responses/create", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify get-response action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "get-response"
+        );
+        assertEq("/responses/{response}/get", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify delete-response action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "delete-response"
+        );
+        assertEq("/responses/{response}/delete", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # verify deferred-completion action
+        action = DataProviderActionCatalog::getAppAction(
+            GrokDataProvider::AppName, "deferred-completion"
+        );
+        assertEq("/deferred-completion", action.path);
         assertEq(DPAT_API, action.action_code);
     }
 
@@ -482,6 +496,12 @@ public class GrokDataProviderTest inherits QUnit::Test {
         auto example = prov.getExampleEventData(EVENT_GROK_RESPONSE_STREAM);
         assertEq(Type::Hash, example.type());
         assertTrue(example.type.val());
+        # verify the example has resource-specific fields from the fake response
+        # (FakeGrokRestClientIo returns a response object, so example wraps it as a completed event)
+        assertEq("response.completed", example.type);
+        assertTrue(example.response.hasKey("id"));
+        assertTrue(example.response.hasKey("model"));
+        assertTrue(example.response.hasKey("output"));
 %endif
     }
 
@@ -491,6 +511,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(GrokChatCompletionRequestType.getFields().hasKey("messages"));
         assertTrue(GrokChatCompletionRequestType.getFields().hasKey("model"));
         assertTrue(GrokChatCompletionRequestType.getFields().hasKey("temperature"));
+        assertTrue(GrokChatCompletionRequestType.getFields().hasKey("logit_bias"));
 
         assertEq(Type::Hash, GrokSimpleChatCompletionRequestType.getFields().type());
         assertTrue(GrokSimpleChatCompletionRequestType.getFields().hasKey("content"));
@@ -499,11 +520,37 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq(Type::Hash, GrokChatCompletionResponseType.getFields().type());
         assertTrue(GrokChatCompletionResponseType.getFields().hasKey("choices"));
         assertTrue(GrokChatCompletionResponseType.getFields().hasKey("usage"));
+        assertTrue(GrokChatCompletionResponseType.getFields().hasKey("output_files"));
+
+        # Verify simple chat response type has "choice" (single) not "choices" (list)
+        assertEq(Type::Hash, GrokSimpleChatCompletionResponseType.getFields().type());
+        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("choice"));
+        assertFalse(GrokSimpleChatCompletionResponseType.getFields().hasKey("choices"));
+        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("usage"));
 
         assertEq(Type::Hash, GrokResponseCreateRequestType.getFields().type());
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("input"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("reasoning"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("tools"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("text"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("include"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("prompt_cache_key"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("logprobs"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("top_logprobs"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("background"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("service_tier"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("truncation"));
+
+        # Verify text format type is typed (not generic hash)
+        assertEq(Type::Hash, GrokTextFormatDataType.getFields().type());
+        assertTrue(GrokTextFormatDataType.getFields().hasKey("format"));
+
+        assertEq(Type::Hash, GrokTextFormatConfigDataType.getFields().type());
+        assertTrue(GrokTextFormatConfigDataType.getFields().hasKey("type"));
+        assertTrue(GrokTextFormatConfigDataType.getFields().hasKey("name"));
+        assertTrue(GrokTextFormatConfigDataType.getFields().hasKey("schema"));
+        assertTrue(GrokTextFormatConfigDataType.getFields().hasKey("description"));
+        assertTrue(GrokTextFormatConfigDataType.getFields().hasKey("strict"));
 
         assertEq(Type::Hash, GrokResponseType.getFields().type());
         assertTrue(GrokResponseType.getFields().hasKey("output"));
@@ -523,8 +570,41 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(GrokResponseUsageDataType.getFields().hasKey("input_tokens"));
         assertTrue(GrokResponseUsageDataType.getFields().hasKey("output_tokens"));
 
+        # Verify token detail sub-fields
+        assertEq(Type::Hash, GrokInputTokenDetailsDataType.getFields().type());
+        assertTrue(GrokInputTokenDetailsDataType.getFields().hasKey("cached_tokens"));
+        assertTrue(GrokInputTokenDetailsDataType.getFields().hasKey("audio_tokens"));
+        assertTrue(GrokInputTokenDetailsDataType.getFields().hasKey("image_tokens"));
+        assertTrue(GrokInputTokenDetailsDataType.getFields().hasKey("text_tokens"));
+
+        assertEq(Type::Hash, GrokOutputTokenDetailsDataType.getFields().type());
+        assertTrue(GrokOutputTokenDetailsDataType.getFields().hasKey("reasoning_tokens"));
+        assertTrue(GrokOutputTokenDetailsDataType.getFields().hasKey("accepted_prediction_tokens"));
+        assertTrue(GrokOutputTokenDetailsDataType.getFields().hasKey("audio_tokens"));
+        assertTrue(GrokOutputTokenDetailsDataType.getFields().hasKey("rejected_prediction_tokens"));
+
         assertEq(Type::Hash, GrokResponseStreamEventDataType.getFields().type());
         assertTrue(GrokResponseStreamEventDataType.getFields().hasKey("type"));
+
+        # Verify output item data types
+        assertEq(Type::Hash, GrokResponseOutputItemDataType.getFields().type());
+        assertTrue(GrokResponseOutputItemDataType.getFields().hasKey("type"));
+        assertTrue(GrokResponseOutputItemDataType.getFields().hasKey("content"));
+        assertTrue(GrokResponseOutputItemDataType.getFields().hasKey("role"));
+        assertTrue(GrokResponseOutputItemDataType.getFields().hasKey("name"));
+
+        assertEq(Type::Hash, GrokResponseOutputContentDataType.getFields().type());
+        assertTrue(GrokResponseOutputContentDataType.getFields().hasKey("type"));
+        assertTrue(GrokResponseOutputContentDataType.getFields().hasKey("text"));
+
+        # Verify logprobs data types
+        assertEq(Type::Hash, GrokLogprobsDataType.getFields().type());
+        assertTrue(GrokLogprobsDataType.getFields().hasKey("content"));
+        assertTrue(GrokLogprobsDataType.getFields().hasKey("refusal"));
+
+        assertEq(Type::Hash, GrokTokenLogprobDataType.getFields().type());
+        assertTrue(GrokTokenLogprobDataType.getFields().hasKey("token"));
+        assertTrue(GrokTokenLogprobDataType.getFields().hasKey("logprob"));
     }
 
     liveTest() {
@@ -606,6 +686,22 @@ public class GrokDataProviderTest inherits QUnit::Test {
         # Delete the stored response
         hash<auto> del_result = responses_del.doRequest({"id": resp.id});
         assertEq(True, del_result.deleted);
+
+        # Test SSE streaming via model -> stream path
+        GrokResponseStreamDataProvider stream_prov =
+            cast<GrokResponseStreamDataProvider>(prov.getChildProvider("models").getChildProvider("grok-3")
+                .getChildProvider("stream"));
+        StreamObserver observer();
+        stream_prov.registerObserver(observer);
+        stream_prov.observersReady();
+        stream_prov.doRequest({
+            "input": "Reply with exactly one word: streaming",
+            "max_output_tokens": 50,
+        });
+        # Wait for at least one event (text delta or completed)
+        observer.wait(1);
+        assertTrue(observer.events.size() > 0);
+        assertTrue(observer.events[0].type.val());
 %endif
     }
 }

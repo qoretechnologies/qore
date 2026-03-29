@@ -148,6 +148,10 @@ public class GrokRestClientBase {
     */
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
+        # rebuild default_path from user's api version if provided
+        if (opts.api) {
+            rv.default_path = "/" + opts.api;
+        }
         # map apikey to token for Bearer authentication
         if (rv.apikey) {
             rv.token = rv.apikey;
@@ -287,14 +291,6 @@ public class GrokResponseSseStream {
             }
             rv = base + rv;
         }
-        *string defp = rest.getDefaultPath();
-        if (defp.val() && defp != "/") {
-            defp =~ s/\/+$//;
-            if (defp !~ /^\//) {
-                defp = "/" + defp;
-            }
-            rv = defp + rv;
-        }
         return rv;
     }
 
@@ -373,7 +369,9 @@ public class GrokRestConnection inherits RestClient::RestConnection {
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "xAI Grok REST Connection",
             "short_desc": "A connection to the xAI Grok REST API",
-            "desc": "A connection to the xAI Grok REST API",
+            "desc": "A connection to the xAI Grok REST API.\n\n"
+                "Requires an API key for Bearer authentication. "
+                "Get your API key from the [xAI Console](https://console.x.ai/)",
             "cls": Class::forName("GrokRestConnection"),
             "auto_url": True,
             "schemes": {

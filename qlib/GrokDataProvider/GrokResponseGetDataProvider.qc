@@ -58,7 +58,14 @@ public class GrokResponseGetDataProvider inherits GrokDataProviderCommon {
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("GET", "responses/" + req.id).body;
+        hash<auto> rv = doRestCommand("GET", "responses/" + req.id).body;
+        # Post-process response to populate synthetic fields
+        if (rv.output) {
+            rv.output_text = GrokModelCreateResponseDataProvider::getOutputText(rv.output);
+            rv.tool_calls = GrokModelCreateResponseDataProvider::getToolCalls(rv.output);
+            rv.tool_results = GrokModelCreateResponseDataProvider::getToolResults(rv.output);
+        }
+        return rv;
     }
 
     #! Returns the description of a successful request message, if any

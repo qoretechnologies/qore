@@ -110,7 +110,7 @@ public class GrokDeleteResponseType inherits HashDataType {
             "object": {
                 "display_name": "Object",
                 "short_desc": "The object type",
-                "desc": "The object type (always 'response')",
+                "desc": "The object type (always `response`)",
                 "type": AbstractDataProviderTypeMap."string",
             },
             "deleted": {

@@ -198,8 +198,8 @@ public class GrokStreamOptionsType inherits HashDataType {
             "include_usage": {
                 "display_name": "Include Usage?",
                 "short_desc": "Enables additional chunks providing usage information",
-                "desc": "If set, an additional chunk will be streamed before the `data: [DONE]` message. The usage "
-                    "field on this chunk shows the token usage statistics for the entire request",
+                "desc": "If set, an additional chunk will be streamed before the `data: [DONE]` message. "
+                    "The usage field on this chunk shows the token usage statistics for the entire request",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
         };
@@ -236,7 +236,10 @@ public class GrokFunctionDataType inherits HashDataType {
             "parameters": {
                 "display_name": "Parameters",
                 "short_desc": "The parameters the function accepts as a JSON Schema object",
-                "desc": "The parameters the function accepts, described as a JSON Schema object",
+                "desc": "The parameters the function accepts, described as a JSON Schema object.\n\n"
+                    "**Example**: `{\"type\": \"object\", \"properties\": {\"location\": {\"type\": \"string\", "
+                    "\"description\": \"City name\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", "
+                    "\"fahrenheit\"]}}, \"required\": [\"location\"]}`",
                 "type": AbstractDataProviderTypeMap."*hash",
             },
         };
@@ -376,7 +379,7 @@ public class GrokChatCompletionRequestType inherits HashDataType {
             "model": {
                 "display_name": "Model ID",
                 "short_desc": "Model to use to create the response",
-                "desc": "Model to use to create the response (e.g., grok-3, grok-4)",
+                "desc": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "attr": {
                     "ref_data": "models",
@@ -432,6 +435,15 @@ public class GrokChatCompletionRequestType inherits HashDataType {
                     "appear in the text so far, increasing the model's likelihood to talk about new topics",
                 "type": AbstractDataProviderTypeMap."*float",
             },
+            "logit_bias": {
+                "display_name": "Logit Bias",
+                "short_desc": "Modify likelihood of specified tokens appearing in the completion",
+                "desc": "Modify the likelihood of specified tokens appearing in the completion. Maps token IDs "
+                    "(as strings) to bias values from `-100` to `100`. Values of `-100` or `100` result in a "
+                    "ban or exclusive selection of the relevant token.\n\n"
+                    "**Example**: `{\"50256\": -100}` to prevent the end-of-text token",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
             "reasoning_effort": {
                 "display_name": "Reasoning Effort",
                 "short_desc": "Reasoning model constraint level",
@@ -444,6 +456,12 @@ public class GrokChatCompletionRequestType inherits HashDataType {
                         "short_desc": "Low reasoning effort",
                         "desc": "Low reasoning effort",
                         "value": "low",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Medium",
+                        "short_desc": "Medium reasoning effort",
+                        "desc": "Medium reasoning effort",
+                        "value": "medium",
                     },
                     <AllowedValueInfo>{
                         "display_name": "High",
@@ -478,7 +496,7 @@ public class GrokChatCompletionRequestType inherits HashDataType {
                 "display_name": "Stop Sequences",
                 "short_desc": "Up to 4 sequences where the API will stop generating further tokens",
                 "desc": "Up to 4 sequences where the API will stop generating further tokens",
-                "type": AbstractDataProviderTypeMap."any",
+                "type": AbstractDataProviderTypeMap."*softlist",
             },
             "stream": {
                 "display_name": "Stream?",
@@ -689,6 +707,74 @@ public class GrokCompletionMessageDataType inherits HashDataType {
 #! Constant for completion message data type
 public const GrokCompletionMessageDataType = new GrokCompletionMessageDataType();
 
+#! Token logprob data type
+public class GrokTokenLogprobDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "token": {
+                "display_name": "Token",
+                "short_desc": "The token string",
+                "desc": "The token string",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "logprob": {
+                "display_name": "Log Probability",
+                "short_desc": "The log probability of the token",
+                "desc": "The log probability of the token",
+                "type": AbstractDataProviderTypeMap."float",
+            },
+            "bytes": {
+                "display_name": "Bytes",
+                "short_desc": "UTF-8 byte representation of the token",
+                "desc": "A list of integers representing the UTF-8 bytes of the token",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+            "top_logprobs": {
+                "display_name": "Top Log Probabilities",
+                "short_desc": "Most likely tokens at this position",
+                "desc": "List of the most likely tokens and their log probabilities at this position",
+                "type": AbstractDataProviderTypeMap."*list",
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokTokenLogprob") {
+        addQoreFields(Fields);
+    }
+}
+
+public const GrokTokenLogprobDataType = new GrokTokenLogprobDataType();
+
+#! Logprobs data type for chat completion choices
+public class GrokLogprobsDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "content": {
+                "display_name": "Content",
+                "short_desc": "Log probabilities for output tokens",
+                "desc": "A list of token log probability objects for each output token",
+                "type": new ListDataType("*GrokTokenLogprobs", GrokTokenLogprobDataType, True),
+            },
+            "refusal": {
+                "display_name": "Refusal",
+                "short_desc": "Log probabilities for refusal tokens",
+                "desc": "A list of token log probability objects for refusal tokens, if applicable",
+                "type": new ListDataType("*GrokRefusalLogprobs", GrokTokenLogprobDataType, True),
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokLogprobs") {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type, "GrokLogprobs") {
+        addQoreFields(Fields);
+    }
+}
+
+public const GrokLogprobsDataType = new GrokLogprobsDataType();
+
 #! Chat completion response choice type
 public class GrokChoiceDataType inherits HashDataType {
     public {
@@ -710,7 +796,7 @@ public class GrokChoiceDataType inherits HashDataType {
                 "display_name": "Log Probability",
                 "short_desc": "Log probability information for the message",
                 "desc": "Log probability information for the message",
-                "type": AbstractDataProviderTypeMap."*hash",
+                "type": new GrokLogprobsDataType(AutoHashOrNothingType),
             },
             "finish_reason": {
                 "display_name": "Finish Reason",
@@ -804,7 +890,7 @@ public class GrokChatCompletionResponseType inherits HashDataType {
             "object": {
                 "display_name": "Object",
                 "short_desc": "The type of response",
-                "desc": "The type of response (always chat.completion)",
+                "desc": "The type of response (always `chat.completion`)",
                 "type": AbstractDataProviderTypeMap."string",
             },
             "created": {
@@ -840,7 +926,13 @@ public class GrokChatCompletionResponseType inherits HashDataType {
             "citations": {
                 "display_name": "Citations",
                 "short_desc": "External sources used in the response",
-                "desc": "External sources used in the response when web search is enabled",
+                "desc": "A list of source URLs used by the model when web search is enabled",
+                "type": new ListDataType("*GrokCitationUrls", AbstractDataProviderTypeMap."string", True),
+            },
+            "output_files": {
+                "display_name": "Output Files",
+                "short_desc": "Files generated by the model",
+                "desc": "A list of files generated by the model, if any",
                 "type": AbstractDataProviderTypeMap."*list",
             },
         };

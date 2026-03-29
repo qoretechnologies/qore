@@ -49,7 +49,13 @@ module GrokDataProvider {
             "name": GrokDataProvider::AppName,
             "display_name": "Grok AI Services",
             "short_desc": "xAI Grok AI services",
-            "desc": "xAI Grok AI services providing chat completions, responses API, and streaming",
+            "desc": "xAI Grok AI services providing chat completions, the Responses API, and SSE streaming.\n\n"
+                "**Features**:\n"
+                "- **Chat Completions**: multi-message and simple chat with tool calling and web search\n"
+                "- **Responses API**: create, retrieve, and delete responses with conversation continuation\n"
+                "- **Streaming**: real-time token delivery via Server-Sent Events\n"
+                "- **Deferred Completions**: asynchronous request processing\n\n"
+                "Get your API key from the [xAI Console](https://console.x.ai/)",
             "scheme": "grok",
             "logo": GrokLogo,
             "logo_file_name": "grok-logo.svg",
@@ -62,9 +68,9 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/multi-chat",
             "action": "multi-chat",
+            "groups": ("Chat",),
             "display_name": "Multi Chat",
-            "short_desc": "Chat with Grok by sending multiple messages at once and potentially getting "
-                "multiple replies",
+            "short_desc": "Chat with Grok using multiple messages with multi-reply support",
             "desc": "Chat with Grok by sending multiple messages at once and potentially getting multiple "
                 "replies",
             "action_code": DPAT_API,
@@ -82,6 +88,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/simple-chat",
             "action": "simple-chat",
+            "groups": ("Chat",),
             "display_name": "Simple Chat",
             "short_desc": "Chat with Grok by sending a single message and receiving a single reply",
             "desc": "Chat with Grok by sending a single message and receiving a single reply",
@@ -94,12 +101,13 @@ module GrokDataProvider {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 GrokSimpleChatCompletionRequestType.getFields() - ("model", "role", "content")
             ),
-            "output_type": GrokChatCompletionDataProvider::ResponseType,
+            "output_type": GrokSimpleChatCompletionDataProvider::ResponseType,
         });
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GrokDataProvider::AppName,
             "path": "/models/{model}/create-response",
             "action": "create-response",
+            "groups": ("Responses",),
             "display_name": "Process Request With a Model",
             "short_desc": "Process a request with a Grok model via the Responses API",
             "desc": "Process a request with a Grok model via the Responses API with optional tool calling "
@@ -109,7 +117,7 @@ module GrokDataProvider {
                 "model": <DataProviderPathVarInfo>{
                     "display_name": "Model",
                     "short_desc": "The Grok model to use",
-                    "desc": "The Grok model to use (e.g., grok-3, grok-4)",
+                    "desc": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
                     "example_value": "grok-3",
                 },
             },
@@ -119,7 +127,12 @@ module GrokDataProvider {
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - "input"
+                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
+                    "max_output_tokens")
             ),
             "output_type": GrokModelCreateResponseDataProvider::ResponseType,
         });
@@ -127,6 +140,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/models/{model}/create-response/stream",
             "action": "stream-response",
+            "groups": ("Responses",),
             "display_name": "Stream Response",
             "short_desc": "Stream a response from a Grok model with Server-Sent Events",
             "desc": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
@@ -136,7 +150,7 @@ module GrokDataProvider {
                 "model": <DataProviderPathVarInfo>{
                     "display_name": "Model",
                     "short_desc": "The Grok model to use",
-                    "desc": "The Grok model to use (e.g., grok-3, grok-4)",
+                    "desc": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
                     "example_value": "grok-3",
                 },
             },
@@ -146,7 +160,12 @@ module GrokDataProvider {
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - "input"
+                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
+                    "max_output_tokens")
             ),
             "output_type": GrokResponseStreamEventDataType,
         });
@@ -154,6 +173,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/responses/create",
             "action": "create-response-direct",
+            "groups": ("Responses",),
             "display_name": "Create Response",
             "short_desc": "Create a response via the Responses API without model context",
             "desc": "Create a response via the Responses API with full control over model selection and options",
@@ -164,7 +184,12 @@ module GrokDataProvider {
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - ("input", "model")
+                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
+                    "max_output_tokens")
             ),
             "output_type": GrokModelCreateResponseDataProvider::ResponseType,
         });
@@ -172,6 +197,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/responses/{response}/get",
             "action": "get-response",
+            "groups": ("Responses",),
             "display_name": "Get Response",
             "short_desc": "Retrieve a previously stored response by ID",
             "desc": "Retrieve a previously stored response by its unique identifier",
@@ -196,6 +222,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/responses/{response}/delete",
             "action": "delete-response",
+            "groups": ("Responses",),
             "display_name": "Delete Response",
             "short_desc": "Delete a stored response by ID",
             "desc": "Delete a previously stored response by its unique identifier",
@@ -220,6 +247,7 @@ module GrokDataProvider {
             "app": GrokDataProvider::AppName,
             "path": "/deferred-completion",
             "action": "deferred-completion",
+            "groups": ("Chat",),
             "display_name": "Get Deferred Completion",
             "short_desc": "Retrieve a deferred chat completion result by request ID",
             "desc": "Retrieve the result of a deferred chat completion request using the request ID",

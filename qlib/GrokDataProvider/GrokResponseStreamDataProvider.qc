@@ -70,7 +70,7 @@ public class GrokResponseStreamEventDataType inherits HashDataType {
     }
 
     #! Creates the object from the arguments
-    constructor() {
+    constructor() : HashDataType("GrokResponseStreamEvent") {
         addQoreFields(Fields);
         setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
     }
@@ -241,6 +241,8 @@ public class GrokResponseStreamDataProvider inherits GrokDataProviderCommon, Dat
 
     #! Starts the SSE thread
     private start() {
+        m.lock();
+        on_exit m.unlock();
         if (started) {
             return;
         }
@@ -323,14 +325,22 @@ public class GrokResponseStreamDataProvider inherits GrokDataProviderCommon, Dat
             "raw_data": evt."data",
         };
 %else
-        hash<auto> payload = parse_json(evt."data");
-        if (evt.event) {
-            payload.event = evt.event;
+        try {
+            hash<auto> payload = parse_json(evt."data");
+            if (evt.event) {
+                payload.event = evt.event;
+            }
+            if (evt.id) {
+                payload.id = evt.id;
+            }
+            return payload;
+        } catch () {
+            return {
+                "event": evt.event,
+                "id": evt.id,
+                "raw_data": evt."data",
+            };
         }
-        if (evt.id) {
-            payload.id = evt.id;
-        }
-        return payload;
 %endif
     }
 

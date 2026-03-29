@@ -236,6 +236,26 @@ public class GrokReasoningConfigDataType inherits HashDataType {
                 "short_desc": "Summary generation control",
                 "desc": "Controls summary generation for reasoning output",
                 "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "short_desc": "Automatic summary generation",
+                        "desc": "Automatic summary generation",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Concise",
+                        "short_desc": "Generate concise summary",
+                        "desc": "Generate concise summary",
+                        "value": "concise",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Detailed",
+                        "short_desc": "Generate detailed summary",
+                        "desc": "Generate detailed summary",
+                        "value": "detailed",
+                    },
+                ),
             },
         };
     }
@@ -295,7 +315,10 @@ public class GrokResponseToolDataType inherits HashDataType {
             "parameters": {
                 "display_name": "Parameters",
                 "short_desc": "The function parameters as a JSON Schema object",
-                "desc": "The parameters the function accepts, described as a JSON Schema object",
+                "desc": "The parameters the function accepts, described as a JSON Schema object.\n\n"
+                    "**Example**: `{\"type\": \"object\", \"properties\": {\"location\": {\"type\": \"string\", "
+                    "\"description\": \"City name\"}, \"unit\": {\"type\": \"string\", \"enum\": [\"celsius\", "
+                    "\"fahrenheit\"]}}, \"required\": [\"location\"]}`",
                 "type": AbstractDataProviderTypeMap."*hash",
             },
         };
@@ -320,6 +343,24 @@ public class GrokInputTokenDetailsDataType inherits HashDataType {
                 "desc": "Number of input tokens served from cache",
                 "type": AbstractDataProviderTypeMap."*int",
             },
+            "audio_tokens": {
+                "display_name": "Audio Tokens",
+                "short_desc": "Number of audio input tokens",
+                "desc": "Number of audio input tokens",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "image_tokens": {
+                "display_name": "Image Tokens",
+                "short_desc": "Number of image input tokens",
+                "desc": "Number of image input tokens",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "text_tokens": {
+                "display_name": "Text Tokens",
+                "short_desc": "Number of text input tokens",
+                "desc": "Number of text input tokens",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
         };
     }
 
@@ -342,6 +383,24 @@ public class GrokOutputTokenDetailsDataType inherits HashDataType {
                 "display_name": "Reasoning Tokens",
                 "short_desc": "Number of reasoning tokens",
                 "desc": "Number of tokens used for reasoning",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "accepted_prediction_tokens": {
+                "display_name": "Accepted Prediction Tokens",
+                "short_desc": "Number of accepted prediction tokens",
+                "desc": "Number of accepted prediction tokens",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "audio_tokens": {
+                "display_name": "Audio Tokens",
+                "short_desc": "Number of audio output tokens",
+                "desc": "Number of audio output tokens",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "rejected_prediction_tokens": {
+                "display_name": "Rejected Prediction Tokens",
+                "short_desc": "Number of rejected prediction tokens",
+                "desc": "Number of rejected prediction tokens",
                 "type": AbstractDataProviderTypeMap."*int",
             },
         };
@@ -490,6 +549,114 @@ public class GrokResponseUsageDataType inherits HashDataType {
 
 public const GrokResponseUsageDataType = new GrokResponseUsageDataType();
 
+#! Text format configuration data type for the Responses API
+public class GrokTextFormatConfigDataType inherits HashDataType {
+    public {
+        #! fields
+        const Fields = {
+            "type": {
+                "display_name": "Type",
+                "short_desc": "The response format type",
+                "desc": "The response format type",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Text",
+                        "short_desc": "Standard text output (default)",
+                        "desc": "Standard text output (default)",
+                        "value": "text",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "JSON Schema",
+                        "short_desc": "Structured output conforming to a JSON schema",
+                        "desc": "Structured output conforming to a JSON schema",
+                        "value": "json_schema",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "JSON Object",
+                        "short_desc": "Valid JSON output without a specific schema",
+                        "desc": "Valid JSON output without a specific schema",
+                        "value": "json_object",
+                    },
+                ),
+                "default_value": "text",
+            },
+            "name": {
+                "display_name": "Schema Name",
+                "short_desc": "Identifier for the JSON schema (required for json_schema type)",
+                "desc": "Identifier for the JSON schema. Required when `type` is `json_schema`. "
+                    "Must be alphanumeric with underscores/dashes, max 64 characters",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "movie_response",
+            },
+            "schema": {
+                "display_name": "Schema",
+                "short_desc": "JSON Schema object defining the output structure",
+                "desc": "The JSON Schema object defining the output structure. Required when `type` is "
+                    "`json_schema`.\n\n"
+                    "**Example**: `{\"type\": \"object\", \"properties\": {\"title\": {\"type\": \"string\"}, "
+                    "\"rating\": {\"type\": \"number\"}}, \"required\": [\"title\", \"rating\"], "
+                    "\"additionalProperties\": false}`",
+                "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "description": {
+                "display_name": "Description",
+                "short_desc": "Human-readable description of the schema's purpose",
+                "desc": "Human-readable description of the schema's purpose",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "strict": {
+                "display_name": "Strict",
+                "short_desc": "Strictly follow the exact schema",
+                "desc": "When `true`, the model strictly follows the exact schema definition",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("GrokTextFormatConfig") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the type with a specific base type
+    constructor(Type base_type) : HashDataType(base_type, "GrokTextFormatConfig") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Constant for text format config data type
+public const GrokTextFormatConfigDataType = new GrokTextFormatConfigDataType();
+
+#! Text format data type for the Responses API
+public class GrokTextFormatDataType inherits HashDataType {
+    public {
+        #! fields
+        const Fields = {
+            "format": {
+                "display_name": "Format",
+                "short_desc": "Output format configuration",
+                "desc": "Output format configuration. Set `type` to `json_schema` for structured outputs "
+                    "or `json_object` for free-form JSON",
+                "type": new GrokTextFormatConfigDataType(AutoHashOrNothingType),
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("GrokTextFormat") {
+        addQoreFields(Fields);
+    }
+
+    #! Creates the type with a specific base type
+    constructor(Type base_type) : HashDataType(base_type, "GrokTextFormat") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Constant for text format data type
+public const GrokTextFormatDataType = new GrokTextFormatDataType();
+
 #! The responses API request type
 public class GrokResponseCreateRequestType inherits HashDataType {
     public {
@@ -505,7 +672,7 @@ public class GrokResponseCreateRequestType inherits HashDataType {
             "model": {
                 "display_name": "Model ID",
                 "short_desc": "Model to use for the response",
-                "desc": "Model to use for the response (e.g., grok-3, grok-4)",
+                "desc": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "attr": {
                     "ref_data": "models",
@@ -585,8 +752,30 @@ public class GrokResponseCreateRequestType inherits HashDataType {
             "tool_choice": {
                 "display_name": "Tool Choice",
                 "short_desc": "Tool invocation control",
-                "desc": "Controls which tools the model may use",
+                "desc": "Controls which tools the model may use. Use a string value for simple modes, or an "
+                    "object with `type` and `name` keys to force a specific function",
                 "type": AbstractDataProviderTypeMap."any",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "None",
+                        "short_desc": "The model will not call any tool",
+                        "desc": "The model will not call any tool and instead generates a message",
+                        "value": "none",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "short_desc": "The model decides whether to call tools",
+                        "desc": "The model can pick between generating a message or calling one or more tools",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Required",
+                        "short_desc": "The model must call one or more tools",
+                        "desc": "The model must call one or more tools",
+                        "value": "required",
+                    },
+                ),
+                "allowed_values_creatable": True,
             },
             "parallel_tool_calls": {
                 "display_name": "Parallel Tool Calls",
@@ -608,9 +797,91 @@ public class GrokResponseCreateRequestType inherits HashDataType {
             },
             "metadata": {
                 "display_name": "Metadata",
-                "short_desc": "Additional metadata",
-                "desc": "Additional metadata to attach to the response",
+                "short_desc": "Additional metadata key-value pairs",
+                "desc": "Set of key-value pairs to attach to the response. Maximum 16 pairs; keys up to 64 "
+                    "characters, values up to 512 characters",
                 "type": AbstractDataProviderTypeMap."*hash",
+            },
+            "text": {
+                "display_name": "Text Format",
+                "short_desc": "Configuration for text response format",
+                "desc": "Configuration for text response format from the model. Use to specify structured output "
+                    "via JSON schema",
+                "type": new GrokTextFormatDataType(AutoHashOrNothingType),
+            },
+            "include": {
+                "display_name": "Include",
+                "short_desc": "Additional output data to include in the response",
+                "desc": "Additional output data to include in the model response",
+                "type": AbstractDataProviderTypeMap."*softlist",
+            },
+            "prompt_cache_key": {
+                "display_name": "Prompt Cache Key",
+                "short_desc": "A key for caching prompts to optimize cache hit rates",
+                "desc": "Used by xAI to cache responses for similar requests to optimize cache hit rates",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "logprobs": {
+                "display_name": "Log Probabilities",
+                "short_desc": "Whether to return log probabilities of output tokens",
+                "desc": "Whether to return log probabilities of the output tokens. If `true`, returns the log "
+                    "probabilities of each output token",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "top_logprobs": {
+                "display_name": "Top Log Probabilities",
+                "short_desc": "Number of most likely tokens to return at each position",
+                "desc": "An integer between `0` and `20` specifying the number of most likely tokens to return "
+                    "at each token position, each with an associated log probability",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "background": {
+                "display_name": "Background",
+                "short_desc": "Process the response asynchronously in the background",
+                "desc": "If `true`, the response will be processed asynchronously in the background. "
+                    "Use the `get-response` action with the returned response ID to poll for the result",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "service_tier": {
+                "display_name": "Service Tier",
+                "short_desc": "Specifies the latency tier to use for processing",
+                "desc": "Specifies the latency tier to use for processing the request",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "short_desc": "Automatic tier selection",
+                        "desc": "Automatic tier selection based on load",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Default",
+                        "short_desc": "Default processing tier",
+                        "desc": "Default processing tier",
+                        "value": "default",
+                    },
+                ),
+            },
+            "truncation": {
+                "display_name": "Truncation",
+                "short_desc": "Truncation strategy for long conversations",
+                "desc": "Truncation strategy when the context exceeds the model's maximum context length. "
+                    "`auto` truncates from the middle of the conversation to fit within the context window",
+                "type": AbstractDataProviderTypeMap."*string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Auto",
+                        "short_desc": "Automatically truncate long conversations",
+                        "desc": "Automatically truncate from the middle of the conversation",
+                        "value": "auto",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Disabled",
+                        "short_desc": "Do not truncate; return error if too long",
+                        "desc": "Do not truncate; return an error if the context exceeds the limit",
+                        "value": "disabled",
+                    },
+                ),
             },
         };
     }
@@ -698,6 +969,183 @@ public class GrokConversationContextDataType inherits HashDataType {
 
 public const GrokConversationContextDataType = new GrokConversationContextDataType();
 
+#! Output content data type for the Responses API
+public class GrokResponseOutputContentDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Content Type",
+                "short_desc": "The output content type",
+                "desc": "The output content type",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Output Text",
+                        "short_desc": "Text output from the model",
+                        "desc": "Text output from the model",
+                        "value": "output_text",
+                    },
+                ),
+                "allowed_values_creatable": True,
+            },
+            "text": {
+                "display_name": "Text",
+                "short_desc": "Text output from the model",
+                "desc": "Text output from the model",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "annotations": {
+                "display_name": "Annotations",
+                "short_desc": "Annotations for output text",
+                "desc": "Annotations for output text such as URL citations from web search results",
+                "type": new ListDataType("*GrokOutputAnnotations", GrokUrlCitationAnnotationDataType, True),
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokResponseOutputContent") {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+public const GrokResponseOutputContentDataType = new GrokResponseOutputContentDataType();
+
+#! URL citation annotation data type for the Responses API
+public class GrokUrlCitationAnnotationDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Type",
+                "short_desc": "The annotation type",
+                "desc": "The annotation type (e.g., `url_citation`)",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "title": {
+                "display_name": "Title",
+                "short_desc": "Citation label or title",
+                "desc": "Citation label or title for the annotation",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "url": {
+                "display_name": "URL",
+                "short_desc": "The source URL",
+                "desc": "The source URL for the citation",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "start_index": {
+                "display_name": "Start Index",
+                "short_desc": "Start character position in the text",
+                "desc": "Character position where the citation reference starts in the text",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+            "end_index": {
+                "display_name": "End Index",
+                "short_desc": "End character position in the text",
+                "desc": "Character position where the citation reference ends in the text",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokUrlCitationAnnotation") {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+public const GrokUrlCitationAnnotationDataType = new GrokUrlCitationAnnotationDataType();
+
+#! Output item data type for the Responses API
+public class GrokResponseOutputItemDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Output Type",
+                "short_desc": "The type of output item",
+                "desc": "The type of output item",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "Message",
+                        "short_desc": "A message output item",
+                        "desc": "A message output item",
+                        "value": "message",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Function Call",
+                        "short_desc": "A function call output item",
+                        "desc": "A function call output item",
+                        "value": "function_call",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Function Call Output",
+                        "short_desc": "A function call result output item",
+                        "desc": "A function call result output item",
+                        "value": "function_call_output",
+                    },
+                ),
+                "allowed_values_creatable": True,
+            },
+            "id": {
+                "display_name": "ID",
+                "short_desc": "Output item ID",
+                "desc": "Output item ID",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "status": {
+                "display_name": "Status",
+                "short_desc": "Output item status",
+                "desc": "Output item status",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "role": {
+                "display_name": "Role",
+                "short_desc": "Role for message outputs",
+                "desc": "Role for message outputs",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "content": {
+                "display_name": "Content",
+                "short_desc": "Output content parts",
+                "desc": "Output content parts",
+                "type": new ListDataType("*GrokResponseOutputContent", GrokResponseOutputContentDataType, True),
+            },
+            "name": {
+                "display_name": "Function Name",
+                "short_desc": "Function name for function call outputs",
+                "desc": "Function name for function call outputs",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "arguments": {
+                "display_name": "Function Arguments",
+                "short_desc": "Function call arguments as JSON string",
+                "desc": "Function call arguments serialized as a JSON string",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+            "call_id": {
+                "display_name": "Call ID",
+                "short_desc": "Function call ID",
+                "desc": "Function call ID",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "output": {
+                "display_name": "Function Output",
+                "short_desc": "Output from a function call",
+                "desc": "Output from a function call",
+                "type": AbstractDataProviderTypeMap."any",
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokResponseOutputItem") {
+        addQoreFields(Fields);
+        setDefaultOtherFieldType(AbstractDataProviderTypeMap."any");
+    }
+}
+
+public const GrokResponseOutputItemDataType = new GrokResponseOutputItemDataType();
+
 #! The responses API response type
 public class GrokResponseType inherits HashDataType {
     public {
@@ -712,7 +1160,7 @@ public class GrokResponseType inherits HashDataType {
             "object": {
                 "display_name": "Object",
                 "short_desc": "The object type (always 'response')",
-                "desc": "The object type (always 'response')",
+                "desc": "The object type (always `response`)",
                 "type": AbstractDataProviderTypeMap."string",
             },
             "created_at": {
@@ -762,8 +1210,8 @@ public class GrokResponseType inherits HashDataType {
             "output": {
                 "display_name": "Output",
                 "short_desc": "Generated response messages",
-                "desc": "The generated response messages and content",
-                "type": AbstractDataProviderTypeMap."*list",
+                "desc": "The generated response output items including messages, function calls, and results",
+                "type": new ListDataType("*GrokResponseOutputItems", GrokResponseOutputItemDataType, True),
             },
             "output_text": {
                 "display_name": "Output Text",
@@ -774,14 +1222,14 @@ public class GrokResponseType inherits HashDataType {
             "tool_calls": {
                 "display_name": "Tool Calls",
                 "short_desc": "Tool calls from output",
-                "desc": "Extracted tool calls from the output",
-                "type": AbstractDataProviderTypeMap."*list",
+                "desc": "Extracted function call items from the output",
+                "type": new ListDataType("*GrokExtractedToolCalls", GrokResponseOutputItemDataType, True),
             },
             "tool_results": {
                 "display_name": "Tool Results",
                 "short_desc": "Tool results from output",
-                "desc": "Extracted tool results from the output",
-                "type": AbstractDataProviderTypeMap."*list",
+                "desc": "Extracted function call output items from the output",
+                "type": new ListDataType("*GrokExtractedToolResults", GrokResponseOutputItemDataType, True),
             },
             "usage": {
                 "display_name": "Usage",

@@ -44,7 +44,7 @@ public class GrokSimpleChatCompletionDataProvider inherits GrokDataProviderCommo
         const RequestType = GrokSimpleChatCompletionRequestType;
 
         #! Response type
-        const ResponseType = GrokChatCompletionResponseType;
+        const ResponseType = GrokSimpleChatCompletionResponseType;
     }
 
     #! Creates the object from the arguments
@@ -66,6 +66,9 @@ public class GrokSimpleChatCompletionDataProvider inherits GrokDataProviderCommo
         },);
         hash<auto> rv = doRestCommand("POST", "chat/completions", req).body;
         # Extract single choice for simple chat
+        if (!rv.choices || !rv.choices.size()) {
+            throw "GROK-API-ERROR", "API returned no choices in chat completion response";
+        }
         rv.choice = remove rv.choices[0];
         return rv;
     }
@@ -143,4 +146,35 @@ public class GrokSimpleChatCompletionRequestType inherits HashDataType {
 
 #! Constant for simple chat completion request type
 public const GrokSimpleChatCompletionRequestType = new GrokSimpleChatCompletionRequestType();
+
+#! Simple chat completion response type - returns a single choice instead of a list
+public class GrokSimpleChatCompletionResponseType inherits HashDataType {
+    public {
+        #! fields
+        const Fields = {
+            "id": GrokChatCompletionResponseType::Fields."id",
+            "object": GrokChatCompletionResponseType::Fields."object",
+            "created": GrokChatCompletionResponseType::Fields."created",
+            "model": GrokChatCompletionResponseType::Fields."model",
+            "system_fingerprint": GrokChatCompletionResponseType::Fields."system_fingerprint",
+            "choice": {
+                "display_name": "Choice",
+                "short_desc": "The chat completion choice",
+                "desc": "The single extracted chat completion choice",
+                "type": GrokChoiceDataType,
+            },
+            "usage": GrokChatCompletionResponseType::Fields."usage",
+            "citations": GrokChatCompletionResponseType::Fields."citations",
+            "output_files": GrokChatCompletionResponseType::Fields."output_files",
+        };
+    }
+
+    #! Creates the type
+    constructor() : HashDataType("GrokSimpleChatCompletionResponse") {
+        addQoreFields(Fields);
+    }
+}
+
+#! Constant for simple chat completion response type
+public const GrokSimpleChatCompletionResponseType = new GrokSimpleChatCompletionResponseType();
 }
