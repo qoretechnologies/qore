@@ -89,6 +89,8 @@ class Http2TrailersTest inherits QUnit::Test {
             \testSendTrailersNoHttp2Session());
         addTestCase("getTrailers() returns NOTHING when no trailers",
             \testGetTrailersNoTrailers());
+        addTestCase("getTrailers() via startStreaming + readData with body",
+            \testStreamingReadDataGetTrailers());
 
         set_return_value(main());
     }
@@ -786,5 +788,119 @@ class Http2TrailersTest inherits QUnit::Test {
         assertEq("plain-response", results.response.body, "body content");
         # Verify getTrailers() returned NOTHING
         assertFalse(results.has_trailers, "getTrailers() returns NOTHING when no trailers sent");
+    }
+
+    #! Test that getTrailers() works after startStreaming() + readData() when body + trailers arrive
+    /** This tests the streaming split path in Http2ClientPollOperationBase where a response
+        with both body and end_stream must preserve trailers in the end_stream marker hash.
+    */
+    testStreamingReadDataGetTrailers() {
+        int port;
+        Socket server_sock = setupServer(\port);
+
+        hash<auto> results;
+        Mutex mx();
+        Counter done(2);
+
+        # Server: streaming response with body + trailers
+        background sub() {
+            try {
+                Socket client = acceptHttp2(server_sock);
+
+                AbstractPollOperation read_op = client.startPollReadHttp2Request();
+                drivePoll(read_op);
+                @assert(read_op.goalReached());
+
+                auto request = read_op.getOutput();
+                int stream_id = request.stream_id;
+
+                # Submit streaming response headers
+                client.submitHttp2StreamingResponseHeaders(stream_id, 200,
+                    {"content-type": "application/grpc+proto"});
+
+                # Send body data
+                client.sendHttp2StreamData(stream_id, binary("streaming-body-data"));
+
+                # Send trailers with custom headers
+                client.sendHttp2Trailers(stream_id, {
+                    "grpc-status": "0",
+                    "grpc-message": "OK",
+                    "x-custom-trailer": "test-value",
+                });
+
+                AbstractPollOperation flush_op = client.startPollHttp2Flush();
+                drivePoll(flush_op);
+                @assert(flush_op.goalReached());
+
+                client.close();
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.server_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        # Client: use startStreaming() + readData() instead of request()
+        background sub() {
+            try {
+                HttpClientIo::HttpClientConnectionManager mgr = createClientMgr();
+
+                string url = sprintf("https://localhost:%d", port);
+                HttpClientIo::Http2ClientStreamHandle stream = mgr.acquireStream(url);
+
+                # Use streaming mode
+                stream.startStreaming("POST", "/test.Service/StreamMethod",
+                    {"content-type": "application/grpc+proto", "te": "trailers"}, False);
+                stream.sendData(binary("request-data"), True);
+
+                # Read all data via readData()
+                *binary body;
+                bool got_end_stream = False;
+                int reads = 0;
+                while (reads < 20) {
+                    auto data = stream.readData(5s);
+                    if (!exists data) {
+                        break;
+                    }
+                    if (data.typeCode() == NT_BINARY) {
+                        body = data;
+                    } else if (data.typeCode() == NT_HASH && data.end_stream) {
+                        got_end_stream = True;
+                        break;
+                    }
+                    ++reads;
+                }
+
+                # getTrailers() should return trailers after readData() streaming
+                *hash<string, string> trailers = stream.getTrailers();
+
+                {
+                    AutoLock al(mx);
+                    results.body = body;
+                    results.got_end_stream = got_end_stream;
+                    results.trailers_from_api = trailers;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(mx);
+                results.client_error = sprintf("%s: %s", ex.err, ex.desc);
+            }
+            done.dec();
+        }();
+
+        done.waitForZero(30s);
+
+        assertFalse(exists results.server_error, "no server error");
+        assertFalse(exists results.client_error, "no client error");
+
+        # Verify body was received
+        assertEq(True, exists results.body, "body received");
+        assertEq(True, results.got_end_stream, "end_stream received");
+
+        # Verify getTrailers() works after streaming readData()
+        assertEq(True, exists results.trailers_from_api, "getTrailers() returned trailers");
+        assertEq("0", results.trailers_from_api."grpc-status", "grpc-status trailer");
+        assertEq("OK", results.trailers_from_api."grpc-message", "grpc-message trailer");
+        assertEq("test-value", results.trailers_from_api."x-custom-trailer",
+            "custom trailer preserved");
     }
 }
