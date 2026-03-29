@@ -156,6 +156,9 @@ public class DataProvider {
             "jsonwrite": "JsonFileDataProvider",
 
             # provided by the jni module
+            "jasperreports": "JasperReportsDataProvider",
+
+            # provided by the jni module
             "kafka": "KafkaDataProvider",
 
             "linear": "LinearDataProvider",
