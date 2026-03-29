@@ -162,6 +162,9 @@ public class DataProvider {
             "jasperreports": "JasperReportsDataProvider",
 
             # provided by the jni module
+            "jdbc-dp": "JdbcDataProvider",
+
+            # provided by the jni module
             "kafka": "KafkaDataProvider",
 
             "linear": "LinearDataProvider",
