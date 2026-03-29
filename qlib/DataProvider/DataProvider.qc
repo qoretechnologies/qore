@@ -106,6 +106,9 @@ public class DataProvider {
             "empathicbuilding": "EmpathicBuildingDataProvider",
 
             # provided by the jni module
+            # provided by the jni module
+            "emlread": "EmailDataProvider",
+
             "excelread": "ExcelDataProvider",
             "excelwrite": "ExcelDataProvider",
 
@@ -157,6 +160,11 @@ public class DataProvider {
             "model-registry": "QoreModelRegistry",
 
             "mailgun": "MailgunDataProvider",
+
+            # provided by the jni module
+            "mboxread": "EmailDataProvider",
+            "msgread": "EmailDataProvider",
+
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
             "mongodb": "MongoDbDataProvider",
