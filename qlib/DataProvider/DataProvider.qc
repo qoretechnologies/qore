@@ -93,6 +93,9 @@ public class DataProvider {
             # provided by the cairo module
             "cairo": "CairoDataProvider",
 
+            # provided by the jni module
+            "camel": "CamelDataProvider",
+
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
