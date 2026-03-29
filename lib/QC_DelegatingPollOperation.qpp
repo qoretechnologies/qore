@@ -294,10 +294,13 @@ auto DelegatingPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
     Counter is decremented first.
 */
 nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) {
-    // Capture exception before decrementing counter (caller may check it)
     if (poll->counter_obj) {
-        // Decrement counter — signals the synchronous waiter
-        ValueHolder rv(poll->counter_obj->evalMethod("dec", nullptr, xsink), xsink);
+        // Decrement counter — use separate xsink so counter failures don't block callback
+        ExceptionSink dec_xsink;
+        ValueHolder rv(poll->counter_obj->evalMethod("dec", nullptr, &dec_xsink), &dec_xsink);
+        if (dec_xsink) {
+            dec_xsink.clear();
+        }
     }
     if (poll->on_complete_code) {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);

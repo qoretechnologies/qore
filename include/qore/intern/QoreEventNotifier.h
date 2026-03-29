@@ -112,7 +112,7 @@ public:
     }
 
     //! No-op for event notifiers (they don't represent closeable connections)
-    DLLLOCAL void closeIo(ExceptionSink* xsink) override {}
+    DLLLOCAL void closeIo(ExceptionSink* /* xsink */) override {}
 
     //! Signals the notifier (thread-safe)
     /** This method can be called from any thread to wake up the event loop.

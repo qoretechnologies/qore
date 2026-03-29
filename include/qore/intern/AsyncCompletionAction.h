@@ -58,7 +58,7 @@ public:
         if (!channel->trySend(output)) {
             // Backpressure: channel full — discard and log
             output.discard(xsink);
-            printd(0, "ChannelAction::execute(): channel full, discarding value\n");
+            printd(5, "ChannelAction::execute(): channel full, discarding value\n");
         }
     }
 
@@ -79,7 +79,7 @@ public:
         QoreHashNode* h = err_hash.release();
         if (!channel->trySend(h)) {
             h->deref(xsink);
-            printd(0, "ChannelAction::executeError(): channel full, discarding error\n");
+            printd(5, "ChannelAction::executeError(): channel full, discarding error\n");
         }
         channel->close();
     }
