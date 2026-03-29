@@ -55,6 +55,7 @@
 #include "qore/intern/ScopedObjectCallNode.h"
 #include <qore/intern/ParseReferenceNode.h>
 #include "qore/intern/NewComplexTypeNode.h"
+#include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/QoreCastOperatorNode.h"
 #include <qore/QoreEnumDecl.h>
 
@@ -2196,6 +2197,7 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             // For empty hashdecl hashes (common case: <HashdeclType>{}), use HASHDECL_NEW
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(qhd->getNamespacePath().c_str());
+            writer.writeU8(0);  // no args
             return true;
         }
         if (qhn->size() <= 255) {
@@ -2262,6 +2264,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (nhd->hd) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(nhd->hd->getNamespacePath().c_str());
+            // Serialize constructor args (typically a single hash initializer)
+            if (nhd->args && nhd->args->size() > 0) {
+                writer.writeU8(static_cast<uint8_t>(nhd->args->size()));
+                for (size_t j = 0; j < nhd->args->size(); ++j) {
+                    classifyAndWriteExpr(writer, nhd->args->get(j), parent_locals, parent_globals, const_reverse_map);
+                }
+            } else {
+                writer.writeU8(0);
+            }
             return true;
         }
     }

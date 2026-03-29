@@ -6103,6 +6103,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (nhd->hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
             id.ref1 = nhd->hd->getNamespacePath();
+            id.parse_args = nhd->args;
             return id;
         }
     }

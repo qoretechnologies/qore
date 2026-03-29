@@ -653,12 +653,21 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         rdr.readStringRef(p);
         return;
     }
+    // HASHDECL_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
+    if (ek == AOTExprKind::HASHDECL_NEW) {
+        rdr.readStringRef(p);  // hashdecl path
+        uint8_t na = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < na; ++i) {
+            skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
     // One-stringref kinds
     if (ek == AOTExprKind::FUNC_CALL || ek == AOTExprKind::RUNTIME_CONST_REF
             || ek == AOTExprKind::CONST_NUMBER || ek == AOTExprKind::CONST_BINARY
             || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
             || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF
-            || ek == AOTExprKind::HASHDECL_NEW || ek == AOTExprKind::COMPLEX_HASH_NEW
+            || ek == AOTExprKind::COMPLEX_HASH_NEW
             || ek == AOTExprKind::COMPLEX_LIST_NEW) {
         rdr.readStringRef(p);
         return;
@@ -1148,11 +1157,67 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
-            case AOTExprKind::HASHDECL_NEW:
             case AOTExprKind::COMPLEX_HASH_NEW:
             case AOTExprKind::COMPLEX_LIST_NEW:
                 ref1 = reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::HASHDECL_NEW: {
+                // ref1 = hashdecl path, followed by serialized constructor args
+                ref1 = reader.readStringRef(ptr);
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreListNode* call_args = nullptr;
+                if (num_args > 0) {
+                    call_args = qore_list_private::newList(true);
+                    for (uint8_t j = 0; j < num_args; ++j) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
+                            printd(0, "AOT v2: error reading hashdecl arg %d for '%s': %s\n",
+                                j, ref1 ? ref1 : "", arg_err.c_str());
+                            arg.discard(nullptr);
+                            call_args->push(QoreValue(), nullptr);
+                        } else {
+                            call_args->push(arg, nullptr);
+                        }
+                    }
+                }
+                // Resolve hashdecl and create node with args
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+                        *pp->RootNS, ref1, found_ns);
+                    if (hd) {
+                        // Convert call_args to QoreParseListNode for NewHashDeclNode
+                        QoreParseListNode* pln = nullptr;
+                        if (call_args) {
+                            pln = new QoreParseListNode(&loc_builtin);
+                            ConstListIterator li(call_args);
+                            while (li.next()) {
+                                QoreValue v = li.getValue();
+                                v.refSelf();
+                                pln->add(v, &loc_builtin);
+                            }
+                            call_args->deref(nullptr);
+                            call_args = nullptr;
+                        }
+                        NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, pln, false);
+                        ctx->exprs[i] = toBitsNB(QoreValue(nhd));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve hashdecl '%s' for new hashdecl\n", ref1);
+                        if (call_args) {
+                            call_args->deref(nullptr);
+                        }
+                        has_unsupported = true;
+                    }
+                } else {
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
@@ -3199,11 +3264,19 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
-            case AOTExprKind::HASHDECL_NEW:
             case AOTExprKind::COMPLEX_HASH_NEW:
             case AOTExprKind::COMPLEX_LIST_NEW:
                 reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::HASHDECL_NEW: {
+                // ref1 = hashdecl path + u8 num_args + N×classifyAndWriteExpr-encoded args
+                reader.readStringRef(ptr);  // hashdecl path
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                for (uint8_t j = 0; j < num_args; ++j) {
+                    skipOneExpr(reader, ptr, end);
+                }
+                break;
+            }
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:

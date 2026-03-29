@@ -31,6 +31,8 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/NewComplexTypeNode.h"
 
 // ============================================================================
 // Expression Kind Handlers (Phase 3.2 - Extracted from serialization code)

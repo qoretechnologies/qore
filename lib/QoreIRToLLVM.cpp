@@ -2777,8 +2777,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Outer-scope variables: assign directly to the thread-local stack via
             // qore_rt_assign_local() without creating an alloca or lazy instantiation.
+            // In AOT mode, closure-use body locals are excluded from pre_instantiated_locals
+            // (to avoid cvstack ordering issues), but they are NOT outer-scope variables —
+            // they need lazy instantiation below, not the runtime assign helper (which would
+            // fail because the variable was never instantiated on the cvstack).
             if (linst->local && pre_instantiated_locals
-                    && !pre_instantiated_locals->count(key)) {
+                    && !pre_instantiated_locals->count(key)
+                    && !(aot_mode && linst->is_closure)) {
                 // Box the value for the runtime assign helper
                 llvm::Value* boxed;
                 if (nanboxed_values.count(inst->operands[0].id)) {

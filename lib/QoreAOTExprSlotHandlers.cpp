@@ -122,9 +122,19 @@ static bool write_slot_CONST_STRING(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! HASHDECL_NEW: ref1 = hashdecl path
+//! HASHDECL_NEW: ref1 = hashdecl path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_HASHDECL_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    // Serialize constructor args (typically a single hash initializer expression)
+    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
+        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
     return true;
 }
 

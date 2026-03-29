@@ -30,6 +30,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/QoreAOTExprSlotRegistry.h"
+#include "qore/intern/QoreParseListNode.h"
 
 class UserClosureVariant;
 QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant);

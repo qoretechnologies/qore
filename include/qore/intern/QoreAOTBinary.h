@@ -53,6 +53,7 @@ class qore_ns_private;
 class QoreIRFunction;
 class LocalVar;
 class Var;
+class QoreParseListNode;
 
 //! Reverse map from constant value node pointer to fully-qualified constant name
 typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
@@ -821,6 +822,7 @@ struct AOTExprSlotId {
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
+    const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function
 };
 
