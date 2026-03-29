@@ -77,6 +77,9 @@ public class DataProvider {
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
 
+            # provided by the jni module
+            "accessread": "AccessDataProvider",
+
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
@@ -251,6 +254,9 @@ public class DataProvider {
             # provided by the jni module
             "vcfread": "VcfDataProvider",
             "vcfwrite": "VcfDataProvider",
+
+            # provided by the jni module
+            "visioread": "VisioDataProvider",
 
             "wave": "WaveDataProvider",
 
