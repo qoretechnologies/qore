@@ -167,6 +167,69 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
         return ResponseType;
     }
 
+    #! Returns the event types supported by this provider
+    private hash<string, hash<DataProviderMessageInfo>> getEventTypesImpl() {
+        return {
+            EVENT_PERPLEXITY_CHAT_STREAM: <DataProviderMessageInfo>{
+                "desc": "Server-Sent Event from the Perplexity chat completion stream",
+                "type": ResponseType,
+            },
+        };
+    }
+
+    #! Returns example event data for the given event
+    private auto getExampleEventDataImpl(string event_id) {
+        try {
+            *RestClient::RestClient rest_client = getRestClient();
+            if (rest_client) {
+                hash<auto> resp = rest_client.doRequest("POST", "chat/completions", {
+                    "model": "sonar",
+                    "messages": ({"role": "user", "content": "Say hi"},),
+                    "max_tokens": 16,
+                }).body;
+                if (resp) {
+                    # Transform the non-streaming response into a stream delta shape
+                    # so the example matches what observers actually receive
+                    *hash<auto> choice = resp.choices[0];
+                    return {
+                        "id": resp.id,
+                        "object": "chat.completion.chunk",
+                        "created": resp.created,
+                        "model": resp.model,
+                        "choices": ({
+                            "index": choice.index ?? 0,
+                            "delta": choice.message,
+                            "finish_reason": choice.finish_reason,
+                        },),
+                        "type": "delta",
+                    };
+                }
+            }
+        } catch () {
+            # fall through to fake data
+        }
+        return getFakeExampleData();
+    }
+
+    #! Returns fake example data for stream events
+    private hash<auto> getFakeExampleData() {
+        return {
+            "id": "chatcmpl-example",
+            "object": "chat.completion.chunk",
+            "created": 1711000000,
+            "model": "sonar",
+            "choices": ({
+                "index": 0,
+                "delta": {
+                    "role": "assistant",
+                    "content": "Hello! How can I help you today?",
+                },
+                "finish_reason": NOTHING,
+            },),
+            "type": "delta",
+        };
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

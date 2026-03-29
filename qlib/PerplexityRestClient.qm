@@ -110,11 +110,11 @@ public class PerplexityRestClientBase {
     /** Maps the \c apikey option to a Bearer token header
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        hash<auto> rv = cast<hash<auto>>(DefaultOptions + opts);
         # Map apikey to Authorization Bearer header
         if (rv.apikey) {
-            rv.token = rv.apikey;
-            delete rv.apikey;
+            string apikey = remove rv.apikey;
+            rv += {"headers": {"Authorization": "Bearer " + apikey}};
         }
         return rv;
     }

@@ -1985,7 +1985,7 @@ qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClie
 qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
-qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ShipStationRestClient.qm" "ConnectionProvider;Mime;RestClient")

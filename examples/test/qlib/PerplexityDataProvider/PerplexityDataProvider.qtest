@@ -100,6 +100,11 @@ class FailingPerplexityRestClient inherits FakePerplexityRestClient {
     auto openChatStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
         throw "SSE-ERROR", "stream failed";
     }
+
+    hash<auto> doRequest(string method, string path, auto body, *reference<hash<auto>> info,
+            softbool decode_errors = True, *hash<auto> hdr) {
+        throw "REST-ERROR", "request failed";
+    }
 }
 
 class StreamObserver inherits Observer {
@@ -157,6 +162,7 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         addTestCase("search test", \searchTest());
         addTestCase("stream-chat events test", \streamChatEventsTest());
         addTestCase("stream-chat error test", \streamChatErrorTest());
+        addTestCase("example event data test", \exampleEventDataTest());
         addTestCase("live test", \liveTest());
 
         try {
@@ -490,6 +496,36 @@ public class PerplexityDataProviderTest inherits QUnit::Test {
         observer.wait(1);
         assertEq("error", observer.events[0].type);
         assertEq("SSE-ERROR", observer.events[0].error.err);
+%endif
+    }
+
+    exampleEventDataTest() {
+        checkModule();
+%ifndef NoJson
+        # Test with fake REST client - getExampleEventDataImpl transforms to delta shape
+        FakePerplexityRestClient rest();
+        PerplexityChatStreamDataProvider prov(rest);
+        hash<auto> example = prov.getExampleEventData(EVENT_PERPLEXITY_CHAT_STREAM);
+        assertTrue(example.hasKey("id"));
+        assertTrue(example.hasKey("model"));
+        assertTrue(example.hasKey("choices"));
+        assertTrue(example.hasKey("type"));
+        assertEq("delta", example.type);
+        assertEq("chat.completion.chunk", example.object);
+        # Verify message was transformed to delta
+        assertTrue(example.choices[0].hasKey("delta"));
+        assertFalse(example.choices[0].hasKey("message"));
+
+        # Test fallback to fake data when the API call fails
+        FailingPerplexityRestClient failing_rest();
+        PerplexityChatStreamDataProvider prov2(failing_rest);
+        hash<auto> fake = prov2.getExampleEventData(EVENT_PERPLEXITY_CHAT_STREAM);
+        assertTrue(fake.hasKey("id"));
+        assertTrue(fake.hasKey("model"));
+        assertTrue(fake.hasKey("choices"));
+        assertTrue(fake.hasKey("type"));
+        assertEq("sonar", fake.model);
+        assertEq("delta", fake.type);
 %endif
     }
 

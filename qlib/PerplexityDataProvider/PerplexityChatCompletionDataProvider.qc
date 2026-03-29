@@ -442,7 +442,7 @@ public class PerplexityChatCompletionRequestType inherits HashDataType {
                 "display_name": "Stop Sequences",
                 "short_desc": "Sequences where the API will stop generating tokens",
                 "desc": "Up to 4 sequences where the API will stop generating further tokens",
-                "type": AbstractDataProviderTypeMap."any",
+                "type": AbstractDataProviderTypeMap."*softlist",
             },
             "reasoning_effort": {
                 "display_name": "Reasoning Effort",
