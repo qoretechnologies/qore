@@ -142,6 +142,10 @@ public class DataProvider {
             # provided by the imagemagick module
             "imagemagick": "ImageMagickDataProvider",
 
+            # provided by the jni module
+            "icsread": "IcsDataProvider",
+            "icswrite": "IcsDataProvider",
+
             "jotform": "JotformDataProvider",
 
             # provided by the json module
@@ -243,6 +247,10 @@ public class DataProvider {
             "zip": "ZipDataProvider",
 
             "unleashed": "UnleashedDataProvider",
+
+            # provided by the jni module
+            "vcfread": "VcfDataProvider",
+            "vcfwrite": "VcfDataProvider",
 
             "wave": "WaveDataProvider",
 
