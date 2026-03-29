@@ -389,15 +389,14 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         operands.push_back(operand);
                         loc = elements->loc;
                         invoked = true;
-                    } else if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-                        QoreIRValue operand = lowerExpression(dot->getExpression(), error);
-                        if (!operand.isValid()) {
-                            return false;
-                        }
-                        operands.push_back(operand);
-                        loc = dot->loc;
-                        invoked = true;
                     } else {
+                        // NOTE: QoreDotEvalOperatorNode is intentionally NOT handled here.
+                        // It falls through to lowerExpression() → lowerDotEval() which creates
+                        // InvokeDotEvalMethodDirect with proper exception handling. The generic
+                        // Invoke path here would set invoke_opcode=Invoke with the full AST
+                        // expression, which works for IR execution but fails in AOT mode because
+                        // QoreDotEvalOperatorNode cannot be serialized — the expr becomes null
+                        // after AOT deserialization, silently dropping the method call.
                         // NOTE: QoreQuestionMarkOperatorNode (ternary ?:) is intentionally
                         // NOT pre-evaluated here.  Pre-evaluating all three operands eagerly
                         // breaks short-circuit semantics — both the "then" and "else" branches

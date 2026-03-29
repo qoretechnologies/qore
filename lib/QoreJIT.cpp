@@ -324,6 +324,7 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot));
     addSymbol("qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot));
     addSymbol("qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot));
+    addSymbol("qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot));
     addSymbol("qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot));
     addSymbol("qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot));
     addSymbol("qore_rt_load_thread_local_aot", reinterpret_cast<void*>(&qore_rt_load_thread_local_aot));

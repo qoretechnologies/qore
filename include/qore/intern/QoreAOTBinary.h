@@ -803,6 +803,7 @@ struct AOTLocalSlotId {
     std::string type_path;   //!< type path from QoreTypeInfo::getPath()
     uint8_t flags = 0;       //!< bit 0: is_param, bit 1: is_closure, bit 2: is_self, bit 3: is_argv
     uint16_t param_index = 0;//!< parameter index (valid only if is_param flag set)
+    const void* local_var_ptr = nullptr; //!< compile-time only: pointer to LocalVar for identity matching
 };
 
 //! Identity for a global variable slot
@@ -1234,7 +1235,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
     QoreProgram* pgm,
     const AOTExprReadFunc& readExpr,
     const std::unordered_map<std::string, LocalVar*>* enclosing_locals,
-    std::string& error);
+    std::string& error,
+    LocalVar** parent_locals_arr = nullptr,
+    int num_parent_locals = 0);
 
 //! Compress metadata blob using zlib
 /** Compresses the serialized metadata blob to reduce size and LLVM compilation overhead.

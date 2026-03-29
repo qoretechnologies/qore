@@ -591,6 +591,10 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
     // for/while/if/try/switch statements).  Mark them as pre-instantiated so the
     // LLVM lowerer doesn't emit instantiation/uninstantiation calls - the caller
     // (evalTiered) handles instantiation at runtime.
+    // NOTE: Closure-use locals are included in pre_instantiated_locals for function
+    // membership identification, but evalTiered skips their actual pre-instantiation
+    // in AOT mode to avoid cvstack ordering issues.  The LLVM lowerer checks
+    // closureUse() + aot_mode to emit instantiation for them at block scope boundaries.
     collectAllStatementLocals(statements, ir_func->all_body_locals);
     for (LocalVar* lv : ir_func->all_body_locals) {
         ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
@@ -1873,6 +1877,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
         // from fully-lowered statements like if/for/while/try/switch).  These are
         // marked as pre-instantiated so the LLVM lowerer doesn't emit
         // qore_rt_instantiate_local/uninstantiate_local calls.
+        // NOTE: Closure-use locals are included for function membership identification,
+        // but evalTiered skips their actual pre-instantiation in AOT mode.
         collectAllStatementLocals(&sb, ir_func->all_body_locals);
         for (LocalVar* lv : ir_func->all_body_locals) {
             ir_func->pre_instantiated_locals.insert(reinterpret_cast<const void*>(lv));
@@ -6296,6 +6302,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         AOTLocalSlotId& lid = out.locals[slot];
         lid.name = lv->getName();
         lid.type_path = getSlotTypePath(lv->getTypeInfo());
+        lid.local_var_ptr = ptr;
 
         lid.flags = 0;
         lid.param_index = 0;

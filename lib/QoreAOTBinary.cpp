@@ -1920,6 +1920,12 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
         return nullptr;
     }
 
+    // Compile handler IRs for try/catch blocks inside the closure
+    std::string handler_error;
+    if (lowering.compileAllHandlerIRs(handler_error) < 0) {
+        printd(2, "AOT: closure handler IR compilation failed: %s\n", handler_error.c_str());
+    }
+
     // Collect body locals
     collectAllStatementLocals(sb, ir->all_body_locals);
 
@@ -2056,14 +2062,34 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
                 varref->getType() == VT_CLOSURE) {
-            // Look up the local slot index from parent function's local slots
-            for (size_t i = 0; i < parent_locals.size(); ++i) {
-                // Compare by name since pointer identity may differ
-                if (varref->getName() && parent_locals[i].name == varref->getName()) {
-                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
-                    writer.writeStringRef(std::to_string(i).c_str());
-                    return true;
+            // Look up the local slot index using pointer identity first (handles
+            // same-named variables in different scopes), then fall back to name
+            const void* var_ptr = varref->ref.id;
+            bool found = false;
+            // First pass: match by pointer identity (exact match)
+            if (var_ptr) {
+                for (size_t i = 0; i < parent_locals.size(); ++i) {
+                    if (parent_locals[i].local_var_ptr == var_ptr) {
+                        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                        writer.writeStringRef(std::to_string(i).c_str());
+                        found = true;
+                        break;
+                    }
                 }
+            }
+            // Second pass: fall back to name match (for cases where pointer isn't available)
+            if (!found) {
+                for (size_t i = 0; i < parent_locals.size(); ++i) {
+                    if (varref->getName() && parent_locals[i].name == varref->getName()) {
+                        writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                        writer.writeStringRef(std::to_string(i).c_str());
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (found) {
+                return true;
             }
         } else if (varref->getType() == VT_GLOBAL || varref->getType() == VT_THREAD_LOCAL) {
             Var* global_var = varref->ref.var;
@@ -2816,6 +2842,7 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
         writer.writeU32(op.id);
     }
     // Exception target block index (0xFFFF = none)
+    // Write base exception target
     if (inst->exception_target) {
         auto it = block_idx.find(inst->exception_target);
         writer.writeU16(it != block_idx.end() ? it->second : 0xFFFF);

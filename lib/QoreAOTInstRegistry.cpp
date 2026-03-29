@@ -36,15 +36,8 @@
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
-bool serializeIRFunction(QoreAOTBinaryWriter& writer, const QoreIRFunction& func,
-        const AOTExprWriteFunc& writeExpr);
-std::unique_ptr<QoreIRFunction> deserializeIRFunction(
-        const QoreAOTBinaryReader& reader,
-        const uint8_t*& ptr, const uint8_t* end,
-        QoreProgram* pgm,
-        const AOTExprReadFunc& readExpr,
-        const std::unordered_map<std::string, class LocalVar*>* enclosing_locals,
-        std::string& error);
+// serializeIRFunction declared in QoreAOTBinary.h
+// deserializeIRFunction declared in QoreAOTBinary.h
 
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
@@ -304,7 +297,11 @@ static std::unique_ptr<QoreIRInstruction> readLocal(
     bool is_closure = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
     bool is_ref = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
 
-    LocalVar* lv = ctx.resolveLocal(lname);
+    // Prefer slot-indexed resolution to avoid name collisions across scopes
+    LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+    if (!lv) {
+        lv = ctx.resolveLocal(lname);
+    }
     if (!lv && lname && *lname) {
         std::string type_error;
         QoreAOTTypeResolver type_resolver(ctx.pgm);
@@ -411,7 +408,7 @@ static std::unique_ptr<QoreIRInstruction> readOnBlockExit(
     std::unique_ptr<QoreIRFunction> nested_handler;
     if (has_handler_ir) {
         nested_handler = deserializeIRFunction(ctx.reader, ctx.ptr, ctx.end, ctx.pgm, ctx.readExpr,
-            nullptr, ctx.error);
+            (const std::unordered_map<std::string, LocalVar*>*)nullptr, ctx.error);
         if (!nested_handler) {
             ctx.error = "failed to deserialize nested OnBlockExit handler IR: " + ctx.error;
             return nullptr;
@@ -692,7 +689,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     }
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
-    ci->exception_target = exc_target;
+    // NOTE: do NOT overwrite ci->exception_target — correctly set at construction
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
@@ -849,7 +846,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
     expr.discard(nullptr);
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
-    ci->exception_target = exc_target;
+    // NOTE: do NOT overwrite ci->exception_target — correctly set at construction
     return std::unique_ptr<QoreIRInstruction>(ci);
 }
 
@@ -894,7 +891,6 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     expr.discard(nullptr);
     ii->result = QoreIRValue(result_id);
     ii->operands = operands;
-    ii->exception_target = exc_target;
     return std::unique_ptr<QoreIRInstruction>(ii);
 }
 
@@ -1590,8 +1586,10 @@ static std::unique_ptr<QoreIRInstruction> readFusedAddLocal(
     uint32_t target_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     uint32_t source_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     bool target_ir_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    LocalVar* target_lv = ctx.resolveLocal(target_name);
-    LocalVar* source_lv = ctx.resolveLocal(source_name);
+    LocalVar* target_lv = ctx.resolveLocalBySlot(target_slot_id);
+    if (!target_lv) target_lv = ctx.resolveLocal(target_name);
+    LocalVar* source_lv = ctx.resolveLocalBySlot(source_slot_id);
+    if (!source_lv) source_lv = ctx.resolveLocal(source_name);
     auto* fi = new QoreIRAddAssignLocalIntInstruction(target_lv, source_lv);
     fi->target_slot_id = target_slot_id;
     fi->source_slot_id = source_slot_id;
@@ -1623,7 +1621,8 @@ static std::unique_ptr<QoreIRInstruction> readFusedIncLocal(
     int64_t delta = QoreAOTBinaryReader::readI64(ctx.ptr);
     uint32_t slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     bool ir_only = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
-    LocalVar* lv = ctx.resolveLocal(local_name);
+    LocalVar* lv = ctx.resolveLocalBySlot(slot_id);
+    if (!lv) lv = ctx.resolveLocal(local_name);
     auto* fi = new QoreIRIncrementLocalIntInstruction(lv, delta);
     fi->slot_id = slot_id;
     fi->ir_only = ir_only;
@@ -1660,8 +1659,10 @@ static std::unique_ptr<QoreIRInstruction> readFusedBrLtLocal(
     uint32_t rhs_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
     uint16_t true_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
     uint16_t false_idx = QoreAOTBinaryReader::readU16(ctx.ptr);
-    LocalVar* lhs_lv = ctx.resolveLocal(lhs_name);
-    LocalVar* rhs_lv = ctx.resolveLocal(rhs_name);
+    LocalVar* lhs_lv = ctx.resolveLocalBySlot(lhs_slot_id);
+    if (!lhs_lv) lhs_lv = ctx.resolveLocal(lhs_name);
+    LocalVar* rhs_lv = ctx.resolveLocalBySlot(rhs_slot_id);
+    if (!rhs_lv) rhs_lv = ctx.resolveLocal(rhs_name);
     auto* fi = new QoreIRBranchIfLtLocalIntInstruction(
         lhs_lv, rhs_lv, ctx.resolveBlock(true_idx), ctx.resolveBlock(false_idx));
     fi->lhs_slot_id = lhs_slot_id;

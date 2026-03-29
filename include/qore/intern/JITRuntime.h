@@ -487,8 +487,14 @@ void qore_rt_instantiate_local_aot(QoreAOTContext* ctx, int32_t idx);
 //! Clear a local variable's value via AOT context slot (block scope exit)
 void qore_rt_clear_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
-//! Uninstantiate a local variable via AOT context slot
+//! Uninstantiate a local variable via AOT context slot (clear only, no pop)
 void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
+
+//! Pop a closure-use variable from the cvstack via AOT context slot
+//! Unlike qore_rt_uninstantiate_local_aot (which only clears), this properly pops
+//! the ClosureVarValue from the thread-local closure variable stack.
+//! Used for closure-use vars that are NOT pre-instantiated by evalTiered.
+void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
 //! Load from a global variable via AOT context slot
 uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);

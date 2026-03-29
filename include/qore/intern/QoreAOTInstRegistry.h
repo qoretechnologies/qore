@@ -67,6 +67,17 @@ struct AOTInstReadCtx {
     const AOTExprReadFunc& readExpr;
     QoreProgram* pgm;
     std::string& error;
+    //! Slot-indexed local variable map for disambiguation of same-named variables
+    const std::unordered_map<uint32_t, LocalVar*>* slot_to_local = nullptr;
+
+    //! Resolve local variable by slot_id (preferred, avoids name collisions)
+    LocalVar* resolveLocalBySlot(uint32_t slot_id) const {
+        if (!slot_to_local) {
+            return nullptr;
+        }
+        auto it = slot_to_local->find(slot_id);
+        return (it != slot_to_local->end()) ? it->second : nullptr;
+    }
 
     //! Resolve block index to block pointer (0xFFFF = nullptr)
     QoreIRBasicBlock* resolveBlock(uint16_t idx) const {

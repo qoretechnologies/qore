@@ -2945,9 +2945,15 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
                 // Instantiate AST-visible body locals so that
                 // AST Invoke callbacks can find them on the thread-local stack.
+                // Skip closure-use vars in AOT mode: the LLVM code handles their
+                // instantiation/uninstantiation at block scope boundaries via
+                // qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
                 const QoreParseOptions& po = pgm->getParseOptions();
                 if (!body_locals.empty()) {
                     for (LocalVar* lv : body_locals) {
+                        if (cached_aot_ctx && lv->closureUse()) {
+                            continue;
+                        }
                         lv->instantiate(po);
                     }
                 }
@@ -3008,8 +3014,13 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 swap_runtime_statement_location(xsink, old_stmt, old_loc, old_po, old_stmt, old_loc, old_po);
 
                 // Uninstantiate in reverse order (LIFO)
+                // Skip closure-use vars in AOT mode: the LLVM code already popped
+                // them via qore_rt_pop_closure_var_aot at block scope boundaries.
                 if (!body_locals.empty()) {
                     for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+                        if (cached_aot_ctx && body_locals[i]->closureUse()) {
+                            continue;
+                        }
                         body_locals[i]->uninstantiate(xsink);
                     }
                 }

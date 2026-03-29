@@ -233,12 +233,22 @@ static bool write_slot_CLOSURE_CREATE(AOTExprSlotWriteCtx& ctx) {
     }
     ctx.writer.writeU8(sig->hasVarargs() ? 1 : 0);
 
-    // Write captured variable names (from LVarSet)
+    // Write captured variable names and parent slot indices (from LVarSet)
     const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
     ctx.writer.writeU16(vlist ? static_cast<uint16_t>(vlist->size()) : 0);
     if (vlist) {
         for (LocalVar* lv : *vlist) {
             ctx.writer.writeStringRef(lv->getName());
+            // Write parent slot index for disambiguation of same-named variables
+            // in different scopes
+            int32_t parent_slot = -1;
+            for (size_t i = 0; i < ctx.parent_locals.size(); ++i) {
+                if (ctx.parent_locals[i].local_var_ptr == lv) {
+                    parent_slot = static_cast<int32_t>(i);
+                    break;
+                }
+            }
+            ctx.writer.writeU32(static_cast<uint32_t>(parent_slot));
         }
     }
 

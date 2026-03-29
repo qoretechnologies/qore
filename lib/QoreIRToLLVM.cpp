@@ -334,6 +334,9 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // uninstantiate_local_aot: (ptr, i32, ptr) -> void
     module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+    // pop_closure_var_aot: (ptr, i32, ptr) -> void (proper cvstack pop for closure vars)
+    module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
+            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
     // load_global_aot: (ptr, i32, ptr) -> i64
     module.getOrInsertFunction("qore_rt_load_global_aot", aot_load_local_ft);
     // store_global_aot: (ptr, i32, i64, ptr) -> void
@@ -858,8 +861,13 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
             continue;
         }
 
+        // In AOT mode, closure-use vars are in pre_instantiated_locals for function
+        // membership but NOT actually pre-instantiated by evalTiered (to avoid cvstack
+        // ordering issues).  Skip the runtime stack load for them - they'll be initialized
+        // to default and instantiated lazily on first StoreLocal.
+        bool skip_pre_inst_load = aot_mode && var->closureUse();
         if (pre_instantiated_locals && pre_instantiated_locals->count(key)
-                && !ir_only_body_locals.count(key)) {
+                && !ir_only_body_locals.count(key) && !skip_pre_inst_load) {
             // Pre-instantiated and NOT IR-only: initialize from runtime stack
             if (aot_mode) {
                 auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
@@ -2868,6 +2876,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // (e.g., via computed gotos), this assumption would need to be revisited.
             bool is_entry_local = entry_locals_set.count(key) > 0;
             bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
+            // In AOT mode, closure-use vars are in pre_instantiated_locals for function
+            // membership identification, but evalTiered does NOT actually pre-instantiate
+            // them (to avoid cvstack ordering issues with same-named vars in other blocks).
+            // Treat them as non-pre-instantiated so we emit instantiation here.
+            if (aot_mode && is_pre_instantiated && linst->local && linst->local->closureUse()) {
+                is_pre_instantiated = false;
+            }
             if (!is_entry_local && !is_pre_instantiated &&
                     instantiated_non_entry_locals.insert(key).second) {
                 // First store to this non-entry local - emit instantiation
@@ -3164,21 +3179,19 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // so there is nothing to clear on the runtime stack.
                 if (!ir_only_body_locals.count(key)) {
                     if (linst->is_closure) {
-                        // Closure-captured pre-instantiated loop variables: pop the old
-                        // ClosureVarValue (giving each iteration an independent binding so
-                        // closures capture their own CVV).  We do NOT push a fresh CVV here.
-                        // - The next iteration's StoreLocal (via closure_pre_inst_flags check)
-                        //   will re-push when needed.
-                        // - emitPreInstClosureReInstantiation at function exit re-pushes any
-                        //   remaining popped CVVs so evalTiered cleanup can pop one per var.
+                        // Closure-captured block-scoped variables: pop the ClosureVarValue
+                        // from the cvstack (giving each iteration an independent binding so
+                        // closures capture their own CVV).
                         if (aot_mode) {
-                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+                            // In AOT mode, closure-use vars are NOT pre-instantiated by
+                            // evalTiered, so we must do a proper pop (uninstantiate) here.
+                            // Use qore_rt_pop_closure_var_aot which pops from the cvstack
+                            // via the LocalVar* from the AOT context.
+                            auto uninst_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
                                     llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
                             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                             builder->CreateCall(uninst_helper, {aot_ctx_arg,
                                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                            // AOT mode: no re-instantiation (AOT doesn't use evalTiered
-                            // pre-instantiation for body locals, so no stack invariant to maintain)
                         } else {
                             auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
@@ -3278,10 +3291,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     return false;
                 }
                 int32_t slot_idx = it->second;
-                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
-                        llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
-                builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
+                // For closure-use vars not pre-instantiated by evalTiered: proper pop
+                if (linst->local && linst->local->closureUse()) {
+                    auto helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+                    builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
+                }
             } else {
                 auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
                         llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));

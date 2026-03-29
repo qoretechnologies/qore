@@ -1358,12 +1358,14 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 bool closure_has_varargs = QoreAOTBinaryReader::readU8(ptr) != 0;
 
-                // Read captured variable names
+                // Read captured variable names and parent slot indices
                 uint16_t num_captured = QoreAOTBinaryReader::readU16(ptr);
                 std::vector<std::string> captured_names(num_captured);
+                std::vector<int32_t> captured_parent_slots(num_captured, -1);
                 for (uint16_t c = 0; c < num_captured; ++c) {
                     const char* cname = reader.readStringRef(ptr);
                     captured_names[c] = cname ? cname : "";
+                    captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
                 }
 
                 // Read closure body IR
@@ -1415,6 +1417,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                         enclosing_locals[ctx->locals[l]->getName()] = ctx->locals[l];
                     }
                 }
+                // 1b. Override with slot-indexed captured variables for disambiguation
+                // of same-named variables in different scopes. The captured_parent_slots
+                // array has the correct parent slot index for each captured variable.
+                for (uint16_t ci = 0; ci < num_captured; ++ci) {
+                    int32_t parent_slot = captured_parent_slots[ci];
+                    if (parent_slot >= 0 && parent_slot < num_locals
+                            && ctx->locals[parent_slot]) {
+                        enclosing_locals[captured_names[ci]] = ctx->locals[parent_slot];
+                    }
+                }
                 // 2. Parent function's parameter locals from the parent variant's
                 // signature — these are NOT in ctx->locals[] when the parameter
                 // is only used inside the closure body (not in the parent's AOT code)
@@ -1456,7 +1468,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ctx->locals, num_locals, ctx->globals, num_globals);
                 };
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
-                    readExprCb, &enclosing_locals, ir_error);
+                    readExprCb, &enclosing_locals, ir_error,
+                    ctx->locals, num_locals);
                 ptr = ir_end_ptr;  // Ensure we advance past IR data
 
                 if (!closure_ir) {
@@ -1472,13 +1485,34 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // uses closureUse to decide whether to instantiate a parameter on
                 // the cvstack (closure variable stack) vs lvstack.  Without this,
                 // thread_find_closure_var() returns null at closure creation time.
+                //
+                // Use the closure IR's local_var_slots to find the correct LocalVar*
+                // for each captured variable. This handles same-named variables in
+                // different scopes correctly, since the IR deserialization already
+                // resolved variables using the enclosing_locals map (which was
+                // updated by deserializeIRFunction for non-duplicate entries).
                 LVarSet* closure_vlist = ucf->getVList();
-                for (auto& cap_name : captured_names) {
-                    auto it = enclosing_locals.find(cap_name);
-                    if (it != enclosing_locals.end()) {
-                        closure_vlist->add(it->second);
-                        if (!it->second->closureUse()) {
-                            it->second->setClosureUse();
+                for (uint16_t ci = 0; ci < num_captured; ++ci) {
+                    const std::string& cap_name = captured_names[ci];
+                    int32_t parent_slot = captured_parent_slots[ci];
+                    LocalVar* lv = nullptr;
+
+                    // Use parent slot index for disambiguation when available
+                    if (parent_slot >= 0 && parent_slot < num_locals
+                            && ctx->locals[parent_slot]) {
+                        lv = ctx->locals[parent_slot];
+                    } else {
+                        // Fall back to name-based lookup
+                        auto it = enclosing_locals.find(cap_name);
+                        if (it != enclosing_locals.end()) {
+                            lv = it->second;
+                        }
+                    }
+
+                    if (lv) {
+                        closure_vlist->add(lv);
+                        if (!lv->closureUse()) {
+                            lv->setClosureUse();
                         }
                     }
                 }
@@ -1957,7 +1991,8 @@ static QoreAOTContext* buildContextFromSlotMap(
                         ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
                 };
                 auto handler = deserializeIRFunction(reader, ptr, end, pgm, readExprCb,
-                    &handler_local_map, ir_error);
+                    &handler_local_map, ir_error,
+                    ctx->locals, num_locals);
                 if (handler) {
                     // Compute slot IDs for the deserialized handler
                     handler->computeSlotIdsAndEmbed();
@@ -2054,6 +2089,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const uint8_t*& ptr, const uint8_t* end,
         const std::vector<std::unique_ptr<QoreIRBasicBlock>>& blocks,
         const std::unordered_map<std::string, LocalVar*>& local_map,
+        const std::unordered_map<uint32_t, LocalVar*>* slot_to_local,
         const AOTExprReadFunc& readExpr,
         QoreProgram* pgm,
         std::string& error) {
@@ -2089,7 +2125,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         error = "unsupported instruction group " + std::to_string(group_byte);
         return nullptr;
     }
-    AOTInstReadCtx rctx{reader, ptr, end, blocks, local_map, readExpr, pgm, error};
+    AOTInstReadCtx rctx{reader, ptr, end, blocks, local_map, readExpr, pgm, error, slot_to_local};
     inst = ginfo->read_fn(opcode_raw, exc_target, operands, result_id, rctx);
     if (!inst) {
         return nullptr;
@@ -2808,7 +2844,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             std::unique_ptr<QoreIRFunction> nested_handler;
             if (has_handler_ir) {
                 nested_handler = deserializeIRFunction(reader, ptr, end, pgm, readExpr,
-                    &local_map, error);
+                    &local_map, error, parent_locals_arr, num_parent_locals);
                 if (!nested_handler) {
                     error = "failed to deserialize nested OnBlockExit handler IR: " + error;
                     return nullptr;
@@ -2909,7 +2945,9 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         QoreProgram* pgm,
         const AOTExprReadFunc& readExpr,
         const std::unordered_map<std::string, LocalVar*>* enclosing_locals,
-        std::string& error) {
+        std::string& error,
+        LocalVar** parent_locals_arr,
+        int num_parent_locals) {
     // 1. Function header
     const char* func_name = reader.readStringRef(ptr);
     uint32_t max_value_id = QoreAOTBinaryReader::readU32(ptr);
@@ -2949,7 +2987,19 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
             continue;
         }
 
-        // Check if local is already provided by enclosing scope
+        // For handler parent slots (slot_id < parent_slot_count), use direct
+        // slot-indexed access to the parent locals array to avoid name-collision
+        // ambiguity when the parent function has same-named variables
+        if (parent_locals_arr && slot_id < (uint32_t)parent_slot_count
+                && (int)slot_id < num_parent_locals
+                && parent_locals_arr[slot_id]) {
+            LocalVar* parent_lv = parent_locals_arr[slot_id];
+            func->local_var_slots[parent_lv] = slot_id;
+            local_map[lname] = parent_lv;
+            continue;
+        }
+
+        // Check if local is already provided by enclosing scope (name-based fallback)
         auto it = local_map.find(lname);
         if (it != local_map.end()) {
             func->local_var_slots[it->second] = slot_id;
@@ -2984,14 +3034,21 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         }
     }
 
-    // 4. Pre-create all blocks (needed for forward references)
+    // 4. Build slot_id -> LocalVar* map for slot-indexed instruction resolution.
+    // This avoids name-collision ambiguity when the enclosing function has
+    // multiple variables with the same name in different scopes.
+    std::unordered_map<uint32_t, LocalVar*> slot_to_local;
+    for (auto& [lv, sid] : func->local_var_slots) {
+        slot_to_local[sid] = const_cast<LocalVar*>(lv);
+    }
+
+    // 5. Pre-create all blocks (needed for forward references)
     func->blocks.reserve(num_blocks);
     for (int i = 0; i < num_blocks; ++i) {
-        // Peek at block name - we'll set it below
         func->blocks.push_back(std::make_unique<QoreIRBasicBlock>(""));
     }
 
-    // 5. Read blocks and instructions
+    // 6. Read blocks and instructions
     for (int i = 0; i < num_blocks; ++i) {
         const char* block_name = reader.readStringRef(ptr);
         bool is_loop_header = QoreAOTBinaryReader::readU8(ptr) != 0;
@@ -3002,7 +3059,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
         for (int j = 0; j < num_insts; ++j) {
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
-                readExpr, pgm, error);
+                &slot_to_local, readExpr, pgm, error);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i) + ": " + error;
@@ -3185,10 +3242,11 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                     }
                 }
                 QoreAOTBinaryReader::readU8(ptr);  // varargs
-                // Skip captured var names
+                // Skip captured var names and parent slot indices
                 uint16_t skip_ncap = QoreAOTBinaryReader::readU16(ptr);
                 for (uint16_t c = 0; c < skip_ncap; ++c) {
-                    reader.readStringRef(ptr);
+                    reader.readStringRef(ptr);  // name
+                    QoreAOTBinaryReader::readU32(ptr);  // parent_slot_index
                 }
                 // Skip closure IR
                 uint8_t skip_has_ir = QoreAOTBinaryReader::readU8(ptr);

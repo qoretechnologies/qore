@@ -3298,9 +3298,16 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
     const std::vector<LocalVar*>& body_locals = uvb->hasCachedAOT()
         ? uvb->getBodyLocals()  // AOT: use all_body_locals via getBodyLocals()
         : uvb->getASTVisibleBodyLocals();  // IR: use filtered ast_visible_body_locals
+    bool has_aot = uvb->hasCachedAOT();
     if (!skip_body_locals) {
         const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
+            // Skip closure-use vars in AOT mode: the LLVM code handles their
+            // instantiation/uninstantiation at block scope boundaries via
+            // qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
+            if (has_aot && lv->closureUse()) {
+                continue;
+            }
             lv->instantiate(po);
         }
     }
@@ -3351,6 +3358,11 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
 
     if (!skip_body_locals) {
         for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+            // Skip closure-use vars in AOT mode: the LLVM code already popped
+            // them via qore_rt_pop_closure_var_aot at block scope boundaries.
+            if (has_aot && body_locals[i]->closureUse()) {
+                continue;
+            }
             body_locals[i]->uninstantiate(xsink);
         }
     }
@@ -4335,6 +4347,14 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, i
     qore_rt_clear_local(ctx->locals[idx], xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    // For closure-use vars that are NOT pre-instantiated by evalTiered (AOT mode):
+    // do a proper pop (uninstantiate) from the cvstack.  The compiled code instantiated
+    // (pushed) this CVV on the first StoreLocal, so we must pop it at block scope exit.
+    qore_rt_uninstantiate_local(ctx->locals[idx], xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
     return qore_rt_load_global(ctx->globals[idx], xsink);
@@ -4578,11 +4598,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
     }
 
     // Body locals — use getBodyLocals() for AOT (same as execJITWithDeopt)
+    // Skip closure-use vars: the LLVM code handles their instantiation/uninstantiation
+    // at block scope boundaries via qore_rt_instantiate_local_aot / qore_rt_pop_closure_var_aot.
     bool skip_body_locals = uvb->areAllBodyLocalsIROnly();
     const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
     if (!skip_body_locals) {
         const QoreParseOptions& po = uvb->pgm->getParseOptions();
         for (LocalVar* lv : body_locals) {
+            if (lv->closureUse()) {
+                continue;
+            }
             lv->instantiate(po);
         }
     }
@@ -4597,6 +4622,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
     // Uninstantiate body locals
     if (!skip_body_locals) {
         for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
+            if (body_locals[i]->closureUse()) {
+                continue;
+            }
             body_locals[i]->uninstantiate(xsink);
         }
     }

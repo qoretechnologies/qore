@@ -361,6 +361,19 @@ static bool write_expr_local_varref(AOTExprWriteCtx& ctx) {
     if (auto* varref = dynamic_cast<const VarRefNode*>(node)) {
         if (varref->getType() == VT_LOCAL || varref->getType() == VT_LOCAL_TS ||
                 varref->getType() == VT_CLOSURE) {
+            // First pass: match by pointer identity (handles same-named variables
+            // in different scopes correctly)
+            const void* var_ptr = varref->ref.id;
+            if (var_ptr) {
+                for (size_t i = 0; i < ctx.parent_locals.size(); ++i) {
+                    if (ctx.parent_locals[i].local_var_ptr == var_ptr) {
+                        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));
+                        ctx.writer.writeStringRef(std::to_string(i).c_str());
+                        return true;
+                    }
+                }
+            }
+            // Second pass: fall back to name match (for cases where pointer isn't available)
             for (size_t i = 0; i < ctx.parent_locals.size(); ++i) {
                 if (varref->getName() && ctx.parent_locals[i].name == varref->getName()) {
                     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::LOCAL_VARREF));

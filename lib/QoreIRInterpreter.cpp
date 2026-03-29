@@ -1248,18 +1248,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                         scoped->getVariant(), scoped->getArgs(), xsink);
                 }
             }
-            QoreValue fallback_res = evalAndRef(inv->expr, xsink);
-            // CRITICAL DIAGNOSTIC: if evalAndRef returned nothing without an exception,
-            // log it so we can diagnose Invoke operation failures in closure contexts
-            if (fallback_res.isNothing() && (!xsink || !*xsink)) {
-                FILE* f = fopen("/home/david/invoke_nothing_bug.txt", "a");
-                if (f) {
-                    fprintf(f, "[CRITICAL] Call opcode evalAndRef returned nothing without exception\n");
-                    fflush(f);
-                    fclose(f);
-                }
-            }
-            return fallback_res;
+            return evalAndRef(inv->expr, xsink);
         }
 
         // DotEval opcodes: use pre-evaluated base to avoid double-evaluation
