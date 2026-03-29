@@ -2228,7 +2228,6 @@ ws.setEventQueue();
                 if (!msg) {
                     break;
                 }
-
                 try {
                     int disp = processAsyncMessage(msg);
                     if (disp == WSEDC_BREAK) {
@@ -4577,7 +4576,7 @@ public class WebSocketClientDataProviderFactory inherits AbstractDataProviderFac
 
     @since WebSocketClient 2.4
 */
-public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
+public class WebSocketClientPollOperation inherits WebSocketClientPollOperationBase {
     public {
         #! State constants
         const STATE_CONNECTED = "connected";
@@ -4587,75 +4586,19 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     }
 
     private {
-        #! The HTTPClient (also a Socket) for I/O
-        HTTPClient hc;
-
-        #! Transport type
-        string transport;
-
-        #! Stream ID for HTTP/2 or HTTP/3
-        int stream_id;
-
-        #! Channel for outbound frames (thread-safe, unlimited)
-        Channel send_channel(-1);
-
         #! Channel for received messages (thread-safe, unlimited, atomic tryRecv)
+        /** The C++ base pushes raw decoded frames to its internal recv_queue.
+            The onPollComplete() method drains those frames, applies extension
+            transforms, and pushes processed messages to this channel for
+            consumption by user code via getReceivedMessage().
+        */
         Channel recv_channel(-1);
-
-        #! Current state
-        string state = STATE_CONNECTED;
-
-        #! Buffer for incoming data (accumulated until complete frames are available)
-        binary recv_buffer = binary();
-
-        #! Pending outgoing data (partially written frame)
-        *binary pending_send;
-        int pending_send_offset = 0;
-
-        #! Inner poll operation for HTTP/1.1 non-blocking send
-        *AbstractPollOperation send_poller;
-
-        #! Data buffer for fragmented frame reassembly
-        *data frag_buf;
-
-        #! RSV bits from first frame of a fragmented message (RFC 7692 Section 6.2.1)
-        *hash<auto> first_frame_rsv;
 
         #! Active/negotiated extensions
         *list<AbstractWebSocketExtension> active_extensions;
 
-        #! I/O timeout
-        timeout timeout_ms;
-
-        #! Mutex for protecting close handshake state accessed from both user and I/O threads
-        /** Protects: state, close_initiated, close_code, close_reason
-            @since WebSocketClient 2.4
-        */
-        Mutex close_mutex();
-
-        #! Close code from close frame
-        int close_code = WSCC_NormalClosure;
-
-        #! Close reason from close frame
-        string close_reason = "";
-
-        #! True if we initiated the close handshake
-        bool close_initiated = False;
-
-        #! Error info
-        *hash<ExceptionInfo> error_info;
-
         #! Logger wrapper for debug output
         *Logger::LoggerInterface logger;
-
-        #! Maximum frame size (16MB default)
-        int max_frame_size = 16 * 1024 * 1024;
-
-        #! HTTP/2 frame buffer for accumulating WebSocket frames from DATA frames
-        *binary h2_frame_buf;
-
-        #! HTTP/3 frame buffer for accumulating WebSocket frames from QUIC stream data
-        *binary h3_frame_buf;
 
         #! Optional raw frame callback — called per-frame before extension transforms
         /** Called with a @ref WebSocketUtil::WsMsgInfo hash for each frame. Return value:
@@ -4665,22 +4608,14 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         */
         *code raw_callback;
 
-        #! Optional callback invoked at the end of each continuePoll() cycle
-        /** Called from the I/O thread after all reads/writes have been processed.
-            Used by WebSocketClient to schedule message delivery via ThreadPool,
-            eliminating the need for a dedicated delivery thread.
+        #! Optional callback invoked after frames are delivered
+        /** Called from a worker thread (NOT the I/O thread) after onPollComplete()
+            processes received frames. Used by WebSocketClient to schedule message
+            delivery via ThreadPool.
 
             @since WebSocketClient 2.4
         */
         *code on_poll_complete;
-
-        #! Counter for messages queued to recv_channel during processReceivedFrames()
-        /** Only written by the I/O thread (in handleParsedFrame), so no lock needed.
-            Reset before processReceivedFrames() and checked after to determine whether
-            notifyPollComplete() should fire.  Unlike recv_channel.size(), this is not
-            subject to races with the concurrent delivery thread.
-        */
-        int frames_queued = 0;
     }
 
     #! Creates the poll operation for an established WebSocket connection
@@ -4690,179 +4625,108 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         @param active_extensions active WebSocket extensions (already negotiated)
         @param timeout_ms I/O timeout
         @param logger optional logger
-        @param raw_callback optional callback for raw frame inspection before extension transforms;
-            matches the raw_callback semantics of @ref WebSocketClient
+        @param raw_callback optional callback for raw frame inspection before extension transforms
+        @param on_poll_complete callback for delivery scheduling (called from worker thread)
     */
     constructor(HTTPClient hc, string transport, int stream_id,
             *list<AbstractWebSocketExtension> active_extensions,
             timeout timeout_ms,
             *Logger::LoggerInterface logger,
             *code raw_callback,
-            *code on_poll_complete) {
-        self.hc = hc;
-        self.transport = transport;
-        self.stream_id = stream_id;
+            *code on_poll_complete)
+        : WebSocketClientPollOperationBase(hc) {
         self.active_extensions = active_extensions;
-        self.timeout_ms = timeout_ms;
         self.logger = logger;
         self.raw_callback = raw_callback;
         self.on_poll_complete = on_poll_complete;
-    }
-
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "ws-client-io";
-    }
-
-    #! Returns the current state
-    string getState() {
-        return state;
-    }
-
-    #! Returns True when the operation is complete (closed or error)
-    bool goalReached() {
-        return state == STATE_CLOSED || state == STATE_ERROR;
+        if (active_extensions) {
+            setHasExtensions(True);
+        }
     }
 
     #! Continues the poll operation
-    /** @return poll info for the next poll cycle, or NOTHING if complete
+    /** Calls the C++ base continuePoll() for socket I/O, then drains any received
+        frames from the C++ recv_queue into recv_channel for user consumption.
+        This allows both manual polling and I/O controller-driven polling to work.
     */
     *hash<SocketPollInfo> continuePoll() {
-        if (state == STATE_CLOSED || state == STATE_ERROR) {
-            return NOTHING;
-        }
+        *hash<SocketPollInfo> rv = WebSocketClientPollOperationBase::continuePoll();
+        # Drain C++ recv_queue → apply extensions → push to recv_channel
+        drainRecvQueue();
+        return rv;
+    }
 
-        # Check if the connection is still open
-        if (!hc.isOpen() && transport == "http1") {
-            int code;
-            string reason;
-            {
-                AutoLock al(close_mutex);
-                state = STATE_CLOSED;
-                if (!close_initiated) {
-                    # Unexpected connection loss
-                    close_code = WSCC_AbnormalClosure;
-                    close_reason = "Connection lost";
-                }
-                # If close was initiated, keep the existing close_code/close_reason
-                code = close_code;
-                reason = close_reason;
+    #! Called by the I/O controller on a worker thread when frames have been pushed
+    /** The C++ base's continuePoll() ran on the I/O thread and pushed raw decoded
+        frames to the internal recv_queue. This method runs on a WORKER thread
+        (dispatched by the controller via dispatchPollCompleteAsync) and:
+        1. Drains all frames from the C++ recv_queue
+        2. Applies extension transforms (decompression etc.)
+        3. Pushes processed messages to recv_channel for user consumption
+        4. Calls on_poll_complete to schedule delivery
+    */
+    #! @cond nodoc
+    public onPollComplete() {
+        @debug(stderr.printf("WS onPollComplete: hasReceivedFrames=%y\n", hasReceivedFrames()));
+        drainRecvQueue();
+    }
+    #! @endcond
+
+    #! Drains the C++ recv_queue, applies extension transforms, pushes to recv_channel
+    private drainRecvQueue() {
+        bool have_frames = False;
+        while (hasReceivedFrames()) {
+            *hash<auto> frame = getReceivedFrame();
+            if (!frame) {
+                break;
             }
-            recv_channel.send({"type": "closed", "code": code, "reason": reason});
-            notifyPollComplete();
-            return NOTHING;
+            processReceivedCppFrame(frame);
+            have_frames = True;
         }
-
-        int poll_events = 0;
-
-        # --- Read phase ---
-        try {
-            readAvailableData();
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err !~ /TIMEOUT/) {
-                logError("read error: %s: %s", ex.err, ex.desc);
-                state = STATE_ERROR;
-                error_info = ex;
-                recv_channel.send({"type": "error", "error": ex});
-                notifyPollComplete();
-                return NOTHING;
-            }
+        if (have_frames && on_poll_complete) {
+            on_poll_complete();
         }
+    }
 
-        if (state == STATE_CLOSED || state == STATE_ERROR) {
-            notifyPollComplete();
-            return NOTHING;
-        }
+    #! Aborts the operation
+    abort() {
+        WebSocketClientPollOperationBase::abort();
+        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure, "reason": "aborted"});
+    }
 
-        # Process complete frames from the receive buffer
-        frames_queued = 0;
-        try {
-            processReceivedFrames();
-        } catch (hash<ExceptionInfo> ex) {
-            logError("frame processing error: %s: %s", ex.err, ex.desc);
-            state = STATE_ERROR;
-            error_info = ex;
-            recv_channel.send({"type": "error", "error": ex});
-            notifyPollComplete();
-            return NOTHING;
-        }
-
-        if (state == STATE_CLOSED || state == STATE_ERROR) {
-            notifyPollComplete();
-            return NOTHING;
-        }
-
-        # Notify delivery only if processReceivedFrames() actually queued messages.
-        # Uses the I/O-thread-local frames_queued counter (incremented by
-        # handleParsedFrame) instead of recv_channel.size(), which races with the
-        # concurrent delivery thread.
-        if (frames_queued > 0) {
-            notifyPollComplete();
-        }
-
-        # --- Write phase ---
-        try {
-            # Continue any in-progress HTTP/1.1 non-blocking send
-            if (send_poller) {
-                *hash<SocketPollInfo> rv = send_poller.continuePoll();
-                if (send_poller.goalReached()) {
-                    send_poller = NOTHING;
-                } else if (rv) {
-                    poll_events |= rv.events;
-                }
+    #! Called when the poll operation completes (goal reached or error/timeout)
+    /** Schedules one final delivery so the terminal message is consumed.
+        @since WebSocketClient 2.4
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        # Drain any remaining frames
+        onPollComplete();
+        # Push terminal message
+        if (isClosed()) {
+            recv_channel.send({"type": "closed", "code": getCloseCode(),
+                "reason": getCloseReason()});
+            if (on_poll_complete) {
+                on_poll_complete();
             }
-
-            # Continue any partially-written send
-            if (!send_poller && pending_send) {
-                writePendingData();
-            }
-
-            # Dequeue new frames to send
-            if (!pending_send && !send_poller) {
-                dequeueAndSend();
-            }
-
-            if (pending_send || send_poller) {
-                poll_events |= SOCK_POLLOUT;
-            }
-
-            # If we are in CLOSING state (server-initiated close) and the echo close frame
-            # has been fully sent, transition to CLOSED to complete the handshake
-            if (state == STATE_CLOSING && !pending_send && !send_poller) {
-                {
-                    AutoLock al(close_mutex);
-                    state = STATE_CLOSED;
-                }
-                recv_channel.send({"type": "closed", "code": close_code, "reason": close_reason});
-                notifyPollComplete();
-                return NOTHING;
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err !~ /TIMEOUT/) {
-                logError("write error: %s: %s", ex.err, ex.desc);
-                state = STATE_ERROR;
-                error_info = ex;
-                recv_channel.send({"type": "error", "error": ex});
-                notifyPollComplete();
-                return NOTHING;
+        } else if (hasError()) {
+            *hash<auto> err = getError();
+            recv_channel.send({"type": "error", "error": err});
+            if (on_poll_complete) {
+                on_poll_complete();
             }
         }
-
-        # Always poll for incoming data
-        poll_events |= SOCK_POLLIN;
-
-        return <SocketPollInfo>{
-            "events": poll_events,
-            "socket": hc,
-        };
     }
 
     #! Queues a text message for sending
+    /** Applies outgoing extension transforms before encoding.
+    */
     sendText(string text) {
         queueOutgoingFrame(text, WSOP_Text, True);
     }
 
     #! Queues a binary message for sending
+    /** Applies outgoing extension transforms before encoding.
+    */
     sendBinary(binary data) {
         queueOutgoingFrame(data, WSOP_Binary, True);
     }
@@ -4870,57 +4734,6 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     #! Queues a raw message for sending with explicit opcode and FIN flag
     sendRaw(data msg, int op, bool fin) {
         queueOutgoingFrame(msg, op, fin);
-    }
-
-    #! Queues a ping frame for sending
-    sendPing(*data msg) {
-        send_channel.send({
-            "data": ws_encode_message(msg ?? "", WSOP_Ping, True),
-        });
-    }
-
-    #! Queues a pong frame for sending
-    sendPong(*data msg) {
-        send_channel.send({
-            "data": ws_encode_message(msg ?? "", WSOP_Pong, True),
-        });
-    }
-
-    #! Initiates the close handshake
-    /** @param code close code (default: WSCC_NormalClosure)
-        @param reason close reason string
-    */
-    sendClose(int code = WSCC_NormalClosure, *string reason) {
-        # Validate close code
-        if (!WSCCMap{code}) {
-            logError("invalid close code %d; using WSCC_InternalServerError", code);
-            code = WSCC_InternalServerError;
-        }
-
-        {
-            AutoLock al(close_mutex);
-            # Ignore duplicate close requests — a close frame has already been sent
-            if (close_initiated) {
-                return;
-            }
-            close_initiated = True;
-            close_code = code;
-            close_reason = reason ?? "";
-            state = STATE_CLOSING;
-        }
-
-        # Build close payload: 2-byte big-endian code + optional UTF-8 reason
-        binary payload = code.encodeMsb(2);
-        if (reason) {
-            if (reason.encoding() != "UTF-8") {
-                reason = convert_encoding(reason, "UTF-8");
-            }
-            payload += binary(reason);
-        }
-
-        send_channel.send({
-            "data": ws_encode_message(payload, WSOP_Close, True),
-        });
     }
 
     #! Gets the next received message (blocking with timeout)
@@ -4937,8 +4750,6 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
     */
     *hash<auto> getReceivedMessage(timeout to = -1) {
         if (to < 0) {
-            # Non-blocking: atomic tryRecv avoids race condition
-            # tryRecv returns {value: <val>, has_value: True} or NOTHING
             *hash<auto> result = recv_channel.tryRecv();
             return result.value;
         }
@@ -4957,327 +4768,105 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         return !recv_channel.empty();
     }
 
-    #! Returns the close code
-    int getCloseCode() {
-        AutoLock al(close_mutex);
-        return close_code;
-    }
-
-    #! Returns the close reason
-    string getCloseReason() {
-        AutoLock al(close_mutex);
-        return close_reason;
-    }
-
-    #! Returns the output of the operation
-    auto getOutput() {
-        AutoLock al(close_mutex);
-        return {
-            "state": state,
-            "close_code": close_code,
-            "close_reason": close_reason,
-            "error_info": error_info,
-        };
-    }
-
-    #! Aborts the operation
-    abort() {
-        {
-            AutoLock al(close_mutex);
-            state = STATE_CLOSED;
-            close_code = WSCC_AbnormalClosure;
-            close_reason = "aborted";
-        }
-        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure, "reason": "aborted"});
-        if (send_poller) {
-            send_poller.abort();
-            send_poller = NOTHING;
-        }
-    }
-
-    #! Called when the poll operation completes (goal reached or error/timeout)
-    /** Schedules one final delivery so the terminal message is consumed.
-        @since WebSocketClient 2.4
+    #! Processes a raw frame from the C++ recv_queue
+    /** Applies extension transforms and raw callback, then pushes to recv_channel.
     */
-    nothing onComplete(hash<SocketPollResultInfo> result) {
-        notifyPollComplete();
-    }
+    private processReceivedCppFrame(hash<auto> frame) {
+        string frame_type = frame.type;
 
-    #! Reads available data from the socket into recv_buffer (non-blocking)
-    private readAvailableData() {
-        if (transport == "http3") {
-            *binary data = hc.readHttp3StreamData(stream_id, 0);
-            if (data) {
-                h3_frame_buf = h3_frame_buf ? h3_frame_buf + data : data;
-            }
-            # Transfer complete WebSocket frames from the stream buffer to recv_buffer
-            transferStreamFrames(\h3_frame_buf);
-        } else if (transport == "http2") {
-            if (hc.isHttp2DataAvailable(stream_id, 0ms)) {
-                *binary data = hc.readHttp2StreamData(stream_id, 0);
-                if (data) {
-                    h2_frame_buf = h2_frame_buf ? h2_frame_buf + data : data;
-                }
-            }
-            # Transfer complete WebSocket frames from the stream buffer to recv_buffer
-            transferStreamFrames(\h2_frame_buf);
-        } else {
-            # HTTP/1.1: read directly from socket
-            if (hc.isDataAvailable(0ms)) {
-                *binary data = hc.recvBinary(-1, 0ms);
-                if (!data || data.size() == 0) {
-                    {
-                        AutoLock al(close_mutex);
-                        state = STATE_CLOSED;
-                        close_code = WSCC_AbnormalClosure;
-                        close_reason = "Connection closed";
-                    }
-                    recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
-                        "reason": "Connection closed"});
-                    return;
-                }
-                recv_buffer += data;
-            }
-        }
-    }
-
-    #! Transfers complete WebSocket frames from HTTP/2 or HTTP/3 stream buffers to recv_buffer
-    /** WebSocket frames may span multiple protocol DATA frames, so we use ws_get_frame_size()
-        to determine when a complete WebSocket frame is available in the stream buffer.
-    */
-    private transferStreamFrames(reference<*binary> frame_buf) {
-        while (frame_buf && frame_buf.size() > 0) {
-            *int needed = ws_get_frame_size(frame_buf);
-            if (!exists needed || frame_buf.size() < needed) {
-                break;
-            }
-            # Extract complete frame and add to recv_buffer for processing
-            recv_buffer += frame_buf.substr(0, needed);
-            frame_buf = frame_buf.size() > needed ? frame_buf.substr(needed) : NOTHING;
-        }
-    }
-
-    #! Processes complete WebSocket frames from recv_buffer
-    private processReceivedFrames() {
-        while (recv_buffer.size() >= 2) {
-            *int frame_size = ws_get_frame_size(recv_buffer);
-            if (!exists frame_size || recv_buffer.size() < frame_size) {
-                break;  # Need more data
-            }
-
-            # Check frame size limit
-            if (frame_size > max_frame_size) {
-                sendClose(WSCC_MessageTooBig, "Message too big");
-                return;
-            }
-
-            # Extract and parse the complete frame
-            binary frame_data = recv_buffer.substr(0, frame_size);
-            recv_buffer = recv_buffer.size() > frame_size ? recv_buffer.substr(frame_size) : binary();
-
-            hash<WsMsgInfo> h = ws_parse_frame(frame_data);
-            handleParsedFrame(h);
-
-            if (state == STATE_CLOSED || state == STATE_ERROR) {
-                return;
-            }
-        }
-    }
-
-    #! Handles a parsed WebSocket frame
-    /** This mirrors the logic in WebSocketClient::handleMessage() but adapted for
-        the poll operation's queue-based delivery model.
-    */
-    private handleParsedFrame(hash<WsMsgInfo> h) {
-        # Handle close frames
-        if (h.op == WSOP_Close) {
-            int code;
-            string reason;
-            bool we_initiated;
-            {
-                AutoLock al(close_mutex);
-                if (h.close) {
-                    close_code = h.close;
-                    close_reason = h.msg ?? "";
-                } else {
-                    close_code = WSCC_NoStatusRcvd;
-                }
-                code = close_code;
-                reason = close_reason;
-                we_initiated = close_initiated;
-
-                if (we_initiated) {
-                    # We initiated close and received the server's response - handshake complete
-                    state = STATE_CLOSED;
-                } else {
-                    # Server initiated close - stay in CLOSING so continuePoll() reaches the
-                    # write phase and flushes the echo close frame before we transition to CLOSED
-                    state = STATE_CLOSING;
-                }
-            }
-
-            recv_channel.send({"type": "close", "msg": h, "code": code, "reason": reason});
-            ++frames_queued;
-
-            if (!we_initiated) {
-                # Server initiated close - echo the close frame back
-                binary payload = code.encodeMsb(2);
-                if (reason) {
-                    payload += binary(reason.encoding() != "UTF-8"
-                        ? convert_encoding(reason, "UTF-8") : reason);
-                }
-                send_channel.send({
-                    "data": ws_encode_message(payload, WSOP_Close, True),
-                });
-            }
-            return;
-        }
-
-        # Validate RSV bits
-        int rsv_bits = (h.rsv1 ? WS_RSV1 : 0) | (h.rsv2 ? WS_RSV2 : 0) | (h.rsv3 ? WS_RSV3 : 0);
-        if (rsv_bits) {
-            if (!active_extensions) {
-                logError("RSV bits set but no extensions are active");
-                sendClose(WSCC_ProtocolError);
-                return;
-            }
-            foreach AbstractWebSocketExtension ext in (active_extensions) {
-                if (!ext.validateRsvBits(rsv_bits, h.op)) {
-                    logError("Extension %s rejected RSV bits", ext.getName());
-                    sendClose(WSCC_ProtocolError);
-                    return;
-                }
-            }
-        }
-
-        # Call raw frame callback before any processing (matches sync eventRaw() semantics)
-        if (raw_callback) {
-            int rc = raw_callback(h);
-            if (rc == WSC_Continue) {
-                return;
-            }
-            if (rc == WSC_Break) {
-                state = STATE_CLOSED;
-                recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
-                    "reason": "raw callback requested break"});
-                ++frames_queued;
-                return;
-            }
-        }
-
-        # Handle ping: auto-reply with pong, notify via queue
-        if (h.op == WSOP_Ping) {
-            send_channel.send({
-                "data": ws_encode_message(h.msg ?? "heartbeat", WSOP_Pong, True),
+        # Close frames
+        if (frame_type == "close") {
+            recv_channel.send({
+                "type": "close",
+                "msg": frame,
+                "code": frame.code ?? WSCC_NormalClosure,
+                "reason": frame.reason ?? "",
             });
-            recv_channel.send({"type": "ping", "msg": h, "data": h.msg});
-            ++frames_queued;
             return;
         }
 
-        # Handle pong
-        if (h.op == WSOP_Pong) {
-            recv_channel.send({"type": "pong", "msg": h, "data": h.msg});
-            ++frames_queued;
+        # Closed notification (EOF / connection lost)
+        if (frame_type == "closed") {
+            recv_channel.send({
+                "type": "closed",
+                "code": frame.code ?? WSCC_AbnormalClosure,
+                "reason": frame.reason ?? "",
+            });
             return;
         }
 
-        # Handle fragmented frames (RFC 6455 Section 5.4)
-        if (!h.fin) {
-            if (!exists frag_buf) {
-                if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-                    frag_buf = h.msg;
-                    # RFC 7692 Section 6.2.1: Store RSV bits from first frame
-                    first_frame_rsv = {
-                        "rsv1": h.rsv1,
-                        "rsv2": h.rsv2,
-                        "rsv3": h.rsv3,
-                        "op": h.op,
-                    };
-                } else {
-                    logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
-                    sendClose(WSCC_ProtocolError);
-                }
-            } else {
-                if (h.op != WSOP_Continuation) {
-                    logError("FIN bit not set with buffer but opcode is %d: %y", h.op,
-                        WSOPMap{h.op} ?? "unknown");
-                    sendClose(WSCC_ProtocolError);
-                } else {
-                    if (frag_buf.typeCode() == NT_STRING) {
-                        frag_buf += h.msg.toString();
-                    } else {
-                        frag_buf += h.msg;
+        # Ping/pong — just pass through (C++ auto-pongs already)
+        if (frame_type == "ping") {
+            recv_channel.send({"type": "ping", "msg": frame, "data": frame.data});
+            return;
+        }
+        if (frame_type == "pong") {
+            recv_channel.send({"type": "pong", "msg": frame, "data": frame.data});
+            return;
+        }
+
+        # Data frames (text/binary) — apply extensions
+        if (frame_type == "text" || frame_type == "binary") {
+            # Build WsMsgInfo-compatible context for extension transforms
+            int op = frame_type == "text" ? WSOP_Text : WSOP_Binary;
+            hash<auto> ctx = {
+                "op": op,
+                "fin": True,
+                "rsv1": frame.rsv1 ?? False,
+                "rsv2": frame.rsv2 ?? False,
+                "rsv3": frame.rsv3 ?? False,
+            };
+
+            # Validate RSV bits against active extensions
+            if (active_extensions) {
+                int rsv_bits = (ctx.rsv1 ? WS_RSV1 : 0)
+                    | (ctx.rsv2 ? WS_RSV2 : 0)
+                    | (ctx.rsv3 ? WS_RSV3 : 0);
+                if (rsv_bits) {
+                    foreach AbstractWebSocketExtension ext in (active_extensions) {
+                        if (!ext.validateRsvBits(rsv_bits, op)) {
+                            logError("Extension %s rejected RSV bits", ext.getName());
+                            WebSocketClientPollOperationBase::sendClose(WSCC_ProtocolError);
+                            return;
+                        }
                     }
                 }
             }
-            return;
-        }
 
-        # Final frame of a fragmented message
-        if (exists frag_buf && h.op == WSOP_Continuation) {
-            if (frag_buf.typeCode() == NT_STRING) {
-                frag_buf += h.msg.toString();
-            } else {
-                frag_buf += h.msg;
+            # Apply raw frame callback
+            if (raw_callback) {
+                hash<WsMsgInfo> h = <WsMsgInfo>{
+                    "op": op,
+                    "msg": frame.data,
+                    "masked": False,
+                    "fin": True,
+                    "rsv1": ctx.rsv1,
+                    "rsv2": ctx.rsv2,
+                    "rsv3": ctx.rsv3,
+                };
+                int rc = raw_callback(h);
+                if (rc == WSC_Continue) {
+                    return;
+                }
+                if (rc == WSC_Break) {
+                    WebSocketClientPollOperationBase::sendClose(WSCC_NormalClosure);
+                    recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
+                        "reason": "raw callback requested break"});
+                    return;
+                }
             }
-            # RFC 7692 Section 6.2.1: Use RSV bits from first frame, not continuation
-            hash<WsMsgInfo> ext_h = h;
-            if (first_frame_rsv) {
-                ext_h.rsv1 = first_frame_rsv.rsv1;
-                ext_h.rsv2 = first_frame_rsv.rsv2;
-                ext_h.rsv3 = first_frame_rsv.rsv3;
-                ext_h.op = first_frame_rsv.op;
-                remove first_frame_rsv;
+
+            # Apply incoming extension transforms
+            auto processed = frame.data;
+            if (active_extensions) {
+                for (int i = active_extensions.size() - 1; i >= 0; --i) {
+                    processed = active_extensions[i].transformIncoming(processed, ctx);
+                }
             }
-            data processed = applyIncomingExtensions(remove frag_buf, ext_h);
-            string msg_type = ext_h.op == WSOP_Text ? "text" : "binary";
-            recv_channel.send({"type": msg_type, "msg": ext_h, "data": processed});
-            ++frames_queued;
+
+            recv_channel.send({"type": frame_type, "data": processed});
             return;
         }
-
-        # Complete single-frame text or binary message
-        if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-            data processed = applyIncomingExtensions(h.msg, h);
-            string msg_type = h.op == WSOP_Text ? "text" : "binary";
-            recv_channel.send({"type": msg_type, "msg": h, "data": processed});
-            ++frames_queued;
-            return;
-        }
-
-        # Continuation frame without preceding fragment
-        if (h.op == WSOP_Continuation) {
-            logError("FIN bit set with continuation opcode but no buffered data");
-            sendClose(WSCC_ProtocolError);
-            return;
-        }
-
-        # Unknown opcode
-        logError("unknown opcode: %d", h.op);
-        sendClose(WSCC_UnsupportedData);
-    }
-
-    #! Applies incoming extension transforms in reverse order
-    private data applyIncomingExtensions(data msg, hash<WsMsgInfo> h) {
-        if (!active_extensions) {
-            return msg;
-        }
-
-        hash<auto> ctx = {
-            "op": h.op,
-            "fin": h.fin,
-            "rsv1": h.rsv1,
-            "rsv2": h.rsv2,
-            "rsv3": h.rsv3,
-        };
-
-        # Apply transforms in reverse order
-        for (int i = active_extensions.size() - 1; i >= 0; --i) {
-            msg = active_extensions[i].transformIncoming(msg, ctx);
-        }
-
-        return msg;
     }
 
     #! Queues an outgoing frame with extension transforms and masking
@@ -5298,76 +4887,8 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
             }
         }
 
-        send_channel.send({
-            "data": ws_encode_message(msg, op, True, fin, rsv_bits),
-        });
-    }
-
-    #! Writes pending send data non-blockingly
-    private writePendingData() {
-        if (!pending_send) {
-            return;
-        }
-
-        if (transport == "http1") {
-            # Use non-blocking send via poll operation
-            binary to_send = pending_send_offset > 0
-                ? pending_send.substr(pending_send_offset)
-                : pending_send;
-            send_poller = hc.startPollSend(to_send);
-            send_poller.continuePoll();
-            if (send_poller.goalReached()) {
-                send_poller = NOTHING;
-                remove pending_send;
-                pending_send_offset = 0;
-            }
-        } else if (transport == "http3") {
-            hc.sendHttp3StreamData(stream_id, pending_send.substr(pending_send_offset), False, timeout_ms);
-            remove pending_send;
-            pending_send_offset = 0;
-        } else {
-            # HTTP/2
-            hc.sendHttp2StreamData(stream_id, pending_send.substr(pending_send_offset), False, timeout_ms);
-            remove pending_send;
-            pending_send_offset = 0;
-        }
-    }
-
-    #! Dequeues frames from the send channel and starts writing
-    private dequeueAndSend() {
-        auto result = send_channel.tryRecv();
-        if (!exists result) {
-            return;
-        }
-
-        # Drain all available frames and concatenate into a single buffer
-        # for more efficient I/O (fewer system calls for burst sends)
-        binary buf = result.value.data;
-        while (True) {
-            result = send_channel.tryRecv();
-            if (!exists result) {
-                break;
-            }
-            buf += result.value.data;
-        }
-
-        pending_send = buf;
-        pending_send_offset = 0;
-
-        # Try to write immediately
-        writePendingData();
-    }
-
-    #! Notifies the delivery callback that a poll cycle has completed
-    /** Called at the end of each continuePoll() cycle (including error/close paths)
-        to trigger message delivery scheduling.
-
-        @since WebSocketClient 2.4
-    */
-    private notifyPollComplete() {
-        if (on_poll_complete) {
-            on_poll_complete();
-        }
+        # Encode with client masking and queue via C++ send_queue
+        sendRawFrame(ws_encode_message(msg, op, True, fin, rsv_bits));
     }
 
     private logError(string fmt, ...) {
@@ -5376,7 +4897,6 @@ public class WebSocketClientPollOperation inherits Qore::AbstractPollOperation {
         }
     }
 
-    #! Logs a debug message
     private logDebug(string fmt, ...) {
         if (logger) {
             logger.log(LoggerLevel::DEBUG, "WebSocketClientPollOperation: " + vsprintf(fmt, argv));

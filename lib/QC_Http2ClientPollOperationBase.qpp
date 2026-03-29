@@ -465,10 +465,15 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                     removed.discard(xsink);
                     action->execute(body_resp, xsink);
 
-                    // Send end_stream marker
+                    // Send end_stream marker with trailers preserved
                     ReferenceHolder<QoreHashNode> end_resp(new QoreHashNode(autoTypeInfo), xsink);
                     end_resp->setKeyValue("end_stream", true, xsink);
                     end_resp->setKeyValue("stream_id", stream_id_val, xsink);
+                    // Preserve trailers so getTrailers() works for streaming responses
+                    QoreValue trailers_val = output->getKeyValue("trailers");
+                    if (!trailers_val.isNullOrNothing()) {
+                        end_resp->setKeyValue("trailers", trailers_val.refSelf(), xsink);
+                    }
                     action->execute(end_resp.release(), xsink);
                 } else {
                     // Just end_stream, no body

@@ -1027,6 +1027,16 @@ nothing WebSocketClientPollOperationBase::setHasExtensions(bool val = True) {
     priv->setHasExtensions(val);
 }
 
+//! Called by the I/O controller when frames have been pushed during continuePoll
+/** Override in subclasses to process received frames on a worker thread.
+    The default implementation does nothing.
+
+    @since %Qore 2.3
+*/
+nothing WebSocketClientPollOperationBase::onPollComplete() {
+    // Default: no-op; subclasses override to drain recv_queue
+}
+
 //! Returns the socket being monitored
 /** @return the Socket object
 */

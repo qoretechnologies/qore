@@ -161,6 +161,19 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::cancel(sock);
     }
 
+    #! Cancels the operation and closes the socket
+    /** Use this when the controller manages the socket lifecycle — cancels the poll
+        operation, then shuts down and closes the socket in C++ (no Qore round-trip).
+
+        @param sock the socket whose operation should be canceled and then closed
+        @return True if an operation was found and canceled
+
+        @since Qore 2.3
+    */
+    bool cancelAndClose(Socket sock) {
+        return Qore::AsyncIoController::cancelAndClose(sock);
+    }
+
     #! Wakes the I/O thread to re-evaluate poll state
     wake() {
         Qore::AsyncIoController::wake();

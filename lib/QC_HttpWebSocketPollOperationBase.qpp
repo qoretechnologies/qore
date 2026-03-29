@@ -57,7 +57,7 @@ HttpWebSocketPollOperationPriv::HttpWebSocketPollOperationPriv(QoreObject* self,
 }
 
 HttpWebSocketPollOperationPriv::~HttpWebSocketPollOperationPriv() {
-    if (sock || recv_queue || send_queue || send_op || recv_op || error_info) {
+    if (sock || recv_queue || send_queue || send_op || recv_op || error_info || frame_callback) {
         ExceptionSink xsink;
         cleanup(&xsink);
     }
@@ -70,6 +70,7 @@ bool HttpWebSocketPollOperationPriv::goalReached() const {
 QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink) {
     printd(5, "HttpWebSocketPollOp::continuePoll() state: %s send_op=%p recv_op=%p\n",
         getWsState(), send_op, recv_op);
+    frames_pushed_in_cycle = 0;
     if (goalReached()) {
         return nullptr;
     }
@@ -84,6 +85,17 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
 
     // --- Phase 1: Drive active send operation ---
     if (send_op) {
+        // Check send timeout
+        if (send_timeout_ms > 0 && send_op_start_ms > 0) {
+            int64 elapsed = q_clock_getmillis() - send_op_start_ms;
+            if (elapsed > send_timeout_ms) {
+                xsink->raiseException("SOCKET-TIMEOUT",
+                    "send operation timed out after " QLLD " ms (timeout: " QLLD " ms)",
+                    elapsed, send_timeout_ms);
+                setError(xsink);
+                return nullptr;
+            }
+        }
         QoreHashNode* send_info = send_op->continuePoll(xsink);
         if (*xsink) {
             setError(xsink);
@@ -168,6 +180,18 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         }
     }
 
+    // --- Heartbeat: auto-send ping if no recv activity ---
+    if (heartbeat_interval_ms > 0 && !goalReached() && last_recv_activity_ms > 0) {
+        int64 elapsed = q_clock_getmillis() - last_recv_activity_ms;
+        if (elapsed >= heartbeat_interval_ms) {
+            queueSendPing(nullptr, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
     // --- Phase 4: Check for queued frames to send ---
     if (!send_op && !goalReached()) {
         drainSendQueue(xsink);
@@ -190,13 +214,39 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
     // Always poll for incoming data at minimum
     poll_events |= SOCK_POLLIN;
 
-    return getSocketPollInfoHash(xsink, poll_events);
+    QoreHashNode* result = getSocketPollInfoHash(xsink, poll_events);
+    // Add poll timeout for send timeout or heartbeat interval
+    if (result) {
+        int64 poll_timeout = 0;
+        if (send_op && send_timeout_ms > 0 && send_op_start_ms > 0) {
+            poll_timeout = send_timeout_ms - (q_clock_getmillis() - send_op_start_ms);
+            if (poll_timeout <= 0) {
+                poll_timeout = 1;
+            }
+        }
+        if (heartbeat_interval_ms > 0 && last_recv_activity_ms > 0) {
+            int64 hb_remaining = heartbeat_interval_ms - (q_clock_getmillis() - last_recv_activity_ms);
+            if (hb_remaining <= 0) {
+                hb_remaining = 1;
+            }
+            if (poll_timeout == 0 || hb_remaining < poll_timeout) {
+                poll_timeout = hb_remaining;
+            }
+        }
+        if (poll_timeout > 0) {
+            result->setKeyValue("poll_timeout_ms", poll_timeout, xsink);
+        }
+    }
+    return result;
 }
 
 void HttpWebSocketPollOperationPriv::abort(ExceptionSink* xsink) {
     ws_state = WsState::CLOSED;
     releaseSendOp(xsink);
     releaseRecvOp(xsink);
+    if (frame_callback) {
+        frame_callback->execValue(nullptr, xsink).discard(xsink);
+    }
 }
 
 QoreValue HttpWebSocketPollOperationPriv::getOutput() const {
@@ -270,12 +320,12 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                     return;
                 }
                 // Also push to recv_queue so the Qore handler sees the ping
-                pushRecvFrame("ping", frame.payload ? frame.payload->refSelf() : nullptr, xsink);
+                pushRecvFrame("ping", frame.payload ? frame.payload->refSelf() : nullptr, frame.rsv, xsink);
                 break;
             }
 
             case WSOP_PONG: {
-                pushRecvFrame("pong", frame.payload ? frame.payload->refSelf() : nullptr, xsink);
+                pushRecvFrame("pong", frame.payload ? frame.payload->refSelf() : nullptr, frame.rsv, xsink);
                 break;
             }
 
@@ -340,9 +390,9 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                     QoreStringNode* text = new QoreStringNode(
                         reinterpret_cast<const char*>(msg_payload->getPtr()),
                         msg_payload->size(), QCS_UTF8);
-                    pushRecvFrame("text", text, xsink);
+                    pushRecvFrame("text", text, msg_rsv, xsink);
                 } else {
-                    pushRecvFrame("binary", msg_payload.release(), xsink);
+                    pushRecvFrame("binary", msg_payload.release(), msg_rsv, xsink);
                 }
             }
         } else {
@@ -356,9 +406,9 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 } else {
                     text = new QoreStringNode(QCS_UTF8);
                 }
-                pushRecvFrame("text", text, xsink);
+                pushRecvFrame("text", text, frame.rsv, xsink);
             } else if (frame.opcode == WSOP_BINARY) {
-                pushRecvFrame("binary", frame.payload ? frame.payload->refSelf() : new BinaryNode(), xsink);
+                pushRecvFrame("binary", frame.payload ? frame.payload->refSelf() : new BinaryNode(), frame.rsv, xsink);
             }
         }
     }
@@ -366,13 +416,21 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
 }
 
 void HttpWebSocketPollOperationPriv::pushRecvFrame(const char* type, AbstractQoreNode* data,
-        ExceptionSink* xsink) {
+        uint8_t rsv, ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
     h->setKeyValue("type", new QoreStringNode(type), xsink);
     if (data) {
         h->setKeyValue("data", data, xsink);
     }
+    h->setKeyValue("rsv1", (rsv & 4) != 0, xsink);
+    h->setKeyValue("rsv2", (rsv & 2) != 0, xsink);
+    h->setKeyValue("rsv3", (rsv & 1) != 0, xsink);
     recv_queue->push(xsink, h.release());
+    ++frames_pushed_in_cycle;
+    last_recv_activity_ms = q_clock_getmillis();
+    if (!*xsink && frame_callback) {
+        frame_callback->execValue(nullptr, xsink).discard(xsink);
+    }
 }
 
 void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const char* reason,
@@ -382,6 +440,11 @@ void HttpWebSocketPollOperationPriv::pushRecvCloseFrame(uint16_t code, const cha
     h->setKeyValue("code", static_cast<int64>(code), xsink);
     h->setKeyValue("reason", new QoreStringNode(reason ? reason : ""), xsink);
     recv_queue->push(xsink, h.release());
+    ++frames_pushed_in_cycle;
+    last_recv_activity_ms = q_clock_getmillis();
+    if (!*xsink && frame_callback) {
+        frame_callback->execValue(nullptr, xsink).discard(xsink);
+    }
 }
 
 void HttpWebSocketPollOperationPriv::queueSendText(const QoreStringNode* text, ExceptionSink* xsink) {
@@ -440,6 +503,17 @@ QoreValue HttpWebSocketPollOperationPriv::getReceivedFrame(ExceptionSink* xsink)
         return QoreValue();
     }
     return val;
+}
+
+void HttpWebSocketPollOperationPriv::queueSendRawFrame(const BinaryNode* data, ExceptionSink* xsink) {
+    send_queue->push(xsink, data->refSelf());
+}
+
+void HttpWebSocketPollOperationPriv::setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink) {
+    if (frame_callback) {
+        frame_callback->deref(xsink);
+    }
+    frame_callback = cb;
 }
 
 void HttpWebSocketPollOperationPriv::drainSendQueue(ExceptionSink* xsink) {
@@ -501,6 +575,7 @@ int HttpWebSocketPollOperationPriv::startSendOp(ExceptionSink* xsink) {
     // Set our QoreObject as the inner op's self for poll info resolution
     assert(self);
     send_op->setSelf(*self);
+    send_op_start_ms = q_clock_getmillis();
     return 0;
 }
 
@@ -508,6 +583,7 @@ void HttpWebSocketPollOperationPriv::releaseSendOp(ExceptionSink* xsink) {
     if (send_op) {
         send_op->deref(xsink);
         send_op = nullptr;
+        send_op_start_ms = 0;
     }
 }
 
@@ -533,6 +609,9 @@ void HttpWebSocketPollOperationPriv::setError(ExceptionSink* xsink) {
             error_info->setKeyValue("desc",
                 desc_val.get<const QoreStringNode>()->stringRefSelf(), &save_xsink);
         }
+    }
+    if (frame_callback) {
+        frame_callback->execValue(nullptr, xsink).discard(xsink);
     }
 }
 
@@ -565,6 +644,10 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     if (send_queue_obj) {
         send_queue_obj->deref(xsink);
         send_queue_obj = nullptr;
+    }
+    if (frame_callback) {
+        frame_callback->deref(xsink);
+        frame_callback = nullptr;
     }
     if (error_info) {
         error_info->deref(xsink);
@@ -761,6 +844,9 @@ nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason
     The frame hash has the following keys:
     - \c type: "text", "binary", "ping", "pong", or "close"
     - \c data: string for text frames, binary for binary/ping/pong frames
+    - \c rsv1: bool RSV1 bit from the frame header
+    - \c rsv2: bool RSV2 bit from the frame header
+    - \c rsv3: bool RSV3 bit from the frame header
     - \c code: int close code (only for close frames)
     - \c reason: string close reason (only for close frames)
 
@@ -819,4 +905,69 @@ string HttpWebSocketPollOperationBase::getCloseReason() [flags=RET_VALUE_ONLY] {
 */
 Socket HttpWebSocketPollOperationBase::getSocket() {
     return self->getReferencedMemberNoMethod("sock", xsink);
+}
+
+//! Queues a pre-encoded raw WebSocket frame for sending
+/** Thread-safe: can be called from any thread.
+
+    @param data the pre-encoded frame bytes (as produced by ws_encode_message())
+*/
+nothing HttpWebSocketPollOperationBase::sendRawFrame(binary data) {
+    priv->queueSendRawFrame(data, xsink);
+}
+
+//! Sets the frame callback, called on the I/O thread when a frame is received
+/** The callback must be fast (e.g., signal a condition variable) — it runs on
+    the I/O thread and blocks further poll processing.
+
+    Pass @ref nothing to clear the callback.
+
+    @param cb the callback, or @ref nothing to clear
+*/
+nothing HttpWebSocketPollOperationBase::setFrameCallback(*code cb) {
+    ResolvedCallReferenceNode* callback = nullptr;
+    if (cb) {
+        callback = cb->refRefSelf();
+    }
+    priv->setFrameCallback(callback, xsink);
+}
+
+//! Sets the send timeout in milliseconds
+/** When a send operation exceeds this timeout, a SOCKET-TIMEOUT exception is raised
+    and the connection transitions to ERROR state.
+
+    @param ms the timeout in milliseconds (0 = no timeout)
+*/
+nothing HttpWebSocketPollOperationBase::setSendTimeout(int ms) {
+    priv->setSendTimeout(static_cast<int64>(ms));
+}
+
+//! Returns the send timeout in milliseconds
+/** @return the send timeout (0 = no timeout)
+*/
+int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
+    return priv->getSendTimeout();
+}
+
+//! Sets the heartbeat interval in milliseconds
+/** When set, the poll operation automatically sends a ping frame if no data
+    has been received within this interval. The I/O controller uses
+    poll_timeout_ms to wake up in time for the heartbeat.
+
+    @param ms the heartbeat interval in milliseconds (0 = disabled)
+
+    @since %Qore 2.3
+*/
+nothing HttpWebSocketPollOperationBase::setHeartbeat(int ms) {
+    priv->setHeartbeat(static_cast<int64>(ms));
+}
+
+//! Called by the I/O controller when frames have been pushed during continuePoll
+/** Override in subclasses to process received frames on a worker thread.
+    The default implementation does nothing.
+
+    @since %Qore 2.3
+*/
+nothing HttpWebSocketPollOperationBase::onPollComplete() {
+    // Default: no-op; subclasses override to drain recv_queue
 }

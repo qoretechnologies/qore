@@ -307,6 +307,16 @@ public class WebSocketConnection {
         *AsyncSocketIo::AsyncSocketIoController async_ctrl;
         *AsyncSocketIo::AbstractStreamContext stream_ctx;
 
+        #! Optional WebSocket poll operation for async H1 I/O
+        /** @since WebSocketHandler 2.7
+        */
+        *HttpWebSocketPollOperationBase async_ws_poll_op;
+
+        #! Optional stream processor for async H2/H3 I/O
+        /** @since WebSocketHandler 2.7
+        */
+        *WebSocketStreamProcessor stream_processor;
+
         #! Listener ID this connection belongs to
         string lid;
 
@@ -369,6 +379,24 @@ public class WebSocketConnection {
 
     setAsyncIo(*AsyncSocketIo::AsyncSocketIoController async_ctrl) {
         self.async_ctrl = async_ctrl;
+    }
+
+    #! Sets the WebSocket poll operation for async HTTP/1.1 I/O
+    /** @param poll_op the poll operation, or @ref nothing to clear
+
+        @since WebSocketHandler 2.7
+    */
+    setWsPollOp(*HttpWebSocketPollOperationBase poll_op) {
+        self.async_ws_poll_op = poll_op;
+    }
+
+    #! Sets the stream processor for async HTTP/2 or HTTP/3 I/O
+    /** @param proc the stream processor, or @ref nothing to clear
+
+        @since WebSocketHandler 2.7
+    */
+    setStreamProcessor(*WebSocketStreamProcessor proc) {
+        self.stream_processor = proc;
     }
 
     #! Sets the stream context for WebSocket over HTTP/2 or HTTP/3
@@ -460,6 +488,11 @@ public class WebSocketConnection {
             io_pending = True;
             io_cond.signal();
         }
+        if (stream_processor) {
+            try {
+                stream_processor.notifyIo();
+            } catch () {}
+        }
         if (async_ctrl) {
             try {
                 async_ctrl.wake();
@@ -524,6 +557,11 @@ public class WebSocketConnection {
 
     #! Pushes an already-encoded message on the connection's message channel
     sendEncoded(binary msg) {
+        if (async_ws_poll_op) {
+            async_ws_poll_op.sendRawFrame(msg);
+            notifyIo();
+            return;
+        }
         try {
             channel.send(msg);
         } catch (hash<ExceptionInfo> ex) {
@@ -564,8 +602,14 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
+        binary encoded = sendWithExtensions(msg);
+        if (async_ws_poll_op) {
+            async_ws_poll_op.sendRawFrame(encoded);
+            notifyIo();
+            return;
+        }
         try {
-            channel.send(sendWithExtensions(msg));
+            channel.send(encoded);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
@@ -587,8 +631,14 @@ public class WebSocketConnection {
             asyncapi_validator.validateOutgoingMessage(asyncapi_channel, \msg, \headers);
         }
 %endif
+        binary encoded = sendWithExtensions(msg, op, fin);
+        if (async_ws_poll_op) {
+            async_ws_poll_op.sendRawFrame(encoded);
+            notifyIo();
+            return;
+        }
         try {
-            channel.send(sendWithExtensions(msg, op, fin));
+            channel.send(encoded);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err != "CHANNEL-CLOSED") {
                 rethrow;
@@ -680,20 +730,37 @@ public class WebSocketConnection {
         @since %WebSocketHandler 1.5.2
     */
     flush() {
-        if (gettid() != tid) {
+        if (async_ws_poll_op) {
+            # Async path: wake the I/O controller to flush any queued sends
+            notifyIo();
+        } else if (gettid() != tid) {
             while (!stop_flag && (!channel.empty() || hasPendingSends())) {
-                # Wait on condition instead of polling with usleep — woken by the
-                # I/O thread after it drains the channel/pending sends
                 waitForIoEvent(DefaultQueuePollingInterval);
             }
-        } else {
-            handler.flushIo(self, sock);
         }
     }
 
     #! force closing socket related to connection
     stop() {
         stop_flag = True;
+        # For async H1 WebSocket: initiate close handshake via poll op
+        if (async_ws_poll_op) {
+            try {
+                async_ws_poll_op.sendClose(WSCC_GoingAway);
+            } catch () {}
+            # Wake the I/O controller to flush the close frame
+            if (async_ctrl) {
+                try {
+                    async_ctrl.wake();
+                } catch () {}
+            }
+        }
+        # For async H2/H3 WebSocket: close the stream processor
+        if (stream_processor) {
+            try {
+                stream_processor.close();
+            } catch () {}
+        }
         # closing the channel wakes up the polling thread immediately
         channel.close();
         # signal the condition to wake up the I/O loop in case it's waiting
@@ -976,6 +1043,184 @@ public class WebSocketConnection {
     @ref WebSocketHandler::WebSocketHandler::handleRequest() "WebSocketHandler::handleRequest()" in the \c "cx.id"
     argument when the connection is first established.
 */
+#! Processes WebSocket frames from an HTTP/2 or HTTP/3 stream on worker threads
+/** This class is registered as a stream data listener with the I/O controller.
+    When the I/O thread pushes data to the stream's Queue, the controller's worker
+    pool calls notifyIo() on this object. The notifyIo() method reads from the
+    stream context, decodes WebSocket frames, and dispatches to gotMessage().
+
+    This eliminates the need for a dedicated handler thread to poll the stream.
+
+    @since WebSocketHandler 2.7
+*/
+class WebSocketStreamProcessor {
+    private {
+        #! The WebSocket connection for frame dispatch
+        WebSocketConnection wsc;
+
+        #! The WebSocket handler for logging
+        WebSocketHandler handler;
+
+        #! Counter to signal when the stream closes
+        Counter done;
+
+        #! Buffer for incomplete WebSocket frames spanning multiple stream data chunks
+        binary stream_buf;
+
+        #! Mutex to serialize processing (multiple worker threads may call notifyIo)
+        Mutex process_mutex();
+
+        #! Timestamp of last recv activity for heartbeat
+        int last_recv_timestamp;
+
+        #! True when the stream has been closed
+        bool closed = False;
+    }
+
+    #! Creates the stream processor
+    constructor(WebSocketConnection wsc, WebSocketHandler handler, Counter done) {
+        self.wsc = wsc;
+        self.handler = handler;
+        self.done = done;
+        self.last_recv_timestamp = clock_getmillis() / 1000;
+    }
+
+    #! Called by the I/O controller's worker pool when stream data arrives
+    /** Also called by HTTP/3 watcher thread.
+    */
+    notifyIo() {
+        AutoLock al(process_mutex);
+        if (closed) {
+            return;
+        }
+
+        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+        if (!ctx) {
+            if (!closed) {
+                closed = True;
+                done.dec();
+            }
+            return;
+        }
+
+        try {
+            # Read all available stream data
+            *binary incoming = ctx.readData();
+            if (!exists incoming) {
+                # Stream closed (NOTHING sentinel from Queue)
+                if (!closed) {
+                    closed = True;
+                    done.dec();
+                }
+                return;
+            }
+            if (incoming.size() > 0) {
+                stream_buf = stream_buf.size() > 0 ? stream_buf + incoming : incoming;
+            }
+
+            # Parse complete WebSocket frames
+            while (stream_buf.size() >= 2) {
+                *int frame_len = ws_get_frame_size(stream_buf);
+                if (!exists frame_len || stream_buf.size() < frame_len) {
+                    break;
+                }
+                binary frame_data = stream_buf.substr(0, frame_len);
+                stream_buf = stream_buf.size() > frame_len
+                    ? stream_buf.substr(frame_len) : binary();
+
+                hash<WsMsgInfo> h = ws_parse_frame(frame_data);
+                last_recv_timestamp = clock_getmillis() / 1000;
+
+                if (h.op == WSOP_Close) {
+                    if (!closed) {
+                        closed = True;
+                        done.dec();
+                    }
+                    return;
+                }
+                if (h.op == WSOP_Ping) {
+                    ctx.sendData(ws_encode_message(h.msg ?? "", WSOP_Pong));
+                    continue;
+                }
+                if (h.op == WSOP_Pong) {
+                    continue;
+                }
+                if (h.op == WSOP_Text || h.op == WSOP_Binary) {
+                    auto msg = h.msg;
+                    hash<auto> ext_ctx = {
+                        "op": h.op,
+                        "rsv1": h.rsv1,
+                        "rsv2": h.rsv2,
+                        "rsv3": h.rsv3,
+                        "fin": h.fin,
+                    };
+                    wsc.applyIncomingExtensions(\msg, ext_ctx);
+                    wsc.validateIncomingMessage(\msg);
+                    wsc.gotMessage(msg);
+                }
+            }
+
+            # Drain outgoing channel data and send via stream
+            bool sent = False;
+            while (*binary d = wsc.pollDataImmediate()) {
+                ctx.sendData(d);
+                sent = True;
+            }
+            # Wake the I/O controller to flush the H2/H3 write buffer
+            if (sent) {
+                *AsyncSocketIo::AsyncSocketIoController ctrl = wsc.getAsyncCtrl();
+                if (ctrl) {
+                    ctrl.wake();
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OBJECT-ALREADY-DELETED") {
+                return;
+            }
+            handler.logError("H2/H3 WebSocket stream error: %s: %s", ex.err, ex.desc);
+            if (!closed) {
+                closed = True;
+                done.dec();
+            }
+        }
+    }
+
+    #! Sends a heartbeat ping if needed
+    /** Called by a timer callback.
+    */
+    sendHeartbeat(int heartbeat_s, data heartbeat_msg) {
+        AutoLock al(process_mutex);
+        if (closed) {
+            return;
+        }
+        int now = clock_getmillis() / 1000;
+        if ((now - last_recv_timestamp) >= heartbeat_s) {
+            *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+            if (ctx) {
+                try {
+                    ctx.sendData(ws_encode_message(heartbeat_msg, WSOP_Ping));
+                } catch () {}
+            }
+            last_recv_timestamp = now;
+        }
+    }
+
+    #! Signals the stream to close
+    close() {
+        AutoLock al(process_mutex);
+        if (!closed) {
+            *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+            if (ctx) {
+                try {
+                    ctx.sendData(ws_encode_message("", WSOP_Close));
+                } catch () {}
+            }
+            closed = True;
+            done.dec();
+        }
+    }
+}
+
 public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Logger::LoggerWrapper {
     public {
         #! default socket send timeout
@@ -1393,7 +1638,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         int h2_stream_id = is_http2 ? cx."header-info".stream_id : -1;
         int h3_session_id = is_http3 ? cx."header-info".session_id : -1;
         int h3_stream_id = is_http3 ? cx."header-info".stream_id : -1;
-        softstring exit_reason = "unknown";
+        # Check for async H1 WebSocket poll operation
+        *HttpWebSocketPollOperationBase ws_poll_op = cx."header-info".ws_poll_op;
+        bool is_ws_async = exists ws_poll_op;
         @debug(bool h2_ws_debug_handler = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_HANDLER"));
         @debug {
             if (h2_ws_debug_handler) {
@@ -1409,7 +1656,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
         }
         # Debug helper for HTTP/2 WS frame headers
-        @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
+        # @debug(bool h2_ws_debug_frames = is_http2 && getenv("QORE_HTTP2_WS_DEBUG_FRAMES"));
         *AsyncSocketIo::AsyncSocketIoController async_ctrl = cx."async_ctrl";
         # get new connection object
         WebSocketConnection wsc = doNewConnection(cx, hdr, cid);
@@ -1431,14 +1678,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
             wsc.setStreamContext(
                 new AsyncSocketIo::Http2StreamContext(sock, h2_stream_id, h2_data_queue));
-            # Register as a stream data listener — the controller's worker pool
-            # will call wsc.notifyIo() (via h2op.onStreamData()) when the I/O
-            # thread drains data to the Queue. No callbacks on the I/O thread.
-            *code<nothing(object)> register_listener =
-                cx."header-info".register_stream_listener;
-            if (register_listener) {
-                register_listener(wsc);
-            }
+            # Stream listener registration is deferred until after setup is complete
+            # (the processor is created later, after extensions and registered())
         } else if (is_http3) {
             @assert(h3_session_id > 0, "missing HTTP/3 session id for WebSocket");
             @assert(h3_stream_id >= 0, "missing HTTP/3 stream id for WebSocket");
@@ -1475,6 +1716,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }();
         }
 
+        # Set up async H1 WebSocket I/O
+        if (is_ws_async) {
+            ws_poll_op.setHeartbeat(heartbeat * 1000);
+            ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
+            wsc.setWsPollOp(ws_poll_op);
+            # Give the poll op references for frame dispatch from worker thread
+            call_object_method(ws_poll_op, "setConnection", wsc, self);
+        }
+
         # Set negotiated extensions on the connection (stored by handleRequest)
         *hash<auto> ext_data = remove pending_extensions{cid};
         if (ext_data) {
@@ -1483,20 +1733,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 (map $1.getName(), ext_data.extensions));
         }
 
-        try {
-            # issue #3225: handle exceptions in WebSocketHandler and remove the connection
-            wsc.registered();
-        } catch (hash<ExceptionInfo> ex) {
-            logError("exception registering WebSocket connection: %s", get_exception_string(ex));
-            rwl.writeLock();
-            on_exit rwl.writeUnlock();
-            remove ch{cid};
-            rethrow;
-        }
-
         on_exit {
-            #logDebug("WebSocketHandler::startImpl(): close connection: cid: %y from %s:%d", cx.id,
-            #    cx."peer-info".hostname_desc, cx."peer-info".port);
+            # Clear async WebSocket poll op resources
+            if (ws_poll_op) {
+                try {
+                    wsc.setWsPollOp();
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("exception clearing WebSocket poll op: %s", get_exception_string(ex));
+                }
+            }
             # Close the stream context (no-op for HTTP/2; sends END_STREAM for HTTP/3)
             try {
                 *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
@@ -1519,405 +1764,100 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             remove pending_extensions{cid};
         }
 
-        # issue #2887 timestamp of last traffic
-        int timestamp = clock_getmillis() / 1000;
+        # issue #3225: handle exceptions in registered()
+        try {
+            wsc.registered();
+        } catch (hash<ExceptionInfo> ex) {
+            logError("exception registering WebSocket connection: %s", get_exception_string(ex));
+            rethrow;
+        }
 
-        # data buffer for fragmented frames
-        data buf;
-        # RSV bits from first frame for fragmented messages (RFC 7692 Section 6.2.1)
-        hash<auto> first_frame_rsv;
-        binary stream_buf;
-        while (True) {
-            #logDebug("WebSocketHandler::startImpl() loop cid: %y", cx.id);
-            if (stop || lsh{lid} || wsc.stop_flag) {
-                logDebug("WebSocketHandler::startImpl() cid: %y stopping; stop: %y lsh{%y}: %y, "
-                    "wsc.stop_flag: %y", cx.id, stop, lid, lsh{lid}, wsc.stop_flag);
-                try {
-                    sendClose(wsc, sock, WSCC_GoingAway);
-                } catch (hash<ExceptionInfo> ex) {
-                    logError("failed to send close frame: %s: %s", ex.err, ex.desc);
-                }
-                exit_reason = "stopping";
-                break;
+        if (ws_poll_op) {
+            # --- Async H1 WebSocket: I/O controller handles all socket I/O ---
+            # The C++ poll op drives frame decode/encode, auto-pong, heartbeat,
+            # close handshake, and fragment reassembly on the I/O thread.
+            # The onPollComplete() method dispatches frames to gotMessage() on a
+            # worker thread. This handler thread holds the connection in ch{}
+            # and blocks until the connection closes.
+
+            # Drain any data queued during getConnectionImpl (e.g., sendData)
+            while (*binary d = wsc.pollDataImmediate()) {
+                ws_poll_op.sendRawFrame(d);
+            }
+            # Wake the I/O controller to flush any queued data
+            if (async_ctrl) {
+                async_ctrl.wake();
             }
 
-            try {
-                bool update = False;
+            # Block until the connection closes
+            Counter done(1);
+            call_object_method(ws_poll_op, "setDone", done);
+            done.waitForZero();
 
-                # Drain any buffered frames from previous iterations
-                drainPendingSends(wsc, sock);
+            # Log exit — suppress SOCKET-NOT-OPEN which is expected during disconnect
+            if (ws_poll_op.hasError()) {
+                *hash<auto> err = ws_poll_op.getError();
+                if (err && err.err != "SOCKET-NOT-OPEN") {
+                    logError("WebSocket connection error: %s: %s", err.err, err.desc);
+                }
+            }
+            logDebug("WebSocketHandler::startImpl() cid: %y connection closed (code %d)",
+                cx.id, ws_poll_op.getCloseCode());
+            return False;
+        }
 
-                # Only poll the Channel for new messages if no pending sends remain;
-                # this creates natural backpressure to the application thread — when
-                # we stop dequeuing, the Channel fills up and send() blocks
-                if (!wsc.hasPendingSends()) {
-                    # Dequeue outgoing messages: event-driven for async extended
-                    # CONNECT (HTTP/2, HTTP/3); blocking with timeout for HTTP/1.1
-                    *binary d;
-                    if (is_extended_connect) {
-                        # Non-blocking: send() signals io_cond which wakes this loop
-                        d = wsc.pollDataImmediate();
-                    } else {
-                        # HTTP/1.1: channel.recv() wakes instantly on channel.send();
-                        # the 250ms timeout provides heartbeat granularity
-                        d = wsc.pollData();
-                    }
-                    if (d) {
-                        @debug {
-                            if (h2_ws_debug_frames && d.size() >= 2) {
-                                int b0 = d[0];
-                                int b1 = d[1];
-                                log(LoggerLevel::INFO,
-                                    "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y", b0, b1,
-                                    (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
-                            }
-                        }
-                        sendFrame(wsc, sock, d);
-                        update = True;
-                        flushIoIntern(wsc, sock, False);
-                    }
-                } else {
-                    # Still backpressured after drain — pump I/O to give the peer a
-                    # chance to send WINDOW_UPDATE / drain its receive buffer, and
-                    # avoid busy-looping
-                    try {
-                        sock.isDataAvailable(FlowControlRetryMs);
-                    } catch () {
-                        # Socket error — next drain iteration will detect
-                    }
-                }
+        # --- HTTP/2 and HTTP/3 WebSocket: async stream processing ---
+        # The I/O controller handles transport-level I/O (HTTP/2 DATA frames,
+        # HTTP/3 QUIC streams). A WebSocketStreamProcessor handles WebSocket
+        # frame decode/dispatch on worker threads. No handler polling loop.
+        Counter stream_done(1);
+        WebSocketStreamProcessor stream_proc(wsc, self, stream_done);
+        wsc.setStreamProcessor(stream_proc);
+        on_exit wsc.setStreamProcessor();
 
-                if (wsc.stop_flag) {
-                    continue;
-                }
-                hash<WsMsgInfo> h;
-                bool have_frame = False;
-                if (is_extended_connect) {
-                    # HTTP/2 and HTTP/3 WebSocket: read from stream context
-                    *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-                    *binary incoming = ctx ? ctx.readData() : NOTHING;
-                    if (incoming) {
-                        stream_buf = stream_buf ? stream_buf + incoming : incoming;
-                    }
-                    # Check WebSocket buffer size against limit
-                    if (max_message_size > 0 && stream_buf.size() > max_message_size) {
-                        logError("%s WebSocket buffer size %d exceeds maximum %d",
-                            is_http3 ? "HTTP/3" : "HTTP/2",
-                            stream_buf.size(), max_message_size);
-                        sendClose(wsc, sock, WSCC_MessageTooBig,
-                            sprintf("message size exceeds %d byte limit", max_message_size));
-                        exit_reason = "message-too-large";
-                        break;
-                    }
-                    *int frame_len = stream_buf ? ws_get_frame_size(stream_buf) : NOTHING;
-                    if (frame_len && stream_buf.size() >= frame_len) {
-                        binary frame = stream_buf.substr(0, frame_len);
-                        if (frame_len == stream_buf.size()) {
-                            remove stream_buf;
-                        } else {
-                            stream_buf = stream_buf.substr(frame_len);
-                        }
-                        h = ws_parse_frame(frame, sock.getEncoding());
-                        have_frame = True;
-                    } else {
-                        int now = clock_getmillis() / 1000;
-                        if (!update) {
-                            # Skip heartbeats when backpressured — the pending data activity
-                            # keeps the connection "warm", and adding heartbeats to the pending
-                            # buffer just wastes memory.  Heartbeats resume when the backlog drains.
-                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
-                                binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
-                                @debug {
-                                    if (h2_ws_debug_frames && frame.size() >= 2) {
-                                        int b0 = frame[0];
-                                        int b1 = frame[1];
-                                        log(LoggerLevel::INFO,
-                                            "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
-                                            b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
-                                    }
-                                }
-                                sendFrame(wsc, sock, frame);
-                                timestamp = now;
-                            } else if (!wsc.hasPendingSends()) {
-                                # Event-driven idle wait: sleep until signaled by send(),
-                                # stop(), or the I/O controller's incoming data callback.
-                                # Wakes instantly on any I/O event; heartbeat is the only
-                                # timeout — no polling.
-                                int remaining_s = heartbeat - (now - timestamp);
-                                if (remaining_s > 0) {
-                                    wsc.waitForIoEvent(remaining_s * 1s);
-                                }
-                            }
-                        } else {
-                            timestamp = now;
-                        }
-                        continue;
-                    }
-                } else {
-                    if (!sock.isDataAvailable(0ms)) {
-                        int now = clock_getmillis() / 1000;
-                        if (!update) {
-                            # Skip heartbeats when backpressured — see comment above
-                            if (!wsc.hasPendingSends() && (now - timestamp) >= heartbeat) {
-                                binary frame = ws_encode_message(heartbeat_msg, WSOP_Ping);
-                                sendFrame(wsc, sock, frame);
-                                timestamp = now;
-                            }
-                        } else {
-                            timestamp = now;
-                        }
-
-                        continue;
-                    }
-                    h = ws_read_message(sock, NOTHING, max_message_size);
-                    have_frame = True;
-                }
-                if (!have_frame) {
-                    continue;
-                }
-
-                # update ping timestamp if we have done WS I/O in a callback
-                on_exit {
-                    if (get_thread_data(tlk)) {
-                        timestamp = clock_getmillis() / 1000;
-                        delete_thread_data(tlk);
-                    }
-                }
-
-                int state = wsc.gotRawMessage(h);
-                if (state == WSC_Continue) {
-                    continue;
-                }
-                if (state == WSC_Break) {
-                    exit_reason = "handler-break";
-                    break;
-                }
-
-                if (h.op == WSOP_Close) {
-                    if (!h.close) {
-                        logDebug("client sent OpClose without code; closing immediately");
-                        exit_reason = "client-close-no-code";
-                        break;
-                    }
-                    logDebug("client sent WSOP_Close code %d (%s): %s", h.close, WSCCMap.(h.close), h.msg);
-                    sendClose(wsc, sock, h.close, h.msg);
-                    exit_reason = "client-close";
-                    break;
-                }
-
-                @debug(int b0);
-                @debug(int b1);
-                @debug(*hash<auto> info);
-                @debug {
-                    if (h2_ws_debug_frames) {
-                    info = h.info;
-                    b0 = info."b0" ?? -1;
-                    b1 = info."b1" ?? -1;
-                        log(LoggerLevel::INFO,
-                            "HTTP/2 WS recv frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y rsv1=%y rsv2=%y rsv3=%y",
-                            b0, b1, h.fin, h.op, h.masked, h.rsv1, h.rsv2, h.rsv3);
-                    }
-                }
-                logDebug("received msg (%s: %d bytes%s%s): %s", WSOPMap{h.op} ?? "unknown", h.msg.size(),
-                    h.masked ? " masked" : "", h.fin ? " FIN" : "", WebSocketHandler::getDataString(h.msg));
-
-                if (!h.masked) {
-                    if (!is_extended_connect) {
-                        logError("unmasked client frame received");
-                        sendClose(wsc, sock, WSCC_ProtocolError);
-                        exit_reason = "protocol-error-unmasked";
-                        break;
-                    }
-                    # HTTP/2 and HTTP/3 WebSocket frames are not masked (RFC 8441/9220)
-                    logDebug("unmasked client frame received on %s WebSocket",
-                        is_http3 ? "HTTP/3" : "HTTP/2");
-                }
-
-                # Validate RSV bits; control frames must not use RSV bits per RFC 6455 / RFC 7692
-                bool any_rsv_set = h.rsv1 || h.rsv2 || h.rsv3;
-                if (h.op == WSOP_Ping || h.op == WSOP_Pong || h.op == WSOP_Close) {
-                    if (any_rsv_set) {
-                        logError("invalid RSV bits on control frame: op=%d rsv1=%y rsv2=%y rsv3=%y",
-                            h.op, h.rsv1, h.rsv2, h.rsv3);
-                        sendClose(wsc, sock, WSCC_ProtocolError);
-                        exit_reason = "protocol-error-rsv-control";
-                        break;
-                    }
-                } else {
-                    # For non-control frames, validate RSV bits against active extensions
-                    if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
-                        logError("invalid RSV bits received: rsv1=%y rsv2=%y rsv3=%y", h.rsv1, h.rsv2, h.rsv3);
-                        sendClose(wsc, sock, WSCC_ProtocolError);
-                        exit_reason = "protocol-error-rsv";
-                        break;
-                    }
-                }
-
-                # issue #2887 update timestamp for incoming traffic
-                timestamp = clock_getmillis() / 1000;
-
-                if (h.op == WSOP_Ping) {
-                    sendFrame(wsc, sock, ws_encode_message(h.msg ?? "", WSOP_Pong));
-                    continue;
-                }
-
-                # issue #2566: https://tools.ietf.org/html/rfc6455#section-5.5.3: we must ignore
-                # unsolicited PONG messages
-                if (h.op == WSOP_Pong) {
-                    continue;
-                }
-
-                # issue #4073: handle fragmented frames
-                if (!h.fin) {
-                    if (!exists buf) {
-                        if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-                            buf = h.msg;
-                            # RFC 7692 Section 6.2.1: Store RSV bits from first frame
-                            first_frame_rsv = {
-                                "rsv1": h.rsv1,
-                                "rsv2": h.rsv2,
-                                "rsv3": h.rsv3,
-                                "op": h.op,
-                            };
-                        } else {
-                            logError("FIN bit not set but opcode is %d: %y", h.op, WSOPMap{h.op} ?? "unknown");
-                            sendClose(wsc, sock, WSCC_ProtocolError);
-                            exit_reason = "protocol-error-fin";
-                            break;
-                        }
-                    } else {
-                        if (h.op != WSOP_Continuation) {
-                            logError("FIN bit not set with buffer of type %y but opcode is %d: %y", buf.type(), h.op,
-                                WSOPMap{h.op} ?? "unknown");
-                            sendClose(wsc, sock, WSCC_ProtocolError);
-                            exit_reason = "protocol-error-continuation";
-                            break;
-                        } else {
-                            if (buf.typeCode() == NT_STRING) {
-                                buf += h.msg.toString();
-                            } else {
-                                buf += h.msg;
-                            }
-                        }
-                    }
-                    # Check accumulated message size against limit
-                    if (max_message_size > 0 && buf.size() > max_message_size) {
-                        logError("WebSocket message size %d exceeds maximum %d", buf.size(),
-                            max_message_size);
-                        sendClose(wsc, sock, WSCC_MessageTooBig,
-                            sprintf("message size exceeds %d byte limit", max_message_size));
-                        exit_reason = "message-too-large";
-                        break;
-                    }
-                    continue;
-                } else if (exists buf && h.op == WSOP_Continuation) {
-                    bool is_text = buf.typeCode() == NT_STRING;
-                    if (is_text) {
-                        buf += h.msg.toString();
-                    } else {
-                        buf += h.msg;
-                    }
-                    auto msg = remove buf;
-                    # RFC 7692 Section 6.2.1: Use RSV bits from first frame, not continuation
-                    hash<auto> ext_ctx = {
-                        "op": is_text ? WSOP_Text : WSOP_Binary,
-                        "rsv1": h.rsv1,
-                        "rsv2": h.rsv2,
-                        "rsv3": h.rsv3,
-                        "fin": h.fin,
-                    };
-                    if (first_frame_rsv) {
-                        ext_ctx.op = first_frame_rsv.op ?? ext_ctx.op;
-                        ext_ctx.rsv1 = first_frame_rsv.rsv1;
-                        ext_ctx.rsv2 = first_frame_rsv.rsv2;
-                        ext_ctx.rsv3 = first_frame_rsv.rsv3;
-                        remove first_frame_rsv;
-                    }
-                    wsc.applyIncomingExtensions(\msg, ext_ctx);
-                    wsc.validateIncomingMessage(\msg);
-                    wsc.gotMessage(msg);
-                    continue;
-                } else if (h.op == WSOP_Text || h.op == WSOP_Binary) {
-                    auto msg = h.msg;
-                    # Apply incoming extension transforms
-                    hash<auto> ext_ctx = {
-                        "op": h.op,
-                        "rsv1": h.rsv1,
-                        "rsv2": h.rsv2,
-                        "rsv3": h.rsv3,
-                        "fin": h.fin,
-                    };
-                    wsc.applyIncomingExtensions(\msg, ext_ctx);
-                    wsc.validateIncomingMessage(\msg);
-                    wsc.gotMessage(msg);
-                    continue;
-                } else if (h.op == WSOP_Continuation) {
-                    logError("FIN bit set with %d: %y opcode, but no data has been buffered", h.op,
-                        WSOPMap{h.op} ?? "unknown");
-                    sendClose(wsc, sock, WSCC_ProtocolError);
-                    exit_reason = "protocol-error-continuation-without-buffer";
-                    break;
-                }
-
-                # unrecognized opcode - close the connection
-                sendClose(wsc, sock, WSCC_UnsupportedData);
-                exit_reason = "unsupported-opcode";
-                break;
-            } catch (hash<ExceptionInfo> ex) {
-                # error in websocket handler server, log and close the connection
-                string err = sprintf("%s: %s: %s", get_ex_pos(ex), ex.err, ex.desc);
-                logError(err);
-                int close_code = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
-                    ? WSCC_MessageTooBig
-                    : WSCC_InternalServerError;
-                try {
-                    sendClose(wsc, sock, close_code, err);
-                } catch (hash<ExceptionInfo> ex2) {
-                    # Log at debug level: close frame failure is expected when the connection
-                    # already has a fatal error (the primary error was logged above)
-                    logDebug("failed to send close frame: %s: %s", ex2.err, ex2.desc);
-                }
-                exit_reason = ex.err == "WEBSOCKET-FRAME-TOO-LARGE"
-                    ? "message-too-large"
-                    : "exception";
-                break;
+        # Register the stream processor as the listener for this stream
+        if (is_http2) {
+            *code<nothing(object)> register_listener =
+                cx."header-info".register_stream_listener;
+            if (register_listener) {
+                register_listener(stream_proc);
             }
         }
-        @debug {
-            if (h2_ws_debug_handler) {
-                log(LoggerLevel::INFO, "HTTP/2 WS handler exit: cid=%y reason=%y", cx.id, exit_reason);
-            } else {
-                logDebug("WebSocketHandler::startImpl() exiting, cid: %y reason: %y", cx.id, exit_reason);
+        # For HTTP/3: the background watcher thread calls wsc.notifyIo(),
+        # which delegates to stream_proc.notifyIo() (set via setStreamProcessor above)
+
+        # Drain any data queued during getConnectionImpl
+        {
+            bool sent = False;
+            while (*binary d = wsc.pollDataImmediate()) {
+                *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
+                if (ctx) {
+                    ctx.sendData(d);
+                    sent = True;
+                }
+            }
+            if (sent && async_ctrl) {
+                async_ctrl.wake();
             }
         }
+
+        # Set up heartbeat timer
+        *int heartbeat_timer_id;
+        if (async_ctrl && heartbeat > 0) {
+            heartbeat_timer_id = async_ctrl.submitTimer(heartbeat * 1000, sub () {
+                stream_proc.sendHeartbeat(heartbeat, heartbeat_msg);
+            });
+        }
+        on_exit {
+            if (heartbeat_timer_id) {
+                try { async_ctrl.cancelTimer(heartbeat_timer_id); } catch () {}
+            }
+        }
+
+        # Block until stream closes
+        stream_done.waitForZero();
+        logDebug("WebSocketHandler::startImpl() cid: %y H2/H3 stream closed", cx.id);
         return False;
-    }
-
-    #! Flushes I/O in the connection channel
-    /** @return True if any data was flushed, False if not
-    */
-    bool flushIo(WebSocketConnection wsc, Socket sock) {
-        return flushIoIntern(wsc, sock, True);
-    }
-
-    private:internal bool flushIoIntern(WebSocketConnection wsc, Socket sock, bool update_tld) {
-        drainPendingSends(wsc, sock);
-        bool rv;
-        while (!wsc.stop_flag && exists (*binary d = wsc.pollDataImmediate())) {
-            sendFrame(wsc, sock, d);
-            if (d && !rv) {
-                rv = True;
-                if (update_tld) {
-                    save_thread_data(tlk, True);
-                }
-            }
-        }
-        # Wake flush() callers waiting on waitForIoEvent() so they see the
-        # channel/pending sends are now drained
-        if (rv) {
-            wsc.notifyIo();
-        }
-        return rv ?? False;
     }
 
     #! called when a connection is established; the default implementation creates a WebSocketConnection object
@@ -2085,208 +2025,6 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         map $1.stop(), ch.iterator();
     }
 
-    private sendClose(WebSocketConnection wsc, Qore::Socket sock, int code, *string txtmsg) {
-        if (!WSCCMap{code}) {
-            logError("WebSocketHandler::sendClose(): invalid close code %d received; expecting one of: %y", code,
-                (map $1.toInt(), WSCCMap.keyIterator()));
-            code = WSCC_InternalServerError;
-        }
-
-        binary msg = code.encodeMsb(2);
-
-        if (txtmsg) {
-            txtmsg = convert_encoding(txtmsg, "utf8");
-        } else {
-            txtmsg = WSCCMap{code};
-        }
-        @debug {
-            if (getenv("QORE_HTTP2_DEBUG")) {
-                log(LoggerLevel::INFO, "HTTP/2 WS sendClose: code=%d reason=%y", code, txtmsg);
-            }
-        }
-        msg += txtmsg;
-        binary frame = ws_encode_message(msg, WSOP_Close);
-        @debug {
-            if (sock.isHttp2() && getenv("QORE_HTTP2_WS_DEBUG_FRAMES") && frame.size() >= 2) {
-                int b0 = frame[0];
-                int b1 = frame[1];
-                log(LoggerLevel::INFO,
-                    "HTTP/2 WS send frame: b0=0x%02x b1=0x%02x fin=%y op=%d masked=%y",
-                    b0, b1, (b0 & WS_FIN) != 0, b0 & 0x0f, (b1 & 0x80) != 0);
-            }
-        }
-        # Close frames bypass the pending send buffer for prompt delivery
-        trySendDirect(wsc, sock, frame);
-    }
-
-    #! Attempts to send a frame directly; returns True on success, False on backpressure
-    /** Fatal errors call @ref WebSocketConnection::stop() "wsc.stop()" and return True
-        (frame "handled" — connection dead).
-
-        @param wsc the WebSocket connection
-        @param sock the socket to send on
-        @param frame the binary frame data to send
-
-        @return True if the frame was sent (or the connection was killed due to a fatal error),
-        False if transport backpressure prevented sending
-
-        @since WebSocketHandler 2.5
-    */
-    private bool trySendDirect(WebSocketConnection wsc, Socket sock, binary frame) {
-        # HTTP/2 or HTTP/3 WebSocket: send via stream context with backpressure handling
-        *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
-        if (ctx) {
-            string proto = ctx.getProtocol();
-            int flow_control_retry = 0;
-            while (True) {
-                try {
-                    ctx.sendData(frame, False);
-                    break;
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "SOCKET-NOT-OPEN" || ex.err == "QUIC-ERROR"
-                            || ex.err == "QUIC-HTTP3-ERROR") {
-                        # QUIC-HTTP3-ERROR: Http3StreamContext.sendData() handles backpressure
-                        # internally, so any error that escapes is fatal (e.g., session gone,
-                        # stream reset)
-                        wsc.stop();
-                        return True;
-                    }
-                    if (ex.err == "HTTP2-ERROR" && ex.desc =~ /no HTTP\/2 session active/) {
-                        @debug {
-                            logDebug("HTTP/2 WS trySendDirect: stream session inactive; stopping connection");
-                        }
-                        wsc.stop();
-                        return True;
-                    }
-                    if (ex.err == "SOCKET-SSL-ERROR") {
-                        logError("%s WS trySendDirect: SSL error; stopping: %s", proto.upr(), ex.desc);
-                        wsc.stop();
-                        return True;
-                    }
-                    if (ex.err == "HTTP2-FLOW-CONTROL") {
-                        if (wsc.stop_flag || ++flow_control_retry > FlowControlMaxRetries) {
-                            return False;
-                        }
-                        # Pump I/O: flush outgoing buffer to TCP and read incoming HTTP/2 frames
-                        # (including WINDOW_UPDATE) from the peer to free flow control window
-                        try {
-                            sock.isDataAvailable(FlowControlRetryMs);
-                        } catch () {
-                            # Socket error during I/O pump - next sendData() will detect and handle
-                        }
-                        continue;
-                    }
-                    throw ex.err, ex.desc, ex.arg;
-                }
-            }
-            if (wsc.getAsyncCtrl()) {
-                wsc.getAsyncCtrl().wake();
-            }
-            return True;
-        }
-        if (wsc.getAsyncCtrl()) {
-            AbstractPollOperation op;
-            try {
-                op = sock.startPollSend(frame);
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "SOCKET-NON-BLOCK-ERROR") {
-                    # Another async send is already in progress on this socket — backpressure
-                    return False;
-                }
-                throw ex.err, ex.desc, ex.arg;
-            }
-            # Submit the send to the I/O controller with a callback and wait on a
-            # Counter for completion.  This blocks the handler thread until the send
-            # finishes (same throughput as the old exec() approach) but does NOT
-            # depend on the I/O controller's command queue — only on the poll
-            # operation itself.  This avoids the thread pool exhaustion deadlock
-            # that exec() caused (exec blocked on q->shift() which required the I/O
-            # thread to process commands, but the I/O thread was blocked trying to
-            # dispatch to the full thread pool).
-            Counter done(1);
-            *hash<auto> send_ex;
-            auto wrapped_op = new DelegatingPollOperation(op,
-                sub (hash<SocketPollResultInfo> result) {
-                    if (result.ex) {
-                        send_ex = result.ex;
-                    }
-                    done.dec();
-                });
-            wsc.getAsyncCtrl().submit(<SocketPollOperationInfo>{
-                "sock": sock,
-                "spop": wrapped_op,
-                "to": send_timeout,
-                "owner": wsc.getOwnerId(),
-                "other": {"goal": "ws-send"},
-            });
-            done.waitForZero();
-            if (send_ex) {
-                throw send_ex.err, send_ex.desc, send_ex.arg;
-            }
-            return True;
-        }
-        sock.send2(frame, send_timeout);
-        return True;
-    }
-
-    #! Sends a WebSocket frame, buffering if transport backpressure is detected
-    /** If there are already pending frames for this connection, the new frame is queued behind them
-        to maintain ordering. If the transport accepts the frame immediately, it is sent directly.
-        If backpressure prevents sending and the pending buffer is full, the frame is dropped with
-        a warning.
-
-        @param wsc the WebSocket connection
-        @param sock the socket to send on
-        @param frame the binary frame data to send
-
-        @since WebSocketHandler 2.5
-    */
-    private sendFrame(WebSocketConnection wsc, Socket sock, binary frame) {
-        if (wsc.hasPendingSends()) {
-            # Maintain ordering: queue behind existing pending frames
-            if (!wsc.queuePendingSend(frame)) {
-                log(LoggerLevel::WARN, "WebSocket pending send buffer full (%d bytes); "
-                    "dropping frame (%d bytes)", wsc.getPendingSendBytes(), frame.size());
-            }
-            return;
-        }
-        if (!trySendDirect(wsc, sock, frame)) {
-            if (!wsc.queuePendingSend(frame)) {
-                log(LoggerLevel::WARN, "WebSocket pending send buffer full; "
-                    "dropping frame (%d bytes)", frame.size());
-            }
-        }
-    }
-
-    #! Drains pending send buffer in order; stops at first backpressure or frame cap
-    /** Sends buffered frames one at a time until the buffer is empty, the transport
-        pushes back again, or @ref WebSocketHandler::WebSocketHandler::MaxDrainFramesPerIteration
-        "MaxDrainFramesPerIteration" frames have been sent.
-        Uses peek+dequeue to ensure frames are not lost on failure.
-
-        The frame cap prevents starving incoming data when a large backlog has accumulated;
-        remaining frames will be drained in subsequent handler loop iterations.
-
-        @param wsc the WebSocket connection
-        @param sock the socket to send on
-
-        @since WebSocketHandler 2.5
-    */
-    private drainPendingSends(WebSocketConnection wsc, Socket sock) {
-        int drained = 0;
-        while (!wsc.stop_flag && wsc.hasPendingSends() && drained < MaxDrainFramesPerIteration) {
-            if (!trySendDirect(wsc, sock, wsc.peekPendingSend())) {
-                break;
-            }
-            wsc.dequeuePendingSend();
-            ++drained;
-        }
-        # If the pending list is now empty after draining, signal flush() callers
-        # waiting on waitForIoEvent() so they see the backlog is cleared
-        if (drained > 0 && !wsc.hasPendingSends()) {
-            wsc.notifyIo();
-        }
-    }
 
     static string getDataString(*data d) {
         if (!d) {

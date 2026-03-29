@@ -121,6 +121,13 @@ public:
         return nullptr;
     }
 
+    DLLLOCAL int getAndClearItemsPushed() override {
+        if (inner_base) {
+            return inner_base->getAndClearItemsPushed();
+        }
+        return 0;
+    }
+
     DLLLOCAL QoreValue getOutput() const override {
         if (inner_base) {
             return inner_base->getOutput();
@@ -296,5 +303,16 @@ nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) {
         ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
         args->push(result->refSelf(), xsink);
         ValueHolder rv(poll->on_complete_code->execValue(*args, xsink), xsink);
+    }
+}
+
+//! Called by the I/O controller when items have been pushed during continuePoll
+/** Forwards to the inner operation's onPollComplete method.
+
+    @since %Qore 2.3
+*/
+nothing DelegatingPollOperation::onPollComplete() {
+    if (poll->inner_obj) {
+        ValueHolder rv(poll->inner_obj->evalMethod("onPollComplete", nullptr, xsink), xsink);
     }
 }

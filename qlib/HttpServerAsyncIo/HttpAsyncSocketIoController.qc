@@ -613,6 +613,51 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "Added idle connection %y", uh);
     }
 
+    #! Registers an HTTP/1.1 WebSocket connection with the async I/O controller
+    /** @param sock the WebSocket socket (after upgrade handshake)
+        @param poll_op the WebSocket poll operation to drive
+        @param target the target for callbacks
+        @param listener the listener interface for logging
+        @param cx connection context
+    */
+    registerH1WebSocketConnection(Socket sock, HttpWebSocketPollOperation poll_op,
+            HttpAsyncTarget target, *HttpServer::HttpListenerInterface listener, hash<auto> cx) {
+        string uh = sock.uniqueHash();
+        hash<HttpActiveConnectionInfo> cinfo;
+        {
+            AutoWriteLock al(m);
+            if (stopping) {
+                return;
+            }
+            cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                "sock": sock,
+                "listener": listener,
+                "cx": cx,
+                "target": target,
+                "state": HttpConnectionState::WebSocket,
+                "stream_op": poll_op,
+            };
+        }
+        submitConnectionOp(uh, cinfo);
+        controller.wake();
+    }
+
+    #! Deregisters an HTTP/1.1 WebSocket connection from the async I/O controller
+    /** @param sock the WebSocket socket to deregister
+    */
+    deregisterH1WebSocketConnection(Socket sock) {
+        string uh = sock.uniqueHash();
+        {
+            AutoWriteLock al(m);
+            remove connections{uh};
+        }
+        try {
+            controller.cancelAndClose(sock);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "Error cancelling WebSocket connection %y: %s: %s", uh, ex.err, ex.desc);
+        }
+    }
+
     #! Gets controller statistics
     hash<auto> getStats() {
         AutoReadLock al(m);

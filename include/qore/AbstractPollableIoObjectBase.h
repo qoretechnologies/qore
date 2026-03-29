@@ -39,6 +39,16 @@ class AbstractPollableIoObjectBase : public AbstractPrivateData {
 public:
     virtual int getPollableDescriptor() const = 0;
 
+    //! Closes the I/O object, releasing the underlying file descriptor
+    /** Called by the async I/O controller when it owns the object's lifecycle
+        (e.g., cancelAndClose).
+
+        @param xsink exception sink
+
+        @since %Qore 2.3
+    */
+    virtual void closeIo(ExceptionSink* xsink) = 0;
+
 #ifdef DARWIN
     //! Sets the write end of a notification pipe for kqueue poll on macOS
     /** On macOS, closing a monitored FD silently removes its kqueue filter without

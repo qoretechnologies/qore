@@ -27,6 +27,7 @@
 %requires Logger
 %requires HttpServerUtil
 %requires AsyncSocketIo
+%requires WebSocketUtil
 
 module HttpServerAsyncIo {
     # NOTE: this module has never been released; version starts at 1.0

@@ -78,6 +78,14 @@ void QoreSocketObject::deref() {
     }
 }
 
+void QoreSocketObject::closeIo(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->socket->isOpen()) {
+        priv->socket->shutdown();
+        priv->socket->close();
+    }
+}
+
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->invalidate();

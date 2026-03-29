@@ -3260,7 +3260,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
         } else if (rv."code" == 101) {
-            # WebSocket upgrade — use dedicated socket handler
+            # WebSocket upgrade — use async I/O controller
             if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -3270,7 +3270,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     handler.className());
             } else {
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
-                    on_exit cx.close = True;
+                    on_exit {
+                        cx.close = True;
+                        listener.removeDedicatedSocket(cx.id);
+                        listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
+                    }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
                     if (async_response_out) {
@@ -3279,10 +3283,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             async_response_out.hdr ?? {}, async_response_out.body);
                         delete async_response_out;
                     }
-                    try {
-                        if (sockhandler.start(listener.getID(), cx + {"listener": listener}, hdr, s)) {
-                            request_helper.setDedicatedExternal();
+
+                    # Create WebSocket poll operation and register with async I/O
+                    *HttpServerAsyncIo::HttpWebSocketPollOperation ws_poll_op;
+                    if (asyncIo) {
+                        ws_poll_op = new HttpServerAsyncIo::HttpWebSocketPollOperation(s);
+                        asyncIo.registerH1WebSocketConnection(s, ws_poll_op, asyncTarget, listener, cx);
+                    }
+                    on_exit {
+                        if (ws_poll_op) {
+                            asyncIo.deregisterH1WebSocketConnection(s);
                         }
+                    }
+
+                    # Pass poll_op to handler via header-info
+                    hash<auto> ws_cx = cx + {"listener": listener};
+                    if (ws_poll_op) {
+                        ws_cx."header-info".ws_poll_op = ws_poll_op;
+                    }
+
+                    try {
+                        sockhandler.start(listener.getID(), ws_cx, hdr, s);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
                             listener.logError("cid %d: dedicated socket handler %y: socket closed by remote", cx.id,
@@ -3294,12 +3315,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             listener.logError("cid %d: error in dedicated socket handler %y: %s", cx.id,
                                 cx.handler_name, desc);
                         }
-                    }
-                    if (request_helper.isDedicatedExternal()) {
-                        listener.log("cid %d: dedicated socket handler %y managed externally", cx.id, cx.handler_name);
-                    } else {
-                        listener.removeDedicatedSocket(cx.id);
-                        listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
                     }
                 } else {
                     listener.logError("cid %d: cannot start dedicated socket handler %y because the listener is "

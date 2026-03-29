@@ -182,6 +182,45 @@ public:
         return !recv_queue->empty();
     }
 
+    //! Queues a pre-encoded raw frame for sending (thread-safe)
+    /** @param data the pre-encoded frame bytes
+        @param xsink exception sink
+    */
+    DLLLOCAL void queueSendRawFrame(const BinaryNode* data, ExceptionSink* xsink);
+
+    //! Sets the frame callback (called on I/O thread when a frame is received)
+    /** @param cb the callback reference (ref'd), or nullptr to clear
+        @param xsink exception sink
+    */
+    DLLLOCAL void setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
+
+    //! Sets the heartbeat interval in milliseconds (0 = disabled)
+    DLLLOCAL void setHeartbeat(int64 ms) {
+        heartbeat_interval_ms = ms;
+        if (ms > 0 && last_recv_activity_ms == 0) {
+            last_recv_activity_ms = q_clock_getmillis();
+        }
+    }
+
+    //! Sets the send timeout in milliseconds
+    DLLLOCAL void setSendTimeout(int64 ms) {
+        send_timeout_ms = ms;
+    }
+
+    //! Returns the send timeout in milliseconds
+    DLLLOCAL int64 getSendTimeout() const {
+        return send_timeout_ms;
+    }
+
+    //! Returns and clears the number of items pushed during the last continuePoll() cycle
+    /** Used by the async I/O controller to dispatch notifications when frames arrive.
+    */
+    DLLLOCAL int getAndClearItemsPushed() override {
+        int result = frames_pushed_in_cycle;
+        frames_pushed_in_cycle = 0;
+        return result;
+    }
+
     //! Releases all internal references
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -213,6 +252,24 @@ private:
     //! Error information (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
+    //! Frame callback — invoked on I/O thread when a frame is pushed to recv_queue
+    ResolvedCallReferenceNode* frame_callback = nullptr;
+
+    //! Send timeout in milliseconds (0 = no timeout)
+    int64 send_timeout_ms = 0;
+
+    //! Timestamp when current send operation started (milliseconds since epoch)
+    int64 send_op_start_ms = 0;
+
+    //! Number of frames pushed during the current continuePoll() cycle
+    int frames_pushed_in_cycle = 0;
+
+    //! Heartbeat interval in milliseconds (0 = disabled)
+    int64 heartbeat_interval_ms = 0;
+
+    //! Timestamp of last recv activity (milliseconds since epoch)
+    int64 last_recv_activity_ms = 0;
+
     //! Pending send data — pre-encoded frame bytes ready to send
     /** Populated from send_queue when no send_op is active.
         Multiple queued frames are concatenated to reduce syscalls.
@@ -235,9 +292,10 @@ private:
     //! Pushes a frame info hash to recv_queue
     /** @param type frame type string ("text", "binary", "ping", "pong", "close")
         @param data the payload (ref transferred to hash)
+        @param rsv the RSV bits from the frame header
         @param xsink exception sink
     */
-    DLLLOCAL void pushRecvFrame(const char* type, AbstractQoreNode* data, ExceptionSink* xsink);
+    DLLLOCAL void pushRecvFrame(const char* type, AbstractQoreNode* data, uint8_t rsv, ExceptionSink* xsink);
 
     //! Pushes a close frame info hash to recv_queue
     /** @param code the close code

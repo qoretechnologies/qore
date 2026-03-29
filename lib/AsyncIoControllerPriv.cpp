@@ -1402,6 +1402,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             if (force_poll) {
                 force_poll = false;
                 forced = true;
+                printd(5, "AsyncIoController: force_poll -> forced, cache_size=%d\n", (int)cache.size());
             }
 
             int64 now_us = get_epoch_us();
@@ -1514,7 +1515,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             } else if (op.spop_base) {
                 // C++ poll operation — safe to call directly on I/O thread
                 ExceptionSink poll_xsink;
+                printd(5, "AsyncIoController Phase2: C++ continuePoll key='%s'\n",
+                    op.key.c_str());
                 QoreHashNode* new_info = op.spop_base->continuePoll(&poll_xsink);
+                printd(5, "AsyncIoController Phase2: C++ continuePoll key='%s' -> %s goalReached=%d\n",
+                    op.key.c_str(), new_info ? "poll_info" : "null",
+                    op.spop_base->goalReached());
                 if (poll_xsink) {
                     QoreException* ex_obj = poll_xsink.getException();
                     if (ex_obj) {

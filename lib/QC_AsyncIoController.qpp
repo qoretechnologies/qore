@@ -227,6 +227,30 @@ static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPolla
     return ctrl->cancel(*sock, xsink);
 }
 
+//! Cancels an operation by socket and closes the socket
+/** Cancels the poll operation associated with the given socket, then shuts down
+    and closes the socket. This is the proper way to tear down a connection whose
+    lifecycle is managed by the async I/O controller.
+
+    @param sock the socket whose operation should be canceled and then closed
+    @return @ref True "True" if an operation was found and canceled
+
+    @since %Qore 2.3
+*/
+static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] sock) {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return false;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    bool rv = ctrl->cancel(*sock, xsink);
+    // Close the I/O object via the type-safe virtual method
+    sock->closeIo(xsink);
+    return rv;
+}
+
 //! Cancels an operation by key on the global singleton
 /** @param key the operation key to cancel
     @return @ref True "True" if an operation was found and canceled
