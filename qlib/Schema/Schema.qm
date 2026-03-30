@@ -883,6 +883,99 @@ public namespace Schema {
         ));
     }
 
+    #! returns a column hash for a PostgreSQL \c VECTOR column (pgvector extension)
+    /** @param dimensions the number of dimensions for the vector
+        @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
+        @param comment an optional comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_vector(int dimensions, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>({
+            "driver": {"pgsql": {"native_type": "vector", "size": dimensions}},
+            "comment": comment,
+        } + (notnull ? {"notnull": True} : NOTHING));
+    }
+
+    #! returns a column hash for a PostgreSQL \c VECTOR column (pgvector extension)
+    /** @param dimensions the number of dimensions for the vector
+        @param comment the comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_vector(int dimensions, string comment) {
+        return new hash<GenericColumnInfo>({
+            "driver": {"pgsql": {"native_type": "vector", "size": dimensions}},
+            "comment": comment,
+        });
+    }
+
+    #! returns a column hash for a PostgreSQL \c HALFVEC column (pgvector extension, half-precision)
+    /** @param dimensions the number of dimensions for the vector
+        @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
+        @param comment an optional comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_halfvec(int dimensions, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>({
+            "driver": {"pgsql": {"native_type": "halfvec", "size": dimensions}},
+            "comment": comment,
+        } + (notnull ? {"notnull": True} : NOTHING));
+    }
+
+    #! returns a column hash for a PostgreSQL \c HALFVEC column (pgvector extension, half-precision)
+    /** @param dimensions the number of dimensions for the vector
+        @param comment the comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_halfvec(int dimensions, string comment) {
+        return new hash<GenericColumnInfo>({
+            "driver": {"pgsql": {"native_type": "halfvec", "size": dimensions}},
+            "comment": comment,
+        });
+    }
+
+    #! returns a column hash for a PostgreSQL \c SPARSEVEC column (pgvector extension, sparse vectors)
+    /** @param dimensions the number of dimensions for the vector
+        @param notnull @ref True "True" for a <tt>NOT NULL</tt> constraint on the column
+        @param comment an optional comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_sparsevec(int dimensions, bool notnull = False, *string comment) {
+        return cast<hash<GenericColumnInfo>>({
+            "driver": {"pgsql": {"native_type": "sparsevec", "size": dimensions}},
+            "comment": comment,
+        } + (notnull ? {"notnull": True} : NOTHING));
+    }
+
+    #! returns a column hash for a PostgreSQL \c SPARSEVEC column (pgvector extension, sparse vectors)
+    /** @param dimensions the number of dimensions for the vector
+        @param comment the comment for the column
+
+        @note only supported with PostgreSQL and requires the pgvector extension
+
+        @since Schema 1.6
+    */
+    public hash<GenericColumnInfo> sub c_sparsevec(int dimensions, string comment) {
+        return new hash<GenericColumnInfo>({
+            "driver": {"pgsql": {"native_type": "sparsevec", "size": dimensions}},
+            "comment": comment,
+        });
+    }
+
     #! Provides information on schema changes
     public hashdecl SchemaAlignmentInfo {
         #! Set to True if only creations / additions were made

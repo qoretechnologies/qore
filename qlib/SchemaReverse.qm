@@ -591,6 +591,19 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
                 case "blob":
                     ret =  ("qore_type": SQL::BLOB, "comment": c.comment, "notnull" : !c.nullable);
                     break;
+                # pgvector extension types
+                case "vector":
+                case "halfvec":
+                case "sparsevec":
+                    ret = (
+                        "driver": (self.datasource().getDriverName(): (
+                            "native_type": c.native_type,
+                            "size": c.size,
+                            "notnull": !c.nullable,
+                        )),
+                        "comment": c.comment,
+                    );
+                    break;
                 #case "rowid":
                 #case "sdo_geometry":
                 #case "raw":
