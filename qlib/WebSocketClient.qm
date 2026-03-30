@@ -2076,6 +2076,12 @@ ws.setEventQueue();
     /** @since WebSocketClient 2.4
     */
     private stopAsyncIo() {
+        # Clear the delivery callback BEFORE cancelling — cancelByOwner dispatches
+        # onComplete asynchronously to a worker, which would reference a destroyed
+        # closure if we don't clear it first
+        if (poll_op) {
+            poll_op.clearCallbacks();
+        }
         if (async_owner) {
             try {
                 AsyncSocketIo::AsyncSocketIoController controller =
@@ -4685,6 +4691,16 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
         if (have_frames && on_poll_complete) {
             on_poll_complete();
         }
+    }
+
+    #! Clears callback references to prevent use-after-free on async cancel
+    /** Called by stopAsyncIo() before cancelByOwner() so that the
+        asynchronously-dispatched onComplete worker finds nothing to call.
+
+        @since WebSocketClient 2.4
+    */
+    clearCallbacks() {
+        on_poll_complete = NOTHING;
     }
 
     #! Aborts the operation
