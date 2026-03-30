@@ -654,12 +654,19 @@ static QoreValue read_expr_scoped_new_object(AOTExprReadCtx& ctx) {
     QoreParseListNode* pln = nullptr;
     if (args_list) {
         pln = new QoreParseListNode(&loc_builtin);
-        for (size_t i = 0; i < args_list->size(); ++i) {
-            pln->add(args_list->retrieveEntry(i), &loc_builtin);
+        ConstListIterator li(args_list);
+        while (li.next()) {
+            QoreValue v = li.getValue();
+            v.refSelf();
+            pln->add(v, &loc_builtin);
         }
         args_list->deref(nullptr);
     }
     ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, pln);
+    // Convert parse_args to args so evalImpl() doesn't hit the assertion
+    if (pln) {
+        socn->resolveParseArgs();
+    }
     return QoreValue(socn);
 }
 
