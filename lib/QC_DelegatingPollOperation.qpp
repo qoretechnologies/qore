@@ -303,9 +303,13 @@ nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) {
         }
     }
     if (poll->on_complete_code) {
-        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-        args->push(result->refSelf(), xsink);
-        ValueHolder rv(poll->on_complete_code->execValue(*args, xsink), xsink);
+        ExceptionSink cb_xsink;
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &cb_xsink);
+        args->push(result->refSelf(), &cb_xsink);
+        ValueHolder rv(poll->on_complete_code->execValue(*args, &cb_xsink), &cb_xsink);
+        if (cb_xsink) {
+            xsink->assimilate(cb_xsink);
+        }
     }
 }
 

@@ -37,9 +37,9 @@ User thread: future.get() → user code [user's thread, not I/O thread]
 //! Abstract base for completion actions executed on the I/O thread
 /** All methods are pure C++ — no execValue(), no Qore interpreter.
     Thread safety: execute/executeError are called from the I/O thread only.
-    Actions are ref-counted via AbstractPrivateData::ref()/deref().
+    Actions are ref-counted via QoreReferenceCounter::ref()/deref().
 */
-class AbstractAsyncAction : public AbstractPrivateData {
+class AbstractAsyncAction : public QoreReferenceCounter {
 public:
     //! Called when the operation produces a successful result
     virtual void execute(QoreValue output, ExceptionSink* xsink) = 0;

@@ -227,12 +227,12 @@ static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPolla
     return ctrl->cancel(*sock, xsink);
 }
 
-//! Cancels an operation by socket and closes the socket
-/** Cancels the poll operation associated with the given socket, then shuts down
-    and closes the socket. This is the proper way to tear down a connection whose
+//! Cancels an operation by I/O object and closes it
+/** Cancels the poll operation associated with the given I/O object, then shuts down
+    and closes it via closeIo(). This is the proper way to tear down a connection whose
     lifecycle is managed by the async I/O controller.
 
-    @param sock the socket whose operation should be canceled and then closed
+    @param sock the I/O object whose operation should be canceled and then closed
     @return @ref True "True" if an operation was found and canceled
 
     @since %Qore 2.3
