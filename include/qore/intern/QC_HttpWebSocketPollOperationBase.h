@@ -247,6 +247,7 @@ private:
     uint16_t close_code = 1000;
     std::string close_reason;
     bool close_initiated = false;           //!< true if we initiated the close handshake
+    bool close_echo_pending = false;        //!< true when peer close received — echo deferred to Phase 4
     size_t max_frame_size = WS_DEFAULT_MAX_FRAME_SIZE;
 
     //! Error information (ref'd or nullptr)

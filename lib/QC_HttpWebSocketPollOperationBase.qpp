@@ -198,6 +198,20 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         if (*xsink) {
             return nullptr;
         }
+        // Queue deferred close echo AFTER draining application data so the
+        // peer receives echo responses before the close frame
+        if (close_echo_pending) {
+            close_echo_pending = false;
+            SimpleRefHolder<BinaryNode> close_frame(
+                WebSocketFrameEncoder::encodeClose(close_code,
+                    close_reason.empty() ? nullptr : close_reason.c_str(), false)
+            );
+            if (pending_send) {
+                pending_send->append(close_frame->getPtr(), close_frame->size());
+            } else {
+                pending_send = close_frame.release();
+            }
+        }
         if (pending_send && pending_send->size() > 0) {
             if (startSendOp(xsink)) {
                 return nullptr;
@@ -352,15 +366,11 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 }
 
                 if (!close_initiated) {
-                    // Peer initiated close — echo the close frame
-                    SimpleRefHolder<BinaryNode> close_frame(
-                        WebSocketFrameEncoder::encodeClose(code,
-                            reason.empty() ? nullptr : reason.c_str(), false)
-                    );
-                    send_queue->push(xsink, close_frame.release());
-                    if (*xsink) {
-                        return;
-                    }
+                    // Peer initiated close — defer the echo to Phase 4 of
+                    // continuePoll so that any pending echo data (queued by
+                    // onPollComplete workers processing earlier frames) is
+                    // sent BEFORE the close frame
+                    close_echo_pending = true;
                 }
                 ws_state = WsState::CLOSING;
                 break;
