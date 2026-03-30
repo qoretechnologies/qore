@@ -356,15 +356,16 @@ public class GrokDataProviderTest inherits QUnit::Test {
         GrokModelCreateResponseDataProvider prov(rest);
         hash<auto> result = prov.doRequest({
             "model": "grok-3",
-            "input": "Hello, what can you do?",
+            "input": ({"text": "Hello, what can you do?"},),
         });
         assertEq("POST", rest.last_method);
         assertEq("responses", rest.last_path);
         assertEq("resp_test", result.id);
         assertEq("completed", result.status);
         assertEq("ok", result.output_text);
-        # Verify plain string input passes through correctly
-        assertEq("Hello, what can you do?", rest.last_request.input);
+        # Verify structured input was sent
+        assertEq("user", rest.last_request.input[0].role);
+        assertEq("Hello, what can you do?", rest.last_request.input[0].content);
 
         # Test structured input format
         rest.last_request = NOTHING;
@@ -381,7 +382,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("user", rest.last_request.input[0].role);
         assertEq("Structured hello", rest.last_request.input[0].content);
 
-        # Test text-only input collapses to plain string
+        # Test text-only shortcut
         rest.last_request = NOTHING;
         result = prov.doRequest({
             "model": "grok-3",
@@ -389,7 +390,8 @@ public class GrokDataProviderTest inherits QUnit::Test {
                 {"text": "Quick text"},
             ),
         });
-        assertEq("Quick text", rest.last_request.input);
+        assertEq("user", rest.last_request.input[0].role);
+        assertEq("Quick text", rest.last_request.input[0].content);
 
         # Test multimodal input (text + image)
         rest.last_request = NOTHING;
@@ -500,7 +502,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
         # First request with context key
         hash<auto> result = prov.doRequest({
             "model": "grok-3",
-            "input": "Hello",
+            "input": ({"text": "Hello"},),
             "context_key": "session-1",
         });
 
@@ -529,7 +531,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
         };
         result = prov.doRequest({
             "model": "grok-3",
-            "input": "Continue",
+            "input": ({"text": "Continue"},),
             "context_key": "session-1",
         });
 

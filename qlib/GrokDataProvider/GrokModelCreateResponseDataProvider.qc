@@ -109,16 +109,8 @@ public class GrokModelCreateResponseDataProvider inherits GrokDataProviderCommon
         }
 
         # Transform typed input to API format
-        if (req.input) {
-            if (req.input.typeCode() == NT_STRING) {
-                # Plain string input — pass through directly
-            } else if (req.input.typeCode() == NT_LIST) {
-                req.input = map getInput($1), req.input;
-                # If single text input, collapse to a plain string
-                if (req.input.lsize() == 1 && (req.input[0].typeCode() == NT_STRING)) {
-                    req.input = req.input[0];
-                }
-            }
+        if (req.input.typeCode() == NT_LIST) {
+            req.input = map getInput($1), req.input;
         }
 
         # Load conversation context
