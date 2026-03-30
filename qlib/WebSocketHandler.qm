@@ -567,10 +567,8 @@ public class WebSocketConnection {
         }
         # H2/H3: send directly via stream context if available
         if (stream_ctx) {
-            try {
-                stream_ctx.sendData(msg);
-                notifyIo();
-            } catch () {}
+            stream_ctx.sendData(msg);
+            notifyIo();
             return;
         }
         try {
@@ -1709,25 +1707,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
                 sock, h3_session_id, h3_stream_id, wake, h3_data_queue));
-            # Start background watcher thread: blocks on the C++ StreamNotifier
-            # (signaled by h3RecvDataCallback when data arrives) and wakes the
-            # handler loop via wsc.notifyIo().  Exits when the notifier is closed
-            # (stream end/cleanup) or the socket is no longer open.
-            background sub () {
-                try {
-                    while (sock.isOpen()) {
-                        if (sock.waitForQuicConnectStreamNotify(
-                                h3_session_id, h3_stream_id, 5s) == -1) {
-                            break;
-                        }
-                        wsc.notifyIo();
-                    }
-                } catch (hash<ExceptionInfo> ex) {
-                    # Watcher thread exits silently on exception — the handler
-                    # loop falls back to heartbeat-based polling if the watcher
-                    # dies (e.g., socket closed during wait)
-                }
-            }();
+            # H3 watcher thread is started AFTER the stream processor is set up
+            # (see below) to avoid a race where the watcher fires before the
+            # processor is ready to handle frames
         }
 
         # Set up async H1 WebSocket I/O
@@ -1837,8 +1819,23 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 register_listener(stream_proc);
             }
         }
-        # For HTTP/3: the background watcher thread calls wsc.notifyIo(),
-        # which delegates to stream_proc.notifyIo() (set via setStreamProcessor above)
+        # For HTTP/3: start the background watcher thread NOW that the stream
+        # processor is set up — wsc.notifyIo() delegates to stream_proc.notifyIo()
+        if (is_http3) {
+            background sub () {
+                try {
+                    while (sock.isOpen()) {
+                        int rv = sock.waitForQuicConnectStreamNotify(
+                                h3_session_id, h3_stream_id, 5s);
+                        if (rv == -1) {
+                            break;
+                        }
+                        wsc.notifyIo();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                }
+            }();
+        }
 
         # Drain any data queued during getConnectionImpl
         {
@@ -1855,18 +1852,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
         }
 
-        # Set up heartbeat timer
-        *int heartbeat_timer_id;
-        if (async_ctrl && heartbeat > 0) {
-            heartbeat_timer_id = async_ctrl.submitTimer(heartbeat * 1000, sub () {
-                stream_proc.sendHeartbeat(heartbeat, heartbeat_msg);
-            });
-        }
-        on_exit {
-            if (heartbeat_timer_id) {
-                try { async_ctrl.cancelTimer(heartbeat_timer_id); } catch () {}
-            }
-        }
+        # Heartbeat is handled inside the stream processor's notifyIo()
+        # via the sendHeartbeat() method, triggered by the watcher thread's
+        # periodic wake cycle (H3: waitForQuicConnectStreamNotify with 5s timeout)
 
         # Block until stream closes
         stream_done.waitForZero();
