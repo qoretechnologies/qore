@@ -503,6 +503,11 @@ public:
             val = thread_try_get_runtime_closure_var(this);
         }
         if (!val) {
+            // Lazily instantiate if not found (see getLValue comment)
+            const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+            val = thread_try_find_closure_var(name.c_str());
+        }
+        if (!val) {
             needs_deref = false;
             return QoreValue();
         }
@@ -563,6 +568,13 @@ public:
         ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
         if (!val) {
             val = thread_try_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            // Variable not yet instantiated on cvstack — lazily instantiate it.
+            // This happens for uninitialized block-scoped closure-captured vars
+            // in AOT mode (e.g., "list<auto> x;") where no StoreLocal is generated.
+            const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+            val = thread_try_find_closure_var(name.c_str());
         }
         if (!val) {
             return -1;

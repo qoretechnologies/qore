@@ -4388,9 +4388,13 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, i
 extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_locals);
     // For closure-use vars that are NOT pre-instantiated by evalTiered (AOT mode):
-    // do a proper pop (uninstantiate) from the cvstack.  The compiled code instantiated
-    // (pushed) this CVV on the first StoreLocal, so we must pop it at block scope exit.
-    qore_rt_uninstantiate_local(ctx->locals[idx], xsink);
+    // pop from the cvstack.  The variable may have been lazily instantiated by
+    // StoreLocal or by LocalVar::getLValue/eval; if it was never accessed, it
+    // may not be on the cvstack at all — check before popping.
+    LocalVar* var = ctx->locals[idx];
+    if (thread_try_find_closure_var(var->getName())) {
+        qore_rt_uninstantiate_local(var, xsink);
+    }
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
