@@ -65,12 +65,22 @@ public class GrokSimpleChatCompletionDataProvider inherits GrokDataProviderCommo
             "name": remove req.name,
         },);
         hash<auto> rv = doRestCommand("POST", "chat/completions", req).body;
-        # Extract single choice for simple chat
+        # Extract and flatten the first choice for simple chat
         if (!rv.choices || !rv.choices.size()) {
             throw "GROK-API-ERROR", "API returned no choices in chat completion response";
         }
-        rv.choice = remove rv.choices[0];
-        return rv;
+        hash<auto> choice = rv.choices[0];
+        return {
+            "content": choice.message.content,
+            "role": choice.message.role,
+            "reasoning_content": choice.message.reasoning_content,
+            "refusal": choice.message.refusal,
+            "tool_calls": choice.message.tool_calls,
+            "finish_reason": choice.finish_reason,
+            "model": rv.model,
+            "usage": rv.usage,
+            "citations": rv.citations,
+        };
     }
 
     #! Returns the description of a successful request message, if any
@@ -135,7 +145,7 @@ public class GrokSimpleChatCompletionRequestType inherits HashDataType {
                 "desc": "An optional name for the participant",
                 "type": AbstractDataProviderTypeMap."*string",
             },
-        } + (GrokChatCompletionRequestType::Fields - ("messages", "model"));
+        } + (GrokChatCompletionRequestType::Fields - ("messages", "model", "n"));
     }
 
     #! Creates the type
@@ -147,25 +157,30 @@ public class GrokSimpleChatCompletionRequestType inherits HashDataType {
 #! Constant for simple chat completion request type
 public const GrokSimpleChatCompletionRequestType = new GrokSimpleChatCompletionRequestType();
 
-#! Simple chat completion response type - returns a single choice instead of a list
+#! Simple chat completion response type - flattened user-friendly response
 public class GrokSimpleChatCompletionResponseType inherits HashDataType {
     public {
         #! fields
         const Fields = {
-            "id": GrokChatCompletionResponseType::Fields."id",
-            "object": GrokChatCompletionResponseType::Fields."object",
-            "created": GrokChatCompletionResponseType::Fields."created",
-            "model": GrokChatCompletionResponseType::Fields."model",
-            "system_fingerprint": GrokChatCompletionResponseType::Fields."system_fingerprint",
-            "choice": {
-                "display_name": "Choice",
-                "short_desc": "The chat completion choice",
-                "desc": "The single extracted chat completion choice",
-                "type": GrokChoiceDataType,
+            "content": {
+                "display_name": "Content",
+                "short_desc": "The response text from the model",
+                "desc": "The text content of the model's response",
+                "type": AbstractDataProviderTypeMap."*string",
             },
+            "role": {
+                "display_name": "Role",
+                "short_desc": "The role of the response author",
+                "desc": "The role of the response author (always `assistant`)",
+                "type": AbstractDataProviderTypeMap."string",
+            },
+            "reasoning_content": GrokCompletionMessageDataType::Fields."reasoning_content",
+            "refusal": GrokCompletionMessageDataType::Fields."refusal",
+            "tool_calls": GrokCompletionMessageDataType::Fields."tool_calls",
+            "finish_reason": GrokChoiceDataType::Fields."finish_reason",
+            "model": GrokChatCompletionResponseType::Fields."model",
             "usage": GrokChatCompletionResponseType::Fields."usage",
             "citations": GrokChatCompletionResponseType::Fields."citations",
-            "output_files": GrokChatCompletionResponseType::Fields."output_files",
         };
     }
 

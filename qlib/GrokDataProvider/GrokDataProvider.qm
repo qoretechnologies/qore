@@ -122,17 +122,18 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"input",}, {
+                GrokResponseCreateRequestType.getFields(){"input", "model"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                GrokResponseCreateRequestType.getFields(){"instructions", "temperature", "max_output_tokens",
+                    "previous_response_id"}, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
-                    "max_output_tokens")
+                GrokResponseCreateRequestType.getFields() -("input", "model", "instructions", "temperature",
+                    "max_output_tokens", "previous_response_id")
             ),
             "output_type": GrokModelCreateResponseDataProvider::ResponseType,
         });
@@ -155,17 +156,18 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"input",}, {
+                GrokResponseCreateRequestType.getFields(){"input", "model"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                GrokResponseCreateRequestType.getFields(){"instructions", "temperature", "max_output_tokens",
+                    "previous_response_id"}, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
-                    "max_output_tokens")
+                GrokResponseCreateRequestType.getFields() -("input", "model", "instructions", "temperature",
+                    "max_output_tokens", "previous_response_id")
             ),
             "output_type": GrokResponseStreamEventDataType,
         });
@@ -179,17 +181,18 @@ module GrokDataProvider {
             "desc": "Create a response via the Responses API with full control over model selection and options",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"input", "model"}, {
+                GrokResponseCreateRequestType.getFields(){"input", "model"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields{"instructions", "temperature", "max_output_tokens"}, {
+                GrokResponseCreateRequestType.getFields(){"instructions", "temperature", "max_output_tokens",
+                    "previous_response_id"}, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseCreateRequestType::Fields - ("input", "model", "instructions", "temperature",
-                    "max_output_tokens")
+                GrokResponseCreateRequestType.getFields() -("input", "model", "instructions", "temperature",
+                    "max_output_tokens", "previous_response_id")
             ),
             "output_type": GrokModelCreateResponseDataProvider::ResponseType,
         });
@@ -211,7 +214,7 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseGetRequestType::Fields{"id",}, {
+                GrokResponseGetRequestType.getFields(){"id",}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -236,7 +239,7 @@ module GrokDataProvider {
                 },
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokResponseDeleteRequestType::Fields{"id",}, {
+                GrokResponseDeleteRequestType.getFields(){"id",}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -253,7 +256,7 @@ module GrokDataProvider {
             "desc": "Retrieve the result of a deferred chat completion request using the request ID",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                GrokDeferredCompletionRequestType::Fields{"request_id",}, {
+                GrokDeferredCompletionRequestType.getFields(){"request_id",}, {
                     "preselected": True,
                     "required": True,
                 }

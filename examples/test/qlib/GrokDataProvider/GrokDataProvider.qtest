@@ -340,8 +340,12 @@ public class GrokDataProviderTest inherits QUnit::Test {
         # verify single message was wrapped in messages array
         assertEq("user", rest.last_request.messages[0].role);
         assertEq("What is the capital of France?", rest.last_request.messages[0].content);
-        # verify single choice extracted
-        assertEq("Paris is the capital of France.", result.choice.message.content);
+        # verify flattened response
+        assertEq("Paris is the capital of France.", result.content);
+        assertEq("assistant", result.role);
+        assertEq("stop", result.finish_reason);
+        assertEq("grok-3", result.model);
+        assertEq(18, result.usage.total_tokens);
 %endif
     }
 
@@ -359,6 +363,53 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertEq("resp_test", result.id);
         assertEq("completed", result.status);
         assertEq("ok", result.output_text);
+        # Verify plain string input passes through correctly
+        assertEq("Hello, what can you do?", rest.last_request.input);
+
+        # Test structured input format
+        rest.last_request = NOTHING;
+        result = prov.doRequest({
+            "model": "grok-3",
+            "input": (
+                {
+                    "role": "user",
+                    "text": "Structured hello",
+                },
+            ),
+        });
+        assertEq(Type::List, rest.last_request.input.type());
+        assertEq("user", rest.last_request.input[0].role);
+        assertEq("Structured hello", rest.last_request.input[0].content);
+
+        # Test text-only input collapses to plain string
+        rest.last_request = NOTHING;
+        result = prov.doRequest({
+            "model": "grok-3",
+            "input": (
+                {"text": "Quick text"},
+            ),
+        });
+        assertEq("Quick text", rest.last_request.input);
+
+        # Test multimodal input (text + image)
+        rest.last_request = NOTHING;
+        result = prov.doRequest({
+            "model": "grok-3",
+            "input": (
+                {
+                    "role": "user",
+                    "text": "What is in this image?",
+                    "image_url": "https://example.com/image.jpg",
+                },
+            ),
+        });
+        assertEq(Type::List, rest.last_request.input.type());
+        assertEq("user", rest.last_request.input[0].role);
+        assertEq(Type::List, rest.last_request.input[0].content.type());
+        assertEq("input_text", rest.last_request.input[0].content[0].type);
+        assertEq("What is in this image?", rest.last_request.input[0].content[0].text);
+        assertEq("input_image", rest.last_request.input[0].content[1].type);
+        assertEq("https://example.com/image.jpg", rest.last_request.input[0].content[1].image_url);
 %endif
     }
 
@@ -522,16 +573,21 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(GrokChatCompletionResponseType.getFields().hasKey("usage"));
         assertTrue(GrokChatCompletionResponseType.getFields().hasKey("output_files"));
 
-        # Verify simple chat response type has "choice" (single) not "choices" (list)
+        # Verify simple chat response type has flattened fields
         assertEq(Type::Hash, GrokSimpleChatCompletionResponseType.getFields().type());
-        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("choice"));
+        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("content"));
+        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("role"));
+        assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("finish_reason"));
         assertFalse(GrokSimpleChatCompletionResponseType.getFields().hasKey("choices"));
+        assertFalse(GrokSimpleChatCompletionResponseType.getFields().hasKey("choice"));
         assertTrue(GrokSimpleChatCompletionResponseType.getFields().hasKey("usage"));
 
         assertEq(Type::Hash, GrokResponseCreateRequestType.getFields().type());
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("input"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("previous_response_id"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("reasoning"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("tools"));
+        assertTrue(GrokResponseCreateRequestType.getFields().hasKey("tool_choice"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("text"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("include"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("prompt_cache_key"));
@@ -540,6 +596,12 @@ public class GrokDataProviderTest inherits QUnit::Test {
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("background"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("service_tier"));
         assertTrue(GrokResponseCreateRequestType.getFields().hasKey("truncation"));
+
+        # Verify input item type has flat structure (role + text + image_url)
+        assertEq(Type::Hash, GrokResponseInputItemDataType.getFields().type());
+        assertTrue(GrokResponseInputItemDataType.getFields().hasKey("role"));
+        assertTrue(GrokResponseInputItemDataType.getFields().hasKey("text"));
+        assertTrue(GrokResponseInputItemDataType.getFields().hasKey("image_url"));
 
         # Verify text format type is typed (not generic hash)
         assertEq(Type::Hash, GrokTextFormatDataType.getFields().type());
@@ -627,7 +689,7 @@ public class GrokDataProviderTest inherits QUnit::Test {
             "role": "user",
             "content": "Reply with exactly one word: hello",
         });
-        assertTrue(result.choice.message.content.val());
+        assertTrue(result.content.val());
 
         # Test multi-chat
         AbstractDataProvider multi_chat = prov.getChildProvider("multi-chat");

@@ -204,7 +204,7 @@ public class GrokDataProviderCommon inherits DataProvider::AbstractDataProvider 
     private *list<hash<AllowedValueInfo>> getReferenceModels() {
         list<hash<AllowedValueInfo>> rv;
         foreach hash<auto> model in (doRestCommand("GET", "models").body."data") {
-            string desc = sprintf("Model created on %y, owned by %y", localtime(model.created), model.owned_by);
+            string desc = sprintf("xAI Grok model: %s", model.id);
             rv += <AllowedValueInfo>{
                 "display_name": model.id,
                 "short_desc": desc,

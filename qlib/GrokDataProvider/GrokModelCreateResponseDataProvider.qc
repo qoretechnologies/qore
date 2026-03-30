@@ -108,6 +108,19 @@ public class GrokModelCreateResponseDataProvider inherits GrokDataProviderCommon
             req.model = model.id;
         }
 
+        # Transform typed input to API format
+        if (req.input) {
+            if (req.input.typeCode() == NT_STRING) {
+                # Plain string input — pass through directly
+            } else if (req.input.typeCode() == NT_LIST) {
+                req.input = map getInput($1), req.input;
+                # If single text input, collapse to a plain string
+                if (req.input.lsize() == 1 && (req.input[0].typeCode() == NT_STRING)) {
+                    req.input = req.input[0];
+                }
+            }
+        }
+
         # Load conversation context
         if (ctx_store && req.context_key) {
             ctx_info.ctx_key = remove req.context_key;
@@ -118,6 +131,40 @@ public class GrokModelCreateResponseDataProvider inherits GrokDataProviderCommon
         }
 
         return req;
+    }
+
+    #! Converts a typed input item to API format
+    private static auto getInput(auto input) {
+        # Plain string — pass through
+        if (input.typeCode() == NT_STRING) {
+            return input;
+        }
+        if (input.typeCode() != NT_HASH) {
+            return input;
+        }
+        # Build API message from flat fields
+        # NOTE: hash<auto!> prevents type narrowing — the Qorus UI may pass richtext (list)
+        # values for string fields inside list element types
+        hash<auto!> msg = {
+            "role": string(input.role ?? "user"),
+        };
+        # Build content from text and/or image_url
+        if (input.text && input.image_url) {
+            # Both provided — multimodal content array
+            msg.content = (
+                {"type": "input_text", "text": input.text},
+                {"type": "input_image", "image_url": input.image_url},
+            );
+        } else if (input.image_url) {
+            # Image only
+            msg.content = (
+                {"type": "input_image", "image_url": input.image_url},
+            );
+        } else if (input.text) {
+            # Text only — use plain string
+            msg.content = input.text;
+        }
+        return msg;
     }
 
     #! Extracts text output from the response output array
@@ -657,6 +704,77 @@ public class GrokTextFormatDataType inherits HashDataType {
 #! Constant for text format data type
 public const GrokTextFormatDataType = new GrokTextFormatDataType();
 
+#! Input item data type for the Responses API
+/** Provides a flat structure with text and image fields. If both are provided, they are split into
+    separate content parts in the API request. The content type is determined automatically.
+*/
+public class GrokResponseInputItemDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "role": {
+                "display_name": "Role",
+                "short_desc": "The role of the message author",
+                "desc": "The role of the message author",
+                "type": AbstractDataProviderTypeMap."string",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "display_name": "User",
+                        "short_desc": "User message",
+                        "desc": "A message from the user",
+                        "value": "user",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "System",
+                        "short_desc": "System instructions",
+                        "desc": "System instructions (must be first if present)",
+                        "value": "system",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Developer",
+                        "short_desc": "Developer instructions (alias for system)",
+                        "desc": "Developer instructions (alias for system)",
+                        "value": "developer",
+                    },
+                    <AllowedValueInfo>{
+                        "display_name": "Assistant",
+                        "short_desc": "Model response for conversation continuation",
+                        "desc": "A previous model response for conversation continuation",
+                        "value": "assistant",
+                    },
+                ),
+                "default_value": "user",
+            },
+            "text": {
+                "display_name": "Text",
+                "short_desc": "The text content of the message",
+                "desc": "The text content of the message",
+                "type": AbstractDataProviderTypeMap."*string",
+                "example_value": "Tell me about quantum computing",
+                "attr": {
+                    "required_groups": ("message_content",),
+                },
+            },
+            "image_url": {
+                "display_name": "Image URL",
+                "short_desc": "URL or base64 data URL for an image",
+                "desc": "URL or base64 data URL for an image input. Supported formats: JPEG, PNG. "
+                    "Max size: 20 MiB. If both text and image are provided, they are sent together "
+                    "as a multimodal message",
+                "type": AbstractDataProviderTypeMap."*string",
+                "attr": {
+                    "required_groups": ("message_content",),
+                },
+            },
+        };
+    }
+
+    constructor() : HashDataType("GrokResponseInputItem") {
+        addQoreFields(Fields);
+    }
+}
+
+public const GrokResponseInputItemDataType = new GrokResponseInputItemDataType();
+
 #! The responses API request type
 public class GrokResponseCreateRequestType inherits HashDataType {
     public {
@@ -664,10 +782,10 @@ public class GrokResponseCreateRequestType inherits HashDataType {
         const Fields = {
             "input": {
                 "display_name": "Input",
-                "short_desc": "Text or message array input",
-                "desc": "The input content for the response. Can be a string or an array of message objects",
-                "type": AbstractDataProviderTypeMap."any",
-                "example_value": "Tell me about quantum computing",
+                "short_desc": "Text or message input to the model",
+                "desc": "The input content for the response. Each item has a role, text, and optional image. "
+                    "For a simple text prompt, a single item with text is sufficient",
+                "type": new SoftListDataType("GrokInputList", GrokResponseInputItemDataType),
             },
             "model": {
                 "display_name": "Model ID",
@@ -752,9 +870,10 @@ public class GrokResponseCreateRequestType inherits HashDataType {
             "tool_choice": {
                 "display_name": "Tool Choice",
                 "short_desc": "Tool invocation control",
-                "desc": "Controls which tools the model may use. Use a string value for simple modes, or an "
-                    "object with `type` and `name` keys to force a specific function",
-                "type": AbstractDataProviderTypeMap."any",
+                "desc": "Controls which tools the model may use.\n\n"
+                    "Use one of the predefined values, or enter a custom value to force a specific function "
+                    "(e.g., a function name)",
+                "type": AbstractDataProviderTypeMap."*string",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "display_name": "None",
