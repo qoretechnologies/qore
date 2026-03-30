@@ -1171,10 +1171,10 @@ public class HttpAsyncSocketIoController {
             stream_data_queue = new Queue();
             listener.registerQuicConnectStreamQueue(session_id, stream_id,
                 stream_data_queue);
-            # For WebSocket: also register a StreamNotifier so the QUIC receive
-            # callback can signal the handler when data arrives (pure C++, safe
-            # from ngtcp2 callbacks).  The handler starts a background watcher
-            # thread that blocks on the notifier and calls wsc.notifyIo().
+            # Register the Queue with the H3 poll operation for dispatch tracking
+            h3op.registerStreamQueue(stream_id, stream_data_queue);
+            # Register a StreamNotifier so the C++ QUIC recv callback can
+            # signal the H3 watcher thread when data arrives
             if (is_websocket_connect) {
                 listener.registerQuicConnectStreamNotifier(session_id, stream_id);
             }
@@ -1222,6 +1222,9 @@ public class HttpAsyncSocketIoController {
                 "stream_data_queue": stream_data_queue,
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wake(); },
+                "register_stream_listener": sub (object listener) {
+                    h3op.registerStreamListener(stream_id, listener);
+                },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {
                     self.registerPersistentQueue(key, q, filter);

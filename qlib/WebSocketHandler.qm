@@ -1703,14 +1703,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 if (async_ctrl) {
                     async_ctrl.wake();
                 }
-                # Wake the startImpl loop so it checks for incoming data
-                wsc.notifyIo();
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
                 sock, h3_session_id, h3_stream_id, wake, h3_data_queue));
-            # H3 watcher thread is started AFTER the stream processor is set up
-            # (see below) to avoid a race where the watcher fires before the
-            # processor is ready to handle frames
         }
 
         # Set up async H1 WebSocket I/O
@@ -1812,29 +1807,27 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         wsc.setStreamProcessor(stream_proc);
         on_exit wsc.setStreamProcessor();
 
-        # Register the stream processor as the listener for this stream
-        if (is_http2) {
-            *code<nothing(object)> register_listener =
-                cx."header-info".register_stream_listener;
-            if (register_listener) {
-                register_listener(stream_proc);
-            }
+        # Register the stream processor as a stream data listener
+        # For H2: the I/O controller dispatches onStreamData() to a worker
+        # For H3: a background watcher thread calls notifyIo() directly
+        *code<nothing(object)> register_listener =
+            cx."header-info".register_stream_listener;
+        if (register_listener) {
+            register_listener(stream_proc);
         }
-        # For HTTP/3: start the background watcher thread that calls the stream
-        # processor directly when QUIC stream data arrives
         if (is_http3) {
+            # H3 uses a C++ StreamNotifier signaled by h3RecvDataCallback.
+            # The watcher thread bridges the C++ signal to the Qore processor.
             background sub () {
                 try {
                     while (sock.isOpen()) {
-                        int rv = sock.waitForQuicConnectStreamNotify(
-                                h3_session_id, h3_stream_id, 5s);
-                        if (rv == -1) {
+                        if (sock.waitForQuicConnectStreamNotify(
+                                h3_session_id, h3_stream_id, 5s) == -1) {
                             break;
                         }
                         stream_proc.notifyIo();
                     }
-                } catch (hash<ExceptionInfo> ex) {
-                }
+                } catch () {}
             }();
         }
 

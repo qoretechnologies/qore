@@ -127,6 +127,23 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Connection-level completion context (for resubmitted ops via submitConnectionOp)
         *string conn_completion_uh;
         *string conn_completion_state;
+
+        #! Registered stream data listeners (stream_id -> listener object)
+        /** Used for WebSocket extended CONNECT streams. The controller dispatches
+            onStreamData() to a worker thread when data arrives.
+
+            @since Http3ServerPollOperation 1.0
+        */
+        hash<string, object> stream_listeners;
+
+        #! Registered stream data Queues (stream_id -> Queue)
+        /** The C++ h3RecvDataCallback pushes data directly to these Queues.
+            continuePoll() checks for non-empty Queues to report data_ready_streams.
+        */
+        hash<string, Queue> stream_queues;
+
+        #! Stream IDs with data available (populated by continuePoll, consumed by controller)
+        list<int> data_ready_streams;
     }
 
     #! Creates the poll operation
@@ -197,6 +214,17 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
     */
     *hash<SocketPollInfo> continuePoll() {
         AutoLock al(op_lock);
+        # Check stream Queues on exit — data arrives during the inner op's
+        # continuePoll (via h3RecvDataCallback → Queue push), so checking
+        # AFTER processing gives the most up-to-date view
+        on_exit {
+            data_ready_streams = ();
+            foreach string sid in (keys stream_queues) {
+                if (!stream_queues{sid}.empty()) {
+                    data_ready_streams += sid.toInt();
+                }
+            }
+        }
         while (True) {
             switch (state) {
                 case STATE_INIT:
@@ -584,6 +612,42 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         @param uh the connection unique hash
         @param state the connection state when submitted
     */
+    #! Registers a Queue for stream data delivery (extended CONNECT tunnels)
+    /** @param stream_id the QUIC stream ID
+        @param queue the Queue that h3RecvDataCallback pushes data to
+    */
+    registerStreamQueue(int stream_id, Queue queue) {
+        stream_queues{string(stream_id)} = queue;
+    }
+
+    #! Registers a stream data listener (called from worker thread when data arrives)
+    /** @param stream_id the QUIC stream ID
+        @param listener object with notifyIo() method (e.g., WebSocketStreamProcessor)
+    */
+    registerStreamListener(int stream_id, object listener) {
+        stream_listeners{string(stream_id)} = listener;
+    }
+
+    #! Called by the I/O controller on a worker thread when stream data is available
+    /** Notifies the registered listener for the given stream.
+    */
+    nothing onStreamData(int stream_id) {
+        *object listener = stream_listeners{string(stream_id)};
+        if (listener) {
+            listener.notifyIo();
+        }
+    }
+
+    #! Returns and clears the list of stream IDs with data available
+    /** Called by the I/O controller after continuePoll() to determine which
+        streams need onStreamData dispatch.
+    */
+    list<int> getAndClearDataReadyStreams() {
+        list<int> rv = data_ready_streams;
+        data_ready_streams = ();
+        return rv;
+    }
+
     nothing setConnectionCompletionContext(HttpAsyncSocketIoController controller,
             string uh, string state) {
         completion_controller = controller;

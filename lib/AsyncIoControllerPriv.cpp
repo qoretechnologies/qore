@@ -1590,6 +1590,32 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     } else {
                         result.completed = true;
                     }
+
+                    // Check for stream data ready (H3 extended CONNECT streams)
+                    if (!result.completed && !result.ex_hash) {
+                        ExceptionSink stream_xsink;
+                        ValueHolder streams(op.spop_obj->evalMethod(
+                            "getAndClearDataReadyStreams", nullptr, &stream_xsink),
+                            &stream_xsink);
+                        if (!stream_xsink && streams->getType() == NT_LIST) {
+                            const QoreListNode* sl = streams->get<const QoreListNode>();
+                            if (sl && sl->size() > 0) {
+                                AutoLocker al(m);
+                                if (!call_dispatcher) {
+                                    call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                                }
+                                for (size_t i = 0; i < sl->size(); ++i) {
+                                    int32_t sid = (int32_t)sl->retrieveEntry(i).getAsBigInt();
+                                    op.spop_obj->ref();
+                                    call_dispatcher->dispatchStreamDataAsync(op.spop_obj, sid);
+                                }
+                            }
+                        }
+                        if (stream_xsink) {
+                            // Method doesn't exist — that's fine, not all Qore ops have it
+                            stream_xsink.clear();
+                        }
+                    }
                 } else {
                     // Sandboxed Qore code — dispatch to worker thread; result
                     // comes back via IoCommand::ContinuePollResult
