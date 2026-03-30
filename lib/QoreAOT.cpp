@@ -6082,11 +6082,13 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
             return id;
         }
-        // Hashdecl construction (e.g., MyHashDecl h())
+        // Hashdecl construction (e.g., MyHashDecl h({"name": "value"}))
         const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
         if (hd) {
             id.kind = AOTExprKind::HASHDECL_NEW;
             id.ref1 = hd->getNamespacePath();
+            id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
             return id;
         }
         // Complex list construction (e.g., list<string> l())
