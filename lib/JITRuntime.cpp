@@ -566,7 +566,9 @@ extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsin
         // (e.g., closures submitted to a thread pool that haven't executed
         // yet).  When references == 1, only the cvstack entry remains, so
         // it's safe to trigger timely destruction at block scope exit.
-        ClosureVarValue* cvv = thread_find_closure_var(var->getName());
+        // NOTE: Use thread_try_find_closure_var() to avoid asserting when the
+        // variable is not on the cvstack (e.g., in closure contexts on background threads).
+        ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
         if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
             cvv->clearValue(xsink);
         }

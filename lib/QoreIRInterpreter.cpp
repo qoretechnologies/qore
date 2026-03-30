@@ -818,9 +818,12 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     // variable, which is the current function's own variable.  This is critical
     // when a function with closure-use variables is called from within a closure:
     // thread_get_runtime_closure_var() would return the calling closure's variable
-    // (wrong scope), while thread_find_closure_var() returns the current function's
+    // (wrong scope), while thread_try_find_closure_var() returns the current function's
     // own cvstack variable (correct scope).
-    ClosureVarValue* cv = thread_find_closure_var(var->getName());
+    // NOTE: Use thread_try_find_closure_var() (not thread_find_closure_var()) because
+    // closures running on background threads may not have the variable on the cvstack —
+    // it may only exist in the ThreadSafeLocalVarRuntimeEnvironment.
+    ClosureVarValue* cv = thread_try_find_closure_var(var->getName());
     if (!cv) {
         cv = thread_get_runtime_closure_var(var);
     }
@@ -3277,10 +3280,15 @@ load_local_done:
                             fprintf(stderr, "[CLOSURE-LOOKUP-ATTEMPT] Trying to find var='%s' in cvstack\n", var_name);
                             fflush(stderr);
                         }
-                        ClosureVarValue* cv = thread_find_closure_var(var_name);
+                        // NOTE: Use thread_try_find_closure_var() (not thread_find_closure_var())
+                        // because closures running on background threads may not have the
+                        // variable on the cvstack — it may only exist in the
+                        // ThreadSafeLocalVarRuntimeEnvironment (accessed via
+                        // thread_get_runtime_closure_var).
+                        ClosureVarValue* cv = thread_try_find_closure_var(var_name);
                         if (!cv) {
                             if (debug_closure) {
-                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-FAILED] thread_find_closure_var returned NULL for '%s', trying thread_get_runtime_closure_var\n", var_name);
+                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-FAILED] thread_try_find_closure_var returned NULL for '%s', trying thread_get_runtime_closure_var\n", var_name);
                                 fflush(stderr);
                             }
                             cv = thread_get_runtime_closure_var(local_inst->local);
@@ -3309,7 +3317,7 @@ load_local_done:
                         } else {
                             // Closure variable NOT FOUND - will result in nothing being stored
                             fprintf(stderr, "[CLOSURE-LOAD-FAILED] Variable '%s' not found in closure context, returning nothing\n", var_name);
-                            fprintf(stderr, "  - thread_find_closure_var() returned NULL\n");
+                            fprintf(stderr, "  - thread_try_find_closure_var() returned NULL\n");
                             fprintf(stderr, "  - thread_get_runtime_closure_var() returned NULL\n");
                             fflush(stderr);
                         }

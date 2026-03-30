@@ -597,6 +597,12 @@ DLLLOCAL ClosureVarValue* thread_instantiate_closure_var(const char* id, const Q
 DLLLOCAL void thread_instantiate_closure_var(ClosureVarValue* cvar);
 DLLLOCAL void thread_uninstantiate_closure_var(ExceptionSink* xsink);
 DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
+//! Like thread_find_closure_var() but returns nullptr instead of asserting when the variable is not found.
+/** Used by the IR interpreter when a closure variable may or may not be on the cvstack
+    (e.g., closures running on background threads where captured variables are in the
+    ThreadSafeLocalVarRuntimeEnvironment, not on the cvstack).
+*/
+DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);

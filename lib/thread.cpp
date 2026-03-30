@@ -1225,6 +1225,10 @@ ClosureVarValue* thread_find_closure_var(const char* id) {
     return thread_data.get()->tlpd->cvstack.find(id);
 }
 
+ClosureVarValue* thread_try_find_closure_var(const char* id) {
+    return thread_data.get()->tlpd->cvstack.try_find(id);
+}
+
 const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current) {
     ThreadData* td = thread_data.get();
     const QoreClosureBase* rv = td->closure_rt_env;
