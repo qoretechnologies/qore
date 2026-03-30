@@ -129,6 +129,9 @@ enum class QoreAOTValueTag : uint8_t {
     VT_ABS_DATE_REGION = 13,
     //! Enum value: namespace path + member name
     VT_ENUM = 14,
+    //! New object constructor call expression: class path + serialized constructor args
+    //! Used for member initializers like "Mutex m()" that need runtime evaluation
+    VT_NEW_OBJECT = 15,
 };
 
 //! Section header in the binary format

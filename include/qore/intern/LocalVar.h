@@ -495,10 +495,12 @@ public:
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
-        // Fall back to runtime closure env for background threads / outlived closures.
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // Use try_find() to avoid crashing if the variable hasn't been instantiated
+        // yet (AOT mode skips closure-use var pre-instantiation in evalTiered,
+        // relying on LLVM codegen for lazy instantiation).
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_get_runtime_closure_var(this);
+            val = thread_try_get_runtime_closure_var(this);
         }
         if (!val) {
             needs_deref = false;
@@ -536,11 +538,11 @@ public:
             }
             return val->isRef();
         }
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_get_runtime_closure_var(this);
+            val = thread_try_get_runtime_closure_var(this);
         }
-        return val->isRef();
+        return val ? val->isRef() : false;
     }
 
     DLLLOCAL int getLValue(LValueHelper& lvh, bool for_remove, bool initial_assignment) const {
@@ -557,10 +559,13 @@ public:
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
-        // Fall back to runtime closure env for background threads / outlived closures.
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // Use try_find() for AOT safety (see eval() comment).
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_get_runtime_closure_var(this);
+            val = thread_try_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            return -1;
         }
         return val->getLValue(lvh, for_remove);
     }
@@ -575,10 +580,13 @@ public:
         }
 
         // Prefer cvstack lookup (topmost = current function's own variable).
-        // Fall back to runtime closure env for background threads / outlived closures.
-        ClosureVarValue* val = thread_find_closure_var(name.c_str());
+        // Use try_find() for AOT safety (see eval() comment).
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
         if (!val) {
-            val = thread_get_runtime_closure_var(this);
+            val = thread_try_get_runtime_closure_var(this);
+        }
+        if (!val) {
+            return;
         }
         return val->remove(lvrh);
     }
@@ -624,7 +632,8 @@ public:
             LocalVarValue* val = get_var();
             return val ? val->val.getType() : NT_NOTHING;
         }
-        return thread_find_closure_var(name.c_str())->val.getType();
+        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
+        return val ? val->val.getType() : NT_NOTHING;
     }
 
     DLLLOCAL const char* getValueTypeName() const {
@@ -632,7 +641,8 @@ public:
             LocalVarValue* val = get_var();
             return val ? val->val.getTypeName() : "nothing";
         }
-        return thread_find_closure_var(name.c_str())->val.getTypeName();
+        ClosureVarValue* cvv = thread_try_find_closure_var(name.c_str());
+        return cvv ? cvv->val.getTypeName() : "nothing";
     }
 
     DLLLOCAL bool isSelf() const {

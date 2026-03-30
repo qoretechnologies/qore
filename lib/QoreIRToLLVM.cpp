@@ -780,7 +780,13 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
         for (LocalVar* var : entry_locals) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(var))) {
-                continue;
+                // Closure-use vars ARE in pre_instantiated_locals (for membership
+                // identification), but evalTiered does NOT actually pre-instantiate
+                // them in AOT mode.  We must instantiate them here so they are on
+                // the cvstack before any StoreLocal, LoadLocal, or CreateClosure.
+                if (!var->closureUse()) {
+                    continue;
+                }
             }
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
                     reinterpret_cast<const void*>(var));
@@ -954,9 +960,19 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
     if (aot_mode) {
         auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local_aot",
                 llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+        auto pop_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
         for (auto it = entry_locals.rbegin(); it != entry_locals.rend(); ++it) {
             if (pre_instantiated_locals &&
                     pre_instantiated_locals->count(reinterpret_cast<const void*>(*it))) {
+                // Closure-use vars were instantiated by emitLocalInstantiation
+                // (not by evalTiered), so we must pop them from the cvstack.
+                if ((*it)->closureUse()) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                            reinterpret_cast<const void*>(*it));
+                    builder->CreateCall(pop_helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                }
                 continue;
             }
             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(

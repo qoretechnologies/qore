@@ -233,6 +233,44 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
             }
             return true;
         }
+        case NT_SCOPE_REF: {
+            // NT_SCOPE_REF is shared by ScopedObjectCallNode, NewHashDeclNode,
+            // NewComplexListNode, NewComplexHashNode — must use dynamic_cast
+            const AbstractQoreNode* node = v.getInternalNode();
+            const ScopedObjectCallNode* socn = dynamic_cast<const ScopedObjectCallNode*>(node);
+            if (socn && socn->oc) {
+                std::string class_path = socn->oc->getNamespacePath();
+                const QoreListNode* args = socn->getArgs();
+                uint32_t nargs = args ? static_cast<uint32_t>(args->size()) : 0;
+
+                // Only serialize if all args are serializable concrete values
+                bool args_ok = true;
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    QoreValue arg = args->retrieveEntry(i);
+                    // Check that args are concrete value types we can serialize
+                    if (arg.getType() == NT_SCOPE_REF || arg.getType() == NT_FUNCTION_CALL
+                            || arg.getType() == NT_SELF_VARREF || arg.getType() == NT_VARREF) {
+                        args_ok = false;
+                        break;
+                    }
+                }
+
+                if (args_ok) {
+                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT));
+                    writeU32(static_cast<uint32_t>(class_path.size()));
+                    writeStringRef(class_path.c_str(), class_path.size());
+                    writeU32(nargs);
+                    for (uint32_t i = 0; i < nargs; ++i) {
+                        writeValue(args->retrieveEntry(i));
+                    }
+                    return true;
+                }
+            }
+            // Fall through to default if not serializable
+            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
+            return true;
+        }
+
         default:
             // Unsupported value type - write NOTHING instead of failing
             // This preserves binary structure integrity for container types
@@ -732,6 +770,56 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 return QoreValue();
             }
             return QoreValue::makeEnum(member);
+        }
+
+        case QoreAOTValueTag::VT_NEW_OBJECT: {
+            if (ptr + 8 > end) {
+                error = "unexpected end of data reading new_object class path";
+                return QoreValue();
+            }
+            uint32_t path_len = readU32(ptr);
+            uint32_t path_offset = readU32(ptr);
+            const char* class_path = getString(path_offset);
+            if (!class_path) {
+                error = "invalid string offset for new_object class path";
+                return QoreValue();
+            }
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading new_object arg count";
+                return QoreValue();
+            }
+            uint32_t nargs = readU32(ptr);
+
+            // Read constructor arguments
+            QoreParseListNode* parse_args = nullptr;
+            if (nargs > 0) {
+                parse_args = new QoreParseListNode(&loc_builtin);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    QoreValue arg = readValue(ptr, end, error);
+                    if (!error.empty()) {
+                        delete parse_args;
+                        return QoreValue();
+                    }
+                    parse_args->add(arg, &loc_builtin);
+                }
+            }
+
+            // Resolve the class and create a ScopedObjectCallNode
+            ExceptionSink xsink;
+            const QoreClass* qc = getProgram()->findClass(class_path, &xsink);
+            if (xsink.isException()) {
+                xsink.clear();
+            }
+            if (!qc) {
+                delete parse_args;
+                return QoreValue();
+            }
+            ScopedObjectCallNode* socn = new ScopedObjectCallNode(&loc_builtin, qc, parse_args);
+            // Convert parse_args to args so evalImpl() doesn't hit the assertion
+            if (parse_args) {
+                socn->resolveParseArgs();
+            }
+            return QoreValue(socn);
         }
 
         default:

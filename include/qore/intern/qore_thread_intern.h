@@ -605,6 +605,8 @@ DLLLOCAL ClosureVarValue* thread_find_closure_var(const char* id);
 DLLLOCAL ClosureVarValue* thread_try_find_closure_var(const char* id);
 
 DLLLOCAL ClosureVarValue* thread_get_runtime_closure_var(const LocalVar* id);
+//! Safe version that returns nullptr when no runtime closure environment is set
+DLLLOCAL ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id);
 DLLLOCAL const QoreClosureBase* thread_set_runtime_closure_env(const QoreClosureBase* current);
 
 typedef std::vector<ClosureVarValue*> cvv_vec_t;

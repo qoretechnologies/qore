@@ -150,6 +150,11 @@ struct AOTSlotMap {
     std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
 
+    //! Check if a slot already exists for a LocalVar*
+    bool hasLocalSlot(const void* local) const {
+        return local_slots.find(local) != local_slots.end();
+    }
+
     //! Get or assign a slot for a LocalVar*
     int32_t getLocalSlot(const void* local) {
         auto it = local_slots.find(local);
