@@ -845,6 +845,42 @@ extern "C" DLLEXPORT uint64_t qore_rt_vrn_construct(const VarRefNewObjectNode* v
     return toBits(vrn->constructValue(xsink));
 }
 
+// --- Hashdecl construction from pre-lowered hash ---
+
+extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash(const TypedHashDecl* hd,
+        uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink) {
+    QoreValue hash_val = fromBits(hash_bits);
+    const QoreHashNode* init = hash_val.getType() == NT_HASH
+        ? hash_val.get<const QoreHashNode>() : nullptr;
+    QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init,
+        runtime_check != 0, xsink);
+    return toBits(result ? QoreValue(result) : QoreValue());
+}
+
+// AOT variant: resolves hashdecl by namespace path at runtime
+extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl_from_hash_by_path(const char* hd_path,
+        uint64_t hash_bits, int32_t runtime_check, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s': no program context",
+                hd_path ? hd_path : "<null>");
+        }
+        return toBits(QoreValue());
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(*pp->RootNS, hd_path, found_ns);
+    if (!hd) {
+        if (xsink) {
+            xsink->raiseException("HASHDECL-ERROR", "cannot resolve hashdecl '%s'",
+                hd_path ? hd_path : "<null>");
+        }
+        return toBits(QoreValue());
+    }
+    return qore_rt_new_hash_decl_from_hash(hd, hash_bits, runtime_check, xsink);
+}
+
 // --- Hash building helper ---
 
 extern "C" DLLEXPORT void qore_rt_hash_set_key_value(uint64_t hash_bits, uint64_t key_bits,

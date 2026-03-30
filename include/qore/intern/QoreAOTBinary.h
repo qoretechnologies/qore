@@ -1175,6 +1175,7 @@ enum class QoreIRInstGroup : uint8_t {
     Context = 54,           //!< QoreIRContextInstruction
     Summarize = 55,         //!< QoreIRSummarizeInstruction
     ListIndexAccess = 56,   //!< QoreIRListIndexAccessInstruction
+    NewHashDeclFromHash = 57, //!< QoreIRNewHashDeclFromHashInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

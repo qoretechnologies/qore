@@ -539,6 +539,15 @@ QoreIRVrnConstructInstruction* QoreIRBuilder::createVrnConstruct(const VarRefNew
     return inst;
 }
 
+QoreIRNewHashDeclFromHashInstruction* QoreIRBuilder::createNewHashDeclFromHash(const TypedHashDecl* hd,
+        bool runtime_check, QoreIRValue hash_val, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewHashDeclFromHashInstruction>(hd, runtime_check);
+    inst->loc = loc;
+    inst->operands.push_back(hash_val);
+    inst->result = func->createValue();
+    return inst;
+}
+
 QoreIRInstruction* QoreIRBuilder::createHashSetKeyValue(QoreIRValue hash, QoreIRValue key,
         QoreIRValue value, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRInstruction>(QoreIROpcode::HashSetKeyValue);

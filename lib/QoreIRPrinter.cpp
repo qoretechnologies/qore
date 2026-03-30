@@ -338,6 +338,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::NewComplexHash: return "new.complex.hash";
         case QoreIROpcode::NewComplexList: return "new.complex.list";
         case QoreIROpcode::VrnConstruct: return "vrn.construct";
+        case QoreIROpcode::NewHashDeclFromHash: return "new.hash.decl.from.hash";
         case QoreIROpcode::HashSetKeyValue: return "hash.set.key.value";
         case QoreIROpcode::IteratorCreateReverse: return "iterator.create.reverse";
         case QoreIROpcode::Call: return "call";
@@ -527,6 +528,11 @@ void QoreIRPrinter::print(const QoreIRFunction& func, std::ostream& out) {
                 out << " <complex-list>";
             } else if (inst->opcode == QoreIROpcode::VrnConstruct) {
                 out << " <vrn-construct>";
+            } else if (inst->opcode == QoreIROpcode::NewHashDeclFromHash) {
+                auto* nhdfh_inst = dynamic_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst.get());
+                if (nhdfh_inst && nhdfh_inst->hd) {
+                    out << " <" << nhdfh_inst->hd->getName() << ">";
+                }
             } else if (inst->opcode == QoreIROpcode::CallMethodDirect) {
                 // Print the devirtualized method name
                 auto* direct_inst = dynamic_cast<const QoreIRCallMethodDirectInstruction*>(inst.get());

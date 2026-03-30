@@ -63,7 +63,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 348,
+static_assert(QORE_IR_MAX_OPCODE == 349,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -1312,6 +1312,28 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             }
             // Direct eval — avoids evalExprNode() overhead
             return evalAndRef(inv->expr, xsink);
+        }
+
+        // NewHashDeclFromHash: construct hashdecl from pre-lowered hash operand
+        case QoreIROpcode::NewHashDeclFromHash: {
+            QoreValue hash_val = inv->operands.empty() ? QoreValue() : getIRValue(values, inv->operands[0]);
+            const TypedHashDecl* hd = nullptr;
+            bool runtime_check = false;
+            if (inv->expr.hasNode()) {
+                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
+                if (vrn) {
+                    hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+                    runtime_check = vrn->getRuntimeCheck();
+                }
+            }
+            if (hd) {
+                const QoreHashNode* init = hash_val.getType() == NT_HASH
+                    ? hash_val.get<const QoreHashNode>() : nullptr;
+                QoreHashNode* result = typed_hash_decl_private::get(*hd)->newHash(init,
+                    runtime_check, xsink);
+                return result ? QoreValue(result) : QoreValue();
+            }
+            return QoreValue();
         }
 
         // ListPush invoke: native list push with pre-evaluated operands
@@ -4243,6 +4265,26 @@ load_local_done:
                 setValueSlot(values, vrn_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(vrn_inst->result.id);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::NewHashDeclFromHash: {
+                auto* nhdfh_inst = static_cast<QoreIRNewHashDeclFromHashInstruction*>(inst);
+                QoreValue hash_val = getIRValue(values, inst->operands[0]);
+                const QoreHashNode* init = hash_val.getType() == NT_HASH
+                    ? hash_val.get<const QoreHashNode>() : nullptr;
+                QoreHashNode* result = typed_hash_decl_private::get(*nhdfh_inst->hd)->newHash(
+                    init, nhdfh_inst->runtime_check, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue out = result ? QoreValue(result) : QoreValue();
+                setValueSlot(values, nhdfh_inst->result.id, out, xsink);
+                if (out.hasNode()) {
+                    cleanup.push_back(nhdfh_inst->result.id);
                 }
                 ++ip;
                 break;

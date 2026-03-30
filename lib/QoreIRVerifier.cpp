@@ -313,6 +313,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::NewComplexHash:
         case QoreIROpcode::NewComplexList:
         case QoreIROpcode::VrnConstruct:
+        case QoreIROpcode::NewHashDeclFromHash:
         case QoreIROpcode::IteratorCreateReverse:
         case QoreIROpcode::LoadImplicitArg:
         case QoreIROpcode::LoadImplicitArgv:
@@ -648,6 +649,8 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::VrnConstruct:       // Uses QoreIRVrnConstructInstruction, no operands
         case QoreIROpcode::RefForeachInit:     // Uses QoreIRRefForeachInitInstruction with expr field, no operands
             return 0;
+        case QoreIROpcode::NewHashDeclFromHash:   // 1 operand: hash value
+            return 1;
         case QoreIROpcode::HashKeyStore:          // 2 operands: hash container value, new element value
             return 2;
         case QoreIROpcode::ListIndexAccess:       // 2 operands: list value, index

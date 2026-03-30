@@ -1514,6 +1514,52 @@ static std::unique_ptr<QoreIRInstruction> readVrnConstruct(
 }
 
 // ============================================================================
+// Group 57: NewHashDeclFromHash - Hashdecl construction from hash operand
+// ============================================================================
+
+static bool writeNewHashDeclFromHash(AOTInstWriteCtx& ctx) {
+    auto* ni = static_cast<const QoreIRNewHashDeclFromHashInstruction*>(ctx.inst);
+    if (!ni->hd) {
+        return false;
+    }
+    ctx.writer.writeStringRef(ni->hd->getNamespacePath().c_str());
+    ctx.writer.writeU8(ni->runtime_check ? 1 : 0);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readNewHashDeclFromHash(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    const char* hd_path = ctx.reader.readStringRef(ctx.ptr);
+    if (!hd_path || !*hd_path) {
+        return nullptr;
+    }
+    uint8_t runtime_check = QoreAOTBinaryReader::readU8(ctx.ptr);
+
+    // Resolve hashdecl by namespace path
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        return nullptr;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
+        *pp->RootNS, hd_path, found_ns);
+    if (!hd) {
+        printd(0, "AOT readNewHashDeclFromHash: cannot resolve hashdecl '%s'\n", hd_path);
+        return nullptr;
+    }
+
+    auto* ni = new QoreIRNewHashDeclFromHashInstruction(hd, runtime_check != 0);
+    ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    ni->result = QoreIRValue(result_id);
+    ni->operands = operands;
+    ni->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(ni);
+}
+
+// ============================================================================
 // Group 38: HashKeyStore - Hash key storage
 // ============================================================================
 
@@ -2091,8 +2137,11 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 56: ListIndexAccess
     { "ListIndexAccess", 56, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
 
-    // Remaining 57-255: Unsupported/undefined
-    UNUSED_ENTRY(57), UNUSED_ENTRY(58), UNUSED_ENTRY(59),
+    // Index 57: NewHashDeclFromHash
+    { "NewHashDeclFromHash", 57, true, false, writeNewHashDeclFromHash, readNewHashDeclFromHash, "Hashdecl from hash" },
+
+    // Remaining 58-255: Unsupported/undefined
+    UNUSED_ENTRY(58), UNUSED_ENTRY(59),
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),

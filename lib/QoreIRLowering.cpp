@@ -3364,7 +3364,57 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
             }
             return obj_val;
         }
-        // Non-VRN_OBJECT types (hashdecl, complex hash/list): construct + store
+        // Hashdecl construction: decompose into hash lowering + NewHashDeclFromHash
+        // This ensures local variable references in the hash initializer are properly
+        // lowered as individual IR instructions (LoadLocal etc.), enabling correct AOT
+        // serialization instead of baking pre-evaluated values into the AST.
+        const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(vrn->getTypeInfo());
+        if (hd && vrn->isHashDeclConstruct()) {
+            // Undo ast_delegate_count: hashdecl args are fully lowered via IR,
+            // not delegated to AST evaluation
+            --ast_delegate_count;
+            const QoreParseListNode* pargs = vrn->getParseArgs();
+            QoreIRValue hash_val;
+            if (pargs && !pargs->empty()) {
+                // Lower the hash initializer expression (single arg) via lowerExpression
+                // which properly handles QoreParseHashNode → MakeHashConstKeys with
+                // individual IR instructions for each value
+                hash_val = lowerExpression(pargs->get(0), error);
+                if (!hash_val.isValid()) {
+                    return QoreIRValue();
+                }
+            } else {
+                // No args: create an empty hash
+                std::vector<std::string> empty_keys;
+                std::vector<QoreIRValue> empty_vals;
+                hash_val = builder.createMakeHashConstKeys(std::move(empty_keys), empty_vals,
+                    var->loc, nullptr)->result;
+            }
+
+            QoreIRValue construct_val;
+            if (!exception_stack.empty()) {
+                QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
+                if (!normal_block) {
+                    error = "IR builder failed to create invoke continuation block";
+                    return QoreIRValue();
+                }
+                QoreIRBasicBlock* handler = exception_stack.back();
+                auto* inst = builder.createInvoke(expr, {hash_val}, normal_block, handler, var->loc);
+                inst->invoke_opcode = QoreIROpcode::NewHashDeclFromHash;
+                builder.setBlock(normal_block);
+                construct_val = inst->result;
+            } else {
+                construct_val = builder.createNewHashDeclFromHash(hd,
+                    vrn->getRuntimeCheck(), hash_val, var->loc)->result;
+            }
+            // Store the constructed value to the variable
+            if (!storeVarRef(var, construct_val, error, "VarRefNewObjectNode", &expr, var->loc)) {
+                return QoreIRValue();
+            }
+            return construct_val;
+        }
+
+        // Non-hashdecl types (complex hash/list): construct + store via VrnConstruct
         QoreIRValue construct_val;
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");

@@ -72,6 +72,7 @@ class NewComplexHashNode;
 class NewComplexListNode;
 class VarRefNewObjectNode;
 class QoreEnumMember;
+class TypedHashDecl;
 
 /** IR opcode identifiers.
 
@@ -542,7 +543,14 @@ enum class QoreIROpcode : uint16_t {
     //! Format a list as sprintf(fmt, args...) — used by assert failure messages
     Sprintf             = 348,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (348, 349, ...)
+    //! Construct hashdecl from a hash operand — operands[0] = hash value
+    //! Unlike NewHashDecl (which delegates to AST node eval), this takes a
+    //! pre-lowered hash operand so each sub-expression is a proper IR instruction.
+    //! This enables correct AOT serialization of hashdecl constructors with
+    //! local variable references in the initializer hash.
+    NewHashDeclFromHash = 349,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (350, 351, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -550,8 +558,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::Sprintf);
-static_assert(QORE_IR_MAX_OPCODE == 348, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::NewHashDeclFromHash);
+static_assert(QORE_IR_MAX_OPCODE == 349, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! PHASE 4: Opcode Coverage Documentation
@@ -1366,6 +1374,22 @@ public:
 
     const VarRefNewObjectNode* vrn;  //!< The VarRefNewObjectNode (for construction)
     QoreValue expr;  //!< Original AST expression (for AOT)
+};
+
+//! Hashdecl construction from a pre-lowered hash operand
+//! Unlike QoreIRVrnConstructInstruction which stores the full AST, this instruction
+//! takes the hash value as an operand (operands[0]), allowing each sub-expression
+//! (including local variable references) to be properly lowered as individual IR
+//! instructions. This enables correct AOT serialization.
+class QoreIRNewHashDeclFromHashInstruction : public QoreIRInstruction {
+public:
+    QoreIRNewHashDeclFromHashInstruction(const TypedHashDecl* n_hd, bool n_runtime_check)
+            : QoreIRInstruction(QoreIROpcode::NewHashDeclFromHash), hd(n_hd),
+              runtime_check(n_runtime_check) {
+    }
+
+    const TypedHashDecl* hd;    //!< Target hashdecl type
+    bool runtime_check;         //!< Whether to validate keys at runtime
 };
 
 class QoreIRLValueInstruction : public QoreIRInstruction {

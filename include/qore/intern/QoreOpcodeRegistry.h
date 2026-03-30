@@ -31,7 +31,7 @@ struct OpcodeInfo {
 
 //! Registry of all 346 IR opcodes (in enum ID order, accounting for removed IDs 134, 141, 142)
 //! PHASE 1 IMPLEMENTATION: Complete registry with verified properties from existing code
-constexpr OpcodeInfo OPCODE_REGISTRY[349] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[350] = {
     { "ConstInt                            ", false, false, false, -1, "Load constant value", false, false, "ConstantNode" }, // 0
     { "ConstFloat                          ", false, false, false, -1, "Load constant value", false, false, "ConstantNode" }, // 1
     { "ConstBool                           ", false, false, false, -1, "Load constant value", false, false, "ConstantNode" }, // 2
@@ -381,12 +381,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[349] = {
     { "MakeHashConstKeys                   ", false, false, false, -1, "Load constant value", false, false, "ConstantNode" }, // 346
     { "ToString                            ", false, false, false, -1, "ToString", false, true , "ParseNode" }, // 347
     { "Sprintf                             ", false, false, false, -1, "Sprintf", false, true , "ParseNode" }, // 348
+    { "NewHashDeclFromHash                 ", false, false, false, -1, "NewHashDeclFromHash", false, true , "ParseNode" }, // 349
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 349,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 349"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 350,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 350"
 );
 
 //! ============================================================================
@@ -396,7 +397,7 @@ static_assert(
 //! Get opcode info by opcode enum value
 //! Returns pointer to registry entry, or nullptr for invalid opcode
 inline const OpcodeInfo* getOpcodeInfo(int opcode_id) {
-    if (opcode_id >= 0 && opcode_id < 349) {
+    if (opcode_id >= 0 && opcode_id < 350) {
         const OpcodeInfo* info = &OPCODE_REGISTRY[opcode_id];
         // Check for null entry (removed opcode IDs: 134, 141, 142)
         if (info->name == nullptr) {

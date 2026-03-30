@@ -2758,6 +2758,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRVrnConstructInstruction*>(inst)) {
         return QoreIRInstGroup::VrnConstruct;
     }
+    if (dynamic_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst)) {
+        return QoreIRInstGroup::NewHashDeclFromHash;
+    }
     if (dynamic_cast<const QoreIRLValueInstruction*>(inst)) {
         return QoreIRInstGroup::LValue;
     }

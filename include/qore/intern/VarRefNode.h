@@ -449,6 +449,26 @@ public:
     //! Construct the value without assigning to the variable (for JIT split)
     DLLLOCAL QoreValue constructValue(ExceptionSink* xsink) const;
 
+    //! Returns true if this is a hashdecl construction
+    DLLLOCAL bool isHashDeclConstruct() const {
+        return vrn_type == VRN_HASHDECL;
+    }
+
+    //! Returns true if this is a complex hash construction
+    DLLLOCAL bool isComplexHashConstruct() const {
+        return vrn_type == VRN_COMPLEXHASH;
+    }
+
+    //! Returns true if this is a complex list construction
+    DLLLOCAL bool isComplexListConstruct() const {
+        return vrn_type == VRN_COMPLEXLIST;
+    }
+
+    //! Returns whether runtime key checking is required for hashdecl construction
+    DLLLOCAL bool getRuntimeCheck() const {
+        return runtime_check;
+    }
+
 protected:
     enum vrn_type_e : unsigned char {
         VRN_NONE = 0,

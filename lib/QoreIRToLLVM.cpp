@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 348,
+static_assert(QORE_IR_MAX_OPCODE == 349,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -4646,6 +4646,43 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // VrnConstruct doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::NewHashDeclFromHash) {
+                // Hashdecl construction from pre-lowered hash operand
+                // Extract TypedHashDecl and runtime_check from the VarRefNewObjectNode in expr
+                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
+                        inv->expr.getInternalNode());
+                assert(vrn);
+                const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(
+                        vrn->getTypeInfo());
+                assert(hd);
+                auto* hash_val = getVal(inv->operands[0].id, error);
+                if (!hash_val) { return false; }
+                llvm::Value* hash_boxed = boxValue(hash_val, inv->operands[0].id);
+                llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
+                        vrn->getRuntimeCheck() ? 1 : 0);
+                if (aot_mode) {
+                    // AOT: resolve hashdecl by namespace path at runtime
+                    std::string hd_path = hd->getNamespacePath();
+                    llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
+                    auto helper = module.getOrInsertFunction(
+                            "qore_rt_new_hash_decl_from_hash_by_path",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {hd_path_str, hash_boxed, rtcheck, xsink_arg});
+                } else {
+                    // JIT: direct pointer is valid within the same process
+                    llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(hd));
+                    llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i64_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {hd_as_ptr, hash_boxed, rtcheck, xsink_arg});
+                }
+                // NewHashDeclFromHash doesn't modify locals — no reload needed
+
             } else if (inv->invoke_opcode == QoreIROpcode::ListPush) {
                 // ListPush invoke: native list push with pre-evaluated operands
                 auto* list = getVal(inv->operands[0].id, error);
@@ -7160,6 +7197,40 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto helper = module.getOrInsertFunction("qore_rt_vrn_construct",
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {vrn_as_ptr, xsink_arg});
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+        case QoreIROpcode::NewHashDeclFromHash: {
+            const auto* nhdfh_inst = static_cast<const QoreIRNewHashDeclFromHashInstruction*>(inst);
+            auto* hash_val = getVal(inst->operands[0].id, error);
+            if (!hash_val) { return false; }
+            llvm::Value* hash_boxed = boxValue(hash_val, inst->operands[0].id);
+            llvm::Value* rtcheck = llvm::ConstantInt::get(i32_type,
+                    nhdfh_inst->runtime_check ? 1 : 0);
+            llvm::Value* result;
+            if (aot_mode) {
+                // AOT: resolve hashdecl by namespace path at runtime
+                std::string hd_path = nhdfh_inst->hd->getNamespacePath();
+                llvm::Value* hd_path_str = builder->CreateGlobalString(hd_path, "hd_path");
+                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash_by_path",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {hd_path_str, hash_boxed, rtcheck, xsink_arg});
+            } else {
+                // JIT: direct pointer is valid within the same process
+                llvm::Value* hd_ptr = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(nhdfh_inst->hd));
+                llvm::Value* hd_as_ptr = builder->CreateIntToPtr(hd_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_new_hash_decl_from_hash",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {hd_as_ptr, hash_boxed, rtcheck, xsink_arg});
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
