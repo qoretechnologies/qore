@@ -195,6 +195,7 @@ public class DataProvider {
             "odtwrite": "OdtDataProvider",
             "opcua": "OpcUaDataProvider",
 
+            "grok": "GrokDataProvider",
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
