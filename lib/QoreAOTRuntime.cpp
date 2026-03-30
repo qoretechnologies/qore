@@ -446,37 +446,8 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             return toBitsNB(QoreValue(nhd));
         }
 
-        case AOTExprKind::COMPLEX_HASH_NEW: {
-            if (!ref1 || !*ref1) {
-                return 0;
-            }
-            std::string type_error;
-            QoreAOTTypeResolver type_resolver(pgm);
-            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
-            if (!ti) {
-                printd(0, "AOT v2: cannot resolve type '%s' for complex hash: %s\n",
-                    ref1, type_error.c_str());
-                return 0;
-            }
-            NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, nullptr);
-            return toBitsNB(QoreValue(nch));
-        }
-
-        case AOTExprKind::COMPLEX_LIST_NEW: {
-            if (!ref1 || !*ref1) {
-                return 0;
-            }
-            std::string type_error;
-            QoreAOTTypeResolver type_resolver(pgm);
-            const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
-            if (!ti) {
-                printd(0, "AOT v2: cannot resolve type '%s' for complex list: %s\n",
-                    ref1, type_error.c_str());
-                return 0;
-            }
-            NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, QoreValue());
-            return toBitsNB(QoreValue(ncl));
-        }
+        // COMPLEX_HASH_NEW and COMPLEX_LIST_NEW are handled inline in the read path
+        // (they use 'continue' to skip resolveExprSlot)
 
         case AOTExprKind::CONST_ENUM: {
             if (!ref1 || !ref2) {
@@ -662,13 +633,20 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    // COMPLEX_HASH_NEW: stringref + u8 num_args + N×classifyAndWriteExpr-encoded args
+    if (ek == AOTExprKind::COMPLEX_HASH_NEW || ek == AOTExprKind::COMPLEX_LIST_NEW) {
+        rdr.readStringRef(p);  // type path
+        uint8_t na = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < na; ++i) {
+            skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
     // One-stringref kinds
     if (ek == AOTExprKind::FUNC_CALL || ek == AOTExprKind::RUNTIME_CONST_REF
             || ek == AOTExprKind::CONST_NUMBER || ek == AOTExprKind::CONST_BINARY
             || ek == AOTExprKind::CONST_STRING || ek == AOTExprKind::SELF_VARREF
-            || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF
-            || ek == AOTExprKind::COMPLEX_HASH_NEW
-            || ek == AOTExprKind::COMPLEX_LIST_NEW) {
+            || ek == AOTExprKind::LOCAL_VARREF || ek == AOTExprKind::GLOBAL_VARREF) {
         rdr.readStringRef(p);
         return;
     }
@@ -1157,10 +1135,102 @@ static QoreAOTContext* buildContextFromSlotMap(
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
-            case AOTExprKind::COMPLEX_HASH_NEW:
-            case AOTExprKind::COMPLEX_LIST_NEW:
                 ref1 = reader.readStringRef(ptr);
                 break;
+            case AOTExprKind::COMPLEX_HASH_NEW: {
+                // ref1 = type path, followed by serialized constructor args
+                ref1 = reader.readStringRef(ptr);
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreListNode* call_args = nullptr;
+                if (num_args > 0) {
+                    call_args = qore_list_private::newList(true);
+                    for (uint8_t j = 0; j < num_args; ++j) {
+                        std::string arg_err;
+                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
+                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                        if (!arg_err.empty()) {
+                            printd(0, "AOT v2: error reading complex hash arg %d for '%s': %s\n",
+                                j, ref1 ? ref1 : "", arg_err.c_str());
+                            arg.discard(nullptr);
+                            call_args->push(QoreValue(), nullptr);
+                        } else {
+                            call_args->push(arg, nullptr);
+                        }
+                    }
+                }
+                // Resolve type and create node with args
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        // Convert call_args to QoreParseListNode for NewComplexHashNode
+                        QoreParseListNode* pln = nullptr;
+                        if (call_args) {
+                            pln = new QoreParseListNode(&loc_builtin);
+                            ConstListIterator li(call_args);
+                            while (li.next()) {
+                                QoreValue v = li.getValue();
+                                v.refSelf();
+                                pln->add(v, &loc_builtin);
+                            }
+                            call_args->deref(nullptr);
+                            call_args = nullptr;
+                        }
+                        NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, pln);
+                        ctx->exprs[i] = toBitsNB(QoreValue(nch));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex hash: %s\n",
+                            ref1, type_error.c_str());
+                        if (call_args) {
+                            call_args->deref(nullptr);
+                        }
+                        has_unsupported = true;
+                    }
+                } else {
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::COMPLEX_LIST_NEW: {
+                // ref1 = type path, followed by serialized constructor arg
+                ref1 = reader.readStringRef(ptr);
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                QoreValue arg_val;
+                if (num_args > 0) {
+                    std::string arg_err;
+                    arg_val = readOneExpr(reader, ptr, end, arg_err, pgm,
+                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                    if (!arg_err.empty()) {
+                        printd(0, "AOT v2: error reading complex list arg for '%s': %s\n",
+                            ref1 ? ref1 : "", arg_err.c_str());
+                        arg_val.discard(nullptr);
+                        arg_val = QoreValue();
+                    }
+                }
+                // Resolve type and create node with arg
+                if (ref1 && *ref1) {
+                    std::string type_error;
+                    QoreAOTTypeResolver type_resolver(pgm);
+                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
+                    if (ti) {
+                        NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
+                        ctx->exprs[i] = toBitsNB(QoreValue(ncl));
+                    } else {
+                        printd(0, "AOT v2: cannot resolve type '%s' for complex list: %s\n",
+                            ref1, type_error.c_str());
+                        arg_val.discard(nullptr);
+                        has_unsupported = true;
+                    }
+                } else {
+                    arg_val.discard(nullptr);
+                    has_unsupported = true;
+                }
+                continue;
+            }
             case AOTExprKind::HASHDECL_NEW: {
                 // ref1 = hashdecl path, followed by serialized constructor args
                 ref1 = reader.readStringRef(ptr);
@@ -3264,13 +3334,13 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
             case AOTExprKind::CONST_BINARY:
             case AOTExprKind::CONST_STRING:
             case AOTExprKind::SELF_VARREF:
-            case AOTExprKind::COMPLEX_HASH_NEW:
-            case AOTExprKind::COMPLEX_LIST_NEW:
                 reader.readStringRef(ptr);
                 break;
-            case AOTExprKind::HASHDECL_NEW: {
-                // ref1 = hashdecl path + u8 num_args + N×classifyAndWriteExpr-encoded args
-                reader.readStringRef(ptr);  // hashdecl path
+            case AOTExprKind::HASHDECL_NEW:
+            case AOTExprKind::COMPLEX_HASH_NEW:
+            case AOTExprKind::COMPLEX_LIST_NEW: {
+                // ref1 = path + u8 num_args + N×classifyAndWriteExpr-encoded args
+                reader.readStringRef(ptr);  // path
                 uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
                 for (uint8_t j = 0; j < num_args; ++j) {
                     skipOneExpr(reader, ptr, end);

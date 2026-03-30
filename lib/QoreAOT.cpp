@@ -6080,6 +6080,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (QoreTypeInfo::getUniqueReturnComplexHash(vrn->getTypeInfo())) {
             id.kind = AOTExprKind::COMPLEX_HASH_NEW;
             id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
             return id;
         }
         // Hashdecl construction (e.g., MyHashDecl h({"name": "value"}))
@@ -6095,6 +6097,8 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (QoreTypeInfo::getUniqueReturnComplexList(vrn->getTypeInfo())) {
             id.kind = AOTExprKind::COMPLEX_LIST_NEW;
             id.ref1 = QoreTypeInfo::getPath(vrn->getTypeInfo());
+            id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
             return id;
         }
         // Other non-class VarRefNewObjectNode falls through to GENERIC_EVAL
@@ -6114,6 +6118,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
         id.kind = AOTExprKind::COMPLEX_HASH_NEW;
         id.ref1 = QoreTypeInfo::getPath(nch->typeInfo);
+        id.parse_args = nch->args;
         return id;
     }
 

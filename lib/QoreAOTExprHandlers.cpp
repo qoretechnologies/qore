@@ -746,6 +746,16 @@ static bool write_expr_complex_hash_new(AOTExprWriteCtx& ctx) {
         if (nch->typeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
             ctx.writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
+            // Serialize constructor args
+            if (nch->args && nch->args->size() > 0) {
+                ctx.writer.writeU8(static_cast<uint8_t>(nch->args->size()));
+                for (size_t j = 0; j < nch->args->size(); ++j) {
+                    ::classifyAndWriteExpr(ctx.writer, nch->args->get(j),
+                        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+                }
+            } else {
+                ctx.writer.writeU8(0);
+            }
             return true;
         }
     }
@@ -757,13 +767,44 @@ static QoreValue read_expr_complex_hash_new(AOTExprReadCtx& ctx) {
     if (!type_path || !*type_path) {
         return QoreValue();
     }
+    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreListNode* call_args = nullptr;
+    if (num_args > 0) {
+        call_args = qore_list_private::newList(true);
+        for (uint8_t j = 0; j < num_args; ++j) {
+            std::string arg_err;
+            QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            if (!arg_err.empty()) {
+                arg.discard(nullptr);
+                call_args->push(QoreValue(), nullptr);
+            } else {
+                call_args->push(arg, nullptr);
+            }
+        }
+    }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
+        if (call_args) {
+            call_args->deref(nullptr);
+        }
         return QoreValue();
     }
-    NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, nullptr);
+    // Convert call_args to QoreParseListNode for NewComplexHashNode
+    QoreParseListNode* pln = nullptr;
+    if (call_args) {
+        pln = new QoreParseListNode(&loc_builtin);
+        ConstListIterator li(call_args);
+        while (li.next()) {
+            QoreValue v = li.getValue();
+            v.refSelf();
+            pln->add(v, &loc_builtin);
+        }
+        call_args->deref(nullptr);
+    }
+    NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, pln);
     return QoreValue(nch);
 }
 
@@ -777,6 +818,14 @@ static bool write_expr_complex_list_new(AOTExprWriteCtx& ctx) {
         if (ncl->typeInfo) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
             ctx.writer.writeStringRef(QoreTypeInfo::getPath(ncl->typeInfo));
+            // Serialize constructor arg (single QoreValue)
+            if (ncl->args.hasNode()) {
+                ctx.writer.writeU8(1);
+                ::classifyAndWriteExpr(ctx.writer, ncl->args,
+                    ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            } else {
+                ctx.writer.writeU8(0);
+            }
             return true;
         }
     }
@@ -788,13 +837,25 @@ static QoreValue read_expr_complex_list_new(AOTExprReadCtx& ctx) {
     if (!type_path || !*type_path) {
         return QoreValue();
     }
+    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreValue arg_val;
+    if (num_args > 0) {
+        std::string arg_err;
+        arg_val = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+        if (!arg_err.empty()) {
+            arg_val.discard(nullptr);
+            arg_val = QoreValue();
+        }
+    }
     std::string type_error;
     QoreAOTTypeResolver type_resolver(ctx.pgm);
     const QoreTypeInfo* ti = type_resolver.resolve(type_path, type_error);
     if (!ti) {
+        arg_val.discard(nullptr);
         return QoreValue();
     }
-    NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, QoreValue());
+    NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, arg_val);
     return QoreValue(ncl);
 }
 

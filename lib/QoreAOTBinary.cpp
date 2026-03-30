@@ -2419,6 +2419,15 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (nch->typeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_HASH_NEW));
             writer.writeStringRef(QoreTypeInfo::getPath(nch->typeInfo));
+            // Serialize constructor args
+            if (nch->args && nch->args->size() > 0) {
+                writer.writeU8(static_cast<uint8_t>(nch->args->size()));
+                for (size_t j = 0; j < nch->args->size(); ++j) {
+                    classifyAndWriteExpr(writer, nch->args->get(j), parent_locals, parent_globals, const_reverse_map);
+                }
+            } else {
+                writer.writeU8(0);
+            }
             return true;
         }
     }
@@ -2428,6 +2437,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (ncl->typeInfo) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::COMPLEX_LIST_NEW));
             writer.writeStringRef(QoreTypeInfo::getPath(ncl->typeInfo));
+            // Serialize constructor arg (single QoreValue)
+            if (ncl->args.hasNode()) {
+                writer.writeU8(1);
+                classifyAndWriteExpr(writer, ncl->args, parent_locals, parent_globals, const_reverse_map);
+            } else {
+                writer.writeU8(0);
+            }
             return true;
         }
     }

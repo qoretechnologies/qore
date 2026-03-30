@@ -144,15 +144,47 @@ static bool write_slot_HASHDECL_NEW(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
-//! COMPLEX_HASH_NEW: ref1 = type path
+//! COMPLEX_HASH_NEW: ref1 = type path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_COMPLEX_HASH_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    // Serialize constructor args from parse_args or call_args
+    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
+        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
+        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
     return true;
 }
 
-//! COMPLEX_LIST_NEW: ref1 = type path
+//! COMPLEX_LIST_NEW: ref1 = type path + u8 num_args + N×classifyAndWriteExpr-encoded args
 static bool write_slot_COMPLEX_LIST_NEW(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    // Serialize constructor args from parse_args or call_args
+    if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.parse_args->size()));
+        for (size_t j = 0; j < ctx.expr.parse_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
+        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
+        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else {
+        ctx.writer.writeU8(0);
+    }
     return true;
 }
 
