@@ -34,6 +34,7 @@
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
+#include "qore/intern/QoreParseListNode.h"
 
 // ============================================================================
 // FUNC_CALL (1)
@@ -1233,6 +1234,16 @@ static bool write_expr_list_literal(AOTExprWriteCtx& ctx) {
             ctx.writer.writeU8(static_cast<uint8_t>(qln->size()));
             for (size_t i = 0; i < qln->size(); ++i) {
                 classifyAndWriteExpr(ctx.writer, qln->retrieveEntry(i), ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+            }
+            return true;
+        }
+    }
+    if (auto* pln = dynamic_cast<const QoreParseListNode*>(node)) {
+        if (pln->size() <= 255) {
+            ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_LITERAL));
+            ctx.writer.writeU8(static_cast<uint8_t>(pln->size()));
+            for (size_t i = 0; i < pln->size(); ++i) {
+                classifyAndWriteExpr(ctx.writer, pln->get(i), ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
             }
             return true;
         }

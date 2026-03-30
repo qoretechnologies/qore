@@ -2142,11 +2142,22 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         if (socn->oc) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::SCOPED_NEW_OBJECT));
             writer.writeStringRef(socn->oc->getPath());
+            // Try evaluated args first, fall back to parse args
             const QoreListNode* args = socn->getArgs();
-            uint8_t num_args = args && args->size() <= 255 ? static_cast<uint8_t>(args->size()) : 0;
-            writer.writeU8(num_args);
-            for (uint8_t j = 0; j < num_args; ++j) {
-                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
+            if (args && args->size() > 0 && args->size() <= 255) {
+                writer.writeU8(static_cast<uint8_t>(args->size()));
+                for (size_t j = 0; j < args->size(); ++j) {
+                    classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
+                }
+            } else if (const QoreParseListNode* pargs = socn->getParseArgs()) {
+                // Args not yet evaluated; serialize from parse-time expressions
+                uint8_t num_args = pargs->size() <= 255 ? static_cast<uint8_t>(pargs->size()) : 0;
+                writer.writeU8(num_args);
+                for (uint8_t j = 0; j < num_args; ++j) {
+                    classifyAndWriteExpr(writer, pargs->get(j), parent_locals, parent_globals, const_reverse_map);
+                }
+            } else {
+                writer.writeU8(0);
             }
             return true;
         }
@@ -2157,8 +2168,22 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         writer.writeU8(static_cast<uint8_t>(AOTExprKind::NEW_OBJECT));
         const QoreClass* qc = no->getClass();
         writer.writeStringRef(qc ? qc->getPath() : "");
-        // No args serialized for NewObjectCallNode (args are handled by native IR code)
-        writer.writeU8(0);
+        // Serialize constructor args if available
+        const QoreListNode* args = no->getArgs();
+        if (args && args->size() > 0 && args->size() <= 255) {
+            writer.writeU8(static_cast<uint8_t>(args->size()));
+            for (size_t j = 0; j < args->size(); ++j) {
+                classifyAndWriteExpr(writer, args->retrieveEntry(j), parent_locals, parent_globals, const_reverse_map);
+            }
+        } else if (const QoreParseListNode* pargs = no->getParseArgs()) {
+            uint8_t num_args = pargs->size() <= 255 ? static_cast<uint8_t>(pargs->size()) : 0;
+            writer.writeU8(num_args);
+            for (uint8_t j = 0; j < num_args; ++j) {
+                classifyAndWriteExpr(writer, pargs->get(j), parent_locals, parent_globals, const_reverse_map);
+            }
+        } else {
+            writer.writeU8(0);
+        }
         return true;
     }
 
@@ -2193,11 +2218,22 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         // If this is a hashdecl-typed hash, serialize as HASHDECL_NEW to preserve the type.
         // The reader creates a NewHashDeclNode which evaluates to a properly typed hash.
         const TypedHashDecl* qhd = qhn->getHashDecl();
-        if (qhd && qhn->empty()) {
-            // For empty hashdecl hashes (common case: <HashdeclType>{}), use HASHDECL_NEW
+        if (qhd) {
             writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASHDECL_NEW));
             writer.writeStringRef(qhd->getNamespacePath().c_str());
-            writer.writeU8(0);  // no args
+            if (qhn->empty()) {
+                writer.writeU8(0);  // no args
+            } else {
+                // Non-empty hashdecl hash: serialize the hash contents as a single HASH_LITERAL arg
+                writer.writeU8(1);  // 1 arg (the hash contents)
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::HASH_LITERAL));
+                writer.writeU8(static_cast<uint8_t>(qhn->size()));
+                ConstHashIterator it(qhn);
+                while (it.next()) {
+                    writer.writeStringRef(it.getKey());
+                    classifyAndWriteExpr(writer, it.get(), parent_locals, parent_globals, const_reverse_map);
+                }
+            }
             return true;
         }
         if (qhn->size() <= 255) {
@@ -2219,6 +2255,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeU8(static_cast<uint8_t>(qln->size()));
             for (size_t i = 0; i < qln->size(); ++i) {
                 classifyAndWriteExpr(writer, qln->retrieveEntry(i), parent_locals, parent_globals, const_reverse_map);
+            }
+            return true;
+        }
+    }
+
+    // QoreParseListNode: parse-time list literal with unevaluated elements
+    // (e.g., list of hashdecl init expressions in constructor args)
+    if (auto* pln = dynamic_cast<const QoreParseListNode*>(node)) {
+        if (pln->size() <= 255) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::LIST_LITERAL));
+            writer.writeU8(static_cast<uint8_t>(pln->size()));
+            for (size_t i = 0; i < pln->size(); ++i) {
+                classifyAndWriteExpr(writer, pln->get(i), parent_locals, parent_globals, const_reverse_map);
             }
             return true;
         }
