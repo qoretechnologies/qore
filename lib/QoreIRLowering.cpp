@@ -6322,7 +6322,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
     // reload trackers → extra refcount → copy-on-write → O(n²) in loops)
     if (left_expr.hasNode()) {
         auto* var = dynamic_cast<const VarRefNode*>(left_expr.getInternalNode());
-        if (var && var->getType() == VT_LOCAL && var->ref.id) {
+        if (var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse()) {
             // Lower the value to push first
             QoreIRValue push_val = lowerExpression(op->getRight(), error);
             if (!push_val.isValid()) {
