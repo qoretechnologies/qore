@@ -80,8 +80,8 @@ public class HuggingFaceInferenceDataProvider inherits HuggingFaceDataProviderCo
     private *AbstractDataProvider getChildProviderImpl(string name) {
         *Class cls = ChildMap{name};
         if (!cls) { return; }
-        # pass inference_rest to children, not the Hub rest client
-        return cls.newObject(inference_rest);
+        # pass inference_rest for API calls, Hub rest for reference data
+        return cls.newObject(inference_rest, rest);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

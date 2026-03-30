@@ -24,6 +24,36 @@
 
 #! contains all public definitions in the HuggingFaceDataProvider module
 public namespace HuggingFaceDataProvider {
+#! Response format data type for chat completions
+public class HuggingFaceChatResponseFormatDataType inherits HashDataType {
+    public {
+        const Fields = {
+            "type": {
+                "display_name": "Type",
+                "short_desc": "Response format type",
+                "desc": "The type of response format to use. Required when `response_format` is provided",
+                "type": AbstractDataProviderTypeMap."string",
+                "default_value": "text",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "text", "display_name": "Text"},
+                    <AllowedValueInfo>{"value": "json_object", "display_name": "JSON Object"},
+                ),
+                "example_value": "json_object",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
+public const HuggingFaceChatResponseFormatDataType = new HuggingFaceChatResponseFormatDataType();
+
 #! Chat message data type
 public class HuggingFaceChatMessageDataType inherits HashDataType {
     public {
@@ -103,12 +133,56 @@ public class HuggingFaceChatCompletionsRequestDataType inherits HashDataType {
                     "probability mass",
                 "type": AbstractDataProviderTypeMap."*float",
             },
+            "frequency_penalty": {
+                "display_name": "Frequency Penalty",
+                "short_desc": "Penalize tokens by frequency",
+                "desc": "Penalizes new tokens based on their existing frequency in the text so far. "
+                    "Values between `-2.0` and `2.0`; positive values decrease the likelihood of "
+                    "repeated tokens",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "presence_penalty": {
+                "display_name": "Presence Penalty",
+                "short_desc": "Penalize tokens by presence",
+                "desc": "Penalizes new tokens based on whether they appear in the text so far. "
+                    "Values between `-2.0` and `2.0`; positive values increase the likelihood of "
+                    "new topics",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
+            "seed": {
+                "display_name": "Seed",
+                "short_desc": "Random seed for deterministic output",
+                "desc": "If specified, the system will attempt to sample deterministically so that "
+                    "repeated requests with the same seed and parameters return the same result",
+                "type": AbstractDataProviderTypeMap."*int",
+            },
             "stop": {
                 "display_name": "Stop Sequences",
                 "short_desc": "Stop sequences",
                 "desc": "Up to 4 sequences where the model will stop generating further tokens",
-                "type": AbstractDataProviderType::get(
-                    new Type("softlist<string>")),
+                "type": SoftListOrNothingType,
+            },
+            "response_format": {
+                "display_name": "Response Format",
+                "short_desc": "Output format for the response",
+                "desc": "Specifies the output format. Use `json_object` to force the model to output "
+                    "valid JSON. The model must be instructed via the prompt to produce JSON output",
+                "type": new HuggingFaceChatResponseFormatDataType(AutoHashOrNothingType),
+            },
+            "logprobs": {
+                "display_name": "Log Probabilities",
+                "short_desc": "Return log probabilities of output tokens",
+                "desc": "Whether to return log probabilities of the output tokens. If `True`, returns "
+                    "the log probabilities of each output token in the `choices` response",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "top_logprobs": {
+                "display_name": "Top Log Probabilities",
+                "short_desc": "Number of most likely tokens to return",
+                "desc": "An integer between `0` and `5` specifying the number of most likely tokens "
+                    "to return at each token position, each with an associated log probability. "
+                    "Requires `logprobs` to be set to `True`",
+                "type": AbstractDataProviderTypeMap."*int",
             },
         };
     }
@@ -237,6 +311,12 @@ public class HuggingFaceChatCompletionsResponseDataType inherits HashDataType {
                 "display_name": "Model",
                 "short_desc": "Model used for completion",
                 "desc": "The model used for the completion",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "system_fingerprint": {
+                "display_name": "System Fingerprint",
+                "short_desc": "Server-side fingerprint",
+                "desc": "A fingerprint representing the backend configuration the model runs with",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "choices": {

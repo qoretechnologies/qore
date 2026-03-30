@@ -82,6 +82,37 @@ public class HuggingFaceSpaceDataType inherits HashDataType {
                 "desc": "The number of likes the Space has received",
                 "type": AbstractDataProviderTypeMap."*int",
             },
+            "subdomain": {
+                "display_name": "Subdomain",
+                "short_desc": "Custom subdomain",
+                "desc": "The custom subdomain for accessing the Space",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "host": {
+                "display_name": "Host",
+                "short_desc": "Full URL to access the Space",
+                "desc": "The full URL to access the Space application",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "Space tags",
+                "desc": "A list of tags associated with the Space",
+                "type": SoftAutoListOrNothingType,
+            },
+            "gated": {
+                "display_name": "Gated",
+                "short_desc": "Gating status",
+                "desc": "Gating status of the Space. `False` if not gated, or a string value such as "
+                    "`auto` or `manual` if gated",
+                "type": AbstractDataProviderTypeMap."auto",
+            },
+            "trendingScore": {
+                "display_name": "Trending Score",
+                "short_desc": "Trending score",
+                "desc": "The trending score of the Space on Hugging Face Hub",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",

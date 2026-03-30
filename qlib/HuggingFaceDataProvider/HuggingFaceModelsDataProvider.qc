@@ -92,11 +92,14 @@ public class HuggingFaceModelListDataProvider inherits HuggingFaceDataProviderCo
         hash<auto> params = {};
         if (req.search) { params.search = req.search; }
         if (req.author) { params.author = req.author; }
-        if (req.filter) { params.filter = req.filter; }
+        if (req.filter) { params.filter = (foldl $1 + "," + $2, req.filter); }
         if (req.sort) { params.sort = req.sort; }
         if (req.direction) { params.direction = req.direction; }
         if (req.limit) { params.limit = req.limit; }
         if (req.pipeline_tag) { params.pipeline_tag = req.pipeline_tag; }
+        if (req.full) { params.full = req.full; }
+        if (req.config) { params.config = req.config; }
+        if (req.cardData) { params.cardData = req.cardData; }
         string path = "models";
         if (params) {
             path += "?" + (foldl $1 + "&" + $2, (map sprintf("%s=%s",
@@ -213,7 +216,8 @@ public class HuggingFaceModelDeleteDataProvider inherits HuggingFaceDataProvider
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("DELETE", "repos/delete", {"type": "model", "name": req.repo_id}).body;
+        return doRestCommand("DELETE", "repos/delete",
+            HuggingFaceDataProviderCommon::makeDeleteBody("model", req.repo_id)).body;
     }
 }
 }

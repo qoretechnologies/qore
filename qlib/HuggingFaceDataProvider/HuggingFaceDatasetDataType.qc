@@ -88,6 +88,31 @@ public class HuggingFaceDatasetDataType inherits HashDataType {
                 "desc": "The Papers With Code identifier for this dataset",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "description": {
+                "display_name": "Description",
+                "short_desc": "Dataset description",
+                "desc": "A short description of the dataset",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "Dataset tags",
+                "desc": "A list of tags associated with the dataset",
+                "type": SoftAutoListOrNothingType,
+            },
+            "gated": {
+                "display_name": "Gated",
+                "short_desc": "Gating status",
+                "desc": "Gating status of the dataset. `False` if not gated, or a string value such as "
+                    "`auto` or `manual` if gated",
+                "type": AbstractDataProviderTypeMap."auto",
+            },
+            "trendingScore": {
+                "display_name": "Trending Score",
+                "short_desc": "Trending score",
+                "desc": "The trending score of the dataset on Hugging Face Hub",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",

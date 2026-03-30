@@ -79,6 +79,9 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
 
         #! Max retries
         const MaxIoRetries = 5;
+
+        #! Max redirects to follow
+        const MaxRedirects = 5;
     }
 
     private {
@@ -154,7 +157,7 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                     "display_name": display,
                     "short_desc": display,
                     "desc": display,
-                    "value": model.id,
+                    "value": string(model.id),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -174,7 +177,7 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                     "display_name": display,
                     "short_desc": display,
                     "desc": display,
-                    "value": dataset.id,
+                    "value": string(dataset.id),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -197,7 +200,7 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                     "display_name": display,
                     "short_desc": display,
                     "desc": display,
-                    "value": space.id,
+                    "value": string(space.id),
                 };
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -206,7 +209,20 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
         return rv;
     }
 
-    #! Makes a REST call and returns the response; handles rate limit and I/O errors
+    #! Builds the delete body, splitting repo_id into name and organization
+    static hash<auto> makeDeleteBody(string type, string repo_id) {
+        hash<auto> body = {"type": type};
+        int slash = repo_id.find("/");
+        if (slash >= 0) {
+            body.organization = repo_id.substr(0, slash);
+            body.name = repo_id.substr(slash + 1);
+        } else {
+            body.name = repo_id;
+        }
+        return body;
+    }
+
+    #! Makes a REST call and returns the response; handles redirects, rate limits, and I/O errors
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
         int retries = 0;
         while (True) {
@@ -227,7 +243,11 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                         return rest.restDoRequest(method, path, body, hdr);
                 }
             } catch (hash<ExceptionInfo> ex) {
-                if (retry(ex, \retries)) {
+                *string redirect_path;
+                if (retry(ex, \retries, \redirect_path)) {
+                    if (redirect_path) {
+                        path = redirect_path;
+                    }
                     continue;
                 }
                 rethrow ex.err, sprintf("%s (request path: %y)", ex.desc,
@@ -237,7 +257,7 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
     }
 
     #! Returns True if the error indicates that the operation should be retried
-    private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
+    private bool retry(hash<ExceptionInfo> ex, reference<int> retries, reference<*string> redirect_path) {
         # retry on I/O errors
         if (RetrySet{ex.err}) {
             if (++retries == MaxIoRetries) {
@@ -245,6 +265,17 @@ public class HuggingFaceDataProviderCommon inherits DataProvider::AbstractDataPr
                 return False;
             }
             warn("Technical error making REST call: %s: %s; retrying", ex.err, ex.desc);
+            return True;
+        }
+        # follow redirects (301, 302, 307, 308)
+        if (ex.err == "REST-RESPONSE-ERROR" && (ex.arg.status_code >= 301 && ex.arg.status_code <= 308)
+                && ex.arg.headers.location) {
+            if (++retries == MaxRedirects) {
+                error("Maximum redirects exceeded (%d)", retries);
+                return False;
+            }
+            redirect_path = ex.arg.headers.location;
+            debug("Following redirect to %y", redirect_path);
             return True;
         }
         # retry on rate limit (429)

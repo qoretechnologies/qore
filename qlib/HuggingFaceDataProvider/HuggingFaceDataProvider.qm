@@ -92,7 +92,6 @@ module HuggingFaceDataProvider {
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelIdRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -111,15 +110,12 @@ module HuggingFaceDataProvider {
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceRepoCreateRequestDataType::Fields{"license",}, {
+                HuggingFaceRepoCreateRequestDataType::Fields - "name", {
                     "preselected": True,
                 }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceRepoCreateRequestDataType::Fields - ("name", "license")
             ),
             "output_type": HuggingFaceModelCreateDataProvider::ResponseType,
         });
@@ -136,11 +132,14 @@ module HuggingFaceDataProvider {
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelUpdateRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceModelUpdateRequestDataType::Fields - "repo_id"
+                HuggingFaceModelUpdateRequestDataType::Fields{"visibility", "gated"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceModelUpdateRequestDataType::Fields - ("repo_id", "visibility", "gated")
             ),
             "output_type": HuggingFaceModelUpdateDataProvider::ResponseType,
         });
@@ -157,7 +156,6 @@ module HuggingFaceDataProvider {
             "groups": ("Models",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceModelDeleteRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -198,7 +196,6 @@ module HuggingFaceDataProvider {
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetIdRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -217,15 +214,12 @@ module HuggingFaceDataProvider {
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceRepoCreateRequestDataType::Fields{"name",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceRepoCreateRequestDataType::Fields{"license",}, {
+                HuggingFaceRepoCreateRequestDataType::Fields - "name", {
                     "preselected": True,
                 }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceRepoCreateRequestDataType::Fields - ("name", "license")
             ),
             "output_type": HuggingFaceDatasetCreateDataProvider::ResponseType,
         });
@@ -242,11 +236,14 @@ module HuggingFaceDataProvider {
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetUpdateRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceDatasetUpdateRequestDataType::Fields - "repo_id"
+                HuggingFaceDatasetUpdateRequestDataType::Fields{"visibility", "gated"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceDatasetUpdateRequestDataType::Fields - ("repo_id", "visibility", "gated")
             ),
             "output_type": HuggingFaceDatasetUpdateDataProvider::ResponseType,
         });
@@ -263,7 +260,6 @@ module HuggingFaceDataProvider {
             "groups": ("Datasets",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceDatasetDeleteRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -283,11 +279,11 @@ module HuggingFaceDataProvider {
             "action_code": DPAT_API,
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceListRequestDataType::Fields{"search", "author"}, {
+                HuggingFaceSpaceListRequestDataType::Fields{"search", "author"}, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceListRequestDataType::Fields - ("search", "author")
+                HuggingFaceSpaceListRequestDataType::Fields - ("search", "author")
             ),
             "output_type": HuggingFaceSpaceListDataProvider::ResponseType,
         });
@@ -304,7 +300,6 @@ module HuggingFaceDataProvider {
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceIdRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -323,11 +318,14 @@ module HuggingFaceDataProvider {
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceCreateRequestDataType::Fields{"name", "space_sdk"}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceSpaceCreateRequestDataType::Fields - ("name", "space_sdk")
+                HuggingFaceSpaceCreateRequestDataType::Fields{"space_hardware",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceCreateRequestDataType::Fields - ("name", "space_sdk", "space_hardware")
             ),
             "output_type": HuggingFaceSpaceCreateDataProvider::ResponseType,
         });
@@ -344,11 +342,14 @@ module HuggingFaceDataProvider {
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceUpdateRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceSpaceUpdateRequestDataType::Fields - "repo_id"
+                HuggingFaceSpaceUpdateRequestDataType::Fields{"visibility", "gated"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                HuggingFaceSpaceUpdateRequestDataType::Fields - ("repo_id", "visibility", "gated")
             ),
             "output_type": HuggingFaceSpaceUpdateDataProvider::ResponseType,
         });
@@ -365,7 +366,6 @@ module HuggingFaceDataProvider {
             "groups": ("Spaces",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceSpaceDeleteRequestDataType::Fields{"repo_id",}, {
-                    "preselected": True,
                     "required": True,
                 }
             ),
@@ -387,16 +387,19 @@ module HuggingFaceDataProvider {
             "groups": ("Inference",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceChatCompletionsRequestDataType::Fields{"model", "messages"}, {
-                    "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                HuggingFaceChatCompletionsRequestDataType::Fields{"max_tokens", "temperature"}, {
+                HuggingFaceChatCompletionsRequestDataType::Fields{
+                    "max_tokens", "temperature", "frequency_penalty", "presence_penalty",
+                    "response_format"
+                }, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 HuggingFaceChatCompletionsRequestDataType::Fields - (
-                    "model", "messages", "max_tokens", "temperature"
+                    "model", "messages", "max_tokens", "temperature",
+                    "frequency_penalty", "presence_penalty", "response_format"
                 )
             ),
             "output_type": HuggingFaceChatCompletionsDataProvider::ResponseType,

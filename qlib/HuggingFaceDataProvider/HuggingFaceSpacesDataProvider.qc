@@ -77,7 +77,7 @@ public class HuggingFaceSpaceListDataProvider inherits HuggingFaceDataProviderCo
         };
         const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
             AbstractDataProvider::DataProviderSummaryInfoKeys});
-        static HuggingFaceListRequestDataType RequestType();
+        static HuggingFaceSpaceListRequestDataType RequestType();
         const ResponseType = new ListDataType("HuggingFaceSpaceList", HuggingFaceSpaceDataType, True);
     }
 
@@ -92,10 +92,11 @@ public class HuggingFaceSpaceListDataProvider inherits HuggingFaceDataProviderCo
         hash<auto> params = {};
         if (req.search) { params.search = req.search; }
         if (req.author) { params.author = req.author; }
-        if (req.filter) { params.filter = req.filter; }
+        if (req.filter) { params.filter = (foldl $1 + "," + $2, req.filter); }
         if (req.sort) { params.sort = req.sort; }
         if (req.direction) { params.direction = req.direction; }
         if (req.limit) { params.limit = req.limit; }
+        if (req.full) { params.full = req.full; }
         string path = "spaces";
         if (params) {
             path += "?" + (foldl $1 + "&" + $2, (map sprintf("%s=%s",
@@ -156,7 +157,35 @@ public class HuggingFaceSpaceCreateDataProvider inherits HuggingFaceDataProvider
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("POST", "repos/create", req + {"type": "space"}).body;
+        # remap space_sdk -> sdk for the API
+        hash<auto> body = req - ("space_sdk", "space_hardware") + {
+            "type": "space",
+            "sdk": req.space_sdk,
+        };
+        hash<auto> result = doRestCommand("POST", "repos/create", body).body;
+
+        # set hardware via separate endpoint if requested
+        if (req.space_hardware) {
+            # determine repo_id from the create response or request
+            string repo_id;
+            if (req.organization) {
+                repo_id = req.organization + "/" + req.name;
+            } else {
+                # extract from the returned URL
+                *string repo_url = result.repoUrl ?? result.url;
+                if (repo_url) {
+                    list<string> parts = repo_url.split("/");
+                    if (parts.size() >= 2) {
+                        repo_id = parts[parts.size() - 2] + "/" + parts[parts.size() - 1];
+                    }
+                }
+            }
+            if (repo_id) {
+                doRestCommand("POST", "spaces/" + repo_id + "/hardware",
+                    {"flavor": req.space_hardware});
+            }
+        }
+        return result;
     }
 }
 
@@ -212,7 +241,8 @@ public class HuggingFaceSpaceDeleteDataProvider inherits HuggingFaceDataProvider
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("DELETE", "repos/delete", {"type": "space", "name": req.repo_id}).body;
+        return doRestCommand("DELETE", "repos/delete",
+            HuggingFaceDataProviderCommon::makeDeleteBody("space", req.repo_id)).body;
     }
 }
 }

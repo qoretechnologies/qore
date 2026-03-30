@@ -45,10 +45,9 @@ public class HuggingFaceListRequestDataType inherits HashDataType {
             "filter": {
                 "display_name": "Filter",
                 "short_desc": "Filter by tags",
-                "desc": "Filter by tags. Multiple tags can be comma-separated "
-                    "(e.g. `text-generation,pytorch`)",
-                "type": AbstractDataProviderTypeMap."*string",
-                "example_value": "text-generation",
+                "desc": "A list of tags to filter results by (e.g. `text-generation`, `pytorch`)",
+                "type": SoftListOrNothingType,
+                "example_value": ("text-generation",),
             },
             "sort": {
                 "display_name": "Sort",
@@ -70,6 +69,7 @@ public class HuggingFaceListRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."*int",
                 "allowed_values": (
                     <AllowedValueInfo>{"value": -1, "display_name": "Descending"},
+                    <AllowedValueInfo>{"value": 1, "display_name": "Ascending"},
                 ),
                 "default_value": -1,
             },
@@ -81,6 +81,12 @@ public class HuggingFaceListRequestDataType inherits HashDataType {
                 "default_value": 30,
                 "example_value": 10,
             },
+            "full": {
+                "display_name": "Include Full Data",
+                "short_desc": "Fetch all metadata",
+                "desc": "Whether to fetch all metadata including last modified time, SHA, files, and tags",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
         };
     }
 
@@ -90,6 +96,31 @@ public class HuggingFaceListRequestDataType inherits HashDataType {
 }
 
 public const HuggingFaceListRequestDataType = new HuggingFaceListRequestDataType();
+
+#! Sort values for Spaces (excludes "downloads" which is not supported for Spaces)
+public const HuggingFaceSpaceSortValues = (
+    <AllowedValueInfo>{"value": "likes", "display_name": "Likes"},
+    <AllowedValueInfo>{"value": "lastModified", "display_name": "Last Modified"},
+    <AllowedValueInfo>{"value": "trendingScore", "display_name": "Trending"},
+    <AllowedValueInfo>{"value": "createdAt", "display_name": "Created At"},
+);
+
+#! Request type for listing Spaces (sort excludes "downloads")
+public class HuggingFaceSpaceListRequestDataType inherits HashDataType {
+    public {
+        const Fields = HuggingFaceListRequestDataType::Fields + {
+            "sort": HuggingFaceListRequestDataType::Fields."sort" + {
+                "allowed_values": HuggingFaceSpaceSortValues,
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+public const HuggingFaceSpaceListRequestDataType = new HuggingFaceSpaceListRequestDataType();
 
 #! Request type for listing models with model-specific filters
 public class HuggingFaceModelListRequestDataType inherits HashDataType {
@@ -102,6 +133,19 @@ public class HuggingFaceModelListRequestDataType inherits HashDataType {
                     "`text-classification`, `image-classification`)",
                 "type": AbstractDataProviderTypeMap."*string",
                 "example_value": "text-generation",
+            },
+            "config": {
+                "display_name": "Include Config",
+                "short_desc": "Include model configuration",
+                "desc": "Whether to also fetch the model configuration files",
+                "type": AbstractDataProviderTypeMap."*bool",
+            },
+            "cardData": {
+                "display_name": "Include Card Data",
+                "short_desc": "Include model card metadata",
+                "desc": "Whether to include model card metadata such as carbon emissions, metrics, "
+                    "and dataset tags",
+                "type": AbstractDataProviderTypeMap."*bool",
             },
         };
     }
@@ -232,14 +276,6 @@ public class HuggingFaceRepoCreateRequestDataType inherits HashDataType {
                 "desc": "Whether the repository should be private. Default: `False`",
                 "type": AbstractDataProviderTypeMap."*bool",
             },
-            "license": {
-                "display_name": "License",
-                "short_desc": "Repository license identifier",
-                "desc": "The license identifier for the repository "
-                    "(e.g. `apache-2.0`, `mit`, `gpl-3.0`, `cc-by-4.0`)",
-                "type": AbstractDataProviderTypeMap."*string",
-                "example_value": "apache-2.0",
-            },
         };
     }
 
@@ -332,6 +368,12 @@ public const HuggingFaceRepoUpdateFieldsBase = {
             <AllowedValueInfo>{"value": "manual", "display_name": "Manual"},
         ),
     },
+    "discussionsDisabled": {
+        "display_name": "Disable Discussions",
+        "short_desc": "Disable discussions on the repository",
+        "desc": "Whether to disable the discussions feature on this repository",
+        "type": AbstractDataProviderTypeMap."*bool",
+    },
 };
 
 #! Update fields for Spaces (includes "protected" visibility)
@@ -357,6 +399,12 @@ public const HuggingFaceSpaceUpdateFieldsBase = {
             <AllowedValueInfo>{"value": "auto", "display_name": "Auto"},
             <AllowedValueInfo>{"value": "manual", "display_name": "Manual"},
         ),
+    },
+    "discussionsDisabled": {
+        "display_name": "Disable Discussions",
+        "short_desc": "Disable discussions on the Space",
+        "desc": "Whether to disable the discussions feature on this Space",
+        "type": AbstractDataProviderTypeMap."*bool",
     },
 };
 

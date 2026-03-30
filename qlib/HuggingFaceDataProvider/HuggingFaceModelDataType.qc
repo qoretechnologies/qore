@@ -100,6 +100,26 @@ public class HuggingFaceModelDataType inherits HashDataType {
                 "desc": "The ML library used (e.g. `transformers`, `pytorch`)",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "tags": {
+                "display_name": "Tags",
+                "short_desc": "Model tags",
+                "desc": "A list of tags associated with the model (e.g. `text-generation`, `pytorch`, "
+                    "`en`)",
+                "type": SoftAutoListOrNothingType,
+            },
+            "gated": {
+                "display_name": "Gated",
+                "short_desc": "Gating status",
+                "desc": "Gating status of the model. `False` if not gated, or a string value such as "
+                    "`auto` or `manual` if gated",
+                "type": AbstractDataProviderTypeMap."auto",
+            },
+            "trendingScore": {
+                "display_name": "Trending Score",
+                "short_desc": "Trending score",
+                "desc": "The trending score of the model on Hugging Face Hub",
+                "type": AbstractDataProviderTypeMap."*float",
+            },
             "createdAt": {
                 "display_name": "Created At",
                 "short_desc": "Creation timestamp",

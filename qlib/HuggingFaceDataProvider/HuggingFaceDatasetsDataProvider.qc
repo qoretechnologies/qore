@@ -92,10 +92,11 @@ public class HuggingFaceDatasetListDataProvider inherits HuggingFaceDataProvider
         hash<auto> params = {};
         if (req.search) { params.search = req.search; }
         if (req.author) { params.author = req.author; }
-        if (req.filter) { params.filter = req.filter; }
+        if (req.filter) { params.filter = (foldl $1 + "," + $2, req.filter); }
         if (req.sort) { params.sort = req.sort; }
         if (req.direction) { params.direction = req.direction; }
         if (req.limit) { params.limit = req.limit; }
+        if (req.full) { params.full = req.full; }
         string path = "datasets";
         if (params) {
             path += "?" + (foldl $1 + "&" + $2, (map sprintf("%s=%s",
@@ -212,7 +213,8 @@ public class HuggingFaceDatasetDeleteDataProvider inherits HuggingFaceDataProvid
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doRestCommand("DELETE", "repos/delete", {"type": "dataset", "name": req.repo_id}).body;
+        return doRestCommand("DELETE", "repos/delete",
+            HuggingFaceDataProviderCommon::makeDeleteBody("dataset", req.repo_id)).body;
     }
 }
 }

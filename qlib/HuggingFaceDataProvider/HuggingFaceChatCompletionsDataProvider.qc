@@ -39,12 +39,61 @@ public class HuggingFaceChatCompletionsDataProvider inherits HuggingFaceDataProv
         const ResponseType = HuggingFaceChatCompletionsResponseDataType;
     }
 
-    constructor(RestClientIo::RestClientIo rest) : HuggingFaceDataProviderCommon(rest) {}
+    private {
+        #! Hub REST client for reference data lookups (models list)
+        *RestClientIo::RestClientIo hub_rest;
+    }
+
+    constructor(RestClientIo::RestClientIo rest, *RestClientIo::RestClientIo hub_rest)
+            : HuggingFaceDataProviderCommon(rest) {
+        self.hub_rest = hub_rest;
+    }
     constructor(*hash<auto> options) : HuggingFaceDataProviderCommon(options) {}
     string getName() { return ProviderInfo.name; }
     private *DataProvider::AbstractDataProviderType getRequestTypeImpl() { return RequestType; }
     private *DataProvider::AbstractDataProviderType getResponseTypeImpl() { return ResponseType; }
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
+
+    #! Returns reference data; uses the inference router for models, Hub client for other types
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        if (type == "models") {
+            # query the inference router directly for actually-deployed models
+            return getChatCompatibleModels();
+        }
+        if (hub_rest) {
+            RestClientIo::RestClientIo saved_rest = rest;
+            rest = hub_rest;
+            on_exit rest = saved_rest;
+            return HuggingFaceDataProviderCommon::getReferenceDataImpl(type, action_opts);
+        }
+        return HuggingFaceDataProviderCommon::getReferenceDataImpl(type, action_opts);
+    }
+
+    #! Returns only models available on the Inference API router
+    private *list<hash<AllowedValueInfo>> getChatCompatibleModels() {
+        list<hash<AllowedValueInfo>> rv;
+        try {
+            # query the inference router's own /models endpoint for actually-deployed models
+            hash<auto> response = doRestCommand("GET", "models");
+            *list<auto> models = response.body.data ?? response.body;
+            foreach hash<auto> model in (models) {
+                string model_id = model.id;
+                string display = model_id;
+                if (model.owned_by) {
+                    display = sprintf("%s (by %s)", model_id, model.owned_by);
+                }
+                rv += <AllowedValueInfo>{
+                    "display_name": display,
+                    "short_desc": display,
+                    "desc": display,
+                    "value": model_id,
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "getChatCompatibleModels: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # force non-streaming for this provider

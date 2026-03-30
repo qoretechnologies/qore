@@ -98,9 +98,20 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
     private {
         FakeHuggingFaceRestClientIo fake_rest;
         HuggingFaceDataProvider::HuggingFaceDataProvider provider;
+
+        # live provider from connection (set up if -c is given)
+        *HuggingFaceDataProvider::HuggingFaceDataProvider live_provider;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
     }
 
-    constructor() : Test("HuggingFaceDataProvider", "1.0") {
+    constructor() : Test("HuggingFaceDataProvider", "1.0", \ARGV, MyOpts) {
+        # unit tests (always run)
         addTestCase("test provider tree", \testProviderTree());
         addTestCase("test list models", \testListModels());
         addTestCase("test list models pipeline_tag", \testListModelsPipelineTag());
@@ -120,6 +131,29 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         addTestCase("test delete space", \testDeleteSpace());
         addTestCase("test chat completions", \testChatCompletions());
         addTestCase("test reference data", \testReferenceData());
+        addTestCase("test data types", \testDataTypes());
+
+        # integration tests (require connection)
+        addTestCase("integration: list models", \testIntegrationListModels());
+        addTestCase("integration: get model", \testIntegrationGetModel());
+        addTestCase("integration: list datasets", \testIntegrationListDatasets());
+        addTestCase("integration: list spaces", \testIntegrationListSpaces());
+        addTestCase("integration: model CRUD", \testIntegrationModelCrud());
+        addTestCase("integration: dataset CRUD", \testIntegrationDatasetCrud());
+        addTestCase("integration: space CRUD", \testIntegrationSpaceCrud());
+        addTestCase("integration: chat completions", \testIntegrationChatCompletions());
+        addTestCase("integration: reference data", \testIntegrationReferenceData());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
         set_return_value(main());
     }
 
@@ -127,6 +161,31 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         fake_rest = new FakeHuggingFaceRestClientIo();
         provider = new HuggingFaceDataProvider::HuggingFaceDataProvider(fake_rest);
     }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name", OptionColumn);
+    }
+
+    private error(string fmt) {
+        throw "OPTION-ERROR", sprintf("%s: ERROR: %s", get_script_name(), vsprintf(fmt, argv));
+    }
+
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.HUGGINGFACE_CONNECTION;
+        if (conn_name.val()) {
+            AbstractConnection conn = get_connection(conn_name);
+            live_provider = conn.getDataProvider();
+            return;
+        }
+        # fallback to API token env var
+        *string token = ENV.HUGGINGFACE_TOKEN;
+        if (token.val()) {
+            live_provider = new HuggingFaceDataProvider::HuggingFaceDataProvider({"apikey": token});
+        }
+    }
+
+    # ---- Unit tests (mock) ----
 
     testProviderTree() {
         list<string> children = provider.getChildProviderNames();
@@ -152,6 +211,17 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertRegex("models\\?", fake_rest.last_path, "list models path contains models?");
         assertRegex("search=llama", fake_rest.last_path, "list models path contains search param");
         assertRegex("limit=10", fake_rest.last_path, "list models path contains limit param");
+
+        # test filter as list joined with commas
+        list_dp.doRequest({"filter": ("text-generation", "pytorch")});
+        assertRegex("filter=text-generation%2Cpytorch", fake_rest.last_path,
+            "list models filter joins list with commas");
+
+        # test boolean model-specific params (full is now in shared type, config/cardData are model-specific)
+        list_dp.doRequest({"full": True, "config": True, "cardData": True});
+        assertRegex("full=1", fake_rest.last_path, "list models full param");
+        assertRegex("config=1", fake_rest.last_path, "list models config param");
+        assertRegex("cardData=1", fake_rest.last_path, "list models cardData param");
     }
 
     testListModelsPipelineTag() {
@@ -182,14 +252,12 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         auto result = create_dp.doRequest({
             "name": "test-model",
             "private": True,
-            "license": "apache-2.0",
         });
         assertEq("POST", fake_rest.last_method, "create model uses POST");
         assertEq("repos/create", fake_rest.last_path, "create model path");
         assertEq("model", fake_rest.last_request."type", "create model type is model");
         assertEq("test-model", fake_rest.last_request.name, "create model name");
         assertEq(True, fake_rest.last_request."private", "create model private flag");
-        assertEq("apache-2.0", fake_rest.last_request.license, "create model license");
     }
 
     testUpdateModel() {
@@ -200,6 +268,10 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("private", fake_rest.last_request.visibility, "update model visibility");
         # repo_id should be removed from body
         assertEq(NOTHING, fake_rest.last_request.repo_id, "repo_id not in body");
+
+        # test discussionsDisabled field
+        update_dp.doRequest({"repo_id": "my-org/my-model", "discussionsDisabled": True});
+        assertEq(True, fake_rest.last_request.discussionsDisabled, "update model discussionsDisabled");
     }
 
     testDeleteModel() {
@@ -208,7 +280,8 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("DELETE", fake_rest.last_method, "delete model uses DELETE");
         assertEq("repos/delete", fake_rest.last_path, "delete model path");
         assertEq("model", fake_rest.last_request."type", "delete model type");
-        assertEq("my-org/my-model", fake_rest.last_request.name, "delete model name");
+        assertEq("my-org", fake_rest.last_request.organization, "delete model organization");
+        assertEq("my-model", fake_rest.last_request.name, "delete model name");
     }
 
     testListDatasets() {
@@ -217,6 +290,10 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("GET", fake_rest.last_method, "list datasets uses GET");
         assertRegex("datasets\\?", fake_rest.last_path, "list datasets path");
         assertRegex("search=imdb", fake_rest.last_path, "list datasets search param");
+
+        # test full param
+        list_dp.doRequest({"full": True});
+        assertRegex("full=1", fake_rest.last_path, "list datasets full param");
     }
 
     testGetDataset() {
@@ -255,7 +332,8 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("DELETE", fake_rest.last_method, "delete dataset uses DELETE");
         assertEq("repos/delete", fake_rest.last_path, "delete dataset path");
         assertEq("dataset", fake_rest.last_request."type", "delete dataset type");
-        assertEq("my-org/my-dataset", fake_rest.last_request.name, "delete dataset name");
+        assertEq("my-org", fake_rest.last_request.organization, "delete dataset organization");
+        assertEq("my-dataset", fake_rest.last_request.name, "delete dataset name");
     }
 
     testListSpaces() {
@@ -264,6 +342,10 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("GET", fake_rest.last_method, "list spaces uses GET");
         assertRegex("spaces\\?", fake_rest.last_path, "list spaces path");
         assertRegex("author=gradio", fake_rest.last_path, "list spaces author param");
+
+        # test full param
+        list_dp.doRequest({"full": True});
+        assertRegex("full=1", fake_rest.last_path, "list spaces full param");
     }
 
     testGetSpace() {
@@ -285,7 +367,8 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("POST", fake_rest.last_method, "create space uses POST");
         assertEq("repos/create", fake_rest.last_path, "create space path");
         assertEq("space", fake_rest.last_request."type", "create space type is space");
-        assertEq("gradio", fake_rest.last_request.space_sdk, "create space sdk");
+        assertEq("gradio", fake_rest.last_request.sdk, "create space sdk mapped to 'sdk'");
+        assertEq(NOTHING, fake_rest.last_request.space_sdk, "space_sdk not sent to API");
     }
 
     testUpdateSpace() {
@@ -303,7 +386,8 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
         assertEq("DELETE", fake_rest.last_method, "delete space uses DELETE");
         assertEq("repos/delete", fake_rest.last_path, "delete space path");
         assertEq("space", fake_rest.last_request."type", "delete space type");
-        assertEq("my-org/my-space", fake_rest.last_request.name, "delete space name");
+        assertEq("my-org", fake_rest.last_request.organization, "delete space organization");
+        assertEq("my-space", fake_rest.last_request.name, "delete space name");
     }
 
     testChatCompletions() {
@@ -348,42 +432,117 @@ class HuggingFaceDataProviderTest inherits QUnit::Test {
             "output_text convenience field");
         assertEq("chatcmpl-test123", result.id, "completion id");
         assertEq(18, result.usage.total_tokens, "total tokens");
+
+        # test response_format and logprobs params
+        chat_dp.doRequest({
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": ({"role": "user", "content": "Return JSON."},),
+            "response_format": {"type": "json_object"},
+            "logprobs": True,
+            "top_logprobs": 3,
+        });
+        assertEq("json_object", inference_rest.last_request.response_format."type",
+            "response_format type passed");
+        assertEq(True, inference_rest.last_request.logprobs, "logprobs passed");
+        assertEq(3, inference_rest.last_request.top_logprobs, "top_logprobs passed");
     }
 
     testReferenceData() {
         fake_rest.response_body = NOTHING;
         *hash<string, bool> ref_data = provider.getSupportedReferenceData();
         assertEq(True, ref_data.models, "models reference data supported");
-    }
-}
-
-#! Integration tests against the real Hugging Face API
-/** Requires HUGGINGFACE_TOKEN environment variable to be set
-*/
-class HuggingFaceIntegrationTest inherits QUnit::Test {
-    private {
-        *string token;
-        HuggingFaceDataProvider::HuggingFaceDataProvider provider;
+        assertEq(True, ref_data.datasets, "datasets reference data supported");
+        assertEq(True, ref_data.spaces, "spaces reference data supported");
     }
 
-    constructor() : Test("HuggingFaceIntegration", "1.0") {
-        token = ENV.HUGGINGFACE_TOKEN;
-        if (!token) {
-            testSkip("Set HUGGINGFACE_TOKEN to run integration tests");
-            return;
-        }
-        provider = new HuggingFaceDataProvider::HuggingFaceDataProvider({"apikey": token});
-        addTestCase("integration: list models", \testIntegrationListModels());
-        addTestCase("integration: get model", \testIntegrationGetModel());
-        addTestCase("integration: list datasets", \testIntegrationListDatasets());
-        addTestCase("integration: list spaces", \testIntegrationListSpaces());
-        addTestCase("integration: model CRUD", \testIntegrationModelCrud());
-        addTestCase("integration: reference data", \testIntegrationReferenceData());
-        set_return_value(main());
+    testDataTypes() {
+        # Model data type
+        HuggingFaceDataProvider::HuggingFaceModelDataType model_type();
+        *hash<string, AbstractDataField> model_fields = model_type.getFields();
+        assertTrue(model_fields.hasKey("id"), "model type has id field");
+        assertTrue(model_fields.hasKey("pipeline_tag"), "model type has pipeline_tag field");
+        assertTrue(model_fields.hasKey("downloads"), "model type has downloads field");
+        assertTrue(model_fields.hasKey("likes"), "model type has likes field");
+        assertTrue(model_fields.hasKey("tags"), "model type has tags field");
+        assertTrue(model_fields.hasKey("gated"), "model type has gated field");
+        assertTrue(model_fields.hasKey("trendingScore"), "model type has trendingScore field");
+
+        # Dataset data type
+        HuggingFaceDataProvider::HuggingFaceDatasetDataType dataset_type();
+        *hash<string, AbstractDataField> dataset_fields = dataset_type.getFields();
+        assertTrue(dataset_fields.hasKey("id"), "dataset type has id field");
+        assertTrue(dataset_fields.hasKey("downloads"), "dataset type has downloads field");
+        assertTrue(dataset_fields.hasKey("author"), "dataset type has author field");
+        assertTrue(dataset_fields.hasKey("description"), "dataset type has description field");
+        assertTrue(dataset_fields.hasKey("tags"), "dataset type has tags field");
+        assertTrue(dataset_fields.hasKey("gated"), "dataset type has gated field");
+        assertTrue(dataset_fields.hasKey("trendingScore"), "dataset type has trendingScore field");
+
+        # Space data type
+        HuggingFaceDataProvider::HuggingFaceSpaceDataType space_type();
+        *hash<string, AbstractDataField> space_fields = space_type.getFields();
+        assertTrue(space_fields.hasKey("id"), "space type has id field");
+        assertTrue(space_fields.hasKey("sdk"), "space type has sdk field");
+        assertTrue(space_fields.hasKey("likes"), "space type has likes field");
+        assertTrue(space_fields.hasKey("subdomain"), "space type has subdomain field");
+        assertTrue(space_fields.hasKey("host"), "space type has host field");
+        assertTrue(space_fields.hasKey("tags"), "space type has tags field");
+        assertTrue(space_fields.hasKey("gated"), "space type has gated field");
+        assertTrue(space_fields.hasKey("trendingScore"), "space type has trendingScore field");
+
+        # Chat completions request type
+        HuggingFaceDataProvider::HuggingFaceChatCompletionsRequestDataType chat_req_type();
+        *hash<string, AbstractDataField> chat_req_fields = chat_req_type.getFields();
+        assertTrue(chat_req_fields.hasKey("model"), "chat request has model field");
+        assertTrue(chat_req_fields.hasKey("messages"), "chat request has messages field");
+        assertTrue(chat_req_fields.hasKey("max_tokens"), "chat request has max_tokens field");
+        assertTrue(chat_req_fields.hasKey("temperature"), "chat request has temperature field");
+        assertTrue(chat_req_fields.hasKey("frequency_penalty"), "chat request has frequency_penalty field");
+        assertTrue(chat_req_fields.hasKey("presence_penalty"), "chat request has presence_penalty field");
+        assertTrue(chat_req_fields.hasKey("seed"), "chat request has seed field");
+        assertTrue(chat_req_fields.hasKey("response_format"), "chat request has response_format field");
+        assertTrue(chat_req_fields.hasKey("logprobs"), "chat request has logprobs field");
+        assertTrue(chat_req_fields.hasKey("top_logprobs"), "chat request has top_logprobs field");
+
+        # Chat completions response type
+        HuggingFaceDataProvider::HuggingFaceChatCompletionsResponseDataType chat_resp_type();
+        *hash<string, AbstractDataField> chat_resp_fields = chat_resp_type.getFields();
+        assertTrue(chat_resp_fields.hasKey("id"), "chat response has id field");
+        assertTrue(chat_resp_fields.hasKey("system_fingerprint"), "chat response has system_fingerprint");
+        assertTrue(chat_resp_fields.hasKey("choices"), "chat response has choices field");
+        assertTrue(chat_resp_fields.hasKey("usage"), "chat response has usage field");
+        assertTrue(chat_resp_fields.hasKey("output_text"), "chat response has output_text field");
+
+        # Chat message type
+        HuggingFaceDataProvider::HuggingFaceChatMessageDataType msg_type();
+        *hash<string, AbstractDataField> msg_fields = msg_type.getFields();
+        assertTrue(msg_fields.hasKey("role"), "message type has role field");
+        assertTrue(msg_fields.hasKey("content"), "message type has content field");
+
+        # Response format type
+        HuggingFaceDataProvider::HuggingFaceChatResponseFormatDataType fmt_type();
+        *hash<string, AbstractDataField> fmt_fields = fmt_type.getFields();
+        assertTrue(fmt_fields.hasKey("type"), "response format type has type field");
+
+        # Update request types have discussionsDisabled
+        HuggingFaceDataProvider::HuggingFaceModelUpdateRequestDataType model_update_type();
+        *hash<string, AbstractDataField> model_update_fields = model_update_type.getFields();
+        assertTrue(model_update_fields.hasKey("discussionsDisabled"),
+            "model update type has discussionsDisabled field");
+
+        # List request type has full param
+        HuggingFaceDataProvider::HuggingFaceListRequestDataType list_type();
+        *hash<string, AbstractDataField> list_fields = list_type.getFields();
+        assertTrue(list_fields.hasKey("full"), "list request type has full field");
     }
+
+    # ---- Integration tests (require connection) ----
 
     testIntegrationListModels() {
-        AbstractDataProvider list_dp = provider.getChildProvider("models").getChildProvider("list");
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        AbstractDataProvider list_dp = live_provider.getChildProvider("models").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
         assertEq(Type::List, result.type(), "list models returns a list");
         assertTrue(result.size() > 0, "list models returns results");
@@ -392,14 +551,20 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
     }
 
     testIntegrationGetModel() {
-        AbstractDataProvider get_dp = provider.getChildProvider("models").getChildProvider("get");
-        auto result = get_dp.doRequest({"repo_id": "bert-base-uncased"});
-        assertEq("bert-base-uncased", result.id, "get model returns correct id");
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        AbstractDataProvider get_dp = live_provider.getChildProvider("models").getChildProvider("get");
+        auto result = get_dp.doRequest({"repo_id": "google-bert/bert-base-uncased"});
+        assertEq("google-bert/bert-base-uncased", result.id, "get model returns correct id");
         assertTrue(result.downloads > 0, "bert-base-uncased has downloads");
     }
 
     testIntegrationListDatasets() {
-        AbstractDataProvider list_dp = provider.getChildProvider("datasets").getChildProvider("list");
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        AbstractDataProvider list_dp = live_provider.getChildProvider("datasets").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "downloads", "direction": -1});
         assertEq(Type::List, result.type(), "list datasets returns a list");
         assertTrue(result.size() > 0, "list datasets returns results");
@@ -407,7 +572,10 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
     }
 
     testIntegrationListSpaces() {
-        AbstractDataProvider list_dp = provider.getChildProvider("spaces").getChildProvider("list");
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        AbstractDataProvider list_dp = live_provider.getChildProvider("spaces").getChildProvider("list");
         auto result = list_dp.doRequest({"limit": 3, "sort": "likes", "direction": -1});
         assertEq(Type::List, result.type(), "list spaces returns a list");
         assertTrue(result.size() > 0, "list spaces returns results");
@@ -415,11 +583,15 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
     }
 
     testIntegrationModelCrud() {
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
         # generate unique repo name to avoid conflicts
         string repo_name = sprintf("qore-test-%d", clock_getmicros());
 
         # Create
-        AbstractDataProvider create_dp = provider.getChildProvider("models").getChildProvider("create");
+        AbstractDataProvider create_dp = live_provider.getChildProvider("models")
+            .getChildProvider("create");
         auto create_result = create_dp.doRequest({
             "name": repo_name,
             "private": True,
@@ -428,7 +600,7 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
             "create model returns URL");
 
         # Get - verify persistence
-        AbstractDataProvider get_dp = provider.getChildProvider("models").getChildProvider("get");
+        AbstractDataProvider get_dp = live_provider.getChildProvider("models").getChildProvider("get");
         # need to determine the full repo_id (user/repo_name)
         *string repo_url = create_result.repoUrl ?? create_result.url;
         # extract repo_id from URL: https://huggingface.co/user/repo_name
@@ -441,7 +613,6 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
             }
         }
         if (!repo_id) {
-            # fallback: try whoami to get username
             testSkip("Could not determine repo_id from create response");
             return;
         }
@@ -449,7 +620,7 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
         on_exit {
             # Delete - cleanup
             try {
-                AbstractDataProvider delete_dp = provider.getChildProvider("models")
+                AbstractDataProvider delete_dp = live_provider.getChildProvider("models")
                     .getChildProvider("delete");
                 delete_dp.doRequest({"repo_id": repo_id});
             } catch (hash<ExceptionInfo> ex) {
@@ -464,14 +635,164 @@ class HuggingFaceIntegrationTest inherits QUnit::Test {
         assertEq(True, get_result."private", "model is private");
 
         # Update
-        AbstractDataProvider update_dp = provider.getChildProvider("models").getChildProvider("update");
+        AbstractDataProvider update_dp = live_provider.getChildProvider("models")
+            .getChildProvider("update");
         update_dp.doRequest({"repo_id": repo_id, "gated": "auto"});
     }
 
+    testIntegrationDatasetCrud() {
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        string repo_name = sprintf("qore-test-ds-%d", clock_getmicros());
+
+        # Create
+        AbstractDataProvider create_dp = live_provider.getChildProvider("datasets")
+            .getChildProvider("create");
+        auto create_result = create_dp.doRequest({
+            "name": repo_name,
+            "private": True,
+        });
+        assertTrue(create_result.url.val() || create_result.repoUrl.val(),
+            "create dataset returns URL");
+
+        # Extract repo_id from URL
+        *string repo_url = create_result.repoUrl ?? create_result.url;
+        string repo_id;
+        if (repo_url) {
+            list<string> parts = repo_url.split("/");
+            if (parts.size() >= 2) {
+                repo_id = parts[parts.size() - 2] + "/" + parts[parts.size() - 1];
+            }
+        }
+        if (!repo_id) {
+            testSkip("Could not determine repo_id from create response");
+            return;
+        }
+
+        on_exit {
+            try {
+                AbstractDataProvider delete_dp = live_provider.getChildProvider("datasets")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"repo_id": repo_id});
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: failed to delete test dataset %y: %s: %s\n",
+                    repo_id, ex.err, ex.desc);
+            }
+        }
+
+        # Get - verify persistence
+        AbstractDataProvider get_dp = live_provider.getChildProvider("datasets").getChildProvider("get");
+        auto get_result = get_dp.doRequest({"repo_id": repo_id});
+        assertEq(repo_id, get_result.id, "get dataset returns created repo");
+        assertEq(True, get_result."private", "dataset is private");
+
+        # Update
+        AbstractDataProvider update_dp = live_provider.getChildProvider("datasets")
+            .getChildProvider("update");
+        update_dp.doRequest({"repo_id": repo_id, "gated": "auto"});
+    }
+
+    testIntegrationSpaceCrud() {
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        string repo_name = sprintf("qore-test-sp-%d", clock_getmicros());
+
+        # Create
+        AbstractDataProvider create_dp = live_provider.getChildProvider("spaces")
+            .getChildProvider("create");
+        auto create_result = create_dp.doRequest({
+            "name": repo_name,
+            "space_sdk": "static",
+            "private": True,
+        });
+        assertTrue(create_result.url.val() || create_result.repoUrl.val(),
+            "create space returns URL");
+
+        # Extract repo_id from URL
+        *string repo_url = create_result.repoUrl ?? create_result.url;
+        string repo_id;
+        if (repo_url) {
+            list<string> parts = repo_url.split("/");
+            if (parts.size() >= 2) {
+                repo_id = parts[parts.size() - 2] + "/" + parts[parts.size() - 1];
+            }
+        }
+        if (!repo_id) {
+            testSkip("Could not determine repo_id from create response");
+            return;
+        }
+
+        on_exit {
+            try {
+                AbstractDataProvider delete_dp = live_provider.getChildProvider("spaces")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"repo_id": repo_id});
+            } catch (hash<ExceptionInfo> ex) {
+                printf("WARNING: failed to delete test space %y: %s: %s\n",
+                    repo_id, ex.err, ex.desc);
+            }
+        }
+
+        # Get - verify persistence
+        AbstractDataProvider get_dp = live_provider.getChildProvider("spaces").getChildProvider("get");
+        auto get_result = get_dp.doRequest({"repo_id": repo_id});
+        assertEq(repo_id, get_result.id, "get space returns created repo");
+        assertEq(True, get_result."private", "space is private");
+
+        # Update
+        AbstractDataProvider update_dp = live_provider.getChildProvider("spaces")
+            .getChildProvider("update");
+        update_dp.doRequest({"repo_id": repo_id, "visibility": "private"});
+    }
+
+    testIntegrationChatCompletions() {
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        # use the inference child provider to get the chat completions provider
+        AbstractDataProvider chat_dp = live_provider.getChildProvider("inference")
+            .getChildProvider("chat-completions");
+        auto result = chat_dp.doRequest({
+            "model": "meta-llama/Llama-3.1-8B-Instruct",
+            "messages": (
+                {"role": "user", "content": "Say hello in one word."},
+            ),
+            "max_tokens": 10,
+        });
+        assertTrue(result.id.val(), "chat completion has id");
+        assertTrue(result.choices.size() > 0, "chat completion has choices");
+        assertTrue(result.choices[0].message.content.val(), "first choice has content");
+        assertTrue(result.output_text.val(), "output_text convenience field populated");
+        assertTrue(result.usage.total_tokens > 0, "usage reports tokens");
+    }
+
     testIntegrationReferenceData() {
-        *list<hash<AllowedValueInfo>> models = provider.getReferenceData("models");
+        if (!live_provider) {
+            testSkip("no connection; use -c <connection> or set HUGGINGFACE_TOKEN");
+        }
+        *list<hash<AllowedValueInfo>> models = live_provider.getReferenceData("models");
         assertTrue(models.size() > 0, "models reference data returns results");
         assertTrue(models[0].value.val(), "first model ref has value");
         assertTrue(models[0].display_name.val(), "first model ref has display_name");
+
+        *list<hash<AllowedValueInfo>> datasets = live_provider.getReferenceData("datasets");
+        assertTrue(datasets.size() > 0, "datasets reference data returns results");
+        assertTrue(datasets[0].value.val(), "first dataset ref has value");
+        assertTrue(datasets[0].display_name.val(), "first dataset ref has display_name");
+
+        *list<hash<AllowedValueInfo>> spaces = live_provider.getReferenceData("spaces");
+        assertTrue(spaces.size() > 0, "spaces reference data returns results");
+        assertTrue(spaces[0].value.val(), "first space ref has value");
+        assertTrue(spaces[0].display_name.val(), "first space ref has display_name");
+
+        # verify chat completions provider can get model ref data via Hub client
+        AbstractDataProvider chat_dp = live_provider.getChildProvider("inference")
+            .getChildProvider("chat-completions");
+        *list<hash<AllowedValueInfo>> chat_models = chat_dp.getReferenceData("models");
+        assertTrue(chat_models.size() > 0, "chat completions models ref data returns results");
+        assertTrue(chat_models[0].value.val(), "chat completions first model ref has value");
+        assertTrue(chat_models[0].display_name.val(), "chat completions first model ref has display_name");
     }
 }
