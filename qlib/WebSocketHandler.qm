@@ -1087,8 +1087,7 @@ class WebSocketStreamProcessor {
     }
 
     #! Called by the I/O controller's worker pool when stream data arrives
-    /** Also called by HTTP/3 watcher thread.
-    */
+
     notifyIo() {
         AutoLock al(process_mutex);
         if (closed) {
@@ -1808,27 +1807,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         on_exit wsc.setStreamProcessor();
 
         # Register the stream processor as a stream data listener
-        # For H2: the I/O controller dispatches onStreamData() to a worker
-        # For H3: a background watcher thread calls notifyIo() directly
+        # The I/O controller dispatches onStreamData() to a worker for both H2 and H3
         *code<nothing(object)> register_listener =
             cx."header-info".register_stream_listener;
         if (register_listener) {
             register_listener(stream_proc);
-        }
-        if (is_http3) {
-            # H3 uses a C++ StreamNotifier signaled by h3RecvDataCallback.
-            # The watcher thread bridges the C++ signal to the Qore processor.
-            background sub () {
-                try {
-                    while (sock.isOpen()) {
-                        if (sock.waitForQuicConnectStreamNotify(
-                                h3_session_id, h3_stream_id, 5s) == -1) {
-                            break;
-                        }
-                        stream_proc.notifyIo();
-                    }
-                } catch () {}
-            }();
         }
 
         # Drain any data queued during getConnectionImpl
@@ -1847,8 +1830,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         }
 
         # Heartbeat is handled inside the stream processor's notifyIo()
-        # via the sendHeartbeat() method, triggered by the watcher thread's
-        # periodic wake cycle (H3: waitForQuicConnectStreamNotify with 5s timeout)
+        # via the sendHeartbeat() method, triggered by the I/O controller's
+        # worker pool dispatch (onStreamData)
 
         # Block until stream closes
         stream_done.waitForZero();

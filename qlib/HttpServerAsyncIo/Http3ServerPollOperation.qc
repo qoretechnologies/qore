@@ -128,22 +128,24 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         *string conn_completion_uh;
         *string conn_completion_state;
 
-        #! Registered stream data listeners (stream_id -> listener object)
+        #! Registered stream data listeners (composite key -> listener object)
         /** Used for WebSocket extended CONNECT streams. The controller dispatches
             onStreamData() to a worker thread when data arrives.
+            Keys are "session_id:stream_id" for H3 (since multiple sessions share one op).
 
             @since Http3ServerPollOperation 1.0
         */
         hash<string, object> stream_listeners;
 
-        #! Registered stream data Queues (stream_id -> Queue)
+        #! Registered stream data Queues (composite key -> Queue)
         /** The C++ h3RecvDataCallback pushes data directly to these Queues.
             continuePoll() checks for non-empty Queues to report data_ready_streams.
+            Keys are "session_id:stream_id" for H3.
         */
         hash<string, Queue> stream_queues;
 
-        #! Stream IDs with data available (populated by continuePoll, consumed by controller)
-        list<int> data_ready_streams;
+        #! Stream keys with data available (populated by continuePoll, consumed by controller)
+        list<string> data_ready_streams;
     }
 
     #! Creates the poll operation
@@ -219,9 +221,9 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         # AFTER processing gives the most up-to-date view
         on_exit {
             data_ready_streams = ();
-            foreach string sid in (keys stream_queues) {
-                if (!stream_queues{sid}.empty()) {
-                    data_ready_streams += sid.toInt();
+            foreach string skey in (keys stream_queues) {
+                if (!stream_queues{skey}.empty()) {
+                    data_ready_streams += skey;
                 }
             }
         }
@@ -613,37 +615,40 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         @param state the connection state when submitted
     */
     #! Registers a Queue for stream data delivery (extended CONNECT tunnels)
-    /** @param stream_id the QUIC stream ID
+    /** @param session_id the QUIC session ID
+        @param stream_id the QUIC stream ID
         @param queue the Queue that h3RecvDataCallback pushes data to
     */
-    registerStreamQueue(int stream_id, Queue queue) {
-        stream_queues{string(stream_id)} = queue;
+    registerStreamQueue(int session_id, int stream_id, Queue queue) {
+        stream_queues{sprintf("%d:%d", session_id, stream_id)} = queue;
     }
 
     #! Registers a stream data listener (called from worker thread when data arrives)
-    /** @param stream_id the QUIC stream ID
+    /** @param session_id the QUIC session ID
+        @param stream_id the QUIC stream ID
         @param listener object with notifyIo() method (e.g., WebSocketStreamProcessor)
     */
-    registerStreamListener(int stream_id, object listener) {
-        stream_listeners{string(stream_id)} = listener;
+    registerStreamListener(int session_id, int stream_id, object listener) {
+        stream_listeners{sprintf("%d:%d", session_id, stream_id)} = listener;
     }
 
     #! Called by the I/O controller on a worker thread when stream data is available
     /** Notifies the registered listener for the given stream.
+        @param stream_key composite key "session_id:stream_id"
     */
-    nothing onStreamData(int stream_id) {
-        *object listener = stream_listeners{string(stream_id)};
+    nothing onStreamData(string stream_key) {
+        *object listener = stream_listeners{stream_key};
         if (listener) {
             listener.notifyIo();
         }
     }
 
-    #! Returns and clears the list of stream IDs with data available
+    #! Returns and clears the list of stream keys with data available
     /** Called by the I/O controller after continuePoll() to determine which
         streams need onStreamData dispatch.
     */
-    list<int> getAndClearDataReadyStreams() {
-        list<int> rv = data_ready_streams;
+    list<string> getAndClearDataReadyStreams() {
+        list<string> rv = data_ready_streams;
         data_ready_streams = ();
         return rv;
     }

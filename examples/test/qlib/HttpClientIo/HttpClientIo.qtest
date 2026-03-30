@@ -1372,7 +1372,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         # Submit async request to slow handler (takes 2s)
-        hash<auto> result = stream.submitAsync("GET", "/slow/2000");
+        stream.submitAsync("GET", "/slow/2000");
 
         # Cancel immediately before response arrives — the Future will be
         # rejected with HTTP3-CANCELLED via the PromiseAction

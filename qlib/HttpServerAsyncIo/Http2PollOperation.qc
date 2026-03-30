@@ -84,8 +84,10 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
     #! Called on a worker thread when stream data has been drained to a Queue
     /** Dispatched by the async I/O controller after the C++ drain pushes data.
         Wakes the handler thread for the given stream.
+        @param stream_key stream identifier (string representation of stream_id)
     */
-    nothing onStreamData(int stream_id) {
+    nothing onStreamData(string stream_key) {
+        int stream_id = stream_key.toInt();
         *object listener = stream_listeners{stream_id};
         if (listener) {
             listener.notifyIo();

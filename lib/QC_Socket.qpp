@@ -6491,54 +6491,6 @@ nothing Socket::deregisterQuicConnectStreamQueue(int session_id, int stream_id) 
     s->deregisterQuicConnectStreamQueue(session_id, stream_id, xsink);
 }
 
-//! Create and register a data notification notifier for an HTTP/3 CONNECT tunnel stream
-/** Creates a StreamNotifier that is signaled (pure C++) from the QUIC receive path
-    when data arrives for this stream.  Use waitForQuicConnectStreamNotify() to block
-    on the notifier from a handler/watcher thread.
-
-    @param session_id the QUIC session ID (must be > 0)
-    @param stream_id the HTTP/3 stream ID (must be >= 0)
-
-    @throw QUIC-ERROR if no session with the given ID exists
-
-    @since %Qore 2.3
-*/
-nothing Socket::registerQuicConnectStreamNotifier(int session_id, int stream_id) {
-    if (session_id <= 0) {
-        xsink->raiseException("QUIC-ERROR", "invalid session_id %lld: must be > 0", (long long)session_id);
-        return QoreValue();
-    }
-    if (stream_id < 0) {
-        xsink->raiseException("QUIC-ERROR", "invalid stream_id %lld: must be >= 0", (long long)stream_id);
-        return QoreValue();
-    }
-    s->registerQuicConnectStreamNotifier(session_id, stream_id, xsink);
-}
-
-//! Wait for data notification on an HTTP/3 CONNECT tunnel stream
-/** Blocks until the notifier is signaled (data arrived) or the timeout expires.
-    Returns immediately if the notifier has been closed (stream ended or cleaned up).
-
-    A timeout without signal returns 0 (same as signaled).  The caller should
-    treat both as "check for data now" and loop back to wait again if no data
-    is found.
-
-    @param session_id the QUIC session ID
-    @param stream_id the HTTP/3 stream ID
-    @param to maximum wait timeout
-
-    @return 0 if signaled or timed out (data may be available),
-            -1 if closed or error (caller should exit)
-
-    @since %Qore 2.3
-*/
-int Socket::waitForQuicConnectStreamNotify(int session_id, int stream_id, timeout to) {
-    if (session_id <= 0 || stream_id < 0) {
-        return -1;
-    }
-    return s->waitForQuicConnectStreamNotify(session_id, stream_id, (int)to, xsink);
-}
-
 //! Reset an HTTP/3 stream by shutting down the read side and cleaning up
 /** Sends a STOP_SENDING signal to the peer for the given stream and removes the stream
     from the QUIC session.

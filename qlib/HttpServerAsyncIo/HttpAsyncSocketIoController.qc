@@ -1172,12 +1172,7 @@ public class HttpAsyncSocketIoController {
             listener.registerQuicConnectStreamQueue(session_id, stream_id,
                 stream_data_queue);
             # Register the Queue with the H3 poll operation for dispatch tracking
-            h3op.registerStreamQueue(stream_id, stream_data_queue);
-            # Register a StreamNotifier so the C++ QUIC recv callback can
-            # signal the H3 watcher thread when data arrives
-            if (is_websocket_connect) {
-                listener.registerQuicConnectStreamNotifier(session_id, stream_id);
-            }
+            h3op.registerStreamQueue(session_id, stream_id, stream_data_queue);
         }
 
         # Create send-and-wake wrapper for handler threads (HTTP/3 version).
@@ -1223,7 +1218,7 @@ public class HttpAsyncSocketIoController {
                 "send_stream_data": send_stream_data,
                 "io_wake": sub () { controller.wake(); },
                 "register_stream_listener": sub (object listener) {
-                    h3op.registerStreamListener(stream_id, listener);
+                    h3op.registerStreamListener(session_id, stream_id, listener);
                 },
                 "register_persistent_queue": sub (string key, Queue q,
                         *code<bool(hash<auto>)> filter) {

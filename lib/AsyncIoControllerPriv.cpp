@@ -35,6 +35,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -193,15 +194,15 @@ void QoreCallDispatcher::dispatchAsync(ResolvedCallReferenceNode* callback, Qore
 
 void QoreCallDispatcher::dispatchContinuePollAsync(QoreObject* spop_obj,
         AsyncIoControllerPriv* controller, const std::string& key) {
-    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key, 0});
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_CONTINUE_POLL, controller, key});
 }
 
-void QoreCallDispatcher::dispatchStreamDataAsync(QoreObject* spop_obj, int32_t stream_id) {
-    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_STREAM_DATA_NOTIFY, nullptr, std::string(), stream_id});
+void QoreCallDispatcher::dispatchStreamDataAsync(QoreObject* spop_obj, const std::string& stream_key) {
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_STREAM_DATA_NOTIFY, nullptr, std::string(), stream_key});
 }
 
 void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj) {
-    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_POLL_COMPLETE_NOTIFY, nullptr, std::string(), 0});
+    enqueue({spop_obj, nullptr, nullptr, nullptr, DT_POLL_COMPLETE_NOTIFY, nullptr, std::string()});
 }
 
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
@@ -364,7 +365,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             case DT_STREAM_DATA_NOTIFY: {
                 method_name = "onStreamData";
                 ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
-                args->push(async_item.stream_id, xsink);
+                args->push(new QoreStringNode(async_item.stream_key), xsink);
                 ValueHolder rv(async_item.spop_obj->evalMethod("onStreamData", *args,
                     &work_xsink), &work_xsink);
                 break;
@@ -1533,6 +1534,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     result.new_poll_info = new_info;
                 }
 
+                // Set controller notifier on QUIC server ops (propagated to sessions)
+                auto* quic_op = dynamic_cast<SocketQuicServerPollOperation*>(op.spop_base);
+                if (quic_op && !quic_op->getControllerNotifier()) {
+                    quic_op->setControllerNotifier(notifier);
+                }
+
                 // Check for stream data notifications (HTTP/2 CONNECT streams)
                 // After the C++ drain pushes data to Queues, dispatch onStreamData()
                 // to the worker pool so the handler thread wakes up.
@@ -1546,7 +1553,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         }
                         for (int32_t sid : ready) {
                             op.spop_obj->ref();
-                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj, sid);
+                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                                std::to_string(sid));
                         }
                     }
                 }
@@ -1605,9 +1613,16 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                     call_dispatcher = new QoreCallDispatcher(max_callback_workers);
                                 }
                                 for (size_t i = 0; i < sl->size(); ++i) {
-                                    int32_t sid = (int32_t)sl->retrieveEntry(i).getAsBigInt();
+                                    QoreValue v = sl->retrieveEntry(i);
+                                    std::string skey;
+                                    if (v.getType() == NT_STRING) {
+                                        skey = v.get<const QoreStringNode>()->c_str();
+                                    } else {
+                                        skey = std::to_string(v.getAsBigInt());
+                                    }
                                     op.spop_obj->ref();
-                                    call_dispatcher->dispatchStreamDataAsync(op.spop_obj, sid);
+                                    call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                                        skey);
                                 }
                             }
                         }
@@ -2399,7 +2414,9 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
             }
         }
 
-        // Acknowledge notifier
+        // Acknowledge notifier — any notify() call (including stream data
+        // notifications from h3RecvDataCallback) means something changed; set
+        // force_poll so Phase 1 re-checks all ops regardless of socket readiness
         notifier->acknowledge(xsink);
         if (*xsink) {
             xsink->clear();
@@ -2408,6 +2425,7 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
         // Check if new commands arrived during acknowledge
         {
             AutoLocker al(m);
+            force_poll = true;
             if (cmdq.empty()) {
                 break;
             }
