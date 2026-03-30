@@ -190,8 +190,12 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     private processServerFrame(hash<auto> frame) {
         string frame_type = frame.type;
 
-        # Close — C++ already handled the close handshake
+        # Close — queue the close echo from the Qore side (after all data
+        # frames have been processed) so echo responses are delivered to the
+        # peer before the close frame.  The C++ side does NOT echo
+        # peer-initiated close frames — that's deferred to here.
         if (frame_type == "close") {
+            sendClose(frame.code ?? WSCC_NormalClosure);
             return;
         }
 
