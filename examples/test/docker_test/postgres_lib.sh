@@ -1,7 +1,7 @@
 #!/bin/sh
 
 start_postgres() {
-    docker run --name=postgres --network=host -e POSTGRES_PASSWORD=omq -e TZ=Europe/Prague -e PGTZ=Europe/Prague -d postgres:15
+    docker run --name=postgres --network=host -e POSTGRES_PASSWORD=omq -e TZ=Europe/Prague -e PGTZ=Europe/Prague -d pgvector/pgvector:pg15
 
     # wait for PostgreSQL server to start
     printf "waiting on PostgreSQL server: "
@@ -32,6 +32,9 @@ start_postgres() {
 
     # make sure we can access the DB
     qore -nX "(new Datasource(\"${QORE_DB_CONNSTR_PGSQL}\")).getServerVersion()"
+
+    # enable pgvector extension if available
+    psql -Upostgres -h ${OMQ_DB_HOST} -c "create extension if not exists vector;" ${OMQ_DB_NAME} 2>/dev/null || true
 }
 
 setup_postgres_on_host() {
@@ -61,6 +64,7 @@ setup_postgres_on_host() {
     cat <<EOF | psql -Upostgres ${PSQL_ARGS}
 create database ${OMQ_DB_NAME} encoding = 'utf8';
 \connect ${OMQ_DB_NAME};
+create extension if not exists vector;
 create user ${OMQ_DB_USER} password 'omq';
 grant create, connect, temp on database ${OMQ_DB_NAME} to ${OMQ_DB_USER};
 grant create on tablespace omq_data to ${OMQ_DB_USER};

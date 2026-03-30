@@ -30,16 +30,20 @@ public namespace Schema {
 /** @since Schema 1.5
 */
 public const ColumnTypeMap = {
-    "int": ("qore_type": Type::Int),
-    "varchar": ("qore_type": SqlUtil::VARCHAR),
-    "char": ("qore_type": SqlUtil::CHAR),
-    "timestamp": ("qore_type": Type::Date),
-    "date": ("qore_type": Type::Date,
-        "driver": ("oracle": ("native_type": "date"), "pgsql": ("native_type": "date"))),
-    "number": ("qore_type": SqlUtil::NUMERIC),
-    "blob": ("qore_type": SqlUtil::BLOB),
-    "clob": ("qore_type": SqlUtil::CLOB),
-    "binary": ("qore_type": Type::Binary),
+    "int": {"qore_type": Type::Int},
+    "varchar": {"qore_type": SqlUtil::VARCHAR},
+    "char": {"qore_type": SqlUtil::CHAR},
+    "timestamp": {"qore_type": Type::Date},
+    "date": {"qore_type": Type::Date,
+        "driver": {"oracle": {"native_type": "date"}, "pgsql": {"native_type": "date"}}},
+    "number": {"qore_type": SqlUtil::NUMERIC},
+    "blob": {"qore_type": SqlUtil::BLOB},
+    "clob": {"qore_type": SqlUtil::CLOB},
+    "binary": {"qore_type": Type::Binary},
+    # pgvector extension types (PostgreSQL only)
+    "vector": {"driver": {"pgsql": {"native_type": "vector"}}},
+    "halfvec": {"driver": {"pgsql": {"native_type": "halfvec"}}},
+    "sparsevec": {"driver": {"pgsql": {"native_type": "sparsevec"}}},
 };
 
 #! Loads and normalizes .ysm (YAML) and .jsm (JSON) schema definition files
