@@ -459,8 +459,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 // for readData() consumer, then close the channel
                 QoreValue body_val = output->getKeyValue("body");
                 if (!body_val.isNullOrNothing()) {
-                    // Send body without end_stream
-                    QoreHashNode* body_resp = output->hashRefSelf();
+                    // Send body without end_stream — copy before modifying
+                    QoreHashNode* body_resp = output->copy();
                     QoreValue removed = body_resp->takeKeyValue("end_stream");
                     removed.discard(xsink);
                     action->execute(body_resp, xsink);

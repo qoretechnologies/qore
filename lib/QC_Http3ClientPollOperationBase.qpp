@@ -322,7 +322,8 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
 
             if (action) {
                 // Pure C++ dispatch — no execValue(), no Qore interpreter
-                ReferenceHolder<QoreHashNode> resp(output->hashRefSelf(), xsink);
+                // Copy before modifying — output may be referenced elsewhere
+                ReferenceHolder<QoreHashNode> resp(output->copy(), xsink);
                 resp->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
                 action->execute(resp.release(), xsink);
                 action->deref(xsink);
