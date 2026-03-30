@@ -163,6 +163,8 @@ public class ConnectionSchemeCache {
             "nats": "NatsDataProvider",
             "natss": "NatsDataProvider",
 
+            "grok": "GrokRestClient",
+
             "netsuite": "NetSuiteRestClient",
 
             "openai": "OpenAiRestClient",
