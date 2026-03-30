@@ -488,7 +488,10 @@ public class WebSocketConnection {
             io_pending = True;
             io_cond.signal();
         }
-        if (stream_processor) {
+        # Delegate to stream processor for H2/H3 — but skip if we're already
+        # inside the processor (re-entry from gotMessage -> send -> notifyIo
+        # would deadlock on the processor's mutex)
+        if (stream_processor && !get_thread_data("ws_stream_processing")) {
             try {
                 stream_processor.notifyIo();
             } catch () {}
@@ -560,6 +563,14 @@ public class WebSocketConnection {
         if (async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(msg);
             notifyIo();
+            return;
+        }
+        # H2/H3: send directly via stream context if available
+        if (stream_ctx) {
+            try {
+                stream_ctx.sendData(msg);
+                notifyIo();
+            } catch () {}
             return;
         }
         try {
@@ -1093,6 +1104,9 @@ class WebSocketStreamProcessor {
         if (closed) {
             return;
         }
+        # Set thread-local flag to prevent re-entry via gotMessage -> send -> notifyIo
+        save_thread_data("ws_stream_processing", True);
+        on_exit delete_thread_data("ws_stream_processing");
 
         *AsyncSocketIo::AbstractStreamContext ctx = wsc.getStreamContext();
         if (!ctx) {
