@@ -1116,17 +1116,29 @@ class WebSocketStreamProcessor {
         }
 
         try {
-            # Read all available stream data
-            *binary incoming = ctx.readData();
-            if (!exists incoming) {
-                # Stream closed (NOTHING sentinel from Queue)
-                if (!closed) {
-                    closed = True;
-                    done.dec();
+            # Read ALL available stream data (may be multiple Queue entries)
+            bool got_data = False;
+            while (True) {
+                *binary incoming = ctx.readData();
+                if (!exists incoming) {
+                    if (!got_data) {
+                        # NOTHING on first read = stream closed or no data
+                        # Check if the stream context reports closed
+                        if (!ctx.isOpen()) {
+                            if (!closed) {
+                                closed = True;
+                                done.dec();
+                            }
+                        }
+                        return;
+                    }
+                    # NOTHING after successful reads = queue drained
+                    break;
                 }
-                return;
-            }
-            if (incoming.size() > 0) {
+                if (incoming.size() == 0) {
+                    break;
+                }
+                got_data = True;
                 stream_buf = stream_buf.size() > 0 ? stream_buf + incoming : incoming;
             }
 
