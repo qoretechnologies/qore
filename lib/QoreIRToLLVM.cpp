@@ -3205,9 +3205,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         // closures capture their own CVV).
                         if (aot_mode) {
                             // In AOT mode, closure-use vars are NOT pre-instantiated by
-                            // evalTiered, so we must do a proper pop (uninstantiate) here.
-                            // Use qore_rt_pop_closure_var_aot which pops from the cvstack
-                            // via the LocalVar* from the AOT context.
+                            // evalTiered — they're lazily instantiated on first StoreLocal.
+                            // Only pop if the variable was actually instantiated (a StoreLocal
+                            // was encountered). Uninitialized declarations like "list<auto> x;"
+                            // generate no StoreLocal, so the variable was never pushed.
+                            if (instantiated_non_entry_locals.count(key) == 0) {
+                                // Never instantiated — skip the pop
+                                return true;
+                            }
                             auto uninst_helper = module.getOrInsertFunction("qore_rt_pop_closure_var_aot",
                                     llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
                             int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
