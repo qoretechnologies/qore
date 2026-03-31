@@ -305,6 +305,27 @@ static nothing AsyncIoController::wakeSocket(AbstractPollableIoObjectBase[Abstra
     ctrl->wakeSocket(std::string(hash.c_str()));
 }
 
+//! Waits for all pending onComplete/abort callbacks to be processed
+/** Call after cancelByOwner() to ensure all cancelled operation callbacks
+    have been delivered before stopping thread pools that depend on them.
+
+    This prevents shutdown deadlocks where a ThreadPool.stop() blocks
+    waiting for handler threads that are waiting for onComplete() to
+    signal their done counter.
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::flushCallbacks() {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->flushCallbacks();
+}
+
 //! Waits for the global singleton's I/O thread to be ready
 /** @param to timeout for waiting; use 0 to wait indefinitely
     @return @ref True "True" if the I/O thread is ready within the timeout

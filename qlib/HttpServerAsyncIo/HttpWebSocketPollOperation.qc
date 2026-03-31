@@ -95,10 +95,17 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     }
 
     #! Sets the done counter for lifecycle signaling
-    /** @param done counter to decrement when the connection closes
+    /** @param done counter to decrement when the connection closes.
+        If onComplete() has already run (race between I/O completion and
+        handler setup), signals immediately.
     */
     public setDone(Counter done) {
+        AutoLock al(dispatch_mutex);
         self.done = done;
+        if (completed) {
+            # onComplete() already ran before we set the counter — signal now
+            done.dec();
+        }
     }
 
     #! Called by the I/O controller on a worker thread when frames have been pushed

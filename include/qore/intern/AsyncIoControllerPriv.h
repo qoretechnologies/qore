@@ -147,6 +147,14 @@ public:
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
 
+    //! Wait for all pending work items to be processed
+    /** Blocks until the async queue is empty AND no workers are actively
+        processing items. Used during shutdown to ensure all onComplete()
+        callbacks are delivered before stopping thread pools that depend
+        on them.
+    */
+    DLLLOCAL void waitForIdle();
+
     //! Maximum cap for auto-scaled workers
     static constexpr int MAX_WORKER_CAP = 32;
 
@@ -154,8 +162,10 @@ private:
     QoreThreadLock m;
     QoreCondition work_avail;               //!< Signaled when work is available
     QoreCondition workers_done;             //!< Signaled when all workers have exited
+    QoreCondition idle_cond;                //!< Signaled when queue drains and processing completes
     std::deque<AsyncWorkItem> async_queue;  //!< Pending async work items
     int active_workers = 0;                 //!< Number of running worker threads
+    int active_processing = 0;             //!< Number of workers currently processing items
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
 
@@ -250,6 +260,12 @@ public:
     /** @param sock_hash the socket hash identifying the target operation
     */
     DLLLOCAL void wakeSocket(const std::string& sock_hash);
+
+    //! Wait for all pending onComplete/abort callbacks to be processed
+    /** Call after cancelByOwner() to ensure all cancelled operation callbacks
+        have been delivered before stopping thread pools that depend on them.
+    */
+    DLLLOCAL void flushCallbacks();
 
     //! Start the I/O thread
     /** @param xsink for exception handling

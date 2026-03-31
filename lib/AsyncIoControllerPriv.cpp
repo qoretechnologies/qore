@@ -278,6 +278,13 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
     async_queue.clear();
 }
 
+void QoreCallDispatcher::waitForIdle() {
+    AutoLocker al(m);
+    while (!async_queue.empty() || active_processing > 0) {
+        idle_cond.wait(m);
+    }
+}
+
 void QoreCallDispatcher::workerEntry(ExceptionSink* xsink, void* arg) {
     QoreCallDispatcher* self = static_cast<QoreCallDispatcher*>(arg);
     self->workerLoop(xsink);
@@ -304,6 +311,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             }
             async_item = async_queue.front();
             async_queue.pop_front();
+            ++active_processing;
         }
 
         ExceptionSink work_xsink;
@@ -400,6 +408,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.args) {
             async_item.args->deref(xsink);
         }
+
+        {
+            AutoLocker al(m);
+            --active_processing;
+            if (async_queue.empty() && active_processing == 0) {
+                idle_cond.broadcast();
+            }
+        }
     }
 }
 
@@ -494,6 +510,22 @@ void AsyncIoControllerPriv::stopThreadPool(ExceptionSink* xsink) {
         tp->stopWait(xsink);
         tp->deref(xsink);
     }
+}
+
+void AsyncIoControllerPriv::flushCallbacks() {
+    // Take a reference on the controller so the dispatcher can't be
+    // deleted (via deref → stop → delete) while we're waiting on it
+    ref();
+    QoreCallDispatcher* cd = nullptr;
+    {
+        AutoLocker al(m);
+        cd = call_dispatcher;
+    }
+    if (cd) {
+        cd->waitForIdle();
+    }
+    ExceptionSink xsink;
+    deref(&xsink);
 }
 
 // --- Public API ---
@@ -2920,6 +2952,9 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         // Always dispatch onComplete() to worker pool — it may acquire
         // application-level locks that would block the I/O thread.
         // Only continuePoll() is safe to run on the I/O thread (frame processing).
+        // Callers that need synchronous delivery (e.g., cancelByOwner during
+        // shutdown) should call flushCallbacks() after cancellation to wait
+        // for all dispatched callbacks to complete.
         {
             AutoLocker al(m);
             if (!call_dispatcher) {

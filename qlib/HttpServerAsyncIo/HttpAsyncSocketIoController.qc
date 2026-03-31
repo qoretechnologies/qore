@@ -288,6 +288,13 @@ public class HttpAsyncSocketIoController {
                 # ignore - operation may have already completed
             }
         }
+        # Wait for all pending onComplete/abort callbacks to be processed before
+        # stopping the handler pool. Cancelled WebSocket operations have their
+        # onComplete dispatched asynchronously via QoreCallDispatcher. The handler
+        # threads are blocked on done.waitForZero() until onComplete signals them.
+        # Without this flush, handler_pool.stopWait() deadlocks.
+        controller.flushCallbacks();
+
         # Wait for in-flight handler tasks to complete; the stopping flag prevents
         # them from submitting new operations to the controller
         handler_pool.stopWait();

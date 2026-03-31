@@ -1459,6 +1459,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # listenerStopped() -> c.done()
         c.wait();
 
+        # Flush any remaining async callbacks (from the cancelByOwner above)
+        ctrl.flushCallbacks();
+
         threadPool.stop();
 
         {

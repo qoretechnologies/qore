@@ -200,6 +200,14 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::cancelByOwner(owner);
     }
 
+    #! Waits for all pending onComplete/abort callbacks to be processed
+    /** Call after cancelByOwner() to ensure all cancelled operation
+        callbacks have been delivered before stopping thread pools.
+    */
+    flushCallbacks() {
+        Qore::AsyncIoController::flushCallbacks();
+    }
+
     #! Sets the logger for the controller
     setLogger(*LoggerInterface logger) {
         LoggerWrapper::setLogger(logger);
