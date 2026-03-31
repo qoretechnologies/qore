@@ -358,18 +358,10 @@ public class QLSServer {
         }
     }
 
-    private:internal log(int verbosity, string fmt) {
+    private:internal log(int verbosity, string fmt, ...) {
         if (fos && verbosity <= logVerbosity) {
             string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
             string msg = vsprintf(str + fmt + "\n", argv);
-            fos.write(binary(msg));
-        }
-    }
-
-    private:internal log(int verbosity, string fmt, softlist<auto> l) {
-        if (fos && verbosity <= logVerbosity) {
-            string str = sprintf("%s: ", format_date("YYYY-MM-DD HH:mm:SS", now()));
-            string msg = vsprintf(str + fmt + "\n", l);
             fos.write(binary(msg));
         }
     }
