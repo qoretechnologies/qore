@@ -478,6 +478,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_box_big_int(int64_t val) {
 
 extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
     if (var) {
+        // Don't create a duplicate CVV if the closure variable is already on the
+        // cvstack (e.g., instantiated by the declaring function's AST execution
+        // before the function was JIT-compiled). Creating a duplicate breaks
+        // closure write-back semantics during tiered compilation tier transitions.
+        if (var->closureUse() && thread_try_find_closure_var(var->getName())) {
+            return;
+        }
         var->instantiate(QoreParseOptions());
     }
 }
