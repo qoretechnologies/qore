@@ -1272,6 +1272,10 @@ ClosureVarValue* thread_try_get_runtime_closure_var(const LocalVar* id) {
     return env ? env->find(id) : nullptr;
 }
 
+bool thread_has_runtime_closure_env() {
+    return thread_data.get()->closure_rt_env != nullptr;
+}
+
 ClosureParseEnvironment* thread_get_closure_parse_env() {
     return thread_data.get()->closure_parse_env;
 }
