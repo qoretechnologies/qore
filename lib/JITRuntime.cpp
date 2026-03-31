@@ -5307,6 +5307,19 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
         return toBits(priv->evalMethod(o, method_name, *arg_list, class_ctx, rc, xsink));
     }
 
+    // Check for hash member closures/call references (e.g. h.f() where h.f is a closure)
+    if (base.getType() == NT_HASH) {
+        const AbstractQoreNode* ref = check_call_ref(base.getInternalNode(), method_name);
+        if (ref) {
+            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+        }
+    } else if (base.getType() == NT_WEAKREF_HASH) {
+        const AbstractQoreNode* ref = check_call_ref(base.get<WeakHashReferenceNode>()->get(), method_name);
+        if (ref) {
+            return toBits(reinterpret_cast<const ResolvedCallReferenceNode*>(ref)->execValue(*arg_list, xsink));
+        }
+    }
+
     // For non-objects, use pseudo-class lookup
     return toBits(pseudo_classes_eval(base, method_name, *arg_list, xsink));
 }
