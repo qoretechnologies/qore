@@ -882,6 +882,22 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         "function into smaller functions\n",
                         variant_key.c_str(), total_ir_insts);
                 }
+                // Pre-register function parameters in the slot map so that AST
+                // expressions delegated to qore_rt_invoke_expr_aot (e.g., NewObject
+                // constructor args) can resolve VarRefNode locals correctly.
+                // Without this, functions that only use params in delegated expressions
+                // (not in direct LLVM loads) would have 0 local slots, and the
+                // deserialized expression would get wrong LocalVar* pointers.
+                {
+                    const UserSignature* pre_sig = uvb->getUserSignature();
+                    if (pre_sig) {
+                        for (unsigned pi = 0; pi < pre_sig->numParams(); ++pi) {
+                            const void* key = reinterpret_cast<const void*>(pre_sig->lv[pi]);
+                            slots.getLocalSlot(key);
+                        }
+                    }
+                }
+
                 bool std_entry_ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
 
                 // Compile fast entry for self-recursive Approach B
@@ -1055,6 +1071,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             "LLVM compilation may take a long time; consider breaking this "
                             "method into smaller methods\n",
                             variant_key.c_str(), total_ir_insts);
+                    }
+                    // Pre-register method parameters in the slot map (see comment above)
+                    {
+                        const UserSignature* pre_sig = uvb->getUserSignature();
+                        if (pre_sig) {
+                            for (unsigned pi = 0; pi < pre_sig->numParams(); ++pi) {
+                                const void* key = reinterpret_cast<const void*>(pre_sig->lv[pi]);
+                                slots.getLocalSlot(key);
+                            }
+                        }
                     }
                     if (lowerer.lowerFunction(*ir_func, module, llvm_error)) {
                         AOTCompiledFunc cf;
