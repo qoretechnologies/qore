@@ -355,6 +355,12 @@ QoreIRLocalInstruction* QoreIRBuilder::createUninstantiateLocal(LocalVar* local,
     return inst;
 }
 
+QoreIRLocalInstruction* QoreIRBuilder::createInstantiateLocal(LocalVar* local, const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::InstantiateLocal, local);
+    inst->loc = loc;
+    return inst;
+}
+
 QoreIRLocalInstruction* QoreIRBuilder::createLoadClosure(LocalVar* local, const QoreProgramLocation* loc) {
     auto inst = block->appendInstruction<QoreIRLocalInstruction>(QoreIROpcode::LoadClosure, local);
     inst->loc = loc;

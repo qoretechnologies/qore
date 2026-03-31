@@ -97,6 +97,7 @@ public:
     QoreIRLocalInstruction* createStoreLocal(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr, bool weak = false);
     QoreIRLocalInstruction* createUninstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
+    QoreIRLocalInstruction* createInstantiateLocal(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createLoadClosure(LocalVar* local, const QoreProgramLocation* loc = nullptr);
     QoreIRLocalInstruction* createStoreClosure(LocalVar* local, QoreIRValue value,
         const QoreProgramLocation* loc = nullptr, bool weak = false);

@@ -1744,6 +1744,16 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
         lvars_entry.lvars = lvars;
         lvars_entry.loc = block->loc;
         cleanup_stack.push_back(lvars_entry);
+
+        // Emit InstantiateLocal for each closure-use variable at block entry.
+        // This ensures the variable is on the cvstack before any code in the
+        // block (including CreateClosure) accesses it. Pairs with
+        // UninstantiateLocal emitted at block exit.
+        for (unsigned i = 0; i < lvars->size(); ++i) {
+            if (lvars->lv[i]->closureUse()) {
+                builder.createInstantiateLocal(lvars->lv[i], block->loc);
+            }
+        }
     }
 
     // Check if this block has on_exit/on_success/on_error handlers

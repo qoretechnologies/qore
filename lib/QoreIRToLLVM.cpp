@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 349,
+static_assert(QORE_IR_MAX_OPCODE == 350,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -675,10 +675,12 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     local_cleanup_allocas.clear();
     closure_pre_inst_flags.clear();
 
-    // First pass: identify block-scoped locals (those with explicit UninstantiateLocal)
+    // First pass: identify block-scoped locals (those with explicit UninstantiateLocal
+    // or InstantiateLocal)
     for (const auto& block : func.blocks) {
         for (const auto& inst_ptr : block->instructions) {
-            if (inst_ptr && inst_ptr->opcode == QoreIROpcode::UninstantiateLocal) {
+            if (inst_ptr && (inst_ptr->opcode == QoreIROpcode::UninstantiateLocal
+                    || inst_ptr->opcode == QoreIROpcode::InstantiateLocal)) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (linst->local) {
                     block_scoped_locals.insert(reinterpret_cast<const void*>(linst->local));
@@ -698,7 +700,8 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
             if (!inst) {
                 continue;
             }
-            if (inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal) {
+            if (inst->opcode == QoreIROpcode::LoadLocal || inst->opcode == QoreIROpcode::StoreLocal
+                    || inst->opcode == QoreIROpcode::InstantiateLocal) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
                 if (linst->local && seen.insert(linst->local).second) {
                     auto key = reinterpret_cast<const void*>(linst->local);
@@ -2897,13 +2900,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // (e.g., via computed gotos), this assumption would need to be revisited.
             bool is_entry_local = entry_locals_set.count(key) > 0;
             bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
-            // In AOT mode, closure-use vars are in pre_instantiated_locals for function
-            // membership identification, but evalTiered does NOT actually pre-instantiate
-            // them (to avoid cvstack ordering issues with same-named vars in other blocks).
-            // Treat them as non-pre-instantiated so we emit instantiation here.
-            if (aot_mode && is_pre_instantiated && linst->local && linst->local->closureUse()) {
-                is_pre_instantiated = false;
-            }
             if (!is_entry_local && !is_pre_instantiated &&
                     instantiated_non_entry_locals.insert(key).second) {
                 // First store to this non-entry local - emit instantiation
@@ -3135,6 +3131,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // local allocas from runtime to prevent stale reads from the target variable.
                 if (QoreTypeInfo::isReference(linst->local->getTypeInfo())) {
                     reloadAllLocalsFromRuntime(module, llvm_func);
+                }
+            }
+            return true;
+        }
+        case QoreIROpcode::InstantiateLocal: {
+            const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst);
+            if (!linst->local || !linst->local->closureUse()) {
+                return true;
+            }
+            auto key = reinterpret_cast<const void*>(linst->local);
+            // Only instantiate if not already done
+            if (instantiated_non_entry_locals.insert(key).second) {
+                if (aot_mode) {
+                    auto helper = module.getOrInsertFunction("qore_rt_instantiate_local_aot",
+                            llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
+                    builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot)});
+                } else {
+                    auto helper = module.getOrInsertFunction("qore_rt_instantiate_local",
+                            llvm::FunctionType::get(void_type, {ptr_type}, false));
+                    llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(linst->local));
+                    llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
+                    builder->CreateCall(helper, {var_as_ptr});
                 }
             }
             return true;

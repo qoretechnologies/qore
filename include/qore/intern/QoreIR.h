@@ -550,7 +550,12 @@ enum class QoreIROpcode : uint16_t {
     //! local variable references in the initializer hash.
     NewHashDeclFromHash = 349,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (350, 351, ...)
+    //! Explicitly instantiate a closure-use local variable on the cvstack at block entry.
+    //! Pairs with UninstantiateLocal at block exit to ensure proper lifecycle for
+    //! closure-captured block-scoped variables.
+    InstantiateLocal    = 350,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (351, 352, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -558,8 +563,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::NewHashDeclFromHash);
-static_assert(QORE_IR_MAX_OPCODE == 349, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::InstantiateLocal);
+static_assert(QORE_IR_MAX_OPCODE == 350, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! PHASE 4: Opcode Coverage Documentation

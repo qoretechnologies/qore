@@ -1820,7 +1820,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         for (const auto& inst : block->instructions) {
             if (inst->opcode == QoreIROpcode::LoadLocal
                     || inst->opcode == QoreIROpcode::StoreLocal
-                    || inst->opcode == QoreIROpcode::UninstantiateLocal) {
+                    || inst->opcode == QoreIROpcode::UninstantiateLocal
+                    || inst->opcode == QoreIROpcode::InstantiateLocal) {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst.get());
                 if (local_inst->local) {
                     auto it = slot_map.find(local_inst->local);
