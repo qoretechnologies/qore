@@ -3462,7 +3462,16 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                 error = std::string("unresolved local variable reference in IR lowering (") + context + ")";
                 return QoreIRValue();
             }
-            result = builder.createLoadLocal(var->ref.id, var->loc)->result;
+            // Route closure-use VT_LOCAL through LoadClosure so the value is
+            // always read from the cvstack (not a local alloca). The parser
+            // sets closureUse() on the LocalVar after the VarRefNode is created,
+            // so the VarRefNode may still have VT_LOCAL even though the variable
+            // is captured by a closure.
+            if (var->ref.id->closureUse()) {
+                result = builder.createLoadClosure(var->ref.id, var->loc)->result;
+            } else {
+                result = builder.createLoadLocal(var->ref.id, var->loc)->result;
+            }
             break;
         case VT_CLOSURE:
         case VT_LOCAL_TS:
@@ -3513,6 +3522,19 @@ bool QoreIRLowering::storeVarRef(const VarRefNode* var, QoreIRValue value, std::
             if (!var->ref.id) {
                 error = std::string("unresolved local variable reference in IR lowering (") + context + ")";
                 return false;
+            }
+            // Route closure-use VT_LOCAL through StoreClosure so the value is
+            // always written to the cvstack (not a local alloca). See loadVarRef
+            // comment for why closureUse() may be true even for VT_LOCAL.
+            if (var->ref.id->closureUse()) {
+                auto* store_inst = builder.createStoreClosure(var->ref.id, value, var->loc, weak);
+                if (!exception_stack.empty()) {
+                    store_inst->exception_target = exception_stack.back();
+                }
+                if (parse_context) {
+                    parse_context->markLocalAssignment(var->ref.id, true, target_type);
+                }
+                return true;
             }
             {
                 auto* store_inst = builder.createStoreLocal(var->ref.id, value, var->loc, weak);
