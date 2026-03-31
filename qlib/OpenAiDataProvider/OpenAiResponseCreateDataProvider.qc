@@ -48,7 +48,7 @@ public class OpenAiResponseCreateDataProvider inherits OpenAiModelCreateResponse
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : OpenAiModelCreateResponseDataProvider(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : OpenAiModelCreateResponseDataProvider(rest) {
     }
 
     #! Returns the data provider name

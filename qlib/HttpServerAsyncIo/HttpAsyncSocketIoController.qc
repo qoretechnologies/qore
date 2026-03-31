@@ -242,6 +242,7 @@ public class HttpAsyncSocketIoController {
         # to avoid deadlock with I/O thread callbacks that also acquire m
         *list<string> listener_keys;
         *list<Socket> conn_sockets;
+        *list<string> conn_keys;
         {
             AutoWriteLock al(m);
             # Guard against multiple stop() calls (e.g., explicit stop + destructor)
@@ -252,6 +253,7 @@ public class HttpAsyncSocketIoController {
             has_been_stopped = True;
             listener_keys = keys listeners;
             if (connections) {
+                conn_keys = keys connections;
                 conn_sockets = map connections{$1}.sock, keys connections;
             }
             listeners = {};
@@ -269,6 +271,20 @@ public class HttpAsyncSocketIoController {
         foreach string lhash in (listener_keys) {
             controller.cancelByOwner(lhash);
         }
+        # Cancel connection operations by their owner key (= connection unique hash).
+        # For QUIC/HTTP/3 connections the cache key and owner are the connection
+        # unique hash (e.g., "HASH:quic:SESSION_ID"), NOT the raw socket hash, so
+        # controller.cancel(sock) would miss them.  cancelByOwner(uh) matches the
+        # owner field set by submitConnectionOpIntern().
+        foreach string uh in (conn_keys) {
+            try {
+                controller.cancelByOwner(uh);
+            } catch () {
+                # ignore - operation may have already completed
+            }
+        }
+        # Also cancel by socket for non-QUIC connections (HTTP/1.x, HTTP/2) where
+        # the cache key is the socket unique hash
         foreach Socket sock in (conn_sockets) {
             try {
                 controller.cancel(sock);
@@ -288,11 +304,18 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             if (connections) {
+                conn_keys = keys connections;
                 conn_sockets = map connections{$1}.sock, keys connections;
                 connections = {};
             } else {
+                conn_keys = NOTHING;
                 conn_sockets = NOTHING;
             }
+        }
+        foreach string uh in (conn_keys) {
+            try {
+                controller.cancelByOwner(uh);
+            } catch () {}
         }
         foreach Socket sock in (conn_sockets) {
             try {
@@ -1080,17 +1103,21 @@ public class HttpAsyncSocketIoController {
         # Detect headers-only dispatch
         bool body_streaming = request.hdr && !request.headers_end_stream;
 
-        # For non-WebSocket extended CONNECT: create unlimited Queue for async data
-        # delivery.  Data is pushed directly from the QUIC receive callback to the
-        # Queue, eliminating the I/O poll loop dependency for data delivery.
-        # WebSocket CONNECT handlers have their own framing mechanism and read
-        # connect_stream_data_ directly — registering a Queue would consume the
-        # data before the WebSocket handler sees it.
+        # For extended CONNECT: create unlimited Queue for async data delivery.
+        # Data is pushed directly from the QUIC receive callback (h3RecvDataCallback)
+        # to the Queue, eliminating the I/O poll loop dependency for data delivery.
         *Queue stream_data_queue;
-        if (is_extended_connect && !is_websocket_connect) {
+        if (is_extended_connect) {
             stream_data_queue = new Queue();
             listener.registerQuicConnectStreamQueue(session_id, stream_id,
                 stream_data_queue);
+            # For WebSocket: also register a StreamNotifier so the QUIC receive
+            # callback can signal the handler when data arrives (pure C++, safe
+            # from ngtcp2 callbacks).  The handler starts a background watcher
+            # thread that blocks on the notifier and calls wsc.notifyIo().
+            if (is_websocket_connect) {
+                listener.registerQuicConnectStreamNotifier(session_id, stream_id);
+            }
         }
 
         # Create send-and-wake wrapper for handler threads (HTTP/3 version).

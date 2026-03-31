@@ -6,7 +6,7 @@ default:
   services:
     - name: mariadb:lts
       alias: mysql
-    - name: postgres:18
+    - name: pgvector/pgvector:pg18
       alias: pgsql
     - name: memcached:latest
       alias: memcached
@@ -349,7 +349,7 @@ test-macos:
   stage: test
   needs: []
   tags:
-    - macos-host
+    - macos
   services: []
   variables:
     QORE_TEST_OPTS: '-penable-debug'

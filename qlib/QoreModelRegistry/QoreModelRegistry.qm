@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file QoreModelRegistry.qm module providing a filesystem-backed ML model registry
+#! @file QoreModelRegistry.qm module providing an ML model registry with pluggable storage backends
 
 /*  QoreModelRegistry.qm Copyright 2026 Qore Technologies, s.r.o.
 
@@ -35,12 +35,19 @@
 %define NoJson
 %endtry
 
+%try-module SqlUtil
+%define NoSqlUtil
+%endtry
+
 module QoreModelRegistry {
-    version = "1.0.0";
-    desc = "user module providing a filesystem-backed ML model registry for versioning, tagging, and deployment management";
+    version = "2.0.0";
+    desc = "user module providing an ML model registry with pluggable storage backends for versioning, tagging, and deployment management";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
     license = "MIT";
+    init = sub () {
+        DataProvider::registerFactory(new ModelRegistryDataProviderFactory());
+    };
 }
 
 /** @mainpage QoreModelRegistry Module
@@ -49,14 +56,23 @@ module QoreModelRegistry {
 
     @section qoremodelregistryintro QoreModelRegistry Module Introduction
 
-    The %QoreModelRegistry module provides a filesystem-backed registry for managing
-    trained ML models. It supports versioning, tagging, pruning, and loading models —
-    enabling production workflows where models need to survive restarts, be compared
-    across versions, and be promoted to production.
+    The %QoreModelRegistry module provides a registry for managing trained ML models
+    with pluggable storage backends. It supports versioning, tagging, pruning, and
+    loading models — enabling production workflows where models need to survive
+    restarts, be compared across versions, and be promoted to production.
+
+    Storage backends:
+    - @ref FilesystemBackend — stores models on the local filesystem (default)
+    - @ref DatabaseBackend — stores models in a database via SqlUtil
+    - @ref RestBackend — stores models via a REST API
 
     The registry supports optional multi-tenant deployment, where each tenant's models
-    are stored in an isolated subdirectory. This enables a single shared registry
-    instance to serve multiple independent tenants with full data isolation.
+    are isolated from other tenants. A single shared registry instance can serve
+    multiple independent tenants with full data isolation.
+
+    The artifact storage layer is designed for extensibility: model artifacts are
+    currently stored inline (as files or blobs), but the @ref ArtifactRef abstraction
+    supports future object store backends (e.g., S3/MinIO) without schema changes.
 
     @par Single-Tenant Example:
     @code{.py}
@@ -109,6 +125,15 @@ list<string> tenants = admin.listTenants();  # ("acme-corp", "globex-inc")
     @endcode
 
     @section qoremodelregistryreleasenotes QoreModelRegistry Module Release Notes
+
+    @subsection qoremodelregistry_2_0 QoreModelRegistry Module Version 2.0
+    - Pluggable storage backends via @ref AbstractModelRegistryBackend
+    - @ref FilesystemBackend extracted from original monolithic ModelRegistry
+    - @ref ArtifactRef abstraction for future object store support
+    - @ref ModelVersionInfo hashdecl for structured version metadata
+    - \c deleteTenantStorage() for user/tenant cleanup
+    - \c getBackend() to access the underlying storage backend
+    - Constructor accepts \c backend option for pre-constructed backends
 
     @subsection qoremodelregistry_1_0 QoreModelRegistry Module Version 1.0
     - Initial release with filesystem-backed registry

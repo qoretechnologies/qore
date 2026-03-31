@@ -35,7 +35,7 @@
 #include "qore/intern/QoreFuture.h"
 
 DLLEXPORT extern qore_classid_t CID_PROMISE;
-DLLLOCAL extern QoreClass* QC_PROMISE;
+DLLEXPORT extern QoreClass* QC_PROMISE;
 
 DLLLOCAL QoreClass* initPromiseClass(QoreNamespace& ns);
 

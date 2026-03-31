@@ -34,11 +34,11 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreCondition.h>
-#include <qore/AbstractPrivateData.h>
+#include <qore/QoreFuture.h>
 
 #include <string>
 
-//! Shared implementation for Future and Promise
+//! Shared implementation for Future and Promise (internal only)
 class qore_future_private : public QoreReferenceCounter {
 public:
     enum State {
@@ -210,6 +210,9 @@ public:
         }
     }
 
+    //! Get the internal private data from a QorePromise object
+    DLLLOCAL static qore_future_private* getFromPromise(QorePromise* p);
+
 private:
     mutable QoreThreadLock lock;
     QoreCondition cond;
@@ -220,94 +223,6 @@ private:
     State state;
     int waiting;
     bool future_retrieved;
-};
-
-//! Future class: consumer side of Promise/Future pair
-class QoreFuture : public AbstractPrivateData {
-public:
-    DLLLOCAL QoreFuture(qore_future_private* p) : priv(p) {
-        priv->ref();
-    }
-
-    DLLLOCAL QoreValue get(int64 timeout_ms, ExceptionSink* xsink) {
-        return priv->get(timeout_ms, xsink);
-    }
-
-    DLLLOCAL bool isDone() const {
-        return priv->isDone();
-    }
-
-    DLLLOCAL bool isError() const {
-        return priv->isError();
-    }
-
-    DLLLOCAL void destructor(ExceptionSink* xsink) {
-        priv->futureDestroyed(xsink);
-    }
-
-    using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            priv->deref();
-            delete this;
-        }
-    }
-
-protected:
-    DLLLOCAL virtual ~QoreFuture() {}
-
-private:
-    qore_future_private* priv;
-};
-
-//! Promise class: producer side of Promise/Future pair
-class QorePromise : public AbstractPrivateData {
-public:
-    DLLLOCAL QorePromise() : priv(new qore_future_private()) {
-    }
-
-    DLLLOCAL void set(QoreValue val, ExceptionSink* xsink) {
-        priv->set(val, xsink);
-    }
-
-    DLLLOCAL void setError(const char* err, const char* desc, QoreValue arg, ExceptionSink* xsink) {
-        priv->setError(err, desc, arg, xsink);
-    }
-
-    DLLLOCAL void setException(ExceptionSink& xs) {
-        priv->setException(xs);
-    }
-
-    DLLLOCAL QoreFuture* getFuture(ExceptionSink* xsink) {
-        if (!priv->markFutureRetrieved()) {
-            xsink->raiseException("PROMISE-ERROR", "Future has already been retrieved from this Promise");
-            return nullptr;
-        }
-        return new QoreFuture(priv);
-    }
-
-    DLLLOCAL void destructor(ExceptionSink* xsink) {
-        priv->promiseDestroyed(xsink);
-    }
-
-    using AbstractPrivateData::deref;
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            priv->deref();
-            delete this;
-        }
-    }
-
-    //! Get internal private data (for call_async implementation)
-    DLLLOCAL qore_future_private* getPriv() {
-        return priv;
-    }
-
-protected:
-    DLLLOCAL virtual ~QorePromise() {}
-
-private:
-    qore_future_private* priv;
 };
 
 #endif // _QORE_INTERN_QOREFUTURE_H

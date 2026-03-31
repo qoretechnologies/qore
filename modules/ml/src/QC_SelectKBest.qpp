@@ -1,0 +1,154 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_SelectKBest.qpp
+
+    Qore SelectKBest class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_SelectKBest.h"
+#include "ml_common.h"
+
+//! Selects the top k features based on a scoring function
+/** Computes a score for each feature with respect to the target variable,
+    then keeps only the top-k scoring features. Two scoring functions are
+    supported:
+    - \c "f_classif": ANOVA F-statistic (for classification targets)
+    - \c "mutual_info": discretized mutual information (for any target type)
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    # Select the 2 most informative features out of 4
+    ML::SelectKBest skb({"k": 2, "score_func": "f_classif"});
+    skb.fitMatrix(
+        ((1.0, 0.1, 100.0, 0.5), (2.0, 0.2, 200.0, 0.5), (3.0, 0.3, 300.0, 0.5)),
+        (0, 0, 1));
+    list<auto> result = skb.transformMatrix(((1.5, 0.15, 150.0, 0.5),));
+    # result has 2 columns — the most discriminative features
+    @endcode
+
+    @since ml 1.0
+*/
+qclass SelectKBest [arg=QoreSelectKBest* skb; ns=Qore::ML; flags=final];
+
+//! Creates a SelectKBest selector
+/** @param options optional hash with:
+    - \c k (int): number of features to select (default 10)
+    - \c score_func (string): scoring function — "f_classif" or "mutual_info" (default "f_classif")
+*/
+SelectKBest::constructor(*hash<auto> options) {
+    int k = 10;
+    std::string score_func = "f_classif";
+    if (options) {
+        QoreValue v = options->getKeyValue("k");
+        if (!v.isNullOrNothing()) {
+            k = (int)v.getAsBigInt();
+        }
+        v = options->getKeyValue("score_func");
+        if (!v.isNullOrNothing()) {
+            QoreStringValueHelper str(v);
+            score_func = str->c_str();
+        }
+    }
+    if (k < 1) {
+        xsink->raiseException("ML-SELECT-K-BEST-ERROR",
+            "k must be >= 1, got %d", k);
+        return;
+    }
+    self->setPrivate(CID_SELECTKBEST, new QoreSelectKBest(k, score_func));
+}
+
+//! SelectKBest objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+SelectKBest::copy() {
+    xsink->raiseException("COPY-ERROR", "SelectKBest objects cannot be copied");
+}
+
+//! Fits on features and target labels
+/** @param matrix list of row lists (features)
+    @param target list of target values (class labels for f_classif)
+*/
+nothing SelectKBest::fitMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    skb->fit(X, y, xsink);
+}
+
+//! Transforms by selecting only top-k features
+/** @param matrix list of row lists
+    @return list of row lists with only selected features
+*/
+list<auto> SelectKBest::transformMatrix(list<auto> matrix) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = skb->transform(X, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Fits and transforms in one step
+/** @param matrix list of row lists (features)
+    @param target list of target values
+    @return list of row lists with only selected features
+*/
+list<auto> SelectKBest::fitTransformMatrix(list<auto> matrix, list<auto> target) {
+    MatrixXd X = qoreListOfListsToMatrix(matrix, xsink);
+    if (*xsink) { return QoreValue(); }
+    VectorXd y = qoreListToVector(target, xsink);
+    if (*xsink) { return QoreValue(); }
+    MatrixXd result = skb->fitTransform(X, y, xsink);
+    if (*xsink) { return QoreValue(); }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(autoTypeInfo), xsink);
+    for (int64_t i = 0; i < result.rows(); ++i) {
+        ReferenceHolder<QoreListNode> row(new QoreListNode(autoTypeInfo), xsink);
+        for (int64_t j = 0; j < result.cols(); ++j) {
+            row->push(result(i, j), xsink);
+        }
+        rv->push(row.release(), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns whether the selector has been fitted
+/** @return True if fitMatrix() has been called
+*/
+bool SelectKBest::isFitted() [flags=CONSTANT] {
+    return skb->isFitted();
+}
+
+//! Returns per-feature scores computed during fit
+/** @return list of score values (higher = more informative)
+*/
+list<auto> SelectKBest::getScores() {
+    return skb->getScores(xsink);
+}
+
+//! Returns the support mask (True = feature selected, False = removed)
+/** @return list of boolean values
+*/
+list<auto> SelectKBest::getSupport() {
+    return skb->getSupport(xsink);
+}
+
+//! Returns the indices of selected features
+/** @return list of integer indices
+*/
+list<int> SelectKBest::getSelectedIndices() {
+    return skb->getSelectedIndices(xsink);
+}

@@ -3415,20 +3415,6 @@ protected:
     }
 };
 
-//! Creates or retrieves a cached typed callable type
-/** @param return_type the return type (nullptr for nothing)
-    @param param_types vector of parameter types
-    @param varargs if true, accepts variable arguments
-    @param or_nothing if true, also accepts NOTHING
-    @return the typed callable type info
-*/
-DLLLOCAL const QoreTypeInfo* qore_get_complex_code_type(const QoreTypeInfo* return_type,
-    const type_vec_t& param_types, bool varargs = false, bool or_nothing = false);
-
-//! Creates or retrieves a cached or-nothing typed callable type
-DLLLOCAL const QoreTypeInfo* qore_get_complex_code_or_nothing_type(const QoreTypeInfo* return_type,
-    const type_vec_t& param_types, bool varargs = false);
-
 //! Creates a typed callable type from a function signature
 /** @param sig the function signature to create the type from
     @param or_nothing if true, also accepts NOTHING

@@ -1,0 +1,188 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_TextFeatures.qpp
+
+    Qore TextFeatures class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+#include "QC_TextFeatures.h"
+#include "ml_tokenizer_bridge.h"
+
+//! Converts text documents into numeric feature vectors using bag-of-words or TF-IDF weighting
+/** Use this to turn customer reviews, support tickets, or log messages into numbers
+    that ML algorithms can process.
+
+    @par Supported Modes:
+    - \c "tfidf" (default): Term Frequency-Inverse Document Frequency weighting.
+      Words that appear in many documents are down-weighted.
+    - \c "count": Raw word counts (bag-of-words).
+
+    @par Example:
+    @code{.py}
+    %requires ml
+
+    ML::TextFeatures tf({"mode": "tfidf"});
+    tf.fit(("the cat sat on the mat", "the dog played in the park"));
+    list<list<float>> vectors = tf.transform(("the cat played"));
+    @endcode
+
+    @since ml 1.0
+*/
+qclass TextFeatures [arg=QoreTextFeatures* tf; ns=Qore::ML; flags=final];
+
+//! Creates a TextFeatures transformer
+/** @param options optional hash with:
+    - \c mode (*string): feature weighting mode; allowed values:
+      - \c "tfidf" (default): TF-IDF weighting
+      - \c "count": raw word counts
+    - \c max_features (*int): maximum vocabulary size; limit vocabulary to top N terms
+      by document frequency (0 = no limit, default 0)
+    - \c min_df (*int): minimum document frequency; minimum number of documents a word
+      must appear in to be included in the vocabulary (default 1)
+    - \c tokenizer_mode (*string): tokenization method:
+      - \c "whitespace" (default): built-in alphanumeric tokenizer (no external dependencies)
+      - \c "subword": use HuggingFace BPE/WordPiece/Unigram tokenization via the tokenizer
+        module (must be loaded and tokenizer_config provided)
+    - \c tokenizer_config (*hash): parsed tokenizer.json config hash for subword mode
+      (required when tokenizer_mode is "subword")
+*/
+TextFeatures::constructor(*hash<auto> options) {
+    std::string mode = "tfidf";
+    int max_features = 0;
+    int min_df = 1;
+    std::string tokenizer_mode = "whitespace";
+    void* tok_handle = nullptr;
+
+    if (options) {
+        QoreValue v = options->getKeyValue("mode");
+        if (!v.isNullOrNothing()) {
+            if (v.getType() != NT_STRING) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "'mode' option must be a string");
+                return;
+            }
+            const char* m = v.get<const QoreStringNode>()->c_str();
+            if (strcmp(m, "tfidf") != 0 && strcmp(m, "count") != 0) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "invalid mode '%s': must be 'tfidf' or 'count'", m);
+                return;
+            }
+            mode = m;
+        }
+
+        v = options->getKeyValue("max_features");
+        if (!v.isNullOrNothing()) {
+            max_features = (int)v.getAsBigInt();
+            if (max_features < 0) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "max_features must be >= 0 (got %d)", max_features);
+                return;
+            }
+        }
+
+        v = options->getKeyValue("min_df");
+        if (!v.isNullOrNothing()) {
+            min_df = (int)v.getAsBigInt();
+            if (min_df < 1) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "min_df must be >= 1 (got %d)", min_df);
+                return;
+            }
+        }
+
+        v = options->getKeyValue("tokenizer_mode");
+        if (!v.isNullOrNothing()) {
+            if (v.getType() != NT_STRING) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "'tokenizer_mode' option must be a string");
+                return;
+            }
+            const char* tm = v.get<const QoreStringNode>()->c_str();
+            if (strcmp(tm, "whitespace") != 0 && strcmp(tm, "subword") != 0) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "invalid tokenizer_mode '%s': must be 'whitespace' or 'subword'", tm);
+                return;
+            }
+            tokenizer_mode = tm;
+        }
+
+        if (tokenizer_mode == "subword") {
+            v = options->getKeyValue("tokenizer_config");
+            if (v.isNullOrNothing() || v.getType() != NT_HASH) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "tokenizer_config (parsed tokenizer.json hash) is required "
+                    "when tokenizer_mode is 'subword'");
+                return;
+            }
+            char error_buf[256];
+            tok_handle = ml_tokenizer_create(v.get<const QoreHashNode>(),
+                error_buf, sizeof(error_buf));
+            if (!tok_handle) {
+                xsink->raiseException("ML-TEXT-FEATURES-ERROR",
+                    "failed to create tokenizer: %s", error_buf);
+                return;
+            }
+        }
+    }
+
+    self->setPrivate(CID_TEXTFEATURES,
+        new QoreTextFeatures(mode, max_features, min_df, tokenizer_mode, tok_handle));
+}
+
+//! TextFeatures objects cannot be copied
+/** @throw COPY-ERROR always thrown
+*/
+TextFeatures::copy() {
+    xsink->raiseException("COPY-ERROR", "TextFeatures objects cannot be copied");
+}
+
+//! Fits the transformer on a list of text documents (learns vocabulary)
+/** @param documents list of string documents
+
+    @throw ML-TEXT-FEATURES-ERROR if the document list is empty or contains non-string values
+*/
+nothing TextFeatures::fit(list<string> documents) {
+    tf->fit(documents, xsink);
+}
+
+//! Transforms text documents into numeric feature vectors
+/** @param documents list of string documents
+    @return list of float lists (document-term matrix); each inner list has one element
+    per vocabulary term
+
+    @throw ML-TEXT-FEATURES-ERROR if the transformer has not been fitted, or the document
+    list is empty or contains non-string values
+*/
+list<list<float>> TextFeatures::transform(list<string> documents) {
+    return tf->transform(documents, xsink);
+}
+
+//! Fits and transforms in one step
+/** @param documents list of string documents
+    @return list of float lists (document-term matrix)
+
+    @throw ML-TEXT-FEATURES-ERROR on any error
+*/
+list<list<float>> TextFeatures::fitTransform(list<string> documents) {
+    return tf->fitTransform(documents, xsink);
+}
+
+//! Returns the vocabulary terms in index order
+/** @return list of string terms matching the column positions in the output matrix
+
+    @throw ML-TEXT-FEATURES-ERROR if the transformer has not been fitted
+*/
+list<string> TextFeatures::getVocabulary() {
+    return tf->getVocabulary(xsink);
+}
+
+//! Returns whether the transformer has been fitted
+/** @return True if fit() or fitTransform() has been called
+*/
+bool TextFeatures::isFitted() [flags=CONSTANT] {
+    return tf->isFitted();
+}

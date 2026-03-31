@@ -384,6 +384,9 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
 
     // commit all module changes
     qmc.commit();
+
+    // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
+    qore_program_private::get(*tpgm)->commitFeature(name.c_str());
 }
 
 QoreHashNode* QoreBuiltinModule::getHash(bool with_filename) const {
@@ -486,6 +489,9 @@ void QoreUserModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) c
 
     // commit all module changes
     qore_root_ns_private::copyMergeCommittedNamespace(*target_root_ns, *source_root_ns);
+
+    // mark the feature as fully committed so the lock-free fast path in runTimeLoadModule() can see it
+    qore_program_private::get(*tpgm)->commitFeature(name.c_str());
 
     // add domain to current Program's domain
     qore_program_private::runtimeAddDomain(*tpgm, dom);
@@ -655,17 +661,32 @@ static const char* get_feature_from_path(QoreString& tmp);
 int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name,
         QoreProgram* pgm, QoreProgram* mpgm, unsigned load_opt, int warning_mask, bool reexport,
         qore_binary_module_desc_t mod_desc_func) {
-    // grab the parse lock
+    // lock-free fast path: check committedFeatureList using only featureLock(read); this allows full
+    // concurrency for the common case where the module is already loaded — no serialization on plock.
+    // committedFeatureList is only populated AFTER namespace changes are committed in addToProgramImpl(),
+    // so a hit here guarantees the module's types are fully available in this program.
+    if (pgm && !load_opt) {
+        QoreString tmp;
+        const char* feat_name = name;
+        if (strchrs(name, "./\\")) {
+            tmp = name;
+            feat_name = get_feature_from_path(tmp);
+        }
+        if (qore_program_private::get(*pgm)->hasCommittedFeature(feat_name)) {
+            return 0;
+        }
+    }
+
+    // slow path: grab the exclusive parse lock for actual module loading
     ProgramRuntimeParseContextHelper pah(&xsink, pgm);
     if (xsink) {
         return -1;
     }
 
-    // fast path: if the feature is already loaded in this program and there are no special load options,
-    // return without acquiring the global module lock; this is thread-safe because all modifications to
-    // featureList occur under the parse lock, which we hold here exclusively
+    // double-check under parse lock using hasFeature() (which includes not-yet-committed features);
+    // this catches the case where another thread is in the middle of addToProgramImpl() — the feature
+    // is registered (for duplicate detection per issue #3592) but namespace changes aren't committed yet
     if (pgm && !load_opt) {
-        // extract the feature name from a path argument if necessary (same logic as loadModuleIntern())
         QoreString tmp;
         const char* feat_name = name;
         if (strchrs(name, "./\\")) {

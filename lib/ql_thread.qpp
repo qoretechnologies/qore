@@ -1207,7 +1207,7 @@ Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
 
     // Create Promise and get Future
     QorePromise* promise = new QorePromise();
-    qore_future_private* priv = promise->getPriv();
+    qore_future_private* priv = qore_future_private::getFromPromise(promise);
 
     QoreFuture* future = promise->getFuture(xsink);
     if (!future) {

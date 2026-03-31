@@ -1443,6 +1443,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             @assert(h3_stream_id >= 0, "missing HTTP/3 stream id for WebSocket");
             # CONNECT response was already sent by HttpServer.qm before calling start()
             # Create HTTP/3 stream context for WebSocket frame I/O
+            *Queue h3_data_queue = cx."header-info".stream_data_queue;
             code<nothing()> wake = sub () {
                 if (async_ctrl) {
                     async_ctrl.wake();
@@ -1451,7 +1452,26 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 wsc.notifyIo();
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
-                sock, h3_session_id, h3_stream_id, wake));
+                sock, h3_session_id, h3_stream_id, wake, h3_data_queue));
+            # Start background watcher thread: blocks on the C++ StreamNotifier
+            # (signaled by h3RecvDataCallback when data arrives) and wakes the
+            # handler loop via wsc.notifyIo().  Exits when the notifier is closed
+            # (stream end/cleanup) or the socket is no longer open.
+            background sub () {
+                try {
+                    while (sock.isOpen()) {
+                        if (sock.waitForQuicConnectStreamNotify(
+                                h3_session_id, h3_stream_id, 5s) == -1) {
+                            break;
+                        }
+                        wsc.notifyIo();
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    # Watcher thread exits silently on exception — the handler
+                    # loop falls back to heartbeat-based polling if the watcher
+                    # dies (e.g., socket closed during wait)
+                }
+            }();
         }
 
         # Set negotiated extensions on the connection (stored by handleRequest)

@@ -92,6 +92,10 @@ public class ProviderIndexUtil {
 
         #! All apps loaded flag
         static bool apps_loaded;
+
+        #! Set of modules that have been successfully loaded; used to avoid calling load_module() which acquires
+        #! the global module lock even when a module is already loaded
+        static hash<string, bool> loaded_module_cache;
     }
 
     #! Returns a list of cached app info
@@ -314,8 +318,13 @@ public class ProviderIndexUtil {
         @return @ref True if the module was loaded, @ref False if it was not
     */
     static bool tryLoadModule(string mod) {
+        # check local cache first to avoid acquiring the global module lock
+        if (loaded_module_cache{mod}) {
+            return True;
+        }
         try {
             load_module(mod);
+            loaded_module_cache{mod} = True;
             return True;
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::LevelError, "Error loading module %y: %s: %s", mod, ex.err, ex.desc);
@@ -619,10 +628,13 @@ public class ProviderIndexUtil {
         logArgs(level, fmt, argv);
     }
 
-    #! Log a message to the global logger if possible
+    #! Log a message to the global logger if possible; falls back to stderr for errors
     static logArgs(Qore::Logger::LoggerLevel level, string fmt, *softlist<auto> args) {
         if (logger) {
             logger.logArgs(level, fmt, args);
+        } else if (level.getValue() >= LoggerLevel::LevelError.getValue()) {
+            # ensure errors are never silently dropped when the logger is not yet configured
+            stderr.printf("ProviderIndexUtil %s: %s\n", level.getStr(), vsprintf(fmt, args));
         }
     }
 }

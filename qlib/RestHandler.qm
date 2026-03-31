@@ -40,7 +40,7 @@
 %requires reflection
 
 module RestHandler {
-    version = "1.6.3";
+    version = "1.6.6";
     desc = "user module for implementing REST services with the Qore HTTP server";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -397,6 +397,11 @@ Content-Length: 16
     @endcode
 
     @section resthandler_relnotes RestHandler Release Notes
+
+    @subsection rh_1_6_6 RestHandler v1.6.6
+    - added the @ref RestHandler::RestHandler::checkAccess() "checkAccess()" virtual method that allows subclasses
+      to perform authorization checks before request dispatching within the exception-handling context of
+      @ref RestHandler::RestHandler::handleRequest() "handleRequest()"
 
     @subsection rh_1_6_5 RestHandler v1.6.5
     - added \c raw_response to bypass serialization and schema validation for custom response bodies
@@ -1543,6 +1548,7 @@ public namespace RestHandler {
             hash<HttpHandlerResponseInfo> rv;
 
             try {
+                checkAccess(cx);
                 rv = dispatchRequest(listener, s, cl, mn, path, cx, args);
             } catch (hash<ExceptionInfo> ex) {
                 string desc = !cx.debug
@@ -1704,6 +1710,22 @@ public namespace RestHandler {
 
         #! default implementation is empty
         removeRootPath(reference<string> path) {
+        }
+
+        #! Called before request dispatching to allow subclasses to perform authorization checks
+        /** This method is called from within the exception-handling context of
+            @ref RestHandler::RestHandler::handleRequest() "handleRequest()", so any exception thrown here
+            will be processed by
+            @ref RestHandler::RestHandler::returnRestException() "returnRestException()" and converted to a
+            proper HTTP error response.
+
+            The default implementation does nothing.
+
+            @param cx the call context hash; note that \c cx.hdr contains the request headers
+
+            @see @ref RestHandler::RestHandler::returnRestException() "returnRestException()"
+        */
+        checkAccess(hash<auto> cx) {
         }
 
         #! default implementation is empty

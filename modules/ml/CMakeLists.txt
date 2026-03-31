@@ -63,6 +63,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/QoreMacros.cmake)
 ### end of hacks
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/LBFGSpp)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -76,6 +77,9 @@ set(ML_QPP_SRC
     src/QC_PCA.qpp
     src/QC_SeasonalDecomposition.qpp
     src/QC_LinearRegression.qpp
+    src/QC_Ridge.qpp
+    src/QC_Lasso.qpp
+    src/QC_ElasticNet.qpp
     src/QC_LogisticRegression.qpp
     src/QC_LOF.qpp
     src/QC_KNN.qpp
@@ -86,6 +90,23 @@ set(ML_QPP_SRC
     src/QC_Imputer.qpp
     src/QC_MLPipeline.qpp
     src/QC_CrossValidator.qpp
+    src/QC_DecisionTree.qpp
+    src/QC_RandomForest.qpp
+    src/QC_GradientBoostedTrees.qpp
+    src/QC_SVM.qpp
+    src/QC_NaiveBayes.qpp
+    src/QC_OneHotEncoder.qpp
+    src/QC_LabelEncoder.qpp
+    src/QC_VarianceThreshold.qpp
+    src/QC_PolynomialFeatures.qpp
+    src/QC_SelectKBest.qpp
+    src/QC_RFE.qpp
+    src/QC_ADWIN.qpp
+    src/QC_PageHinkley.qpp
+    src/QC_DDM.qpp
+    src/QC_TextFeatures.qpp
+    src/QC_DateTimeFeatures.qpp
+    src/QC_SparseMatrix.qpp
     src/ql_ml.qpp
 )
 
@@ -101,6 +122,9 @@ set(ML_CPP_SRC
     src/PCA.cpp
     src/SeasonalDecomposition.cpp
     src/LinearRegression.cpp
+    src/Ridge.cpp
+    src/Lasso.cpp
+    src/ElasticNet.cpp
     src/LogisticRegression.cpp
     src/LOF.cpp
     src/KNN.cpp
@@ -111,6 +135,27 @@ set(ML_CPP_SRC
     src/MLPipeline.cpp
     src/ml_metrics.cpp
     src/CrossValidator.cpp
+    src/FlatTree.cpp
+    src/DecisionTree.cpp
+    src/RandomForest.cpp
+    src/GradientBoostedTrees.cpp
+    src/SVM.cpp
+    src/NaiveBayes.cpp
+    src/ml_stats.cpp
+    src/OneHotEncoder.cpp
+    src/LabelEncoder.cpp
+    src/VarianceThreshold.cpp
+    src/PolynomialFeatures.cpp
+    src/SelectKBest.cpp
+    src/RFE.cpp
+    src/ml_tokenizer_bridge.cpp
+    src/ADWIN.cpp
+    src/PageHinkley.cpp
+    src/DDM.cpp
+    src/TextFeatures.cpp
+    src/DateTimeFeatures.cpp
+    src/ml_sparse.cpp
+    src/SparseMatrix.cpp
 )
 
 # Conditional ONNX Runtime support

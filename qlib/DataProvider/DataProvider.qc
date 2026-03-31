@@ -74,11 +74,21 @@ public class DataProvider {
     public {
         #! Map of known data provider factory names to modules
         const FactoryMap = {
+            # provided by the amqp module
+            "amqp": "AmqpDataProvider",
+
+            # provided by the jni module
+            "accessread": "AccessDataProvider",
+
+            "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
+
+            "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
 
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
+            "bitly": "BitlyDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
@@ -86,12 +96,16 @@ public class DataProvider {
             # provided by the cairo module
             "cairo": "CairoDataProvider",
 
+            # provided by the jni module
+            "camel": "CamelDataProvider",
+
             "cdsrest": "CdsRestDataProvider",
             "chargebee": "ChargebeeDataProvider",
             "cin7core": "Cin7CoreDataProvider",
             "close": "CloseDataProvider",
             "csvread": "CsvUtil",
             "csvwrite": "CsvUtil",
+            "dataframe": "DataProviderDataFrame",
             "db": "DbDataProvider",
             "deel": "DeelDataProvider",
             "discord": "DiscordDataProvider",
@@ -101,29 +115,36 @@ public class DataProvider {
             "empathicbuilding": "EmpathicBuildingDataProvider",
 
             # provided by the jni module
+            # provided by the jni module
+            "emlread": "EmailDataProvider",
+
             "excelread": "ExcelDataProvider",
+            "excelwrite": "ExcelDataProvider",
 
             "file": "FileDataProvider",
             "filepoller": "FilePoller",
             "fixedlengthread": "FixedLengthUtil",
             "fixedlengthwrite": "FixedLengthUtil",
+            # provided by the jni module
+            "flyway": "FlywayDataProvider",
+
             "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
+            "gemini": "GeminiDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
             "generator": "GeneratorDataProvider",
 
             # provided by the geos module
+            "geosgeojsonread": "GEOSDataProvider",
+            "geosgeojsonwrite": "GEOSDataProvider",
             "geoswkbread": "GEOSDataProvider",
             "geoswkbwrite": "GEOSDataProvider",
             "geoswktread": "GEOSDataProvider",
             "geoswktwrite": "GEOSDataProvider",
 
             "gmail": "GmailDataProvider",
-
-            # provided by the amqp module
-            "amqp": "AmqpDataProvider",
 
             # provided by the grpc module
             "grpc": "GrpcDataProvider",
@@ -133,7 +154,21 @@ public class DataProvider {
             # provided by the imagemagick module
             "imagemagick": "ImageMagickDataProvider",
 
+            # provided by the jni module
+            "icsread": "IcsDataProvider",
+            "icswrite": "IcsDataProvider",
+
             "jotform": "JotformDataProvider",
+
+            # provided by the json module
+            "jsonread": "JsonFileDataProvider",
+            "jsonwrite": "JsonFileDataProvider",
+
+            # provided by the jni module
+            "jasperreports": "JasperReportsDataProvider",
+
+            # provided by the jni module
+            "jdbc-dp": "JdbcDataProvider",
 
             # provided by the jni module
             "kafka": "KafkaDataProvider",
@@ -144,8 +179,14 @@ public class DataProvider {
             "mcpclient": "McpClientDataProvider",
 
             "ml": "DataProviderML",
+            "model-registry": "QoreModelRegistry",
 
             "mailgun": "MailgunDataProvider",
+
+            # provided by the jni module
+            "mboxread": "EmailDataProvider",
+            "msgread": "EmailDataProvider",
+
             "mewsrest": "MewsRestDataProvider",
             "memcached": "MemcachedDataProvider",
             "mongodb": "MongoDbDataProvider",
@@ -153,12 +194,30 @@ public class DataProvider {
             # provided by the jni module
             "mqtt": "MqttDataProvider",
 
+            # provided by the json module
+            "ndjson": "NdjsonDataProvider",
+
+            # provided by the nats module
+            "nats": "NatsDataProvider",
+            "natsjetstream": "NatsJetStreamDataProvider",
+
             # provided by the jni module
+            "odpread": "OdpDataProvider",
+            "odpwrite": "OdpDataProvider",
+            "odsread": "OdsDataProvider",
+            "odswrite": "OdsDataProvider",
+            "odtread": "OdtDataProvider",
+            "odtwrite": "OdtDataProvider",
             "opcua": "OpcUaDataProvider",
 
+            "grok": "GrokDataProvider",
             "openai": "OpenAiDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
+
+            # provided by the jni module
+            "powerpointread": "PowerPointDataProvider",
+            "powerpointwrite": "PowerPointDataProvider",
             "qdrant": "QdrantDataProvider",
             "redis": "RedisDataProvider",
             "restclient": "RestClientDataProvider",
@@ -195,6 +254,9 @@ public class DataProvider {
             # provided by the tar module
             "tar": "TarDataProvider",
 
+            # provided by the jni module
+            "tikaread": "TikaDataProvider",
+
             # provided by the xml module
             "webdavclient": "WebDavClientDataProvider",
 
@@ -208,8 +270,26 @@ public class DataProvider {
 
             "unleashed": "UnleashedDataProvider",
 
+            # provided by the jni module
+            "avroread": "AvroDataProvider",
+            "avrowrite": "AvroDataProvider",
+            "vcfread": "VcfDataProvider",
+            "vcfwrite": "VcfDataProvider",
+
+            # provided by the jni module
+            "visioread": "VisioDataProvider",
+
             "wave": "WaveDataProvider",
+
+            # provided by the jni module
+            "wordread": "WordDataProvider",
+            "wordwrite": "WordDataProvider",
+
             "woocommerce": "WooCommerceDataProvider",
+
+            # provided by the yaml module
+            "yamldoc": "YamlDocumentDataProvider",
+            "yamlwrite": "YamlDocumentDataProvider",
 
             "zohobooks": "ZohoBooksDataProvider",
             "zohoinventory": "ZohoInventoryDataProvider",

@@ -942,6 +942,31 @@ cargo install tree-sitter-cli@0.26.5
         (file-based .qml native format) for all 12 algorithms
       - Online learning (incremental updates) for KMeans, LinearRegression, GMM, and LogisticRegression
       - MLPipeline for chaining preprocessing steps and estimators into a single fit/predict unit
+      - DecisionTree (CART) for classification (Gini/entropy) and regression (MSE) with feature importance
+      - RandomForest bagging ensemble with bootstrap sampling and random feature subsets
+      - GradientBoostedTrees sequential boosting with log-loss (classification) and MSE (regression),
+        early stopping via validation_fraction and n_iter_no_change, row subsampling
+      - Shared FlatTree CART engine with flat-array node storage for cache-friendly traversal
+      - SVM (Support Vector Machine) with simplified SMO, linear and RBF kernels,
+        multiclass via one-vs-one voting
+      - Gaussian Naive Bayes with online learning (incremental mean/variance updates)
+      - Statistical functions: ml_percentile, ml_iqr, ml_skewness, ml_kurtosis,
+        ml_correlation_matrix, ml_covariance_matrix, ml_t_test (Welch's, Cephes incbet),
+        ml_chi_squared_test, ml_normal_pdf/cdf/ppf (Acklam's rational approximation)
+      - Feature engineering:
+        OneHotEncoder for categorical-to-binary column encoding (with drop_first option),
+        LabelEncoder for string/integer-to-consecutive-integer mapping (with inverse transform),
+        VarianceThreshold for removing low-variance features (population variance),
+        PolynomialFeatures for polynomial and interaction term generation,
+        SelectKBest for top-k feature selection by ANOVA F-test or mutual information,
+        RFE (Recursive Feature Elimination) using decision tree importances,
+        DateTimeFeatures for extracting numeric date components (day_of_week, hour, quarter, etc.),
+        TextFeatures for TF-IDF and bag-of-words text vectorization
+      - Concept drift detection for monitoring deployed models:
+        ADWIN (adaptive windowing), Page-Hinkley (mean shift detection),
+        DDM (classifier error rate monitoring with warning/drift levels)
+      - Vector similarity functions: ml_cosine_similarity, ml_dot_product,
+        ml_euclidean_distance, ml_manhattan_distance for embedding comparison and RAG
       - Model evaluation: classification metrics (accuracy, precision, recall, F1, confusion matrix),
         regression metrics (MSE, RMSE, MAE, R², explained variance), clustering metrics (silhouette,
         Davies-Bouldin, Calinski-Harabasz), and CrossValidator for k-fold cross-validation
@@ -957,8 +982,65 @@ cargo install tree-sitter-cli@0.26.5
         from files, strings, serialized descriptors, or programmatic hash definitions
       - encode/decode Qore hashes to/from protobuf binary format, JSON conversion,
         schema introspection, and file descriptor serialization
+    - @ref dataframeintro "dataframe" module
+      - new builtin module providing a columnar DataFrame with typed columns (int64, float64,
+        string, bool, date) and null/missing value support
+      - construction from records (\c list<hash>), column hash, CSV files, database queries, Parquet
+        files (optional Apache Arrow dependency), or numeric matrices
+      - SQL-like query operations: select, filter (11 operators), sort, fillna, dropna
+      - groupBy with 10 aggregation functions (sum, mean, median, std, min, max, count, first,
+        last, nunique) and GroupedDataFrame class
+      - join operations: inner, left, right, outer, cross with hash join algorithm
+      - reshape: pivot (long to wide), melt (wide to long), withColumn (immutable column add)
+      - window functions: rowNumber, lag, lead, cumSum, rollingMean with partition/order support
+      - streaming CSV reader with type inference from first 100 rows
+      - Parquet I/O via Apache Arrow (\c #ifdef \c HAVE_ARROW gated, \c MISSING-FEATURE-ERROR fallback)
+      - database I/O: fromQuery (via DBI select), toTable (via DBI exec with bind placeholders)
+      - ML integration: toMatrix, toVector, fromMatrix for zero-overhead ML algorithm feeding
+      - describe() for per-column descriptive statistics (mean, std, quartiles, unique count)
+      - Eigen3-backed float64 columns for SIMD-friendly numeric operations
+      - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
+      - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref tokenizerintro "tokenizer" module
+      - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
+      - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)
+      - loads standard \c tokenizer.json files and produces token IDs matching the Python \c tokenizers library
+      - truncation with \c longest_first, \c only_first, \c only_second strategies
+      - padding to \c max_length or batch-longest for uniform-length output
+      - batch encoding for efficient multi-text processing
+      - byte-level offset mapping and special tokens mask
+      - word_ids mapping for NER span alignment and token-to-word grouping
+      - sliding window overflow (\c stride + \c return_overflowing_tokens) for long document processing
+      - pre-tokenized input (\c encodePreTokenized) for domain-specific tokenization
+      - dynamic vocabulary extension (\c addTokens) with \c std::shared_mutex thread safety
+      - full Unicode \\p{N} digit support and Unicode punctuation decoder cleanup
+      - O(n log n) BPE merge algorithm using priority queue + doubly linked list
+      - Precompiled normalizer supporting SentencePiece Darts DoubleArray trie format
+      - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
+    - @ref anthropicrestclientintro "AnthropicRestClient" module
+      - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
+      - supports API key authentication via x-api-key header
+      - provides AnthropicRestConnection for connection management with \c anthropic:// URL scheme
+      - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
+    - @ref anthropicdataproviderintro "AnthropicDataProvider" module
+      - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
+      - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
+      - supports Bearer token authentication
+      - provides HuggingFaceRestConnection for connection management with \c huggingface:// URL scheme
+    - @ref huggingfacedataproviderintro "HuggingFaceDataProvider" module
+      - new module providing a data provider API for <a href="https://huggingface.co/">Hugging Face</a> services
+      - models, datasets, and spaces CRUD operations via the Hub API
+      - chat completions via the Inference API
+      - message creation with support for text, images, tool use, and extended thinking
+      - SSE streaming for incremental message delivery via observer pattern
+      - token counting API for cost estimation
+      - models listing API
+      - conversation context store for multi-turn conversation persistence
+      - action session for Creator WebSocket integration with event normalization
+      - built on RestClientIo for async-capable multiplexed HTTP/2 and HTTP/3 connections
     - @ref apollorestclientintro "ApolloRestClient" module
       - new module providing a REST client for <a href="https://www.apollo.io/">Apollo</a>'s B2B sales intelligence API
       - supports OAuth2 authentication and API key authentication via x-api-key header
@@ -1015,6 +1097,22 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref bitlyrestclientintro "BitlyRestClient" module
+      - new module providing a REST client for <a href="https://bitly.com/">Bitly</a>'s URL shortening API
+      - supports Bearer token and OAuth2 authentication
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides BitlyRestConnection for connection management with \c bitlyrest:// URL scheme
+    - @ref bitlydataproviderintro "BitlyDataProvider" module
+      - new module providing a data provider API for <a href="https://bitly.com/">Bitly</a> URL shortening
+      - bitlink management (shorten, create, update, delete, list)
+      - click analytics (click summary with time-based aggregation)
+      - group and organization management
+      - campaign management (create, update, list)
+      - branded short domains (list)
+      - QR code management (create, update, list)
+      - custom bitlink support
+      - polling-based event triggers for bitlink click activity
+      - action catalog integration with 21 actions and 1 trigger
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username
@@ -1102,6 +1200,12 @@ cargo install tree-sitter-cli@0.26.5
       - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
       - action catalog integration with the "ML Analytics" app
+    - @ref dataproviderdataframeintro "DataProviderDataFrame" module
+      - new module providing DataProvider integration for the dataframe binary module
+      - wraps DataFrame as a record-oriented DataProvider for Qorus data pipeline integration
+      - supports searchRecords with hash-based where conditions (equality and comparison operators)
+      - record type reflects DataFrame column schema (int, float, string, bool, date)
+      - factory registered as "dataframe" in DataProvider FactoryMap
     - @ref deelrestclientintro "DeelRestClient" module
       - new module providing a REST client for <a href="https://www.deel.com/">Deel</a>'s global workforce management API
       - supports API key (Bearer token) authentication
@@ -1346,10 +1450,21 @@ cargo install tree-sitter-cli@0.26.5
       - new module providing a filesystem-backed ML model registry for versioning,
         tagging, comparison, and deployment management of trained models
       - multi-tenant support with optional \c tenant_id for tenant-isolated model storage
+    - @ref qoremlutilsintro "QoreMLUtils" module
+      - new module providing hyperparameter optimization and model explainability
+      - GridSearch: exhaustive parameter grid search with k-fold cross-validation
+      - RandomSearch: random parameter sampling with k-fold cross-validation
+      - PermutationImportance: model-agnostic feature importance via column shuffling
+      - MLScoringUtils: default R², negative MSE, and accuracy scoring functions
     - @ref qoreonnxexportintro "QoreOnnxExport" module
-      - new module that exports trained ML models to ONNX format (8 algorithms: StandardScaler, MinMaxScaler,
-        Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)
+      - exports trained ML models to ONNX format (11 algorithms including tree ensembles)
+      - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
+      - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
+      - new module providing document chunking and token counting for RAG pipelines
+      - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
+      - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries
     - @ref qorereplintro "QoreRepl" module
       - new module providing a reusable REPL (Read-Eval-Print Loop) implementation for Qore
       - can be used from command-line applications or network handlers (WebSocket, HTTP, etc.)
@@ -1781,6 +1896,11 @@ cargo install tree-sitter-cli@0.26.5
         (<a href="https://github.com/qoretechnologies/qore/issues/4941">issue 4941</a>)
     - <a href="../../modules/GoogleDataProvider/html/index.html#googledataproviderintro">GoogleDataProvider</a> module
       - updates to allow the module to be more easily and generically extensible for other apps
+    - <a href="../../modules/GrokDataProvider/html/index.html#grokdataproviderintro">GrokDataProvider</a> module
+      - initial release: xAI Grok data provider with chat completions, responses API, SSE streaming,
+        deferred completions, and conversation context store; built with RestClientIo for async HTTP/2+3
+    - <a href="../../modules/GrokRestClient/html/index.html#grokrestclientintro">GrokRestClient</a> module
+      - initial release: REST client for xAI Grok API with SSE streaming support
     - <a href="../../modules/OpenAiDataProvider/html/index.html#openaidataproviderintro">OpenAiDataProvider</a> module
       - missing APIs and actions to handle image analysis
         (<a href="https://github.com/qoretechnologies/qore/issues/4947">issue 4947</a>)
@@ -1850,6 +1970,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - <a href="../../modules/DiscordWebSocketClient/html/index.html#discordwebsocketclientintro">DiscordWebSocketClient</a>
       - <a href="../../modules/ElevenLabsDataProvider/html/index.html#elevenlabsdataproviderintro">ElevenLabsDataProvider</a>
       - <a href="../../modules/ElevenLabsRestClient/html/index.html#elevenlabsrestclientintro">ElevenLabsRestClient</a>
+      - <a href="../../modules/GeminiDataProvider/html/index.html#geminidataproviderintro">GeminiDataProvider</a>
+      - <a href="../../modules/GeminiRestClient/html/index.html#geminirestclientintro">GeminiRestClient</a>
       - <a href="../../modules/GmailDataProvider/html/index.html#gmaildataproviderintro">GmailDataProvider</a>
       - <a href="../../modules/GoogleCalendarDataProvider/html/index.html#googlecalendardataproviderintro">GoogleCalendarDataProvider</a>
       - <a href="../../modules/GoogleDataProvider/html/index.html#googledataproviderintro">GoogleDataProvider</a>

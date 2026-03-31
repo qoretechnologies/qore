@@ -9,6 +9,7 @@
 %requires ../../../../qlib/SqlUtil
 %requires ../../../../qlib/PgsqlSqlUtilBase.qm
 %requires ../../../../qlib/PgsqlSqlUtil.qm
+%requires ../../../../qlib/SchemaReverse.qm
 
 %requires ./SqlUtilTestBase.qm
 
@@ -150,6 +151,53 @@ class DatasourceProxy inherits AbstractDatasource {
     int getCapabilities() { return real_ds.getCapabilities(); }
 }
 
+#! Schema with pgvector columns for testing vector type support
+class PgsqlTestVectorSchema inherits SqlUtilTestSchema {
+    public {
+        const SchemaName = "PgsqlTestVectorSchema";
+        const SchemaVersion = "1.0";
+    }
+
+    private {
+        const GenericOptions = {
+            "replace": True,
+        };
+
+        const T_VectorTest = {
+            "columns": {
+                "id": c_number(14, True),
+                "vec_f": c_vector(3, True, "test vector column"),
+                "halfvec_f": c_halfvec(5),
+                "sparsevec_f": c_sparsevec(10),
+            },
+            "primary_key": {"name": "pk_vector_test", "columns": ("id",)},
+        };
+
+        const Tables = {
+            "pgsql_vector_test": T_VectorTest,
+        };
+    }
+
+    constructor(AbstractDatasource ds, *string dts, *string its) : SqlUtilTestSchema(ds, dts, its) {
+    }
+
+    private string getNameImpl() {
+        return SchemaName;
+    }
+
+    private string getVersionImpl() {
+        return SchemaVersion;
+    }
+
+    private *hash getTablesImpl() {
+        return Tables;
+    }
+
+    private *hash getGenericOptionsImpl() {
+        return GenericOptions;
+    }
+}
+
 class PgsqlTest inherits SqlTestBase {
     public {
         hash<SchemaAlignmentInfo> schema_info;
@@ -271,6 +319,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("default value", \testDefaultValue());
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
+            addTestCase("pgvector type support", \pgvectorTest());
         }
 
         set_return_value(main());
@@ -404,6 +453,162 @@ class PgsqlTest inherits SqlTestBase {
         # proxy because it is not a Datasource or DatasourcePool
         AbstractDatasource ads = proxy;
         assertThrows("RUNTIME-OVERLOAD-ERROR", sub () { new SQLStatement(ads); });
+    }
+
+    private pgvectorTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        # check if pgvector extension is available
+        *hash<auto> ext_row = ds.selectRow("select * from pg_extension where extname = %v", "vector");
+        if (!ext_row) {
+            testSkip("pgvector extension not installed");
+        }
+
+        # test Schema helper functions produce correct column hashes
+        hash<GenericColumnInfo> vec_col = c_vector(3, True, "test vector column");
+        assertEq("vector", vec_col.driver.pgsql.native_type, "c_vector native_type");
+        assertEq(3, vec_col.driver.pgsql.size, "c_vector size");
+        assertEq(True, vec_col.notnull, "c_vector notnull");
+        assertEq("test vector column", vec_col.comment, "c_vector comment");
+
+        hash<GenericColumnInfo> hv_col = c_halfvec(5);
+        assertEq("halfvec", hv_col.driver.pgsql.native_type, "c_halfvec native_type");
+        assertEq(5, hv_col.driver.pgsql.size, "c_halfvec size");
+
+        hash<GenericColumnInfo> sv_col = c_sparsevec(10, True);
+        assertEq("sparsevec", sv_col.driver.pgsql.native_type, "c_sparsevec native_type");
+        assertEq(10, sv_col.driver.pgsql.size, "c_sparsevec size");
+        assertEq(True, sv_col.notnull, "c_sparsevec notnull");
+
+        # comment-only overloads
+        hash<GenericColumnInfo> vec_col2 = c_vector(3, "my comment");
+        assertEq("my comment", vec_col2.comment, "c_vector comment-only overload");
+        hash<GenericColumnInfo> hv_col2 = c_halfvec(5, "hv comment");
+        assertEq("hv comment", hv_col2.comment, "c_halfvec comment-only overload");
+        hash<GenericColumnInfo> sv_col2 = c_sparsevec(10, "sv comment");
+        assertEq("sv comment", sv_col2.comment, "c_sparsevec comment-only overload");
+
+        string tname = "pgsql_vector_test";
+
+        # clean up if table exists from a previous failed run
+        {
+            PgsqlTable t(ds, tname);
+            if (t.checkExistence()) {
+                t.dropCommit();
+            }
+        }
+
+        # test schema creation with vector columns
+        PgsqlTestVectorSchema vec_schema(ds);
+        hash<SchemaAlignmentInfo> info = vec_schema.alignWithInfo(False, m_options.verbose,
+            m_options.verbose > 0);
+        assertTrue(info.created, "vector schema created");
+
+        # get table and describe it
+        PgsqlTable vec_table(ds, tname);
+        assertTrue(vec_table.checkExistence(), "vector table exists");
+
+        Columns cols = vec_table.describe();
+
+        # verify vector column was correctly described
+        assertTrue(cols.hasKey("vec_f"), "vector column exists");
+        assertEq("vector", cols.vec_f.native_type, "vector native_type from describe");
+        assertEq(3, cols.vec_f.size, "vector dimension from describe");
+        assertEq(False, cols.vec_f.nullable, "vector not null from describe");
+
+        # verify halfvec column
+        assertTrue(cols.hasKey("halfvec_f"), "halfvec column exists");
+        assertEq("halfvec", cols.halfvec_f.native_type, "halfvec native_type from describe");
+        assertEq(5, cols.halfvec_f.size, "halfvec dimension from describe");
+        assertEq(True, cols.halfvec_f.nullable, "halfvec nullable from describe");
+
+        # verify sparsevec column
+        assertTrue(cols.hasKey("sparsevec_f"), "sparsevec column exists");
+        assertEq("sparsevec", cols.sparsevec_f.native_type, "sparsevec native_type from describe");
+        assertEq(10, cols.sparsevec_f.size, "sparsevec dimension from describe");
+
+        # test getNativeTypeString() produces correct DDL
+        assertEq("vector(3)", cols.vec_f.getNativeTypeString(), "vector getNativeTypeString");
+        assertEq("halfvec(5)", cols.halfvec_f.getNativeTypeString(), "halfvec getNativeTypeString");
+        assertEq("sparsevec(10)", cols.sparsevec_f.getNativeTypeString(), "sparsevec getNativeTypeString");
+
+        # test schema re-alignment (should report no real changes)
+        hash<SchemaAlignmentInfo> info2 = vec_schema.alignWithInfo(False, m_options.verbose,
+            m_options.verbose > 0);
+        assertFalse(info2.created, "vector schema re-align not created");
+        # all entries should be "unchanged"
+        assertEq(info2.num_changes, info2.change_map.unchanged ?? 0,
+            "vector schema re-align only unchanged");
+
+        # test SchemaReverse for vector columns
+        TableReverse rev(ds, tname);
+        hash<auto> rev_hash = rev.toQore();
+        assertEq("vector", rev_hash.columns.vec_f.driver.pgsql.native_type,
+            "reverse vector native_type");
+        assertEq(3, rev_hash.columns.vec_f.driver.pgsql.size, "reverse vector size");
+        assertEq(True, rev_hash.columns.vec_f.driver.pgsql.notnull, "reverse vector notnull");
+
+        assertEq("halfvec", rev_hash.columns.halfvec_f.driver.pgsql.native_type,
+            "reverse halfvec native_type");
+        assertEq(5, rev_hash.columns.halfvec_f.driver.pgsql.size, "reverse halfvec size");
+        assertEq(False, rev_hash.columns.halfvec_f.driver.pgsql.notnull, "reverse halfvec notnull");
+
+        assertEq("sparsevec", rev_hash.columns.sparsevec_f.driver.pgsql.native_type,
+            "reverse sparsevec native_type");
+        assertEq(10, rev_hash.columns.sparsevec_f.driver.pgsql.size, "reverse sparsevec size");
+
+        # test vector column without dimension constraint (SZ_OPT allows this)
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.execRaw("create table pgsql_vector_nodim_test (id serial primary key, "
+                "vec_f vector)");
+        }
+        {
+            PgsqlTable nodim_table(ds, "pgsql_vector_nodim_test");
+            Columns nodim_cols = nodim_table.describe();
+            assertEq("vector", nodim_cols.vec_f.native_type,
+                "dimensionless vector native_type");
+            assertEq(0, nodim_cols.vec_f.size, "dimensionless vector size is 0");
+            assertEq("vector", nodim_cols.vec_f.getNativeTypeString(),
+                "dimensionless vector getNativeTypeString no parens");
+            on_error ds.rollback();
+            on_success ds.commit();
+            nodim_table.drop();
+        }
+
+        # test unknown USER-DEFINED type falls through gracefully
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            ds.execRaw("do $$ begin "
+                "if not exists (select 1 from pg_type where typname = 'test_status_enum') then "
+                "create type test_status_enum as enum ('active', 'inactive'); "
+                "end if; end $$");
+            ds.execRaw("create table pgsql_udt_test (id serial primary key, "
+                "status test_status_enum)");
+        }
+        {
+            PgsqlTable udt_table(ds, "pgsql_udt_test");
+            Columns udt_cols = udt_table.describe();
+            # unknown USER-DEFINED type should not crash; column is still described
+            assertTrue(udt_cols.hasKey("status"), "unknown USER-DEFINED column exists");
+            # the type falls through as USER-DEFINED since it's not in PgsqlTypeMap
+            assertEq("USER-DEFINED", udt_cols.status.native_type,
+                "unknown USER-DEFINED native_type preserved");
+            on_error ds.rollback();
+            on_success ds.commit();
+            udt_table.drop();
+            ds.execRaw("drop type test_status_enum");
+        }
+
+        # clean up
+        vec_table.dropCommit();
     }
 
     private string getResultSetSql() {

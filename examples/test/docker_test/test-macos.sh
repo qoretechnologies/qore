@@ -45,6 +45,13 @@ BUILD_DIR="${QORE_SRC_DIR}/build"
 rm -rf "${BUILD_DIR}"
 mkdir -p "${BUILD_DIR}"
 
+# install Rust/cargo if not available (needed for tree-sitter-cli)
+if ! command -v cargo > /dev/null 2>&1; then
+    echo "=== Installing Rust toolchain ==="
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+    source "$HOME/.cargo/env"
+fi
+
 # install tree-sitter CLI for astparser module build
 if ! command -v tree-sitter > /dev/null 2>&1; then
     echo "=== Installing tree-sitter CLI ==="

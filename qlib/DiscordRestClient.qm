@@ -410,7 +410,7 @@ DiscordRestClient rest(opts);
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
     constructor(hash<auto> opts, *softbool do_not_connect)
-            : RestClient(DiscordRestClientBase::getOptions(opts), False) {
+            : RestClient(DiscordRestClientBase::getOptions(opts), True) {
         setAssumedEncoding("UTF-8");
         if (!do_not_connect) {
             if (token) {

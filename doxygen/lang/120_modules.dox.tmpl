@@ -60,6 +60,11 @@ ModuleName/
         communicating with <a href="https://www.bigcommerce.com">BigCommerce</a>'s REST API with access token authentication
     |user|<a href="../../modules/BillwerkRestClient/html/index.html#billwerkrestclientintro">BillwerkRestClient</a>|providing APIs for \
         communicating with <a href="http://billwerk.com">billwerk.com</a>'s REST API
+    |user|<a href="../../modules/BitlyDataProvider/html/index.html#bitlydataproviderintro">BitlyDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Bitly URL shortening, \
+        branded links, QR codes, campaigns, and click analytics
+    |user|<a href="../../modules/BitlyRestClient/html/index.html#bitlyrestclientintro">BitlyRestClient</a>|Provides APIs for \
+        communicating with <a href="https://bitly.com">Bitly</a>'s REST API with Bearer token or OAuth2 authentication
     |user|<a href="../../modules/BulkSqlUtil/html/index.html#bulksqlutilintro">BulkSqlUtil</a>|Provides APIs based on \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> for executing bulk DML operations
     |user|<a href="../../modules/CdsRestClient/html/index.html#cdsrestclientintro">CdsRestClient</a>|providing APIs for communicating \
@@ -142,6 +147,11 @@ ModuleName/
     |user|<a href="../../modules/FreshBooksDataProvider/html/index.html#freshbooksdataproviderintro">FreshBooksDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for FreshBooks \
         accounting and invoicing services
+    |user|<a href="../../modules/GeminiRestClient/html/index.html#geminirestclientintro">GeminiRestClient</a>|Provides APIs for \
+        communicating with <a href="https://ai.google.dev">Google Gemini</a> REST APIs
+    |user|<a href="../../modules/GeminiDataProvider/html/index.html#geminidataproviderintro">GeminiDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Google Gemini \
+        generative AI services
     |user|<a href="../../modules/FreetdsSqlUtil/html/index.html#freetdssqlutilintro">FreetdsSqlUtil</a>|Provides a high-level \
         DB-independent API for working with MS SQL Server and Sybase database objects; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with the \
@@ -243,13 +253,24 @@ ModuleName/
         mapping APIs
     |user|<a href="../../modules/MemcachedDataProvider/html/index.html#memcacheddataproviderintro">MemcachedDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Memcached caching servers
-    |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides machine learning algorithms \
-        (IsolationForest, LOF, DBSCAN, KMeans, GMM, LinearRegression, HoltWinters, PCA, SeasonalDecomposition) \
-        and optional ONNX Runtime inference
+    |binary|<a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a>|Provides a columnar \
+        DataFrame with typed columns, SQL-like query operations (select, filter, sort, groupby, join, pivot, \
+        melt, window functions), CSV/Parquet/database I/O, and ML integration
+    |user|<a href="../../modules/DataProviderDataFrame/html/index.html#dataproviderdataframeintro">DataProviderDataFrame</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for \
+        <a href="../../modules/dataframe/html/index.html#dataframeintro">dataframe</a> columnar DataFrames \
+        with searchable record iteration and filtering
+    |binary|<a href="../../modules/ml/html/index.html#mlintro">ml</a>|Provides 20 machine learning algorithms \
+        including DecisionTree, RandomForest, GradientBoostedTrees, LogisticRegression, KNN, KMeans, GMM, \
+        IsolationForest, LOF, PCA, LinearRegression, HoltWinters, and preprocessing/pipeline utilities \
+        with metrics, serialization, online learning, and optional ONNX Runtime inference
     |user|<a href="../../modules/DataProviderML/html/index.html#dataprovidermlintro">DataProviderML</a>|Provides \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> pipeline \
         processors wrapping the <a href="../../modules/ml/html/index.html#mlintro">ml</a> module's machine \
         learning algorithms for anomaly detection, clustering, forecasting, and dimensionality reduction
+    |binary|<a href="../../modules/tokenizer/html/index.html#tokenizerintro">tokenizer</a>|Provides \
+        HuggingFace-compatible text tokenization (BPE, WordPiece, Unigram) with word_ids, sliding window, \
+        pre-tokenized input, dynamic vocabulary, and full tokenizer.json support
     |binary|<a href="../../modules/mongodb/html/index.html#mongodbintro">mongodb</a>|Provides MongoDB client connectivity using \
         libmongoc with full CRUD, aggregation, and automatic BSON conversion
     |user|<a href="../../modules/MongoDbDataProvider/html/index.html#mongodbdataproviderintro">MongoDbDataProvider</a>|Provides a \
@@ -280,6 +301,18 @@ ModuleName/
         <a href="https://github.com/qoretechnologies/module-odbc">odbc</a> module; loaded automatically by the \
         <a href="../../modules/SqlUtil/html/index.html#sqlutilintro">SqlUtil</a> module when working with Firebird databases \
         for automated schema management, programmatic DB access, schema and data synchronization, and more
+    |user|<a href="../../modules/AnthropicDataProvider/html/index.html#anthropicdataproviderintro">AnthropicDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Anthropic Claude AI services
+    |user|<a href="../../modules/AnthropicRestClient/html/index.html#anthropicrestclientintro">AnthropicRestClient</a>|providing APIs for \
+        communicating with Anthropic Claude REST APIs
+    |user|<a href="../../modules/GrokDataProvider/html/index.html#grokdataproviderintro">GrokDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for xAI Grok AI services
+    |user|<a href="../../modules/GrokRestClient/html/index.html#grokrestclientintro">GrokRestClient</a>|providing APIs for \
+        communicating with xAI Grok REST APIs
+    |user|<a href="../../modules/HuggingFaceDataProvider/html/index.html#huggingfacedataproviderintro">HuggingFaceDataProvider</a>|Provides a \
+        <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for Hugging Face Hub and Inference API services
+    |user|<a href="../../modules/HuggingFaceRestClient/html/index.html#huggingfacerestclientintro">HuggingFaceRestClient</a>|providing APIs for \
+        communicating with Hugging Face REST APIs
     |user|<a href="../../modules/OpenAiDataProvider/html/index.html#openaidataproviderintro">OpenAiDataProvider</a>|Provides a \
         <a href="../../modules/DataProvider/html/index.html#dataproviderintro">data provider</a> API for OpenAI cloud services
     |user|<a href="../../modules/OpenAiRestClient/html/index.html#openairestclientintro">OpenAiRestClient</a>|providing APIs for \
@@ -337,10 +370,17 @@ ModuleName/
     |user|<a href="../../modules/QoreHistory/html/index.html#qorehistoryintro">QoreHistory</a>|Provides \
         shared history management with timestamps, deduplication, search, expansion, and persistence
     |user|<a href="../../modules/QoreModelRegistry/html/index.html#qoremodelregistryintro">QoreModelRegistry</a>|Provides \
-        a filesystem-backed ML model registry for versioning, tagging, and deployment management
+        an ML model registry with pluggable storage backends (filesystem, database, REST) for versioning, \
+        tagging, pruning, and deployment management with multi-tenant support and DataProvider integration
+    |user|<a href="../../modules/QoreMLUtils/html/index.html#qoremlutilsintro">QoreMLUtils</a>|Provides \
+        hyperparameter optimization (GridSearch, RandomSearch) and model-agnostic feature importance \
+        (PermutationImportance) for ML model tuning and explainability
     |user|<a href="../../modules/QoreOnnxExport/html/index.html#qoreonnxexportintro">QoreOnnxExport</a>|Provides \
-        ONNX model export for 8 trained ML algorithms (StandardScaler, MinMaxScaler, Imputer, \
-        LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest)
+        ONNX model export for 11 trained ML algorithms including tree ensembles \
+        (DecisionTree, RandomForest, GradientBoostedTrees), linear models, preprocessing, and clustering
+    |user|<a href="../../modules/QoreTokenizerUtils/html/index.html#qoretokenizerutilsintro">QoreTokenizerUtils</a>|Provides \
+        document chunking (DocumentChunker) and token counting (TokenCounter) for RAG text ingestion \
+        pipelines using HuggingFace-compatible tokenizers
     |user|<a href="../../modules/QLS/html/index.html#qlsintro">QLS</a>|Provides a Language Server Protocol \
         (LSP) implementation for %Qore with 25+ features including hover, go-to-definition, \
         code completion, rename, semantic tokens, type/call hierarchy, and formatting

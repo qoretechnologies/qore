@@ -1031,6 +1031,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreParseOptions.cpp
     lib/SystemEnvironment.cpp
     lib/QoreCounter.cpp
+    lib/QoreFuture.cpp
     lib/ReferenceArgumentHelper.cpp
     lib/ReferenceHelper.cpp
     lib/QoreTypeInfo.cpp
@@ -1353,6 +1354,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreParseOptions.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/SystemEnvironment.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreCounter.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreFuture.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceArgumentHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/ReferenceHelper.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTypeInfo.cpp\"
@@ -1903,6 +1905,8 @@ if (NOT Eigen3_FOUND)
     endif()
 endif()
 add_subdirectory(modules/ml)
+add_subdirectory(modules/tokenizer)
+add_subdirectory(modules/dataframe)
 # protobuf module (requires libprotobuf)
 # Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files
 # (e.g., MacPorts protobuf-targets-macports.cmake referencing missing upb targets)
@@ -1984,8 +1988,11 @@ qore_user_module("qlib/EdifactUtil" "Util;DataProvider;FileLocationHandler")
 # base 3 modules
 qore_user_module("qlib/DataProvider" "MapperUtil;Mime;Util" "DataProvider-Full.svg;Qore-Q-square.svg")
 qore_user_module("qlib/DataProviderML" "DataProvider;modules/ml/ml")
+qore_user_module("qlib/DataProviderDataFrame" "DataProvider;modules/dataframe/dataframe")
 qore_user_module("qlib/QoreModelRegistry" "DataProvider;modules/ml/ml;Mime;Util")
 qore_user_module("qlib/QoreOnnxExport" "modules/protobuf/protobuf;modules/ml/ml;Util")
+qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
+qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
 qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
@@ -2062,6 +2069,7 @@ qore_user_module("qlib/SewioRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ZeyosRestClient.qm" "ConnectionProvider;RestClient;Swagger;RestSchemaValidator")
 qore_user_module("qlib/BigCommerceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/BillwerkRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator")
+qore_user_module("qlib/BitlyRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/Sap4HanaRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/CdsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ChargebeeRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2069,6 +2077,7 @@ qore_user_module("qlib/CloseRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/DiscordRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ElevenLabsRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/FreshBooksRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/GeminiRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/LinearRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/WaveRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/WooCommerceRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2078,6 +2087,9 @@ qore_user_module("qlib/JotformRestClient.qm" "ConnectionProvider;Mime;RestClient
 qore_user_module("qlib/MailgunRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
+qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
+qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2105,6 +2117,7 @@ qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValida
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
 qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")
+qore_user_module("qlib/BitlyDataProvider" "BitlyRestClient;RestClient;RestClientIo;DataProvider" "bitly-logo.svg")
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
@@ -2124,12 +2137,16 @@ qore_user_module("qlib/GoogleDataProvider" "GoogleRestClient;RestClient;DataProv
 qore_user_module("qlib/DiscordDataProvider" "DiscordRestClient;RestClient;DataProvider;WebSocketClient" "discord-logo.svg")
 qore_user_module("qlib/ElevenLabsDataProvider" "ElevenLabsRestClient;RestClientIo;DataProvider" "elevenlabs-logo.svg")
 qore_user_module("qlib/FreshBooksDataProvider" "FreshBooksRestClient;RestClient;DataProvider" "freshbooks-logo.svg")
+qore_user_module("qlib/GeminiDataProvider" "GeminiRestClient;RestClientIo;DataProvider" "gemini-logo.svg")
 qore_user_module("qlib/LinearDataProvider" "LinearRestClient;RestClient;DataProvider" "linear-logo.svg")
 qore_user_module("qlib/WaveDataProvider" "WaveRestClient;RestClient;DataProvider" "wave-logo.svg")
 qore_user_module("qlib/WooCommerceDataProvider" "WooCommerceRestClient;RestClient;DataProvider" "woocommerce-logo.svg")
 qore_user_module("qlib/JotformDataProvider" "JotformRestClient;RestClient;DataProvider" "jotform-logo.svg")
 qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataProvider" "mailgun-logo.svg")
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
+qore_user_module("qlib/AnthropicDataProvider" "AnthropicRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "anthropic-logo.svg")
+qore_user_module("qlib/GrokDataProvider" "GrokRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "grok-logo.svg")
+qore_user_module("qlib/HuggingFaceDataProvider" "HuggingFaceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "huggingface-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")
 
 # base 9 modules

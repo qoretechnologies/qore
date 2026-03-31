@@ -1640,6 +1640,10 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             "varbit": ("qore": Type::Binary, "size": SZ_OPT,),
             "varchar": ("qore": Type::String, "size": SZ_OPT,),
             "xml": {"qore": Type::String},
+            # pgvector extension types
+            "vector": ("qore": Type::List, "size": SZ_OPT,),
+            "halfvec": ("qore": Type::List, "size": SZ_OPT,),
+            "sparsevec": ("qore": Type::Hash, "size": SZ_OPT,),
         );
 
         #! maps from verbose type names to simple type names
@@ -2773,12 +2777,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
     private Columns describeImpl() {
         # get column descriptions
-        *hash<auto> qh = ds.select("select column_name, data_type, character_maximum_length, "
-            "character_octet_length, numeric_precision, numeric_scale, datetime_precision, is_nullable, "
+        *hash<auto> qh = ds.select("select column_name, data_type, c.udt_name, "
+            "character_maximum_length, "
+            "character_octet_length, numeric_precision, numeric_scale, datetime_precision, "
+            "pa.atttypmod, is_nullable, "
             "column_default, description from information_schema.columns c "
             "join pg_catalog.pg_statio_all_tables st on (c.table_schema = st.schemaname and c.table_name = "
             "st.relname) left join pg_catalog.pg_description pgd on (st.relid = pgd.objoid and pgd.objsubid = "
-            "c.ordinal_position) where table_schema = %v and table_name = %v order by ordinal_position", schema,
+            "c.ordinal_position) left join pg_catalog.pg_attribute pa on (st.relid = pa.attrelid and "
+            "pa.attnum = c.ordinal_position and not pa.attisdropped) "
+            "where table_schema = %v and table_name = %v order by ordinal_position", schema,
             name);
         if (!qh.column_name)
             throw "TABLE-ERROR", sprintf("cannot retrieve table information for table %y in %y", name, dsdesc);
@@ -2786,12 +2794,20 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         hash<auto> rv;
         foreach hash<auto> row in (qh.contextIterator()) {
             *hash<auto> th = PgsqlTypeMap.(row.data_type);
-            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            # handle USER-DEFINED types (extension types like pgvector)
+            if (!th && row.data_type == "USER-DEFINED") {
+                th = PgsqlTypeMap{row.udt_name};
+                if (th) {
+                    row.data_type = row.udt_name;
+                }
+            }
+            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
             if (!size) {
                 size = row.datetime_precision;
             }
-            if (!exists size) {
-                size = 0;
+            # for extension types, get size from atttypmod (e.g. vector dimensions)
+            if (!size && row.atttypmod > 0) {
+                size = row.atttypmod;
             }
             # use short names in descriptions
             *string an = PgsqlNameMap{row.data_type};

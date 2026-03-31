@@ -124,6 +124,12 @@ public namespace Schema {
             init(ds, opts);
         }
 
+        #! Protected constructor for subclasses that call init() themselves
+        /** @since Schema 1.1
+        */
+        private constructor() {
+        }
+
         #! returns the name of the schema
         string getName() {
             return getNameImpl();

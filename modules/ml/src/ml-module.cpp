@@ -35,6 +35,9 @@
 #include "QC_PCA.h"
 #include "QC_SeasonalDecomposition.h"
 #include "QC_LinearRegression.h"
+#include "QC_Ridge.h"
+#include "QC_Lasso.h"
+#include "QC_ElasticNet.h"
 #include "QC_LogisticRegression.h"
 #include "QC_LOF.h"
 #include "QC_KNN.h"
@@ -45,6 +48,23 @@
 #include "QC_Imputer.h"
 #include "QC_MLPipeline.h"
 #include "QC_CrossValidator.h"
+#include "QC_DecisionTree.h"
+#include "QC_RandomForest.h"
+#include "QC_GradientBoostedTrees.h"
+#include "QC_SVM.h"
+#include "QC_NaiveBayes.h"
+#include "QC_OneHotEncoder.h"
+#include "QC_LabelEncoder.h"
+#include "QC_VarianceThreshold.h"
+#include "QC_PolynomialFeatures.h"
+#include "QC_SelectKBest.h"
+#include "QC_RFE.h"
+#include "QC_ADWIN.h"
+#include "QC_PageHinkley.h"
+#include "QC_DDM.h"
+#include "QC_DateTimeFeatures.h"
+#include "QC_TextFeatures.h"
+#include "QC_SparseMatrix.h"
 
 static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink);
 static void ml_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink);
@@ -77,6 +97,12 @@ DLLLOCAL TypedHashDecl* init_hashdecl_PCAResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_SeasonalDecompositionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LinearRegressionModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RidgeResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RidgeModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LassoResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_LassoModelInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ElasticNetResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ElasticNetModelInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LogisticRegressionResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_LOFResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_GMMResult(QoreNamespace& ns);
@@ -93,6 +119,16 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ConfusionMatrixResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ClassMetrics(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ClassificationReport(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_CrossValidationFold(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_DecisionTreeRegressionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_FeatureImportanceInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RandomForestClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RandomForestRegressionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_GBTClassificationResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_GBTRegressionResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_SVMResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_NaiveBayesResult(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_HypothesisTestResult(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_MLCapabilities(QoreNamespace& ns);
 
 // Global hashdecl pointers (referenced by generated QPP code)
@@ -104,6 +140,12 @@ const TypedHashDecl* hashdeclPCAResult;
 const TypedHashDecl* hashdeclSeasonalDecompositionResult;
 const TypedHashDecl* hashdeclLinearRegressionResult;
 const TypedHashDecl* hashdeclLinearRegressionModelInfo;
+const TypedHashDecl* hashdeclRidgeResult;
+const TypedHashDecl* hashdeclRidgeModelInfo;
+const TypedHashDecl* hashdeclLassoResult;
+const TypedHashDecl* hashdeclLassoModelInfo;
+const TypedHashDecl* hashdeclElasticNetResult;
+const TypedHashDecl* hashdeclElasticNetModelInfo;
 const TypedHashDecl* hashdeclLogisticRegressionResult;
 const TypedHashDecl* hashdeclLOFResult;
 const TypedHashDecl* hashdeclGMMResult;
@@ -120,6 +162,16 @@ const TypedHashDecl* hashdeclConfusionMatrixResult;
 const TypedHashDecl* hashdeclClassMetrics;
 const TypedHashDecl* hashdeclClassificationReport;
 const TypedHashDecl* hashdeclCrossValidationFold;
+const TypedHashDecl* hashdeclDecisionTreeClassificationResult;
+const TypedHashDecl* hashdeclDecisionTreeRegressionResult;
+const TypedHashDecl* hashdeclFeatureImportanceInfo;
+const TypedHashDecl* hashdeclRandomForestClassificationResult;
+const TypedHashDecl* hashdeclRandomForestRegressionResult;
+const TypedHashDecl* hashdeclGBTClassificationResult;
+const TypedHashDecl* hashdeclGBTRegressionResult;
+const TypedHashDecl* hashdeclSVMResult;
+const TypedHashDecl* hashdeclNaiveBayesResult;
+const TypedHashDecl* hashdeclHypothesisTestResult;
 const TypedHashDecl* hashdeclMLCapabilities;
 
 // Forward declarations for function init (generated from ql_ml.qpp)
@@ -134,6 +186,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitPCAClass();
     preinitSeasonalDecompositionClass();
     preinitLinearRegressionClass();
+    preinitRidgeClass();
+    preinitLassoClass();
+    preinitElasticNetClass();
     preinitLogisticRegressionClass();
     preinitLOFClass();
     preinitKNNClass();
@@ -144,6 +199,23 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     preinitImputerClass();
     preinitMLPipelineClass();
     preinitCrossValidatorClass();
+    preinitDecisionTreeClass();
+    preinitRandomForestClass();
+    preinitGradientBoostedTreesClass();
+    preinitSVMClass();
+    preinitNaiveBayesClass();
+    preinitOneHotEncoderClass();
+    preinitLabelEncoderClass();
+    preinitVarianceThresholdClass();
+    preinitPolynomialFeaturesClass();
+    preinitSelectKBestClass();
+    preinitRFEClass();
+    preinitADWINClass();
+    preinitPageHinkleyClass();
+    preinitDDMClass();
+    preinitDateTimeFeaturesClass();
+    preinitTextFeaturesClass();
+    preinitSparseMatrixClass();
 
     // Initialize hashdecls (store in globals for generated QPP code)
     hashdeclIsolationForestResult = init_hashdecl_IsolationForestResult(MLNS);
@@ -154,6 +226,12 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclSeasonalDecompositionResult = init_hashdecl_SeasonalDecompositionResult(MLNS);
     hashdeclLinearRegressionResult = init_hashdecl_LinearRegressionResult(MLNS);
     hashdeclLinearRegressionModelInfo = init_hashdecl_LinearRegressionModelInfo(MLNS);
+    hashdeclRidgeResult = init_hashdecl_RidgeResult(MLNS);
+    hashdeclRidgeModelInfo = init_hashdecl_RidgeModelInfo(MLNS);
+    hashdeclLassoResult = init_hashdecl_LassoResult(MLNS);
+    hashdeclLassoModelInfo = init_hashdecl_LassoModelInfo(MLNS);
+    hashdeclElasticNetResult = init_hashdecl_ElasticNetResult(MLNS);
+    hashdeclElasticNetModelInfo = init_hashdecl_ElasticNetModelInfo(MLNS);
     hashdeclLogisticRegressionResult = init_hashdecl_LogisticRegressionResult(MLNS);
     hashdeclLOFResult = init_hashdecl_LOFResult(MLNS);
     hashdeclGMMResult = init_hashdecl_GMMResult(MLNS);
@@ -170,6 +248,16 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     hashdeclClassMetrics = init_hashdecl_ClassMetrics(MLNS);
     hashdeclClassificationReport = init_hashdecl_ClassificationReport(MLNS);
     hashdeclCrossValidationFold = init_hashdecl_CrossValidationFold(MLNS);
+    hashdeclDecisionTreeClassificationResult = init_hashdecl_DecisionTreeClassificationResult(MLNS);
+    hashdeclDecisionTreeRegressionResult = init_hashdecl_DecisionTreeRegressionResult(MLNS);
+    hashdeclFeatureImportanceInfo = init_hashdecl_FeatureImportanceInfo(MLNS);
+    hashdeclRandomForestClassificationResult = init_hashdecl_RandomForestClassificationResult(MLNS);
+    hashdeclRandomForestRegressionResult = init_hashdecl_RandomForestRegressionResult(MLNS);
+    hashdeclGBTClassificationResult = init_hashdecl_GBTClassificationResult(MLNS);
+    hashdeclGBTRegressionResult = init_hashdecl_GBTRegressionResult(MLNS);
+    hashdeclSVMResult = init_hashdecl_SVMResult(MLNS);
+    hashdeclNaiveBayesResult = init_hashdecl_NaiveBayesResult(MLNS);
+    hashdeclHypothesisTestResult = init_hashdecl_HypothesisTestResult(MLNS);
     hashdeclMLCapabilities = init_hashdecl_MLCapabilities(MLNS);
 
     // Add classes to namespace (adds methods that may reference other classes)
@@ -180,6 +268,9 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initPCAClass(MLNS));
     MLNS.addSystemClass(initSeasonalDecompositionClass(MLNS));
     MLNS.addSystemClass(initLinearRegressionClass(MLNS));
+    MLNS.addSystemClass(initRidgeClass(MLNS));
+    MLNS.addSystemClass(initLassoClass(MLNS));
+    MLNS.addSystemClass(initElasticNetClass(MLNS));
     MLNS.addSystemClass(initLogisticRegressionClass(MLNS));
     MLNS.addSystemClass(initLOFClass(MLNS));
     MLNS.addSystemClass(initKNNClass(MLNS));
@@ -190,6 +281,23 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLNS.addSystemClass(initImputerClass(MLNS));
     MLNS.addSystemClass(initMLPipelineClass(MLNS));
     MLNS.addSystemClass(initCrossValidatorClass(MLNS));
+    MLNS.addSystemClass(initDecisionTreeClass(MLNS));
+    MLNS.addSystemClass(initRandomForestClass(MLNS));
+    MLNS.addSystemClass(initGradientBoostedTreesClass(MLNS));
+    MLNS.addSystemClass(initSVMClass(MLNS));
+    MLNS.addSystemClass(initNaiveBayesClass(MLNS));
+    MLNS.addSystemClass(initOneHotEncoderClass(MLNS));
+    MLNS.addSystemClass(initLabelEncoderClass(MLNS));
+    MLNS.addSystemClass(initVarianceThresholdClass(MLNS));
+    MLNS.addSystemClass(initPolynomialFeaturesClass(MLNS));
+    MLNS.addSystemClass(initSelectKBestClass(MLNS));
+    MLNS.addSystemClass(initRFEClass(MLNS));
+    MLNS.addSystemClass(initADWINClass(MLNS));
+    MLNS.addSystemClass(initPageHinkleyClass(MLNS));
+    MLNS.addSystemClass(initDDMClass(MLNS));
+    MLNS.addSystemClass(initDateTimeFeaturesClass(MLNS));
+    MLNS.addSystemClass(initTextFeaturesClass(MLNS));
+    MLNS.addSystemClass(initSparseMatrixClass(MLNS));
 
     // Add namespace-level functions
     init_ml_functions(MLNS);
@@ -202,6 +310,18 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("LinearRegression", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreLinearRegression::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("Ridge", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreRidge::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("Lasso", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLasso::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("ElasticNet", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreElasticNet::deserializeState(data, len, xsink);
     });
     MLSerialization::registerAlgorithm("LogisticRegression", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
@@ -242,6 +362,62 @@ static void ml_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     MLSerialization::registerAlgorithm("Imputer", [](const uint8_t* data, size_t len,
         ExceptionSink* xsink) -> AbstractPrivateData* {
         return QoreImputer::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("DecisionTree", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreDecisionTree::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("RandomForest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreRandomForest::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("GradientBoostedTrees", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreGradientBoostedTrees::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("SVM", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreSVM::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("NaiveBayes", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreNaiveBayes::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("OneHotEncoder", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreOneHotEncoder::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("LabelEncoder", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreLabelEncoder::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("VarianceThreshold", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreVarianceThreshold::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("PolynomialFeatures", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QorePolynomialFeatures::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("SelectKBest", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreSelectKBest::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("RFE", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreRFE::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("SparseMatrix", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreSparseMatrix::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("DateTimeFeatures", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreDateTimeFeatures::deserializeState(data, len, xsink);
+    });
+    MLSerialization::registerAlgorithm("TextFeatures", [](const uint8_t* data, size_t len,
+        ExceptionSink* xsink) -> AbstractPrivateData* {
+        return QoreTextFeatures::deserializeState(data, len, xsink);
     });
 }
 

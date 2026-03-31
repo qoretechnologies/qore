@@ -509,7 +509,9 @@ MACRO (QORE_USER_MODULE _module_file _mod_deps)
         # make this dependent on the other module targets
         foreach(i ${_mod_deps})
             get_filename_component(f0 ${i} NAME)
-            add_dependencies(docs-${f} docs-${f0})
+            if (TARGET docs-${f0})
+                add_dependencies(docs-${f} docs-${f0})
+            endif()
         endforeach(i)
     endif (DOXYGEN_FOUND)
 

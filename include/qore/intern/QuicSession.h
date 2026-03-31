@@ -737,6 +737,28 @@ public:
     */
     DLLLOCAL void deregisterConnectStreamQueue(int64_t stream_id);
 
+    //! Create and register a StreamNotifier for a CONNECT stream
+    /** Creates a StreamNotifier that is signaled from h3RecvDataCallback()
+        (pure C++, safe from ngtcp2 callbacks) when data arrives on the stream.
+        A handler thread can block on the notifier via getConnectStreamNotifier().
+
+        @param stream_id the HTTP/3 stream ID
+        @return shared_ptr to the created notifier
+    */
+    DLLLOCAL std::shared_ptr<StreamNotifier> registerConnectStreamNotifier(int64_t stream_id);
+
+    //! Get the StreamNotifier for a CONNECT stream
+    /** @param stream_id the HTTP/3 stream ID
+        @return shared_ptr to the notifier, or nullptr if not registered
+    */
+    DLLLOCAL std::shared_ptr<StreamNotifier> getConnectStreamNotifier(int64_t stream_id);
+
+    //! Deregister the StreamNotifier for a CONNECT stream
+    /** Marks the notifier as closed and removes it from the map.
+        @param stream_id the HTTP/3 stream ID
+    */
+    DLLLOCAL void deregisterConnectStreamNotifier(int64_t stream_id);
+
     //! Returns true if extended CONNECT protocol is enabled locally (server)
     DLLLOCAL bool isExtendedConnectSupported() const {
         return is_server_;  // Server always enables via setupHttp3()
@@ -1243,7 +1265,16 @@ private:
     */
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
 
-    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_ and connect_stream_queues_
+    //! Per-stream notifiers for CONNECT tunnel data arrival
+    /** Signaled from h3RecvDataCallback() (pure C++, safe from ngtcp2 callbacks)
+        when data is pushed to the Queue.  A handler-side watcher thread blocks
+        on StreamNotifier::wait() and calls the Qore notification callback (e.g.,
+        wsc.notifyIo()) when signaled.
+        Protected by connect_data_mutex_.
+    */
+    std::unordered_map<int64_t, std::shared_ptr<StreamNotifier>> connect_stream_notifiers_;
+
+    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_, connect_stream_queues_, and connect_stream_notifiers_
 
     //! Per-stream incoming datagram queue (RFC 9221/9297)
     /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on

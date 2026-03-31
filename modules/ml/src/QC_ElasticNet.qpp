@@ -1,0 +1,395 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_ElasticNet.qpp
+
+    Qore ml module - ElasticNet regression class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "qore/Qore.h"
+#include "QC_ElasticNet.h"
+#include "QC_SparseMatrix.h"
+
+// Extern declarations for hashdecls (defined in ml-module.cpp)
+extern const TypedHashDecl* hashdeclElasticNetResult;
+extern const TypedHashDecl* hashdeclElasticNetModelInfo;
+
+//! The ElasticNet class implements combined L1+L2 regularized linear regression
+/** ElasticNet regression combines L1 (Lasso) and L2 (Ridge) penalties, controlled by
+    the \c l1_ratio parameter:
+    - \c l1_ratio = 0: equivalent to Ridge regression (pure L2 penalty)
+    - \c l1_ratio = 1: equivalent to Lasso regression (pure L1 penalty)
+    - 0 < \c l1_ratio < 1: mixed L1+L2 penalty
+
+    It uses coordinate descent optimization with soft thresholding. The L1 penalty
+    encourages sparsity (some coefficients become exactly zero), while the L2 penalty
+    handles correlated features and improves stability.
+
+    Each instance is independent and thread-safe for concurrent prediction after fitting.
+
+    @par Example:
+    @code{.py}
+# Create an ElasticNet model with mixed L1+L2 penalty
+ElasticNet enet({"alpha": 1.0, "l1_ratio": 0.5, "fit_intercept": True});
+
+# Train on data with a target field
+list<hash<auto>> training_data = (
+    {"x1": 1.0, "x2": 2.0, "y": 5.0},
+    {"x1": 2.0, "x2": 3.0, "y": 8.0},
+    {"x1": 3.0, "x2": 4.0, "y": 11.0},
+);
+enet.fit(training_data, "y");
+
+# Predict
+hash<ElasticNetResult> result = enet.predict({"x1": 4.0, "x2": 5.0});
+printf("Prediction: %f, R-squared: %f\n", result.prediction, result.r_squared);
+    @endcode
+
+*/
+qclass ElasticNet [arg=QoreElasticNet* enet; ns=Qore::ML; flags=final];
+
+//! Creates an ElasticNet regression with the given options
+/** @param options a hash with the following optional keys:
+    - \c alpha (float): regularization strength; larger values mean stronger regularization (default: 1.0)
+    - \c l1_ratio (float): L1/L2 mixing parameter; 0 = pure Ridge, 1 = pure Lasso (default: 0.5)
+    - \c fit_intercept (bool): whether to fit an intercept term (default: True)
+    - \c normalize (bool): whether to normalize features before fitting (default: False)
+    - \c max_iter (int): maximum number of coordinate descent iterations (default: 1000)
+    - \c tol (float): convergence tolerance for relative objective decrease (default: 1e-4)
+    - \c warm_start (bool): if True, reuse coefficients from a previous fit() as initialization (default: False)
+
+    @par Example:
+    @code{.py}
+ElasticNet enet({"alpha": 0.5, "l1_ratio": 0.7, "fit_intercept": True});
+    @endcode
+*/
+ElasticNet::constructor(*hash<auto> options) {
+    double alpha = 1.0;
+    double l1_ratio = 0.5;
+    bool fit_intercept = true;
+    bool normalize = false;
+    int max_iter = 1000;
+    double tol = 1e-4;
+    bool warm_start = false;
+
+    if (options) {
+        QoreValue v;
+        v = options->getKeyValue("alpha");
+        if (!v.isNullOrNothing()) {
+            alpha = v.getAsFloat();
+        }
+        v = options->getKeyValue("l1_ratio");
+        if (!v.isNullOrNothing()) {
+            l1_ratio = v.getAsFloat();
+        }
+        v = options->getKeyValue("fit_intercept");
+        if (!v.isNullOrNothing()) {
+            fit_intercept = v.getAsBool();
+        }
+        v = options->getKeyValue("normalize");
+        if (!v.isNullOrNothing()) {
+            normalize = v.getAsBool();
+        }
+        v = options->getKeyValue("max_iter");
+        if (!v.isNullOrNothing()) {
+            max_iter = static_cast<int>(v.getAsBigInt());
+        }
+        v = options->getKeyValue("tol");
+        if (!v.isNullOrNothing()) {
+            tol = v.getAsFloat();
+        }
+        v = options->getKeyValue("warm_start");
+        if (!v.isNullOrNothing()) {
+            warm_start = v.getAsBool();
+        }
+    }
+
+    if (alpha < 0.0) {
+        xsink->raiseException("ML-ELASTICNET-ERROR", "alpha must be >= 0; got %f", alpha);
+        return;
+    }
+    if (l1_ratio < 0.0 || l1_ratio > 1.0) {
+        xsink->raiseException("ML-ELASTICNET-ERROR",
+            "l1_ratio must be between 0 and 1; got %f", l1_ratio);
+        return;
+    }
+    if (max_iter <= 0) {
+        xsink->raiseException("ML-ELASTICNET-ERROR",
+            "max_iter must be > 0; got %d", max_iter);
+        return;
+    }
+    if (tol <= 0.0) {
+        xsink->raiseException("ML-ELASTICNET-ERROR",
+            "tol must be > 0; got %f", tol);
+        return;
+    }
+
+    self->setPrivate(CID_ELASTICNET,
+        new QoreElasticNet(alpha, l1_ratio, fit_intercept, normalize, max_iter, tol, warm_start));
+}
+
+//! Creates a copy of the ElasticNet
+/** @throw COPY-ERROR ElasticNet objects cannot be copied
+*/
+ElasticNet::copy() {
+    xsink->raiseException("COPY-ERROR", "ElasticNet objects cannot be copied");
+}
+
+//! Trains the model on a list of hash records with a target field
+/** Extracts numeric fields (excluding the target) from the records as features,
+    and uses the target field as the dependent variable.
+
+    @param data a list of hashes where each hash represents a record
+    @param target_field the name of the field to predict
+
+    @throw ML-DATA-ERROR if data is empty or has no numeric fields
+    @throw ML-ELASTICNET-ERROR if fitting fails
+*/
+nothing ElasticNet::fit(list<auto> data, string target_field) {
+    if (!data || data->empty()) {
+        xsink->raiseException("ML-DATA-ERROR", "empty data list provided");
+        return QoreValue();
+    }
+
+    QoreValue first = data->retrieveEntry(0);
+    if (first.getType() != NT_HASH) {
+        xsink->raiseException("ML-DATA-ERROR", "data list must contain hash elements");
+        return QoreValue();
+    }
+    const QoreHashNode* first_hash = first.get<const QoreHashNode>();
+    const char* target_str = target_field->c_str();
+
+    std::vector<std::string> feat_names;
+    ConstHashIterator hi(first_hash);
+    while (hi.next()) {
+        if (strcmp(hi.getKey(), target_str) == 0) {
+            continue;
+        }
+        QoreValue val = hi.get();
+        qore_type_t vt = val.getType();
+        if (vt == NT_INT || vt == NT_FLOAT || vt == NT_NUMBER) {
+            feat_names.push_back(hi.getKey());
+        }
+    }
+
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-DATA-ERROR",
+            "no numeric feature fields found in data (excluding target '%s')",
+            target_str);
+        return QoreValue();
+    }
+
+    size_t n_rows = data->size();
+    size_t n_cols = feat_names.size();
+    MatrixXd X(n_rows, n_cols);
+    VectorXd y(n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        QoreValue row_val = data->retrieveEntry(i);
+        if (row_val.getType() != NT_HASH) {
+            xsink->raiseException("ML-DATA-ERROR", "data element %zu is not a hash", i);
+            return QoreValue();
+        }
+        const QoreHashNode* row = row_val.get<const QoreHashNode>();
+        for (size_t j = 0; j < n_cols; ++j) {
+            QoreValue v = row->getKeyValue(feat_names[j].c_str());
+            X(i, j) = v.getAsFloat();
+        }
+        QoreValue target_v = row->getKeyValue(target_str);
+        y(i) = target_v.getAsFloat();
+    }
+
+    enet->setFieldNames(feat_names);
+    enet->setTargetField(target_str);
+    enet->fit(X, y, xsink);
+}
+
+//! Trains the model on a numeric feature matrix and target vector
+/** @param X a list of lists where each inner list is a row of feature values
+    @param y a list of target values
+
+    @throw ML-DATA-ERROR if the matrix is empty or malformed
+    @throw ML-ELASTICNET-ERROR if fitting fails
+*/
+nothing ElasticNet::fitMatrix(list<auto> X, list<auto> y) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    enet->fit(mat, target, xsink);
+}
+
+//! Predicts the target value for a single record
+/** @param record a hash with the same numeric fields used during training
+
+    @return a @ref ElasticNetResult hash with prediction details
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+hash<ElasticNetResult> ElasticNet::predict(hash<auto> record) {
+    const std::vector<std::string>& feat_names = enet->getFieldNames();
+    if (feat_names.empty()) {
+        xsink->raiseException("ML-ELASTICNET-ERROR",
+            "model was fitted with fitMatrix(); use predictMatrix() or fit() with hash records");
+        return QoreValue();
+    }
+    RowVectorXd point = qoreHashToRowVector(record, feat_names, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return enet->predict(point, xsink);
+}
+
+//! Predicts target values for multiple rows in matrix form
+/** @param X a list of lists where each inner list is a row of feature values
+
+    @return a list of @ref ElasticNetResult hashes
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted or input dimensions mismatch
+*/
+list<hash<ElasticNetResult>> ElasticNet::predictMatrix(list<auto> X) {
+    MatrixXd mat = qoreListOfListsToMatrix(X, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return enet->predictMatrix(mat, xsink);
+}
+
+//! Returns True if the model has been trained
+/** @return True if fit() or fitMatrix() has been called successfully
+*/
+bool ElasticNet::isFitted() [flags=CONSTANT] {
+    return enet->isFitted();
+}
+
+//! Returns model-level information in a single call
+/** @return a @ref ElasticNetModelInfo hash with coefficients, intercept, R-squared,
+    feature count, alpha, l1_ratio, and iterations_run
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted
+*/
+hash<ElasticNetModelInfo> ElasticNet::getModelInfo() [flags=RET_VALUE_ONLY] {
+    return enet->getModelInfo(xsink);
+}
+
+//! Returns the model coefficients
+/** @return a list of coefficient values, one per feature; some may be exactly zero
+    due to the L1 penalty
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted
+*/
+list<float> ElasticNet::getCoefficients() [flags=RET_VALUE_ONLY] {
+    return enet->getCoefficients(xsink);
+}
+
+//! Returns the intercept value
+/** @return the intercept (bias) term; 0.0 if fit_intercept was False
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted
+*/
+float ElasticNet::getIntercept() [flags=RET_VALUE_ONLY] {
+    return enet->getIntercept(xsink);
+}
+
+//! Returns the R-squared (coefficient of determination)
+/** @return R-squared value; 1.0 means perfect fit, 0.0 means no better than mean
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted
+*/
+float ElasticNet::getRSquared() [flags=RET_VALUE_ONLY] {
+    return enet->getRSquared(xsink);
+}
+
+//! Returns the regularization strength
+/** @return the alpha value used for regularization
+*/
+float ElasticNet::getAlpha() [flags=CONSTANT] {
+    return enet->getAlpha();
+}
+
+//! Returns the L1/L2 mixing ratio
+/** @return the l1_ratio value; 0 = pure Ridge (L2), 1 = pure Lasso (L1)
+*/
+float ElasticNet::getL1Ratio() [flags=CONSTANT] {
+    return enet->getL1Ratio();
+}
+
+//! Returns the number of coordinate descent iterations executed during the last fit
+/** @return the number of iterations run; 0 if not yet fitted
+*/
+int ElasticNet::getIterationsRun() [flags=CONSTANT] {
+    return enet->getIterationsRun();
+}
+
+//! Returns True if the model was fitted with normalization
+/** @return True if the \c normalize option was set to True during construction
+*/
+bool ElasticNet::isNormalized() [flags=CONSTANT] {
+    return enet->isNormalized();
+}
+
+//! Returns feature means used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature mean values, one per feature
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> ElasticNet::getFeatureMeans() [flags=RET_VALUE_ONLY] {
+    return enet->getFeatureMeans(xsink);
+}
+
+//! Returns feature standard deviations used for normalization
+/** Only valid when the model was fitted with \c normalize: True
+
+    @return a list of feature standard deviation values, one per feature
+
+    @throw ML-ELASTICNET-ERROR if the model has not been fitted or was not fitted with normalization
+*/
+list<float> ElasticNet::getFeatureStds() [flags=RET_VALUE_ONLY] {
+    return enet->getFeatureStds(xsink);
+}
+
+//! Trains the model on a sparse feature matrix and target vector
+/** Uses sparse column operations in coordinate descent for memory-efficient fitting
+    on high-dimensional sparse data.
+
+    @param X a SparseMatrix containing the feature data
+    @param y a list of target values
+
+    @note Feature normalization is not applied when fitting with sparse data, as
+    centering destroys sparsity. Pre-normalize your features if needed.
+
+    @throw ML-ELASTICNET-ERROR if fitting fails or dimensions mismatch
+    @throw ML-DATA-ERROR if the target vector is malformed
+*/
+nothing ElasticNet::fitMatrixSparse(SparseMatrix[QoreSparseMatrix] X, list<auto> y) {
+    VectorXd target = qoreListToVector(y, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    enet->fitSparse(X->getMatrix(), target, xsink);
+}

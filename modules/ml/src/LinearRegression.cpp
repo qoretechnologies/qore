@@ -322,6 +322,85 @@ QoreListNode* QoreLinearRegression::getFeatureStds(ExceptionSink* xsink) const {
     return rv.release();
 }
 
+void QoreLinearRegression::fitSparse(const SparseMatrixXd& X, const VectorXd& y, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lk(mtx);
+
+    if (X.rows() == 0 || X.cols() == 0) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "cannot fit on empty data: provide at least one sample with one feature");
+        return;
+    }
+    if (X.rows() != y.size()) {
+        xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+            "X has %d rows but y has %d elements; they must match",
+            static_cast<int>(X.rows()), static_cast<int>(y.size()));
+        return;
+    }
+
+    n_features = static_cast<int>(X.cols());
+    int n_samples = static_cast<int>(X.rows());
+
+    // Note: normalization with sparse data is skipped (centering destroys sparsity)
+    // Users should pre-normalize if needed
+
+    double y_mean = 0.0;
+    if (fit_intercept) {
+        y_mean = y.mean();
+    }
+
+    // Form sparse normal equations: (X^T * X) * beta = X^T * y
+    SparseMatrixXd XtX = (X.transpose() * X).pruned();
+    VectorXd Xty = X.transpose() * y;
+
+    if (fit_intercept) {
+        // Compute X column means for intercept adjustment
+        VectorXd col_sums = X.transpose() * VectorXd::Ones(n_samples);
+        VectorXd X_mean = col_sums / n_samples;
+
+        // Implicit centering via adjusted normal equations:
+        // (X_c)^T (X_c) = X^T X - n * X_mean * X_mean^T
+        // (X_c)^T y_c   = X^T y - n * X_mean * y_mean
+        MatrixXd mean_outer = n_samples * X_mean * X_mean.transpose();
+        // Convert XtX to dense for the adjustment (normal equations are p x p, typically small)
+        MatrixXd XtX_dense = MatrixXd(XtX) - mean_outer;
+        VectorXd Xty_adj = Xty - n_samples * X_mean * y_mean;
+
+        // Solve dense normal equations (p x p system -- usually small)
+        coefficients = XtX_dense.ldlt().solve(Xty_adj);
+        intercept = y_mean - X_mean.dot(coefficients);
+    } else {
+        // Solve sparse system: X^T X * beta = X^T y
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;
+        // Need column-major for SimplicialLDLT
+        Eigen::SparseMatrix<double> XtX_colmajor = XtX;
+        solver.compute(XtX_colmajor);
+        if (solver.info() != Eigen::Success) {
+            xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+                "sparse LDLT decomposition failed");
+            return;
+        }
+        coefficients = solver.solve(Xty);
+        if (solver.info() != Eigen::Success) {
+            xsink->raiseException("ML-LINEAR-REGRESSION-ERROR",
+                "sparse LDLT solve failed");
+            return;
+        }
+        intercept = 0.0;
+    }
+
+    // Compute R-squared: need y_pred = X * coefficients + intercept
+    VectorXd y_pred = (X * coefficients).array() + intercept;
+    double ss_res = (y - y_pred).squaredNorm();
+    double ss_tot = (y.array() - y.mean()).square().sum();
+    if (ss_tot > 1e-10) {
+        r_squared = 1.0 - ss_res / ss_tot;
+    } else {
+        r_squared = (ss_res < 1e-10) ? 1.0 : 0.0;
+    }
+
+    fitted = true;
+}
+
 std::vector<uint8_t> QoreLinearRegression::serializeState() const {
     std::vector<uint8_t> buf;
     // Hyperparameters

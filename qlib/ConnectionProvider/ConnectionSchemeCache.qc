@@ -74,12 +74,18 @@ public class ConnectionSchemeCache {
     public {
         #! Map of known connection schemes to modules
         const SchemeMap = {
+            "anthropic": "AnthropicRestClient",
+
             "awsrests": "AwsRestClient",
+
+            "huggingface": "HuggingFaceRestClient",
 
             "bigcommerceres": "BigCommerceRestClient",
 
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
+
+            "bitlyrest": "BitlyRestClient",
 
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
@@ -118,6 +124,8 @@ public class ConnectionSchemeCache {
             "esrests": "ElasticSearchDataProvider",
 
             "freshbooks": "FreshBooksRestClient",
+
+            "gemini": "GeminiRestClient",
 
             "gohighlevelres": "GoHighLevelRestClient",
 
@@ -158,6 +166,8 @@ public class ConnectionSchemeCache {
             # provided by the nats module
             "nats": "NatsDataProvider",
             "natss": "NatsDataProvider",
+
+            "grok": "GrokRestClient",
 
             "netsuite": "NetSuiteRestClient",
 

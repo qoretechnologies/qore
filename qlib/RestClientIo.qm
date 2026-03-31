@@ -492,6 +492,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             url = opts.url;
             @assert(url.val());
 
+            # Extract username/password from URL if not provided as explicit options
+            if (!opts.username) {
+                hash<UrlInfo> url_info = parse_url(url);
+                if (url_info.username) {
+                    opts.username = url_info.username;
+                    opts.password = url_info.password;
+                }
+            }
+
             # Initialize logger first so it's available for other components
             if (opts.logger instanceof LoggerInterface) {
                 logger = cast<LoggerInterface>(opts.logger);

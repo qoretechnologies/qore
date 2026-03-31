@@ -2,45 +2,101 @@
 
 ## Overview
 
-This document describes a 6-phase plan to significantly improve Qore's ML capabilities in
-the `ml` binary module (C++/Eigen3) and `DataProviderML` user module (Qore). Each phase
-builds incrementally on existing infrastructure and includes independent verification.
+This document describes the phased plan to build Qore into an enterprise data science
+platform. Phases 1–7 are **complete** (ML foundation: 17 algorithms, preprocessing,
+metrics, serialization, model registry, HuggingFace tokenization). Phase 8 is
+**complete** (DataFrame module with SQL-like operations, CSV/Parquet/DB I/O, ML
+integration, DataProvider wrapper). Phase 9 is **complete** (DecisionTree, RandomForest, GradientBoostedTrees with
+6 DataProvider processors, GBT multiclass softmax, typed predict API).
+Phase 10 is **complete** (SVM, NaiveBayes).
+Phase 11 is **complete** (statistical functions with Cephes incbet).
+Phase 12 is **complete** (OneHotEncoder, LabelEncoder, VarianceThreshold,
+PolynomialFeatures, SelectKBest, RFE, DateTimeFeatures, TextFeatures).
+Phase 13 is **core complete** (13.1 concept drift detection: ADWIN, Page-Hinkley, DDM;
+13.2 streaming feature computation: RollingStats, EWMA; 13.3 data validation:
+DataProfile, SchemaValidation — remaining: 13.4 experiment tracking).
+Phase 14 is **in progress** (14.1 removed — covered by gRPC module; 14.2 ONNX tree
+ensemble export complete; 14.3 vector similarity + TextFeatures subword integration
+complete; 14.4 tokenizer C API complete — remaining: AI Gateway chunker integration
+(Qorus repo)).
+Phase 15 is **complete** (15.1 Ridge/Lasso/ElasticNet regularized regression; 15.2
+SparseMatrix with COO serialization; 15.3 ONNX export for DecisionTree, RandomForest,
+GradientBoostedTrees; 15.4 GridSearch/RandomSearch hyperparameter optimization; 15.5
+PermutationImportance model-agnostic explainability).
 
-## Current State
+## Current State (after Phases 1–9)
 
-- **ml module**: 10 native algorithms (IsolationForest, LOF, DBSCAN, KMeans, GMM,
-  LinearRegression, HoltWinters, SeasonalDecomposition, PCA) + optional OnnxModel
-- **DataProviderML module**: 9 pipeline processors with window-based accumulation
+- **ml module**: 25 native algorithms (Phase 9: DecisionTree, RandomForest,
+  GradientBoostedTrees with shared FlatTree CART engine; Phase 10: SVM, NaiveBayes;
+  Phase 15: Ridge, Lasso, ElasticNet) (IsolationForest, LOF, DBSCAN, KMeans, GMM,
+  LinearRegression, LogisticRegression, KNN, HoltWinters, SeasonalDecomposition, PCA,
+  StandardScaler, MinMaxScaler, Imputer, MLPipeline, CrossValidator, SparseMatrix) +
+  OnnxModel + classification/regression/clustering metrics + native serialization +
+  online learning
+- **DataProviderML module**: 20 pipeline processors (algorithms + preprocessing +
+  metrics + registry model)
+- **QoreModelRegistry module**: Multi-tenant model versioning with filesystem, database,
+  and REST backends
+- **QoreOnnxExport module**: ONNX export for 11 algorithms (StandardScaler, MinMaxScaler,
+  Imputer, LinearRegression, LogisticRegression, PCA, KMeans, IsolationForest,
+  DecisionTree, RandomForest, GradientBoostedTrees)
+- **QoreMLUtils module**: GridSearch, RandomSearch (hyperparameter optimization),
+  PermutationImportance (model-agnostic explainability), MLScoringUtils
+- **tokenizer module**: HuggingFace-compatible BPE/WordPiece/Unigram tokenization with
+  word_ids, pre-tokenized input, sliding window, dynamic vocabulary, Unicode support
 - **Architecture**: C++ with Eigen3 (no Python), thread-safe, typed hashdecl results,
-  dual API (hash-based + matrix-based)
+  dual API (hash-based + matrix-based), sparse matrix support (Eigen::SparseMatrix)
 
-## Architecture After Enhancement
+## Architecture (Current — Phases 1–7 Complete)
 
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                Qorus / Applications                      │
 ├──────────────────────────────────────────────────────────┤
 │               DataProviderML (Qore)                      │
-│  Existing processors + preprocessing + metric processors │
+│  20 processors: algorithms + preprocessing + metrics +   │
+│  registry model                                          │
 ├──────────────────────────────────────────────────────────┤
 │             QoreModelRegistry (Qore)                     │
-│  Model versioning, comparison, deployment management     │
+│  Model versioning, comparison, multi-tenant, 3 backends  │
 ├──────────────────────────────────────────────────────────┤
-│                 ml (C++ binary)                           │
-│  Existing algorithms + LogisticRegression + KNN          │
-│  + StandardScaler + MinMaxScaler + Imputer + Pipeline    │
-│  + Metrics (accuracy, F1, silhouette, MSE, ...)          │
-│  + ModelSerializer (native, ONNX export, JSON)           │
-│  + Online learning (LinearRegression, GMM)               │
+│        ml (C++ binary)          tokenizer (C++ binary)   │
+│  25 algorithms + metrics +      BPE, WordPiece, Unigram  │
+│  serialization + pipeline +     word_ids, sliding window  │
+│  online learning + CrossVal +   addTokens, pre-tokenized │
+│  SparseMatrix + Ridge/Lasso                              │
 ├──────────────────────────────────────────────────────────┤
-│    Eigen3          ONNX Runtime (opt)    libprotobuf*    │
+│    Eigen3       ONNX Runtime (opt)       utf8proc        │
 └──────────────────────────────────────────────────────────┘
-* libprotobuf only needed for ONNX export; optional like ONNX Runtime
+```
+
+## Architecture Target (Phases 8–14)
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                Qorus / Applications                      │
+├──────────────────────────────────────────────────────────┤
+│               DataProviderML (Qore)                      │
+│  All current + DataFrame + feature eng + validation +    │
+│  experiment tracking + streaming processors              │
+├──────────────────────────────────────────────────────────┤
+│  QoreModelRegistry    QoreDataFrame    QoreStats         │
+│  (current)            columnar data    distributions,    │
+│                       SQL-like ops     hypothesis tests  │
+├──────────────────────────────────────────────────────────┤
+│        ml (C++ binary)          tokenizer (C++ binary)   │
+│  Current + DecisionTree +       Current + embeddings     │
+│  RandomForest + GBT + SVM +     pipeline integration     │
+│  NaiveBayes + feature eng +                              │
+│  drift detection + statistics                            │
+├──────────────────────────────────────────────────────────┤
+│  Eigen3    ONNX Runtime    utf8proc    Apache Arrow(opt) │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Phase 1: Data Preprocessing Pipeline
+## Phase 1: Data Preprocessing Pipeline ✅ COMPLETE
 
 ### Motivation
 
@@ -200,7 +256,7 @@ transform all subsequent records.
 
 ---
 
-## Phase 2: Model Evaluation Metrics
+## Phase 2: Model Evaluation Metrics ✅ COMPLETE
 
 ### Motivation
 
@@ -335,7 +391,7 @@ list<hash<auto>> folds = cv.split(data.size());
 
 ---
 
-## Phase 3: New Algorithms — Logistic Regression and k-NN
+## Phase 3: New Algorithms — Logistic Regression and k-NN ✅ COMPLETE
 
 ### Motivation
 
@@ -496,7 +552,7 @@ hashdecl KNNNeighborInfo {
 
 ---
 
-## Phase 4: Online Learning Extensions
+## Phase 4: Online Learning Extensions ✅ COMPLETE
 
 ### Motivation
 
@@ -605,7 +661,7 @@ Update existing processors to support online mode:
 
 ---
 
-## Phase 5: Model Persistence and Export
+## Phase 5: Model Persistence and Export ✅ COMPLETE
 
 ### Motivation
 
@@ -929,7 +985,7 @@ This is best-effort: ONNX models exported by other tools remain as `OnnxModel`.
 
 ---
 
-## Phase 6: Model Registry and Deployment Management
+## Phase 6: Model Registry and Deployment Management ✅ COMPLETE
 
 ### Motivation
 
@@ -1188,39 +1244,684 @@ This is an optional add-on and depends on existing SqlUtil infrastructure.
 
 ---
 
-## Implementation Schedule and Dependencies
+## Implementation Schedule — Phases 1–7 (Complete)
 
 ```
-Phase 1 ──────────────> Phase 2 ──────────────> Phase 3
-(Preprocessing)         (Metrics)               (New Algorithms)
-                                                       │
-                            Phase 4 <──────────────────┘
-                            (Online Learning)
-                                  │
-                            Phase 5 <── depends on all trained models existing
-                            (Persistence & Export)
-                                  │
-                            Phase 6
-                            (Model Registry)
+Phase 1 ──────> Phase 2 ──────> Phase 3 ──────> Phase 4 ──────> Phase 5 ──────> Phase 6
+(Preproc) ✅    (Metrics) ✅    (Classif) ✅    (Online) ✅     (Persist) ✅    (Registry) ✅
+
+Phase 7 (Tokenizer enhancements) ✅ — independent of Phases 1–6
 ```
 
-- **Phase 1** has no dependencies on other phases
-- **Phase 2** can proceed in parallel with Phase 1 (metrics don't depend on preprocessing)
-- **Phase 3** benefits from Phase 2 (can use metrics in tests) but is not blocked by it
-- **Phase 4** depends on Phase 3 (extends LogisticRegression)
-- **Phase 5** benefits from all prior phases (more algorithms to serialize) but can start
-  with existing algorithms first
-- **Phase 6** depends on Phase 5 (uses persistence layer)
+---
+
+## Phase 8: DataFrame / Columnar Data Abstraction ✅ COMPLETE
+
+### Motivation
+
+This is the single biggest gap between Qore and Python for data science. Python's Pandas
+is the gravity well that keeps data scientists in the ecosystem. Every ML workflow starts
+with data manipulation — without a native columnar data structure, users must work with
+lists of hashes, which is verbose and slow for numerical workloads.
+
+### Components
+
+#### 8.1 QoreDataFrame (C++ binary module)
+
+Column-oriented data structure backed by Eigen for numeric columns and `std::vector<std::string>`
+for string columns. Designed for tabular data with heterogeneous column types.
+
+```cpp
+class QoreDataFrame : public AbstractPrivateData {
+public:
+    // Construction
+    QoreDataFrame(ExceptionSink* xsink);  // empty
+    static QoreDataFrame* fromHashList(const QoreListNode* records, ExceptionSink* xsink);
+    static QoreDataFrame* fromColumns(const QoreHashNode* columns, ExceptionSink* xsink);
+
+    // Column access
+    int numRows() const;
+    int numCols() const;
+    QoreListNode* columnNames(ExceptionSink* xsink) const;
+    QoreValue getColumn(const std::string& name, ExceptionSink* xsink) const;
+    QoreHashNode* getRow(int index, ExceptionSink* xsink) const;
+
+    // SQL-like operations
+    QoreDataFrame* select(const QoreListNode* columns, ExceptionSink* xsink) const;
+    QoreDataFrame* filter(const std::string& column, const std::string& op,
+        QoreValue value, ExceptionSink* xsink) const;
+    QoreDataFrame* groupBy(const QoreListNode* columns, const QoreHashNode* aggs,
+        ExceptionSink* xsink) const;
+    QoreDataFrame* join(const QoreDataFrame* other, const std::string& on,
+        const std::string& how, ExceptionSink* xsink) const;
+    QoreDataFrame* sortBy(const QoreListNode* columns, bool ascending,
+        ExceptionSink* xsink) const;
+    QoreDataFrame* head(int n, ExceptionSink* xsink) const;
+    QoreDataFrame* tail(int n, ExceptionSink* xsink) const;
+
+    // Aggregation
+    QoreHashNode* describe(ExceptionSink* xsink) const;  // count, mean, std, min, max, quartiles
+    QoreHashNode* corrMatrix(ExceptionSink* xsink) const;
+
+    // Mutation
+    void addColumn(const std::string& name, QoreValue data, ExceptionSink* xsink);
+    void dropColumn(const std::string& name, ExceptionSink* xsink);
+    void renameColumn(const std::string& old_name, const std::string& new_name,
+        ExceptionSink* xsink);
+    QoreDataFrame* fillna(QoreValue value, ExceptionSink* xsink) const;
+    QoreDataFrame* dropna(ExceptionSink* xsink) const;
+
+    // Conversion
+    QoreListNode* toHashList(ExceptionSink* xsink) const;  // list<hash>
+    QoreHashNode* toColumnHash(ExceptionSink* xsink) const;
+    MatrixXd toMatrix(const QoreListNode* columns, ExceptionSink* xsink) const;
+
+    // I/O
+    static QoreDataFrame* readCSV(const std::string& path, const QoreHashNode* options,
+        ExceptionSink* xsink);
+    void writeCSV(const std::string& path, const QoreHashNode* options,
+        ExceptionSink* xsink) const;
+
+private:
+    struct Column {
+        std::string name;
+        enum Type { FLOAT, INT, STRING, BOOL, DATE } type;
+        VectorXd float_data;           // for FLOAT columns
+        std::vector<int64_t> int_data; // for INT columns
+        std::vector<std::string> str_data;
+        std::vector<bool> null_mask;   // true = missing value
+    };
+    std::vector<Column> columns;
+    int n_rows = 0;
+    mutable std::mutex mtx;
+};
+```
+
+**Key design decisions:**
+- Column-oriented (not row-oriented) for efficient numerical operations
+- Null mask per column for missing value tracking (like Pandas nullable types)
+- Eigen-backed numeric columns for zero-copy integration with ml module
+- `toMatrix()` enables direct feeding into ml algorithms
+- CSV I/O with type inference
+
+#### 8.2 ML Module Integration
+
+Extend all ml algorithms to accept DataFrame input:
+```qore
+DataFrame df = DataFrame::readCSV("training_data.csv");
+auto model = new ML::LinearRegression();
+model.fitDataFrame(df, "target_column");
+DataFrame predictions = model.predictDataFrame(df.select(feature_columns));
+```
+
+#### 8.3 DataProvider Integration
+
+- DataFrame as a DataProvider record source/sink
+- Database query results → DataFrame (via SqlUtil)
+- REST API responses → DataFrame
+- DataProvider processor that accumulates records into a DataFrame
+
+### Files to Create
+
+| File | Action |
+|------|--------|
+| `modules/dataframe/` | New module directory |
+| `modules/dataframe/src/QC_DataFrame.h` | Class declaration |
+| `modules/dataframe/src/DataFrame.cpp` | Implementation |
+| `modules/dataframe/src/QC_DataFrame.qpp` | QPP bindings |
+| `modules/dataframe/src/df_csv.h/cpp` | CSV reader/writer |
+| `modules/dataframe/src/ql_dataframe.qpp` | Hashdecls |
+| `modules/dataframe/src/dataframe-module.cpp` | Module init |
+| `modules/dataframe/CMakeLists.txt` | Build config |
+| `modules/dataframe/test/dataframe.qtest` | Tests |
+
+### Independent Verification
+
+1. Construction from list<hash>, column hash, CSV file
+2. SQL-like operations: select, filter, groupby, join, sort produce correct results
+3. `describe()` matches hand-computed statistics
+4. `toMatrix()` → ml fit → predictDataFrame round-trip
+5. Missing value handling: fillna, dropna, null propagation in aggregations
+6. Large dataset test: 100K rows, verify no memory leaks, reasonable performance
+7. Thread safety: concurrent read operations after construction
+
+---
+
+## Phase 9: Tree-Based Algorithms ✅ CORE COMPLETE
+
+### Status
+
+Core algorithms implemented: DecisionTree, RandomForest, GradientBoostedTrees with
+shared FlatTree CART engine, full serialization, feature importance, and tests.
+20 new test cases, 75 new assertions.
+
+**Remaining items:**
+- GBT multiclass: currently uses simplified nearest-class-to-raw-prediction; proper
+  softmax with K sets of trees per round needed for calibrated multiclass probabilities
+- DataProvider processors: decision-tree-classification, decision-tree-regression,
+  random-forest-classification, random-forest-regression, gbt-classification,
+  gbt-regression (6 processor files + MLProcessorsDataProvider + DataProviderML.qm
+  registration)
+- `findBestSplit()` performance: creates new index vectors per candidate threshold;
+  pre-sorted index optimization would reduce allocation pressure for large datasets
+- DecisionTree `fit()` has no cancellation check inside the recursive tree build;
+  acceptable since bounded by max_depth but could be improved for very deep trees
+
+### Motivation
+
+Decision trees, random forests, and gradient boosting are the workhorses of enterprise ML
+on tabular data. They dominate Kaggle competitions, fraud detection, churn prediction,
+and credit scoring. Without these, Qore cannot compete for the most common enterprise
+use cases.
+
+### Components
+
+#### 9.1 DecisionTree (C++)
+
+Classification and regression tree (CART) with Gini/entropy split criteria.
+
+```cpp
+class QoreDecisionTree : public AbstractPrivateData {
+public:
+    QoreDecisionTree(const std::string& task, int max_depth, int min_samples_split,
+        int min_samples_leaf, const std::string& criterion);
+
+    void fit(const MatrixXd& X, const VectorXd& y, ExceptionSink* xsink);
+    QoreHashNode* predict(const RowVectorXd& point, ExceptionSink* xsink) const;
+    QoreHashNode* featureImportances(ExceptionSink* xsink) const;
+
+private:
+    struct Node {
+        int feature_index = -1;
+        double threshold = 0.0;
+        double value = 0.0;           // leaf value (class or mean)
+        std::vector<double> class_probs;  // class probabilities at leaf
+        std::unique_ptr<Node> left, right;
+        int n_samples = 0;
+    };
+    std::unique_ptr<Node> root;
+};
+```
+
+**Hashdecls**: `DecisionTreeResult`, `FeatureImportanceInfo`
+
+#### 9.2 RandomForest (C++)
+
+Bagging ensemble of decision trees. Qore's native threading is an advantage — trees can
+be trained in parallel using Qore background threads or C++ `std::async`.
+
+```cpp
+class QoreRandomForest : public AbstractPrivateData {
+    // n_trees, max_depth, max_features, bootstrap, n_jobs
+    // fit() trains trees in parallel
+    // predict() aggregates predictions (majority vote / mean)
+    // featureImportances() averages across trees
+    // Out-of-bag (OOB) error estimation
+};
+```
+
+#### 9.3 GradientBoostedTrees (C++)
+
+Sequential ensemble with gradient descent on a loss function. The enterprise ML algorithm
+— equivalent to XGBoost/LightGBM for tabular data.
+
+```cpp
+class QoreGBT : public AbstractPrivateData {
+    // n_estimators, learning_rate, max_depth, min_samples_split
+    // subsample, colsample_bytree
+    // loss: "mse" (regression), "log_loss" (classification)
+    // fit() builds trees sequentially, each fitting residuals
+    // predict() sums tree predictions with learning rate
+    // Early stopping with validation set
+    // featureImportances() via split gain or permutation
+};
+```
+
+#### 9.4 DataProvider Processors
+
+- `decision-tree` processor: classification/regression
+- `random-forest` processor: ensemble classification/regression
+- `gradient-boosted-trees` processor: ensemble with early stopping
+
+### Independent Verification
+
+1. DecisionTree on linearly separable data → perfect split
+2. DecisionTree on XOR data → requires depth ≥ 2
+3. RandomForest accuracy ≥ single DecisionTree on noisy data
+4. GBT on Iris-equivalent → >95% accuracy
+5. Feature importances sum to 1.0
+6. Serialization round-trip for all three
+7. OOB error close to cross-validation error
+8. Early stopping triggers when validation loss stops improving
+
+---
+
+## Phase 10: Additional Classifiers — SVM and Naive Bayes ✅ COMPLETE
+
+### Motivation
+
+SVM is widely used in enterprise for text classification and anomaly detection with
+small-to-medium datasets. Naive Bayes is the fastest classifier for text — a good
+baseline that's commonly required in enterprise pipelines.
+
+### Components
+
+#### 10.1 SVM (C++)
+
+Support Vector Machine with linear and RBF kernels. Uses SMO (Sequential Minimal
+Optimization) algorithm — no external dependency needed.
+
+```cpp
+class QoreSVM : public AbstractPrivateData {
+    // kernel: "linear", "rbf", "poly"
+    // C (regularization), gamma (RBF), degree (poly)
+    // fit() uses SMO algorithm
+    // predict() returns class + decision function value
+    // Multi-class via one-vs-one decomposition
+};
+```
+
+#### 10.2 NaiveBayes (C++)
+
+Gaussian, Multinomial, and Bernoulli variants.
+
+```cpp
+class QoreNaiveBayes : public AbstractPrivateData {
+    // variant: "gaussian", "multinomial", "bernoulli"
+    // fit() computes class priors and per-feature statistics
+    // predict() returns class + log probabilities
+    // Laplace smoothing for multinomial/bernoulli
+    // Online update() support (sufficient statistics are additive)
+};
+```
+
+---
+
+## Phase 11: Statistical Functions ✅ COMPLETE
+
+### Motivation
+
+The ml module has ML algorithms but lacks foundational statistics. Data scientists need
+descriptive statistics, hypothesis testing, and distribution functions for exploratory
+data analysis and feature validation.
+
+### Components
+
+#### 11.1 Descriptive Statistics (C++ namespace functions)
+
+```cpp
+// All operate on VectorXd or DataFrame columns
+double ml_percentile(const VectorXd& data, double q);
+double ml_iqr(const VectorXd& data);
+double ml_skewness(const VectorXd& data);
+double ml_kurtosis(const VectorXd& data);
+MatrixXd ml_correlation_matrix(const MatrixXd& data);
+MatrixXd ml_covariance_matrix(const MatrixXd& data);
+```
+
+#### 11.2 Hypothesis Testing
+
+```cpp
+QoreHashNode* ml_t_test(const VectorXd& a, const VectorXd& b, ...);     // t-statistic, p-value
+QoreHashNode* ml_chi_squared_test(const MatrixXd& contingency, ...);
+QoreHashNode* ml_anova(const std::vector<VectorXd>& groups, ...);
+QoreHashNode* ml_ks_test(const VectorXd& data, const std::string& distribution, ...);
+```
+
+**Hashdecls**: `HypothesisTestResult` — `statistic`, `p_value`, `reject_null`, `df`
+
+#### 11.3 Probability Distributions
+
+```cpp
+class QoreDistribution : public AbstractPrivateData {
+    // Factory: Normal, Binomial, Poisson, Uniform, Exponential, Gamma, Beta
+    double pdf(double x) const;
+    double cdf(double x) const;
+    double ppf(double p) const;      // inverse CDF (percent point function)
+    VectorXd sample(int n) const;    // random sampling
+};
+```
+
+---
+
+## Phase 12: Feature Engineering Pipeline
+
+### Motivation
+
+Raw data rarely feeds directly into ML models. Feature engineering — encoding
+categoricals, extracting date components, computing text features — is where enterprise
+ML practitioners spend most of their time. Standardized, serializable feature
+transformers that compose into pipelines eliminate manual boilerplate and ensure
+consistency between training and production.
+
+### Components
+
+#### 12.1 Categorical Encoders (C++)
+
+- **OneHotEncoder**: Sparse binary columns for each category
+- **LabelEncoder**: Integer mapping for ordinal categories
+- **OrdinalEncoder**: Ordered integer mapping with explicit ordering
+- **TargetEncoder**: Replace category with mean target value (with smoothing)
+
+#### 12.2 Feature Extractors
+
+- **DateTimeFeatures**: Extract day-of-week, hour, month, quarter, is_weekend,
+  is_holiday from date columns
+- **TextFeatures**: TF-IDF and bag-of-words via tokenizer module integration
+- **PolynomialFeatures**: Generate interaction and polynomial terms
+
+#### 12.3 Feature Selection
+
+- **SelectKBest**: Select top-k features by mutual information or chi-squared score
+- **RecursiveFeatureElimination**: Iteratively remove least important features
+- **VarianceThreshold**: Remove low-variance features
+
+All transformers implement the `fit()` / `transform()` / `fitTransform()` pattern and
+are serializable via Phase 5's persistence layer. They compose into MLPipeline chains.
+
+---
+
+## Phase 13: Streaming Analytics and Data Governance
+
+### Motivation
+
+Enterprise data science operates on live data streams and requires governance guardrails.
+Concept drift detection tells you when a deployed model's assumptions are violated.
+Data validation prevents garbage-in-garbage-out. These are where Qore + Qorus has a
+structural advantage over Python.
+
+### Components
+
+#### 13.1 Concept Drift Detection (C++)
+
+- **ADWIN** (Adaptive Windowing): detects distribution changes in streaming data
+- **Page-Hinkley**: detects mean shifts in sequential observations
+- **DDM** (Drift Detection Method): monitors error rate for classification models
+
+```cpp
+class QoreADWIN : public AbstractPrivateData {
+    // add(double value) — add observation
+    // bool driftDetected() — check if drift occurred
+    // double getMean() — current window mean
+    // int getWidth() — current window size
+};
+```
+
+#### 13.2 Streaming Feature Computation
+
+DataProvider processors for real-time feature engineering:
+- Rolling window statistics (mean, std, min, max over last N records)
+- Exponential moving average / exponential weighted statistics
+- Rate computation (events per time window)
+
+#### 13.3 Data Validation (Qore module)
+
+- Schema validation: expected types, ranges, nullability per column
+- Distribution drift: compare incoming data distribution against training baseline
+- Automated data profiling: cardinality, missing rates, outlier detection per column
+- Integration with DataProvider processors for pipeline guardrails
+
+#### 13.4 Experiment Tracking (extend QoreModelRegistry)
+
+- Track hyperparameters, metrics, datasets, and code versions per experiment
+- Compare experiments side-by-side
+- Reproducibility metadata (random seeds, data hashes, environment info)
+
+---
+
+## Phase 14: Ecosystem Interoperability and LLM Integration
+
+### Motivation
+
+Enterprise environments are polyglot. Qore must exchange data with Python/Spark/R
+ecosystems and participate in the enterprise AI/LLM wave. Apache Arrow is the lingua
+franca for columnar data; ONNX covers model exchange. Embedding computation and vector
+search enable RAG and semantic search pipelines.
+
+### Components
+
+#### 14.1 Apache Arrow / Parquet Support — REMOVED
+
+~~Originally planned: Parquet I/O, Arrow IPC, Arrow↔DataFrame conversion.~~
+
+**Superseded**: Parquet I/O already exists in the DataFrame module. Full Arrow
+support (IPC, streaming, cross-process sharing) is provided by the gRPC module
+(`module-grpc`). The only remaining gap would be an Arrow↔DataFrame bridge for
+in-process conversion, but this is a small utility if needed — not a phase-level
+effort. Defer to customer demand.
+
+#### 14.2 ONNX Export (extend ml module) — ✅ TREE ENSEMBLES COMPLETE
+
+QoreOnnxExport v1.1 now exports 11 algorithms to ONNX format:
+- **Preprocessing**: StandardScaler, MinMaxScaler, Imputer
+- **Linear models**: LinearRegression, LogisticRegression, PCA, KMeans
+- **Anomaly detection**: IsolationForest
+- **Tree ensembles** (Phase 15.3): DecisionTree, RandomForest, GradientBoostedTrees
+
+Tree ensembles use `ai.onnx.ml` domain operators:
+- `TreeEnsembleClassifier` for classification (class probabilities from leaf nodes)
+- `TreeEnsembleRegressor` for regression (leaf values with SUM/AVERAGE aggregation)
+- GBT: learning rate baked into leaf weights, `base_values` for initial predictions,
+  Sigmoid (binary) or Softmax (multiclass) post-processing
+
+#### 14.3 LLM / Embedding Pipeline
+
+Build on the tokenizer module:
+- **Embedding computation**: tokenize → run ONNX embedding model → return vectors
+  (sentence-transformers style)
+- **Vector similarity**: cosine, dot product, euclidean distance on embedding vectors
+- **ONNX inference pipeline processor** (deferred 7.7): chains tokenizer → ONNX model
+  → output in a DataProvider processor
+- **Prompt templating**: structured prompt construction for LLM API calls
+
+#### 14.4 Tokenizer Module C API for Cross-Module Integration
+
+The tokenizer binary module (`QoreTokenizer::QoreHFTokenizer` in `modules/tokenizer/src/`)
+currently has no `extern "C"` API. To allow the ml module's `TextFeatures` (and future
+NLP classes) to use BPE/WordPiece/Unigram tokenization via `dlsym()`, add a C-linkage
+API to the tokenizer module:
+
+```c
+extern "C" {
+    // Create a tokenizer from a JSON config string; returns opaque handle
+    void* qore_tokenizer_create(const char* json_config, int json_len, char** error);
+    // Tokenize text; returns array of token strings
+    char** qore_tokenizer_tokenize(void* handle, const char* text, int text_len, int* count);
+    // Free token array
+    void qore_tokenizer_free_tokens(char** tokens, int count);
+    // Destroy tokenizer
+    void qore_tokenizer_destroy(void* handle);
+}
+```
+
+The ml module would `dlsym()` these symbols at runtime from the loaded tokenizer module
+(similar to how optional ONNX Runtime support works). When available, `TextFeatures`
+would use the tokenizer module for subword tokenization instead of the built-in
+whitespace splitter. This enables multilingual text, subword vocabulary, and
+HuggingFace-compatible tokenization in ML feature pipelines.
+
+---
+
+## Phase 15: Regularization, Sparse Data, ONNX Trees, and ML Utilities ✅ COMPLETE
+
+### Motivation
+
+Close the most impactful gaps between Qore ML and Python's scikit-learn ecosystem:
+regularized regression (the most-used linear model variants), sparse matrix support
+(required for text/categorical data), ONNX export for the most commonly deployed model
+types (tree ensembles), hyperparameter optimization (table stakes for production ML),
+and model-agnostic explainability (increasingly required for compliance).
+
+### Components
+
+#### 15.1 Regularized Linear Models ✅ COMPLETE
+
+Three new C++ classes with full API (fit, predict, serialize, hash + matrix interfaces):
+
+- **Ridge** (`QC_Ridge.h/.cpp/.qpp`): L2-regularized regression using Eigen LDLT
+  closed-form solver `(X^T X + αI)β = X^T y`. SGD update with L2 penalty gradient.
+- **Lasso** (`QC_Lasso.h/.cpp/.qpp`): L1-regularized regression using coordinate
+  descent with soft-thresholding. Incremental residual updates for O(n·p) per iteration
+  (not O(n·p²)). No update() — coordinate descent is not naturally incremental.
+- **ElasticNet** (`QC_ElasticNet.h/.cpp/.qpp`): Combined L1+L2 penalty with `l1_ratio`
+  parameter (0 = pure Ridge, 1 = pure Lasso). Same coordinate descent with incremental
+  residuals.
+
+Hashdecls: RidgeResult, RidgeModelInfo, LassoResult, LassoModelInfo, ElasticNetResult,
+ElasticNetModelInfo. Serialization registered for all three. 22 test cases.
+
+#### 15.2 Sparse Matrix Support ✅ COMPLETE
+
+- **SparseMatrix class** (`QC_SparseMatrix.h/.cpp/.qpp`): Wraps
+  `Eigen::SparseMatrix<double, RowMajor>` with triplet and dense constructors,
+  threshold-based sparsification, toDense/toTriplets conversion, density accessor,
+  COO-format serialization.
+- **Utility functions** (`ml_sparse.h/.cpp`): `denseToSparse()`, `sparseToDense()`,
+  `qoreTripletListToSparse()`, `sparseToQoreTripletList()`.
+- Cooperative cancellation in all long-running operations.
+- 7 test cases. No new Eigen dependency (ships `<Eigen/Sparse>` in same package).
+
+#### 15.3 ONNX Export for Tree Ensembles ✅ COMPLETE
+
+Extended QoreOnnxExport module (v1.0 → v1.1) with tree ensemble export:
+
+- **C++ tree data accessors**: Added `getTreeData()` / `getTreesData()`, `getNumFeatures()`,
+  `getNumClasses()`, `getClasses()`, `getTask()` to DecisionTree, RandomForest, and
+  GradientBoostedTrees. GBT also exposes `getInitialPrediction()`,
+  `getInitialPredictions()`, `getLearningRate()`.
+- **ONNX exporters**: `exportDecisionTree()`, `exportRandomForest()`, `exportGBT()` with
+  shared helpers `exportTreeEnsembleRegressor()` and `exportTreeEnsembleClassifier()`.
+- **GBT variants**: regression (SUM + base_values), binary classification
+  (TreeEnsembleRegressor → Sigmoid), multiclass (TreeEnsembleRegressor with
+  n_targets=K → Softmax). Learning rate baked into leaf weights.
+- 10 new ONNX export test cases (classification + regression for each algorithm type).
+
+#### 15.4 Hyperparameter Optimization ✅ COMPLETE
+
+New `QoreMLUtils` Qore module (`qlib/QoreMLUtils/`):
+
+- **GridSearch**: Exhaustive Cartesian product over parameter grid with k-fold
+  cross-validation. Strongly-typed `code<>` callbacks for model_factory, predictor,
+  scorer. Returns best_params, best_score, cv_results with fold-level detail.
+- **RandomSearch**: Random sampling from parameter distributions with deterministic
+  LCG-based RNG for reproducibility. Same CV and callback pattern as GridSearch.
+- **MLScoringUtils**: Default scorers — `r2Scorer()`, `negMseScorer()`,
+  `accuracyScorer()` — wrapping ml module metric functions.
+- 7 test cases for search, 2 for scoring.
+
+#### 15.5 Permutation Importance ✅ COMPLETE
+
+- **PermutationImportance** (in QoreMLUtils module): Model-agnostic feature importance
+  via Fisher-Yates column shuffling. Measures score degradation per feature across
+  n_repeats. Works with any model that has a predict function. Deterministic seeding.
+- 4 test cases including feature ranking validation.
+
+### Test Summary
+
+| Component | Test Cases | Assertions |
+|-----------|-----------|------------|
+| Ridge/Lasso/ElasticNet | 22 | ~100 |
+| SparseMatrix | 7 | ~50 |
+| ONNX tree export | 10 | 132 |
+| GridSearch/RandomSearch | 7 | ~20 |
+| PermutationImportance | 4 | ~15 |
+| MLScoringUtils | 2 | ~5 |
+
+All tests pass. 0 memory leaks (verified with macOS `leaks --atExit`).
+
+---
+
+## Implementation Schedule — Phases 8–15
+
+```
+Phase 8 (DataFrame) ──────> Phase 12 (Feature Eng)
+        │                          │
+        └──> Phase 9 (Trees) ─────>│──> Phase 13 (Streaming/Governance)
+        │                          │
+        └──> Phase 10 (SVM/NB)     └──> Phase 14 (Interop/LLM)
+        │                                    │
+        └──> Phase 11 (Statistics)           └──> Phase 15 (Regularization/Sparse/ONNX/Utils)
+```
+
+- **Phase 8** (DataFrame) is the top priority — it unlocks Phases 9–14
+- **Phases 9, 10, 11** can proceed in parallel after Phase 8
+- **Phase 12** benefits from Phase 8 (feature transformers operate on DataFrames)
+- **Phase 13** benefits from Phases 9–10 (drift detection needs diverse algorithms)
+- **Phase 14** is largely independent but benefits from Phase 8 (Arrow ↔ DataFrame)
 
 ## Risk Assessment
 
 | Risk | Mitigation |
 |------|------------|
-| Protobuf dependency for ONNX export | Make fully optional (ifdef); JSON and native formats work without it |
-| ONNX operator coverage | Not all algorithms map to ONNX; clearly document which export and which don't |
-| Large model serialization performance | Use binary format with Eigen's raw memory layout; avoid JSON for large models |
-| Backward-compatible format evolution | Version field in header; reader checks version and dispatches accordingly |
-| Thread safety in registry | Filesystem: atomic rename + advisory locks; Database: SQL transactions |
+| DataFrame performance vs Pandas | Use Eigen for numerics; column-oriented storage; benchmark against Pandas on key operations |
+| Apache Arrow dependency size | Make fully optional; DataFrame works without Arrow |
+| GBT complexity | Start with basic GBT; optimize later (histogram binning, etc.) |
+| SVM SMO convergence | Use well-tested SMO variant (Platt 1998); fall back to linear for non-convergence |
+| Parquet format complexity | Use Apache Arrow's Parquet reader rather than implementing from scratch |
+| LLM API landscape changes | Focus on ONNX local inference; API integrations via existing REST DataProvider |
+
+## Phase 7: Tokenizer Module Enhancements ✅ COMPLETE (7.1–7.6)
+
+The `tokenizer` binary module (C++/utf8proc) provides HuggingFace-compatible text
+tokenization with BPE, WordPiece, and Unigram models. It loads `tokenizer.json` files
+and produces token IDs matching the Python `tokenizers` library exactly.
+
+### Capabilities (v1.1)
+- **Models**: BPE (GPT-2, Llama), WordPiece (BERT), Unigram/Viterbi (T5)
+- **Normalizers**: BertNormalizer, Unicode NFC/NFD/NFKC/NFKD, Precompiled (SentencePiece
+  Darts DoubleArray trie), Sequence, Replace, Prepend, Lowercase, StripAccents
+- **Pre-tokenizers**: BertPreTokenizer, ByteLevel (GPT-2), Metaspace (SentencePiece),
+  Whitespace, Sequence
+- **Post-processors**: TemplateProcessing, BertProcessing, RobertaProcessing, ByteLevel
+- **Decoders**: WordPiece (Unicode punctuation cleanup), ByteLevel, Metaspace,
+  ByteFallback, Fuse, Strip, Sequence
+- **Features**: truncation (3 strategies), padding, batch encoding, offset mapping,
+  special tokens mask, added token matching, sentence pair encoding, getVocab(),
+  **word_ids mapping**, **pre-tokenized input**, **sliding window overflow**,
+  **dynamic vocabulary extension** (`addTokens()`), **full Unicode `\p{N}` digit support**
+- **Thread safety**: `std::shared_mutex` — concurrent encode with dynamic vocab extension
+- **Performance**: O(n log n) BPE merge via priority queue + doubly linked list
+- **Verified**: BERT, GPT-2, T5, Llama/TinyLlama — exact match vs Python `tokenizers`
+- **Tests**: 22 test cases, 103 assertions
+
+### Implemented Enhancements
+
+#### 7.1 `word_ids` Mapping ✅
+Each output token maps to its pre-token word index. NOTHING for special/added/padding
+tokens. Flows through InternalEncoding → EncodingResult → processWithOffsets →
+TokenizerEncoding hashdecl. Subword tokens from the same word share the same word_id.
+
+#### 7.2 Overflowing Tokens (Sliding Window) ✅
+`stride` and `return_overflowing_tokens` options in `encodeAdvanced()`. When truncation
+discards tokens and stride > 0, produces overlap chunks. Each chunk includes special
+tokens, word_ids, and attention mask. Returned in `overflowing` hashdecl field.
+
+#### 7.3 Pre-tokenized Input (`is_pretokenized`) ✅
+`encodePreTokenized(list<string> words)` method and `is_pretokenized` option in
+`encodeAdvanced()`. Skips normalization and pre-tokenization. word_ids naturally map
+to input word indices. Supports truncation and padding.
+
+#### 7.4 Dynamic Vocabulary Extension (`addTokens()`) ✅
+`addTokens(list<auto>)` accepts strings or hashes with content/special/single_word.
+Thread-safe via `std::shared_mutex` — `shared_lock` on all read methods, `unique_lock`
+on `addTokens()`. Duplicates skipped. `tokenToId()` and `idToToken()` search dynamically
+added tokens. `getVocabSize()` includes dynamic additions.
+
+#### 7.5 Decoder Output Cleanup ✅
+WordPieceDecoder cleanup uses utf8proc Unicode punctuation detection (all P* categories)
+instead of ASCII-only `std::ispunct()`.
+
+#### 7.6 Full Unicode `\p{N}` Digit Support ✅
+`ByteLevelPreTokenizer::isDigit()` expanded to include `UTF8PROC_CATEGORY_NL` (letter
+numbers, e.g. Roman numerals) and `UTF8PROC_CATEGORY_NO` (other numbers, e.g. fractions,
+superscripts) in addition to `UTF8PROC_CATEGORY_ND`.
+
+#### 7.7 ONNX Inference Pipeline Integration — DEFERRED to Phase 14
+Create a `QorusModelProcessor` that chains: load tokenizer.json → tokenize input →
+run ONNX model → decode output. Deferred because it requires DataProviderML integration
+and is better scoped as part of the LLM/embedding pipeline work in Phase 14.
+
+---
 
 ## Conventions
 
@@ -1231,5 +1932,10 @@ All new code follows the existing patterns documented in `design/ml-architecture
 - DataProvider processors in `qlib/DataProviderML/`, registered in `DataProviderML.qm`
 - Tests: binary module tests in `modules/ml/test/ml.qtest`, DataProvider tests in
   `examples/test/qlib/DataProviderML/DataProviderMLProcessors.qtest`
+- Serialization: all algorithms implement `serialize()` / `deserialize()` and register
+  in `ml_serialization.cpp`
+- Online learning: algorithms with streaming support implement `update()` / `updateMatrix()`
+- Tokenizer: `ns=Qore::Tokenizer`, `std::shared_mutex` for dynamic vocab, `qore_check_cancel()`
+  for cooperative cancellation
 - Copyright 2026, MIT license
-- All hashdecls and functions marked with `@since ml 1.2` (or appropriate version)
+- Version tags: `@since ml 1.2` for Phases 1–6, `@since tokenizer 1.1` for Phase 7
