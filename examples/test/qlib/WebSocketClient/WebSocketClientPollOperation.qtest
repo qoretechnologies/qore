@@ -318,7 +318,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         # Send a message — the controller should drive the I/O
         poll_op.sendText("controller-test");
-        controller.wake();
+        controller.wakeSocket(hc);
 
         # Wait for the echo
         *hash<auto> msg;
@@ -335,7 +335,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         # Close
         poll_op.sendClose();
-        controller.wake();
+        controller.wakeSocket(hc);
 
         # Wait for close to complete
         end = now_us() + 10s;

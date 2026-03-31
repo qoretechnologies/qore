@@ -377,6 +377,11 @@ public class WebSocketConnection {
         self.sock = sock;
     }
 
+    #! Returns the socket used by the server for the connection
+    Socket getSocket() {
+        return sock;
+    }
+
     setAsyncIo(*AsyncSocketIo::AsyncSocketIoController async_ctrl) {
         self.async_ctrl = async_ctrl;
     }
@@ -490,7 +495,7 @@ public class WebSocketConnection {
         }
         if (async_ctrl) {
             try {
-                async_ctrl.wake();
+                async_ctrl.wakeSocket(sock);
             } catch () {
                 # Wake failure is non-critical; the I/O loop will wake on its next cycle
             }
@@ -752,7 +757,7 @@ public class WebSocketConnection {
             # Wake the I/O controller to flush the close frame
             if (async_ctrl) {
                 try {
-                    async_ctrl.wake();
+                    async_ctrl.wakeSocket(sock);
                 } catch () {}
             }
         }
@@ -1182,7 +1187,7 @@ class WebSocketStreamProcessor {
             if (sent) {
                 *AsyncSocketIo::AsyncSocketIoController ctrl = wsc.getAsyncCtrl();
                 if (ctrl) {
-                    ctrl.wake();
+                    ctrl.wakeSocket(wsc.getSocket());
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -1700,7 +1705,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             *Queue h3_data_queue = cx."header-info".stream_data_queue;
             code<nothing()> wake = sub () {
                 if (async_ctrl) {
-                    async_ctrl.wake();
+                    async_ctrl.wakeSocket(sock);
                 }
             };
             wsc.setStreamContext(new AsyncSocketIo::Http3StreamContext(
@@ -1711,6 +1716,9 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         if (is_ws_async) {
             ws_poll_op.setHeartbeat(heartbeat * 1000);
             ws_poll_op.setSendTimeout(get_duration_microseconds(send_timeout) / 1000);
+            if (max_message_size > 0) {
+                ws_poll_op.setMaxFrameSize(max_message_size);
+            }
             wsc.setWsPollOp(ws_poll_op);
             # Give the poll op references for frame dispatch from worker thread
             call_object_method(ws_poll_op, "setConnection", wsc, self);
@@ -1777,7 +1785,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             }
             # Wake the I/O controller to flush any queued data
             if (async_ctrl) {
-                async_ctrl.wake();
+                async_ctrl.wakeSocket(sock);
             }
 
             # Block until the connection closes
@@ -1825,7 +1833,7 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
                 }
             }
             if (sent && async_ctrl) {
-                async_ctrl.wake();
+                async_ctrl.wakeSocket(sock);
             }
         }
 

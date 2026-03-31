@@ -140,6 +140,11 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
                 }
             }
         }
+        # Wake the controller to send any queued data (echo responses,
+        # close echoes) that processServerFrame pushed to send_queue
+        if (wsc) {
+            wsc.notifyIo();
+        }
     }
 
     #! Called when the poll operation completes (goal reached, error, or timeout)

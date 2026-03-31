@@ -246,8 +246,10 @@ public:
     */
     DLLLOCAL int cancelByOwner(const QoreStringNode* owner, ExceptionSink* xsink);
 
-    //! Wake the I/O thread to force re-poll
-    DLLLOCAL void wake();
+    //! Wake the I/O thread for a specific socket that has pending data
+    /** @param sock_hash the socket hash identifying the target operation
+    */
+    DLLLOCAL void wakeSocket(const std::string& sock_hash);
 
     //! Start the I/O thread
     /** @param xsink for exception handling
@@ -361,7 +363,7 @@ private:
         Cancel,
         CancelOwner,
         Quit,
-        Wake,
+        WakeSocket,          //!< Targeted wake: re-poll a specific socket's operation
         AddTimer,
         CancelTimer,
         ContinuePollResult,  //!< Result from async continuePoll() dispatch
@@ -369,7 +371,7 @@ private:
 
     //! Command queue entry
     struct Command {
-        IoCommand cmd = IoCommand::Wake;
+        IoCommand cmd = IoCommand::WakeSocket;
         std::string key;                //!< For Cancel / ContinuePollResult: the cache key
         std::string owner;              //!< For CancelOwner: the owner string
         QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
@@ -379,6 +381,7 @@ private:
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
+        std::string sock_hash;          //!< For WakeSocket: socket hash to re-poll
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -433,7 +436,8 @@ private:
     int tid;                              //!< I/O thread ID (0 if not running)
     bool autostop_flag;
     bool shutting_down;
-    bool force_poll;
+    //! Socket hashes that need re-polling (set by WakeSocket, consumed by Phase 1)
+    std::unordered_set<std::string> wake_socket_hashes;
     std::unordered_map<std::string, int> socket_refcounts;
     std::deque<Command> cmdq;
     std::unordered_map<std::string, QoreCondition*> cancel_cond_map;

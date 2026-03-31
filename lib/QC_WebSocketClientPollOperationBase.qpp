@@ -77,8 +77,9 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Check if socket is still open
-    if (!sock->isOpen()) {
+    // Check if socket is still open — skip in CLOSING state because the
+    // peer's TCP FIN may arrive before the close echo is sent
+    if (!sock->isOpen() && ws_state != WsState::CLOSING) {
         setClosed(1006, "Connection lost");
         // Push "closed" notification to recv_queue
         ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -179,22 +180,15 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         }
     }
 
-    // --- Phase 3: Check for incoming data and start recv if needed ---
-    if (!recv_op && !goalReached()) {
-        printd(5, "WsClientPollOp::continuePoll() checking isDataAvailable\n");
-        // Non-blocking check if data is available on the socket
-        if (sock->isDataAvailable(xsink, 0)) {
-            if (startRecvOp(xsink)) {
-                return nullptr;
-            }
-            // Don't return POLLIN yet — drive the recv op immediately on next continuePoll
-            poll_events |= SOCK_POLLIN;
-        }
-        if (*xsink) {
-            // isDataAvailable error — likely connection issue
-            setError(xsink);
+    // --- Phase 3: Start recv if no active recv ---
+    // Skip in CLOSING state (FIN would cause SSL errors). No
+    // isDataAvailable() — the controller's hasPendingData() check and
+    // epoll handle readiness.
+    if (!recv_op && !goalReached() && ws_state != WsState::CLOSING) {
+        if (startRecvOp(xsink)) {
             return nullptr;
         }
+        poll_events |= SOCK_POLLIN;
     }
 
     // --- Phase 4: Check for queued frames to send ---
@@ -223,8 +217,10 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Always poll for incoming data at minimum
-    poll_events |= SOCK_POLLIN;
+    // Poll for incoming data — skip in CLOSING to prevent busy-loop from FIN
+    if (ws_state != WsState::CLOSING) {
+        poll_events |= SOCK_POLLIN;
+    }
 
     return getSocketPollInfoHash(xsink, poll_events);
 }

@@ -203,7 +203,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
         int rv = poll_op.sendStreamData(stream_id, data, end_stream);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return rv;
@@ -240,7 +240,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return stream_id;
@@ -274,7 +274,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
             channel, max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return stream_id;
@@ -320,7 +320,7 @@ public class Http3ClientConnection inherits HttpClientConnection {
 
         # Wake the controller so it forces a continuePoll() cycle with the new fd
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return True;

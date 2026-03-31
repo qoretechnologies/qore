@@ -86,6 +86,12 @@ void QoreSocketObject::closeIo(ExceptionSink* xsink) {
     }
 }
 
+bool QoreSocketObject::hasPendingData() const {
+    // Check SSL buffer without syscalls or locking — safe from any thread
+    // SSL_pending() is documented as thread-safe for read-only queries
+    return priv->socket->priv->ssl ? priv->socket->priv->ssl->pending() > 0 : false;
+}
+
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->invalidate();

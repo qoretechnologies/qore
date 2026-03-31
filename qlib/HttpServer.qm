@@ -3187,7 +3187,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                                 rv."code" ?? 200, resp_hdr);
                             *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
                             if (ctrl) {
-                                ctrl.wake();
+                                ctrl.wakeSocket(s);
                             }
                         } else {
                             # HTTP/2 multiplexed mode: submit CONNECT response directly
@@ -3197,7 +3197,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # the pending CONNECT response
                             *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
                             if (ctrl) {
-                                ctrl.wake();
+                                ctrl.wakeSocket(s);
                             }
                         }
 

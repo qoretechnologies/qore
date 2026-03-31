@@ -1523,10 +1523,7 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Store in both local and qore_socket_private session maps
         sessions_[new_session->getSessionId()] = new_session;
         sock->priv->socket->priv->addQuicSession(new_session);
-        // Propagate controller notifier and headers-only mode to new sessions
-        if (controller_notifier_) {
-            new_session->setControllerNotifier(controller_notifier_);
-        }
+        // Propagate headers-only mode to new sessions
         if (headers_only_) {
             new_session->setHeadersOnlyMode(true);
         }

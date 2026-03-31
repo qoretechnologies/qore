@@ -2069,7 +2069,7 @@ ws.setEventQueue();
 
         # Wake the controller to ensure the first continuePoll() runs immediately;
         # data may already be buffered in the socket from the handshake response
-        controller.wake();
+        controller.wakeSocket(hc);
     }
 
     #! Stops the async I/O controller for this connection
@@ -2101,7 +2101,7 @@ ws.setEventQueue();
         try {
             AsyncSocketIo::AsyncSocketIoController controller =
                 AsyncSocketIo::getGlobalAsyncIoController();
-            controller.wake();
+            controller.wakeSocket(hc);
         } catch (hash<ExceptionInfo> ex) {
             logDebug("async I/O wake error: %s: %s", ex.err, ex.desc);
         }

@@ -139,7 +139,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.sendStreamData(stream_id, data, end_stream);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
     }
 
@@ -174,7 +174,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return stream_id;

@@ -1030,20 +1030,6 @@ class SocketQuicServerPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketQuicServerPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
 
-    //! Returns the controller's EventNotifier
-    DLLLOCAL QoreEventNotifier* getControllerNotifier() const {
-        return controller_notifier_;
-    }
-
-    //! Sets the controller's EventNotifier — propagated to all sessions
-    DLLLOCAL void setControllerNotifier(QoreEventNotifier* notifier) {
-        controller_notifier_ = notifier;
-        // Propagate to existing sessions
-        for (auto& [id, session] : sessions_) {
-            session->setControllerNotifier(notifier);
-        }
-    }
-
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (set_non_block) {
@@ -1122,9 +1108,6 @@ private:
 
     //! Headers-only mode flag
     bool headers_only_ = false;
-
-    //! Controller's EventNotifier — propagated to new sessions for CONNECT stream wake-up
-    QoreEventNotifier* controller_notifier_ = nullptr;
 
     //! Cached completed stream info; mutable so getOutput() (const) can consume it.
     //! Thread safety: the poll framework serializes continuePoll() and getOutput()

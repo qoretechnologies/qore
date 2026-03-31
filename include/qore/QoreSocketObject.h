@@ -96,6 +96,9 @@ public:
     //! Shuts down and closes the socket
     DLLEXPORT void closeIo(ExceptionSink* xsink) override;
 
+    //! Returns true if the SSL layer has buffered data ready to read
+    DLLEXPORT bool hasPendingData() const override;
+
     //! Invalidates the socket
     /** Normally called only in the %Qore object's destructor
 

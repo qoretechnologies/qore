@@ -61,6 +61,20 @@ public:
     */
     virtual void setPollNotifyFd(int fd) {}
 #endif
+
+    //! Returns true if the I/O object has buffered data ready to read
+    /** For SSL sockets, this checks SSL_pending() — data decrypted by a
+        previous SSL_read but not yet consumed. This data is invisible to
+        epoll/kqueue (no TCP socket readiness), so the controller must check
+        this to avoid missing buffered data.
+
+        Safe to call from any thread. No syscalls, no exceptions.
+
+        @return true if buffered data is available
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual bool hasPendingData() const { return false; }
 };
 
 #endif

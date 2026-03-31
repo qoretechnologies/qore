@@ -75,8 +75,9 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         return nullptr;
     }
 
-    // Check if socket is still open
-    if (!sock->isOpen()) {
+    // Check if socket is still open — skip in CLOSING state because the
+    // peer's TCP FIN may have arrived before the close echo is sent
+    if (!sock->isOpen() && ws_state != WsState::CLOSING) {
         setClosed(1006, "Connection lost");
         return nullptr;
     }
@@ -147,6 +148,12 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
             releaseRecvOp(xsink);
 
+            // Check for EOF — the peer closed the connection
+            if (!sock->isOpen()) {
+                setClosed(1006, "Connection lost");
+                return nullptr;
+            }
+
             // Process any complete frames in the decoder buffer
             processDecodedFrames(xsink);
             if (*xsink) {
@@ -162,22 +169,23 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         }
     }
 
-    // --- Phase 3: Check for incoming data and start recv if needed ---
-    if (!recv_op && !goalReached()) {
-        printd(5, "HttpWebSocketPollOp::continuePoll() checking isDataAvailable\n");
-        // Non-blocking check if data is available on the socket
-        if (sock->isDataAvailable(xsink, 0)) {
-            if (startRecvOp(xsink)) {
-                return nullptr;
-            }
-            // Don't return POLLIN yet — drive the recv op immediately on next continuePoll
-            poll_events |= SOCK_POLLIN;
-        }
-        if (*xsink) {
-            // isDataAvailable error — likely connection issue
-            setError(xsink);
+    // --- Phase 3: Start recv if no active recv ---
+    // Skip in CLOSING state (FIN would cause SSL errors on the closing
+    // socket). No isDataAvailable() — the controller's hasPendingData()
+    // check in Phase 1 detects SSL-buffered data that epoll can't see.
+    if (!recv_op && !goalReached() && ws_state != WsState::CLOSING) {
+        if (startRecvOp(xsink)) {
             return nullptr;
         }
+        poll_events |= SOCK_POLLIN;
+    }
+
+    // In CLOSING state: transition to CLOSED when the close handshake
+    // is complete (close_initiated) or the connection is lost
+    if (ws_state == WsState::CLOSING && !send_op && send_queue->empty()
+            && (close_initiated || !sock->isOpen())) {
+        setClosed(close_code, close_reason.c_str());
+        return nullptr;
     }
 
     // --- Heartbeat: auto-send ping if no recv activity ---
@@ -211,8 +219,12 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         return nullptr;
     }
 
-    // Always poll for incoming data at minimum
-    poll_events |= SOCK_POLLIN;
+    // Poll for incoming data. Skip in CLOSING state to prevent busy-loop
+    // from the TCP FIN. The wakeSocket mechanism handles the closing
+    // handshake, and the CLOSED transition cleans up the cache entry.
+    if (ws_state != WsState::CLOSING) {
+        poll_events |= SOCK_POLLIN;
+    }
 
     QoreHashNode* result = getSocketPollInfoHash(xsink, poll_events);
     // Add poll timeout for send timeout or heartbeat interval
@@ -829,6 +841,15 @@ nothing HttpWebSocketPollOperationBase::sendPing(*binary data) {
 */
 nothing HttpWebSocketPollOperationBase::sendClose(int code = 1000, string reason = "") {
     priv->queueSendClose(static_cast<uint16_t>(code), reason->c_str(), xsink);
+}
+
+//! Sets the maximum frame/message size in bytes
+/** Frames larger than this are rejected with close code 1009 (Message Too Big).
+    @param size the maximum size in bytes (0 = unlimited, default = 16MB)
+    @since %Qore 2.3
+*/
+nothing HttpWebSocketPollOperationBase::setMaxFrameSize(int size) {
+    priv->setMaxFrameSize(size > 0 ? static_cast<size_t>(size) : WS_DEFAULT_MAX_FRAME_SIZE);
 }
 
 //! Gets the next received frame (non-blocking)

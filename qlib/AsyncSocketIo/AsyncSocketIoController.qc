@@ -174,9 +174,11 @@ public class AsyncSocketIoController inherits LoggerWrapper {
         return Qore::AsyncIoController::cancelAndClose(sock);
     }
 
-    #! Wakes the I/O thread to re-evaluate poll state
-    wake() {
-        Qore::AsyncIoController::wake();
+    #! Wakes the I/O thread for a specific socket with pending data
+    /** @param sock the I/O object whose operation needs re-polling
+    */
+    wakeSocket(AbstractPollableIoObjectBase sock) {
+        Qore::AsyncIoController::wakeSocket(sock);
     }
 
     #! Cancels any operation in progress for the given Socket; throws if not found

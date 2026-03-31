@@ -281,7 +281,7 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
         }
 
         if (!suppress_wake && ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         # Return the Promise alongside the Future so the caller keeps it alive
@@ -312,7 +312,7 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
     }
 

@@ -194,6 +194,11 @@ public:
     */
     DLLLOCAL void setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
 
+    //! Sets the maximum frame/message size in bytes
+    DLLLOCAL void setMaxFrameSize(size_t size) {
+        max_frame_size = size;
+    }
+
     //! Sets the heartbeat interval in milliseconds (0 = disabled)
     DLLLOCAL void setHeartbeat(int64 ms) {
         heartbeat_interval_ms = ms;

@@ -683,16 +683,6 @@ public:
     */
     DLLLOCAL void deregisterConnectStreamQueue(int64_t stream_id);
 
-    //! Sets the controller's EventNotifier for CONNECT stream data wake-up
-    /** Called by SocketQuicServerPollOperation when the controller notifier is set.
-        The notifier is called from h3RecvDataCallback (lock-free, safe from
-        ngtcp2 callbacks) to wake the I/O controller when stream data arrives.
-        @param notifier pointer to the controller's notifier (not ref'd, not owned)
-    */
-    DLLLOCAL void setControllerNotifier(QoreEventNotifier* notifier) {
-        controller_notifier_ = notifier;
-    }
-
     //! Returns true if extended CONNECT protocol is enabled locally (server)
     DLLLOCAL bool isExtendedConnectSupported() const {
         return is_server_;  // Server always enables via setupHttp3()
@@ -1197,12 +1187,6 @@ private:
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
 
     std::mutex connect_data_mutex_;  //!< protects connect_stream_data_ and connect_stream_queues_
-
-    //! Controller's EventNotifier — wakes I/O loop when CONNECT stream data arrives
-    /** Set by SocketQuicServerPollOperation. Called from h3RecvDataCallback
-        (lock-free, safe from ngtcp2 callbacks). Weak pointer, not owned.
-    */
-    QoreEventNotifier* controller_notifier_ = nullptr;
 
     //! Per-stream incoming datagram queue (RFC 9221/9297)
     /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on

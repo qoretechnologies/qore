@@ -35,7 +35,7 @@
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
-#include "qore/intern/QC_SocketPollOperation.h"
+// QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
@@ -406,7 +406,7 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 // --- AsyncIoControllerPriv implementation ---
 
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
-    : tid(0), autostop_flag(autostop), shutting_down(false), force_poll(false),
+    : tid(0), autostop_flag(autostop), shutting_down(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
       submit_seq(0), processed_seq(0), autostop_idle_since(0),
       logger(nullptr), timer_callback(nullptr),
@@ -978,12 +978,16 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     }
 }
 
-void AsyncIoControllerPriv::wake() {
+void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     bool do_signal = false;
     {
         AutoLocker al(m);
         if (tid && !io_exiting) {
-            do_signal = enqueueCmdLocked(IoCommand::Wake);
+            Command cmd;
+            cmd.cmd = IoCommand::WakeSocket;
+            cmd.sock_hash = sock_hash;
+            cmdq.push_back(std::move(cmd));
+            do_signal = true;
         }
     }
     if (do_signal) {
@@ -1395,15 +1399,16 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         };
         std::vector<OpToPoll> ops_to_poll;
         int64 poll_deadline_us = 0;
-        bool forced = false;
+
+        // Consume targeted wakeup set (populated by WakeSocket commands)
+        std::unordered_set<std::string> woken_hashes;
 
         {
             AutoLocker al(m);
 
-            if (force_poll) {
-                force_poll = false;
-                forced = true;
-                printd(5, "AsyncIoController: force_poll -> forced, cache_size=%d\n", (int)cache.size());
+            if (!wake_socket_hashes.empty()) {
+                woken_hashes = std::move(wake_socket_hashes);
+                wake_socket_hashes.clear();
             }
 
             int64 now_us = get_epoch_us();
@@ -1431,7 +1436,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 }
 
                 // Check if we should call continuePoll
-                if (pinfo.poll_info && !forced) {
+                if (pinfo.poll_info) {
                     // Get the socket from poll_info
                     std::string sock_hash;
                     int events = 0;
@@ -1442,8 +1447,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         poll_xsink.clear();
                     }
 
-                    // Check if socket was marked ready by the EventLoop
-                    if (poll_sock && !ready_socket_hashes.count(sock_hash)) {
+                    // Check if socket was marked ready by the EventLoop,
+                    // by a WakeSocket command (worker queued data), or has
+                    // SSL-buffered data (invisible to epoll)
+                    bool ssl_pending = pinfo.sock && pinfo.sock->hasPendingData();
+                    if (poll_sock && !ready_socket_hashes.count(sock_hash)
+                            && !woken_hashes.count(sock_hash)
+                            && !ssl_pending) {
                         // Socket not ready - skip continuePoll, update deadline
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             if (poll_deadline_us == 0 || pinfo.timeout_date_us < poll_deadline_us) {
@@ -1532,12 +1542,6 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     result.completed = true;
                 } else {
                     result.new_poll_info = new_info;
-                }
-
-                // Set controller notifier on QUIC server ops (propagated to sessions)
-                auto* quic_op = dynamic_cast<SocketQuicServerPollOperation*>(op.spop_base);
-                if (quic_op && !quic_op->getControllerNotifier()) {
-                    quic_op->setControllerNotifier(notifier);
                 }
 
                 // Check for stream data notifications (HTTP/2 CONNECT streams)
@@ -2283,9 +2287,9 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     break;
                 }
 
-                case IoCommand::Wake: {
+                case IoCommand::WakeSocket: {
                     AutoLocker al(m);
-                    force_poll = true;
+                    wake_socket_hashes.insert(cmd.sock_hash);
                     break;
                 }
 
@@ -2358,11 +2362,24 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                             pinfo.cleanup(xsink);
                             cache.erase(it);
                         } else {
-                            // Still pending — update poll_info and force re-poll
-                            // so the operation is included in the next Phase 1 even
-                            // if the socket isn't marked ready by epoll (application-
-                            // level data may be buffered in the Http2Session)
-                            force_poll = true;
+                            // Still pending — update poll_info and target
+                            // this socket for re-poll so the operation is
+                            // included in the next Phase 1 even if the socket
+                            // isn't marked ready by epoll (application-level
+                            // data may be buffered in the Http2Session)
+                            if (cmd.continue_poll_result) {
+                                std::string sh;
+                                int ev = 0;
+                                ExceptionSink sh_xsink;
+                                getSocketFromPollInfo(cmd.continue_poll_result,
+                                    sh, ev, &sh_xsink);
+                                if (!sh.empty()) {
+                                    wake_socket_hashes.insert(sh);
+                                }
+                                if (sh_xsink) {
+                                    sh_xsink.clear();
+                                }
+                            }
 
                             if (pinfo.poll_info) {
                                 pinfo.poll_info->deref(xsink);
@@ -2414,9 +2431,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
             }
         }
 
-        // Acknowledge notifier — any notify() call (including stream data
-        // notifications from h3RecvDataCallback) means something changed; set
-        // force_poll so Phase 1 re-checks all ops regardless of socket readiness
+        // Acknowledge notifier — each command has already targeted specific
+        // sockets via wake_socket_hashes; no blanket re-poll needed
         notifier->acknowledge(xsink);
         if (*xsink) {
             xsink->clear();
@@ -2425,7 +2441,6 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
         // Check if new commands arrived during acknowledge
         {
             AutoLocker al(m);
-            force_poll = true;
             if (cmdq.empty()) {
                 break;
             }

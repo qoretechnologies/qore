@@ -3426,11 +3426,10 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                         " datalen=%d buffered (no Queue registered)\n",
                         stream_id, (int)datalen);
                 }
-                // Wake the I/O controller so it re-polls and dispatches stream data
-                // to a worker thread (pure C++, lock-free, safe from ngtcp2 callbacks)
-                if (session->controller_notifier_) {
-                    session->controller_notifier_->notify();
-                }
+                // Stream data is dispatched by the I/O controller after this
+                // continuePoll cycle completes (via on_exit stream queue check
+                // in Http3ServerPollOperation). No explicit wake needed — epoll
+                // POLLIN on the UDP socket handles inter-cycle data.
             }
             // Extend flow control
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,

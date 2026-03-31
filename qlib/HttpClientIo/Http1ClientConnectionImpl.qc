@@ -111,7 +111,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
         return sid;
     }
@@ -144,7 +144,7 @@ public class Http1ClientConnection inherits HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
         return sid;
     }
