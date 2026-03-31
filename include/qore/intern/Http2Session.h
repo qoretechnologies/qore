@@ -490,6 +490,13 @@ public:
     */
     DLLLOCAL void setStreamStreaming(int32_t stream_id);
 
+    //! Returns true if there's a CONNECT stream with headers ready and not yet dispatched
+    /** Lightweight check to avoid calling takeHeadersReadyStreamCopy() unconditionally,
+        which marks the stream as dispatched and would break non-CONNECT response processing.
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasHeadersReadyConnectStream();
+
     //! Check if any streaming client streams have body data available
     /** Used by client multiplex to deliver intermediate body data for streaming streams.
         @param stream_id [out] set to the stream ID with data, if found

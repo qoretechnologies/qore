@@ -2062,22 +2062,28 @@ ws.setEventQueue();
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
 
-        if (transport == "http2" && use_hcio && hcio_stream) {
-            # HTTP/2 via HttpClientIo: the connection manager already submitted the
-            # H2 poll operation to the async I/O controller. Create an adapter that
+        if ((transport == "http2" || transport == "http3") && use_hcio && hcio_stream) {
+            # H2/H3 via HttpClientIo: the connection manager already submitted the
+            # poll operation to the async I/O controller. Create an adapter that
             # reads from the stream handle and parses WS frames.
             poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
                 logger, raw_callback, on_poll_complete);
-            # Start the reader — no controller.submit() needed
             async_owner = "wsc-hcio-" + get_random_string(12);
             async_close_sent = False;
-            return;
-        } else if (transport == "http3" && use_hcio && hcio_stream) {
-            # HTTP/3 via HttpClientIo: same adapter pattern as H2
-            poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
-                logger, raw_callback, on_poll_complete);
-            async_owner = "wsc-hcio-" + get_random_string(12);
-            async_close_sent = False;
+            # Drain any data already in the Channel from the initial
+            # handleReading() cycle that ran before the adapter registered.
+            # Must be called AFTER poll_op is assigned so the delivery
+            # mechanism can find it via getReceivedMessage().
+            # Uses drainAndParseFrames() directly to avoid on_poll_complete
+            # race — scheduleDelivery() is called once at the end.
+            # Mark as started — enables on_poll_complete delivery from notifyIo.
+            # Then drain any data already in the Channel and trigger delivery.
+            # The registerStreamListener replay may have drained data into
+            # recv_channel during construction (before poll_op was assigned);
+            # this ensures it gets delivered.
+            poll_op.start();
+            poll_op.initialDrain();
+            scheduleDelivery();
             return;
         } else {
             # HTTP/1.1: Use C++ WebSocket poll operation directly on the socket
@@ -2120,6 +2126,19 @@ ws.setEventQueue();
             }
         }
         remove poll_op;
+
+        # Clean up HttpClientIo resources — shut down the connection manager
+        # so its pooled connections are removed from the async I/O controller's
+        # cache, preventing cache leaks across test runs
+        if (hcio_mgr) {
+            try {
+                hcio_mgr.closeAll();
+            } catch () {
+            }
+            remove hcio_mgr;
+        }
+        remove hcio_stream;
+        use_hcio = False;
     }
 
     #! Wakes the async I/O controller to process pending operations
@@ -3164,6 +3183,9 @@ ws.setEventQueue();
         processExtensions(rhdr);
 
         use_hcio = True;
+        @debug {
+            stderr.printf("HCIO H2 CONNECT: OK stream_id=%d status=%d\n", h2_stream_id, status_code);
+        }
         finishConnect();
 
         return rh;
@@ -5178,6 +5200,13 @@ public class WebSocketClientHcioPollOp {
         #! The H2 CONNECT stream ID
         int stream_id;
 
+        #! True when the adapter is fully initialized and delivery is safe
+        bool started = False;
+
+        #! Mutex to serialize notifyIo/drainAndParseFrames (multiple worker
+        #! threads may call notifyIo concurrently)
+        Mutex process_mutex();
+
         #! Channel for received processed WS messages
         Channel recv_channel(-1);
 
@@ -5255,13 +5284,18 @@ public class WebSocketClientHcioPollOp {
         delivers to recv_channel.
     */
     notifyIo() {
+        AutoLock al(process_mutex);
         if (closed) {
             return;
         }
 
         bool have_frames = drainAndParseFrames();
 
-        if (have_frames && on_poll_complete) {
+        # Only trigger delivery after start() — before that, poll_op isn't
+        # assigned in the WebSocketClient so scheduleDelivery() would fail.
+        # Data drained before start() stays in recv_channel and is picked
+        # up by the initial scheduleDelivery() call in startAsyncIo().
+        if (have_frames && started && on_poll_complete) {
             on_poll_complete();
         }
     }
@@ -5270,6 +5304,20 @@ public class WebSocketClientHcioPollOp {
     /** Uses readData(0s) for non-blocking Channel read.
         @return True if any frames were processed
     */
+    #! Marks the adapter as started — enables on_poll_complete delivery
+    start() {
+        started = True;
+    }
+
+    #! Drains data already in the Channel and returns True if WS frames were parsed
+    /** Must be called after registration to pick up data dispatched before the
+        adapter was created. Safe to call from the user thread.
+    */
+    bool initialDrain() {
+        AutoLock al(process_mutex);
+        return drainAndParseFrames();
+    }
+
     private bool drainAndParseFrames() {
         # Read available data from the stream handle.
         # Use 1ms timeout since 0s/NOTHING is treated as "wait forever" by Channel.recv()
@@ -5279,6 +5327,10 @@ public class WebSocketClientHcioPollOp {
             auto data;
             try {
                 data = stream.readData(1ms);
+                @debug {
+                    stderr.printf("HCIO-ADAPTER: readData type=%y\n",
+                        exists data ? data.fullType() : "NOTHING");
+                }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
                     if (!closed) {

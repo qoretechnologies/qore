@@ -1295,6 +1295,16 @@ void Http2Session::cleanupStream(int32_t stream_id) {
     }
 }
 
+bool Http2Session::hasHeadersReadyConnectStream() {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    for (auto& [id, info] : streams) {
+        if (info->headers_complete && !info->dispatched && info->is_connect) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void Http2Session::setStreamStreaming(int32_t stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     auto it = streams.find(stream_id);
@@ -1306,6 +1316,10 @@ void Http2Session::setStreamStreaming(int32_t stream_id) {
 bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& it : streams) {
+        ASYNC_IO_TRACE("hasStreamingData: stream=%d streaming=%d headers_complete=%d "
+            "body_size=%d dispatched=%d\n",
+            it.first, (int)it.second->streaming, (int)it.second->headers_complete,
+            (int)it.second->body.size(), (int)it.second->dispatched);
         if (it.second->streaming && it.second->headers_complete && !it.second->body.empty()) {
             out_stream_id = it.first;
             return true;

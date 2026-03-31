@@ -8294,7 +8294,11 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                 // Deliver headers as output so the caller knows the CONNECT
                 // was accepted — without this, streaming CONNECT responses
                 // would never be visible to getOutput().
-                {
+                // NOTE: only check if there are actually CONNECT streams
+                // pending — takeHeadersReadyStreamCopy() marks the stream as
+                // dispatched, which would break normal (non-CONNECT) response
+                // processing if called unconditionally.
+                if (h2_session->hasHeadersReadyConnectStream()) {
                     std::unique_ptr<Http2StreamInfo> hdr_stream =
                         h2_session->takeHeadersReadyStreamCopy();
                     if (hdr_stream && hdr_stream->is_connect) {
