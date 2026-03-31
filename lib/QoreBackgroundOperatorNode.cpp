@@ -47,7 +47,7 @@ QoreValue QoreBackgroundOperatorNode::evalImpl(RuntimeConfig& rc, bool& needs_de
     }();
     if (debug_bg) {
         int eval_num = ++bg_eval_count;
-        fprintf(stderr, "[BG_EVAL %d] TID=%ld expr=%p\n", eval_num, (long)gettid(), exp.getInternalNode());
+        fprintf(stderr, "[BG_EVAL %d] TID=%d expr=%p\n", eval_num, q_gettid(), exp.getInternalNode());
         fflush(stderr);
     }
     return do_op_background(rc, exp, xsink);
