@@ -68,6 +68,7 @@ public class HttpPingPollOperation inherits Qore::PollPipeline {
         self.addDelegate(inner);
         self.addValidateStatus(200, 299, err_code);
         self.addDeliverResult();
+        goal = "http-ping";
     }
 }
 
@@ -118,6 +119,7 @@ public class HttpRequestPollOperation inherits Qore::PollPipeline {
         auto inner = hc.startPollSendRecv(method, path, method == "GET" ? NOTHING : body, req_headers);
         self.addDelegate(inner);
         self.addDeliverResult();
+        goal = "http-request";
     }
 }
 

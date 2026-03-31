@@ -4936,7 +4936,7 @@ nothing Socket::sendHttp2StreamData(int stream_id, *binary data, softbool end_st
             break;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "HTTP2-FLOW-CONTROL") {
-                controllers[idx].wake();
+                controllers[idx].wakeSocket(sock);
                 sock.waitForHttp2StreamDrain(stream_id, 5s);
                 continue;
             }
@@ -6131,7 +6131,7 @@ int Socket::submitQuicStreamingResponseWithStream(int session_id, int stream_id,
 /** @par Example:
     @code{.py}
     while (sock.submitQuicStreamData(session_id, stream_id, chunk, False) == 1) {
-        controllers[idx].wake();
+        controllers[idx].wakeSocket(sock);
         # Deterministic wait — blocks until buffer drains or timeout expires
         sock.waitForQuicStreamDrain(session_id, stream_id, 5s);
     }

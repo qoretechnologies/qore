@@ -236,7 +236,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
             method, path, stream_id));
 
         # Wake controller to flush request
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.client_sock);
 
         # Wait for server to receive request
         auto server_result = ctx.server_q.get(30000);
@@ -563,7 +563,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         }
 
         # Wake controller to flush all requests
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.client_sock);
 
         # Server should receive first request
         auto server_result = ctx.server_q.get(30000);
@@ -657,7 +657,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
         waitForClientReading(ctx.client_op);
         int stream_id = ctx.client_sock.submitQuicRequest("GET", "/large-response");
         assertTrue(stream_id >= 0, "large response: valid stream_id");
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.client_sock);
 
         # Wait for server to receive request
         ctx.server_q.get(30000);
@@ -864,7 +864,7 @@ class QuicComprehensiveTest inherits QUnit::Test {
                     # Submit request
                     string path = sprintf("/conn/%d", conn_idx);
                     cli.submitQuicRequest("GET", path);
-                    ctrl.wake();
+                    ctrl.wakeSocket(cli);
 
                     # Wait for server
                     server_q.get(internal_to);
@@ -1074,13 +1074,13 @@ class QuicComprehensiveTest inherits QUnit::Test {
         ctx.server_sock.submitQuicShutdownNotice(session_id);
 
         # Wake the controller to flush the GOAWAY frame
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.server_sock);
 
         # Submit final shutdown (sends GOAWAY with actual last stream ID)
         ctx.server_sock.submitQuicShutdown(session_id);
 
         # Wake again to flush the final GOAWAY
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.server_sock);
 
         # Poll until the server reports goaway_sent (deterministic: the controller
         # I/O thread flushes packets between our yield-via-Queue.get() calls)

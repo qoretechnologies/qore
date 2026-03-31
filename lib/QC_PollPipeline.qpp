@@ -890,7 +890,8 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
                 const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
                 setError(err_str ? err_str->c_str() : "POLL-PIPELINE-ERROR",
                     desc_str ? desc_str->c_str() : "step failed", xsink);
-                poll_xsink.clear();
+                // Propagate the original exception to the caller
+                xsink->assimilate(poll_xsink);
                 return nullptr;
             }
 
@@ -1126,6 +1127,21 @@ QoreHashNode* PollPipelinePriv::continuePoll(ExceptionSink* xsink) {
             case StepType::DELIVER_RESULT: {
                 deliverResult(xsink);
                 return nullptr;
+            }
+
+            case StepType::DELEGATE: {
+                if (step.delegate_idx < 0
+                        || step.delegate_idx >= (int)delegate_ops.size()) {
+                    xsink->raiseException("POLL-PIPELINE-ERROR",
+                        "invalid delegate index %d", step.delegate_idx);
+                    return nullptr;
+                }
+                DelegateOp& dop = delegate_ops[step.delegate_idx];
+                dop.op->ROreference();
+                current_op = dop.op;
+                // Don't call setSelf — delegate ops already have their own
+                // self set from when they were created
+                continue;
             }
 
             case StepType::RECV_FRAMED: {

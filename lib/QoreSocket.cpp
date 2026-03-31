@@ -3611,7 +3611,7 @@ int QoreSocket::sendHttp2StreamData(int32_t stream_id, const BinaryNode* data,
     }
     // Data queued; nghttp2_session_resume_data() already called by sendStreamData().
     // I/O thread flushes via continuePoll() -> sendPendingData().
-    // WebSocket caller wakes I/O thread via wsc.getAsyncCtrl().wake().
+    // WebSocket caller wakes I/O thread via wsc.getAsyncCtrl().wakeSocket(sock).
     return 0;
 }
 
