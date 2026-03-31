@@ -71,7 +71,13 @@ public:
         if (*xsink) {
             return QoreValue();
         }
-        return code->execValue(0, xsink);
+        QoreValue rv = code->execValue(0, xsink);
+        // Clear thread-local data after each task to prevent data leakage between
+        // workers sharing the same pooled thread.  Without this, data such as
+        // "_jni_save" and "_python_save" accumulates across tasks, causing memory
+        // leaks and a security issue (one request's data visible to the next).
+        qore_program_private::clearThreadData(*pgm, xsink);
+        return rv;
     }
 
     DLLLOCAL void cancel(ExceptionSink* xsink) {
