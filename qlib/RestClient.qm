@@ -4975,14 +4975,19 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         # Background waiter: blocks on the Future (off the I/O thread), then
         # pushes the result to the Channel and notifies the EventNotifier.
         # The I/O thread's continuePoll reads the Channel non-blockingly.
+        # Capture members as locals BEFORE the background statement to hold
+        # strong refs — the closure captures self with a weak ref, so the
+        # object can be destroyed before the background thread starts.
+        Channel rc = result_channel;
+        EventNotifier n = notifier;
         background sub () {
             try {
                 hash<auto> resp = f.get();
-                result_channel.send(resp);
+                rc.send(resp);
             } catch (hash<ExceptionInfo> ex) {
-                result_channel.send({"err": ex.err, "desc": ex.desc, "_error": True});
+                rc.send({"err": ex.err, "desc": ex.desc, "_error": True});
             }
-            notifier.notify();
+            n.notify();
         }();
     }
 }
