@@ -1,0 +1,306 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HuggingFaceRestClient.qm Qore user module for calling Hugging Face REST services
+
+/*  HuggingFaceRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module HuggingFaceRestClient {
+    version = "1.0";
+    desc = "user module for calling Hugging Face REST API services";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("huggingface", HuggingFaceRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage HuggingFaceRestClient Module
+
+    @tableofcontents
+
+    @section huggingfacerestclientintro HuggingFaceRestClient Introduction
+
+    The %HuggingFaceRestClient module provides an API for calling Hugging Face REST API services.
+
+    To use this module, use \c "%requires HuggingFaceRestClient" in your code.
+
+    All the public symbols in the module are defined in the HuggingFaceRestClient namespace.
+
+    The main classes are:
+    - @ref HuggingFaceRestClient::HuggingFaceRestClient "HuggingFaceRestClient":
+      this class provides the REST client API for communication with the Hugging Face REST
+      API; it also automates authentication and authorization to the target
+    - @ref HuggingFaceRestClient::HuggingFaceRestConnection "HuggingFaceRestConnection":
+      provides a REST connection object to Hugging Face services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires HuggingFaceRestClient
+%requires ConnectionProvider
+
+HuggingFaceRestClient rest = get_connection("my-huggingface-connection");
+hash<auto> ans = rest.get("/models");
+printf("%N\n", ans.body);
+    @endcode
+
+    @section HuggingFaceRestClientRelnotes Release Notes
+
+    @subsection HuggingFaceRestClientv1_0 HuggingFaceRestClient v1.0
+    - the initial version of the %HuggingFaceRestClient module
+*/
+
+#! the HuggingFaceRestClient namespace contains all the objects in the HuggingFaceRestClient module
+public namespace HuggingFaceRestClient {
+#! Common base class for HuggingFaceRestClient functionality
+public class HuggingFaceRestClientBase {
+    public {
+        #! Default Hugging Face REST API URL
+        const DefaultUrl = "https://huggingface.co";
+
+        #! Default API path
+        const DefaultApiPath = "api";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "data": "json",
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (no leading slash - relative to base path)
+        const DefaultPingPath = "whoami-v2";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+    }
+
+    #! returns options for the constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        # set default_path for RestClientIo (uses this instead of setConnectionPath)
+        if (!rv.default_path) {
+            rv.default_path = "/" + (opts.api ?? DefaultApiPath);
+        }
+        # ensure Accept header is JSON
+        if (!rv.headers."Accept") {
+            rv.headers."Accept" = MimeTypeJson;
+        }
+        # map apikey to Authorization Bearer header
+        if (rv.apikey) {
+            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            remove rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! this class provides the REST client API for communication with Hugging Face servers
+/** You must use an API key in the 'apikey' option to call Hugging Face APIs.
+    The API key is sent as the \c Authorization: \c Bearer header.
+*/
+public class HuggingFaceRestClient inherits RestClient::RestClient, HuggingFaceRestClientBase {
+    #! creates the object with the given options
+    /**
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
+        that the URL is set by default if not provided (see @ref DefaultUrl)
+        @param do_not_connect if \c False (the default), then a connection is returned already connected to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(HuggingFaceRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(opts.api.val() ? string(opts.api) : DefaultApiPath);
+        }
+    }
+}
+
+#! Class for Hugging Face REST connections; returns @ref HuggingFaceRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref HuggingFaceRestClient::HuggingFaceRestClient::constructor() for more information on the above options
+*/
+public class HuggingFaceRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Hugging Face REST API URL
+        const DefaultUrl = "huggingface://huggingface.co";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Hugging Face REST Connection",
+            "short_desc": "A connection to the Hugging Face REST API",
+            "desc": "A connection to the Hugging Face REST API.\n\n"
+                "Requires an API key (set as `apikey`) from "
+                "[Hugging Face Settings](https://huggingface.co/settings/tokens). "
+                "The connection uses the `huggingface://` URL scheme and provides access "
+                "to the Hub API for models, datasets, and spaces",
+            "cls": Class::forName("HuggingFaceRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "huggingface": True,
+            },
+            "base_scheme_map": {
+                "https": "huggingface",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Hugging Face API token for authentication",
+                    "type": "string",
+                    "desc": "The Hugging Face API token used for authentication; sent as the "
+                        "`Authorization: Bearer` header.\n\n"
+                        "Get your token from [Hugging Face Settings](https://huggingface.co/settings/tokens)",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Path",
+                    "short_desc": "The API base path",
+                    "desc": "The API base path to use",
+                    "type": "string",
+                    "default_value": HuggingFaceRestClientBase::DefaultApiPath,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": HuggingFaceRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": HuggingFaceRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": HuggingFaceRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    #! creates the HuggingFaceRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the HuggingFaceRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    #! returns \c "huggingface"
+    string getType() {
+        return "huggingface";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the HuggingFaceDataProvider and creates the data provider
+        # object dynamically
+        load_module("HuggingFaceDataProvider");
+        return create_object("HuggingFaceDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref HuggingFaceRestClient object
+    private HuggingFaceRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new HuggingFaceRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new HuggingFaceRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Hugging Face REST API using multiplexed HTTP connections
+/** @see HuggingFaceRestClient for more information
+*/
+public class HuggingFaceRestClientIo inherits RestClientIo::RestClientIo, HuggingFaceRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(HuggingFaceRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}

@@ -832,6 +832,14 @@ cargo install tree-sitter-cli@0.26.5
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
+      - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
+      - supports Bearer token authentication
+      - provides HuggingFaceRestConnection for connection management with \c huggingface:// URL scheme
+    - @ref huggingfacedataproviderintro "HuggingFaceDataProvider" module
+      - new module providing a data provider API for <a href="https://huggingface.co/">Hugging Face</a> services
+      - models, datasets, and spaces CRUD operations via the Hub API
+      - chat completions via the Inference API
       - message creation with support for text, images, tool use, and extended thinking
       - SSE streaming for incremental message delivery via observer pattern
       - token counting API for cost estimation
