@@ -3020,9 +3020,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // like translate(list<hash<auto>>, string).  This must happen BEFORE
             // storing to the alloca because LoadLocal reads from the alloca directly.
             bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
+            // Apply type coercion for complex hash/list types (not hashdecl types).
+            // Hashdecl types are also "complex" per isComplex(), but they use
+            // priv->hashdecl (not complexTypeInfo) for type identity. Coercing
+            // them through acceptAssignment can strip hashdecl annotations —
+            // a hash with complexTypeInfo set instead of hashdecl is rejected
+            // by QTS_HASHDECL type checking. The runtime assign (below) already
+            // handles type checking for hashdecl types correctly.
             bool is_complex_typed = linst->local
                 && QoreTypeInfo::isComplex(linst->local->getTypeInfo())
-                && !QoreTypeInfo::isReference(linst->local->getTypeInfo());
+                && !QoreTypeInfo::isReference(linst->local->getTypeInfo())
+                && !QoreTypeInfo::getUniqueReturnHashDecl(linst->local->getTypeInfo());
 
             if (is_complex_typed && !is_ir_only) {
                 // Apply type coercion: stores complexTypeInfo on the value for runtime
@@ -3102,11 +3110,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(after_reinst);
                 }
 
-                // For complex-typed locals, use no-coerce variant because coercion was already
-                // applied above via qore_rt_coerce_value. This avoids double-coercion.
-                const char* aot_helper_name = is_complex_typed ? "qore_rt_assign_local_no_coerce_aot"
+                // For complex-typed locals (including hashdecl), use no-coerce variant.
+                // Complex types: coercion was already applied above via qore_rt_coerce_value.
+                // Hashdecl types: runtime type checking via acceptAssignment rejects hashes
+                // that have complexTypeInfo set instead of hashdecl (a valid state that the
+                // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
+                bool use_no_coerce = is_complex_typed
+                    || QoreTypeInfo::getUniqueReturnHashDecl(linst->local->getTypeInfo());
+                const char* aot_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce_aot"
                         : "qore_rt_assign_local_aot";
-                const char* jit_helper_name = is_complex_typed ? "qore_rt_assign_local_no_coerce"
+                const char* jit_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce"
                         : "qore_rt_assign_local";
 
                 if (aot_mode) {
