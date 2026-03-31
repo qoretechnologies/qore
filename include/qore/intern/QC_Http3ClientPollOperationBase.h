@@ -38,6 +38,7 @@
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
 
+#include <algorithm>
 #include <atomic>
 #include <string>
 #include <unordered_map>
@@ -196,6 +197,25 @@ public:
         return nullptr;
     }
 
+    //! Registers a stream for onStreamData() notifications
+    /** Called from Qore when setting up a CONNECT stream (WebSocket/SSE) to
+        receive async notifications when data is dispatched for this stream.
+        @param stream_id the QUIC stream ID
+    */
+    DLLLOCAL void registerStreamNotify(int64_t stream_id) {
+        AutoLocker al(stream_lock);
+        notify_streams.insert(stream_id);
+    }
+
+    //! Returns and clears the list of stream IDs with dispatched data
+    /** Called by the controller after continuePoll() returns.
+    */
+    DLLLOCAL std::vector<int64_t> getAndClearDataReadyStreams() {
+        std::vector<int64_t> result;
+        result.swap(data_ready_streams);
+        return result;
+    }
+
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -244,6 +264,18 @@ private:
 
     //! Pending responses buffered during submit race window: stream_id -> ref'd hashes
     std::unordered_map<std::string, std::vector<QoreHashNode*>> pending_responses;
+
+    //! Stream IDs registered for onStreamData() notifications
+    /** Populated by registerStreamNotify(); checked in handleReading() to signal
+        data_ready_streams after ChannelAction dispatch.
+    */
+    std::unordered_set<int64_t> notify_streams;
+
+    //! Stream IDs that had data dispatched in the last continuePoll cycle
+    /** Populated by handleReading(); consumed by the controller via
+        getAndClearDataReadyStreams() for onStreamData() worker dispatch.
+    */
+    std::vector<int64_t> data_ready_streams;
 
     //! Stream IDs between Phase 2 and Phase 3 of submit
     std::unordered_set<std::string> pending_stream_ids;

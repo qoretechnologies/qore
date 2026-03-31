@@ -327,6 +327,16 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 resp->setKeyValue("protocol", new QoreStringNode("h3"), xsink);
                 action->execute(resp.release(), xsink);
                 action->deref(xsink);
+
+                // Signal stream data ready for registered stream listeners
+                // (WebSocket/SSE consumers that use the onStreamData dispatch)
+                if (!notify_streams.empty()
+                        && notify_streams.count(stream_id_val)) {
+                    if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                            stream_id_val) == data_ready_streams.end()) {
+                        data_ready_streams.push_back(stream_id_val);
+                    }
+                }
             }
         }
 
@@ -908,4 +918,16 @@ nothing Http3ClientPollOperationBase::setSubmitError(string err, string desc) {
 */
 Socket Http3ClientPollOperationBase::getSocket() [flags=RET_VALUE_ONLY] {
     return self->getReferencedMemberNoMethod("sock", xsink);
+}
+
+//! Registers a stream for onStreamData() dispatch notifications
+/** After this call, when the I/O thread dispatches data for this stream,
+    the controller will dispatch onStreamData() to the worker pool.
+
+    @param stream_id the QUIC stream ID
+
+    @since %Qore 2.3
+*/
+nothing Http3ClientPollOperationBase::registerStreamNotify(int stream_id) {
+    priv->registerStreamNotify(stream_id);
 }

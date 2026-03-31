@@ -57,6 +57,16 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
 
         #! Logger (kept for Qore-level logging)
         *LoggerInterface h3_logger;
+
+        #! Stream data listeners: stream_id string -> listener object
+        hash<string, object> stream_listeners;
+
+        #! Pending data flags for streams where onStreamData fired before
+        #! the listener was registered
+        hash<string, bool> pending_stream_data;
+
+        #! Lock protecting stream listener registration and dispatch
+        Mutex stream_listener_mutex();
     }
 
     #! Creates the poll operation for a new QUIC connection
@@ -85,6 +95,42 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
     #! Copying is not supported
     private copy() {
         throw "COPY-ERROR", "Http3ClientPollOperation objects cannot be copied";
+    }
+
+    #! Registers a stream for onStreamData() notifications and registers
+    #! a listener to be notified when data is dispatched
+    /** @param stream_id the QUIC stream ID
+        @param listener an object with a notifyIo() method
+    */
+    registerStreamNotifyAndListener(int stream_id, object listener) {
+        # Register in C++ for data_ready_streams signaling
+        registerStreamNotify(stream_id);
+        # Register Qore listener for worker dispatch
+        *bool has_pending;
+        {
+            AutoLock al(stream_listener_mutex);
+            stream_listeners{stream_id} = listener;
+            has_pending = remove pending_stream_data{stream_id};
+        }
+        if (has_pending) {
+            listener.notifyIo();
+        }
+    }
+
+    #! Called on a worker thread when stream data has been dispatched
+    /** Dispatched by the async I/O controller after the C++ dispatch signals
+        data_ready_streams. Wakes the handler for the given stream.
+        @param stream_key stream identifier (string representation of stream_id)
+    */
+    nothing onStreamData(string stream_key) {
+        int stream_id = stream_key.toInt();
+        AutoLock al(stream_listener_mutex);
+        *object listener = stream_listeners{stream_id};
+        if (listener) {
+            listener.notifyIo();
+        } else {
+            pending_stream_data{stream_id} = True;
+        }
     }
 
     #! Submits a new HTTP/3 request on this connection

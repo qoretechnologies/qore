@@ -178,6 +178,14 @@ public class Http3ClientConnection inherits HttpClientConnection {
         }
     }
 
+    #! Registers a stream for notifications and sets a listener
+    /** @param stream_id the QUIC stream ID
+        @param listener an object with a notifyIo() method
+    */
+    registerStreamNotifyAndListener(int stream_id, object listener) {
+        poll_op.registerStreamNotifyAndListener(stream_id, listener);
+    }
+
     #! Sends data on a streaming HTTP/3 request
     /** @param stream_id the stream ID to send data on
         @param data the data to send (can be NOTHING to send END_STREAM only)

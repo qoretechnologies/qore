@@ -38,6 +38,7 @@
 // QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
+#include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -1653,6 +1654,23 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             call_dispatcher = new QoreCallDispatcher(max_callback_workers);
                         }
                         for (int32_t sid : ready) {
+                            op.spop_obj->ref();
+                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                                std::to_string(sid));
+                        }
+                    }
+                }
+
+                // Same for HTTP/3 client poll ops (WebSocket/SSE over H3 CONNECT)
+                auto* h3_client_op = dynamic_cast<Http3ClientPollOperationPriv*>(op.spop_base);
+                if (h3_client_op) {
+                    std::vector<int64_t> ready = h3_client_op->getAndClearDataReadyStreams();
+                    if (!ready.empty()) {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        for (int64_t sid : ready) {
                             op.spop_obj->ref();
                             call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
                                 std::to_string(sid));

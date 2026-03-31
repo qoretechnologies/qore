@@ -2066,17 +2066,18 @@ ws.setEventQueue();
             # HTTP/2 via HttpClientIo: the connection manager already submitted the
             # H2 poll operation to the async I/O controller. Create an adapter that
             # reads from the stream handle and parses WS frames.
-            poll_op = new WebSocketClientH2PollOp(hcio_stream, active_extensions,
+            poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
                 logger, raw_callback, on_poll_complete);
             # Start the reader — no controller.submit() needed
             async_owner = "wsc-hcio-" + get_random_string(12);
             async_close_sent = False;
             return;
-        } else if (transport == "http3") {
-            # HTTP/3: Same pattern as H2 but using QUIC stream
-            # TODO: implement WebSocketClientH3PollOp when H3 client is fully async
-            logDebug("async I/O not yet supported for HTTP/3 transport; falling back to sync mode");
-            async_io = False;
+        } else if (transport == "http3" && use_hcio && hcio_stream) {
+            # HTTP/3 via HttpClientIo: same adapter pattern as H2
+            poll_op = new WebSocketClientHcioPollOp(hcio_stream, active_extensions,
+                logger, raw_callback, on_poll_complete);
+            async_owner = "wsc-hcio-" + get_random_string(12);
+            async_close_sent = False;
             return;
         } else {
             # HTTP/1.1: Use C++ WebSocket poll operation directly on the socket
@@ -2869,16 +2870,17 @@ ws.setEventQueue();
             hc.connect();
         }
 
-        # RFC 9220: Use extended CONNECT for HTTP/3 WebSocket
-        # Try HTTP/3 if already active, or if http3_mode is "required" (QUIC will be
-        # established by sendHttp3Connect internally — the initial hc.connect() only
-        # establishes TCP+TLS, not QUIC)
-        if (hc.isHttp3Active() || hc.getHttp3Mode() == "required") {
+        # RFC 9220: Use HttpClientIo for fully async HTTP/3 WebSocket when available
+        if ((hc.isHttp3Active() || hc.getHttp3Mode() == "required") && async_io) {
             try {
-                return connectHttp3WebSocket(hdr, \info, reconnect);
+                return connectHttp3WebSocketViaHcio(hdr, \info, reconnect);
             } catch (hash<ExceptionInfo> ex) {
-                if (ex.err == "HTTP3-CONNECT-ERROR" && http_opts.http_version == "auto") {
-                    logInfo("HTTP/3 WebSocket not supported by server; retrying with HTTP/1.1");
+                if ((ex.err == "HTTP3-CONNECT-ERROR" || ex.err == "HTTPCLIENT-CONNECT-ERROR")
+                        && http_opts.http_version == "auto") {
+                    logInfo("HttpClientIo H3 WebSocket failed (%s); retrying with HTTP/1.1",
+                        ex.err);
+                    use_hcio = False;
+                    remove hcio_stream;
                     http_opts.http_version = "1.1";
                     hc = new HTTPClient(http_opts);
                     hc.connect();
@@ -3239,6 +3241,89 @@ ws.setEventQueue();
         }
 
         processExtensions(rhdr);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! RFC 9220: HTTP/3 WebSocket handshake via HttpClientIo (fully async)
+    /** Uses HttpClientIo's connection manager for the H3 connection and
+        Http3ClientStreamHandle for bidirectional CONNECT streaming.
+        All I/O is async — no HTTPClient synchronous methods are called.
+
+        @since WebSocketClient 2.4
+    */
+    private hash<auto> connectHttp3WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
+            *bool reconnect) {
+        http3_websocket = True;
+        h3_stream_id = -1;
+        remove h3_frame_buf;
+        logDebug("Using HttpClientIo for HTTP/3 WebSocket handshake (RFC 9220)");
+
+        # Build the HTTPS URL from the WebSocket URL
+        string url = http_opts.url;
+        url =~ s/^ws:/http:/;
+        url =~ s/^wss:/https:/;
+
+        # Create connection manager if not yet created
+        if (!hcio_mgr) {
+            auto mgr_opts = <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h3",
+                "logger": logger,
+                "request_timeout": timeout_ms,
+            };
+            if (http_opts.ssl_verify_cert.typeCode() == NT_BOOLEAN && !http_opts.ssl_verify_cert) {
+                mgr_opts.accept_all_certs = True;
+            }
+            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+
+        # Build CONNECT headers with RFC 9220 protocol header
+        hdr = (http_opts.headers ?? {}) + hdr;
+        hdr.":protocol" = "websocket";
+
+        string key = get_random_string(16).toBase64();
+        hdr."Sec-WebSocket-Key" = key;
+        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
+
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+            }
+        }
+
+        string path = hc.getConnectionPath() ?? "/";
+
+        # Acquire stream and start bidirectional CONNECT
+        hcio_stream = hcio_mgr.acquireAndStartStreaming(url, "CONNECT", path, hdr, True);
+
+        # Read the CONNECT response headers
+        auto rh = hcio_stream.readData(timeout_ms);
+        if (!rh || rh.typeCode() != NT_HASH) {
+            raiseError("HttpClientIo H3 CONNECT to %y failed: no response received", url);
+        }
+
+        h3_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
+
+        int status_code = rh.status_code ?? rh.headers.":status".toInt();
+        if (status_code != 200) {
+            raiseError("HTTP/3 server at URL %y returned status code '%d' to our WebSocket CONNECT; "
+                "expecting '200 OK' (RFC 9220)", url, status_code);
+        }
+
+        hash<auto> rhdr = rh.headers ?? rh;
+        if (rhdr."sec-websocket-accept") {
+            string expected_key = ws_get_response_key(key);
+            if (rhdr."sec-websocket-accept" != expected_key) {
+                raiseError("HTTP/3 server at URL %y returned invalid Sec-WebSocket-Accept: %y; expecting %y",
+                    url, rhdr."sec-websocket-accept", expected_key);
+            }
+        }
+
+        processExtensions(rhdr);
+
+        use_hcio = True;
         finishConnect();
 
         return rh;
@@ -5064,30 +5149,30 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     }
 }
 
-#! Async WebSocket adapter for HTTP/2 via HttpClientIo
-/** Uses the stream queue + listener pattern from the async I/O controller.
-    The H2 connection's poll operation (managed by HttpClientConnectionManager)
-    drains incoming DATA frames to a Queue.  The controller dispatches
-    \c onStreamData() to the worker pool, which calls \c notifyIo() on this
-    adapter.  The adapter reads from the Queue, parses WS frames, and delivers
-    messages to \c recv_channel for consumption by the WebSocketClient delivery
-    mechanism.
+#! Async WebSocket adapter for HTTP/2 and HTTP/3 via HttpClientIo
+/** Uses the stream listener pattern from the async I/O controller.
+    The connection's poll operation (managed by HttpClientConnectionManager)
+    dispatches \c onStreamData() to the worker pool when data arrives,
+    which calls \c notifyIo() on this adapter.  The adapter reads from the
+    stream handle's Channel, parses WS frames, and delivers messages to
+    \c recv_channel for consumption by the WebSocketClient delivery mechanism.
 
-    Sending is non-blocking via \c Http2ClientConnection::sendStreamData().
+    Sending is non-blocking via the connection's \c sendStreamData().
 
     No threads, no blocking I/O — fully event-driven via the async I/O controller.
+    Works with both HTTP/2 (\c Http2ClientConnection) and HTTP/3 (\c Http3ClientConnection).
 
     @since WebSocketClient 2.4
 */
-public class WebSocketClientH2PollOp {
+public class WebSocketClientHcioPollOp {
     private {
-        #! HttpClientIo stream handle for CONNECT tunnel
+        #! HttpClientIo stream handle for CONNECT tunnel (protocol-agnostic)
         HttpClientIo::HttpClientStreamHandle stream;
 
-        #! H2 connection (for sendStreamData and registerStreamListener)
-        HttpClientIo::Http2ClientConnection h2conn;
+        #! Connection object (for sendStreamData); typed as generic base
+        HttpClientIo::HttpClientConnection conn;
 
-        #! Queue for incoming H2 DATA (populated by C++ drainStreamQueues)
+        #! Queue for incoming DATA (used for H2 stream queue registration)
         Queue data_queue();
 
         #! The H2 CONNECT stream ID
@@ -5146,21 +5231,22 @@ public class WebSocketClientH2PollOp {
         self.on_poll_complete = on_poll_complete;
         self.has_extensions = active_extensions ? True : False;
 
-        # Get typed H2 connection and stream ID
-        h2conn = cast<HttpClientIo::Http2ClientConnection>(stream.getConnection());
+        # Get connection and stream ID (protocol-agnostic)
+        conn = stream.getConnection();
         stream_id = stream.getStreamId();
         @assert(stream_id > 0, "stream_id must be positive after startStreaming");
 
-        # Register Queue to enable the data_ready_streams signal mechanism.
-        # The Queue itself may stay empty (the ChannelAction delivers data to
-        # the stream handle's data_channel instead), but its presence in the
-        # stream_queues map causes handleReading() to signal data_ready_streams
-        # when data is dispatched for this stream.
-        h2conn.registerStreamQueue(stream_id, data_queue);
-
-        # Register ourselves as the stream listener — the controller's worker
-        # pool calls notifyIo() when data_ready_streams signals this stream
-        h2conn.registerStreamListener(stream_id, self);
+        # Register for async stream data notifications.
+        # H2: uses stream queue + listener (queue enables data_ready_streams signal)
+        # H3: uses registerStreamNotifyAndListener (no queue needed)
+        if (conn instanceof HttpClientIo::Http2ClientConnection) {
+            auto h2conn = cast<HttpClientIo::Http2ClientConnection>(conn);
+            h2conn.registerStreamQueue(stream_id, data_queue);
+            h2conn.registerStreamListener(stream_id, self);
+        } else if (conn instanceof HttpClientIo::Http3ClientConnection) {
+            auto h3conn = cast<HttpClientIo::Http3ClientConnection>(conn);
+            h3conn.registerStreamNotifyAndListener(stream_id, self);
+        }
     }
 
     #! Called on a worker thread when stream data has been dispatched
@@ -5265,7 +5351,7 @@ public class WebSocketClientH2PollOp {
             if (!ws_close_sent) {
                 ws_close_sent = True;
                 try {
-                    h2conn.sendStreamData(stream_id,
+                    stream.sendData(
                         ws_encode_message("", WSOP_Close, True));
                 } catch (hash<ExceptionInfo> ex) {
                     logError("close response send error: %s: %s", ex.err, ex.desc);
@@ -5278,7 +5364,7 @@ public class WebSocketClientH2PollOp {
 
         if (op == WSOP_Ping) {
             try {
-                h2conn.sendStreamData(stream_id,
+                stream.sendData(
                     ws_encode_message(h.msg ?? "", WSOP_Pong, True));
             } catch (hash<ExceptionInfo> ex) {
                 logError("pong send error: %s: %s", ex.err, ex.desc);
@@ -5387,7 +5473,7 @@ public class WebSocketClientH2PollOp {
         }
         ws_close_sent = True;
         try {
-            h2conn.sendStreamData(stream_id,
+            stream.sendData(
                 ws_encode_message(reason ?? "", WSOP_Close, True, True, 0, code));
         } catch (hash<ExceptionInfo> ex) {
             logError("close send error: %s: %s", ex.err, ex.desc);
@@ -5397,7 +5483,7 @@ public class WebSocketClientH2PollOp {
     #! Sends a ping frame (non-blocking)
     sendPing(data msg) {
         try {
-            h2conn.sendStreamData(stream_id, ws_encode_message(msg, WSOP_Ping, True));
+            stream.sendData( ws_encode_message(msg, WSOP_Ping, True));
         } catch (hash<ExceptionInfo> ex) {
             logError("ping send error: %s: %s", ex.err, ex.desc);
         }
@@ -5406,7 +5492,7 @@ public class WebSocketClientH2PollOp {
     #! Sends a pong frame (non-blocking)
     sendPong(data msg) {
         try {
-            h2conn.sendStreamData(stream_id, ws_encode_message(msg, WSOP_Pong, True));
+            stream.sendData( ws_encode_message(msg, WSOP_Pong, True));
         } catch (hash<ExceptionInfo> ex) {
             logError("pong send error: %s: %s", ex.err, ex.desc);
         }
@@ -5455,12 +5541,12 @@ public class WebSocketClientH2PollOp {
                 rsv_bits |= result.rsv_bits;
             }
         }
-        h2conn.sendStreamData(stream_id, ws_encode_message(msg, op, True, fin, rsv_bits));
+        stream.sendData( ws_encode_message(msg, op, True, fin, rsv_bits));
     }
 
     private logError(string fmt, ...) {
         if (logger) {
-            logger.log(LoggerLevel::ERROR, "WebSocketClientH2PollOp: " + vsprintf(fmt, argv));
+            logger.log(LoggerLevel::ERROR, "WebSocketClientHcioPollOp: " + vsprintf(fmt, argv));
         }
     }
 }
