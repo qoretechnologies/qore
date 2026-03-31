@@ -832,6 +832,14 @@ cargo install tree-sitter-cli@0.26.5
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
+      - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
+      - supports Bearer token authentication
+      - provides HuggingFaceRestConnection for connection management with \c huggingface:// URL scheme
+    - @ref huggingfacedataproviderintro "HuggingFaceDataProvider" module
+      - new module providing a data provider API for <a href="https://huggingface.co/">Hugging Face</a> services
+      - models, datasets, and spaces CRUD operations via the Hub API
+      - chat completions via the Inference API
       - message creation with support for text, images, tool use, and extended thinking
       - SSE streaming for incremental message delivery via observer pattern
       - token counting API for cost estimation
@@ -895,6 +903,22 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref bitlyrestclientintro "BitlyRestClient" module
+      - new module providing a REST client for <a href="https://bitly.com/">Bitly</a>'s URL shortening API
+      - supports Bearer token and OAuth2 authentication
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides BitlyRestConnection for connection management with \c bitlyrest:// URL scheme
+    - @ref bitlydataproviderintro "BitlyDataProvider" module
+      - new module providing a data provider API for <a href="https://bitly.com/">Bitly</a> URL shortening
+      - bitlink management (shorten, create, update, delete, list)
+      - click analytics (click summary with time-based aggregation)
+      - group and organization management
+      - campaign management (create, update, list)
+      - branded short domains (list)
+      - QR code management (create, update, list)
+      - custom bitlink support
+      - polling-based event triggers for bitlink click activity
+      - action catalog integration with 21 actions and 1 trigger
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username

@@ -82,10 +82,13 @@ public class DataProvider {
 
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
+
+            "huggingface": "HuggingFaceDataProvider",
             "awsrestclient": "AwsRestClientDataProvider",
 
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
+            "bitly": "BitlyDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",

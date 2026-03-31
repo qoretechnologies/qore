@@ -1,0 +1,569 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  BitlyDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/BitlyRestClient.qm
+%requires ../../../../qlib/BitlyDataProvider
+
+%exec-class BitlyDataProviderTest
+
+public class BitlyDataProviderTest inherits QUnit::Test {
+    private {
+        #! Bitly REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *string testBitlinkId;
+        *string testCampaignGuid;
+        *string testGroupGuid;
+    }
+
+    constructor() : Test("BitlyDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Bitly credentials)
+        addTestCase("groups tests", \groupsTests());
+        addTestCase("organizations tests", \organizationsTests());
+        addTestCase("bitlink shorten tests", \bitlinkShortenTests());
+        addTestCase("bitlink CRUD tests", \bitlinkCrudTests());
+        addTestCase("bitlink clicks tests", \bitlinkClicksTests());
+        addTestCase("campaign CRUD tests", \campaignCrudTests());
+        addTestCase("BSDs tests", \bsdsTests());
+        addTestCase("QR code tests", \qrCodeTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("cleanup tests", \cleanupTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Bitly client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.BITLY_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof BitlyRestClient::BitlyRestConnection) {
+                client = (cast<BitlyRestClient::BitlyRestConnection>(conn)).getAsync(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.BITLY_API_KEY ?? ENV.BITLY_ACCESS_TOKEN;
+        if (apikey) {
+            client = new BitlyRestClient::BitlyRestClientIo({"apikey": apikey});
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Bitly credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private BitlyDataProvider::BitlyDataProvider getProvider() {
+        return new BitlyDataProvider::BitlyDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Bitly", BitlyDataProvider::AppName);
+        assertEq(50, BitlyDataProvider::DefaultPageSize);
+        assertEq(120, BitlyDataProvider::DefaultPollInterval);
+        assertEq(60, BitlyDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("bitlink-click", BitlyDataProvider::EVENT_BITLINK_CLICK);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("bitly");
+        assertEq(True, factory instanceof BitlyDataProvider::BitlyDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("bitly", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Bitly");
+        assertEq(True, app.val(), "Bitly app registered in action catalog");
+        assertEq("Bitly", app.display_name);
+        assertEq("bitlyrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Bitly");
+        assertEq(True, actions.size() >= 22, "at least 22 actions registered");
+
+        bool found_shorten = False;
+        bool found_list_bitlinks = False;
+        bool found_click_event = False;
+        bool found_update_group = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "shorten-bitlink") {
+                found_shorten = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-bitlinks") {
+                found_list_bitlinks = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "bitlink-click") {
+                found_click_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+            if (action.action == "update-group") {
+                found_update_group = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+        }
+        assertEq(True, found_shorten, "shorten-bitlink action registered");
+        assertEq(True, found_list_bitlinks, "list-bitlinks action registered");
+        assertEq(True, found_click_event, "bitlink-click event registered");
+        assertEq(True, found_update_group, "update-group action registered");
+    }
+
+    dataTypeTests() {
+        BitlyDataProvider::BitlyBitlinkDataType bitlink_type();
+        hash<auto> fields = bitlink_type.getFields();
+        assertEq(True, fields.hasKey("id"), "bitlink type has id field");
+        assertEq(True, fields.hasKey("link"), "bitlink type has link field");
+        assertEq(True, fields.hasKey("long_url"), "bitlink type has long_url field");
+        assertEq(True, fields.hasKey("title"), "bitlink type has title field");
+        assertEq(True, fields.hasKey("archived"), "bitlink type has archived field");
+        assertEq(True, fields.hasKey("tags"), "bitlink type has tags field");
+
+        BitlyDataProvider::BitlyBitlinkClicksDataType clicks_type();
+        hash<auto> cfields = clicks_type.getFields();
+        assertEq(True, cfields.hasKey("total_clicks"), "clicks type has total_clicks field");
+        assertEq(True, cfields.hasKey("unit"), "clicks type has unit field");
+
+        BitlyDataProvider::BitlyGroupDataType group_type();
+        hash<auto> gfields = group_type.getFields();
+        assertEq(True, gfields.hasKey("guid"), "group type has guid field");
+        assertEq(True, gfields.hasKey("name"), "group type has name field");
+        assertEq(True, gfields.hasKey("is_active"), "group type has is_active field");
+
+        BitlyDataProvider::BitlyOrganizationDataType org_type();
+        hash<auto> ofields = org_type.getFields();
+        assertEq(True, ofields.hasKey("guid"), "org type has guid field");
+        assertEq(True, ofields.hasKey("name"), "org type has name field");
+        assertEq(True, ofields.hasKey("tier"), "org type has tier field");
+
+        BitlyDataProvider::BitlyCampaignDataType campaign_type();
+        hash<auto> cpfields = campaign_type.getFields();
+        assertEq(True, cpfields.hasKey("guid"), "campaign type has guid field");
+        assertEq(True, cpfields.hasKey("name"), "campaign type has name field");
+
+        BitlyDataProvider::BitlyBsdDataType bsd_type();
+        hash<auto> bfields = bsd_type.getFields();
+        assertEq(True, bfields.hasKey("domain"), "bsd type has domain field");
+
+        BitlyDataProvider::BitlyQrCodeDataType qr_type();
+        hash<auto> qfields = qr_type.getFields();
+        assertEq(True, qfields.hasKey("qrcode_id"), "qr type has qrcode_id field");
+        assertEq(True, qfields.hasKey("title"), "qr type has title field");
+        assertEq(True, qfields.hasKey("destination"), "qr type has destination field");
+        assertEq(True, qfields.hasKey("render_customizations"),
+            "qr type has render_customizations field");
+        assertEq(True, qfields.hasKey("tags"), "qr type has tags field");
+
+        BitlyDataProvider::BitlyQrCodeDestinationDataType dest_type();
+        hash<auto> destfields = dest_type.getFields();
+        assertEq(True, destfields.hasKey("long_url"), "destination type has long_url field");
+        assertEq(True, destfields.hasKey("bitlink_id"),
+            "destination type has bitlink_id field");
+
+        BitlyDataProvider::BitlyRenderCustomizationsDataType rc_type();
+        hash<auto> rcfields = rc_type.getFields();
+        assertEq(True, rcfields.hasKey("background_color"),
+            "render customizations has background_color field");
+        assertEq(True, rcfields.hasKey("dot_pattern_color"),
+            "render customizations has dot_pattern_color field");
+        assertEq(True, rcfields.hasKey("dot_pattern_type"),
+            "render customizations has dot_pattern_type field");
+
+        BitlyDataProvider::BitlyUpdateGroupRequestDataType ug_type();
+        hash<auto> ugfields = ug_type.getFields();
+        assertEq(True, ugfields.hasKey("group_guid"),
+            "update group request has group_guid field");
+        assertEq(True, ugfields.hasKey("name"), "update group request has name field");
+        assertEq(True, ugfields.hasKey("bsds"), "update group request has bsds field");
+
+        BitlyDataProvider::BitlyDeeplinkDataType dl_type();
+        hash<auto> dlfields = dl_type.getFields();
+        assertEq(True, dlfields.hasKey("app_id"), "deeplink type has app_id field");
+        assertEq(True, dlfields.hasKey("app_uri_path"), "deeplink type has app_uri_path field");
+        assertEq(True, dlfields.hasKey("install_url"), "deeplink type has install_url field");
+        assertEq(True, dlfields.hasKey("install_type"), "deeplink type has install_type field");
+    }
+
+    connectionTests() {
+        *hash<auto> scheme = ConnectionSchemeCache::getScheme("bitlyrest");
+        assertEq(True, scheme.val(), "bitlyrest scheme registered");
+        assertEq("Bitly REST Connection", scheme.display_name);
+        assertEq(True, scheme.options.hasKey("apikey"), "scheme has apikey option");
+        assertEq(True, scheme.required_options.val(), "scheme has required_options");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    groupsTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+        AbstractDataProvider groups_dp = provider.getChildProvider("groups");
+        assertEq(True, groups_dp.val());
+
+        # List groups
+        AbstractDataProviderRecordIterator iter = groups_dp.searchRecords();
+        assertEq(True, iter.next());
+        hash<auto> group = iter.getValue();
+        assertEq(True, group.hasKey("guid"), "group has guid");
+        assertEq(True, group.hasKey("name"), "group has name");
+        testGroupGuid = group.guid;
+
+        if (m_options.verbose) {
+            printf("Found group: %s (%s)\n", group.name, group.guid);
+        }
+    }
+
+    organizationsTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+        AbstractDataProvider orgs_dp = provider.getChildProvider("organizations");
+
+        # List organizations
+        AbstractDataProviderRecordIterator iter = orgs_dp.searchRecords();
+        assertEq(True, iter.next());
+        hash<auto> org = iter.getValue();
+        assertEq(True, org.hasKey("guid"), "org has guid");
+        assertEq(True, org.hasKey("name"), "org has name");
+
+        if (m_options.verbose) {
+            printf("Found organization: %s (%s, tier: %s)\n", org.name, org.guid,
+                org.tier_display_name ?? org.tier ?? "N/A");
+        }
+    }
+
+    bitlinkShortenTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+        AbstractDataProvider shorten_dp = provider.getChildProvider("bitlinks")
+            .getChildProvider("shorten");
+
+        # Shorten a URL
+        hash<auto> result = shorten_dp.doRequest({
+            "long_url": "https://qoretechnologies.com/test-bitly-" + now_us().toString(),
+        });
+
+        assertEq(True, result.hasKey("id"), "shorten result has id");
+        assertEq(True, result.hasKey("link"), "shorten result has link");
+        assertEq(True, result.link.val(), "shorten result has non-empty link");
+        testBitlinkId = result.id;
+
+        if (m_options.verbose) {
+            printf("Shortened: %s -> %s\n", result.long_url, result.link);
+        }
+    }
+
+    bitlinkCrudTests() {
+        skipIfNoCredentials();
+        if (!testBitlinkId) {
+            testSkip("no test bitlink created");
+        }
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+
+        # Get the bitlink
+        AbstractDataProvider bitlinks_dp = provider.getChildProvider("bitlinks");
+        AbstractDataProviderRecordIterator iter = bitlinks_dp.searchRecords(NOTHING, {
+            "bitlink": testBitlinkId,
+        });
+        assertEq(True, iter.next());
+        hash<auto> bitlink = iter.getValue();
+        assertEq(testBitlinkId, bitlink.id);
+
+        # Update the bitlink
+        AbstractDataProvider update_dp = bitlinks_dp.getChildProvider("update");
+        string new_title = "Test Title " + now_us().toString();
+        hash<auto> updated = update_dp.doRequest({
+            "bitlink": testBitlinkId,
+            "title": new_title,
+        });
+        assertEq(new_title, updated.title, "title was updated");
+
+        # Verify persistence — re-read and check (small delay for API consistency)
+        sleep(1s);
+        iter = bitlinks_dp.searchRecords(NOTHING, {"bitlink": testBitlinkId});
+        assertEq(True, iter.next());
+        hash<auto> re_read = iter.getValue();
+        assertEq(new_title, re_read.title, "title persisted after update");
+
+        if (m_options.verbose) {
+            printf("Updated bitlink title to: %s\n", new_title);
+        }
+    }
+
+    bitlinkClicksTests() {
+        skipIfNoCredentials();
+        if (!testBitlinkId) {
+            testSkip("no test bitlink created");
+        }
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+        AbstractDataProvider clicks_dp = provider.getChildProvider("bitlinks")
+            .getChildProvider("clicks");
+
+        try {
+            hash<auto> result = clicks_dp.doRequest({
+                "bitlink": testBitlinkId,
+                "unit": "day",
+                "units": 7,
+            });
+
+            assertEq(True, result.hasKey("total_clicks"), "clicks result has total_clicks");
+            assertEq(True, result.hasKey("unit"), "clicks result has unit");
+            assertEq("day", result.unit);
+
+            if (m_options.verbose) {
+                printf("Clicks for %s: %d (last 7 days)\n", testBitlinkId, result.total_clicks);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 402) {
+                testSkip("clicks API requires upgraded plan");
+            }
+            rethrow;
+        }
+    }
+
+    campaignCrudTests() {
+        skipIfNoCredentials();
+        if (!testGroupGuid) {
+            testSkip("no test group GUID available");
+        }
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+
+        # Create campaign
+        AbstractDataProvider create_dp = provider.getChildProvider("campaigns")
+            .getChildProvider("create");
+        string campaign_name = "Test Campaign " + now_us().toString();
+        try {
+            hash<auto> result = create_dp.doRequest({
+                "name": campaign_name,
+                "description": "Automated test campaign",
+                "group_guid": testGroupGuid,
+            });
+            assertEq(True, result.hasKey("guid"), "campaign has guid");
+            testCampaignGuid = result.guid;
+
+            if (m_options.verbose) {
+                printf("Created campaign: %s (%s)\n", campaign_name, result.guid);
+            }
+
+            # Update campaign
+            AbstractDataProvider update_dp = provider.getChildProvider("campaigns")
+                .getChildProvider("update");
+            string new_name = "Updated " + campaign_name;
+            hash<auto> updated = update_dp.doRequest({
+                "campaign_guid": testCampaignGuid,
+                "name": new_name,
+            });
+            assertEq(new_name, updated.name, "campaign name updated");
+
+            # Verify persistence
+            AbstractDataProvider campaigns_dp = provider.getChildProvider("campaigns");
+            AbstractDataProviderRecordIterator iter = campaigns_dp.searchRecords(NOTHING, {
+                "campaign_guid": testCampaignGuid,
+            });
+            assertEq(True, iter.valid());
+            hash<auto> re_read = iter.getValue();
+            assertEq(new_name, re_read.name, "campaign name persisted after update");
+        } catch (hash<ExceptionInfo> ex) {
+            # Campaigns may require higher tier plan
+            if (ex.arg.status_code == 402 || ex.arg.status_code == 403) {
+                if (m_options.verbose) {
+                    printf("Campaign tests skipped (plan limitation): %s\n", ex.desc);
+                }
+                testSkip("campaign API requires upgraded plan");
+            }
+            rethrow;
+        }
+    }
+
+    bsdsTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+        AbstractDataProvider bsds_dp = provider.getChildProvider("bsds");
+
+        AbstractDataProviderRecordIterator iter = bsds_dp.searchRecords();
+        # BSDs may or may not exist depending on account
+        if (iter.valid()) {
+            hash<auto> bsd = iter.getValue();
+            assertEq(True, bsd.hasKey("domain"), "bsd has domain field");
+
+            if (m_options.verbose) {
+                printf("Found BSD: %s\n", bsd.domain);
+            }
+        } else {
+            if (m_options.verbose) {
+                printf("No branded short domains found\n");
+            }
+        }
+        assertEq(True, True, "BSDs endpoint accessible");
+    }
+
+    qrCodeTests() {
+        skipIfNoCredentials();
+        if (!testGroupGuid) {
+            testSkip("no test group GUID available");
+        }
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+
+        # List QR codes (may be empty, just verify endpoint works)
+        AbstractDataProvider qrcodes_dp = provider.getChildProvider("qr-codes");
+        try {
+            AbstractDataProviderRecordIterator iter = qrcodes_dp.searchRecords(NOTHING, {
+                "group_guid": testGroupGuid,
+            });
+            if (iter.valid()) {
+                hash<auto> qr = iter.getValue();
+                assertEq(True, qr.hasKey("qrcode_id"), "QR code has qrcode_id");
+
+                if (m_options.verbose) {
+                    printf("Found QR code: %s (%s)\n", qr.title ?? "untitled", qr.qrcode_id);
+                }
+            } else {
+                if (m_options.verbose) {
+                    printf("No QR codes found in group\n");
+                }
+            }
+            assertEq(True, True, "QR codes listing endpoint accessible");
+        } catch (hash<ExceptionInfo> ex) {
+            # QR codes may require higher tier plan
+            if (ex.arg.status_code == 402 || ex.arg.status_code == 403) {
+                if (m_options.verbose) {
+                    printf("QR code tests skipped (plan limitation): %s\n", ex.desc);
+                }
+                testSkip("QR code API requires upgraded plan");
+            }
+            rethrow;
+        }
+    }
+
+    triggerExampleDataTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+
+        # Get the bitlink-click event provider
+        AbstractDataProvider events_dp = provider.getChildProvider("events");
+        AbstractDataProvider click_dp = events_dp.getChildProvider(
+            BitlyDataProvider::EVENT_BITLINK_CLICK);
+        assertEq(True, click_dp.val(), "bitlink-click event provider exists");
+
+        # Get example event data
+        auto example = click_dp.getExampleEventData(BitlyDataProvider::EVENT_BITLINK_CLICK);
+        assertEq(True, example.val(), "example event data returned");
+        assertEq(True, example.hasKey("id"), "example has id field");
+        assertEq(True, example.hasKey("link") || example.hasKey("long_url"),
+            "example has link or long_url field");
+        assertEq(True, example.hasKey("title"), "example has title field");
+        assertEq(True, example.hasKey("archived"), "example has archived field");
+        assertEq(True, example.hasKey("tags"), "example has tags field");
+        assertEq(True, example.hasKey("created_at"), "example has created_at field");
+
+        if (m_options.verbose) {
+            printf("Example event data: %y\n", example);
+        }
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        BitlyDataProvider::BitlyDataProvider provider = getProvider();
+
+        # Note: Bitly API v4 does not support campaign deletion;
+        # test campaigns will be cleaned up manually or expire
+
+        # Delete test bitlink
+        if (testBitlinkId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("bitlinks")
+                    .getChildProvider("delete");
+                hash<auto> result = delete_dp.doRequest({"bitlink": testBitlinkId});
+                assertEq(True, result.deleted, "bitlink deleted");
+
+                if (m_options.verbose) {
+                    printf("Deleted test bitlink: %s\n", testBitlinkId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete bitlink %s: %s: %s\n", testBitlinkId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}

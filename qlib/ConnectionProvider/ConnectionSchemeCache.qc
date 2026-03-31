@@ -78,10 +78,14 @@ public class ConnectionSchemeCache {
 
             "awsrests": "AwsRestClient",
 
+            "huggingface": "HuggingFaceRestClient",
+
             "bigcommerceres": "BigCommerceRestClient",
 
             "billwerkrest": "BillwerkRestClient",
             "billwerkrests": "BillwerkRestClient",
+
+            "bitlyrest": "BitlyRestClient",
 
             # provided by the amqp module
             "amqp": "AmqpDataProvider",
