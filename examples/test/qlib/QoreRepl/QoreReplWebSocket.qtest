@@ -292,6 +292,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
                 break;
             }
         }
+        assertTrue(exists error_msg, "Expected error message for unknown command");
         assertEq("error", error_msg.type, "Unknown command should return error");
         assertRegex("Unknown command", error_msg.description, "Should mention unknown command");
 

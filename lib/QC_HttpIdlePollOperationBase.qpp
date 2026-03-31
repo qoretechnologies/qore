@@ -159,9 +159,9 @@ qclass HttpIdlePollOperationBase [
 
 //! Creates the idle poll operation
 /** @param sock the Socket to monitor for new data
-    @param ttl_us keep-alive timeout in microseconds
+    @param ttl_ms keep-alive timeout in milliseconds (converted to microseconds internally)
 */
-HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] sock, int ttl_us) {
+HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] sock, timeout ttl_ms) {
     QoreSocketObject* sock_ptr = *sock;
 
     // Store socket as Qore member for DGC visibility
@@ -176,7 +176,7 @@ HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] sock, int ttl_us
 
     sock_ptr->ref();
     self->setPrivate(CID_HTTPIDLEPOLLOPERATIONBASE,
-        new HttpIdlePollOperationPriv(self, sock_ptr, ttl_us));
+        new HttpIdlePollOperationPriv(self, sock_ptr, (int64_t)ttl_ms * 1000));
 }
 
 //! Destroys the object
