@@ -6317,20 +6317,26 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
     }
     QoreValue left_expr = op->getLeft();
 
-    // Native ListPush path: when lvalue is a simple local variable, emit
-    // LoadLocal + ListPush + StoreLocal to avoid AST delegation (which causes
-    // reload trackers → extra refcount → copy-on-write → O(n²) in loops)
+    // Native ListPush path: emit Load + ListPush + Store for local and closure
+    // variables to avoid AST delegation (which relies on AST nodes stripped in AOT)
     if (left_expr.hasNode()) {
         auto* var = dynamic_cast<const VarRefNode*>(left_expr.getInternalNode());
-        if (var && var->getType() == VT_LOCAL && var->ref.id && !var->ref.id->closureUse()) {
+        if (var && var->ref.id
+                && (var->getType() == VT_LOCAL || var->getType() == VT_CLOSURE
+                    || var->getType() == VT_LOCAL_TS)) {
+            bool is_closure = var->ref.id->closureUse()
+                || var->getType() == VT_CLOSURE || var->getType() == VT_LOCAL_TS;
+
             // Lower the value to push first
             QoreIRValue push_val = lowerExpression(op->getRight(), error);
             if (!push_val.isValid()) {
                 return QoreIRValue();
             }
 
-            // Load current list from local
-            QoreIRValue list_val = builder.createLoadLocal(var->ref.id, op->loc)->result;
+            // Load current list
+            QoreIRValue list_val = is_closure
+                ? builder.createLoadClosure(var->ref.id, op->loc)->result
+                : builder.createLoadLocal(var->ref.id, op->loc)->result;
 
             if (!exception_stack.empty()) {
                 // Invoke path: ListPush can throw (type errors, etc.)
@@ -6344,22 +6350,34 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 inst->invoke_opcode = QoreIROpcode::ListPush;
                 builder.setBlock(normal_block);
 
-                // Store result back to local
-                auto* store_inst = builder.createStoreLocal(var->ref.id, inst->result, op->loc);
-                store_inst->exception_target = exception_stack.back();
+                // Store result back
+                if (is_closure) {
+                    auto* store_inst = builder.createStoreClosure(var->ref.id, inst->result, op->loc);
+                    store_inst->exception_target = exception_stack.back();
+                } else {
+                    auto* store_inst = builder.createStoreLocal(var->ref.id, inst->result, op->loc);
+                    store_inst->exception_target = exception_stack.back();
+                }
                 return inst->result;
             }
 
             // Normal path
             QoreIRValue result = builder.createListPush(list_val, push_val, op->loc)->result;
 
-            // Store result back to local (may be new list if auto-vivified from NOTHING)
-            builder.createStoreLocal(var->ref.id, result, op->loc);
+            // Store result back (may be new list if auto-vivified from NOTHING)
+            if (is_closure) {
+                auto* store_inst = builder.createStoreClosure(var->ref.id, result, op->loc);
+                if (!exception_stack.empty()) {
+                    store_inst->exception_target = exception_stack.back();
+                }
+            } else {
+                builder.createStoreLocal(var->ref.id, result, op->loc);
+            }
             return result;
         }
     }
 
-    // Fallback: delegate to AST for non-local lvalues (global, closure, complex lvalues)
+    // Fallback: delegate to AST for non-local lvalues (global, complex lvalues)
     if (!guardLValueBase(left_expr, error, true)) {
         return QoreIRValue();
     }
