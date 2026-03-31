@@ -480,6 +480,16 @@ public:
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
 
+    //! Marks a stream as streaming for subsequent data delivery
+    /** Used by client multiplex to mark a CONNECT stream as streaming after
+        the response headers are received, so that subsequent DATA frames are
+        delivered as intermediate body data via hasStreamingData()/takeStreamData().
+
+        @param stream_id the HTTP/2 stream ID
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setStreamStreaming(int32_t stream_id);
+
     //! Check if any streaming client streams have body data available
     /** Used by client multiplex to deliver intermediate body data for streaming streams.
         @param stream_id [out] set to the stream ID with data, if found

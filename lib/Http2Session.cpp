@@ -1295,6 +1295,14 @@ void Http2Session::cleanupStream(int32_t stream_id) {
     }
 }
 
+void Http2Session::setStreamStreaming(int32_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lg(m);
+    auto it = streams.find(stream_id);
+    if (it != streams.end()) {
+        it->second->streaming = true;
+    }
+}
+
 bool Http2Session::hasStreamingData(int32_t& out_stream_id) {
     std::lock_guard<std::recursive_mutex> lg(m);
     for (auto& it : streams) {

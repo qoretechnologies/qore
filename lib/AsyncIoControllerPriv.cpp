@@ -37,6 +37,7 @@
 #include "qore/intern/QC_SocketPollOperationBase.h"
 // QC_SocketPollOperation.h no longer needed — controller_notifier plumbing removed
 #include "qore/intern/QC_Http2PollOperationBase.h"
+#include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -712,6 +713,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
             }
             if (on_async_io_thread) {
                 // On an async I/O thread — cancel directly to avoid deadlock
+                ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
+                    uh.c_str(), it->second.owner.c_str());
                 direct_pinfo = it->second;
                 it->second = PollInfo();
                 cache.erase(it);
@@ -833,6 +836,8 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
                 // (enqueuing+waiting from the I/O thread would deadlock since the I/O thread
                 // is the one that processes cancel commands)
                 direct_cancel = true;
+                ASYNC_IO_TRACE("cache.erase CANCEL_DIRECT key='%s' owner='%s'\n",
+                    uh.c_str(), it->second.owner.c_str());
                 direct_pinfo = it->second;
                 it->second = PollInfo();
                 cache.erase(it);
@@ -913,6 +918,8 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
                 for (auto& key : keys) {
                     auto it = cache.find(key);
                     if (it != cache.end()) {
+                        ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DIRECT key='%s' owner='%s'\n",
+                            key.c_str(), owner_str.c_str());
                         direct_pinfos.push_back(it->second);
                         it->second = PollInfo();
                         cache.erase(it);
@@ -954,6 +961,8 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             for (auto& key : keys) {
                 auto it = cache.find(key);
                 if (it != cache.end()) {
+                    ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_POSTSIGNAL key='%s' owner='%s'\n",
+                        key.c_str(), owner_str.c_str());
                     direct_pinfos.push_back(it->second);
                     it->second = PollInfo();
                     cache.erase(it);
@@ -1015,6 +1024,8 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                     // Unregister from EventLoop via the I/O thread command queue
                     do_signal = enqueueCmdLocked(IoCommand::Cancel, key);
                 }
+                ASYNC_IO_TRACE("cache.erase CANCEL_BY_PROGRAM key='%s' owner='%s'\n",
+                    key.c_str(), it->second.owner.c_str());
                 cancel_pinfos.push_back(it->second);
                 it->second = PollInfo();
                 cache.erase(it);
@@ -1469,6 +1480,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             int64 now_us = get_epoch_us();
 
             for (auto& [key, pinfo] : cache) {
+                ASYNC_IO_TRACE("Phase2 iter key='%s' owner='%s' poll_info=%p "
+                    "spop_base=%p in_flight=%d\n",
+                    key.c_str(), pinfo.owner.c_str(), (void*)pinfo.poll_info,
+                    (void*)pinfo.spop_base, (int)pinfo.continue_poll_in_flight);
                 // Skip Qore ops whose continuePoll is dispatched to a worker
                 if (pinfo.continue_poll_in_flight) {
                     if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
@@ -1506,9 +1521,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     // by a WakeSocket command (worker queued data), or has
                     // SSL-buffered data (invisible to epoll)
                     bool ssl_pending = pinfo.sock && pinfo.sock->hasPendingData();
-                    if (poll_sock && !ready_socket_hashes.count(sock_hash)
-                            && !woken_hashes.count(sock_hash)
-                            && !ssl_pending) {
+                    bool ready = ready_socket_hashes.count(sock_hash) > 0;
+                    bool woken = woken_hashes.count(sock_hash) > 0;
+                    if (poll_sock && !ready && !woken && !ssl_pending) {
+                        ASYNC_IO_TRACE("Phase2 SKIP key='%s' sock='%s' "
+                            "ready=%d woken=%d ssl=%d events=%d\n",
+                            key.c_str(), sock_hash.c_str(), (int)ready, (int)woken,
+                            (int)ssl_pending, events);
                         // Socket not ready - skip continuePoll, update deadline
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             if (poll_deadline_us == 0 || pinfo.timeout_date_us < poll_deadline_us) {
@@ -1581,9 +1600,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             } else if (op.spop_base) {
                 // C++ poll operation — safe to call directly on I/O thread
                 ExceptionSink poll_xsink;
+                ASYNC_IO_TRACE("Phase2 C++ continuePoll key='%s'\n", op.key.c_str());
                 printd(5, "AsyncIoController Phase2: C++ continuePoll key='%s'\n",
                     op.key.c_str());
                 QoreHashNode* new_info = op.spop_base->continuePoll(&poll_xsink);
+                ASYNC_IO_TRACE("Phase2 C++ continuePoll key='%s' -> %s goal=%d\n",
+                    op.key.c_str(), new_info ? "poll_info" : "null",
+                    op.spop_base->goalReached());
                 printd(5, "AsyncIoController Phase2: C++ continuePoll key='%s' -> %s goalReached=%d\n",
                     op.key.c_str(), new_info ? "poll_info" : "null",
                     op.spop_base->goalReached());
@@ -1605,6 +1628,25 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 auto* h2_op = dynamic_cast<Http2PollOperationPriv*>(op.spop_base);
                 if (h2_op) {
                     std::vector<int32_t> ready = h2_op->getAndClearDataReadyStreams();
+                    if (!ready.empty()) {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        for (int32_t sid : ready) {
+                            op.spop_obj->ref();
+                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                                std::to_string(sid));
+                        }
+                    }
+                }
+
+                // Same for HTTP/2 client poll ops (WebSocket/SSE over H2 CONNECT)
+                auto* h2_client_op = dynamic_cast<Http2ClientPollOperationPriv*>(op.spop_base);
+                if (h2_client_op) {
+                    std::vector<int32_t> ready = h2_client_op->getAndClearDataReadyStreams();
+                    ASYNC_IO_TRACE("H2Client dispatch: key='%s' ready_streams=%d\n",
+                        op.key.c_str(), (int)ready.size());
                     if (!ready.empty()) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
@@ -1644,18 +1686,33 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 if (trusted) {
                     // Trusted Qore code — run on I/O thread
                     ExceptionSink poll_xsink;
+                    ASYNC_IO_TRACE("Phase2 Qore evalMethod BEFORE key='%s'\n", op.key.c_str());
+                    int64 eval_start = get_epoch_us();
                     ValueHolder rv(op.spop_obj->evalMethod("continuePoll", nullptr,
                         &poll_xsink), &poll_xsink);
+                    int64 eval_elapsed = get_epoch_us() - eval_start;
+                    ASYNC_IO_TRACE("Phase2 Qore evalMethod AFTER key='%s' elapsed=%lldms\n",
+                        op.key.c_str(), (long long)(eval_elapsed / 1000));
+                    if (eval_elapsed > 100000) { // > 100ms
+                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' SLOW: %lldms\n",
+                            op.key.c_str(), (long long)(eval_elapsed / 1000));
+                    }
                     if (poll_xsink) {
                         QoreException* ex_obj = poll_xsink.getException();
                         if (ex_obj) {
                             result.ex_hash = ex_obj->makeExceptionObject();
                         }
                         poll_xsink.clear();
+                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> EXCEPTION\n",
+                            op.key.c_str());
                     } else if (rv->getType() == NT_HASH) {
                         result.new_poll_info = rv.release().get<QoreHashNode>();
+                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> poll_info\n",
+                            op.key.c_str());
                     } else {
                         result.completed = true;
+                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> COMPLETED (type=%d)\n",
+                            op.key.c_str(), rv->getType());
                     }
 
                     // Check for stream data ready (H3 extended CONNECT streams)
@@ -1736,6 +1793,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 PollInfo& pinfo = it->second;
 
                 if (result.ex_hash || result.timed_out || result.completed) {
+                    ASYNC_IO_TRACE("Phase3 REMOVE key='%s' ex=%p timeout=%d completed=%d\n",
+                        result.key.c_str(), (void*)result.ex_hash, (int)result.timed_out,
+                        (int)result.completed);
                     // Operation finished (error, timeout, or completed)
                     // Clean up extra fds before unregistering main socket
                     unregisterExtraFds(result.key, xsink);
@@ -1789,6 +1849,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         QoreObject* poll_sock = getSocketFromPollInfo(result.new_poll_info,
                             sock_hash, events, xsink);
                         if (!*xsink && poll_sock) {
+                            ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
+                                result.key.c_str(), sock_hash.c_str(), events);
                             updateEventLoopRegistration(result.key, poll_sock, sock_hash, events,
                                 xsink);
                             // Update extra fd registrations
@@ -1954,8 +2016,13 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         // Poll for events
+        ASYNC_IO_TRACE("poll: timeout_ms=%d deadline=%lld registered_fds=%d cache_size=%d\n",
+            timeout_ms, (long long)poll_deadline_us,
+            (int)registered_fds.size(), (int)cache.size());
         std::vector<QoreEventInfo> events;
+        int64 poll_start_us = get_epoch_us();
         int count = loop->poll(events, timeout_ms, xsink);
+        int64 poll_elapsed_us = get_epoch_us() - poll_start_us;
         if (*xsink) {
             const QoreStringNode* err = xsink->getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc = xsink->getExceptionDesc().get<const QoreStringNode>();
@@ -1966,6 +2033,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         // Build ready socket hash set: always clear first, then populate from poll results
+        ASYNC_IO_TRACE("poll returned: count=%d elapsed=%lldus (timeout_ms=%d)\n",
+            count, (long long)poll_elapsed_us, timeout_ms);
         ready_socket_hashes.clear();
 
         // Collect timer events and socket events from poll results
@@ -2212,6 +2281,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                         for (auto& key : keys) {
                             auto it = cache.find(key);
                             if (it != cache.end()) {
+                                ASYNC_IO_TRACE("cache.erase IO_CMD_QUIT key='%s' owner='%s'\n",
+                                    key.c_str(), it->second.owner.c_str());
                                 unregisterFromEventLoop(key, xsink);
                                 // Move PollInfo out of cache
                                 quit_pinfos.push_back(it->second);
@@ -2256,6 +2327,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                         auto it = cache.find(cmd.key);
                         if (it != cache.end()) {
                             found = true;
+                            ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
+                                cmd.key.c_str(), it->second.owner.c_str());
                             unregisterFromEventLoop(cmd.key, xsink);
                             pinfo_copy = it->second;
                             // Clear the cache entry without cleanup (we'll do it after delivery)
@@ -2305,6 +2378,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                             auto it = cache.find(key);
                             if (it != cache.end() && it->second.owner == cmd.owner) {
                                 found = true;
+                                ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL_OWNER key='%s' owner='%s'\n",
+                                    key.c_str(), cmd.owner.c_str());
                                 unregisterFromEventLoop(key, xsink);
                                 pinfo_copy = it->second;
                                 it->second = PollInfo();
@@ -2414,6 +2489,10 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                                 cancel_cond_map.erase(cit);
                             }
 
+                            ASYNC_IO_TRACE("cache.erase IO_CMD_CONTINUE_POLL_RESULT key='%s' "
+                                "owner='%s' ex=%p completed=%d\n",
+                                cmd.key.c_str(), pinfo.owner.c_str(),
+                                (void*)cmd.continue_poll_ex, (int)cmd.continue_poll_completed);
                             pinfo.cleanup(xsink);
                             cache.erase(it);
                         } else {
@@ -2562,6 +2641,9 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
         }
     }
 
+    ASYNC_IO_TRACE("updateEventLoop key='%s' sock='%s' events=%d prev_sock=%p\n",
+        key.c_str(), sock_hash.c_str(), events, (void*)prev_sock);
+
     if (prev_sock && prev_sock_hash == sock_hash) {
         // Same socket object - check if underlying fd changed (e.g., reconnection to
         // a different host during multi-step poll operations like OAuth2 token refresh)
@@ -2570,6 +2652,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
             int curr_fd = s->getPollableDescriptor();
+            ASYNC_IO_TRACE("updateEventLoop key='%s' same_sock fd=%d\n", key.c_str(), curr_fd);
             auto fd_it = registered_fds.find(sock_hash);
             if (fd_it != registered_fds.end() && fd_it->second != curr_fd) {
                 fd_changed = true;
@@ -2647,9 +2730,14 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
             int fd = s->getPollableDescriptor();
+            ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' fd=%d events=%d\n",
+                key.c_str(), sock_hash.c_str(), fd, union_events);
             loop->add(fd, union_events, socket, xsink);
             registered_fds[sock_hash] = fd;
             s->deref(xsink);
+        } else {
+            ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' NO_FD (not pollable)\n",
+                key.c_str(), sock_hash.c_str());
         }
         socket_refcounts[sock_hash] = 1;
         registered_events[sock_hash] = union_events;

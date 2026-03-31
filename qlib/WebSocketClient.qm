@@ -38,6 +38,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) Logger
 %requires AsyncSocketIo
+%requires HttpClientIo
 
 # Optional AsyncAPI support
 %try-module AsyncApi >= 1.0
@@ -652,12 +653,29 @@ public class WebSocketClient inherits Logger::LoggerWrapper, ConnectionProvider:
         #! The poll operation for async I/O mode
         /** @since WebSocketClient 2.4
         */
-        *WebSocketClientPollOperation poll_op;
+        *object poll_op;
 
         #! Owner string for the async I/O controller
         /** @since WebSocketClient 2.4
         */
         string async_owner;
+
+        #! HttpClientIo connection manager for fully async H2/H3 connections
+        /** Created lazily when connecting via HTTP/2. Manages the H2 connection
+            lifecycle, protocol negotiation, and async I/O controller registration.
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientConnectionManager hcio_mgr;
+
+        #! HttpClientIo stream handle for the active H2 CONNECT tunnel
+        /** Provides async sendData()/readData() for bidirectional WebSocket
+            frame I/O over the H2 CONNECT stream.
+            @since WebSocketClient 2.4
+        */
+        *HttpClientIo::HttpClientStreamHandle hcio_stream;
+
+        #! True when the H2 connection uses HttpClientIo (fully async)
+        bool use_hcio = False;
 
         #! Mutex for delivery scheduling (prevents concurrent delivery tasks)
         /** @since WebSocketClient 2.4
@@ -2028,34 +2046,43 @@ ws.setEventQueue();
             stream_id = 0;
         }
 
-        # Async I/O with the controller only works reliably for HTTP/1.1;
-        # HTTP/2 and HTTP/3 multiplex streams over a shared connection, so
-        # socket-level poll events don't map to WebSocket stream readiness.
-        # async_io is reset from async_io_requested on each new connection in connectIntern().
-        if (transport != "http1") {
-            logDebug("async I/O not supported for %s transport; falling back to sync mode", transport);
-            async_io = False;
-            return;
-        }
-
         AsyncSocketIo::AsyncSocketIoController controller = AsyncSocketIo::getGlobalAsyncIoController();
 
-        # Create poll_op with on_poll_complete callback for background-thread delivery
-        # This callback fires on the I/O thread after each continuePoll() cycle
-        poll_op = new WebSocketClientPollOperation(hc, transport, stream_id,
-            active_extensions, timeout_ms, logger, raw_callback,
-            sub () {
-                try {
-                    scheduleDelivery();
-                } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err == "OBJECT-ALREADY-DELETED") {
-                        return;
-                    }
-                    rethrow;
+        code<nothing()> on_poll_complete = sub () {
+            try {
+                scheduleDelivery();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "OBJECT-ALREADY-DELETED") {
+                    return;
                 }
-            });
+                rethrow;
+            }
+        };
+
         async_owner = "wsc-" + get_random_string(12);
         async_close_sent = False;
+
+        if (transport == "http2" && use_hcio && hcio_stream) {
+            # HTTP/2 via HttpClientIo: the connection manager already submitted the
+            # H2 poll operation to the async I/O controller. Create an adapter that
+            # reads from the stream handle and parses WS frames.
+            poll_op = new WebSocketClientH2PollOp(hcio_stream, active_extensions,
+                logger, raw_callback, on_poll_complete);
+            # Start the reader — no controller.submit() needed
+            async_owner = "wsc-hcio-" + get_random_string(12);
+            async_close_sent = False;
+            return;
+        } else if (transport == "http3") {
+            # HTTP/3: Same pattern as H2 but using QUIC stream
+            # TODO: implement WebSocketClientH3PollOp when H3 client is fully async
+            logDebug("async I/O not yet supported for HTTP/3 transport; falling back to sync mode");
+            async_io = False;
+            return;
+        } else {
+            # HTTP/1.1: Use C++ WebSocket poll operation directly on the socket
+            poll_op = new WebSocketClientPollOperation(hc, transport, stream_id,
+                active_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
+        }
 
         # Submit the poll operation to the global controller
         # The completion callback fires when the operation reaches goal (connection closed)
@@ -2224,7 +2251,7 @@ ws.setEventQueue();
                 if (!self) {
                     return;
                 }
-                *WebSocketClientPollOperation op = poll_op;
+                *object op = poll_op;
                 if (!op) {
                     AutoLock al(delivery_mutex);
                     delivery_active = False;
@@ -2861,8 +2888,29 @@ ws.setEventQueue();
             }
         }
 
-        # RFC 8441: Use extended CONNECT for HTTP/2 WebSocket
+        # RFC 8441: Use HttpClientIo for fully async HTTP/2 WebSocket when HTTPS
+        # is available (required for ALPN-based H2 negotiation)
         bool h2_active = hc.isHttp2Active();
+        if (h2_active && async_io) {
+            try {
+                return connectHttp2WebSocketViaHcio(hdr, \info, reconnect);
+            } catch (hash<ExceptionInfo> ex) {
+                if ((ex.err == "HTTP2-CONNECT-ERROR" || ex.err == "HTTPCLIENT-CONNECT-ERROR")
+                        && http_opts.http_version == "auto") {
+                    logInfo("HttpClientIo H2 WebSocket failed (%s); retrying with HTTP/1.1",
+                        ex.err);
+                    use_hcio = False;
+                    remove hcio_stream;
+                    http_opts.http_version = "1.1";
+                    hc = new HTTPClient(http_opts);
+                    hc.connect();
+                    return connectHttp1WebSocket(hdr, \info, reconnect);
+                }
+                rethrow;
+            }
+        }
+
+        # Fallback: sync HTTPClient path for non-async or non-H2 connections
         if (h2_active) {
             try {
                 return connectHttp2WebSocket(hdr, \info, reconnect);
@@ -3017,6 +3065,103 @@ ws.setEventQueue();
         }
 
         processExtensions(rhdr);
+        finishConnect();
+
+        return rh;
+    }
+
+    #! RFC 8441: HTTP/2 WebSocket handshake via HttpClientIo (fully async)
+    /** Uses HttpClientIo's connection manager for the H2 connection and
+        Http2ClientStreamHandle for bidirectional CONNECT streaming.
+        All I/O is async — no HTTPClient synchronous methods are called.
+
+        @since WebSocketClient 2.4
+    */
+    private hash<auto> connectHttp2WebSocketViaHcio(hash<auto> hdr, *reference<hash<auto>> info,
+            *bool reconnect) {
+        http2_websocket = True;
+        h2_stream_id = 0;
+        remove h2_frame_buf;
+        logDebug("Using HttpClientIo for HTTP/2 WebSocket handshake (RFC 8441)");
+
+        # Build the HTTPS URL from the WebSocket URL
+        string url = http_opts.url;
+        url =~ s/^ws:/http:/;
+        url =~ s/^wss:/https:/;
+
+        # Create connection manager if not yet created
+        if (!hcio_mgr) {
+            auto mgr_opts = <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h2",
+                "logger": logger,
+                "request_timeout": timeout_ms,
+            };
+            if (http_opts.ssl_verify_cert.typeCode() == NT_BOOLEAN && !http_opts.ssl_verify_cert) {
+                mgr_opts.accept_all_certs = True;
+            }
+            if (http_opts.proxy) {
+                mgr_opts.proxy_url = http_opts.proxy;
+            }
+            hcio_mgr = new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+
+        # Build CONNECT headers with RFC 8441 protocol header
+        hdr = (http_opts.headers ?? {}) + hdr;
+        hdr.":protocol" = "websocket";
+
+        # Add Sec-WebSocket-Key for RFC 8441 handshake
+        string key = get_random_string(16).toBase64();
+        hdr."Sec-WebSocket-Key" = key;
+        hdr."Sec-WebSocket-Version" = sprintf("%d", ws_ver);
+
+        # Add extension offers
+        if (offered_extensions) {
+            *string ext_header = WebSocketExtensionRegistry::buildOfferHeader(offered_extensions);
+            if (ext_header) {
+                hdr."Sec-WebSocket-Extensions" = ext_header;
+                logDebug("Offering extensions: %s", ext_header);
+            }
+        }
+
+        string path = hc.getConnectionPath() ?? "/";
+
+        # Acquire stream and start bidirectional CONNECT
+        hcio_stream = hcio_mgr.acquireAndStartStreaming(url, "CONNECT", path, hdr, True);
+
+        # Read the CONNECT response headers
+        auto rh = hcio_stream.readData(timeout_ms);
+        if (!rh || rh.typeCode() != NT_HASH) {
+            raiseError("HttpClientIo H2 CONNECT to %y failed: no response received", url);
+        }
+
+        # Store stream ID
+        h2_stream_id = rh.stream_id ?? hcio_stream.getStreamId();
+        logDebug("HttpClientIo: CONNECT accepted, stream_id=%d", h2_stream_id);
+
+        # Validate status code (200 OK)
+        int status_code = rh.status_code ?? rh.headers.":status".toInt();
+        if (status_code != 200) {
+            raiseError("HTTP/2 server at URL %y returned status code '%d' to our WebSocket CONNECT request; "
+                "expecting '200 OK' (RFC 8441)", url, status_code);
+        }
+
+        # Validate Sec-WebSocket-Accept
+        hash<auto> rhdr = rh.headers ?? rh;
+        if (!rhdr."sec-websocket-accept") {
+            raiseError("HTTP/2 server at URL %y did not return the Sec-WebSocket-Accept header", url);
+        }
+
+        {
+            string expected_key = ws_get_response_key(key);
+            if (rhdr."sec-websocket-accept" != expected_key) {
+                raiseError("HTTP/2 server at URL %y returned invalid Sec-WebSocket-Accept: %y; expecting %y",
+                    url, rhdr."sec-websocket-accept", expected_key);
+            }
+        }
+
+        processExtensions(rhdr);
+
+        use_hcio = True;
         finishConnect();
 
         return rh;
@@ -4915,6 +5060,407 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     private logDebug(string fmt, ...) {
         if (logger) {
             logger.log(LoggerLevel::DEBUG, "WebSocketClientPollOperation: " + vsprintf(fmt, argv));
+        }
+    }
+}
+
+#! Async WebSocket adapter for HTTP/2 via HttpClientIo
+/** Uses the stream queue + listener pattern from the async I/O controller.
+    The H2 connection's poll operation (managed by HttpClientConnectionManager)
+    drains incoming DATA frames to a Queue.  The controller dispatches
+    \c onStreamData() to the worker pool, which calls \c notifyIo() on this
+    adapter.  The adapter reads from the Queue, parses WS frames, and delivers
+    messages to \c recv_channel for consumption by the WebSocketClient delivery
+    mechanism.
+
+    Sending is non-blocking via \c Http2ClientConnection::sendStreamData().
+
+    No threads, no blocking I/O — fully event-driven via the async I/O controller.
+
+    @since WebSocketClient 2.4
+*/
+public class WebSocketClientH2PollOp {
+    private {
+        #! HttpClientIo stream handle for CONNECT tunnel
+        HttpClientIo::HttpClientStreamHandle stream;
+
+        #! H2 connection (for sendStreamData and registerStreamListener)
+        HttpClientIo::Http2ClientConnection h2conn;
+
+        #! Queue for incoming H2 DATA (populated by C++ drainStreamQueues)
+        Queue data_queue();
+
+        #! The H2 CONNECT stream ID
+        int stream_id;
+
+        #! Channel for received processed WS messages
+        Channel recv_channel(-1);
+
+        #! Buffer for incomplete WS frames spanning multiple H2 DATA chunks
+        binary stream_buf;
+
+        #! Active WebSocket extensions
+        *list<AbstractWebSocketExtension> active_extensions;
+
+        #! Logger
+        *Logger::LoggerInterface logger;
+
+        #! Raw frame callback
+        *code raw_callback;
+
+        #! Callback invoked after frames are delivered
+        *code on_poll_complete;
+
+        #! True when the connection is closed
+        bool closed = False;
+
+        #! True when WS close handshake is complete
+        bool ws_close_sent = False;
+
+        #! Close code
+        int close_code = 0;
+
+        #! Close reason
+        string close_reason = "";
+
+        #! True if extensions are active
+        bool has_extensions = False;
+    }
+
+    #! Creates the adapter and registers for async stream data delivery
+    /** @param stream the HttpClientIo stream handle (after startStreaming CONNECT)
+        @param active_extensions negotiated WebSocket extensions
+        @param logger optional logger
+        @param raw_callback optional raw frame callback
+        @param on_poll_complete callback for delivery scheduling
+    */
+    constructor(HttpClientIo::HttpClientStreamHandle stream,
+            *list<AbstractWebSocketExtension> active_extensions,
+            *Logger::LoggerInterface logger,
+            *code raw_callback,
+            *code on_poll_complete) {
+        self.stream = stream;
+        self.active_extensions = active_extensions;
+        self.logger = logger;
+        self.raw_callback = raw_callback;
+        self.on_poll_complete = on_poll_complete;
+        self.has_extensions = active_extensions ? True : False;
+
+        # Get typed H2 connection and stream ID
+        h2conn = cast<HttpClientIo::Http2ClientConnection>(stream.getConnection());
+        stream_id = stream.getStreamId();
+        @assert(stream_id > 0, "stream_id must be positive after startStreaming");
+
+        # Register Queue to enable the data_ready_streams signal mechanism.
+        # The Queue itself may stay empty (the ChannelAction delivers data to
+        # the stream handle's data_channel instead), but its presence in the
+        # stream_queues map causes handleReading() to signal data_ready_streams
+        # when data is dispatched for this stream.
+        h2conn.registerStreamQueue(stream_id, data_queue);
+
+        # Register ourselves as the stream listener — the controller's worker
+        # pool calls notifyIo() when data_ready_streams signals this stream
+        h2conn.registerStreamListener(stream_id, self);
+    }
+
+    #! Called on a worker thread when stream data has been dispatched
+    /** Dispatched by the async I/O controller via onStreamData() -> notifyIo().
+        Reads from the stream handle's Channel (non-blocking), parses WS frames,
+        delivers to recv_channel.
+    */
+    notifyIo() {
+        if (closed) {
+            return;
+        }
+
+        bool have_frames = drainAndParseFrames();
+
+        if (have_frames && on_poll_complete) {
+            on_poll_complete();
+        }
+    }
+
+    #! Drains data from the stream handle's Channel and parses WS frames
+    /** Uses readData(0s) for non-blocking Channel read.
+        @return True if any frames were processed
+    */
+    private bool drainAndParseFrames() {
+        # Read available data from the stream handle.
+        # Use 1ms timeout since 0s/NOTHING is treated as "wait forever" by Channel.recv()
+        bool got_data = False;
+        int max_reads = 100;
+        while (max_reads-- > 0) {
+            auto data;
+            try {
+                data = stream.readData(1ms);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
+                    if (!closed) {
+                        closed = True;
+                        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
+                            "reason": "H2 stream closed"});
+                    }
+                    return True;
+                }
+                rethrow;
+            }
+            if (!exists data) {
+                break;  # Timeout = no data available
+            }
+            if (data.typeCode() == NT_HASH) {
+                if (data.end_stream) {
+                    if (!closed) {
+                        closed = True;
+                        recv_channel.send({"type": "closed", "code": WSCC_AbnormalClosure,
+                            "reason": "H2 stream ended"});
+                    }
+                    return True;
+                }
+                if (data.error) {
+                    if (!closed) {
+                        closed = True;
+                        recv_channel.send({"type": "error", "error": data.error});
+                    }
+                    return True;
+                }
+                # Headers or other metadata — skip (already processed during handshake)
+                continue;
+            }
+            # Binary body data
+            if (data.typeCode() == NT_BINARY && data.size() > 0) {
+                stream_buf = stream_buf.size() > 0 ? stream_buf + data : data;
+                got_data = True;
+            }
+        }
+
+        if (!got_data && (!stream_buf || !stream_buf.size())) {
+            return False;
+        }
+
+        # Parse complete WS frames from the buffer
+        bool processed_any = False;
+        while (stream_buf && stream_buf.size() >= 2) {
+            *int frame_len = ws_get_frame_size(stream_buf);
+            if (!exists frame_len || stream_buf.size() < frame_len) {
+                break;
+            }
+            binary frame_data = stream_buf.substr(0, frame_len);
+            stream_buf = stream_buf.size() > frame_len
+                ? stream_buf.substr(frame_len) : binary();
+
+            hash<WsMsgInfo> h = ws_parse_frame(frame_data);
+            processFrame(h);
+            processed_any = True;
+        }
+        return processed_any;
+    }
+
+    #! Processes a single parsed WS frame
+    private processFrame(hash<WsMsgInfo> h) {
+        int op = h.op;
+
+        if (op == WSOP_Close) {
+            close_code = h.close ?? WSCC_NormalClosure;
+            close_reason = h.msg ?? "";
+            if (!ws_close_sent) {
+                ws_close_sent = True;
+                try {
+                    h2conn.sendStreamData(stream_id,
+                        ws_encode_message("", WSOP_Close, True));
+                } catch (hash<ExceptionInfo> ex) {
+                    logError("close response send error: %s: %s", ex.err, ex.desc);
+                }
+            }
+            closed = True;
+            recv_channel.send({"type": "closed", "code": close_code, "reason": close_reason});
+            return;
+        }
+
+        if (op == WSOP_Ping) {
+            try {
+                h2conn.sendStreamData(stream_id,
+                    ws_encode_message(h.msg ?? "", WSOP_Pong, True));
+            } catch (hash<ExceptionInfo> ex) {
+                logError("pong send error: %s: %s", ex.err, ex.desc);
+            }
+            recv_channel.send({"type": "ping", "data": h.msg});
+            return;
+        }
+
+        if (op == WSOP_Pong) {
+            recv_channel.send({"type": "pong", "data": h.msg});
+            return;
+        }
+
+        if (op == WSOP_Text || op == WSOP_Binary) {
+            string frame_type = op == WSOP_Text ? "text" : "binary";
+
+            hash<auto> ctx = {
+                "op": op,
+                "fin": h.fin ?? True,
+                "first": True,
+                "rsv1": h.rsv1 ?? False,
+                "rsv2": h.rsv2 ?? False,
+                "rsv3": h.rsv3 ?? False,
+            };
+
+            if (has_extensions) {
+                int rsv_bits = (ctx.rsv1 ? WS_RSV1 : 0)
+                    | (ctx.rsv2 ? WS_RSV2 : 0)
+                    | (ctx.rsv3 ? WS_RSV3 : 0);
+                if (rsv_bits) {
+                    foreach AbstractWebSocketExtension ext in (active_extensions) {
+                        if (!ext.validateRsvBits(rsv_bits, op)) {
+                            logError("Extension %s rejected RSV bits", ext.getName());
+                            sendClose(WSCC_ProtocolError);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (raw_callback) {
+                int rc = raw_callback(h);
+                if (rc == WSC_Continue) {
+                    return;
+                }
+                if (rc == WSC_Break) {
+                    sendClose(WSCC_NormalClosure);
+                    recv_channel.send({"type": "closed", "code": WSCC_NormalClosure,
+                        "reason": "raw callback requested break"});
+                    return;
+                }
+            }
+
+            auto processed = h.msg;
+            if (active_extensions) {
+                for (int i = active_extensions.size() - 1; i >= 0; --i) {
+                    processed = active_extensions[i].transformIncoming(processed, ctx);
+                }
+            }
+
+            recv_channel.send({"type": frame_type, "data": processed});
+            return;
+        }
+    }
+
+    #! Gets the next received message (blocking with timeout)
+    *hash<auto> getReceivedMessage(timeout to = -1) {
+        if (to < 0) {
+            *hash<auto> result = recv_channel.tryRecv();
+            return result.value;
+        }
+        try {
+            return recv_channel.recv(to);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "CHANNEL-TIMEOUT") {
+                return NOTHING;
+            }
+            rethrow;
+        }
+    }
+
+    #! Returns True if there are received messages waiting
+    bool hasReceivedMessages() {
+        return !recv_channel.empty();
+    }
+
+    #! Sends a text message (non-blocking — queues via sendStreamData)
+    sendText(string text) {
+        queueOutgoingFrame(text, WSOP_Text, True);
+    }
+
+    #! Sends a binary message (non-blocking)
+    sendBinary(binary data) {
+        queueOutgoingFrame(data, WSOP_Binary, True);
+    }
+
+    #! Sends a raw message (non-blocking)
+    sendRaw(data msg, int op, bool fin) {
+        queueOutgoingFrame(msg, op, fin);
+    }
+
+    #! Sends a close frame (non-blocking)
+    sendClose(int code, *string reason) {
+        if (ws_close_sent) {
+            return;
+        }
+        ws_close_sent = True;
+        try {
+            h2conn.sendStreamData(stream_id,
+                ws_encode_message(reason ?? "", WSOP_Close, True, True, 0, code));
+        } catch (hash<ExceptionInfo> ex) {
+            logError("close send error: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Sends a ping frame (non-blocking)
+    sendPing(data msg) {
+        try {
+            h2conn.sendStreamData(stream_id, ws_encode_message(msg, WSOP_Ping, True));
+        } catch (hash<ExceptionInfo> ex) {
+            logError("ping send error: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! Sends a pong frame (non-blocking)
+    sendPong(data msg) {
+        try {
+            h2conn.sendStreamData(stream_id, ws_encode_message(msg, WSOP_Pong, True));
+        } catch (hash<ExceptionInfo> ex) {
+            logError("pong send error: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    bool isClosed() {
+        return closed;
+    }
+
+    int getCloseCode() {
+        return close_code;
+    }
+
+    string getCloseReason() {
+        return close_reason;
+    }
+
+    bool hasError() {
+        return False;
+    }
+
+    *hash<auto> getError() {
+        return NOTHING;
+    }
+
+    clearCallbacks() {
+        on_poll_complete = NOTHING;
+    }
+
+    bool goalReached() {
+        return closed;
+    }
+
+    #! Queues an outgoing frame with extension transforms and client masking
+    private queueOutgoingFrame(data msg, int op, bool fin) {
+        int rsv_bits = 0;
+        if (active_extensions) {
+            hash<auto> ctx = {
+                "op": op,
+                "fin": fin,
+                "first": True,
+            };
+            foreach AbstractWebSocketExtension ext in (active_extensions) {
+                hash<auto> result = ext.transformOutgoing(msg, ctx);
+                msg = result.data;
+                rsv_bits |= result.rsv_bits;
+            }
+        }
+        h2conn.sendStreamData(stream_id, ws_encode_message(msg, op, True, fin, rsv_bits));
+    }
+
+    private logError(string fmt, ...) {
+        if (logger) {
+            logger.log(LoggerLevel::ERROR, "WebSocketClientH2PollOp: " + vsprintf(fmt, argv));
         }
     }
 }

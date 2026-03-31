@@ -4998,6 +4998,32 @@ nothing Socket::sendHttp2Trailers(int stream_id, hash<string, string> trailers) 
     return QoreValue();
 }
 
+//! Queues data for sending on an HTTP/2 stream (non-blocking)
+/** Queues the DATA frame in the nghttp2 session's send buffer without any
+    socket-level I/O.  The actual TCP write is deferred to the I/O thread's
+    @ref SocketHttp2ClientMultiplexPollOperation::continuePoll() cycle which
+    calls \c sendPendingData() non-blockingly.
+
+    This is functionally identical to @ref Socket::sendHttp2StreamData() and
+    is provided as an explicit non-blocking entry point for use from
+    application threads when the socket is driven by the async I/O controller.
+
+    @note The @ref HTTPClient class overrides @ref sendHttp2StreamData() and
+    adds a blocking flush and receive probe — use this method or
+    @ref Http2ClientConnection::sendStreamData() to avoid that.
+
+    @param stream_id the HTTP/2 stream ID (from @ref sendHttp2Connect())
+    @param data binary data to queue
+    @param end_stream if @ref True, signals end of stream
+
+    @throw HTTP2-ERROR if no HTTP/2 session is active
+
+    @since %Qore 2.3
+*/
+nothing Socket::queueHttp2StreamData(int stream_id, *binary data, softbool end_stream = False) {
+    return s->sendHttp2StreamData((int32_t)stream_id, data, (bool)end_stream, xsink);
+}
+
 //! Read HTTP/2 stream data with blocking timeout
 /** Blocks until data is available on the specified stream, the stream
     completes (END_STREAM), or the timeout expires.

@@ -43,6 +43,7 @@
 
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreClassIntern.h"
@@ -8197,7 +8198,9 @@ int32_t SocketHttp2ClientMultiplexPollOperation::submitRequest(const char* metho
 }
 
 QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSink* xsink) {
+    ASYNC_IO_TRACE("H2Mux::continuePoll() acquiring lock...\n");
     AutoLocker al(sock->priv->m);
+    ASYNC_IO_TRACE("H2Mux::continuePoll() lock acquired\n");
 
     // Check if the socket was closed by another thread (e.g., connection
     // close during h2c probe timeout).  Without this check, subsequent
@@ -8241,8 +8244,9 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     // Continue reading for more responses
                 }
 
-                // First try to send any pending data (requests submitted from other threads)
-                if (h2_session->wantWrite()) {
+                // First try to send any pending data (requests submitted from other threads
+                // or left in send_buffer from a previous non-blocking send attempt)
+                if (h2_session->wantWrite() || h2_session->hasPendingData()) {
                     int srv = h2_session->sendPendingData(0, xsink);
                     if (*xsink) {
                         return nullptr;
@@ -8282,6 +8286,41 @@ QoreHashNode* SocketHttp2ClientMultiplexPollOperation::continuePoll(ExceptionSin
                     // Responses are dispatched via callback mechanism
                     // Continue the loop to process more frames
                     continue;
+                }
+
+                // Check for CONNECT streams that received response headers
+                // but no END_STREAM (RFC 8441: server accepts the tunnel with
+                // 200 OK, then stream stays open for bidirectional data).
+                // Deliver headers as output so the caller knows the CONNECT
+                // was accepted — without this, streaming CONNECT responses
+                // would never be visible to getOutput().
+                {
+                    std::unique_ptr<Http2StreamInfo> hdr_stream =
+                        h2_session->takeHeadersReadyStreamCopy();
+                    if (hdr_stream && hdr_stream->is_connect) {
+                        ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
+                        resp->setKeyValue("stream_id", (int64)hdr_stream->stream_id, xsink);
+                        resp->setKeyValue("status_code", (int64)hdr_stream->status_code, xsink);
+                        // Copy response headers
+                        if (!hdr_stream->headers.empty()) {
+                            ReferenceHolder<QoreHashNode> hdrs(new QoreHashNode(autoTypeInfo), xsink);
+                            for (auto& [k, vals] : hdr_stream->headers) {
+                                if (!vals.empty()) {
+                                    hdrs->setKeyValue(k.c_str(),
+                                        new QoreStringNode(vals[0]), xsink);
+                                }
+                            }
+                            resp->setKeyValue("headers", hdrs.release(), xsink);
+                        }
+                        // NOT end_stream — the CONNECT tunnel is still open
+                        // Mark the stream as streaming for subsequent data delivery
+                        h2_session->setStreamStreaming(hdr_stream->stream_id);
+                        {
+                            AutoLocker rl(response_lock);
+                            completed_responses.push_back(resp.release());
+                        }
+                        continue;
+                    }
                 }
 
                 // Check for intermediate body data on streaming streams.

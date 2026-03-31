@@ -67,6 +67,9 @@ Http2ClientPollOperationPriv::~Http2ClientPollOperationPriv() {
 }
 
 void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    // Clean up stream queues
+    clearStreamQueues(xsink);
+
     // Clean up stream actions
     {
         AutoLocker al(stream_lock);
@@ -417,6 +420,15 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         }
     }
 
+    // Drain registered CONNECT stream queues after every read poll cycle.
+    // The inner op may have processed DATA frames for CONNECT streams that
+    // need to be delivered to handler threads via their registered Queues.
+    drainStreamQueues(xsink);
+    if (*xsink) {
+        setError("HTTP2-READ-ERROR", "stream queue drain error", xsink);
+        return nullptr;
+    }
+
     // Drain completed responses
     int drain_count = 0;
     while (true) {
@@ -481,10 +493,30 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
                 }
                 action->complete(xsink);
             } else {
-                // Non-streaming (PromiseAction): send complete output
+                // Non-streaming (PromiseAction) or intermediate streaming data:
+                // send complete output to action
                 action->execute(output->hashRefSelf(), xsink);
             }
             action->deref(xsink);
+
+            // Signal stream data ready for registered stream listeners
+            // (WebSocket/SSE consumers that use the onStreamData dispatch).
+            // The ChannelAction already pushed data to the stream handle's
+            // Channel; this ensures the controller dispatches onStreamData()
+            // so the listener's notifyIo() fires.
+            {
+                int32_t sid32 = (int32_t)stream_id_val;
+                ASYNC_IO_TRACE("H2Client handleReading: stream=%d queues=%d is_end=%d\n",
+                    sid32, (int)stream_queues.size(), (int)is_end);
+                if (!stream_queues.empty()
+                        && stream_queues.find(sid32) != stream_queues.end()) {
+                    ASYNC_IO_TRACE("H2Client handleReading: signaling stream=%d\n", sid32);
+                    if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                            sid32) == data_ready_streams.end()) {
+                        data_ready_streams.push_back(sid32);
+                    }
+                }
+            }
         }
     }
 
@@ -535,6 +567,7 @@ void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     if (current_op) {
         current_op->abort(xsink);
     }
+    clearStreamQueues(xsink);
     notifyPendingStreams("HTTP2-ABORT", "connection aborted", xsink);
     connection_priv = nullptr;
     // Note: do NOT close socket or delete current_op here to avoid
@@ -580,6 +613,145 @@ void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
     if (connection_priv) {
         connection_priv->onConnectionReady();  // Pure C++, no evalMethod, I/O-thread safe
     }
+}
+
+// --- Stream queue management (I/O thread) ---
+
+void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
+        QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj) {
+    // If there's already a registration for this stream, update it
+    auto it = stream_queues.find(stream_id);
+    if (it != stream_queues.end()) {
+        if (it->second.notifier && it->second.notifier != notifier) {
+            ExceptionSink xsink;
+            it->second.notifier->deref(&xsink);
+        }
+        if (it->second.notifier_obj && it->second.notifier_obj != notifier_obj) {
+            ExceptionSink xsink;
+            it->second.notifier_obj->deref(&xsink);
+        }
+        if (it->second.queue != queue) {
+            ExceptionSink xsink;
+            it->second.queue->deref(&xsink);
+        }
+        if (it->second.queue_obj != queue_obj) {
+            ExceptionSink xsink;
+            it->second.queue_obj->deref(&xsink);
+        }
+        it->second = {queue, queue_obj, notifier, notifier_obj};
+    } else {
+        stream_queues[stream_id] = {queue, queue_obj, notifier, notifier_obj};
+    }
+
+    // Immediately drain any data already buffered in the H2 session for this
+    // stream. DATA frames may arrive in the same TCP segment as the CONNECT
+    // response. Without this drain, the data sits there until the next
+    // continuePoll cycle — which may never come because the SSL/TCP buffers
+    // are empty (analogous to the SSL data hole).
+    ExceptionSink xsink;
+    while (true) {
+        BinaryNode* data = sock_obj->readHttp2StreamData(stream_id, 0, &xsink);
+        if (xsink) {
+            xsink.clear();
+            break;
+        }
+        if (!data || data->empty()) {
+            if (data) {
+                data->deref(&xsink);
+            }
+            break;
+        }
+        queue->push(&xsink, data);
+        if (xsink) {
+            data->deref(&xsink);
+            xsink.clear();
+            break;
+        }
+        data_ready_streams.push_back(stream_id);
+    }
+}
+
+void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
+    if (stream_queues.empty()) {
+        return;
+    }
+
+    std::vector<int32_t> completed;
+    for (auto& [stream_id, info] : stream_queues) {
+        int drain_count = 0;
+        while (true) {
+            BinaryNode* data = sock_obj->readHttp2StreamData(stream_id, 0, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (!data) {
+                break;
+            }
+            if (data->empty()) {
+                data->deref(xsink);
+                break;
+            }
+            ++drain_count;
+            info.queue->push(xsink, data);
+            if (*xsink) {
+                data->deref(xsink);
+                return;
+            }
+        }
+
+        if (drain_count > 0) {
+            data_ready_streams.push_back(stream_id);
+        }
+
+        // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
+        if (sock_obj->isHttp2StreamRemoteClosed(stream_id)
+                || sock_obj->isHttp2StreamClosed(stream_id)) {
+            // Push NOTHING sentinel so the handler thread knows the stream is done
+            info.queue->push(xsink, QoreValue());
+            if (*xsink) {
+                return;
+            }
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                    stream_id) == data_ready_streams.end()) {
+                data_ready_streams.push_back(stream_id);
+            }
+            completed.push_back(stream_id);
+        }
+    }
+
+    // Remove completed streams and deref their objects
+    for (int32_t sid : completed) {
+        auto it = stream_queues.find(sid);
+        if (it != stream_queues.end()) {
+            it->second.queue->deref(xsink);
+            it->second.queue_obj->deref(xsink);
+            if (it->second.notifier) {
+                it->second.notifier->deref(xsink);
+            }
+            if (it->second.notifier_obj) {
+                it->second.notifier_obj->deref(xsink);
+            }
+            stream_queues.erase(it);
+        }
+    }
+}
+
+void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
+    for (auto& [stream_id, info] : stream_queues) {
+        info.queue->push(xsink, QoreValue());
+        if (info.notifier) {
+            info.notifier->notify();
+        }
+        info.queue->deref(xsink);
+        info.queue_obj->deref(xsink);
+        if (info.notifier) {
+            info.notifier->deref(xsink);
+        }
+        if (info.notifier_obj) {
+            info.notifier_obj->deref(xsink);
+        }
+    }
+    stream_queues.clear();
 }
 
 // --- Stream management (app thread) ---
@@ -994,6 +1166,45 @@ nothing Http2ClientPollOperationBase::sendStreamData(int stream_id, data data,
             "data must be string or binary, got type '%s'",
             data.getFullTypeName());
     }
+}
+
+//! Registers a Queue for async stream data delivery
+/** Called when setting up a CONNECT stream (WebSocket, SSE, etc.) to receive
+    data asynchronously via the I/O controller's drain cycle.
+
+    @param stream_id the HTTP/2 stream ID
+    @param queue the Queue for data delivery
+    @param notifier optional EventNotifier for handler wake-up
+
+    @note Must be called on the I/O controller thread before the handler starts reading.
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::registerStreamQueue(int stream_id,
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) {
+    Queue* queue_ptr = queue.release();
+    const_cast<QoreObject*>(obj_queue)->ref();
+
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+        notifier_obj_ptr->ref();
+    }
+
+    priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
+        const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+}
+
+//! Clears all stream queue registrations
+/** Pushes NOTHING sentinels to all registered queues and notifies all
+    EventNotifiers so handler threads wake up and see the stream is closed.
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::clearStreamQueues() {
+    priv->clearStreamQueues(xsink);
 }
 
 //! Returns the socket object

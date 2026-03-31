@@ -41,6 +41,8 @@
 #include <atomic>
 #include <string>
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
 
 //! C++ base for Http2ClientPollOperation providing SocketPollOperationBase fast path
 /** This class implements the HTTP/2 client poll state machine (connecting,
@@ -178,6 +180,54 @@ public:
         return nullptr;
     }
 
+    //! Information for a registered CONNECT stream queue
+    struct StreamQueueInfo {
+        Queue* queue;                       //!< ref'd Queue for data delivery
+        QoreObject* queue_obj;              //!< ref'd QoreObject wrapping queue (for DGC)
+        QoreEventNotifier* notifier;        //!< ref'd EventNotifier for wake-up, or nullptr
+        QoreObject* notifier_obj;           //!< ref'd QoreObject wrapping notifier, or nullptr
+    };
+
+    //! Registers a Queue (and optional EventNotifier) for a CONNECT stream
+    /** Called from the Qore wrapper when dispatching an extended CONNECT handler.
+        The Queue is used for non-blocking data delivery from the I/O thread.
+
+        @param stream_id the HTTP/2 stream ID
+        @param queue the Queue for data delivery (ref transferred)
+        @param queue_obj the QoreObject wrapping queue (ref transferred)
+        @param notifier optional EventNotifier for wake-up (ref transferred), or nullptr
+        @param notifier_obj optional QoreObject wrapping notifier (ref transferred), or nullptr
+    */
+    DLLLOCAL void registerStreamQueue(int32_t stream_id, Queue* queue, QoreObject* queue_obj,
+        QoreEventNotifier* notifier, QoreObject* notifier_obj);
+
+    //! Returns and clears the list of stream IDs that had data drained
+    /** Called by the controller after continuePoll() returns. For each
+        stream ID, the controller dispatches onStreamData() to the worker pool.
+    */
+    DLLLOCAL std::vector<int32_t> getAndClearDataReadyStreams() {
+        std::vector<int32_t> result;
+        result.swap(data_ready_streams);
+        return result;
+    }
+
+    //! Drains all registered stream queues after a read poll cycle
+    /** Reads all available data from each registered stream's per-stream buffer
+        and pushes it to the corresponding Queue.  When a stream is closed, a
+        NOTHING sentinel is pushed and the registration is removed.
+
+        @param xsink exception sink
+    */
+    DLLLOCAL void drainStreamQueues(ExceptionSink* xsink);
+
+    //! Clears all stream queue registrations (called in abort/cleanup)
+    /** Pushes NOTHING sentinels to all queues, notifies all EventNotifiers,
+        and derefs all queue/notifier objects.
+
+        @param xsink exception sink
+    */
+    DLLLOCAL void clearStreamQueues(ExceptionSink* xsink);
+
     //! Cleanup all referenced objects (must be called before destructor)
     DLLLOCAL void cleanup(ExceptionSink* xsink);
 
@@ -239,6 +289,16 @@ private:
         This raw pointer is used for direct I/O-thread calls (onConnectionReady).
     */
     AbstractHttpPollConnectionPriv* connection_priv = nullptr;
+
+    //! Registered stream queues for CONNECT stream data delivery (stream_id -> info)
+    std::unordered_map<int32_t, StreamQueueInfo> stream_queues;
+
+    //! Stream IDs that had data drained in the last continuePoll cycle
+    /** Populated by drainStreamQueues(), consumed by the controller after
+        continuePoll() returns. The controller dispatches onStreamData()
+        to the worker pool for each stream ID.
+    */
+    std::vector<int32_t> data_ready_streams;
 
     static constexpr int MAX_DRAIN_ITERATIONS = 100;
     static constexpr int MAX_EMPTY_READS = 100;

@@ -46,6 +46,19 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
     private {
         #! Logger (kept for Qore-level logging)
         *LoggerInterface h2_logger;
+
+        #! Stream data listeners: stream_id string -> listener object
+        /** The listener's notifyIo() method is called from the controller's
+            worker pool when the I/O thread drains data to the stream's Queue.
+        */
+        hash<string, object> stream_listeners;
+
+        #! Pending data flags for streams where onStreamData fired before
+        #! the listener was registered (race between I/O dispatch and handler setup)
+        hash<string, bool> pending_stream_data;
+
+        #! Lock protecting stream listener registration and dispatch
+        Mutex stream_listener_mutex();
     }
 
     #! Creates the poll operation for a new connection
@@ -72,6 +85,40 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
     #! Prevent copying — shared socket/mutex/state would corrupt
     private copy() {
         throw "COPY-ERROR", "Http2ClientPollOperation cannot be copied";
+    }
+
+    #! Registers a listener to be notified when stream data arrives
+    /** @param stream_id the HTTP/2 stream ID
+        @param listener an object with a notifyIo() method
+    */
+    registerStreamListener(int stream_id, object listener) {
+        *bool has_pending;
+        {
+            AutoLock al(stream_listener_mutex);
+            stream_listeners{stream_id} = listener;
+            has_pending = remove pending_stream_data{stream_id};
+        }
+        # Replay missed notification if data arrived before registration
+        if (has_pending) {
+            listener.notifyIo();
+        }
+    }
+
+    #! Called on a worker thread when stream data has been drained to a Queue
+    /** Dispatched by the async I/O controller after the C++ drain pushes data.
+        Wakes the handler thread for the given stream.
+        @param stream_key stream identifier (string representation of stream_id)
+    */
+    nothing onStreamData(string stream_key) {
+        int stream_id = stream_key.toInt();
+        AutoLock al(stream_listener_mutex);
+        *object listener = stream_listeners{stream_id};
+        if (listener) {
+            listener.notifyIo();
+        } else {
+            # Buffer the notification — the handler hasn't registered yet
+            pending_stream_data{stream_id} = True;
+        }
     }
 
     #! Cancels a pending request

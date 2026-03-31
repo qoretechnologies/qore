@@ -143,6 +143,22 @@ public class Http2ClientConnection inherits HttpClientConnection {
         }
     }
 
+    #! Registers a Queue for async stream data delivery
+    /** @param stream_id the HTTP/2 stream ID
+        @param queue the unlimited Queue for data delivery
+    */
+    registerStreamQueue(int stream_id, Queue queue) {
+        poll_op.registerStreamQueue(stream_id, queue);
+    }
+
+    #! Registers a listener to be notified when stream data arrives
+    /** @param stream_id the HTTP/2 stream ID
+        @param listener an object with a notifyIo() method
+    */
+    registerStreamListener(int stream_id, object listener) {
+        poll_op.registerStreamListener(stream_id, listener);
+    }
+
     #! Submits a request with streaming support (HTTP/2-specific)
     /** @param method HTTP method
         @param path request path

@@ -85,7 +85,7 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
         @param listener an object with a notifyIo() method (e.g., WebSocketConnection)
     */
     registerStreamListener(int stream_id, object listener) {
-        bool has_pending;
+        *bool has_pending;
         {
             AutoLock al(stream_listener_mutex);
             stream_listeners{stream_id} = listener;
