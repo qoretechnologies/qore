@@ -895,6 +895,22 @@ cargo install tree-sitter-cli@0.26.5
       - polling-based event triggers for customers, orders, products, carts, shipments, and addresses
       - action catalog integration with 13 actions and 11 triggers
       - connection support with \c bigcommerceres:// URL scheme
+    - @ref bitlyrestclientintro "BitlyRestClient" module
+      - new module providing a REST client for <a href="https://bitly.com/">Bitly</a>'s URL shortening API
+      - supports Bearer token and OAuth2 authentication
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides BitlyRestConnection for connection management with \c bitlyrest:// URL scheme
+    - @ref bitlydataproviderintro "BitlyDataProvider" module
+      - new module providing a data provider API for <a href="https://bitly.com/">Bitly</a> URL shortening
+      - bitlink management (shorten, create, update, delete, list)
+      - click analytics (click summary with time-based aggregation)
+      - group and organization management
+      - campaign management (create, update, list)
+      - branded short domains (list)
+      - QR code management (create, update, list)
+      - custom bitlink support
+      - polling-based event triggers for bitlink click activity
+      - action catalog integration with 21 actions and 1 trigger
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username

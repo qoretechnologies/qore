@@ -86,6 +86,7 @@ public class DataProvider {
 
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
+            "bitly": "BitlyDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",

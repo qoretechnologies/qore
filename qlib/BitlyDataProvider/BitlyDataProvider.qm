@@ -1,0 +1,614 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore BitlyDataProvider module definition
+
+/*  BitlyDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) BitlyRestClient
+%requires RestClientIo
+
+module BitlyDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Bitly URL shortening and link management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new BitlyDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": BitlyDataProvider::AppName,
+            "display_name": "Bitly",
+            "short_desc": "Bitly URL shortening and link management",
+            "desc": "Bitly is a URL shortening and link management platform for creating "
+                "branded links, QR codes, and tracking click analytics.\n\n"
+                "This integration supports creating, managing, and tracking bitlinks, "
+                "campaigns, QR codes, and engagement events.",
+            "scheme": "bitlyrest",
+            "logo": BitlyLogo,
+            "logo_file_name": "bitly-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Marketing, DataProvider::AppGroup::Analytics),
+        });
+
+        # ========== BITLINK ACTIONS ==========
+
+        # Shorten a URL
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/shorten",
+            "action": "shorten-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Shorten a URL",
+            "short_desc": "Create a shortened bitlink",
+            "desc": "Shorten a URL to create a new bitlink with optional custom domain",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyShortenBitlinkDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyBitlinkDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyShortenBitlinkRequestDataType::Fields),
+        });
+
+        # Create a Bitlink (advanced)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/create",
+            "action": "create-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Create a Bitlink",
+            "short_desc": "Create a bitlink with advanced options",
+            "desc": "Create a new bitlink with title, tags, and deep links",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyCreateBitlinkDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyBitlinkDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyCreateBitlinkRequestDataType::Fields),
+        });
+
+        # Update a Bitlink
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/update",
+            "action": "update-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Update a Bitlink",
+            "short_desc": "Update an existing bitlink",
+            "desc": "Update the destination URL, title, tags, or archive status of a bitlink",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyUpdateBitlinkDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyBitlinkDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyUpdateBitlinkRequestDataType::Fields),
+        });
+
+        # Delete a Bitlink
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/delete",
+            "action": "delete-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Delete a Bitlink",
+            "short_desc": "Delete an existing bitlink",
+            "desc": "Permanently delete a bitlink",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyDeleteBitlinkDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyDeleteBitlinkResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyDeleteBitlinkRequestDataType::Fields),
+        });
+
+        # Get Bitlink Click Summary
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/clicks",
+            "action": "get-bitlink-clicks",
+            "groups": "Bitlinks",
+            "display_name": "Get Bitlink Clicks",
+            "short_desc": "Get click summary for a bitlink",
+            "desc": "Retrieve aggregate click statistics for a bitlink over a specified "
+                "time period",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyBitlinkClicksDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyBitlinkClicksDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyBitlinkClicksRequestDataType::Fields),
+        });
+
+        # Create Custom Bitlink
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks/create-custom",
+            "action": "create-custom-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Create Custom Bitlink",
+            "short_desc": "Add a custom back-half to a bitlink",
+            "desc": "Add a custom back-half (slug) to an existing bitlink for branded URLs",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyCreateCustomBitlinkDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyBitlinkDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyCreateCustomBitlinkRequestDataType::Fields),
+        });
+
+        # List Bitlinks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks",
+            "action": "list-bitlinks",
+            "groups": "Bitlinks",
+            "display_name": "List Bitlinks",
+            "short_desc": "List bitlinks in a group",
+            "desc": "List bitlinks in a group with optional filtering by keyword, date, "
+                "tags, and more",
+            "action_code": DPAT_FIND,
+            "options": {
+                "bitlink": <ActionOptionInfo>{
+                    "display_name": "Bitlink",
+                    "short_desc": "Get a specific bitlink",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "bitlinks",
+                },
+                "group_guid": <ActionOptionInfo>{
+                    "display_name": "Group GUID",
+                    "short_desc": "Group to list bitlinks for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "groups",
+                    "preselected": True,
+                },
+                "keyword": <ActionOptionInfo>{
+                    "display_name": "Keyword",
+                    "short_desc": "Search by keyword",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "created_after": <ActionOptionInfo>{
+                    "display_name": "Created After",
+                    "short_desc": "Filter by creation date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "created_before": <ActionOptionInfo>{
+                    "display_name": "Created Before",
+                    "short_desc": "Filter by creation date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "modified_after": <ActionOptionInfo>{
+                    "display_name": "Modified After",
+                    "short_desc": "Filter by modification date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                },
+                "archived": <ActionOptionInfo>{
+                    "display_name": "Archived",
+                    "short_desc": "Filter by archive status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "on", "display_name": "Archived"},
+                        <AllowedValueInfo>{"value": "off", "display_name": "Not Archived"},
+                        <AllowedValueInfo>{"value": "both", "display_name": "Both"},
+                    ),
+                },
+                "custom_bitlink": <ActionOptionInfo>{
+                    "display_name": "Custom Bitlink",
+                    "short_desc": "Filter custom back-halves",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "on", "display_name": "Has Custom"},
+                        <AllowedValueInfo>{"value": "off", "display_name": "No Custom"},
+                        <AllowedValueInfo>{"value": "both", "display_name": "Both"},
+                    ),
+                },
+                "tags": <ActionOptionInfo>{
+                    "display_name": "Tags",
+                    "short_desc": "Filter by tags",
+                    "type": AbstractDataProviderTypeMap."*softlist",
+                },
+                "campaign_guid": <ActionOptionInfo>{
+                    "display_name": "Campaign GUID",
+                    "short_desc": "Filter by campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Bitlink
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bitlinks",
+            "action": "get-bitlink",
+            "groups": "Bitlinks",
+            "display_name": "Get a Bitlink",
+            "short_desc": "Get a single bitlink by ID",
+            "desc": "Retrieve a single bitlink by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "bitlink": <ActionOptionInfo>{
+                    "display_name": "Bitlink",
+                    "short_desc": "The bitlink ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "bitlinks",
+                },
+            },
+        });
+
+        # ========== GROUP ACTIONS ==========
+
+        # List Groups
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/groups",
+            "action": "list-groups",
+            "groups": "Groups",
+            "display_name": "List Groups",
+            "short_desc": "List all groups",
+            "desc": "List all groups in the account",
+            "action_code": DPAT_FIND,
+            "options": {
+                "group_guid": <ActionOptionInfo>{
+                    "display_name": "Group GUID",
+                    "short_desc": "Get a specific group",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "groups",
+                    "preselected": True,
+                },
+                "organization_guid": <ActionOptionInfo>{
+                    "display_name": "Organization GUID",
+                    "short_desc": "Filter by organization",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "organizations",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Update a Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/groups/update",
+            "action": "update-group",
+            "groups": "Groups",
+            "display_name": "Update a Group",
+            "short_desc": "Update an existing group",
+            "desc": "Update the name, organization, or branded short domains of a group",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyUpdateGroupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyGroupDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyUpdateGroupRequestDataType::Fields),
+        });
+
+        # Get a Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/groups",
+            "action": "get-group",
+            "groups": "Groups",
+            "display_name": "Get a Group",
+            "short_desc": "Get a single group by GUID",
+            "desc": "Retrieve a single group by its GUID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "group_guid": <ActionOptionInfo>{
+                    "display_name": "Group GUID",
+                    "short_desc": "The group GUID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "groups",
+                },
+            },
+        });
+
+        # ========== ORGANIZATION ACTIONS ==========
+
+        # List Organizations
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/organizations",
+            "action": "list-organizations",
+            "groups": "Organizations",
+            "display_name": "List Organizations",
+            "short_desc": "List all organizations",
+            "desc": "List all organizations in the account",
+            "action_code": DPAT_FIND,
+            "options": {
+                "organization_guid": <ActionOptionInfo>{
+                    "display_name": "Organization GUID",
+                    "short_desc": "Get a specific organization",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "organizations",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get an Organization
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/organizations",
+            "action": "get-organization",
+            "groups": "Organizations",
+            "display_name": "Get an Organization",
+            "short_desc": "Get a single organization by GUID",
+            "desc": "Retrieve a single organization by its GUID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "organization_guid": <ActionOptionInfo>{
+                    "display_name": "Organization GUID",
+                    "short_desc": "The organization GUID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "organizations",
+                },
+            },
+        });
+
+        # ========== CAMPAIGN ACTIONS ==========
+
+        # Create Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/campaigns/create",
+            "action": "create-campaign",
+            "groups": "Campaigns",
+            "display_name": "Create a Campaign",
+            "short_desc": "Create a new campaign",
+            "desc": "Create a new campaign for organizing and tracking bitlinks",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyCreateCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyCampaignDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyCreateCampaignRequestDataType::Fields),
+        });
+
+        # Update Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/campaigns/update",
+            "action": "update-campaign",
+            "groups": "Campaigns",
+            "display_name": "Update a Campaign",
+            "short_desc": "Update an existing campaign",
+            "desc": "Update the name or description of an existing campaign",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyUpdateCampaignDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyCampaignDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyUpdateCampaignRequestDataType::Fields),
+        });
+
+        # List Campaigns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "list-campaigns",
+            "groups": "Campaigns",
+            "display_name": "List Campaigns",
+            "short_desc": "List campaigns",
+            "desc": "List campaigns with optional filtering by group",
+            "action_code": DPAT_FIND,
+            "options": {
+                "campaign_guid": <ActionOptionInfo>{
+                    "display_name": "Campaign GUID",
+                    "short_desc": "Get a specific campaign",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "campaigns",
+                    "preselected": True,
+                },
+                "group_guid": <ActionOptionInfo>{
+                    "display_name": "Group GUID",
+                    "short_desc": "Filter by group",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "groups",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Campaign
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/campaigns",
+            "action": "get-campaign",
+            "groups": "Campaigns",
+            "display_name": "Get a Campaign",
+            "short_desc": "Get a single campaign by GUID",
+            "desc": "Retrieve a single campaign by its GUID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "campaign_guid": <ActionOptionInfo>{
+                    "display_name": "Campaign GUID",
+                    "short_desc": "The campaign GUID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "campaigns",
+                },
+            },
+        });
+
+        # ========== BSD ACTIONS ==========
+
+        # List BSDs
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/bsds",
+            "action": "list-bsds",
+            "groups": "Branded Short Domains",
+            "display_name": "List Branded Short Domains",
+            "short_desc": "List all branded short domains",
+            "desc": "List all branded short domains (BSDs) available in the account",
+            "action_code": DPAT_FIND,
+            "options": {},
+        });
+
+        # ========== QR CODE ACTIONS ==========
+
+        # Create QR Code
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/qr-codes/create",
+            "action": "create-qr-code",
+            "groups": "QR Codes",
+            "display_name": "Create a QR Code",
+            "short_desc": "Create a new QR code",
+            "desc": "Create a new QR code linked to a URL or existing bitlink with optional "
+                "appearance customization",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyCreateQrCodeDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyQrCodeDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyCreateQrCodeRequestDataType::Fields),
+        });
+
+        # Update QR Code
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/qr-codes/update",
+            "action": "update-qr-code",
+            "groups": "QR Codes",
+            "display_name": "Update a QR Code",
+            "short_desc": "Update an existing QR code",
+            "desc": "Update the title, destination, appearance, or archive status of a QR code",
+            "action_code": DPAT_API,
+            "data_provider_info": BitlyUpdateQrCodeDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new BitlyQrCodeDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                BitlyUpdateQrCodeRequestDataType::Fields),
+        });
+
+        # List QR Codes
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/qr-codes",
+            "action": "list-qr-codes",
+            "groups": "QR Codes",
+            "display_name": "List QR Codes",
+            "short_desc": "List QR codes in a group",
+            "desc": "List QR codes in a group with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "qrcode_id": <ActionOptionInfo>{
+                    "display_name": "QR Code ID",
+                    "short_desc": "Get a specific QR code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "qrcodes",
+                    "preselected": True,
+                },
+                "group_guid": <ActionOptionInfo>{
+                    "display_name": "Group GUID",
+                    "short_desc": "Group to list QR codes for",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "groups",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a QR Code
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/qr-codes",
+            "action": "get-qr-code",
+            "groups": "QR Codes",
+            "display_name": "Get a QR Code",
+            "short_desc": "Get a single QR code by ID",
+            "desc": "Retrieve a single QR code by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "qrcode_id": <ActionOptionInfo>{
+                    "display_name": "QR Code ID",
+                    "short_desc": "The QR code ID",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "required": True,
+                    "ref_data": "qrcodes",
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # Bitlink Click Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": BitlyDataProvider::AppName,
+            "path": "/events/" + EVENT_BITLINK_CLICK,
+            "action": EVENT_BITLINK_CLICK,
+            "groups": "Events",
+            "display_name": "Bitlink Click Event",
+            "short_desc": "Watch for bitlink click activity",
+            "desc": "Poll for bitlinks with new click activity in a group. "
+                "Emits events when bitlinks are modified (indicating new clicks)",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_BITLINK_CLICK,
+        });
+    };
+}
+
+/** @mainpage BitlyDataProvider Module
+
+    @tableofcontents
+
+    @section bitlydataproviderintro BitlyDataProvider Introduction
+
+    The %BitlyDataProvider module provides a data provider API for Bitly URL shortening
+    and link management services.
+
+    To use this module, use \c "%requires BitlyDataProvider" in your code.
+
+    @section bitlydataproviderrelnotes Release Notes
+
+    @subsection bitlydataproviderv1_0 BitlyDataProvider v1.0
+    - the initial version of the %BitlyDataProvider module
+*/
