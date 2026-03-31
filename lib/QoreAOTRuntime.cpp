@@ -617,8 +617,18 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         }
         return;
     }
+    // STATIC_METHOD_CALL: ref1(stringref) + ref2(stringref) + num_args(u8) + N×skipOneExpr
+    if (ek == AOTExprKind::STATIC_METHOD_CALL) {
+        rdr.readStringRef(p);  // class path
+        rdr.readStringRef(p);  // method name
+        uint8_t na = QoreAOTBinaryReader::readU8(p);
+        for (uint8_t i = 0; i < na; ++i) {
+            skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
     // Two-stringref kinds
-    if (ek == AOTExprKind::SELF_METHOD_CALL || ek == AOTExprKind::STATIC_METHOD_CALL
+    if (ek == AOTExprKind::SELF_METHOD_CALL
             || ek == AOTExprKind::STATIC_VARREF || ek == AOTExprKind::CONST_ENUM) {
         rdr.readStringRef(p);
         rdr.readStringRef(p);
@@ -639,6 +649,37 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         uint8_t na = QoreAOTBinaryReader::readU8(p);
         for (uint8_t i = 0; i < na; ++i) {
             skipOneExpr(rdr, p, e);  // each arg
+        }
+        return;
+    }
+    // CLOSURE_CREATE: flags(stringref) + class_type_path(stringref) + return_type(stringref)
+    //   + num_params(u16) + params + varargs(u8) + num_captured(u16) + captured
+    //   + has_ir(u8) + [ir_size(u32) + ir_data]
+    if (ek == AOTExprKind::CLOSURE_CREATE) {
+        rdr.readStringRef(p);  // flags
+        rdr.readStringRef(p);  // class_type_path
+        rdr.readStringRef(p);  // return type
+        uint16_t np = QoreAOTBinaryReader::readU16(p);
+        for (uint16_t i = 0; i < np; ++i) {
+            rdr.readStringRef(p);  // param name
+            rdr.readStringRef(p);  // param type
+            uint8_t hd = QoreAOTBinaryReader::readU8(p);
+            if (hd) {
+                std::string val_error;
+                QoreValue dv = rdr.readValue(p, e, val_error);
+                dv.discard(nullptr);
+            }
+        }
+        QoreAOTBinaryReader::readU8(p);  // varargs
+        uint16_t nc = QoreAOTBinaryReader::readU16(p);
+        for (uint16_t i = 0; i < nc; ++i) {
+            rdr.readStringRef(p);  // captured name
+            QoreAOTBinaryReader::readU32(p);  // parent slot
+        }
+        uint8_t has_ir = QoreAOTBinaryReader::readU8(p);
+        if (has_ir) {
+            uint32_t ir_size = QoreAOTBinaryReader::readU32(p);
+            p += ir_size;  // skip IR data
         }
         return;
     }
@@ -3347,8 +3388,17 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 }
                 break;
             }
+            case AOTExprKind::STATIC_METHOD_CALL: {
+                // ref1 = class path + ref2 = method name + u8 num_args + N×classifyAndWriteExpr-encoded args
+                reader.readStringRef(ptr);  // class path
+                reader.readStringRef(ptr);  // method name
+                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
+                for (uint8_t j = 0; j < num_args; ++j) {
+                    skipOneExpr(reader, ptr, end);
+                }
+                break;
+            }
             case AOTExprKind::SELF_METHOD_CALL:
-            case AOTExprKind::STATIC_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
                 reader.readStringRef(ptr);

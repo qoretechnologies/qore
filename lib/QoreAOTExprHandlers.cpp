@@ -31,10 +31,17 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/QoreAOTExprRegistry.h"
 #include "qore/intern/QoreParseListNode.h"
+#include "qore/intern/Function.h"
+#include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/qore_thread_intern.h"
+#include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreNamespaceIntern.h"
 
 // ============================================================================
 // FUNC_CALL (1)
@@ -516,15 +523,215 @@ static QoreValue read_expr_const_binary(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_closure_create(AOTExprWriteCtx& ctx) {
-    // Closures require the full AST context and cannot be serialized from just a node
-    // This is handled by GENERIC_EVAL or source fallback
+    // Closures in expression context are now serialized by classifyAndWriteExpr()
+    // in QoreAOTBinary.cpp. This handler is only called from the expression registry
+    // path which is not used for closure writes.
     return false;
 }
 
 static QoreValue read_expr_closure_create(AOTExprReadCtx& ctx) {
-    // Closures are resolved at runtime from the re-parsed source via buildContextForVariant()
-    // Mark as resolvable but return 0 — the slot will be filled from source
-    return QoreValue();
+    // Read flags
+    const char* flags_str = ctx.reader.readStringRef(ctx.ptr);
+    const char* class_type_path = ctx.reader.readStringRef(ctx.ptr);
+
+    bool is_lambda = false, is_in_method = false;
+    if (flags_str) {
+        is_lambda = (flags_str[0] == '1');
+        is_in_method = (strlen(flags_str) >= 3 && flags_str[2] == '1');
+    }
+
+    // Read return type
+    const char* ret_type_path = ctx.reader.readStringRef(ctx.ptr);
+    std::string type_error;
+    QoreAOTTypeResolver type_resolver(ctx.pgm);
+    const QoreTypeInfo* ret_type = (ret_type_path && *ret_type_path)
+        ? type_resolver.resolve(ret_type_path, type_error) : nullptr;
+
+    // Read params
+    uint16_t closure_num_params = QoreAOTBinaryReader::readU16(ctx.ptr);
+    std::vector<std::string> param_names(closure_num_params);
+    std::vector<const QoreTypeInfo*> param_types(closure_num_params);
+    std::vector<QoreValue> defaults(closure_num_params);
+    for (uint16_t p = 0; p < closure_num_params; ++p) {
+        const char* pname = ctx.reader.readStringRef(ctx.ptr);
+        param_names[p] = pname ? pname : "";
+        const char* ptype = ctx.reader.readStringRef(ctx.ptr);
+        param_types[p] = (ptype && *ptype)
+            ? type_resolver.resolve(ptype, type_error) : nullptr;
+        uint8_t has_default = QoreAOTBinaryReader::readU8(ctx.ptr);
+        if (has_default) {
+            std::string val_error;
+            defaults[p] = ctx.reader.readValue(ctx.ptr, ctx.end, val_error);
+        }
+    }
+    bool closure_has_varargs = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+
+    // Read captured variable names and parent slot indices
+    uint16_t num_captured = QoreAOTBinaryReader::readU16(ctx.ptr);
+    std::vector<std::string> captured_names(num_captured);
+    std::vector<int32_t> captured_parent_slots(num_captured, -1);
+    for (uint16_t c = 0; c < num_captured; ++c) {
+        const char* cname = ctx.reader.readStringRef(ctx.ptr);
+        captured_names[c] = cname ? cname : "";
+        captured_parent_slots[c] = static_cast<int32_t>(QoreAOTBinaryReader::readU32(ctx.ptr));
+    }
+
+    // Read closure body IR
+    uint8_t has_ir = QoreAOTBinaryReader::readU8(ctx.ptr);
+    if (!has_ir) {
+        ctx.error = "closure has no IR data";
+        return QoreValue();
+    }
+
+    uint32_t ir_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    const uint8_t* ir_end_ptr = ctx.ptr + ir_size;
+
+    // Resolve class for method context
+    const QoreClass* closure_class = nullptr;
+    if (class_type_path && *class_type_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        closure_class = qore_root_ns_private::runtimeFindClass(
+            *pp->RootNS, class_type_path, found_ns);
+    }
+
+    // Construct UserClosureFunction + UserClosureVariant
+    ExceptionSink closure_xsink;
+    ProgramRuntimeParseContextHelper closure_pch(&closure_xsink, ctx.pgm);
+    if (closure_xsink.isException()) {
+        closure_xsink.clear();
+        ctx.ptr = ir_end_ptr;
+        ctx.error = "failed to acquire parse context for closure";
+        return QoreValue();
+    }
+    auto* ucf = new UserClosureFunction(nullptr, 0, 0, QoreValue(), nullptr);
+    auto* closure_variant = static_cast<UserClosureVariant*>(
+        const_cast<AbstractQoreFunctionVariant*>(ucf->first()));
+    UserSignature* closure_sig = closure_variant->getUserSignature();
+    closure_sig->setupFromAOTMetadata(
+        ctx.pgm, ret_type, param_names, param_types, defaults, closure_has_varargs,
+        closure_class);
+
+    // Build enclosing locals map for IR deserialization
+    std::unordered_map<std::string, LocalVar*> enclosing_locals;
+    // 1. Parent function's locals
+    for (int l = 0; l < ctx.num_locals; ++l) {
+        if (ctx.locals[l] && ctx.locals[l]->getName()) {
+            enclosing_locals[ctx.locals[l]->getName()] = ctx.locals[l];
+        }
+    }
+    // 1b. Override with slot-indexed captured variables for disambiguation
+    for (uint16_t ci = 0; ci < num_captured; ++ci) {
+        int32_t parent_slot = captured_parent_slots[ci];
+        if (parent_slot >= 0 && parent_slot < ctx.num_locals
+                && ctx.locals[parent_slot]) {
+            enclosing_locals[captured_names[ci]] = ctx.locals[parent_slot];
+        }
+    }
+    // 2. Closure's own parameter locals from its signature
+    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+        const char* pname = closure_sig->getName(p);
+        if (pname && *pname) {
+            enclosing_locals[pname] = closure_sig->lv[p];
+        }
+    }
+    if (closure_sig->argvid) {
+        enclosing_locals["argv"] = closure_sig->argvid;
+    }
+    if (closure_sig->selfid) {
+        enclosing_locals["self"] = closure_sig->selfid;
+    }
+
+    // Deserialize closure body IR
+    std::string ir_error;
+    auto readExprCb = [&ctx]
+            (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
+            const uint8_t* e, std::string& err) -> QoreValue {
+        return readOneExpr(rdr, p, e, err, ctx.pgm,
+            ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    };
+    auto closure_ir = deserializeIRFunction(ctx.reader, ctx.ptr, ir_end_ptr, ctx.pgm,
+        readExprCb, &enclosing_locals, ir_error,
+        ctx.locals, ctx.num_locals);
+    ctx.ptr = ir_end_ptr;  // Ensure we advance past IR data
+
+    if (!closure_ir) {
+        printd(2, "AOT: closure IR deser failed in expr context: %s\n", ir_error.c_str());
+        delete ucf;
+        ctx.error = "closure IR deserialization failed: " + ir_error;
+        return QoreValue();
+    }
+
+    // Set up captured variables in LVarSet and ensure closureUse
+    LVarSet* closure_vlist = ucf->getVList();
+    for (uint16_t ci = 0; ci < num_captured; ++ci) {
+        int32_t parent_slot = captured_parent_slots[ci];
+        LocalVar* lv = nullptr;
+        if (parent_slot >= 0 && parent_slot < ctx.num_locals
+                && ctx.locals[parent_slot]) {
+            lv = ctx.locals[parent_slot];
+        } else {
+            auto it = enclosing_locals.find(captured_names[ci]);
+            if (it != enclosing_locals.end()) {
+                lv = it->second;
+            }
+        }
+        if (lv) {
+            closure_vlist->add(lv);
+            if (!lv->closureUse()) {
+                lv->setClosureUse();
+            }
+        }
+    }
+
+    // Populate pre_instantiated_locals
+    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+        if (closure_sig->lv[p]) {
+            closure_ir->pre_instantiated_locals.insert(
+                reinterpret_cast<const void*>(closure_sig->lv[p]));
+        }
+    }
+    if (closure_sig->argvid) {
+        closure_ir->pre_instantiated_locals.insert(
+            reinterpret_cast<const void*>(closure_sig->argvid));
+    }
+    if (closure_sig->selfid) {
+        closure_ir->pre_instantiated_locals.insert(
+            reinterpret_cast<const void*>(closure_sig->selfid));
+    }
+    for (LocalVar* lv : closure_ir->all_body_locals) {
+        closure_ir->pre_instantiated_locals.insert(
+            reinterpret_cast<const void*>(lv));
+    }
+
+    // Build cached_pre_instantiated for the IR interpreter
+    auto* cached_pre_inst = new std::unordered_set<const LocalVar*>();
+    for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+        if (closure_sig->lv[p]) {
+            cached_pre_inst->insert(closure_sig->lv[p]);
+        }
+    }
+    if (closure_sig->argvid) {
+        cached_pre_inst->insert(closure_sig->argvid);
+    }
+    if (closure_sig->selfid) {
+        cached_pre_inst->insert(closure_sig->selfid);
+    }
+    closure_ir->cached_pre_instantiated = cached_pre_inst;
+
+    // Set cached IR on variant
+    closure_ir->computeSlotIdsAndEmbed();
+    closure_variant->setCachedIR(closure_ir.release());
+    closure_variant->pgm = ctx.pgm;
+
+    // Set class type if in a method context
+    if (class_type_path && *class_type_path) {
+        ucf->setClassType(type_resolver.resolve(class_type_path, type_error));
+    }
+
+    // Create QoreClosureParseNode
+    auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
+    return QoreValue(closure_node);
 }
 
 // ============================================================================

@@ -2502,6 +2502,95 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         return true;
     }
 
+    // QoreClosureParseNode: closure/lambda in expression context (e.g., hash literal values)
+    if (auto* closure = dynamic_cast<const QoreClosureParseNode*>(node)) {
+        UserClosureFunction* ucf = closure->getFunction();
+        if (ucf) {
+            auto* variant = static_cast<const UserClosureVariant*>(ucf->first());
+            if (variant) {
+                const UserSignature* sig = const_cast<UserClosureVariant*>(variant)->getUserSignature();
+                writer.writeU8(static_cast<uint8_t>(AOTExprKind::CLOSURE_CREATE));
+
+                // Write flags: "lambda,in_method" (matches write_slot_CLOSURE_CREATE ref1 format)
+                std::string flags = std::string(closure->isLambda() ? "1" : "0") + ","
+                    + (closure->isInMethod() ? "1" : "0");
+                writer.writeStringRef(flags.c_str());
+
+                // Write class type path (ref2)
+                const QoreTypeInfo* cti = ucf->getClassType();
+                writer.writeStringRef(cti ? QoreTypeInfo::getPath(cti) : "");
+
+                // Write return type
+                const char* ret_path = sig->getReturnTypeInfo()
+                    ? QoreTypeInfo::getPath(sig->getReturnTypeInfo()) : "";
+                writer.writeStringRef(ret_path);
+
+                // Write params: count, then (name, type_path, default) per param
+                unsigned num_params = sig->numParams();
+                writer.writeU16(static_cast<uint16_t>(num_params));
+                for (unsigned p = 0; p < num_params; ++p) {
+                    const char* pname = sig->getName(p);
+                    writer.writeStringRef(pname ? pname : "");
+                    const char* ptype = sig->getParamTypeInfo(p)
+                        ? QoreTypeInfo::getPath(sig->getParamTypeInfo(p)) : "";
+                    writer.writeStringRef(ptype);
+                    bool has_default = sig->hasDefaultArg(p);
+                    writer.writeU8(has_default ? 1 : 0);
+                    if (has_default) {
+                        writer.writeValue(sig->getDefaultArgList()[p]);
+                    }
+                }
+                writer.writeU8(sig->hasVarargs() ? 1 : 0);
+
+                // Write captured variable names and parent slot indices
+                const LVarSet* vlist = const_cast<UserClosureFunction*>(ucf)->getVList();
+                writer.writeU16(vlist ? static_cast<uint16_t>(vlist->size()) : 0);
+                if (vlist) {
+                    for (LocalVar* lv : *vlist) {
+                        writer.writeStringRef(lv->getName());
+                        // Write parent slot index for disambiguation
+                        int32_t parent_slot = -1;
+                        for (size_t i = 0; i < parent_locals.size(); ++i) {
+                            if (parent_locals[i].local_var_ptr == lv) {
+                                parent_slot = static_cast<int32_t>(i);
+                                break;
+                            }
+                        }
+                        writer.writeU32(static_cast<uint32_t>(parent_slot));
+                    }
+                }
+
+                // Lower closure to IR and serialize
+                const QoreIRFunction* closure_ir = const_cast<UserClosureVariant*>(variant)->getCachedIR();
+                QoreIRFunction* owned_ir = nullptr;
+                if (!closure_ir) {
+                    owned_ir = ::lowerClosureForSerialization(variant);
+                    closure_ir = owned_ir;
+                }
+
+                if (closure_ir) {
+                    writer.writeU8(1);  // has_ir
+                    uint32_t size_pos = writer.position();
+                    writer.writeU32(0);  // placeholder
+
+                    auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
+                            QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
+                        return classifyAndWriteExpr(w, e, parent_locals, parent_globals,
+                            const_reverse_map);
+                    };
+
+                    ::serializeIRFunction(writer, *closure_ir, writeExpr);
+                    uint32_t end_pos = writer.position();
+                    writer.patchU32(size_pos, end_pos - size_pos - 4);
+                } else {
+                    writer.writeU8(0);  // no IR
+                }
+                delete owned_ir;
+                return true;
+            }
+        }
+    }
+
     // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
     if (const_reverse_map) {
         auto it = const_reverse_map->find(node);
