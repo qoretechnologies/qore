@@ -79,6 +79,10 @@ int QoreRemoveOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
             LocalVar* lvar = vrn->ref.id;
             if (lvar) {
                 lvar->parseUnassigned();
+                // Reset narrowed type so the variable reverts to its declared
+                // type after branch merging (e.g., auto v; v = rec; ... remove v;
+                // should not leave v narrowed to hash<auto>)
+                lvar->parseResetNarrowedType();
             }
         }
         // TODO: handle global and thread-local variables if needed

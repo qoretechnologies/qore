@@ -349,7 +349,14 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
         }
     }
 
-    parse_context.typeInfo = ti;
+    // For auto-typed variables, use the declared type (auto) as the expression result
+    // type, not the narrowed type. This prevents map/select/etc. from creating typed
+    // lists (e.g., list<hash<auto>>) when the actual values may be of different types.
+    if (is_direct_auto_assignment) {
+        parse_context.typeInfo = autoTypeInfo;
+    } else {
+        parse_context.typeInfo = ti;
+    }
     parse_context.analysis.clear();
     if (parse_context.typeInfo) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
