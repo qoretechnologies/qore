@@ -4846,10 +4846,6 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 */
 public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
     public {
-        #! Loading OpenAPI3 schema
-        const SPS_GET_OPENAPI3 = "io-get-openapi3";
-        #! Loading Swagger schema
-        const SPS_GET_SWAGGER = "io-get-swagger";
         #! Waiting for response
         const SPS_IO_WAITING = "io-waiting";
         #! Complete
@@ -4875,9 +4871,6 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         */
         Channel result_channel(1);
 
-        #! Schema loading poller (non-blocking)
-        *AbstractPollOperation schema_poller;
-
         #! Loaded schema validator
         *RestSchemaValidator::AbstractRestSchemaValidator schema_validator;
 
@@ -4897,16 +4890,15 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         self.ping_opts = ping_opts;
         self.logger = logger;
 
-        # Stage 1: non-blocking schema loading if needed
+        # Load schema synchronously in the constructor (not on the I/O thread).
+        # doSubmitPing() blocks on waitForReady() which requires the I/O thread;
+        # calling it from continuePoll() (which runs on the I/O thread) deadlocks.
         if (ping_opts.openapi3) {
-            state = SPS_GET_OPENAPI3;
-            schema_poller = FileLocationHandler::getIoPollerForLocation(ping_opts.openapi3);
+            schema_validator = OpenApi3Loader::fromUrl(ping_opts.openapi3);
         } else if (ping_opts.swagger) {
-            state = SPS_GET_SWAGGER;
-            schema_poller = FileLocationHandler::getIoPollerForLocation(ping_opts.swagger);
-        } else {
-            doSubmitPing();
+            schema_validator = SwaggerLoader::fromUrl(ping_opts.swagger);
         }
+        doSubmitPing();
     }
 
     string getGoal() {
@@ -4914,7 +4906,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     }
 
     string getState() {
-        return state + (schema_poller ? ("-" + schema_poller.getState()) : "");
+        return state;
     }
 
     bool goalReached() {
@@ -4922,22 +4914,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     }
 
     *hash<SocketPollInfo> continuePoll() {
-        # Stage 1: schema loading
-        if (schema_poller) {
-            *hash<SocketPollInfo> pinfo = schema_poller.continuePoll();
-            if (pinfo) {
-                return pinfo;
-            }
-            if (state == SPS_GET_OPENAPI3) {
-                schema_validator = OpenApi3Loader::fromString(schema_poller.getOutput().toString());
-            } else if (state == SPS_GET_SWAGGER) {
-                schema_validator = SwaggerLoader::fromString(schema_poller.getOutput().toString());
-            }
-            remove schema_poller;
-            doSubmitPing();
-        }
-
-        # Stage 2: waiting for response via EventNotifier + Channel
+        # Waiting for response via EventNotifier + Channel
         if (state == SPS_IO_WAITING) {
             # Non-blocking check: is the result available?
             *hash<auto> recv_result = result_channel.tryRecv();

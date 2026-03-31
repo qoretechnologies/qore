@@ -89,7 +89,8 @@ public:
         DispatchType type;                   //!< What method to call
         AsyncIoControllerPriv* controller;   //!< For DT_CONTINUE_POLL: controller (referenced)
         std::string key;                     //!< For DT_CONTINUE_POLL: operation key
-        std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key (H2: "stream_id", H3: "session_id:stream_id")
+        std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key
+        QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
     };
 
     //! Creates the dispatcher

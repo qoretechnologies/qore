@@ -614,6 +614,15 @@ public class WebSocketConnection {
             notifyIo();
             return;
         }
+        # For H2/H3 WebSocket with a stream context, send directly via the
+        # stream context. Using the channel + notifyIo() only wakes the I/O
+        # controller but doesn't trigger the stream processor to drain the
+        # channel if no incoming data arrives.
+        if (stream_ctx) {
+            stream_ctx.sendData(encoded);
+            notifyIo();
+            return;
+        }
         try {
             channel.send(encoded);
         } catch (hash<ExceptionInfo> ex) {
@@ -640,6 +649,11 @@ public class WebSocketConnection {
         binary encoded = sendWithExtensions(msg, op, fin);
         if (async_ws_poll_op) {
             async_ws_poll_op.sendRawFrame(encoded);
+            notifyIo();
+            return;
+        }
+        if (stream_ctx) {
+            stream_ctx.sendData(encoded);
             notifyIo();
             return;
         }

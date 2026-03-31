@@ -206,6 +206,18 @@ void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj) {
 }
 
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
+    // Hold a reference to the object's program to prevent premature program
+    // destruction while the callback is pending. Without this, the program
+    // can be destroyed (QoreProgramHelper dtor skips QTF_EXTERNAL_LIFECYCLE
+    // threads) while our worker still holds referenced QoreObjects, causing
+    // SIGSEGV on arm64 when evalMethod accesses freed program data.
+    if (item.spop_obj) {
+        item.pgm = item.spop_obj->getProgram();
+        if (item.pgm) {
+            item.pgm->ref();
+        }
+    }
+
     AutoLocker al(m);
 
     if (stopping) {
@@ -225,6 +237,9 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
         }
         if (item.controller) {
             item.controller->deref(&xsink);
+        }
+        if (item.pgm) {
+            item.pgm->deref(&xsink);
         }
         return;
     }
@@ -273,6 +288,9 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
         }
         if (item.controller) {
             item.controller->deref(xsink);
+        }
+        if (item.pgm) {
+            item.pgm->deref(xsink);
         }
     }
     async_queue.clear();
@@ -407,6 +425,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         }
         if (async_item.args) {
             async_item.args->deref(xsink);
+        }
+        // Release program reference AFTER all object derefs — program must
+        // stay alive while we deref objects belonging to it
+        if (async_item.pgm) {
+            async_item.pgm->deref(xsink);
         }
 
         {
