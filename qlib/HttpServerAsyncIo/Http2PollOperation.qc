@@ -71,6 +71,13 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
             worker pool when the I/O thread drains data to the stream's Queue.
         */
         hash<string, object> stream_listeners;
+
+        #! Pending data flags for streams where onStreamData fired before
+        #! the listener was registered (race between I/O dispatch and handler setup)
+        hash<string, bool> pending_stream_data;
+
+        #! Lock protecting stream listener registration and dispatch
+        Mutex stream_listener_mutex();
     }
 
     #! Registers a listener to be notified when stream data arrives
@@ -78,7 +85,16 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
         @param listener an object with a notifyIo() method (e.g., WebSocketConnection)
     */
     registerStreamListener(int stream_id, object listener) {
-        stream_listeners{stream_id} = listener;
+        bool has_pending;
+        {
+            AutoLock al(stream_listener_mutex);
+            stream_listeners{stream_id} = listener;
+            has_pending = remove pending_stream_data{stream_id};
+        }
+        # Replay missed notification if data arrived before registration
+        if (has_pending) {
+            listener.notifyIo();
+        }
     }
 
     #! Called on a worker thread when stream data has been drained to a Queue
@@ -88,9 +104,13 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
     */
     nothing onStreamData(string stream_key) {
         int stream_id = stream_key.toInt();
+        AutoLock al(stream_listener_mutex);
         *object listener = stream_listeners{stream_id};
         if (listener) {
             listener.notifyIo();
+        } else {
+            # Buffer the notification — the handler hasn't registered yet
+            pending_stream_data{stream_id} = True;
         }
     }
 

@@ -89,7 +89,19 @@ void QoreSocketObject::closeIo(ExceptionSink* xsink) {
 bool QoreSocketObject::hasPendingData() const {
     // Check SSL buffer without syscalls or locking — safe from any thread
     // SSL_pending() is documented as thread-safe for read-only queries
-    return priv->socket->priv->ssl ? priv->socket->priv->ssl->pending() > 0 : false;
+    if (priv->socket->priv->ssl && priv->socket->priv->ssl->pending() > 0) {
+        return true;
+    }
+    // Check H2/H3 session for pending stream data that was received in a
+    // previous read cycle but not yet drained by the poll operation.
+    // Without this, CONNECT stream DATA received during the same TCP read
+    // as the CONNECT request headers is never dispatched — the SSL/TCP
+    // buffers are empty so epoll/hasPendingData never triggers a re-poll.
+    if (priv->socket->priv->h2_session
+            && priv->socket->priv->h2_session->hasStreamData()) {
+        return true;
+    }
+    return false;
 }
 
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {

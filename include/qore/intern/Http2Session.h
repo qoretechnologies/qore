@@ -558,6 +558,21 @@ public:
     */
     DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
 
+    //! Returns true if any stream has buffered body data waiting to be drained
+    /** Used by QoreSocketObject::hasPendingData() to trigger re-polling of H2
+        operations when stream data was received in a previous TCP read but not
+        yet drained by the poll operation (analogous to the SSL pending check).
+    */
+    DLLLOCAL bool hasStreamData() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        for (auto& [sid, info] : streams) {
+            if (!info->body.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     //! Returns the remote flow control window size for a given stream
     /** Returns the number of bytes the server can send on this stream before
         a WINDOW_UPDATE is needed from the client.

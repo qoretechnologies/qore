@@ -366,6 +366,34 @@ void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue
     } else {
         stream_queues[stream_id] = {queue, queue_obj, notifier, notifier_obj};
     }
+
+    // Immediately drain any data already buffered in the H2 session for this
+    // stream. The CONNECT request and subsequent DATA frames may arrive in the
+    // same TCP segment. The CONNECT triggers request dispatch, but the DATA is
+    // already in the session's per-stream buffer. Without this drain, the data
+    // sits there until the next continuePoll cycle — which may never come
+    // because the SSL/TCP buffers are empty (analogous to the SSL data hole).
+    ExceptionSink xsink;
+    while (true) {
+        BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, &xsink);
+        if (xsink) {
+            xsink.clear();
+            break;
+        }
+        if (!data || data->empty()) {
+            if (data) {
+                data->deref(&xsink);
+            }
+            break;
+        }
+        queue->push(&xsink, data);
+        if (xsink) {
+            data->deref(&xsink);
+            xsink.clear();
+            break;
+        }
+        data_ready_streams.push_back(stream_id);
+    }
 }
 
 void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
