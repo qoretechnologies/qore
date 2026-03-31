@@ -5285,8 +5285,21 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             (int)((parse_options & PO_MODERN) == PO_MODERN));
 
         // Load module dependencies before deserialization so that module classes,
-        // functions, etc. are available when resolving base classes and types
+        // functions, etc. are available when resolving base classes and types.
+        // Scoped ProgramThreadCountContextHelper ensures thread-local program data
+        // (tlpd) is initialized so module constant initializers can call constructors
+        // that need thread-local variable stacks. Non-AOT scripts get this via
+        // QoreProgram::parse(); AOT binaries skip parse() so we set it up explicitly.
+        // NOTE: runtime=false to avoid premature doTopLevelInstantiation() before
+        // setLVarsFromAOTContext() has populated the top-level LVList.
         {
+            ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
+            if (xsink.isException()) {
+                xsink.handleExceptions();
+                rc = 2;
+                break;
+            }
+
             std::vector<std::string> deps;
             std::string dep_error;
             if (readDependencies(metadata, static_cast<uint32_t>(metadata_len), deps, dep_error)) {

@@ -1178,6 +1178,7 @@ void thread_ref_remove(const lvalue_ref* r) {
 
 LocalVarValue* thread_instantiate_lvar() {
     ThreadLocalProgramData* tlpd = thread_data.get()->tlpd;
+    assert(tlpd && "thread_instantiate_lvar called without tlpd - missing ProgramThreadCountContextHelper");
     LocalVarValue* var = tlpd->lvstack.instantiate();
     // Set declaration order for proper cleanup ordering (issue #5168)
     var->setDeclOrder(tlpd->getNextVarOrder());
