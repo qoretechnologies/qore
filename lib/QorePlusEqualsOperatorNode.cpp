@@ -59,10 +59,20 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
+    // Dereference reference types before type checking so that
+    // reference<list<string>> is recognized as a list type
+    const QoreTypeInfo* check_ti = ti;
+    if (QoreTypeInfo::isReference(ti)) {
+        const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
+        if (deref_ti) {
+            check_ti = deref_ti;
+        }
+    }
+
     // issue #5765 use getReturnComplexListOrNothing to handle or-nothing types (e.g., *list<int>)
     // so that list append operations on nested structures preserve type checking
     // Check if lvalue type returns a list (including *list types)
-    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(ti);
+    const QoreTypeInfo* eti = QoreTypeInfo::getReturnComplexListOrNothing(check_ti);
     if (eti) {
         if (!QoreTypeInfo::parseReturns(rightTypeInfo, NT_LIST)) {
             if (!QoreTypeInfo::parseAccepts(eti, rightTypeInfo)) {
@@ -80,14 +90,14 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 }
             }
         }
-    } else if (!QoreTypeInfo::isType(ti, NT_LIST)
-        && !QoreTypeInfo::isType(ti, NT_HASH)
-        && !QoreTypeInfo::isType(ti, NT_OBJECT)
-        && !QoreTypeInfo::isType(ti, NT_STRING)
-        && !QoreTypeInfo::isType(ti, NT_FLOAT)
-        && !QoreTypeInfo::isType(ti, NT_NUMBER)
-        && !QoreTypeInfo::isType(ti, NT_DATE)
-        && !QoreTypeInfo::isType(ti, NT_BINARY)) {
+    } else if (!QoreTypeInfo::isType(check_ti, NT_LIST)
+        && !QoreTypeInfo::isType(check_ti, NT_HASH)
+        && !QoreTypeInfo::isType(check_ti, NT_OBJECT)
+        && !QoreTypeInfo::isType(check_ti, NT_STRING)
+        && !QoreTypeInfo::isType(check_ti, NT_FLOAT)
+        && !QoreTypeInfo::isType(check_ti, NT_NUMBER)
+        && !QoreTypeInfo::isType(check_ti, NT_DATE)
+        && !QoreTypeInfo::isType(check_ti, NT_BINARY)) {
         // if the lhs type is not one of the above types,
         // there are 2 possibilities: the lvalue has no value, in which
         // case it takes the value of the right side, or if it's anything else it's

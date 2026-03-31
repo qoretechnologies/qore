@@ -56,11 +56,21 @@ int QoreMinusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext&
     }
     //const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
 
-    if (!QoreTypeInfo::isType(ti, NT_HASH)
-        && !QoreTypeInfo::isType(ti, NT_OBJECT)
-        && !QoreTypeInfo::isType(ti, NT_FLOAT)
-        && !QoreTypeInfo::isType(ti, NT_NUMBER)
-        && !QoreTypeInfo::isType(ti, NT_DATE)) {
+    // Dereference reference types before type checking so that
+    // reference<hash<...>> etc. are recognized correctly
+    const QoreTypeInfo* check_ti = ti;
+    if (QoreTypeInfo::isReference(ti)) {
+        const QoreTypeInfo* deref_ti = QoreTypeInfo::getReferenceTarget(ti);
+        if (deref_ti) {
+            check_ti = deref_ti;
+        }
+    }
+
+    if (!QoreTypeInfo::isType(check_ti, NT_HASH)
+        && !QoreTypeInfo::isType(check_ti, NT_OBJECT)
+        && !QoreTypeInfo::isType(check_ti, NT_FLOAT)
+        && !QoreTypeInfo::isType(check_ti, NT_NUMBER)
+        && !QoreTypeInfo::isType(check_ti, NT_DATE)) {
         // if the lhs type is not one of the above types,
         // there are 2 possibilities: the lvalue has no value, in which
         // case it takes the value of the right side, or if it's anything else it's
