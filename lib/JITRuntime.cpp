@@ -483,7 +483,7 @@ extern "C" DLLEXPORT void qore_rt_instantiate_local(LocalVar* var) {
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
-    if (!var) {
+    if (!var || *xsink) {
         return;
     }
     QoreValue val = fromBits(value);
@@ -513,7 +513,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
 }
 
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
-    if (!var) {
+    if (!var || *xsink) {
         return;
     }
     QoreValue val = fromBits(value);
