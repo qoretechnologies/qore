@@ -6664,9 +6664,11 @@ load_local_done:
                         }
                     } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
                         // Inline: strlen()/length() for strings
+                        // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
                             const QoreStringNode* s = base.get<const QoreStringNode>();
-                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                            res = QoreValue(static_cast<int64_t>(
+                                !strcmp(method_name, "strlen") ? s->strlen() : s->length()));
                         } else {
                             // Unsupported type, use runtime dispatch
                             called_external = true;
@@ -6805,9 +6807,11 @@ load_local_done:
                         }
                     } else if ((!strcmp(method_name, "strlen") || !strcmp(method_name, "length")) && nargs == 0) {
                         // Inline: strlen()/length() for strings
+                        // strlen() returns byte length, length() returns character count
                         if (base_type == NT_STRING) {
                             const QoreStringNode* s = base.get<const QoreStringNode>();
-                            res = QoreValue(static_cast<int64_t>(s->strlen()));
+                            res = QoreValue(static_cast<int64_t>(
+                                !strcmp(method_name, "strlen") ? s->strlen() : s->length()));
                         } else {
                             // Unsupported type, use runtime dispatch
                             called_external = true;
