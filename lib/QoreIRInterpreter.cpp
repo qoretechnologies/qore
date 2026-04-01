@@ -4505,9 +4505,12 @@ load_local_done:
             }
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
-                //printd(2, "UNINST: %s is_closure=%d slot=%d\n",
-                //    local_inst->local ? local_inst->local->getName() : "null",
-                //    local_inst->is_closure, (int)local_inst->slot_id);
+                if (getenv("QORE_DEBUG_UNINST")) {
+                    bool ip2 = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
+                    fprintf(stderr, "UNINST: %s is_closure=%d slot=%d is_pre=%d\n",
+                        local_inst->local ? local_inst->local->getName() : "null",
+                        local_inst->is_closure, (int)local_inst->slot_id, ip2);
+                }
                 // Uninstantiate the local variable (calls destructor for objects)
                 if (local_inst->local) {
                     bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();

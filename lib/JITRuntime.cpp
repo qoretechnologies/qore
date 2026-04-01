@@ -600,9 +600,19 @@ extern "C" DLLEXPORT void qore_rt_clear_local(LocalVar* var, ExceptionSink* xsin
 }
 
 extern "C" DLLEXPORT void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSink* xsink) {
-    if (var) {
-        var->uninstantiate(xsink);
+    if (!var) {
+        return;
     }
+    // For closure-use variables: trigger deterministic destruction
+    // by clearing the CVV value when it's the last reference,
+    // matching the qore_rt_clear_local() pattern
+    if (var->closureUse()) {
+        ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
+        if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
+            cvv->clearValue(xsink);
+        }
+    }
+    var->uninstantiate(xsink);
 }
 
 // --- Generic opcode dispatch helpers ---
