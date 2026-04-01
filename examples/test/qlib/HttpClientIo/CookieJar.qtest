@@ -31,6 +31,7 @@
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Mime.qm
 %requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpUtil.qm
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServer.qm
 %requires ../../../../qlib/HttpClientIo

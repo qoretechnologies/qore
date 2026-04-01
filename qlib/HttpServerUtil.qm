@@ -27,6 +27,7 @@
 %requires(reexport) Util >= 1.0
 %requires Logger
 %requires FileLocationHandler
+%requires(reexport) HttpUtil
 
 %modern
 
@@ -700,73 +701,21 @@ public hashdecl HttpHandlerConfigInfo {
     softlist<softstring> headers;
 }
 
-#! Cookie configuration info
-public hashdecl CookieInfo {
-    #! the cookie name
-    string name;
-
-    #! the cookie value
-    *string value;
-
-    #! the maximum age of the cookie in seconds
-    int max_age;
-
-    #! the domain for which the cookie is valid
-    *string domain;
-
-    #! the path for which the cookie is valid
-    string path = "/";
-
-    #! whether the cookie is secure (ie only sent over HTTPS)
-    bool secure = True;
-
-    #! Whether the cookie is HTTP-only (ie not accessible to JavaScript in browsers)
-    bool http_only = True;
-
-    #! Whether the cookie is SameSite (Lax, Strict, or None)
-    string same_site = "Lax";
-}
-
 #! Class with cookie helper methods
+/** @deprecated Use @ref HttpUtil::set_cookie_header() and @ref HttpUtil::CookieInfo directly.
+    This class delegates to the shared HttpUtil module.
+*/
 public class CookieHelper {
     #! Set cookie info in response headers
     /** @param hdr the response header hash
-        @param cookie the cookie info hash
-        @param set_cache_control if @ref True "True", then a \c Cache-Control header is set to
-        \c "no-cache, no-store, must-revalidate, max-age=0" if no \c Cache-Control header is already present
+        @param cookie the cookie info hash (HttpUtil::CookieInfo)
+        @param set_cache_control if @ref True "True", then a \c Cache-Control header is set
 
         @note https://datatracker.ietf.org/doc/html/rfc6265
     */
-    static set(reference<hash<auto>> hdr, hash<CookieInfo> cookie, bool set_cache_control = True) {
-        if (!cookie.name.val()) {
-            throw "COOKIE-ERROR", sprintf("Cookie name is required (cookie params: %y)", cookie);
-        }
-        if (cookie.value.val()) {
-            if (exists cookie.max_age && !cookie.max_age) {
-                throw "COOKIE-ERROR", sprintf("Cookie set with value %y but max age = %y", cookie.value, cookie.max_age);
-            }
-        } else if (cookie.max_age) {
-            throw "COOKIE-ERROR", sprintf("Cookie set with max age %d but no value", cookie.max_age);
-        }
-        string cookiestr = sprintf(
-            "%s=%s; SameSite=%s; Path=%s%s%s%s%s", cookie.name, cookie.value,
-            cookie.same_site, cookie.path,
-            (cookie.secure ? "; Secure" : ""),
-            (cookie.domain.val() ? sprintf("; Domain=%s", cookie.domain) : ""),
-            (cookie.http_only ? "; HttpOnly" : ""),
-            (exists cookie.max_age ? sprintf("; Max-Age=%d", cookie.max_age) : "")
-        );
-        if (auto cookieval = hdr."Set-Cookie") {
-            if (cookieval.typeCode() != NT_LIST) {
-                hdr."Set-Cookie" = (cookieval,);
-            }
-            hdr."Set-Cookie" += cookiestr;
-        } else {
-            hdr."Set-Cookie" = cookiestr;
-        }
-        if (set_cache_control && !hdr."Cache-Control") {
-            hdr."Cache-Control" = "no-cache, no-store, must-revalidate, max-age=0";
-        }
+    static set(reference<hash<auto>> hdr, hash<HttpUtil::CookieInfo> cookie,
+            bool set_cache_control = True) {
+        HttpUtil::set_cookie_header(\hdr, cookie, set_cache_control);
     }
 }
 

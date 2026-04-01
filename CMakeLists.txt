@@ -1928,7 +1928,8 @@ qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
-qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
+qore_user_module("qlib/HttpUtil.qm" "Util")
+qore_user_module("qlib/HttpServerUtil.qm" "HttpUtil;Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 
 # base 4 modules
@@ -1951,7 +1952,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
-qore_user_module("qlib/HttpClientIo" "Logger;AsyncSocketIo")
+qore_user_module("qlib/HttpClientIo" "HttpUtil;Logger;AsyncSocketIo")
 qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logger")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")
