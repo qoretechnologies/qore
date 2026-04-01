@@ -1,6 +1,6 @@
 /* -*- mode: c++; indent-tabs-mode: nil -*- */
 /*
-    QC_Future.h
+    QC_FutureImpl.h
 
     Qore Programming Language
 
@@ -29,12 +29,14 @@
     information.
 */
 
-#ifndef _QORE_CLASS_FUTURE_H
-#define _QORE_CLASS_FUTURE_H
+#ifndef _QORE_CLASS_FUTUREIMPL_H
+#define _QORE_CLASS_FUTUREIMPL_H
 
-DLLEXPORT extern qore_classid_t CID_FUTURE;
-DLLEXPORT extern QoreClass* QC_FUTURE;
+#include "qore/intern/QoreFuture.h"
 
-DLLLOCAL QoreClass* initFutureClass(QoreNamespace& ns);
+DLLEXPORT extern qore_classid_t CID_FUTUREIMPL;
+DLLEXPORT extern QoreClass* QC_FUTUREIMPL;
 
-#endif // _QORE_CLASS_FUTURE_H
+DLLLOCAL QoreClass* initFutureImplClass(QoreNamespace& ns);
+
+#endif // _QORE_CLASS_FUTUREIMPL_H

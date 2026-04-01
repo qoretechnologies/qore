@@ -370,5 +370,18 @@ public namespace HttpClientIo {
 
         #! HTTP/3-only: client private key for mutual TLS (mTLS)
         *SSLPrivateKey client_pk;
+
+        #! Enable automatic cookie handling (default: True)
+        /** When True, the connection manager automatically processes Set-Cookie
+            headers from responses and injects matching Cookie headers into
+            requests. This enables session-based authentication, OAuth2 token
+            endpoints, and other flows that depend on HTTP cookies.
+
+            Set to False to disable automatic cookie handling (e.g., when the
+            application manages cookies manually).
+
+            @since HttpClientIo 1.1
+        */
+        bool enable_cookies = True;
     }
 }

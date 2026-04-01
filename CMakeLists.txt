@@ -185,6 +185,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Channel.qpp
     lib/QC_ChannelIterator.qpp
     lib/QC_Future.qpp
+    lib/QC_FutureImpl.qpp
     lib/QC_Promise.qpp
     lib/QC_Semaphore.qpp
     lib/QC_AutoSemaphore.qpp
@@ -1481,6 +1482,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FutureImpl.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Semaphore.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoSemaphore.cpp\"

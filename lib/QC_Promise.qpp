@@ -31,7 +31,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QC_Promise.h"
-#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
 
 //! The producer side of a Promise/Future pair for cross-thread result delivery
 /** Promise objects allow a thread to set a result that another thread can retrieve via
@@ -182,5 +182,5 @@ Future Promise::getFuture() {
     if (!future) {
         return QoreValue();
     }
-    return new QoreObject(QC_FUTURE, getProgram(), future);
+    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
 }

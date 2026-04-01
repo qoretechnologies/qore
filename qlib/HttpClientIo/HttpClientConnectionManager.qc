@@ -125,6 +125,15 @@ public class HttpClientConnectionManager {
             lookup.  This avoids acquiring pool_lock from the I/O thread.
         */
         Queue pending_alt_svc();
+
+        #! Cookie jar for automatic Set-Cookie / Cookie header handling
+        /** Created when enable_cookies is True (default).  Shared across all
+            pooled connections — cookies set by one request are sent with
+            subsequent matching requests regardless of which connection is used.
+
+            @since HttpClientIo 1.1
+        */
+        *CookieJar cookie_jar;
     }
 
     #! Creates a new connection manager with the given options
@@ -174,11 +183,17 @@ public class HttpClientConnectionManager {
         # a single I/O thread for efficient async operation
         controller = AsyncSocketIo::getGlobalAsyncIoController();
 
-        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d",
+        # Create cookie jar if enabled (default: True)
+        if (self.opts.enable_cookies) {
+            cookie_jar = new CookieJar();
+        }
+
+        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d cookies=%y",
             self.opts.protocol,
             self.opts.max_connections_per_host,
             self.opts.max_streams_per_connection,
-            self.opts.idle_timeout / 1s);
+            self.opts.idle_timeout / 1s,
+            self.opts.enable_cookies);
     }
 
     #! Copying is not supported
@@ -198,6 +213,15 @@ public class HttpClientConnectionManager {
     #! Returns the AsyncSocketIoController
     AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns the cookie jar (NOTHING if cookies are disabled)
+    /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
+
+        @since HttpClientIo 1.1
+    */
+    *CookieJar getCookieJar() {
+        return cookie_jar;
     }
 
     #! Acquires a stream handle for the given URL
@@ -313,12 +337,38 @@ public class HttpClientConnectionManager {
     */
     hash<auto> submitRequestAsync(string url, string method, string path,
             *hash<auto> headers, *data body) {
+        # Inject cookies from jar into request headers
+        hash<UrlInfo> url_info;
+        if (cookie_jar) {
+            url_info = parse_url(url);
+            *string cookie_hdr = cookie_jar.getCookieHeader(
+                url_info.host, path, url_info.protocol == "https");
+            if (cookie_hdr) {
+                headers = headers ?? {};
+                if (headers.Cookie) {
+                    headers.Cookie += "; " + cookie_hdr;
+                } else {
+                    headers.Cookie = cookie_hdr;
+                }
+            }
+        }
+
         int retries = 0;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
                 hash<auto> result = stream.submitAsync(method, path, headers, body);
+                # Wrap the Future so Set-Cookie extraction happens when
+                # the caller resolves it — no extra threads
+                if (cookie_jar) {
+                    if (!url_info) {
+                        url_info = parse_url(url);
+                    }
+                    result.future = new CookieExtractingFuture(result.future,
+                        cookie_jar, url_info.host, path,
+                        url_info.protocol == "https");
+                }
                 return {
                     "stream": stream,
                     "future": result.future,
@@ -359,6 +409,23 @@ public class HttpClientConnectionManager {
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
+        # Inject cookies from jar into request headers
+        if (cookie_jar) {
+            hash<UrlInfo> url_info = parse_url(url);
+            bool is_secure = url_info.protocol == "https";
+            *string cookie_hdr = cookie_jar.getCookieHeader(
+                url_info.host, path, is_secure);
+            if (cookie_hdr) {
+                headers = headers ?? {};
+                # Append to existing Cookie header if present
+                if (headers.Cookie) {
+                    headers.Cookie += "; " + cookie_hdr;
+                } else {
+                    headers.Cookie = cookie_hdr;
+                }
+            }
+        }
+
         int retries = 0;
         while (True) {
             *HttpClientStreamHandle stream;
@@ -366,6 +433,15 @@ public class HttpClientConnectionManager {
                 stream = acquireStream(url);
                 hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
                 checkAltSvc(url, resp);
+
+                # Extract Set-Cookie from response and store in jar
+                if (cookie_jar && resp.headers) {
+                    hash<UrlInfo> url_info = parse_url(url);
+                    bool is_secure = url_info.protocol == "https";
+                    cookie_jar.processResponseHeaders(
+                        url_info.host, path, is_secure, resp.headers);
+                }
+
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed — request() calls
@@ -1235,6 +1311,49 @@ public class HttpClientConnectionManager {
         if (logger) {
             call_function_args(\logger.log(), (level, "HttpClientConnectionManager: " + fmt) + argv);
         }
+    }
+}
+
+#! Future subclass that extracts Set-Cookie headers when the caller resolves it
+/** Overrides \c get() to process cookies from the response headers before
+    returning.  No extra threads — cookie extraction happens synchronously
+    on the caller's thread when they call \c get().
+
+    @since HttpClientIo 1.1
+*/
+class CookieExtractingFuture inherits Future {
+    private {
+        Future real_future;
+        CookieJar jar;
+        string host;
+        string path;
+        bool is_secure;
+    }
+
+    constructor(Future real_future, CookieJar jar, string host, string path,
+            bool is_secure) {
+        self.real_future = real_future;
+        self.jar = jar;
+        self.host = host;
+        self.path = path;
+        self.is_secure = is_secure;
+    }
+
+    #! Blocks until the response is available, then extracts cookies and returns it
+    auto get(timeout timeout_ms = 0) {
+        auto rv = real_future.get(timeout_ms);
+        if (rv.typeCode() == NT_HASH && rv.headers) {
+            jar.processResponseHeaders(host, path, is_secure, rv.headers);
+        }
+        return rv;
+    }
+
+    bool isDone() {
+        return real_future.isDone();
+    }
+
+    bool isError() {
+        return real_future.isError();
     }
 }
 
