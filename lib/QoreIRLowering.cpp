@@ -1158,11 +1158,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                 msg = builder.createExprOp(QoreIROpcode::Sprintf, message, {list_val},
                     stmt->loc)->result;
             } else {
-                // Single message expression
-                msg = lowerExpression(message, error);
-                if (!msg.isValid()) {
+                // Single message expression — convert to string for the error desc
+                QoreIRValue raw_msg = lowerExpression(message, error);
+                if (!raw_msg.isValid()) {
                     return false;
                 }
+                // Wrap in sprintf("%s", val) to ensure string conversion
+                QoreIRValue fmt = builder.createConstString("%s", stmt->loc)->result;
+                QoreIRValue sprintf_list = builder.createMakeList({fmt, raw_msg}, stmt->loc)->result;
+                msg = builder.createExprOp(QoreIROpcode::Sprintf, QoreValue(),
+                    {sprintf_list}, stmt->loc)->result;
             }
         } else {
             msg = builder.createConstString("assertion failed", stmt->loc)->result;
