@@ -213,6 +213,7 @@ public class DataProvider {
 
             "grok": "GrokDataProvider",
             "openai": "OpenAiDataProvider",
+            "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
 

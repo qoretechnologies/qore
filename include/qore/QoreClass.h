@@ -882,6 +882,18 @@ public:
     */
     DLLEXPORT void addBaseClass(QoreClass* qc, bool virt = false);
 
+    //! initializes a builtin class after all base classes have been added
+    /** Call this after all base classes are set up but before any operation that may trigger recursive
+        class loading (e.g., method type resolution). Ensures the class and all its parents are properly
+        initialized so that recursive loading chains cannot prematurely initialize the class with an
+        incomplete parent list.
+
+        Safe to call multiple times; subsequent calls are no-ops.
+
+        @since %Qore 2.1
+    */
+    DLLEXPORT void initializeBuiltin();
+
     //! call this function if your builtin class requires *all* methods (except the constructor) to be run in an RMutex lock
     /** use this for classes that require exclusive access to the private data in all functions
     */
