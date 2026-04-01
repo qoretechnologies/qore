@@ -202,43 +202,17 @@ l50Xb2GWQesIt9k5jF5IOw==
         submitToController(conn);
     }
 
-    #! Helper: submit/re-submit a connection to the controller
+    #! Helper: submit a connection's poll operation to the controller
     private submitToController(HttpClientIo::HttpClientConnection conn) {
         HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
         Socket sock = conn.getSocket();
 
-        # Use the onComplete abstract API: set a completion handler on the
-        # poll operation so that handleControllerResult() fires when the
-        # controller marks the operation as completed.
-        op.setCompletionHandler(sub (hash<SocketPollResultInfo> result) {
-            handleControllerResult(conn, result);
-        });
         mController.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": self.uniqueHash(),
             "to": -1s,
         });
-    }
-
-    #! Callback: handle controller result for a connection
-    private handleControllerResult(HttpClientIo::HttpClientConnection conn, hash<SocketPollResultInfo> result) {
-        if (result.canceled || result.ex) {
-            return;
-        }
-        conn.handlePollResult();
-
-        HttpClientIo::HttpClientPollOperation op = conn.getPollOperation();
-        if (op.isClosed() || op.hasError()) {
-            return;
-        }
-
-        try {
-            op.continueReading();
-        } catch () {
-            return;
-        }
-        submitToController(conn);
     }
 
     #! Helper: create a single Http3ClientConnection and wait for it to become ready
@@ -258,29 +232,9 @@ l50Xb2GWQesIt9k5jF5IOw==
     #! Helper: do a sync request via Http3ClientConnection and return the response
     private hash<auto> doSyncRequest(Http3ClientConnection conn, string method, string path,
             *hash<auto> headers, *data body) {
-        *hash<auto> result;
-        *hash<auto> error;
-        Counter cnt(1);
-
-        conn.submitRequest(method, path, headers, body, sub (auto resp, *hash<auto> err) {
-            if (err) {
-                error = err;
-            } else {
-                result = resp;
-            }
-            cnt.dec();
-        });
-
-        # Controller drives I/O — just wait for the callback
-        int rc = cnt.waitForZero(15s);
-        if (rc) {
-            throw "TIMEOUT", "request timed out";
-        }
-
-        if (error) {
-            throw error.err, error.desc;
-        }
-        return result;
+        hash<auto> req = conn.submitRequest(method, path, headers, body);
+        Future f = req.future;
+        return f.get(15s);
     }
 
     #! Test: connect → request → migrate → request → verify both succeed
@@ -313,35 +267,16 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, pre.status_code, "pre-migration request succeeds");
 
         int body_size = 1000000;
-        *hash<auto> result;
-        *hash<auto> error;
-        Counter cnt(1);
 
-        conn.submitRequest("GET", sprintf("/large/%d", body_size), NOTHING, NOTHING,
-                sub (auto resp, *hash<auto> err) {
-            if (err) {
-                error = err;
-            } else {
-                result = resp;
-            }
-            cnt.dec();
-        });
+        hash<auto> req = conn.submitRequest("GET", sprintf("/large/%d", body_size));
+        Future f = req.future;
 
-        # Migrate mid-stream
-        if (cnt.getCount() > 0) {
-            assertTrue(conn.migrate(), "migration during streaming succeeds");
-        }
+        # Migrate mid-stream — the request is in-flight via the controller
+        assertTrue(conn.migrate(), "migration during streaming succeeds");
 
-        # Controller drives I/O — wait for completion; on localhost, QUIC
-        # retransmission PTO is well under 1s so 5s is generous
-        int rc = cnt.waitForZero(5s);
-        if (rc) {
-            throw "TIMEOUT", "streaming request timed out after migration";
-        }
+        # Wait for the Future to resolve
+        hash<auto> result = f.get(15s);
 
-        if (error) {
-            throw error.err, error.desc;
-        }
         assertEq(200, result.status_code, "streaming response status after migration");
         # HTTP/3 response body comes as binary from the C++ layer
         string body_str = result.body.typeCode() == NT_BINARY ? binary_to_string(result.body) : result.body;
@@ -434,35 +369,28 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, pre.status_code, "pre-migration request succeeds");
 
         int num_requests = 10;
-        Counter cnt(num_requests);
-        hash<string, hash<auto>> results;
-        hash<string, hash<auto>> errors;
-        Mutex results_lock();
+        list<Future> futures;
 
         # Submit multiple concurrent requests
         for (int i = 0; i < num_requests; ++i) {
             string req_body = sprintf("concurrent-%d", i);
-            string key = string(i);
-            conn.submitRequest("POST", "/echo", NOTHING, req_body,
-                    sub (auto resp, *hash<auto> err) {
-                AutoLock al(results_lock);
-                if (err) {
-                    errors{key} = err;
-                } else {
-                    results{key} = resp;
-                }
-                cnt.dec();
-            });
+            hash<auto> req = conn.submitRequest("POST", "/echo", NOTHING, req_body);
+            futures += req.future;
         }
 
         # Migrate while requests are in-flight (controller drives I/O)
         assertTrue(conn.migrate(), "migration with concurrent streams succeeds");
 
-        # Controller drives I/O — wait for completion
-        int rc = cnt.waitForZero(15s);
-        if (rc) {
-            throw "TIMEOUT", sprintf("concurrent requests timed out: %d/%d remaining",
-                cnt.getCount(), num_requests);
+        # Wait for all Futures to resolve
+        hash<string, hash<auto>> results;
+        hash<string, hash<auto>> errors;
+        for (int i = 0; i < num_requests; ++i) {
+            string key = string(i);
+            try {
+                results{key} = futures[i].get(15s);
+            } catch (hash<ExceptionInfo> ex) {
+                errors{key} = ex;
+            }
         }
 
         # Verify all requests succeeded
@@ -589,34 +517,16 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, pre.status_code, "pre-migration request succeeds");
 
         string upload_body = strmul("U", 1000000);
-        *hash<auto> result;
-        *hash<auto> error;
-        Counter cnt(1);
 
-        conn.submitRequest("POST", "/echo", NOTHING, upload_body,
-                sub (auto resp, *hash<auto> err) {
-            if (err) {
-                error = err;
-            } else {
-                result = resp;
-            }
-            cnt.dec();
-        });
+        hash<auto> req = conn.submitRequest("POST", "/echo", NOTHING, upload_body);
+        Future f = req.future;
 
-        # Migrate mid-upload
-        if (cnt.getCount() > 0) {
-            assertTrue(conn.migrate(), "migration during upload succeeds");
-        }
+        # Migrate mid-upload — the request is in-flight via the controller
+        assertTrue(conn.migrate(), "migration during upload succeeds");
 
-        # Controller drives I/O — wait for completion
-        int rc = cnt.waitForZero(60s);
-        if (rc) {
-            throw "TIMEOUT", "upload request timed out after migration";
-        }
+        # Wait for the Future to resolve
+        hash<auto> result = f.get(60s);
 
-        if (error) {
-            throw error.err, error.desc;
-        }
         assertEq(200, result.status_code, "upload response status after migration");
         # The echo handler echoes the body back
         string resp_body = result.body.typeCode() == NT_BINARY

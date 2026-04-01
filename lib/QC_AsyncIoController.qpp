@@ -92,6 +92,14 @@ hashdecl Qore::SocketPollOperationInfo {
         on a listener) by using distinct keys like "accept:<hash>:1", "accept:<hash>:2".
     */
     *string key;
+
+    //! Force onComplete dispatch even if the C++ auto-detection doesn't find an override
+    /** Works around C++/Qore multiple inheritance method resolution order issues where
+        findMethod("onComplete") returns the base no-op from the wrong parent class.
+
+        @since %Qore 2.3
+    */
+    bool has_on_complete = False;
 }
 
 //! Socket poll result info hash
@@ -300,9 +308,11 @@ static nothing AsyncIoController::wakeSocket(AbstractPollableIoObjectBase[Abstra
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    QoreString hash;
-    qore_get_ptr_hash(hash, static_cast<AbstractPollableIoObjectBase*>(*sock));
-    ctrl->wakeSocket(std::string(hash.c_str()));
+    // Use QoreObject unique hash — the private data pointer
+    // (AbstractPollableIoObjectBase*) can change during QUIC handshake when
+    // the socket is reconfigured, causing hash mismatches with the cache key.
+    // The QoreObject unique hash is stable across the connection lifecycle.
+    ctrl->wakeSocketByObject(const_cast<QoreObject*>(obj_sock), xsink);
 }
 
 //! Waits for all pending onComplete/abort callbacks to be processed

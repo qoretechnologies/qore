@@ -292,11 +292,14 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
         }
 
-        # Filter pseudo-headers
+        # Filter pseudo-headers (keep :protocol for RFC 9220 extended CONNECT)
         hash<auto> req_headers = {};
+        *string protocol;
         if (headers) {
             foreach string key in (keys headers) {
-                if (key[0] != ":") {
+                if (key == ":protocol") {
+                    protocol = headers{key};
+                } else if (key[0] != ":") {
                     req_headers{key} = headers{key};
                 }
             }
@@ -305,6 +308,11 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             req_headers.host = h3_url_info.port == 443
                 ? h3_url_info.host
                 : sprintf("%s:%d", h3_url_info.host, h3_url_info.port);
+        }
+
+        # Pass :protocol through for RFC 9220 extended CONNECT
+        if (protocol) {
+            req_headers.":protocol" = protocol;
         }
 
         self.checkCapacity(max_streams);
@@ -337,6 +345,14 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR",
                 sprintf("connection closed during request submission (state: %y)",
                     self.getState());
+        }
+
+        # Deliver any responses that arrived during the submit-to-registration window
+        if (reg_result.buffered) {
+            foreach hash<auto> resp in (reg_result.buffered) {
+                resp.protocol = "h3";
+                channel.send(resp);
+            }
         }
 
         return stream_id;

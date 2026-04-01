@@ -5263,7 +5263,7 @@ public class WebSocketClientHcioPollOp {
         # Get connection and stream ID (protocol-agnostic)
         conn = stream.getConnection();
         stream_id = stream.getStreamId();
-        @assert(stream_id > 0, "stream_id must be positive after startStreaming");
+        @assert(stream_id >= 0, "stream_id must be non-negative after startStreaming");
 
         # Register for async stream data notifications.
         # H2: uses stream queue + listener (queue enables data_ready_streams signal)

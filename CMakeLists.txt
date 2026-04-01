@@ -86,7 +86,7 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR}/include/)
 include_directories(BEFORE ${CMAKE_BINARY_DIR})
 
 # for add the source dir include for cmake runs that refuse to add it in some environments for an unknown reason
-set(CMAKE_CXX_FLAGS "-I${CMAKE_SOURCE_DIR}/include")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/include")
 
 find_package(Java)
 

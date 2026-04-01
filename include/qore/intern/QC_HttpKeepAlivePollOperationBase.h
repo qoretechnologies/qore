@@ -135,9 +135,13 @@ private:
     int64_t deadline_us;                            //!< absolute deadline for idle phase
     int64_t header_deadline_us;                     //!< absolute deadline for header phase
     int64_t ttl_us;                                 //!< keep-alive timeout duration in microseconds
+    bool registered_pollin = false;                  //!< True after first POLLIN registration
 
-    //! Idle phase polling — check timeout, socket liveness, data availability
+    //! Idle phase polling — register POLLIN on first call, transition to header on subsequent
     DLLLOCAL QoreHashNode* continueIdlePoll(ExceptionSink* xsink);
+
+    //! Returns POLLIN poll_info with idle deadline timeout
+    DLLLOCAL QoreHashNode* getIdlePollInfo(ExceptionSink* xsink);
 
     //! Transitions from idle to header reading phase
     DLLLOCAL QoreHashNode* transitionToHeaderPhase(ExceptionSink* xsink);

@@ -262,6 +262,15 @@ public:
     */
     DLLLOCAL void wakeSocket(const std::string& sock_hash);
 
+    //! Wakes a socket operation by QoreObject identity
+    /** Looks up the socket's registered hash from registered_sockets to find the
+        correct cache entry. This avoids the hash mismatch that occurs when the
+        AbstractPollableIoObjectBase pointer changes during QUIC handshake.
+        @param sock_obj the socket QoreObject
+        @param xsink exception sink
+    */
+    DLLLOCAL void wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink);
+
     //! Wait for all pending onComplete/abort callbacks to be processed
     /** Call after cancelByOwner() to ensure all cancelled operation callbacks
         have been delivered before stopping thread pools that depend on them.

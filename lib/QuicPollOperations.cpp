@@ -1725,7 +1725,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;
                     }
 
-                    // Check again for completed streams
+                    // Check again for completed streams (after send)
                     for (auto& entry : sessions_) {
                         auto& session = entry.second;
                         if (session->hasCompletedStreams()) {
@@ -2207,9 +2207,10 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     ExceptionSink* xsink, QoreSocketObject* sock,
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
-    InputStream* input_stream, int64 chunk_size)
+    InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size)
     : SocketPollSocketOperationBase(sock), stream_id(stream_id),
-      input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+      input_stream(input_stream), input_stream_obj(input_stream_obj),
+      chunk_size(chunk_size > 0 ? chunk_size : 16384),
       is_pollable(input_stream->supportsNonBlockingIo()) {
     AutoLocker al(sock->priv->m);
 

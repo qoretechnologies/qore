@@ -92,14 +92,19 @@ bool QoreSocketObject::hasPendingData() const {
     if (priv->socket->priv->ssl && priv->socket->priv->ssl->pending() > 0) {
         return true;
     }
-    // Check H2/H3 session for pending stream data that was received in a
-    // previous read cycle but not yet drained by the poll operation.
-    // Without this, CONNECT stream DATA received during the same TCP read
-    // as the CONNECT request headers is never dispatched — the SSL/TCP
-    // buffers are empty so epoll/hasPendingData never triggers a re-poll.
-    if (priv->socket->priv->h2_session
-            && priv->socket->priv->h2_session->hasStreamData()) {
-        return true;
+    // Check H2/H3 session for pending data at the protocol level:
+    // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
+    //   but not yet drained by the poll operation
+    // - wantWrite(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE)
+    //   that must be flushed before the peer will send more data
+    // - wantRead(): nghttp2 has buffered frames to process
+    // Without these checks, the SSL/TCP buffers appear empty so epoll never
+    // triggers a re-poll, but the H2 session has actionable work.
+    if (priv->socket->priv->h2_session) {
+        Http2Session* h2 = priv->socket->priv->h2_session.get();
+        if (h2->hasStreamData() || h2->wantWrite() || h2->wantRead()) {
+            return true;
+        }
     }
     return false;
 }

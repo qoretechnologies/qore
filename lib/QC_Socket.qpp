@@ -986,6 +986,13 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
         return QoreValue();
     }
 
+    // Safety gate: reject Qore-implemented InputStreams whose read() calls evalMethod()
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAMANDREADHEADER-ERROR",
+            "InputStream is not I/O thread safe; use handler-thread streaming instead");
+        return QoreValue();
+    }
+
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
     hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
@@ -1006,19 +1013,24 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
 
     // Take ownership of InputStream
     InputStream* body_ptr = body.release();
+    // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
+    // while the C++ poll operation holds the InputStreamWrapper private data
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
     s->ref();
 
     // The InputStream may already be unassigned (from doResponse async capture);
     // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
     body_ptr->reassignThread(xsink);
     if (*xsink) {
+        body_obj->deref(xsink);
         return QoreValue();
     }
 
     // Create the fused poll operation
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
-            body_ptr, content_length, deadline_ms, true),
+            body_ptr, body_obj, content_length, deadline_ms, true),
         xsink);
     if (*xsink) {
         return QoreValue();
@@ -1037,6 +1049,96 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStreamAndReadHeader(i
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("send-stream-and-read-header"), xsink);
+    }
+    return rv.release();
+}
+
+//! Starts a poll operation to send a chunked HTTP response with InputStream body + idle + read header
+/** Sends HTTP response headers with Transfer-Encoding: chunked, streams InputStream body using
+    HTTP chunked framing, waits for idle timeout, then reads the next HTTP request header.
+    The handler thread returns immediately; all I/O happens on the I/O thread.
+
+    @param status_code the HTTP status code (e.g. 200)
+    @param status_desc the HTTP status description (e.g. "OK")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers (Transfer-Encoding is set automatically)
+    @param body the InputStream to read the response body from; EOF signals end of chunks
+    @param idle_timeout keep-alive idle timeout after the response is sent
+
+    @return an @ref AbstractPollOperation object
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int status_code,
+        string status_desc, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body, timeout idle_timeout) {
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    // Safety gate: reject Qore-implemented InputStreams whose read() calls evalMethod()
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAMANDREADHEADER-ERROR",
+            "InputStream is not I/O thread safe; use handler-thread streaming instead");
+        return QoreValue();
+    }
+
+    // Ensure Transfer-Encoding: chunked is set
+    ReferenceHolder<QoreHashNode> hdr_copy(headers
+        ? headers->hashRefSelf() : new QoreHashNode(autoTypeInfo), xsink);
+    hdr_copy->setKeyValue("Transfer-Encoding", new QoreStringNode("chunked"), xsink);
+    // Remove Content-Length if present (incompatible with chunked)
+    hdr_copy->removeKey("Content-Length", xsink);
+
+    QoreString hdr_str(s->getEncoding());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.concat("\r\n");
+    qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
+
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr_str.c_str(), hdr_str.size());
+
+    int us;
+    int64 now_s = q_epoch_us(us);
+    int64 now_ms = now_s * 1000 + us / 1000;
+    int64 deadline_ms = now_ms + idle_timeout;
+
+    InputStream* body_ptr = body.release();
+    // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
+    // while the C++ poll operation holds the InputStreamWrapper private data
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
+    s->ref();
+
+    body_ptr->reassignThread(xsink);
+    if (*xsink) {
+        body_obj->deref(xsink);
+        return QoreValue();
+    }
+
+    // Create fused poll operation with chunked=true, content_length=-1
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
+            body_ptr, body_obj, -1, deadline_ms, true, true),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-chunked-stream-and-read-header"), xsink);
     }
     return rv.release();
 }
@@ -1070,6 +1172,13 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
         return QoreValue();
     }
 
+    // Safety gate: reject Qore-implemented InputStreams whose read() calls evalMethod()
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPRESPONSEWITHSTREAM-ERROR",
+            "InputStream is not I/O thread safe; use handler-thread streaming instead");
+        return QoreValue();
+    }
+
     // Build the HTTP response headers in a buffer
     QoreString hdr(s->getEncoding());
     hdr.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
@@ -1084,19 +1193,23 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
 
     // Take ownership of InputStream
     InputStream* body_ptr = body.release();
+    // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
     s->ref();
 
     // The InputStream may already be unassigned (from doResponse async capture);
     // reassign it to this thread so the constructor can access it (e.g. getPollableDescriptor)
     body_ptr->reassignThread(xsink);
     if (*xsink) {
+        body_obj->deref(xsink);
         return QoreValue();
     }
 
     // Create the non-fused poll operation
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
-            body_ptr, content_length, 0, false),
+            body_ptr, body_obj, content_length, 0, false),
         xsink);
     if (*xsink) {
         return QoreValue();
@@ -4686,11 +4799,14 @@ AbstractPollOperation Socket::startPollSendHttp2StreamingResponse(int stream_id,
         *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
+    // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketHttp2SendStreamingResponsePollOperation(xsink, s, stream_id, status_code,
-            headers, body_ptr, chunk_size ? chunk_size : 16384),
+            headers, body_ptr, body_obj, chunk_size ? chunk_size : 16384),
         xsink
     );
     if (*xsink) {
@@ -5985,11 +6101,14 @@ AbstractPollOperation Socket::startPollQuicSendStreamingResponse(int session_id,
     }
     // body ref is owned by QPP ReferenceHolder; poll operation takes ownership via release()
     InputStream* body_ptr = body.release();
+    // Hold a strong reference to the QoreObject so the InputStream is not garbage collected
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
     s->ref();
 
     ReferenceHolder<SocketPollOperationBase> poller(
         new SocketQuicSendStreamingResponsePollOperation(xsink, s, session_id, stream_id,
-            status_code, headers, body_ptr, chunk_size ? chunk_size : 16384),
+            status_code, headers, body_ptr, body_obj, chunk_size ? chunk_size : 16384),
         xsink
     );
     if (*xsink) {

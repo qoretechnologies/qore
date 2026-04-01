@@ -6664,13 +6664,15 @@ QoreValue SocketSendAndReadHeaderPollOperation::getOutput() const {
 }
 
 SocketSendStreamAndReadHeaderPollOperation::SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink,
-        BinaryNode* hdr_data, QoreSocketObject* sock, InputStream* is, int64 content_length,
-        int64 idle_timeout_ms, bool fused)
+        BinaryNode* hdr_data, QoreSocketObject* sock, InputStream* is, QoreObject* is_obj,
+        int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked)
         : SocketPollSocketOperationBase(sock), header_data(hdr_data),
           hdr_buf(reinterpret_cast<const char*>(hdr_data->getPtr())),
           hdr_size(hdr_data->size()),
           input_stream(is),
+          input_stream_obj(is_obj),
           content_length(content_length),
+          chunked_encoding(chunked),
           fused(fused),
           idle_timeout_ms(idle_timeout_ms), header_output(xsink) {
 
@@ -6785,7 +6787,7 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                 }
 
                 // Check if we've sent all the data
-                if (bytes_sent >= content_length) {
+                if (chunked_encoding ? sent_terminal_chunk : (bytes_sent >= content_length)) {
                     // All data sent; unassign InputStream thread
                     if (input_stream) {
                         input_stream->unassignThread(xsink);
@@ -6803,8 +6805,13 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                 }
 
                 // Read the next chunk from InputStream
-                int64 remaining = content_length - bytes_sent;
-                int64 chunk_size = remaining < 65536 ? remaining : 65536;
+                int64 chunk_size;
+                if (chunked_encoding) {
+                    chunk_size = 65536;  // Read up to 64KB per chunk
+                } else {
+                    int64 remaining = content_length - bytes_sent;
+                    chunk_size = remaining < 65536 ? remaining : 65536;
+                }
 
                 if (is_pollable) {
                     // Non-blocking read for pollable streams.
@@ -6845,54 +6852,96 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                             input_stream->unassignThread(xsink);
                             input_stream = nullptr;
                         }
-                        if (bytes_sent < content_length) {
-                            xsink->raiseException("HTTP-STREAM-ERROR",
-                                "InputStream EOF after " QLLD " bytes but Content-Length is " QLLD,
-                                bytes_sent, content_length);
-                            phase = Phase::Error;
+                        if (chunked_encoding) {
+                            // Send terminal chunk "0\r\n\r\n"
+                            SimpleRefHolder<BinaryNode> term(new BinaryNode);
+                            term->append("0\r\n\r\n", 5);
+                            current_chunk = term.release();
+                            sent_terminal_chunk = true;
+                            // Fall through to start sending
+                        } else {
+                            if (bytes_sent < content_length) {
+                                xsink->raiseException("HTTP-STREAM-ERROR",
+                                    "InputStream EOF after " QLLD " bytes but Content-Length is " QLLD,
+                                    bytes_sent, content_length);
+                                phase = Phase::Error;
+                                return nullptr;
+                            }
+                            // bytes_sent == content_length: normal completion
+                            if (fused) {
+                                phase = Phase::Idle;
+                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                            }
+                            sock->priv->clearNonBlock();
+                            set_non_block = false;
+                            phase = Phase::Complete;
                             return nullptr;
                         }
-                        // bytes_sent == content_length: normal completion
-                        if (fused) {
-                            phase = Phase::Idle;
-                            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                    } else {
+                        chunk->setSize(count);
+                        if (chunked_encoding) {
+                            // Frame as HTTP chunked: "<hex-size>\r\n<data>\r\n"
+                            QoreString hex;
+                            hex.sprintf("%x\r\n", (int)count);
+                            SimpleRefHolder<BinaryNode> framed(new BinaryNode);
+                            framed->append(hex.c_str(), hex.size());
+                            framed->append(chunk->getPtr(), count);
+                            framed->append("\r\n", 2);
+                            current_chunk = framed.release();
+                        } else {
+                            current_chunk = chunk.release();
                         }
-                        sock->priv->clearNonBlock();
-                        set_non_block = false;
-                        phase = Phase::Complete;
-                        return nullptr;
                     }
-                    chunk->setSize(count);
-                    current_chunk = chunk.release();
                 } else {
                     // Non-pollable (memory streams) — readHelper never blocks
-                    current_chunk = input_stream->readHelper(chunk_size, xsink);
+                    SimpleRefHolder<BinaryNode> raw_chunk(
+                        input_stream->readHelper(chunk_size, xsink));
                     if (*xsink) {
                         phase = Phase::Error;
                         return nullptr;
                     }
-                    if (!current_chunk) {
+                    if (!raw_chunk || !raw_chunk->size()) {
                         // EOF from non-pollable InputStream
                         if (input_stream) {
                             input_stream->unassignThread(xsink);
                             input_stream = nullptr;
                         }
-                        if (bytes_sent < content_length) {
-                            xsink->raiseException("HTTP-STREAM-ERROR",
-                                "InputStream provided " QLLD " bytes but Content-Length is " QLLD,
-                                bytes_sent, content_length);
-                            phase = Phase::Error;
+                        if (chunked_encoding) {
+                            // Send terminal chunk
+                            SimpleRefHolder<BinaryNode> term(new BinaryNode);
+                            term->append("0\r\n\r\n", 5);
+                            current_chunk = term.release();
+                            sent_terminal_chunk = true;
+                            // Fall through to start sending
+                        } else {
+                            if (bytes_sent < content_length) {
+                                xsink->raiseException("HTTP-STREAM-ERROR",
+                                    "InputStream provided " QLLD " bytes but Content-Length is " QLLD,
+                                    bytes_sent, content_length);
+                                phase = Phase::Error;
+                                return nullptr;
+                            }
+                            // bytes_sent == content_length: normal completion
+                            if (fused) {
+                                phase = Phase::Idle;
+                                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+                            }
+                            sock->priv->clearNonBlock();
+                            set_non_block = false;
+                            phase = Phase::Complete;
                             return nullptr;
                         }
-                        // bytes_sent == content_length: normal completion
-                        if (fused) {
-                            phase = Phase::Idle;
-                            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-                        }
-                        sock->priv->clearNonBlock();
-                        set_non_block = false;
-                        phase = Phase::Complete;
-                        return nullptr;
+                    } else if (chunked_encoding) {
+                        // Frame as HTTP chunked
+                        QoreString hex;
+                        hex.sprintf("%x\r\n", (int)raw_chunk->size());
+                        SimpleRefHolder<BinaryNode> framed(new BinaryNode);
+                        framed->append(hex.c_str(), hex.size());
+                        framed->append(raw_chunk->getPtr(), raw_chunk->size());
+                        framed->append("\r\n", 2);
+                        current_chunk = framed.release();
+                    } else {
+                        current_chunk = raw_chunk.release();
                     }
                 }
 
@@ -7597,9 +7646,11 @@ Http2SessionPtr SocketHttp2SendResponsePollOperation::takeSession() {
 
 SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponsePollOperation(
         ExceptionSink* xsink, QoreSocketObject* sock, int32_t stream_id, int status_code,
-        const QoreHashNode* headers, InputStream* input_stream, int64 chunk_size)
+        const QoreHashNode* headers, InputStream* input_stream, QoreObject* input_stream_obj,
+        int64 chunk_size)
         : SocketPollSocketOperationBase(sock), stream_id(stream_id),
-          input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+          input_stream(input_stream), input_stream_obj(input_stream_obj),
+          chunk_size(chunk_size > 0 ? chunk_size : 16384),
           is_pollable(input_stream->supportsNonBlockingIo()) {
 
     AutoLocker al(sock->priv->m);

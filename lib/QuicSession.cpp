@@ -1541,6 +1541,13 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         add_nv(":authority", 10, authority.c_str(), authority.size());
     }
 
+    // RFC 9220: if :protocol is in headers, include it as a pseudo-header
+    // (extended CONNECT for WebSocket, A2A, etc.)
+    auto proto_it = headers.find(":protocol");
+    if (proto_it != headers.end() && !proto_it->second.empty()) {
+        add_nv(":protocol", 9, proto_it->second.c_str(), proto_it->second.size());
+    }
+
     // Regular headers (same filtering as submitRequest)
     std::vector<std::string> lower_keys;
     lower_keys.reserve(headers.size());
@@ -1600,6 +1607,14 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     stream->method = method;
     stream->path = path;
     stream->state = QuicStreamState::Open;
+
+    // RFC 9220: mark extended CONNECT streams as connect tunnels
+    if (proto_it != headers.end() && !proto_it->second.empty()
+            && strcmp(method, "CONNECT") == 0) {
+        stream->is_connect = true;
+        stream->connect_protocol = proto_it->second;
+        stream->connect_tunnel_active = true;
+    }
 
     // Signal that there's data to write (headers)
     pending_write_.store(true, std::memory_order_release);
@@ -2307,6 +2322,9 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                 result->connect_protocol = it->second->connect_protocol;
                 result->is_connect = it->second->is_connect;
                 result->connect_tunnel_active = true;
+                // Move body for incremental tunnel data delivery (client side)
+                result->body = std::move(it->second->body);
+                it->second->body.clear();
                 return result;
             }
             auto result = std::move(it->second);
@@ -3404,8 +3422,8 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
             stream_id, (int)datalen, (int)(stream->body.size() + datalen));
 
-        // RFC 9220: Extended CONNECT tunnel — deliver data to handler
-        if (stream->is_connect) {
+        // RFC 9220: Extended CONNECT tunnel — deliver data to handler (server side)
+        if (stream->is_connect && session->is_server_) {
             {
                 std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
                 auto qit = session->connect_stream_queues_.find(stream_id);
@@ -3431,6 +3449,22 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                 // in Http3ServerPollOperation). No explicit wake needed — epoll
                 // POLLIN on the UDP socket handles inter-cycle data.
             }
+            // Extend flow control
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
+
+        // Client-side CONNECT tunnel: deliver each DATA chunk incrementally.
+        // Push to completed_streams_ so getOutput() returns the chunk, which
+        // handleReading() dispatches to the ChannelAction → Channel → readData().
+        if (stream->is_connect && !session->is_server_) {
+            stream->body.insert(stream->body.end(), data, data + datalen);
+            // Mark as "completed" for incremental delivery — getOutput() builds
+            // the response hash with the accumulated body and resets it.
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
             // Extend flow control
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
                                                   static_cast<uint64_t>(datalen));

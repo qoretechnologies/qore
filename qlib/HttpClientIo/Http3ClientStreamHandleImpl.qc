@@ -329,6 +329,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     AutoLock al(lock);
                     state = HttpClientStreamState::Complete;
                 }
+                # For initial response headers (no body) — return the full hash
+                # so callers can inspect the response (CONNECT 200, etc.)
+                if ((rv.status_code || rv.headers) && !rv.body) {
+                    return rv;
+                }
                 # Return body data if present, otherwise the end_stream sentinel
                 if (rv.body) {
                     return rv.body;

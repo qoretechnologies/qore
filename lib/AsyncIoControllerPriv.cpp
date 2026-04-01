@@ -593,6 +593,19 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     // (DelegatingPollOperation) — any class other than AbstractPollOperation itself
     bool has_qore_on_complete = on_complete_meth
         && on_complete_meth->getClass()->getID() != CID_ABSTRACTPOLLOPERATION;
+    // Allow callers to force onComplete dispatch via "has_on_complete" flag
+    // in the submit info hash — works around C++/Qore multiple inheritance
+    // where findMethod may return the base no-op from the wrong parent
+    if (!has_qore_on_complete) {
+        v = info->getKeyValue("has_on_complete");
+        bool flag_val = v.getAsBool();
+        ASYNC_IO_TRACE("submit: has_on_complete flag=%d (type=%d, node=%p) auto=%d class=%s keys=%d\n",
+            (int)flag_val, v.getType(), v.getInternalNode(), (int)has_qore_on_complete,
+            spop_cls->getName(), (int)info->size());
+        if (flag_val) {
+            has_qore_on_complete = true;
+        }
+    }
 
     // Get C++ poll operation for direct continuePoll() calls (bypasses evalMethod overhead).
     // Only attempt getReferencedPrivateData if the class actually inherits the C++ base;
@@ -1062,6 +1075,43 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     }
 }
 
+void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
+    // Look up the registered socket hash for this QoreObject — the cache key
+    // uses the AbstractPollableIoObjectBase pointer hash computed at submit time.
+    // We MUST NOT recompute from the current private data pointer because it
+    // may have changed during QUIC handshake (socket reconfiguration).
+    // Instead, find the matching QoreObject in registered_sockets and use the
+    // stored socket hash from the registration.
+    std::string sock_hash;
+    {
+        AutoLocker al(m);
+        for (auto& [key, obj] : registered_sockets) {
+            if (obj == sock_obj) {
+                // Found — look up the socket hash via sock_hash_to_keys reverse map
+                for (auto& [hash, keys] : sock_hash_to_keys) {
+                    if (keys.count(key)) {
+                        sock_hash = hash;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+    }
+    if (sock_hash.empty()) {
+        // Fallback: compute from current private data pointer
+        AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
+            sock_obj->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
+        if (s) {
+            sock_hash = getSocketHash(s);
+            s->deref(xsink);
+        }
+    }
+    if (!sock_hash.empty()) {
+        wakeSocket(sock_hash);
+    }
+}
+
 void AsyncIoControllerPriv::start(ExceptionSink* xsink) {
     AutoLocker al(m);
     if (!tid || io_exiting) {
@@ -1451,6 +1501,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
     // it is populated at the bottom of each iteration after EventLoop::poll().
     std::unordered_set<std::string> ready_socket_hashes;
 
+    // Deferred SSL pending set — nginx pattern: after continuePoll reads from an
+    // SSL socket and returns poll_info (not completed), SSL-buffered data may remain
+    // invisible to epoll.  Instead of checking hasPendingData() in Phase 1 (which
+    // causes a busy loop when leftover bytes don't form a complete protocol frame),
+    // we defer the re-check to the NEXT iteration — after epoll_wait runs and other
+    // connections are serviced.  This prevents starvation while still detecting
+    // SSL-buffered data within one extra event loop pass.
+    std::unordered_set<std::string> ssl_deferred_hashes;
+
     while (true) {
         // Process commands
         if (processCommands(xsink)) {
@@ -1469,6 +1528,17 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Consume targeted wakeup set (populated by WakeSocket commands)
         std::unordered_set<std::string> woken_hashes;
+
+        // Merge deferred SSL hashes into ready set — these were posted by the
+        // previous iteration's Phase 3 when continuePoll left SSL-buffered data.
+        // Track which hashes were deferred to avoid re-deferring the same socket
+        // (which would cause a busy loop for partial SSL/TLS records)
+        std::unordered_set<std::string> already_deferred;
+        if (!ssl_deferred_hashes.empty()) {
+            already_deferred = ssl_deferred_hashes;
+            ready_socket_hashes.insert(ssl_deferred_hashes.begin(), ssl_deferred_hashes.end());
+            ssl_deferred_hashes.clear();
+        }
 
         {
             AutoLocker al(m);
@@ -1519,16 +1589,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
 
                     // Check if socket was marked ready by the EventLoop,
-                    // by a WakeSocket command (worker queued data), or has
-                    // SSL-buffered data (invisible to epoll)
-                    bool ssl_pending = pinfo.sock && pinfo.sock->hasPendingData();
+                    // by a WakeSocket command (worker queued data), or by
+                    // deferred SSL pending from the previous iteration
                     bool ready = ready_socket_hashes.count(sock_hash) > 0;
                     bool woken = woken_hashes.count(sock_hash) > 0;
-                    if (poll_sock && !ready && !woken && !ssl_pending) {
+                    if (poll_sock && !ready && !woken) {
                         ASYNC_IO_TRACE("Phase2 SKIP key='%s' sock='%s' "
-                            "ready=%d woken=%d ssl=%d events=%d\n",
+                            "ready=%d woken=%d events=%d\n",
                             key.c_str(), sock_hash.c_str(), (int)ready, (int)woken,
-                            (int)ssl_pending, events);
+                            events);
                         // Socket not ready - skip continuePoll, update deadline
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             if (poll_deadline_us == 0 || pinfo.timeout_date_us < poll_deadline_us) {
@@ -1896,6 +1965,17 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
                         }
 
+                        // Defer SSL pending check to next iteration (nginx pattern):
+                        // if the SSL layer has buffered data invisible to epoll,
+                        // schedule a re-poll on the next pass instead of spinning now.
+                        // Skip if this socket was already deferred from the previous
+                        // iteration — one retry is sufficient; if the data still doesn't
+                        // form a complete protocol frame, wait for new epoll events
+                        if (pinfo.sock && pinfo.sock->hasPendingData()
+                                && !already_deferred.count(sock_hash)) {
+                            ssl_deferred_hashes.insert(sock_hash);
+                        }
+
                         // Update poll deadline
                         if (pinfo.timeout_us >= 0 && pinfo.timeout_date_us > 0) {
                             if (poll_deadline_us == 0 || pinfo.timeout_date_us < poll_deadline_us) {
@@ -2020,7 +2100,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Calculate poll timeout
         int timeout_ms = -1;  // Wait indefinitely by default
-        if (poll_deadline_us > 0) {
+        if (!ssl_deferred_hashes.empty()) {
+            // SSL-buffered data discovered in Phase 3 — don't block in epoll,
+            // just check for new kernel events and return immediately so the
+            // next iteration processes the deferred hashes
+            timeout_ms = 0;
+        } else if (poll_deadline_us > 0) {
             int64 now_us = get_epoch_us();
             int64 remaining_us = poll_deadline_us - now_us;
             if (remaining_us <= 0) {
@@ -3077,13 +3162,12 @@ void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink
 
 void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         bool has_on_complete, QoreHashNode* result, ExceptionSink* xsink) {
+    ASYNC_IO_TRACE("deliverResult: has_on_complete=%d spop_obj=%p queue=%p class=%s\n",
+        (int)has_on_complete, (void*)spop_obj, (void*)queue,
+        spop_obj ? spop_obj->getClassName() : "null");
     if (has_on_complete && spop_obj) {
-        // Always dispatch onComplete() to worker pool — it may acquire
-        // application-level locks that would block the I/O thread.
-        // Only continuePoll() is safe to run on the I/O thread (frame processing).
-        // Callers that need synchronous delivery (e.g., cancelByOwner during
-        // shutdown) should call flushCallbacks() after cancellation to wait
-        // for all dispatched callbacks to complete.
+        // Dispatch onComplete() to worker pool — no Qore code on the I/O thread.
+        // The closure's captured program context ensures proper execution.
         {
             AutoLocker al(m);
             if (!call_dispatcher) {

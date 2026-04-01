@@ -590,6 +590,11 @@ public class HttpAsyncSocketIoController {
     addIdleConnection(Socket sock, *HttpServer::HttpListenerInterface listener, hash<auto> cx, HttpAsyncTarget target,
             timeout ttl = DefaultIdleTimeout,
             *HttpKeepAlivePollOperation reuse_op) {
+        # Guard against race: if the client closed the connection while the handler
+        # thread was sending the response, don't re-register a closed socket
+        if (!sock.isOpen()) {
+            return;
+        }
         string uh = sock.uniqueHash();
         hash<HttpActiveConnectionInfo> cinfo;
         {
@@ -1812,12 +1817,17 @@ public class HttpAsyncSocketIoController {
                         handleConnectionResult(result, uh, cinfo.state);
                     });
             }
-            controller.submit(<SocketPollOperationInfo>{
+            hash<SocketPollOperationInfo> submit_info = <SocketPollOperationInfo>{
                 "sock": cinfo.sock,
                 "spop": submit_op,
                 "owner": owner,
                 "to": timeout,
-            }, True);  # replace=True since connection key may be reused
+                # Force onComplete dispatch for operations with HttpConnectionPollOperationBase
+                # or Http3ServerPollOperation — their onComplete overrides may not be detected
+                # by findMethod() due to C++/Qore multiple inheritance resolution order
+                "has_on_complete": True,
+            };
+            controller.submit(submit_info, True);  # replace=True since connection key may be reused
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit connection op for %s (state=%y): %s: %s",
                 uh, cinfo.state, ex.err, ex.desc);
@@ -2192,9 +2202,35 @@ public class HttpAsyncSocketIoController {
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
 
+        # Convert non-I/O-safe InputStreams for sync handler-thread send.
+        # These InputStreams (CallbackInputStream etc.) cannot be read on the I/O thread
+        # because InputStreamWrapper::read() calls evalMethod() (Qore user code).
+        # I/O-safe InputStreams skip this and use the fused I/O-thread paths below.
+        if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+            InputStream is = result.input_stream;
+            remove result.input_stream;
+            if (result.chunked) {
+                # Chunked: convert to send_callback for sendHTTPResponseWithCallback
+                is.reassignThread();
+                result.send_callback = auto sub() { return is.read(65536); };
+            } else {
+                # Content-Length: read entire body into memory on handler thread
+                is.reassignThread();
+                binary buf;
+                while (*binary chunk = is.read(65536)) {
+                    buf += chunk;
+                }
+                is.unassignThread();
+                result.body = buf;
+            }
+        }
+
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
+        # Only use fused I/O-thread path for I/O-thread-safe InputStreams (C++ native);
+        # Qore InputStreams (CallbackInputStream etc.) converted to body/send_callback above
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
-                && !result.close && result.return_to_idle && result.hdr."Content-Length") {
+                && !result.close && result.return_to_idle && result.hdr."Content-Length"
+                && result.input_stream.isIoThreadSafe()) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 timeout ttl = result.ttl ?? DefaultIdleTimeout;
@@ -2225,9 +2261,10 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Opt #3b: InputStream + close → non-fused stream send
+        # Opt #3b: InputStream + close → non-fused stream send (I/O-thread-safe only)
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
-                && result.close && result.hdr."Content-Length") {
+                && result.close && result.hdr."Content-Length"
+                && result.input_stream.isIoThreadSafe()) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 AbstractPollOperation send_op =
@@ -2286,6 +2323,41 @@ public class HttpAsyncSocketIoController {
                 submitConnectionOp(uh, cinfo);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "Error starting fused send+read for %y: %s: %s",
+                    uh, ex.err, ex.desc);
+                try { sock.close(); } catch () {}
+            }
+            return;
+        }
+
+        # Opt #3d: InputStream + chunked + keep-alive → fused chunked stream send + idle + read header
+        # (I/O-thread-safe only; non-I/O-safe InputStreams already converted above)
+        if (result.code && !result.streaming && result.input_stream && !result.send_callback
+                && !result.close && result.return_to_idle && result.chunked
+                && result.input_stream.isIoThreadSafe()) {
+            try {
+                string status_msg = result.status_message ?? "Unknown";
+                timeout ttl = result.ttl ?? DefaultIdleTimeout;
+                AbstractPollOperation fused_op =
+                    sock.startPollSendHttpChunkedResponseAndReadHeader(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.input_stream, ttl);
+                hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                    "sock": sock,
+                    "listener": linfo.listener,
+                    "cx": cx,
+                    "target": target,
+                    "state": HttpConnectionState::SendStreamAndReadHeader,
+                    "stream_op": fused_op,
+                    "ttl": ttl,
+                };
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoWriteLock al(m);
+                    cinfo = connections{uh} = new_cinfo;
+                }
+                submitConnectionOp(uh, cinfo);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error starting chunked fused send+read for %y: %s: %s",
                     uh, ex.err, ex.desc);
                 try { sock.close(); } catch () {}
             }
@@ -2973,6 +3045,11 @@ public class HttpAsyncSocketIoController {
                 log(LoggerLevel::ERROR,
                     "Error submitting HTTP/2 response for stream=%d on %y: %s: %s",
                     stream_id, uh, ex.err, ex.desc);
+                # Send RST_STREAM so the client gets an error instead of waiting forever
+                try {
+                    cinfo.sock.resetHttp2Stream(stream_id);
+                    controller.wakeSocket(cinfo.sock);
+                } catch () {}
             }
             return;
         }

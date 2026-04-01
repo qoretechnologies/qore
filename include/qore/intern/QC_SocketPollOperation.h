@@ -398,7 +398,7 @@ class SocketHttp2SendStreamingResponsePollOperation : public SocketPollSocketOpe
 public:
     DLLLOCAL SocketHttp2SendStreamingResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         int32_t stream_id, int status_code, const QoreHashNode* headers,
-        InputStream* input_stream, int64 chunk_size = 16384);
+        InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size = 16384);
 
     DLLLOCAL ~SocketHttp2SendStreamingResponsePollOperation();
 
@@ -409,6 +409,10 @@ public:
             }
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
+            }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
             }
             sock->deref(xsink);
             delete this;
@@ -437,6 +441,10 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         // Send RST_STREAM to notify client that the stream is being cancelled
         {
@@ -462,6 +470,7 @@ private:
     StreamingState ss_state = SS_READ_CHUNK;
     int32_t stream_id = 0;
     SimpleRefHolder<InputStream> input_stream;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
     int64 chunk_size;
     bool eof = false;
     bool is_pollable;
@@ -589,8 +598,8 @@ private:
 class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* header_data,
-        QoreSocketObject* sock, InputStream* input_stream, int64 content_length,
-        int64 idle_timeout_ms, bool fused);
+        QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
+        int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -599,6 +608,10 @@ public:
             }
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
+            }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
             }
             sock->deref(xsink);
             delete this;
@@ -619,6 +632,10 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         header_output = nullptr;
         SocketPollSocketOperationBase::abort(xsink);
@@ -635,11 +652,14 @@ private:
 
     // StreamBody phase: InputStream body source
     SimpleRefHolder<InputStream> input_stream;
-    int64 content_length;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
+    int64 content_length;       //!< -1 for chunked encoding (stream until EOF)
     int64 bytes_sent = 0;
     int stream_fd = -1;
     bool is_pollable = true;
     bool need_reassign = true;
+    bool chunked_encoding = false; //!< True when using HTTP chunked Transfer-Encoding
+    bool sent_terminal_chunk = false; //!< True after sending "0\r\n\r\n"
     SimpleRefHolder<BinaryNode> current_chunk;
 
     // Idle + ReadHeader phases
@@ -1279,12 +1299,17 @@ public:
                                                            int status_code,
                                                            const QoreHashNode* headers,
                                                            InputStream* input_stream,
+                                                           QoreObject* input_stream_obj,
                                                            int64 chunk_size = 16384);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
+            }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
             }
             // If destroyed without abort() (e.g. owner cancellation), clean up
             // the stream and restore socket state
@@ -1321,6 +1346,10 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         // Cancel stream via QuicSession
         {
@@ -1345,6 +1374,7 @@ private:
 
     //! InputStream fields
     SimpleRefHolder<InputStream> input_stream;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
     int64 chunk_size;
     bool eof = false;
     bool is_pollable;
