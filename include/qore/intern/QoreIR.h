@@ -808,6 +808,14 @@ struct QoreIRConstant {
     std::string string_value;
     int64_t date_microseconds = 0;
     bool date_is_relative = false;
+    // Relative date components (years/months can't be converted to seconds losslessly)
+    int rel_years = 0;
+    int rel_months = 0;
+    int rel_days = 0;
+    int rel_hours = 0;
+    int rel_minutes = 0;
+    int rel_seconds = 0;
+    int rel_us = 0;
     const QoreEnumMember* enum_member = nullptr;
 };
 
