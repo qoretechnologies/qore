@@ -4563,6 +4563,9 @@ load_local_done:
                     // (init slot from StoreLocal + load slots from LoadLocal) BEFORE
                     // lvar->del()/uninstantiate() so that lvar->del() is the true
                     // final deref and triggers the destructor immediately.
+                    // Unlike clearLoadSlots (used during StoreLocal), this ALSO discards
+                    // values in the cleanup vector because the variable is going out of
+                    // scope and ALL references must be released for deterministic destruction.
                     auto cleanupLocalSlots = [&](uint32_t var_slot_id) {
                         if (var_slot_id == UINT32_MAX) {
                             return;
@@ -4575,16 +4578,22 @@ load_local_done:
                                 values[init_slot].discard(xsink);
                                 values[init_slot] = QoreValue();
                             }
-                            // Don't remove from cleanup vector — values[slot] is now
-                            // NOTHING so cleanupValues() will no-op on it.  Removing
-                            // via erase(remove()) is O(n) and causes O(n^2) in loops.
                             local_init_slots[var_slot_id] = UINT32_MAX;
                         }
-                        // Clean up all LoadLocal result slots for this local.
-                        // On the last loop iteration, these slots are never overwritten
-                        // by the next iteration's LoadLocal, so they hold an extra
-                        // reference that defers the object's destructor to function exit.
-                        clearLoadSlots(var_slot_id);
+                        // Clean up all LoadLocal result slots for this local,
+                        // INCLUDING those in the cleanup vector (scope exit releases all)
+                        if (var_slot_id < local_load_slots.size()) {
+                            for (uint32_t vid : local_load_slots[var_slot_id]) {
+                                if (vid < values.size()) {
+                                    values[vid].discard(xsink);
+                                    values[vid] = QoreValue();
+                                }
+                                if (vid < load_slot_registered.size()) {
+                                    load_slot_registered[vid] = false;
+                                }
+                            }
+                            local_load_slots[var_slot_id].clear();
+                        }
                     };
 
                     if (is_pre) {
