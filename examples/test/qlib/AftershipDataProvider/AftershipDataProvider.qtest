@@ -584,7 +584,7 @@ class AftershipDataProviderTest inherits QUnit::Test {
 
         # test connection ping
         hash<auto> ping_result = conn.ping(True);
-        assertEq("ok", ping_result.ok.toString(), "connection ping succeeds");
+        assertTrue(ping_result.ok, "connection ping succeeds");
 
         AbstractDataProvider prov = conn.getDataProvider();
 
