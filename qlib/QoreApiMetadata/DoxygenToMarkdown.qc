@@ -109,7 +109,7 @@ public class DoxygenToMarkdown {
     }
 
     #! Convert @code{.py}...@endcode blocks to fenced code blocks
-    private static string convertCodeBlocks(string text) {
+    static string convertCodeBlocks(string text) {
         string result = text;
         # match @code or @code{.py} or @code{.lang} followed by content and @endcode
         while (True) {
@@ -132,7 +132,7 @@ public class DoxygenToMarkdown {
         @param protected_blocks reference to list to store protected blocks
         @return the text with protected blocks replaced by placeholders
     */
-    private static string protectCodeBlocks(string text, reference<list<string>> protected_blocks) {
+    static string protectCodeBlocks(string text, reference<list<string>> protected_blocks) {
         string result = text;
 
         # protect fenced code blocks (one at a time since replacement depends on index)
@@ -164,7 +164,7 @@ public class DoxygenToMarkdown {
     }
 
     #! Restore protected code blocks from placeholders
-    private static string restoreCodeBlocks(string result, list<string> protected_blocks) {
+    static string restoreCodeBlocks(string result, list<string> protected_blocks) {
         for (int i = protected_blocks.size() - 1; i >= 0; --i) {
             result = regex_subst(result, "\x00PROTECTED_" + string(i) + "\x00",
                 protected_blocks[i], RE_Global);
@@ -173,7 +173,7 @@ public class DoxygenToMarkdown {
     }
 
     #! Convert HTML \<table\> elements to Markdown tables
-    private static string convertHtmlTables(string text) {
+    static string convertHtmlTables(string text) {
         string result = text;
         while (True) {
             *list<string> m = (result =~ x/<table[^>]*>([\s\S]*?)<\/table>/i);
@@ -188,7 +188,7 @@ public class DoxygenToMarkdown {
     }
 
     #! Convert HTML table content to Markdown table format
-    private static string htmlTableToMarkdown(string table_html) {
+    static string htmlTableToMarkdown(string table_html) {
         # extract rows
         list<string> rows = ();
         string remaining = table_html;
