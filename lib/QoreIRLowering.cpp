@@ -1811,12 +1811,31 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // At fall-through (normal exit), inline handlers
     if (has_on_block_exit) {
         if (!terminated) {
-            // Phase 1: Inline handlers at fall-through exit
-            if (!lowerHandlersAtExit(false, error, block_handler_start)) {
-                return false;
+            // Check if the block has BOTH on_exit and on_error handlers.
+            // When on_exit handler code throws, the LandingPad re-fires handlers,
+            // causing on_exit to execute twice. Don't inline when mixed — let the
+            // runtime ScopeExit handler manage re-entrancy properly.
+            bool has_unconditional = false;
+            bool has_error = false;
+            for (size_t hi = block_handler_start; hi < block_handlers.size(); ++hi) {
+                if (block_handlers[hi].type == OBE_Unconditional) has_unconditional = true;
+                if (block_handlers[hi].type == OBE_Error) has_error = true;
             }
-            // Phase 2a: Emit ScopeExit for fall-through path (inline_lowered=true means handlers already inlined)
-            builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/true);
+            bool skip_inline = has_unconditional && has_error;
+
+            if (!skip_inline) {
+                // Phase 1: Inline handlers at fall-through exit
+                if (!lowerHandlersAtExit(false, error, block_handler_start)) {
+                    return false;
+                }
+            }
+            // Phase 2a: Emit ScopeExit (inline_lowered when handlers were inlined)
+            auto* se_inst = builder.createScopeExit(scope_id, false, nullptr, /*inline_lowered=*/!skip_inline);
+            // When handlers execute at runtime (!inline_lowered), they may throw.
+            // Set exception_target so the interpreter routes to the try/catch landing pad.
+            if (skip_inline && !exception_stack.empty()) {
+                se_inst->exception_target = exception_stack.back();
+            }
         }
         // Always pop scope/cleanup stacks - they're tracking compile-time state, not IR instructions
         // When terminated=true, emitBlockCleanups already emitted the ScopeExit IR, but we still need to pop

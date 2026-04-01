@@ -5329,6 +5329,14 @@ load_local_done:
                     // are unreachable by handlers, so they stay valid.
                     if (!scope_inst->inline_lowered) {
                         invalidateExternalCaches();
+                        // If handler execution raised an exception, route to the
+                        // ScopeExit instruction's exception_target (try/catch landing pad)
+                        if (xsink && *xsink && inst->exception_target) {
+                            prev_block = block;
+                            block = inst->exception_target;
+                            ip = 0;
+                            break;
+                        }
                     }
                 }
                 ++ip;
