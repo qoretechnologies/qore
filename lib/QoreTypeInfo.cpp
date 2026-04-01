@@ -3333,19 +3333,16 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* first, const Q
 qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool& may_not_match,
         bool& may_need_filter, qore_type_result_e& max_result, bool known_initial_assignment) const {
     //printd(5, "QoreTypeInfo::parseAccepts() '%s' <- '%s'\n", tname.c_str(), typeInfo->tname.c_str());
-    // For non-union types (return_vec.size() == 1), use fast path: return immediately on QTI_IDENT
-    // For union types (return_vec.size() > 1), check all components for proper matching
-
-    bool ok = false;
-    bool is_union = typeInfo && typeInfo->return_vec.size() > 1;
-    qore_type_result_e best_score = QTI_NOT_EQUAL;  // best (lowest numeric value) score across matched components
-    bool all_match = true;
-
-    if (is_union) {
+    // Restore develop's logic: iterate source return_vec components against target accept_vec.
+    // For union types (return_vec.size() > 1), all components are checked; return QTI_AMBIGUOUS
+    // when ok=true (not QTI_IDENT, which incorrectly signals exact identity for unions and
+    // changes variant resolution behavior).
+    if (typeInfo->return_vec.size() > getAcceptSpecs().size()) {
+        may_not_match = true;
     }
 
-    for (size_t comp_idx = 0; comp_idx < typeInfo->return_vec.size(); ++comp_idx) {
-        auto& rt = typeInfo->return_vec[comp_idx];
+    bool ok = false;
+    for (auto& rt : typeInfo->return_vec) {
         bool t_no_match = true;
         for (auto& at : getAcceptSpecs()) {
             qore_type_result_e t_max_result = QTI_NOT_EQUAL;
@@ -3353,22 +3350,9 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
                 t_max_result, known_initial_assignment);
             if (res == QTI_IDENT) {
                 max_result = t_max_result;
-                // Fast path for non-union types: return immediately
-                if (!is_union) {
-                    return res;
-                }
-                // For union types: record and continue checking other components
-                // Track best (minimum numeric value) score across all components
-                if (best_score == QTI_NOT_EQUAL || t_max_result < best_score) {
-                    best_score = t_max_result;
-                }
-                break;  // done with accept specs for this component
+                return res;
             } else if (res == QTI_AMBIGUOUS || res == QTI_NEAR || res == QTI_WILDCARD) {
                 max_result = t_max_result;
-                // Track best score for union types
-                if (is_union && (best_score == QTI_NOT_EQUAL || res < best_score)) {
-                    best_score = res;
-                }
                 assert(ok);
                 if (may_not_match) {
                     return res;
@@ -3377,53 +3361,18 @@ qore_type_result_e QoreTypeInfo::parseAccepts(const QoreTypeInfo* typeInfo, bool
             }
         }
         if (t_no_match) {
-            if (is_union) {
-                all_match = false;
-                if (!may_not_match) {
-                    may_not_match = true;
-                    if (ok) {
-                        // some prior component matched, some didn't -> case 2
-                        return QTI_AMBIGUOUS;
-                    }
-                }
-            } else {
-                if (!may_not_match) {
-                    may_not_match = true;
-                    if (ok) {
-                        return QTI_AMBIGUOUS;
-                    }
+            if (!may_not_match) {
+                may_not_match = true;
+                if (ok) {
+                    return QTI_AMBIGUOUS;
                 }
             }
         }
     }
     if (ok) {
-        if (is_union && !all_match) {
-            // case 2: some matched, some didn't -> conservative match
-            may_not_match = true;
-            if (is_union) {
-            }
-            return QTI_AMBIGUOUS;
-        }
-        // For union types:
-        // Case 3 (all_match=true): all components match -> definitive match (QTI_IDENT)
-        // Case 2 (all_match=false): some match, some don't -> already returned QTI_AMBIGUOUS above
-        qore_type_result_e result;
-        if (is_union) {
-            if (all_match) {
-                // All components match - definitive match
-                result = QTI_IDENT;
-            } else {
-                // Should have already returned above
-                result = QTI_AMBIGUOUS;
-            }
-        } else {
-            result = QTI_AMBIGUOUS;
-        }
-        return result;
+        return QTI_AMBIGUOUS;
     }
     may_not_match = false;
-    if (is_union) {
-    }
     return QTI_NOT_EQUAL;
 }
 
