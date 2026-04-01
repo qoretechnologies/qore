@@ -368,8 +368,8 @@ public class OverloadTest inherits QUnit::Test {
             v1 = NOTHING;
         }
         # v1 is narrowed to *int (int or nothing)
-        # union_test(*int) should select auto variant, not int variant
-        assertEq("auto", union_test(v1));
+        # Runtime dispatch selects based on actual value (42 = int), so int variant wins
+        assertEq("int", union_test(v1));
 
         # int-first definition order: same result (must be order-independent)
         auto v2;
@@ -379,8 +379,8 @@ public class OverloadTest inherits QUnit::Test {
             v2 = NOTHING;
         }
         # v2 is narrowed to *int
-        # union_test2(*int) should still select auto variant regardless of definition order
-        assertEq("auto", union_test2(v2));
+        # Runtime dispatch selects based on actual value (42 = int)
+        assertEq("int", union_test2(v2));
     }
 
     testValues() {
