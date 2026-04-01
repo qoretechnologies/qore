@@ -6675,6 +6675,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+            // Track the input value's cleanup alloca for this closure variable
+            // so UninstantiateLocal can release it at block scope exit.
+            // Without this, the original object ref in the invoke result alloca
+            // persists until function exit, preventing deterministic destruction.
+            {
+                auto key = reinterpret_cast<const void*>(linst->local);
+                auto alloca_it = invoke_alloca_map.find(inst->operands[0].id);
+                if (alloca_it != invoke_alloca_map.end()) {
+                    local_cleanup_allocas[key].push_back(alloca_it->second);
+                }
+            }
             if (aot_mode) {
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
                         reinterpret_cast<const void*>(linst->local));
