@@ -4695,9 +4695,15 @@ load_local_done:
                             locals_slot_cache[local_inst->slot_id].discard(xsink);
                             locals_slot_cache[local_inst->slot_id] = QoreValue();
                         }
-                        // For closure-use vars: trigger deterministic destruction when
-                        // CVV's only remaining reference is the cvstack entry (refcount==1)
+                        // For closure-use vars: release closures cache ref and trigger
+                        // deterministic destruction via clearValue when possible
                         if (local_inst->is_closure) {
+                            // Release closures cache entry (StoreClosure adds refSelf'd copy)
+                            auto cit = closures.find(local_inst->local);
+                            if (cit != closures.end()) {
+                                cit->second.discard(xsink);
+                                closures.erase(cit);
+                            }
                             ClosureVarValue* cvv = thread_try_find_closure_var(
                                 local_inst->local->getName());
                             if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
