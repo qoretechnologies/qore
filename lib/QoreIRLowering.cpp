@@ -3330,8 +3330,9 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
         int64_t micros = is_relative ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
         auto* inst = builder.createConstDate(micros, is_relative);
         if (is_relative) {
-            // Preserve full relative date components (years/months can't be
-            // losslessly converted to seconds due to variable-length months/leap years)
+            // Always preserve full relative date components to avoid lossy
+            // conversions (e.g., -1D → -24h loses the day semantics, 5Y → hours
+            // loses year precision across leap years)
             qore_tm info;
             dt->getInfo(info);
             inst->constant.rel_years = info.year;

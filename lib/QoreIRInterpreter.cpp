@@ -2342,19 +2342,13 @@ next_instruction:
                 auto* cinst = static_cast<QoreIRConstInstruction*>(inst);
                 DateTimeNode* dt;
                 if (cinst->constant.date_is_relative) {
-                    // Use full relative date components when available (years/months
-                    // can't be losslessly converted to seconds)
-                    if (cinst->constant.rel_years || cinst->constant.rel_months) {
-                        dt = DateTimeNode::makeRelative(
-                            cinst->constant.rel_years, cinst->constant.rel_months,
-                            cinst->constant.rel_days, cinst->constant.rel_hours,
-                            cinst->constant.rel_minutes, cinst->constant.rel_seconds,
-                            cinst->constant.rel_us);
-                    } else {
-                        dt = new DateTimeNode(true);
-                        dt->setRelativeDateSeconds(cinst->constant.date_microseconds / 1000000,
-                            static_cast<int>(cinst->constant.date_microseconds % 1000000));
-                    }
+                    // Always use full relative date components to preserve semantics
+                    // (e.g., -1D stays as -1 day, not -24 hours; 5Y stays as 5 years)
+                    dt = DateTimeNode::makeRelative(
+                        cinst->constant.rel_years, cinst->constant.rel_months,
+                        cinst->constant.rel_days, cinst->constant.rel_hours,
+                        cinst->constant.rel_minutes, cinst->constant.rel_seconds,
+                        cinst->constant.rel_us);
                 } else {
                     // date_microseconds is a UTC epoch from getEpochMicrosecondsUTC(); use
                     // makeAbsolute() which stores the epoch directly without local-to-UTC
