@@ -66,6 +66,20 @@ int QoreParseCastOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
 
     const QoreTypeInfo* expTypeInfo = parse_context.typeInfo;
 
+    // If the expression is a reference to an auto-typed variable whose type was narrowed,
+    // use autoTypeInfo for parse-time cast checking so we don't reject valid casts based
+    // on the narrowed type (the actual runtime type may differ from the narrowed type)
+    if (exp && exp.getType() == NT_VARREF) {
+        VarRefNode* vrn = exp.get<VarRefNode>();
+        qore_var_t vtype = vrn->getType();
+        if (vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS) {
+            LocalVar* lvar = vrn->ref.id;
+            if (lvar && lvar->isAutoType()) {
+                expTypeInfo = autoTypeInfo;
+            }
+        }
+    }
+
     auto set_cast_analysis = [&]() {
         parse_context.analysis.clear();
         if (parse_context.typeInfo) {
