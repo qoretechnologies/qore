@@ -4695,10 +4695,12 @@ load_local_done:
                             locals_slot_cache[local_inst->slot_id].discard(xsink);
                             locals_slot_cache[local_inst->slot_id] = QoreValue();
                         }
-                        // For closure-use vars: release closures cache ref and trigger
-                        // deterministic destruction via clearValue when possible
+                        // For closure-use vars: release all extra refs BEFORE
+                        // clearValue so clearValue is the final deref that triggers
+                        // the Qore destructor through the proper CVV lifecycle.
+                        // Order: closures cache → values[] scan → clearValue
                         if (local_inst->is_closure) {
-                            // Release closures cache entry (StoreClosure adds refSelf'd copy)
+                            // 1. Release closures cache entry
                             auto cit = closures.find(local_inst->local);
                             if (cit != closures.end()) {
                                 cit->second.discard(xsink);
@@ -4706,8 +4708,30 @@ load_local_done:
                             }
                             ClosureVarValue* cvv = thread_try_find_closure_var(
                                 local_inst->local->getName());
-                            if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
-                                cvv->clearValue(xsink);
+                            if (cvv) {
+                                // 2. Scan values[] for refs to the CVV's contained value
+                                // and discard them BEFORE clearValue. The CVV still holds
+                                // a ref, so the object won't be prematurely freed.
+                                {
+                                    // cvv->eval() always returns an owned ref (refSelf'd)
+                                    // via getReferencedValue(), so always discard after use
+                                    QoreValue cvval = cvv->eval(xsink);
+                                    if (cvval.hasNode()) {
+                                        const AbstractQoreNode* node_ptr = cvval.getInternalNode();
+                                        for (size_t vi = 0; vi < values.size(); ++vi) {
+                                            if (values[vi].hasNode()
+                                                && values[vi].getInternalNode() == node_ptr) {
+                                                values[vi].discard(xsink);
+                                                values[vi] = QoreValue();
+                                            }
+                                        }
+                                    }
+                                    cvval.discard(xsink);
+                                }
+                                // 3. clearValue is now the final deref → destructor fires
+                                if (cvv->references.load(std::memory_order_acquire) == 1) {
+                                    cvv->clearValue(xsink);
+                                }
                             }
                         }
                         local_inst->local->uninstantiate(xsink);
