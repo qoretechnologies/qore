@@ -728,5 +728,17 @@ QoreValue QoreEnumCastOperatorNode::castValue(QoreValue inner, ExceptionSink* xs
     if (QoreEnumCastOperatorNode::checkValue(xsink, inner, false)) {
         return QoreValue();
     }
-    return inner.hasNode() ? inner.refSelf() : inner;
+    // or-nothing cast with NOTHING value: return NOTHING
+    if (inner.isNothing()) {
+        return QoreValue();
+    }
+    // If already a TAG_ENUM of the same enum, return as-is
+    if (inner.isEnum() && inner.getEnumMember()->getEnumDecl() == ed) {
+        return inner;
+    }
+    // Find the member by value and return a TAG_ENUM
+    QoreValue base_val = inner.isEnum() ? inner.getEnumMember()->getValue() : inner;
+    const QoreEnumMember* member = ed->findMemberByValue(base_val);
+    assert(member);
+    return QoreValue::makeEnum(member);
 }
