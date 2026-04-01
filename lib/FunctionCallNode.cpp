@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,14 @@
 QoreValue AbstractMethodCallNode::exec(QoreObject* o, const char* c_str, const qore_class_private* ctx,
         ExceptionSink* xsink) const {
     //QORE_TRACE("AbstractMethodCallNode::exec()");
+
+    // Hold a strong reference to the target object for the duration of the method call.
+    // Without this, if the caller's reference is the last strong reference (e.g. a temporary
+    // from evaluating a weak reference), the object can be destroyed mid-call when another
+    // thread drops its reference.  For builtin methods, the private data reference provides
+    // this guarantee; for user methods, there was no equivalent protection.
+    QoreObjectRealRefHelper ref_holder(o, xsink);
+
     /* the class and method saved at parse time are used here for this run-time
         optimization: the method pointer saved at parse time is used to execute the
         method directly if the object used at run-time is of the same class as

@@ -2897,6 +2897,10 @@ void QoreClass::addBaseClass(QoreClass* qc, bool virt) {
     priv->addBaseClass(qc, virt);
 }
 
+void QoreClass::initializeBuiltin() {
+    priv->initializeBuiltin();
+}
+
 int QoreClass::runtimeCheckInstantiateClass(ExceptionSink* xsink) const {
     return priv->runtimeCheckInstantiateClass(xsink);
 }

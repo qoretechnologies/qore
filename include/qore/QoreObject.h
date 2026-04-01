@@ -813,4 +813,29 @@ protected:
     void* ptr;
 };
 
+//! RAII helper that holds a strong ("real") reference to a QoreObject
+/** Calls realRef() in the constructor and realDeref() in the destructor.
+    Used to keep an object alive during a method call on it.
+
+    @since %Qore 2.1
+*/
+class QoreObjectRealRefHelper {
+public:
+    DLLLOCAL QoreObjectRealRefHelper(QoreObject* obj, ExceptionSink* xsink) : obj(obj), xsink(xsink) {
+        obj->realRef();
+    }
+
+    DLLLOCAL ~QoreObjectRealRefHelper() {
+        obj->realDeref(xsink);
+    }
+
+private:
+    DLLLOCAL QoreObjectRealRefHelper(const QoreObjectRealRefHelper&) = delete;
+    DLLLOCAL QoreObjectRealRefHelper& operator=(const QoreObjectRealRefHelper&) = delete;
+    DLLLOCAL void* operator new(size_t) = delete;
+
+    QoreObject* obj;
+    ExceptionSink* xsink;
+};
+
 #endif
