@@ -6400,6 +6400,15 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 QoreIRBasicBlock* handler = exception_stack.back();
                 auto* inst = builder.createInvoke(expr, {list_val, push_val}, normal_block, handler, op->loc);
                 inst->invoke_opcode = QoreIROpcode::ListPush;
+                // Set element type for proper coercion on auto-vivification
+                const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
+                inst->element_type = QoreTypeInfo::getUniqueReturnComplexList(var_type);
+                if (!inst->element_type) {
+                    inst->element_type = QoreTypeInfo::getUniqueReturnComplexSoftList(var_type);
+                }
+                if (!inst->element_type) {
+                    inst->element_type = QoreTypeInfo::getReturnComplexListOrNothing(var_type);
+                }
                 builder.setBlock(normal_block);
 
                 // Store result back
@@ -6414,7 +6423,18 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             }
 
             // Normal path
-            QoreIRValue result = builder.createListPush(list_val, push_val, op->loc)->result;
+            auto* push_inst = builder.createListPush(list_val, push_val, op->loc);
+            // Set element type from the variable's list type for proper coercion
+            // when auto-vivifying from NOTHING (e.g., list<softint> l; push l, "3")
+            const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
+            push_inst->element_type = QoreTypeInfo::getUniqueReturnComplexList(var_type);
+            if (!push_inst->element_type) {
+                push_inst->element_type = QoreTypeInfo::getUniqueReturnComplexSoftList(var_type);
+            }
+            if (!push_inst->element_type) {
+                push_inst->element_type = QoreTypeInfo::getReturnComplexListOrNothing(var_type);
+            }
+            QoreIRValue result = push_inst->result;
 
             // Store result back (may be new list if auto-vivified from NOTHING)
             if (is_closure) {

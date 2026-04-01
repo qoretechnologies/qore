@@ -1348,7 +1348,9 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                 return list_val.refSelf();
             }
             if (list_val.isNothing()) {
-                QoreListNode* l = new QoreListNode(autoTypeInfo);
+                const QoreTypeInfo* elem_type = inv->element_type
+                    ? inv->element_type : autoTypeInfo;
+                QoreListNode* l = new QoreListNode(elem_type);
                 l->push(push_val.refSelf(), xsink);
                 return QoreValue(l);
             }
@@ -2520,7 +2522,11 @@ next_instruction:
                     // cleanup, so both need their own reference
                     result = list_val.refSelf();
                 } else if (list_val.isNothing()) {
-                    QoreListNode* l = new QoreListNode(autoTypeInfo);
+                    // Use element type from instruction (set by lowerPush) for proper
+                    // coercion (e.g., list<softint> converts "3" to 3)
+                    const QoreTypeInfo* elem_type = inst->element_type
+                        ? inst->element_type : autoTypeInfo;
+                    QoreListNode* l = new QoreListNode(elem_type);
                     l->push(push_val.refSelf(), xsink);
                     result = QoreValue(l);
                 } else {
