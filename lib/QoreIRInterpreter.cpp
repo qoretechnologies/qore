@@ -4620,6 +4620,27 @@ load_local_done:
                         } else {
                             LocalVarValue* lvar = thread_find_lvar(local_inst->local->getName());
                             if (lvar) {
+                                // Release ALL value slot references to this object
+                                // BEFORE lvar->del() so del() is the final deref and
+                                // triggers deterministic destruction at scope exit.
+                                // This handles expression results (e.g., a.next = b
+                                // returns object 'a') that hold extra references in
+                                // the IR values array beyond the load/init slots.
+                                bool nd = false;
+                                QoreValue lval = lvar->eval(nd, xsink);
+                                if (lval.getType() == NT_OBJECT) {
+                                    const QoreObject* obj = lval.get<const QoreObject>();
+                                    for (size_t vi = 0; vi < values.size(); ++vi) {
+                                        if (values[vi].getType() == NT_OBJECT
+                                            && values[vi].get<const QoreObject>() == obj) {
+                                            values[vi].discard(xsink);
+                                            values[vi] = QoreValue();
+                                        }
+                                    }
+                                }
+                                if (nd) {
+                                    lval.discard(xsink);
+                                }
                                 lvar->del(xsink);
                             }
                         }
