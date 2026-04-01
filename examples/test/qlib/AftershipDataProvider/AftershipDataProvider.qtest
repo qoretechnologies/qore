@@ -1,0 +1,659 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** AftershipDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/AftershipDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class AftershipDataProviderTest
+
+class FakeAftershipRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        string last_method;
+        string last_path;
+        auto last_body;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.aftership.com",
+            "headers": {"as-api-key": "test-key"}, "data": "json"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        last_method = "GET";
+        last_path = path;
+        if (response_body) {
+            return <RestClient::RestResponseInfo>{"body": response_body};
+        }
+        # default responses based on path
+        if (path =~ /couriers/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "total": 2,
+                        "couriers": (
+                            {"slug": "fedex", "name": "FedEx"},
+                            {"slug": "ups", "name": "UPS"},
+                        ),
+                    },
+                },
+            };
+        }
+        if (path =~ /trackings\/[^\/]+$/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "tracking": {
+                            "id": "test123",
+                            "tracking_number": "1Z999AA10123456784",
+                            "slug": "ups",
+                            "tag": "InTransit",
+                            "title": "Test Tracking",
+                            "checkpoints": (
+                                {
+                                    "tag": "Pending",
+                                    "message": "Package info received",
+                                    "checkpoint_time": "2026-03-28T08:00:00Z",
+                                },
+                                {
+                                    "tag": "InTransit",
+                                    "message": "Package in transit",
+                                    "checkpoint_time": "2026-03-30T10:00:00Z",
+                                },
+                            ),
+                        },
+                    },
+                },
+            };
+        }
+        if (path =~ /trackings/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "trackings": (
+                            {
+                                "id": "test123",
+                                "tracking_number": "1Z999AA10123456784",
+                                "slug": "ups",
+                                "tag": "InTransit",
+                            },
+                        ),
+                    },
+                },
+            };
+        }
+        if (path =~ /returns\/[^\/]+$/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "id": "ret123",
+                        "rma_number": "RMA001",
+                        "approval_status": "submitted",
+                    },
+                },
+            };
+        }
+        if (path =~ /returns/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "returns": (
+                            {
+                                "id": "ret123",
+                                "rma_number": "RMA001",
+                                "approval_status": "submitted",
+                            },
+                        ),
+                    },
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": {"data": {}},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_method = "POST";
+        last_path = path;
+        last_body = body;
+        if (response_body) {
+            return <RestClient::RestResponseInfo>{"body": response_body};
+        }
+        if (path =~ /couriers\/detect/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "total": 1,
+                        "couriers": ({"slug": "ups", "name": "UPS"},),
+                    },
+                },
+            };
+        }
+        if (path =~ /retrack/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "tracking": {
+                            "id": "test123",
+                            "tracking_number": "1Z999AA10123456784",
+                            "tag": "Pending",
+                        },
+                    },
+                },
+            };
+        }
+        if (path =~ /mark-as-completed/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "tracking": {
+                            "id": "test123",
+                            "tracking_number": "1Z999AA10123456784",
+                            "tag": "Delivered",
+                        },
+                    },
+                },
+            };
+        }
+        if (path =~ /trackings/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "tracking": {
+                            "id": "new123",
+                            "tracking_number": body.tracking.tracking_number,
+                            "slug": body.tracking.slug ?? "auto",
+                            "tag": "Pending",
+                        },
+                    },
+                },
+            };
+        }
+        if (path =~ /returns.*approve/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {"data": {"id": "ret123", "approval_status": "approved"}},
+            };
+        }
+        if (path =~ /returns.*reject/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {"data": {"id": "ret123", "approval_status": "rejected"}},
+            };
+        }
+        if (path =~ /returns.*resolve/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {"data": {"id": "ret123", "approval_status": "done"}},
+            };
+        }
+        if (path =~ /returns/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "id": "ret123",
+                        "rma_number": "RMA001",
+                        "approval_status": "submitted",
+                    },
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": {"data": {}},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
+        last_method = "PUT";
+        last_path = path;
+        last_body = body;
+        if (response_body) {
+            return <RestClient::RestResponseInfo>{"body": response_body};
+        }
+        if (path =~ /trackings/) {
+            return <RestClient::RestResponseInfo>{
+                "body": {
+                    "data": {
+                        "tracking": {
+                            "id": "test123",
+                            "tracking_number": "1Z999AA10123456784",
+                            "title": body.tracking.title ?? "Updated",
+                        },
+                    },
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": {"data": {}},
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        last_method = "DELETE";
+        last_path = path;
+        return <RestClient::RestResponseInfo>{
+            "body": {
+                "data": {
+                    "tracking": {
+                        "id": "test123",
+                        "tracking_number": "1Z999AA10123456784",
+                    },
+                },
+            },
+        };
+    }
+}
+
+class AftershipDataProviderTest inherits QUnit::Test {
+    public {
+        const OptionColumn = 22;
+    }
+
+    private {
+        *string conn_name;
+        FakeAftershipRestClientIo fake_rest;
+    }
+
+    constructor() : QUnit::Test("AftershipDataProvider", "1.0") {
+        conn_name = m_options."connection" ?? ENV.AFTERSHIP_CONNECTION;
+        addTestCase("unit: create tracking", \testCreateTracking());
+        addTestCase("unit: get tracking", \testGetTracking());
+        addTestCase("unit: search trackings", \testSearchTrackings());
+        addTestCase("unit: update tracking", \testUpdateTracking());
+        addTestCase("unit: delete tracking", \testDeleteTracking());
+        addTestCase("unit: retrack", \testRetrack());
+        addTestCase("unit: mark as completed", \testMarkAsCompleted());
+        addTestCase("unit: get last checkpoint", \testGetLastCheckpoint());
+        addTestCase("unit: list couriers", \testListCouriers());
+        addTestCase("unit: detect courier", \testDetectCourier());
+        addTestCase("unit: returns actions", \testReturnsActions());
+        addTestCase("unit: provider structure", \testProviderStructure());
+        addTestCase("unit: example event data", \testExampleEventData());
+        addTestCase("unit: data types", \testDataTypes());
+        if (conn_name) {
+            addTestCase("integration: live API", \testLiveApi());
+        }
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set Aftership connection name", OptionColumn);
+    }
+
+    setUp() {
+        fake_rest = new FakeAftershipRestClientIo();
+    }
+
+    private testCreateTracking() {
+        AftershipCreateTrackingDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"tracking_number": "1Z999AA10123456784", "slug": "ups"});
+        assertEq("POST", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /trackings/);
+        assertEq("1Z999AA10123456784", fake_rest.last_body.tracking.tracking_number);
+        assertEq("new123", result.id);
+    }
+
+    private testGetTracking() {
+        AftershipGetTrackingDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123"});
+        assertEq("GET", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /trackings\/test123/);
+        assertEq("test123", result.id);
+        assertEq("InTransit", result.tag);
+    }
+
+    private testSearchTrackings() {
+        AftershipTrackingsDataProvider prov(fake_rest);
+        AbstractDataProviderRecordIterator i = prov.searchRecords(NOTHING,
+            {"slug": "ups", "tag": "InTransit"});
+        assertTrue(i.next());
+        hash<auto> rec = i.getValue();
+        assertEq("test123", rec.id);
+        assertTrue(fake_rest.last_path =~ /slug=ups/);
+        assertTrue(fake_rest.last_path =~ /tag=InTransit/);
+
+        # test new search options: order_id, shipment_tags, return_to_sender
+        i = prov.searchRecords(NOTHING,
+            {"order_id": "ORD-123", "shipment_tags": "vip,urgent", "return_to_sender": True});
+        assertTrue(i.next());
+        assertTrue(fake_rest.last_path =~ /order_id=ORD-123/);
+        assertTrue(fake_rest.last_path =~ /shipment_tags=vip/);
+        assertTrue(fake_rest.last_path =~ /return_to_sender/);
+    }
+
+    private testUpdateTracking() {
+        AftershipUpdateTrackingDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123", "title": "My Package"});
+        assertEq("PUT", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /trackings\/test123/);
+        assertEq("My Package", fake_rest.last_body.tracking.title);
+    }
+
+    private testDeleteTracking() {
+        AftershipDeleteTrackingDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123"});
+        assertEq("DELETE", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /trackings\/test123/);
+    }
+
+    private testRetrack() {
+        AftershipRetrackDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123"});
+        assertEq("POST", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /trackings\/test123\/retrack/);
+    }
+
+    private testMarkAsCompleted() {
+        AftershipMarkCompletedDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123", "reason": "DELIVERED"});
+        assertEq("POST", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /mark-as-completed/);
+    }
+
+    private testGetLastCheckpoint() {
+        AftershipGetLastCheckpointDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"id": "test123"});
+        assertEq("GET", fake_rest.last_method);
+        # implementation fetches full tracking and extracts last checkpoint
+        assertTrue(fake_rest.last_path =~ /trackings\/test123$/);
+        assertEq("InTransit", result.tag);
+    }
+
+    private testListCouriers() {
+        AftershipCouriersDataProvider prov(fake_rest);
+        AbstractDataProviderRecordIterator i = prov.searchRecords();
+        assertTrue(i.next());
+        hash<auto> rec = i.getValue();
+        assertEq("fedex", rec.slug);
+        assertTrue(i.next());
+        rec = i.getValue();
+        assertEq("ups", rec.slug);
+    }
+
+    private testDetectCourier() {
+        AftershipDetectCourierDataProvider prov(fake_rest);
+        auto result = prov.doRequest({"tracking_number": "1Z999AA10123456784"});
+        assertEq("POST", fake_rest.last_method);
+        assertTrue(fake_rest.last_path =~ /couriers\/detect/);
+        assertEq(1, result.total);
+    }
+
+    private testReturnsActions() {
+        # create return
+        {
+            AftershipCreateReturnDataProvider prov(fake_rest);
+            auto result = prov.doRequest({
+                "external_order_id": "ORD-001",
+                "return_items": ({
+                    "external_order_item_id": "ITEM-001",
+                    "intended_return_quantity": 1,
+                    "return_reason": "Wrong size",
+                    "resolution": "refund",
+                    "refund_destination": "original_payment",
+                },),
+            });
+            assertEq("POST", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /returns/);
+            # verify API gets nested structure
+            assertEq("ORD-001", fake_rest.last_body.order.external_id);
+            assertTrue(fake_rest.last_body.return_items.size() > 0);
+            assertEq("ret123", result.id);
+        }
+
+        # search returns
+        {
+            AftershipReturnsDataProvider prov(fake_rest);
+            AbstractDataProviderRecordIterator i = prov.searchRecords(NOTHING,
+                {"approval_status": "submitted"});
+            assertTrue(i.next());
+            hash<auto> rec = i.getValue();
+            assertEq("ret123", rec.id);
+            assertEq("submitted", rec.approval_status);
+        }
+
+        # get return
+        {
+            AftershipGetReturnDataProvider prov(fake_rest);
+            auto result = prov.doRequest({"id": "ret123"});
+            assertEq("GET", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /returns\/ret123/);
+        }
+
+        # approve return
+        {
+            AftershipApproveReturnDataProvider prov(fake_rest);
+            auto result = prov.doRequest({"id": "ret123"});
+            assertEq("POST", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /approve/);
+            assertEq("approved", result.approval_status);
+        }
+
+        # reject return
+        {
+            AftershipRejectReturnDataProvider prov(fake_rest);
+            auto result = prov.doRequest({"id": "ret123", "reason": "Damaged"});
+            assertEq("POST", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /reject/);
+        }
+
+        # resolve return
+        {
+            AftershipResolveReturnDataProvider prov(fake_rest);
+            auto result = prov.doRequest({"id": "ret123"});
+            assertEq("POST", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /resolve/);
+        }
+
+        # add return shipment
+        {
+            AftershipAddReturnShipmentDataProvider prov(fake_rest);
+            auto result = prov.doRequest({
+                "id": "ret123",
+                "tracking_number": "1Z999",
+                "courier_code": "ups",
+            });
+            assertEq("POST", fake_rest.last_method);
+            assertTrue(fake_rest.last_path =~ /shipments/);
+        }
+    }
+
+    private testProviderStructure() {
+        AftershipDataProvider root(fake_rest);
+        assertEq("aftership", root.getName());
+
+        # verify all child providers exist
+        list<string> children = root.getChildProviderNames();
+        assertTrue(children.contains("trackings"));
+        assertTrue(children.contains("create-tracking"));
+        assertTrue(children.contains("get-tracking"));
+        assertTrue(children.contains("update-tracking"));
+        assertTrue(children.contains("delete-tracking"));
+        assertTrue(children.contains("retrack"));
+        assertTrue(children.contains("mark-as-completed"));
+        assertTrue(children.contains("get-last-checkpoint"));
+        assertTrue(children.contains("couriers"));
+        assertTrue(children.contains("detect-courier"));
+        assertTrue(children.contains("returns"));
+        assertTrue(children.contains("create-return"));
+        assertTrue(children.contains("get-return"));
+        assertTrue(children.contains("approve-return"));
+        assertTrue(children.contains("reject-return"));
+        assertTrue(children.contains("resolve-return"));
+        assertTrue(children.contains("add-return-shipment"));
+        assertTrue(children.contains("events"));
+
+        # verify events container
+        AbstractDataProvider events = root.getChildProvider("events");
+        list<string> event_children = events.getChildProviderNames();
+        assertTrue(event_children.contains("tracking-status-changed"));
+    }
+
+    private testExampleEventData() {
+        AftershipWatchTrackingStatusDataProvider prov(fake_rest);
+        auto example = prov.getExampleEventData("tracking-status-changed");
+        # should return fake data since no real records available
+        assertTrue(example.typeCode() == NT_HASH, "example event data is a hash");
+        assertTrue(example.tracking_number.val(), "example has tracking_number");
+        assertTrue(example.slug.val(), "example has slug");
+        assertTrue(example.tag.val(), "example has tag");
+        assertTrue(example.id.val(), "example has id");
+    }
+
+    private testDataTypes() {
+        # verify tracking data type fields
+        AftershipTrackingDataType tracking_type();
+        *hash<string, AbstractDataField> fields = tracking_type.getFields();
+        assertTrue(fields.id.val(), "tracking type has id field");
+        assertTrue(fields.tracking_number.val(), "tracking type has tracking_number field");
+        assertTrue(fields.tag.val(), "tracking type has tag field");
+        assertTrue(fields.slug.val(), "tracking type has slug field");
+        assertTrue(fields.checkpoints.val(), "tracking type has checkpoints field");
+        assertTrue(fields.custom_fields.val(), "tracking type has custom_fields field");
+        assertTrue(fields.order_promised_delivery_date.val(),
+            "tracking type has order_promised_delivery_date field");
+        assertTrue(fields.shipment_tags.val(), "tracking type has shipment_tags field");
+
+        # verify checkpoint data type fields
+        AftershipCheckpointDataType checkpoint_type();
+        fields = checkpoint_type.getFields();
+        assertTrue(fields.tag.val(), "checkpoint type has tag field");
+        assertTrue(fields.message.val(), "checkpoint type has message field");
+        assertTrue(fields.zip.val(), "checkpoint type has zip field");
+
+        # verify courier data type fields
+        AftershipCourierDataType courier_type();
+        fields = courier_type.getFields();
+        assertTrue(fields.slug.val(), "courier type has slug field");
+        assertTrue(fields.name.val(), "courier type has name field");
+        assertTrue(fields.support_languages.val(), "courier type has support_languages field");
+
+        # verify return item data type fields
+        AftershipReturnItemDataType item_type();
+        fields = item_type.getFields();
+        assertTrue(fields.external_order_item_id.val(), "return item type has external_order_item_id");
+        assertTrue(fields.intended_return_quantity.val(), "return item type has intended_return_quantity");
+        assertTrue(fields.resolution.val(), "return item type has resolution");
+
+        # verify update tracking request has API-aligned fields
+        AftershipUpdateTrackingRequestDataType update_type();
+        fields = update_type.getFields();
+        assertTrue(fields.id.val(), "update type has id field");
+        assertTrue(fields.title.val(), "update type has title field");
+        assertTrue(fields.custom_fields.val(), "update type has custom_fields field");
+        assertTrue(fields.delivery_type.val(), "update type has delivery_type field");
+        assertTrue(fields.slug.val(), "update type has slug field");
+        assertTrue(fields.pickup_location.val(), "update type has pickup_location field");
+        assertTrue(fields.pickup_note.val(), "update type has pickup_note field");
+        assertTrue(fields.tracking_account_number.val(), "update type has tracking_account_number field");
+        assertTrue(fields.tracking_key.val(), "update type has tracking_key field");
+        assertTrue(fields.origin_state.val(), "update type has origin_state field");
+        assertTrue(fields.destination_state.val(), "update type has destination_state field");
+    }
+
+    private testLiveApi() {
+        # requires a running Qorus instance with an Aftership connection
+        AbstractConnection conn = get_connection(conn_name);
+
+        # test connection ping
+        hash<auto> ping_result = conn.ping(True);
+        assertEq("ok", ping_result.ok.toString(), "connection ping succeeds");
+
+        AbstractDataProvider prov = conn.getDataProvider();
+
+        # test listing couriers (read-only, safe for live testing)
+        AbstractDataProvider couriers_prov = prov.getChildProvider("couriers");
+        AbstractDataProviderRecordIterator i = couriers_prov.searchRecords();
+        assertTrue(i.next(), "at least one courier exists");
+        hash<auto> courier = i.getValue();
+        assertTrue(courier.slug.val(), "courier has a slug");
+        assertTrue(courier.name.val(), "courier has a name");
+
+        # test detect courier
+        AbstractDataProvider detect_prov = prov.getChildProvider("detect-courier");
+        auto detect_result = detect_prov.doRequest({"tracking_number": "1Z999AA10123456784"});
+        assertTrue(detect_result.total > 0, "at least one courier detected");
+
+        # test create -> get -> update -> delete tracking (data persistence)
+        string test_tracking = "TEST" + now_us().toString() + string(rand() % 10000);
+        AbstractDataProvider create_prov = prov.getChildProvider("create-tracking");
+        auto created = create_prov.doRequest({
+            "tracking_number": test_tracking,
+            "slug": "ups",
+            "title": "Integration Test Tracking",
+            "note": "Automated test - safe to delete",
+        });
+        assertTrue(created.id.val(), "created tracking has an ID");
+        string tracking_id = created.id;
+        on_exit {
+            # always clean up, even if assertions fail
+            try {
+                AbstractDataProvider del_prov = prov.getChildProvider("delete-tracking");
+                del_prov.doRequest({"id": tracking_id});
+            } catch () {
+                # ignore cleanup errors
+            }
+        }
+
+        # get the tracking and verify fields persisted
+        AbstractDataProvider get_prov = prov.getChildProvider("get-tracking");
+        auto fetched = get_prov.doRequest({"id": tracking_id});
+        assertEq(tracking_id, fetched.id, "fetched tracking ID matches");
+        assertEq(test_tracking, fetched.tracking_number, "tracking number persisted");
+        assertEq("ups", fetched.slug, "slug persisted");
+        assertEq("Integration Test Tracking", fetched.title, "title persisted");
+
+        # update the tracking and verify
+        AbstractDataProvider update_prov = prov.getChildProvider("update-tracking");
+        auto updated = update_prov.doRequest({
+            "id": tracking_id,
+            "title": "Updated Test Tracking",
+        });
+        assertTrue(updated.typeCode() == NT_HASH, "update returns a hash");
+
+        # verify update persisted
+        fetched = get_prov.doRequest({"id": tracking_id});
+        assertEq("Updated Test Tracking", fetched.title, "title update persisted");
+
+        # search for the tracking
+        AbstractDataProvider trackings_prov = prov.getChildProvider("trackings");
+        AbstractDataProviderRecordIterator si = trackings_prov.searchRecords(NOTHING,
+            {"keyword": test_tracking, "limit": 1});
+        assertTrue(si.next(), "search finds the created tracking");
+        hash<auto> found = si.getValue();
+        assertEq(tracking_id, found.id, "search result matches created tracking");
+
+        # test example event data from live provider
+        AbstractDataProvider events_prov = prov.getChildProvider("events");
+        AbstractDataProvider watch_prov = events_prov.getChildProvider("tracking-status-changed");
+        auto example = watch_prov.getExampleEventData("tracking-status-changed");
+        assertTrue(example.typeCode() == NT_HASH, "live example event data is a hash");
+    }
+}
