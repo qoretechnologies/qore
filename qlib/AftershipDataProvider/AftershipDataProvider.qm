@@ -1,0 +1,628 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore AftershipDataProvider module definition
+
+/*  AftershipDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) AftershipRestClient
+%requires RestClientIo
+
+module AftershipDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Aftership tracking and returns services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new AftershipDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": AftershipDataProvider::AppName,
+            "display_name": "Aftership",
+            "short_desc": "Aftership package tracking and returns",
+            "desc": "Aftership package tracking and returns management services providing access to tracking, "
+                "courier detection, and returns APIs",
+            "scheme": "aftership",
+            "logo": AftershipLogo,
+            "logo_file_name": "aftership-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Shipping,),
+        });
+
+        # --- Tracking Actions ---
+
+        # create-tracking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/create-tracking",
+            "action": "create-tracking",
+            "display_name": "Create Tracking",
+            "short_desc": "Create a new tracking",
+            "desc": "Create a new package tracking by providing a tracking number and optional courier code",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipCreateTrackingRequestDataType::Fields{"tracking_number",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipCreateTrackingRequestDataType::Fields{"slug",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipCreateTrackingRequestDataType::Fields - ("tracking_number", "slug")
+            ),
+            "output_type": AftershipCreateTrackingDataProvider::ResponseType,
+        });
+
+        # get-tracking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/get-tracking",
+            "action": "get-tracking",
+            "display_name": "Get Tracking",
+            "short_desc": "Get a tracking by ID",
+            "desc": "Retrieve a single tracking record by its Aftership tracking ID",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipGetTrackingRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipGetTrackingDataProvider::ResponseType,
+        });
+
+        # search-trackings
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/trackings",
+            "action": "search-trackings",
+            "display_name": "Search Trackings",
+            "short_desc": "Search and list trackings",
+            "desc": "Search and list trackings with optional filters for keyword, courier, status, and date range",
+            "action_code": DPAT_FIND,
+            "groups": ("Tracking",),
+            "options": {
+                "keyword": <ActionOptionInfo>{
+                    "display_name": "Keyword",
+                    "short_desc": "Search keyword",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Search keyword to filter trackings by tracking number, title, order ID, etc.",
+                    "preselected": True,
+                },
+                "slug": <ActionOptionInfo>{
+                    "display_name": "Courier Code",
+                    "short_desc": "Filter by courier code",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter trackings by courier code (e.g., `fedex`, `ups`)",
+                },
+                "tag": <ActionOptionInfo>{
+                    "display_name": "Status Tag",
+                    "short_desc": "Filter by status tag",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter trackings by delivery status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "Pending", "display_name": "Pending"},
+                        <AllowedValueInfo>{"value": "InfoReceived", "display_name": "Info Received"},
+                        <AllowedValueInfo>{"value": "InTransit", "display_name": "In Transit"},
+                        <AllowedValueInfo>{"value": "OutForDelivery", "display_name": "Out for Delivery"},
+                        <AllowedValueInfo>{"value": "AttemptFail", "display_name": "Attempt Failed"},
+                        <AllowedValueInfo>{"value": "Delivered", "display_name": "Delivered"},
+                        <AllowedValueInfo>{"value": "AvailableForPickup", "display_name": "Available for Pickup"},
+                        <AllowedValueInfo>{"value": "Exception", "display_name": "Exception"},
+                        <AllowedValueInfo>{"value": "Expired", "display_name": "Expired"},
+                    ),
+                },
+                "tracking_numbers": <ActionOptionInfo>{
+                    "display_name": "Tracking Numbers",
+                    "short_desc": "Filter by tracking numbers",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Comma-separated tracking numbers to filter by (up to 50)",
+                },
+                "order_id": <ActionOptionInfo>{
+                    "display_name": "Order ID",
+                    "short_desc": "Filter by order ID",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter trackings by the order ID",
+                    "preselected": True,
+                },
+                "shipment_tags": <ActionOptionInfo>{
+                    "display_name": "Shipment Tags",
+                    "short_desc": "Filter by shipment tags",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Comma-separated shipment tags to filter by",
+                },
+                "return_to_sender": <ActionOptionInfo>{
+                    "display_name": "Return to Sender",
+                    "short_desc": "Filter return-to-sender shipments",
+                    "type": AbstractDataProviderTypeMap."*bool",
+                    "desc": "Filter trackings by return-to-sender status. Set to `True` to show only "
+                        "return-to-sender shipments, `False` to exclude them",
+                },
+                "created_at_min": <ActionOptionInfo>{
+                    "display_name": "Created After",
+                    "short_desc": "Filter by minimum creation date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter trackings created after this date",
+                },
+                "created_at_max": <ActionOptionInfo>{
+                    "display_name": "Created Before",
+                    "short_desc": "Filter by maximum creation date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter trackings created before this date",
+                },
+                "updated_at_min": <ActionOptionInfo>{
+                    "display_name": "Updated After",
+                    "short_desc": "Filter by minimum update date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter trackings updated after this date",
+                },
+                "updated_at_max": <ActionOptionInfo>{
+                    "display_name": "Updated Before",
+                    "short_desc": "Filter by maximum update date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter trackings updated before this date",
+                },
+                "origin": <ActionOptionInfo>{
+                    "display_name": "Origin Country",
+                    "short_desc": "Filter by origin country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ISO Alpha-3 origin country code(s), comma-separated",
+                },
+                "destination": <ActionOptionInfo>{
+                    "display_name": "Destination Country",
+                    "short_desc": "Filter by destination country",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "ISO Alpha-3 destination country code(s), comma-separated",
+                },
+                "cursor": <ActionOptionInfo>{
+                    "display_name": "Cursor",
+                    "short_desc": "Pagination cursor",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Cursor for pagination; use the value from the previous response to get the next page",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of trackings per page (max 200)",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # update-tracking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/update-tracking",
+            "action": "update-tracking",
+            "display_name": "Update Tracking",
+            "short_desc": "Update a tracking",
+            "desc": "Update an existing tracking's metadata (title, order ID, notes, etc.)",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipUpdateTrackingRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipUpdateTrackingRequestDataType::Fields{"title", "note"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipUpdateTrackingRequestDataType::Fields - ("id", "title", "note")
+            ),
+            "output_type": AftershipUpdateTrackingDataProvider::ResponseType,
+        });
+
+        # delete-tracking
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/delete-tracking",
+            "action": "delete-tracking",
+            "display_name": "Delete Tracking",
+            "short_desc": "Delete a tracking",
+            "desc": "Delete an existing tracking by its Aftership tracking ID",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipDeleteTrackingRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipDeleteTrackingDataProvider::ResponseType,
+        });
+
+        # retrack
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/retrack",
+            "action": "retrack",
+            "display_name": "Retrack",
+            "short_desc": "Retrack an expired tracking",
+            "desc": "Reactivate tracking for an expired shipment",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipRetrackRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipRetrackDataProvider::ResponseType,
+        });
+
+        # mark-as-completed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/mark-as-completed",
+            "action": "mark-as-completed",
+            "display_name": "Mark as Completed",
+            "short_desc": "Mark a tracking as completed",
+            "desc": "Mark a tracking as completed with a reason (delivered, lost, or returned to sender)",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipMarkCompletedRequestDataType::Fields{"id", "reason"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipMarkCompletedRequestDataType::Fields - ("id", "reason")
+            ),
+            "output_type": AftershipMarkCompletedDataProvider::ResponseType,
+        });
+
+        # get-last-checkpoint
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/get-last-checkpoint",
+            "action": "get-last-checkpoint",
+            "display_name": "Get Last Checkpoint",
+            "short_desc": "Get the last checkpoint of a tracking",
+            "desc": "Retrieve the most recent checkpoint event for a tracking",
+            "action_code": DPAT_API,
+            "groups": ("Tracking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipGetLastCheckpointRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipGetLastCheckpointDataProvider::ResponseType,
+        });
+
+        # --- Courier Actions ---
+
+        # list-couriers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/couriers",
+            "action": "list-couriers",
+            "display_name": "List Couriers",
+            "short_desc": "List all supported couriers",
+            "desc": "Retrieve a list of all couriers supported by Aftership",
+            "action_code": DPAT_FIND,
+            "groups": ("Couriers",),
+        });
+
+        # detect-courier
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/detect-courier",
+            "action": "detect-courier",
+            "display_name": "Detect Courier",
+            "short_desc": "Auto-detect courier from tracking number",
+            "desc": "Automatically detect the courier for a given tracking number",
+            "action_code": DPAT_API,
+            "groups": ("Couriers",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipDetectCourierRequestDataType::Fields{"tracking_number",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipDetectCourierRequestDataType::Fields - "tracking_number"
+            ),
+            "output_type": AftershipDetectCourierDataProvider::ResponseType,
+        });
+
+        # --- Returns Actions ---
+
+        # search-returns
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/returns",
+            "action": "search-returns",
+            "display_name": "Search Returns",
+            "short_desc": "Search and list returns",
+            "desc": "Search and list returns with optional filters for status, email, outcome, and date range",
+            "action_code": DPAT_FIND,
+            "groups": ("Returns",),
+            "options": {
+                "approval_status": <ActionOptionInfo>{
+                    "display_name": "Approval Status",
+                    "short_desc": "Filter by approval status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter returns by approval status",
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "submitted", "display_name": "Submitted"},
+                        <AllowedValueInfo>{"value": "approved", "display_name": "Approved"},
+                        <AllowedValueInfo>{"value": "done", "display_name": "Done"},
+                        <AllowedValueInfo>{"value": "rejected", "display_name": "Rejected"},
+                        <AllowedValueInfo>{"value": "expired", "display_name": "Expired"},
+                    ),
+                },
+                "customer_email": <ActionOptionInfo>{
+                    "display_name": "Customer Email",
+                    "short_desc": "Filter by customer email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter returns by customer email address",
+                },
+                "outcome": <ActionOptionInfo>{
+                    "display_name": "Outcome",
+                    "short_desc": "Filter by return outcome",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter returns by outcome type",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "exchange", "display_name": "Exchange"},
+                        <AllowedValueInfo>{"value": "refund", "display_name": "Refund"},
+                        <AllowedValueInfo>{"value": "upsell", "display_name": "Upsell"},
+                        <AllowedValueInfo>{"value": "store_credit", "display_name": "Store Credit"},
+                    ),
+                },
+                "return_method": <ActionOptionInfo>{
+                    "display_name": "Return Method",
+                    "short_desc": "Filter by return method",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter returns by shipping method",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "happy_returns", "display_name": "Happy Returns"},
+                        <AllowedValueInfo>{"value": "retail_reworks", "display_name": "Retail Reworks"},
+                        <AllowedValueInfo>{"value": "retailer_label", "display_name": "Retailer Label"},
+                        <AllowedValueInfo>{"value": "carrier_pickup", "display_name": "Carrier Pickup"},
+                        <AllowedValueInfo>{"value": "customer_courier", "display_name": "Customer Courier"},
+                        <AllowedValueInfo>{"value": "in_store", "display_name": "In Store"},
+                        <AllowedValueInfo>{"value": "green_return", "display_name": "Green Return"},
+                        <AllowedValueInfo>{"value": "carrier_dropoff", "display_name": "Carrier Dropoff"},
+                    ),
+                },
+                "order_name": <ActionOptionInfo>{
+                    "display_name": "Order Name",
+                    "short_desc": "Filter by order name",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter by order name (e.g., `#1001`)",
+                },
+                "created_at_min": <ActionOptionInfo>{
+                    "display_name": "Created After",
+                    "short_desc": "Filter by minimum creation date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter returns created after this date",
+                },
+                "created_at_max": <ActionOptionInfo>{
+                    "display_name": "Created Before",
+                    "short_desc": "Filter by maximum creation date",
+                    "type": AbstractDataProviderType::get(DateOrNothingType),
+                    "desc": "Filter returns created before this date",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Page number for pagination (1-200, default `1`)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of returns per page (1-50, default `10`)",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # create-return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/create-return",
+            "action": "create-return",
+            "display_name": "Create Return",
+            "short_desc": "Create a new return request",
+            "desc": "Create a new return request for an order",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipCreateReturnRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipCreateReturnDataProvider::ResponseType,
+        });
+
+        # get-return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/get-return",
+            "action": "get-return",
+            "display_name": "Get Return",
+            "short_desc": "Get a return by ID",
+            "desc": "Retrieve a single return record by its ID or RMA number",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipGetReturnRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipGetReturnDataProvider::ResponseType,
+        });
+
+        # approve-return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/approve-return",
+            "action": "approve-return",
+            "display_name": "Approve Return",
+            "short_desc": "Approve a return request",
+            "desc": "Approve a pending return request",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipApproveReturnRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipApproveReturnDataProvider::ResponseType,
+        });
+
+        # reject-return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/reject-return",
+            "action": "reject-return",
+            "display_name": "Reject Return",
+            "short_desc": "Reject a return request",
+            "desc": "Reject a pending return request with an optional reason",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipRejectReturnRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipRejectReturnRequestDataType::Fields - "id", {
+                    "preselected": True,
+                }
+            ),
+            "output_type": AftershipRejectReturnDataProvider::ResponseType,
+        });
+
+        # resolve-return
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/resolve-return",
+            "action": "resolve-return",
+            "display_name": "Resolve Return",
+            "short_desc": "Resolve a return",
+            "desc": "Mark a return as resolved (completed processing)",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipResolveReturnRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipResolveReturnDataProvider::ResponseType,
+        });
+
+        # add-return-shipment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/add-return-shipment",
+            "action": "add-return-shipment",
+            "display_name": "Add Return Shipment",
+            "short_desc": "Add a shipment to a return",
+            "desc": "Attach a shipping label or tracking number to a return",
+            "action_code": DPAT_API,
+            "groups": ("Returns",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipAddReturnShipmentRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                AftershipAddReturnShipmentRequestDataType::Fields - "id", {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": AftershipAddReturnShipmentDataProvider::ResponseType,
+        });
+
+        # --- Events ---
+
+        # tracking-status-changed
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": AftershipDataProvider::AppName,
+            "path": "/events/" + EVENT_TRACKING_STATUS_CHANGED,
+            "action": EVENT_TRACKING_STATUS_CHANGED,
+            "display_name": "Tracking Status Changed",
+            "short_desc": "Watch for tracking status changes",
+            "desc": "Polls the Aftership API and fires an event when a tracking's delivery status changes",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TRACKING_STATUS_CHANGED,
+            "groups": ("Events",),
+        });
+    };
+}
+
+/** @mainpage AftershipDataProvider Module
+
+    @tableofcontents
+
+    @section aftershipdataproviderintro AftershipDataProvider Introduction
+
+    The %AftershipDataProvider module provides a data provider API for Aftership tracking and returns services.
+
+    To use this module, use \c "%requires AftershipDataProvider" in your code.
+
+    All the public symbols in the module are defined in the AftershipDataProvider namespace.
+
+    The main classes are:
+    - @ref AftershipDataProvider::AftershipDataProvider "AftershipDataProvider":
+      the root data provider for Aftership services
+    - @ref AftershipDataProvider::AftershipDataProviderFactory "AftershipDataProviderFactory":
+      the data provider factory for Aftership services
+
+    @section aftershipdataproviderrelnotes Release Notes
+
+    @subsection aftershipdataprovider_v1_0 AftershipDataProvider v1.0
+    - initial release of the module
+    - Tracking API: create, get, list/search, update, delete, retrack, mark as completed, get last checkpoint
+    - Courier API: list all couriers, detect courier from tracking number
+    - Returns API: create, get, approve, reject, resolve, add shipment
+    - Polling-based event: tracking status changed
+    - Built on RestClientIo for async-capable multiplexed HTTP connections
+*/
+
+#! contains all public definitions in the AftershipDataProvider module
+public namespace AftershipDataProvider {
+}
