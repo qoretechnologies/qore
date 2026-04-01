@@ -34,6 +34,7 @@
 #include "qore/intern/qore_enum_decl_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreTypeInfo.h"
+#include "qore/intern/qore_program_private.h"
 
 // QoreTypeSpec::getType() implementation
 qore_type_t QoreTypeSpec::getType() const {

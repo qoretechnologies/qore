@@ -230,7 +230,8 @@ void AbstractMethod::parseMergeBase(AbstractMethod& m, MethodFunctionBase* f, bo
         //    "rm: %d) '%s'\n", &m, f, f ? f->getClassName() : "n/a", f ? f->getName() : "n/a", this, sig, f,
         //    f && f->parseHasVariantWithSignature(i.second, relaxed_match), relaxed_match, sig);
 
-        if (f && f->parseHasVariantWithSignature(i.second, relaxed_match)) {
+        bool has_match = f && f->parseHasVariantWithSignature(i.second, relaxed_match);
+        if (has_match) {
             // add to our pending_save
             i.second->ref();
             pending_save.insert(vmap_t::value_type(sig, i.second));
@@ -1194,6 +1195,7 @@ void qore_class_private::initializeBuiltin() {
             // merge abstract variants from parent classes to this class
             mergeAbstract();
         }
+    } else {
     }
 }
 

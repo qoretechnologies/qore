@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 350,
+static_assert(QORE_IR_MAX_OPCODE == 352,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -180,6 +180,8 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_load_local",
             llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
     module.getOrInsertFunction("qore_rt_uninstantiate_local",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_uninstantiate_closure_block_exit",
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
 
     // Generic opcode dispatch helpers: (i32, i64, i64, ptr) -> i64
@@ -3251,7 +3253,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             builder->CreateCall(uninst_helper, {aot_ctx_arg,
                                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                         } else {
-                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                            // Block exit: clear CVV unconditionally for deterministic destruction
+                            // Loop body: only clear when CVV refcount==1
+                            const char* fn_name = linst->is_block_exit
+                                ? "qore_rt_uninstantiate_closure_block_exit"
+                                : "qore_rt_uninstantiate_local";
+                            auto uninst_helper = module.getOrInsertFunction(fn_name,
                                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                             llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(linst->local));
@@ -3362,7 +3369,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             llvm::ConstantInt::get(i32_type, slot_idx), xsink_arg});
                 }
             } else {
-                auto helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                // Block exit + closure: clear CVV unconditionally for deterministic destruction
+                const char* fn_name = (linst->is_block_exit && linst->is_closure)
+                    ? "qore_rt_uninstantiate_closure_block_exit"
+                    : "qore_rt_uninstantiate_local";
+                auto helper = module.getOrInsertFunction(fn_name,
                         llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                 llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));

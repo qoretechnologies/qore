@@ -32,6 +32,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/ql_thread.h"
 #include "qore/intern/QC_TimeZone.h"
 #include "qore/intern/qore_program_private.h"

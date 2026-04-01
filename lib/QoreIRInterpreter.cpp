@@ -63,7 +63,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 350,
+static_assert(QORE_IR_MAX_OPCODE == 352,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -956,11 +956,13 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::AddInt:
         case QoreIROpcode::AddFloat:
         case QoreIROpcode::AddAny:
+        case QoreIROpcode::AddTimeout:
         case QoreIROpcode::AddString:
         case QoreIROpcode::StringConcat:
         case QoreIROpcode::SubInt:
         case QoreIROpcode::SubFloat:
         case QoreIROpcode::SubAny:
+        case QoreIROpcode::SubTimeout:
         case QoreIROpcode::MulInt:
         case QoreIROpcode::MulFloat:
         case QoreIROpcode::MulAny:
@@ -4670,7 +4672,10 @@ load_local_done:
                                         }
                                     }
                                     cvval.discard(xsink);
-                                    if (cvv->references.load(std::memory_order_acquire) == 1) {
+                                    // Block exit: clear unconditionally (variable leaving scope)
+                                    // Loop body: only clear when CVV refcount==1
+                                    if (local_inst->is_block_exit
+                                        || cvv->references.load(std::memory_order_acquire) == 1) {
                                         cvv->clearValue(xsink);
                                     }
                                 }
@@ -4750,8 +4755,11 @@ load_local_done:
                                     }
                                     cvval.discard(xsink);
                                 }
-                                // 3. clearValue is now the final deref → destructor fires
-                                if (cvv->references.load(std::memory_order_acquire) == 1) {
+                                // 3. clearValue triggers destructor
+                                // Block exit: clear unconditionally (variable leaving scope)
+                                // Loop body: only clear when CVV refcount==1
+                                if (local_inst->is_block_exit
+                                    || cvv->references.load(std::memory_order_acquire) == 1) {
                                     cvv->clearValue(xsink);
                                 }
                             }
@@ -5527,10 +5535,12 @@ load_local_done:
             case QoreIROpcode::AddInt:
             case QoreIROpcode::AddFloat:
             case QoreIROpcode::AddAny:
+            case QoreIROpcode::AddTimeout:
             case QoreIROpcode::AddString:
             case QoreIROpcode::SubInt:
             case QoreIROpcode::SubFloat:
             case QoreIROpcode::SubAny:
+            case QoreIROpcode::SubTimeout:
             case QoreIROpcode::MulInt:
             case QoreIROpcode::MulFloat:
             case QoreIROpcode::MulAny:
@@ -7643,7 +7653,13 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::AddFloat:
             return QoreValue(left.getAsFloat() + right.getAsFloat());
         case QoreIROpcode::AddAny: {
-            // issue #3157: timeout (int ms) + date → convert int to relative date first
+            bool needs_deref = true;
+            QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            return evalAndRef(&node, xsink);
+        }
+        case QoreIROpcode::AddTimeout: {
+            // Timeout arithmetic: int operand is milliseconds, date operand is duration
+            // Convert the int (ms) to a relative date, then add
             if (left.getType() == NT_INT && right.getType() == NT_DATE) {
                 int64_t lms = left.getAsBigInt();
                 int64_t secs = lms / 1000;
@@ -7652,7 +7668,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 l.setRelativeDateSeconds(secs, static_cast<int>(ms));
                 return right.get<const DateTimeNode>()->add(l);
             }
-            // issue #3157: date + timeout (int ms) → convert int to relative date first
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
                 int64_t rms = right.getAsBigInt();
                 int64_t secs = rms / 1000;
@@ -7661,6 +7676,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 r.setRelativeDateSeconds(secs, static_cast<int>(ms));
                 return left.get<const DateTimeNode>()->add(r);
             }
+            // Fallback for non-timeout cases
             bool needs_deref = true;
             QorePlusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);
@@ -7693,7 +7709,12 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::SubFloat:
             return QoreValue(left.getAsFloat() - right.getAsFloat());
         case QoreIROpcode::SubAny: {
-            // issue #3157: timeout (int ms) - date → convert int to relative date first
+            bool needs_deref = true;
+            QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
+            return evalAndRef(&node, xsink);
+        }
+        case QoreIROpcode::SubTimeout: {
+            // Timeout arithmetic: int operand is milliseconds, date operand is duration
             if (left.getType() == NT_INT && right.getType() == NT_DATE) {
                 int64_t lms = left.getAsBigInt();
                 int64_t secs = lms / 1000;
@@ -7701,7 +7722,6 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 SimpleRefHolder<DateTimeNode> l(DateTimeNode::makeRelativeFromSeconds(secs, static_cast<int>(ms)));
                 return l->subtractBy(right.get<const DateTimeNode>());
             }
-            // issue #3157: date - timeout (int ms) → convert int to relative date first
             if (left.getType() == NT_DATE && right.getType() == NT_INT) {
                 int64_t rms = right.getAsBigInt();
                 int64_t secs = rms / 1000;
@@ -7710,6 +7730,7 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
                 r.setRelativeDateSeconds(secs, static_cast<int>(ms));
                 return left.get<const DateTimeNode>()->subtractBy(r);
             }
+            // Fallback
             bool needs_deref = true;
             QoreMinusOperatorNode node(nullptr, left.refSelf(), right.refSelf());
             return evalAndRef(&node, xsink);

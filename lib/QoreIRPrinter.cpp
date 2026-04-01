@@ -310,6 +310,8 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::StoreLocal: return "store.local";
         case QoreIROpcode::UninstantiateLocal: return "uninstantiate.local";
         case QoreIROpcode::InstantiateLocal: return "instantiate.local";
+        case QoreIROpcode::AddTimeout: return "add.timeout";
+        case QoreIROpcode::SubTimeout: return "sub.timeout";
         case QoreIROpcode::LoadArg: return "load.arg";
         case QoreIROpcode::LoadClosure: return "load.closure";
         case QoreIROpcode::StoreClosure: return "store.closure";

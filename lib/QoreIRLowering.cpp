@@ -205,6 +205,13 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
                 return ce->typeInfo;
             }
         }
+        // Operator nodes with parse-time type info (e.g., range/index slice returns string)
+        if (auto* range_op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+            return range_op->getTypeInfo();
+        }
+        if (auto* sq_op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            return sq_op->getTypeInfo();
+        }
     }
     return val.getTypeInfo();
 }
@@ -567,10 +574,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        ++loop_depth;
         if (!lowerStatementBlock(do_stmt->getCode(), error)) {
+            --loop_depth;
             flow_stack.pop_back();
             return false;
         }
+        --loop_depth;
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(cond_block);
         }
@@ -623,10 +633,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, cond_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        ++loop_depth;
         if (!lowerStatementBlock(while_stmt->getCode(), error)) {
+            --loop_depth;
             flow_stack.pop_back();
             return false;
         }
+        --loop_depth;
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(cond_block);
         }
@@ -689,10 +702,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
 
         builder.setBlock(body_block);
         flow_stack.push_back({exit_block, iter_block, false, catch_cleanup_depth, cleanup_stack.size(), QoreIRValue()});
+        ++loop_depth;
         if (!lowerStatementBlock(for_stmt->getCode(), error)) {
+            --loop_depth;
             flow_stack.pop_back();
             return false;
         }
+        --loop_depth;
         if (!blockHasTerminator(builder.getBlock())) {
             builder.createBranch(iter_block);
         }
@@ -869,7 +885,9 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             // Lower the loop body
             StatementBlock* body = foreach_stmt->getCode();
             if (body) {
+                ++loop_depth;
                 if (!lowerStatementBlock(body, error)) {
+                    --loop_depth;
                     flow_stack.pop_back();
                     cleanup_stack.pop_back();  // RefForeachRecord
                     exception_stack.pop_back();
@@ -880,6 +898,7 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                     cleanup_stack.pop_back();  // RefForeach
                     return false;
                 }
+                --loop_depth;
             }
             flow_stack.pop_back();
 
@@ -1047,10 +1066,13 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         flow_stack.push_back(ft);
         StatementBlock* body = foreach_stmt->getCode();
         if (body) {
+            ++loop_depth;
             if (!lowerStatementBlock(body, error)) {
+                --loop_depth;
                 flow_stack.pop_back();
                 return false;
             }
+            --loop_depth;
         }
         flow_stack.pop_back();
 
@@ -1874,7 +1896,12 @@ bool QoreIRLowering::lowerStatementBlock(const StatementBlock* block, std::strin
     // via emitBlockCleanups
     if (lvars && !terminated) {
         for (int i = static_cast<int>(lvars->size()) - 1; i >= 0; --i) {
-            builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+            auto* ui = builder.createUninstantiateLocal(lvars->lv[i], block->loc);
+            // Set is_block_exit only when NOT inside a loop body.
+            // Loop body blocks re-use variables each iteration — closures
+            // may still need the captured value. Non-loop blocks are permanent
+            // scope exits where CVV values should be cleared unconditionally.
+            ui->is_block_exit = (loop_depth == 0);
         }
     }
     if (lvars) {
@@ -1905,7 +1932,9 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
                 if (!(flags & CF_SKIP_LVARS)) {
                     assert(entry.lvars);
                     for (int j = static_cast<int>(entry.lvars->size()) - 1; j >= 0; --j) {
-                        builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
+                        auto* ui = builder.createUninstantiateLocal(entry.lvars->lv[j], entry.loc);
+                        // break/continue/return always exit the scope permanently
+                        ui->is_block_exit = true;
                     }
                 }
                 break;
@@ -4407,6 +4436,53 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
+
+    // Generic NOTHING→default coercion for typed variables: if the variable's type has
+    // a non-NOTHING default value (e.g., date→ZeroDate, hash→{}, list→()), emit a
+    // conditional store of the default value before arithmetic.  This matches the AST
+    // PlusEquals semantics (QorePlusEqualsOperatorNode::evalImpl lines 155-187) via
+    // proper IR lowering.
+    const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
+    if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti)) {
+        QoreIRBasicBlock* has_value_bb = createBlock("pe.has_value");
+        QoreIRBasicBlock* nothing_bb = createBlock("pe.nothing");
+        QoreIRBasicBlock* merge_bb = createBlock("pe.merge");
+        if (!has_value_bb || !nothing_bb || !merge_bb) {
+            error = "IR builder failed to create blocks for NOTHING→default coercion";
+            return QoreIRValue();
+        }
+        // Use EqHard comparison with NOTHING constant (not BrIf, which uses getAsBool
+        // and would treat 0, "", false as NOTHING)
+        QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
+            left_value, nothing_val, op->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
+
+        // Nothing path: store the type's default value and branch to merge
+        builder.setBlock(nothing_bb);
+        QoreValue default_val = QoreTypeInfo::getDefaultQoreValue(lvar_ti);
+        QoreIRValue default_ir = lowerConstant(default_val, error);
+        if (!default_ir.isValid()) {
+            default_val.discard(nullptr);
+            return QoreIRValue();
+        }
+        if (!storeVarRef(left_var, default_ir, error, "pe.default-init", nullptr)) {
+            return QoreIRValue();
+        }
+        builder.createBranch(merge_bb);
+
+        // Has-value path: just branch to merge
+        builder.setBlock(has_value_bb);
+        builder.createBranch(merge_bb);
+
+        // Merge: reload the variable (now has either original or default value)
+        builder.setBlock(merge_bb);
+        left_value = loadVarRef(left_var, error, "pe.reload", op->getLeft());
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+    }
+
     QoreIROpcode opcode = QoreIROpcode::AddAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
@@ -4517,6 +4593,44 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
     if (!left_value.isValid()) {
         return QoreIRValue();
     }
+
+    // Generic NOTHING→default coercion for typed variables (see lowerPlusEquals)
+    const QoreTypeInfo* lvar_ti = left_var->getTypeInfo();
+    if (lvar_ti && QoreTypeInfo::hasDefaultValue(lvar_ti)) {
+        QoreIRBasicBlock* has_value_bb = createBlock("me.has_value");
+        QoreIRBasicBlock* nothing_bb = createBlock("me.nothing");
+        QoreIRBasicBlock* merge_bb = createBlock("me.merge");
+        if (!has_value_bb || !nothing_bb || !merge_bb) {
+            error = "IR builder failed to create blocks for NOTHING→default coercion";
+            return QoreIRValue();
+        }
+        QoreIRValue nothing_val = builder.createConstNothing(op->loc)->result;
+        QoreIRValue is_nothing = builder.createBinaryOp(QoreIROpcode::EqHard,
+            left_value, nothing_val, op->loc)->result;
+        builder.createBranchIf(is_nothing, nothing_bb, has_value_bb);
+
+        builder.setBlock(nothing_bb);
+        QoreValue default_val = QoreTypeInfo::getDefaultQoreValue(lvar_ti);
+        QoreIRValue default_ir = lowerConstant(default_val, error);
+        if (!default_ir.isValid()) {
+            default_val.discard(nullptr);
+            return QoreIRValue();
+        }
+        if (!storeVarRef(left_var, default_ir, error, "me.default-init", nullptr)) {
+            return QoreIRValue();
+        }
+        builder.createBranch(merge_bb);
+
+        builder.setBlock(has_value_bb);
+        builder.createBranch(merge_bb);
+
+        builder.setBlock(merge_bb);
+        left_value = loadVarRef(left_var, error, "me.reload", op->getLeft());
+        if (!left_value.isValid()) {
+            return QoreIRValue();
+        }
+    }
+
     QoreIROpcode opcode = QoreIROpcode::SubAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;
@@ -5437,6 +5551,15 @@ QoreIRValue QoreIRLowering::lowerPlus(const QoreValue& expr, std::string& error)
     QoreIROpcode op = selectNumericOpcode(plus->getLeft(), plus->getRight(),
         QoreIROpcode::AddInt, QoreIROpcode::AddFloat, QoreIROpcode::AddAny,
         QoreIROpcode::AddNumber);
+    // Use timeout-aware opcode when one operand is typed as timeout (int ms convention)
+    if (op == QoreIROpcode::AddAny) {
+        const QoreTypeInfo* lti = getExprTypeInfo(plus->getLeft());
+        const QoreTypeInfo* rti = getExprTypeInfo(plus->getRight());
+        if ((lti && QoreTypeInfo::equal(lti, timeoutTypeInfo))
+                || (rti && QoreTypeInfo::equal(rti, timeoutTypeInfo))) {
+            op = QoreIROpcode::AddTimeout;
+        }
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, plus->loc, error);
 }
 
@@ -5458,6 +5581,15 @@ QoreIRValue QoreIRLowering::lowerMinus(const QoreValue& expr, std::string& error
     QoreIROpcode op = selectNumericOpcode(minus->getLeft(), minus->getRight(),
         QoreIROpcode::SubInt, QoreIROpcode::SubFloat, QoreIROpcode::SubAny,
         QoreIROpcode::SubNumber);
+    // Use timeout-aware opcode when one operand is typed as timeout (int ms convention)
+    if (op == QoreIROpcode::SubAny) {
+        const QoreTypeInfo* lti = getExprTypeInfo(minus->getLeft());
+        const QoreTypeInfo* rti = getExprTypeInfo(minus->getRight());
+        if ((lti && QoreTypeInfo::equal(lti, timeoutTypeInfo))
+                || (rti && QoreTypeInfo::equal(rti, timeoutTypeInfo))) {
+            op = QoreIROpcode::SubTimeout;
+        }
+    }
     return lowerBinaryOpOrInvoke(op, expr, left, right, minus->loc, error);
 }
 

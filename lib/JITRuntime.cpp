@@ -615,6 +615,19 @@ extern "C" DLLEXPORT void qore_rt_uninstantiate_local(LocalVar* var, ExceptionSi
     var->uninstantiate(xsink);
 }
 
+extern "C" DLLEXPORT void qore_rt_uninstantiate_closure_block_exit(LocalVar* var, ExceptionSink* xsink) {
+    if (!var) {
+        return;
+    }
+    // Block scope exit: clear CVV value unconditionally to trigger
+    // deterministic destruction even when closures hold extra refs
+    ClosureVarValue* cvv = thread_try_find_closure_var(var->getName());
+    if (cvv) {
+        cvv->clearValue(xsink);
+    }
+    var->uninstantiate(xsink);
+}
+
 // --- Generic opcode dispatch helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_binary_op(int opcode, uint64_t left, uint64_t right, ExceptionSink* xsink) {

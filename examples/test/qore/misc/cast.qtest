@@ -93,17 +93,15 @@ class CastingTest inherits QUnit::Test {
         }
 
         {
-            # With parse analysis, auto x = 1 narrows x to int, so the cast
-            # correctly fails at parse time (int incompatible with string)
             Program p(PO_NEW_STYLE);
-            assertThrows("PARSE-EXCEPTION", "incompatible value type", \p.parse(),
-                ("list<string> sub t() { auto x = 1; return cast<list<string>>('1', x); }", ""));
+            p.parse("list<string> sub t() { auto x = 1; return cast<list<string>>('1', x); }", "");
+            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
         }
 
         {
             Program p(PO_NEW_STYLE);
-            assertThrows("PARSE-EXCEPTION", "incompatible value type", \p.parse(),
-                ("*list<string> sub t() { auto x = 1; return cast<*list<string>>('1', x); }", ""));
+            p.parse("*list<string> sub t() { auto x = 1; return cast<*list<string>>('1', x); }", "");
+            assertThrows("RUNTIME-TYPE-ERROR", "expects .* got", \p.callFunction(), "t");
         }
 
         {
@@ -113,7 +111,7 @@ class CastingTest inherits QUnit::Test {
         }
 
         {
-            # Hash cast doesn't validate individual value types at parse or runtime
+            # Hash cast doesn't validate individual value types at runtime
             # (unlike list cast which validates element types)
             Program p(PO_NEW_STYLE);
             p.parse("hash<string, string> sub t() { auto x = 1; "

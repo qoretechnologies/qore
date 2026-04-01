@@ -555,7 +555,13 @@ enum class QoreIROpcode : uint16_t {
     //! closure-captured block-scoped variables.
     InstantiateLocal    = 350,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (351, 352, ...)
+    //! Timeout arithmetic: int (milliseconds) +/- date → date
+    //! Unlike AddAny/SubAny which treat int as seconds, these treat int as ms
+    //! (matching the timeout type convention where values are stored as ms ints)
+    AddTimeout          = 351,
+    SubTimeout          = 352,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (353, 354, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -563,8 +569,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::InstantiateLocal);
-static_assert(QORE_IR_MAX_OPCODE == 350, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::SubTimeout);
+static_assert(QORE_IR_MAX_OPCODE == 352, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! PHASE 4: Opcode Coverage Documentation
@@ -1024,6 +1030,7 @@ public:
     bool weak = false;  // For StoreLocal: if true, wraps object/hash/list in weak reference
     bool is_closure = false;       // Pre-computed from local->closureUse() during IR analysis
     bool is_ref = false;           // Pre-computed from local->isRef() during IR analysis
+    bool is_block_exit = false;    // For UninstantiateLocal: true = block scope exit (clear CVV unconditionally)
     uint32_t slot_id = UINT32_MAX; // Pre-computed slot index into locals_slot_cache
 };
 

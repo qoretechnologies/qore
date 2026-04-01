@@ -114,8 +114,11 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     // return types for abstract methods must be compatible if present
     if (sig.returnTypeInfo != nothingTypeInfo) {
         bool may_not_match = false;
-        if (!QoreTypeInfo::parseAccepts(sig.returnTypeInfo, returnTypeInfo, may_not_match)
-            || (may_not_match && !relaxed_match)) {
+        qore_type_result_e res = QoreTypeInfo::parseAccepts(sig.returnTypeInfo, returnTypeInfo, may_not_match);
+        if (!res || (may_not_match && !relaxed_match
+                // auto/any return types always accept any concrete return type
+                && sig.returnTypeInfo != autoTypeInfo
+                && sig.returnTypeInfo != anyTypeInfo)) {
             //printd(5, "AbstractFunctionSignature::compare() rt: %s is not compatible with %s (%p %p)\n",
             //    QoreTypeInfo::getName(returnTypeInfo), QoreTypeInfo::getName(sig.returnTypeInfo), returnTypeInfo,
             //    sig.returnTypeInfo);
