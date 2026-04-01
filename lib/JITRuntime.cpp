@@ -5571,6 +5571,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     QoreValue val{};
     {
         ArgvContextHelper argv_helper(argv.release(), xsink);
+        // Set class context for private method access (matches AST's
+        // ObjectSubstitutionHelper in StaticMethodFunction::evalMethod)
+        ClassOnlySubstitutionHelper cosh(qore_class_private::get(*method->getClass()));
         if (uvb->hasCachedFunction()) {
             // JIT/AOT fast path
             execJITWithDeopt(uvb, call_name, [uvb](ExceptionSink* xs, bool& inv) {

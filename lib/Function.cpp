@@ -2494,6 +2494,16 @@ void UserVariantBase::attemptIRLowering(const char* name) const {
     // Check if all body locals are IR-only (enables skipping instantiation in fast call path)
     all_body_locals_ir_only = func->areAllBodyLocalsIROnly();
 
+    // When debugger is enabled, all locals must be on the TLS stack so
+    // get_local_vars() and set_local_var_value() can access them
+    if (pgm && (pgm->getParseOptions() & PO_ALLOW_DEBUGGER)) {
+        if (!func->ir_only_locals.empty()) {
+            func->ir_only_locals.clear();
+            func->ast_visible_body_locals = func->all_body_locals;
+            all_body_locals_ir_only = false;
+        }
+    }
+
     // Third pass: set ir_only flags on fused instructions using computed ir_only_locals
     if (!func->ir_only_locals.empty()) {
         for (const auto& block : func->blocks) {
