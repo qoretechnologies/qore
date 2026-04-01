@@ -2127,6 +2127,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     bool can_debug = tlpd && statements && pgm;
     bool debug_active = can_debug && tlpd->runtimeCheck();
     int last_debug_line = -1;  // track line changes for dbgStep
+    bool debug_break_loop = false;  // set by dbgStep RC_BREAK to exit current loop
 
     // Call dbgFunctionEnter if debug is active, then fire block-entry event.
     // AST mode fires dbgStep(block, nullptr) at block entry (StatementBlock.cpp:239)
@@ -2245,6 +2246,20 @@ next_instruction:
         // (pthread_getspecific + std::map::find per call).
         // Uses cached_start_line (-1 = no loc, >=0 = loc->start_line) to avoid
         // pointer dereferences on the hot path.
+        // Debug: check for debugger attach/detach on every instruction (not gated
+        // by line change). runtimeCheck() is very cheap (2 booleans + 1 enum, no locks)
+        // and only runs when can_debug is true (program has PO_ALLOW_DEBUGGER).
+        // This ensures breakProgramThread() signals are detected even in tight loops
+        // where all instructions share the same source line.
+        if (can_debug) {
+            bool runtime_check = tlpd->runtimeCheck();
+            if (!debug_active && runtime_check) {
+                debug_active = true;
+                last_debug_line = -1;
+            } else if (debug_active && !runtime_check) {
+                debug_active = false;
+            }
+        }
         if (inst->cached_start_line >= 0 && inst->cached_start_line != last_ephemeral_line) {
             // Update runtime_loc for exception/callstack reporting via cached pointers
             *rl_cache.stmt_ptr = nullptr;
@@ -2260,16 +2275,6 @@ next_instruction:
                 ephemeral_weak_ref_slots.clear();
             }
             last_ephemeral_line = inst->cached_start_line;
-            // Debug: check for debugger attach/detach and fire dbgStep on line changes
-            if (can_debug) {
-                bool runtime_check = tlpd->runtimeCheck();
-                if (!debug_active && runtime_check) {
-                    debug_active = true;
-                    last_debug_line = -1;
-                } else if (debug_active && !runtime_check) {
-                    debug_active = false;
-                }
-            }
             if (debug_active && inst->cached_start_line != last_debug_line) {
                 last_debug_line = inst->cached_start_line;
                 AbstractStatement* dbg_stmt = qore_program_private::get(*pgm)->getStatementFromIndex(
@@ -2285,6 +2290,12 @@ next_instruction:
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
                             return dbg_rc == RC_RETURN;
+                        }
+                        if (dbg_rc == RC_BREAK) {
+                            // Debug break: force the next BrIf to take the false branch
+                            // (exits the current loop), matching AST behavior where
+                            // RC_BREAK causes the while/for loop to exit
+                            debug_break_loop = true;
                         }
                     }
                 }
@@ -3080,7 +3091,13 @@ next_instruction:
                 auto* br = static_cast<QoreIRBranchIfInstruction*>(inst);
                 QoreValue cond = getIRValue(values, br->condition);
                 prev_block = block;
-                block = cond.getAsBool() ? br->true_target : br->false_target;
+                // Debug break: force false branch to exit the current loop
+                if (debug_break_loop) {
+                    debug_break_loop = false;
+                    block = br->false_target;
+                } else {
+                    block = cond.getAsBool() ? br->true_target : br->false_target;
+                }
                 ip = 0;
                 // OSR: count back-edges to loop headers
                 if (block->is_loop_header) {
@@ -4693,8 +4710,6 @@ load_local_done:
                                 bool nd = false;
                                 QoreValue lval = lvar->eval(nd, xsink);
                                 if (lval.hasNode()) {
-                                    // Scan for ANY node type (objects, closures, etc.)
-                                    // that matches the variable's value pointer.
                                     const AbstractQoreNode* node_ptr = lval.getInternalNode();
                                     for (size_t vi = 0; vi < values.size(); ++vi) {
                                         if (values[vi].hasNode()
@@ -4737,11 +4752,8 @@ load_local_done:
                                 local_inst->local->getName());
                             if (cvv) {
                                 // 2. Scan values[] for refs to the CVV's contained value
-                                // and discard them BEFORE clearValue. The CVV still holds
-                                // a ref, so the object won't be prematurely freed.
+                                // and discard them BEFORE clearValue.
                                 {
-                                    // cvv->eval() always returns an owned ref (refSelf'd)
-                                    // via getReferencedValue(), so always discard after use
                                     QoreValue cvval = cvv->eval(xsink);
                                     if (cvval.hasNode()) {
                                         const AbstractQoreNode* node_ptr = cvval.getInternalNode();
