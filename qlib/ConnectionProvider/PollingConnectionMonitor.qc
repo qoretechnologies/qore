@@ -477,18 +477,44 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
     #! Starts and submits a ping operation to the async I/O controller
     private submitPing(string name, int gen) {
-        AutoLock al(m);
-        if (!cache{name} || !active || cache{name}.ping_gen != gen || cache{name}.ping_active) {
-            return;
+        # Step 1: check eligibility and capture the connection reference under the lock,
+        # then release the lock BEFORE calling startPollConnect().
+        #
+        # Rationale: startPollConnect() may block for async ping poll operations such as
+        # RestClientIoPingPollOperation, whose constructor calls waitForReady() to wait
+        # for an external TCP/SSL connection to be established (potentially hundreds of
+        # milliseconds for remote servers).  If m is held during that wait, every
+        # DelegatingPollOperation::onComplete() callback queues a worker thread that
+        # immediately blocks on m in handlePingResult(), exhausting the async I/O
+        # controller's callback worker pool and starving all new HTTP request dispatches.
+        #
+        # We set ping_active = True before releasing the lock so that no concurrent
+        # submitPing() for the same connection can start while we are outside the lock.
+        *AbstractConnection conn;
+        {
+            AutoLock al(m);
+            if (!cache{name} || !active || cache{name}.ping_gen != gen || cache{name}.ping_active) {
+                return;
+            }
+            delete cache{name}.timer_id;
+            # Mark as active before releasing the lock to prevent concurrent submits
+            cache{name}.ping_active = True;
+            cache{name}.start = now_us();
+            conn = cache{name}.conn;
         }
-        delete cache{name}.timer_id;
+        # m is NOT held here — startPollConnect() may block for async ping ops
 
         AbstractPollOperation spop;
         try {
-            spop = cache{name}.conn.startPollConnect(getLogger());
+            spop = conn.startPollConnect(getLogger());
             log(LoggerLevel::DEBUG, "%y: starting connect ping to %y; poll state: %y", name,
-                cache{name}.conn.getUrl(), spop.getState());
+                conn.getUrl(), spop.getState());
         } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(m);
+            if (!cache{name} || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
+                return;  # stale or superseded
+            }
+            cache{name}.ping_active = False;
             log(LoggerLevel::ERROR, "%y: error handling ping start: %s", name, get_exception_string(ex));
             failedToStartPing(name, ex);
             if (active) {
@@ -501,6 +527,11 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         try {
             poll_info = spop.continuePoll();
         } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(m);
+            if (!cache{name} || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
+                return;  # stale or superseded
+            }
+            cache{name}.ping_active = False;
             cache{name}.conn.last_check = now_us();
             cache{name}.spop = spop;
             handlePingFailed(name, now_us() - cache{name}.start, ex);
@@ -510,21 +541,32 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
             return;
         }
 
+        # Step 2: re-acquire lock to finalise submission
+        AutoLock al(m);
+        if (!cache{name} || !active || cache{name}.ping_gen != gen || !cache{name}.ping_active) {
+            # Stale: connection was removed/re-added or monitor was stopped while we
+            # were outside the lock.  ping_active is already True in the surviving entry
+            # only if the same gen is still valid, so the !ping_active guard covers the
+            # case where the entry was deleted and recreated with a fresh (False) state.
+            return;
+        }
+
         cache{name}.spop = spop;
-        cache{name}.start = now_us();
+        # cache{name}.start was already set before the first lock release
 
         if (!poll_info) {
-            # Completed immediately
+            # Completed immediately (e.g. RestClientIoPingPollOperation: result already ready)
+            cache{name}.ping_active = False;
             cache{name}.conn.last_check = cache{name}.start;
             if (spop.goalReached()) {
-                handlePingSuccess(name, 0us, cache{name}.conn.up);
+                handlePingSuccess(name, now_us() - cache{name}.start, cache{name}.conn.up);
             } else {
                 hash<ExceptionInfo> ex = <ExceptionInfo>{
                     "err": "PING-FAILED",
                     "desc": sprintf("ping operation ended in state %y without reaching goal",
                         spop.getState()),
                 };
-                handlePingFailed(name, 0us, ex);
+                handlePingFailed(name, now_us() - cache{name}.start, ex);
             }
             if (active) {
                 scheduleNextPing(name, ping_repeat);
@@ -540,7 +582,7 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
         # Design note: submit() is safe to call while holding `m` — it never invokes
         # callbacks inline (stores in cache, notifies I/O thread). Lock ordering is
         # PCM.m -> controller.m (never reverse), so no deadlock is possible.
-        cache{name}.ping_active = True;
+        # ping_active is already True (set before the first lock release).
         int submit_gen = ++cache{name}.ping_gen;
         string conn_name = name;
         auto wrapped_spop = new DelegatingPollOperation(spop,
