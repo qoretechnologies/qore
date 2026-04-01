@@ -132,6 +132,7 @@ public class DataProvider {
             "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "gemini": "GeminiDataProvider",
+            "gorgias": "GorgiasDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
