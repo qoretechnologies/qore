@@ -3456,10 +3456,17 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             return 0;
         }
 
-        // Client-side CONNECT tunnel: deliver each DATA chunk incrementally.
-        // Push to completed_streams_ so getOutput() returns the chunk, which
-        // handleReading() dispatches to the ChannelAction → Channel → readData().
+        // Client-side CONNECT tunnel: deliver each DATA chunk to the
+        // connect_stream_data_ buffer so readConnectStreamData() (used by
+        // the low-level readHttp3StreamData API) can retrieve it.
+        // Also push to completed_streams_ for the async I/O pipeline
+        // (ChannelAction → Channel → readData()).
         if (stream->is_connect && !session->is_server_) {
+            {
+                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+                auto& buf = session->connect_stream_data_[stream_id];
+                buf.insert(buf.end(), data, data + datalen);
+            }
             stream->body.insert(stream->body.end(), data, data + datalen);
             // Mark as "completed" for incremental delivery — getOutput() builds
             // the response hash with the accumulated body and resets it.

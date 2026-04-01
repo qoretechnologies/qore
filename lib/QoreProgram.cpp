@@ -353,6 +353,7 @@ qore_program_private::~qore_program_private() {
     assert(!pendingParseSink);
     assert(pgm_data_map.empty());
     assert(!exec_class_rv);
+    assert(!exec_class_inst);
     assert(!dpgm);
 }
 
@@ -687,6 +688,12 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
         purge_pgm_thread_resources(pgm, xsink);
 
         //printd(5, "qore_program_private::waitForTerminationAndClear() this: %p pgm: %p clr: %d\n", this, pgm, clr);
+
+        // Discard the exec-class instance now that all threads have terminated.
+        // This must happen before clearLocalVars()/clearNamespaceData() because the
+        // instance's destructor may run user code that references globals or namespace data.
+        exec_class_inst.discard(xsink);
+        exec_class_inst = QoreValue();
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
@@ -1974,8 +1981,16 @@ void QoreProgram::runClass(const char* classname, ExceptionSink* xsink) {
     //printd(5, "QoreProgram::runClass(%s)\n", classname);
 
     ProgramThreadCountContextHelper tch(xsink, this, true);
-    if (!*xsink)
-        discard(qc->execConstructor((QoreListNode*)0, xsink), xsink);
+    if (!*xsink) {
+        // Save the exec-class instance in the program private data instead of discarding it
+        // immediately.  The constructor may spawn background threads that reference members of
+        // the exec-class object (e.g. an HttpServer member).  If we discard the instance here,
+        // those members are destroyed while the background threads are still running, leading to
+        // deadlocks or use-after-free.  The instance is discarded in
+        // waitForTerminationAndClear() after all threads have terminated.
+        priv->exec_class_inst.discard(xsink);
+        priv->exec_class_inst = qc->execConstructor((QoreListNode*)0, xsink);
+    }
 }
 
 void QoreProgram::parseFileAndRunClass(const char* filename, const char* classname) {
