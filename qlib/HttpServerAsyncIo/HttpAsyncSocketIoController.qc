@@ -1522,7 +1522,7 @@ public class HttpAsyncSocketIoController {
         if (result.ex) {
             log(LoggerLevel::ERROR, "SSL handshake error for %s: %s: %s",
                 uh, result.ex.err, result.ex.desc);
-            hash<HttpActiveConnectionInfo> cinfo;
+            *hash<HttpActiveConnectionInfo> cinfo;
             {
                 AutoWriteLock al(m);
                 cinfo = remove connections{uh};

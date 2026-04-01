@@ -119,7 +119,9 @@ class FutureTest inherits QUnit::Test {
     }
 
     testFutureDirectConstruct() {
-        assertThrows("FUTURE-ERROR", sub() { Future f(); });
+        # Future is abstract — direct instantiation is a parse-time error
+        Program p();
+        assertThrows("ABSTRACT-CLASS-ERROR", \p.parse(), ("%modern\nFuture f();", "test"));
     }
 
     testFutureCopy() {
