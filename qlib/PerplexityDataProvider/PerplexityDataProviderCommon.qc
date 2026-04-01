@@ -39,7 +39,7 @@ public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataPro
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client object to use",
-                "type": AbstractDataProviderType::get(new Type("RestClient"), NOTHING, {
+                "type": AbstractDataProviderType::get(new Type("RestClientIo::RestClientIo"), NOTHING, {
                     DTT_ClientOnly: True,
                 }),
                 "desc": "The REST client object to use",
@@ -67,11 +67,11 @@ public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataPro
 
     private {
         #! The REST client object for API calls
-        *RestClient::RestClient rest;
+        *RestClientIo::RestClientIo rest;
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest) {
+    constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
@@ -90,29 +90,27 @@ public class PerplexityDataProviderCommon inherits DataProvider::AbstractDataPro
             opts += copts.restclient_options + {
                 "apikey": copts.api_key,
             };
-            rest = new PerplexityRestClient::PerplexityRestClient(opts);
+            rest = new PerplexityRestClient::PerplexityRestClientIo(opts);
         }
     }
 
     #! Returns the REST client object
-    *RestClient::RestClient getRestClient() {
+    *RestClientIo::RestClientIo getRestClient() {
         return rest;
     }
 
-    #! Makes a REST call and returns the response; handles rate limit responses
-    private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr,
-            *reference<hash<auto>> info) {
+    #! Makes a REST call and returns the response with I/O retry support
+    private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
         int retries = 0;
         while (True) {
             try {
-                debug("REST %y %y (%y) body: %y", method, rest.getURL(), path, body);
-                return rest.doRequest(method, path, body, \info, NOTHING, hdr);
+                debug("REST %y %y (%y) body: %y", method, rest.getUrl(), path, body);
+                return rest.restDoRequest(method, path, body, hdr);
             } catch (hash<ExceptionInfo> ex) {
                 if (retry(ex, \retries)) {
                     continue;
                 }
-                rethrow ex.err, sprintf("%s (HTTP response code: %y)", ex.desc,
-                    info."response-headers".status_code);
+                rethrow ex.err, sprintf("%s (HTTP response code: %y)", ex.desc, ex.arg.status_code);
             }
         }
     }

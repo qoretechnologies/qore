@@ -127,7 +127,7 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : PerplexityDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : PerplexityDataProviderCommon(rest) {
     }
 
     #! Creates the object from constructor options
@@ -180,9 +180,9 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
     #! Returns example event data for the given event
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            *RestClient::RestClient rest_client = getRestClient();
+            *RestClientIo::RestClientIo rest_client = getRestClient();
             if (rest_client) {
-                hash<auto> resp = rest_client.doRequest("POST", "chat/completions", {
+                hash<auto> resp = rest_client.restDoRequest("POST", "chat/completions", {
                     "model": "sonar",
                     "messages": ({"role": "user", "content": "Say hi"},),
                     "max_tokens": 16,
@@ -294,7 +294,10 @@ public class PerplexityChatStreamDataProvider inherits PerplexityDataProviderCom
             while (!stop_flag) {
                 *hash<SseMessageInfo> evt = stream.readEvent(1s);
                 if (!evt) {
-                    break;
+                    if (stream.isDone()) {
+                        break;
+                    }
+                    continue;
                 }
                 if (evt."data" == "[DONE]") {
                     notifyObservers(EVENT_PERPLEXITY_CHAT_STREAM, {"type": "done"});

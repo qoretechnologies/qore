@@ -113,8 +113,8 @@ public class PerplexityRestClientBase {
         hash<auto> rv = cast<hash<auto>>(DefaultOptions + opts);
         # Map apikey to Authorization Bearer header
         if (rv.apikey) {
-            string apikey = remove rv.apikey;
-            rv += {"headers": {"Authorization": "Bearer " + apikey}};
+            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            remove rv.apikey;
         }
         return rv;
     }
@@ -224,6 +224,11 @@ public class PerplexityChatSseStream {
             return rest.parseServerSentEvent(ostream.getData());
         }
         return rest.readServerSentEvent(content_encoding, use_to);
+    }
+
+    #! Returns True if the stream has ended
+    bool isDone() {
+        return closed;
     }
 
     #! Closes the stream connection

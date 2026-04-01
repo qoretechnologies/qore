@@ -48,7 +48,7 @@ public class PerplexitySearchDataProvider inherits PerplexityDataProviderCommon 
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : PerplexityDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : PerplexityDataProviderCommon(rest) {
     }
 
     #! Returns the data provider name

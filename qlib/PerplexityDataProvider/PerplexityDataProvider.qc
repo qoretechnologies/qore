@@ -51,7 +51,7 @@ public class PerplexityDataProvider inherits PerplexityDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(*RestClient rest) : PerplexityDataProviderCommon(rest) {
+    constructor(*RestClientIo::RestClientIo rest) : PerplexityDataProviderCommon(rest) {
     }
 
     #! Creates the object from constructor options
