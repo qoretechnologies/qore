@@ -911,8 +911,16 @@ public:
             if (!is_closure) {
                 check_lvalue_object_in_out(v.n, nullptr);
             }
+        } else if (val.isNull()) {
+            // NULL: store the Null singleton node pointer so getReferencedValue()
+            // can distinguish NULL from NOTHING (v.n == nullptr)
+            v.n = &Null;
+            v.n->ref();
+            if (type != QV_Node) {
+                type = QV_Node;
+            }
         } else {
-            // nothing or null
+            // nothing
             v.n = nullptr;
             if (type != QV_Node) {
                 type = QV_Node;
