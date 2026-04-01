@@ -4630,6 +4630,12 @@ load_local_done:
                         // At function exit, cleanupLocalCaches() re-pushes an empty CVV
                         // for evalTiered's cleanup to pop (maintaining the stack invariant).
                         if (local_inst->is_closure) {
+                            // Clear slot cache for closure-use locals too
+                            if (local_inst->slot_id != UINT32_MAX
+                                    && local_inst->slot_id < locals_slot_cache.size()) {
+                                locals_slot_cache[local_inst->slot_id].discard(xsink);
+                                locals_slot_cache[local_inst->slot_id] = QoreValue();
+                            }
                             local_inst->local->uninstantiate(xsink);
                         } else {
                             LocalVarValue* lvar = thread_find_lvar(local_inst->local->getName());
@@ -4642,11 +4648,13 @@ load_local_done:
                                 // the IR values array beyond the load/init slots.
                                 bool nd = false;
                                 QoreValue lval = lvar->eval(nd, xsink);
-                                if (lval.getType() == NT_OBJECT) {
-                                    const QoreObject* obj = lval.get<const QoreObject>();
+                                if (lval.hasNode()) {
+                                    // Scan for ANY node type (objects, closures, etc.)
+                                    // that matches the variable's value pointer.
+                                    const AbstractQoreNode* node_ptr = lval.getInternalNode();
                                     for (size_t vi = 0; vi < values.size(); ++vi) {
-                                        if (values[vi].getType() == NT_OBJECT
-                                            && values[vi].get<const QoreObject>() == obj) {
+                                        if (values[vi].hasNode()
+                                            && values[vi].getInternalNode() == node_ptr) {
                                             values[vi].discard(xsink);
                                             values[vi] = QoreValue();
                                         }
