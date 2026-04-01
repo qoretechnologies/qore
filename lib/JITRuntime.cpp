@@ -425,7 +425,15 @@ extern "C" DLLEXPORT void qore_rt_rethrow_with_args(uint64_t args_bits, Exceptio
     QoreException* ex = catch_get_exception();
     if (ex) {
         QoreValue args = fromBits(args_bits);
-        if (args.getType() == NT_LIST) {
+        // The args may contain unevaluated AST nodes (e.g., $1.err + "-NEW"
+        // wrapped in a QoreListNode by RethrowStatement::parseInitImpl).
+        // Evaluate like the AST path does via ValueEvalOptimizedRefHolder.
+        if (args.needsEval()) {
+            ValueEvalOptimizedRefHolder v(args, xsink);
+            if (!*xsink && v->getType() == NT_LIST) {
+                ex = ex->replaceTop(*v->get<const QoreListNode>(), *xsink);
+            }
+        } else if (args.getType() == NT_LIST) {
             ex = ex->replaceTop(*args.get<const QoreListNode>(), *xsink);
         }
         qore_es_private::get(*xsink)->rethrow(ex);

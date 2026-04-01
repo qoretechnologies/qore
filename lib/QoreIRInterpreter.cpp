@@ -7309,7 +7309,15 @@ load_local_done:
                             // Rethrow with args: modify the exception's err/desc/arg
                             // before rethrowing (matches AST RethrowStatement::execImpl)
                             QoreValue arg = getIRValue(values, inst->operands[0]);
-                            if (arg.getType() == NT_LIST) {
+                            // The args may contain unevaluated AST nodes (e.g., $1.err + "-NEW"
+                            // wrapped in a QoreListNode by RethrowStatement::parseInitImpl).
+                            // Evaluate like the AST path does via ValueEvalOptimizedRefHolder.
+                            if (arg.needsEval()) {
+                                ValueEvalOptimizedRefHolder v(arg, xsink);
+                                if (!*xsink && v->getType() == NT_LIST) {
+                                    ex = ex->replaceTop(*v->get<const QoreListNode>(), *xsink);
+                                }
+                            } else if (arg.getType() == NT_LIST) {
                                 ex = ex->replaceTop(*arg.get<const QoreListNode>(), *xsink);
                             }
                         }
