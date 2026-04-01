@@ -3622,7 +3622,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast(const QoreFunction* func,
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            // Missing return statement: check type and set location to method definition
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);
@@ -3779,7 +3788,15 @@ static uint64_t execClosureDirect(const QoreClosureBase* cb, const UserVariantBa
     // Apply return type coercion
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);
@@ -3859,7 +3876,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_fast_with_target(uint64_t (*target_fn
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);
@@ -3958,7 +3983,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
     // Apply return type coercion to match ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);
@@ -4161,7 +4194,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_method_fast(const QoreMethod* method,
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            // Missing return statement: set location to method definition
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);
@@ -4591,7 +4633,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_direct_aot(QoreAOTContext* ctx, int32
 
         if (!*xsink) {
             const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+                QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+                if (*xsink) {
+                    xsink->overrideLocation(*sig->getParseLocation());
+                    xsink->appendLastDescription(": block missing return statement");
+                }
+            } else {
+                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+            }
         }
 
         return toBits(val);
@@ -5164,7 +5214,15 @@ static bool try_dispatch_method_fast(QoreObject* o, const QoreMethod* method,
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     result = toBits(val);
@@ -5525,7 +5583,15 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_static_method_direct(const QoreMethod
     // ReturnStatement::execImpl behavior
     if (!*xsink) {
         const QoreTypeInfo* rt = sig->getReturnTypeInfo();
-        QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        if (val.isNothing() && rt && QoreTypeInfo::hasType(rt)) {
+            QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+            if (*xsink) {
+                xsink->overrideLocation(*sig->getParseLocation());
+                xsink->appendLastDescription(": block missing return statement");
+            }
+        } else {
+            QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+        }
     }
 
     return toBits(val);

@@ -3046,11 +3046,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
-            // Apply return type coercion (e.g. softlist wrapping) to match
-            // ReturnStatement::execImpl behavior.
-            // Skip for untyped functions and autoType as acceptAssignment is a no-op
             if (rt && QoreTypeInfo::hasType(rt)) {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+                if (val.isNothing()) {
+                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+                    if (*xsink) {
+                        xsink->overrideLocation(*signature.getParseLocation());
+                        xsink->appendLastDescription(": block missing return statement");
+                    }
+                } else {
+                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+                }
             }
         }
         return val;
@@ -3180,11 +3185,16 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
 
         if (!*xsink) {
             const QoreTypeInfo* rt = signature.getReturnTypeInfo();
-            // Apply return type coercion (e.g. softlist wrapping) to match
-            // ReturnStatement::execImpl behavior.
-            // Skip for untyped functions and autoType as acceptAssignment is a no-op
             if (rt && QoreTypeInfo::hasType(rt)) {
-                QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+                if (val.isNothing()) {
+                    QoreTypeInfo::acceptAssignment(rt, "<block return>", val, xsink, nullptr);
+                    if (*xsink) {
+                        xsink->overrideLocation(*signature.getParseLocation());
+                        xsink->appendLastDescription(": block missing return statement");
+                    }
+                } else {
+                    QoreTypeInfo::acceptAssignment(rt, "<return statement>", val, xsink);
+                }
             }
         }
         return val;
