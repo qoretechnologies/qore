@@ -2801,7 +2801,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     row.data_type = row.udt_name;
                 }
             }
-            softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
+            *softint size = row.character_maximum_length ? row.character_maximum_length : row.numeric_precision;
             if (!size) {
                 size = row.datetime_precision;
             }
