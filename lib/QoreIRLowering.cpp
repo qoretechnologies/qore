@@ -3338,6 +3338,12 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
         bool is_relative = dt->isRelative();
         int64_t micros = is_relative ? dt->getRelativeMicroseconds() : dt->getEpochMicrosecondsUTC();
         auto* inst = builder.createConstDate(micros, is_relative);
+        if (!is_relative) {
+            // Preserve the original timezone for absolute dates so UTC "Z"
+            // dates are reconstructed with UTC zone, not the current local zone
+            inst->constant.date_zone = dt->getZone();
+            inst->constant.date_zone_set = true;
+        }
         if (is_relative) {
             // Always preserve full relative date components to avoid lossy
             // conversions (e.g., -1D → -24h loses the day semantics, 5Y → hours

@@ -808,6 +808,8 @@ struct QoreIRConstant {
     std::string string_value;
     int64_t date_microseconds = 0;
     bool date_is_relative = false;
+    const AbstractQoreZoneInfo* date_zone = nullptr;  // Original timezone for absolute dates
+    bool date_zone_set = false;  // true when date_zone was explicitly stored (nullptr = UTC)
     // Relative date components (years/months can't be converted to seconds losslessly)
     int rel_years = 0;
     int rel_months = 0;

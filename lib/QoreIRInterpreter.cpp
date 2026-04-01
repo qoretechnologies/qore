@@ -2357,7 +2357,11 @@ next_instruction:
                     // conversion (unlike DateTimeNode(s, ms) which goes through setLocalDate)
                     int64_t epoch_seconds = cinst->constant.date_microseconds / 1000000;
                     int us = static_cast<int>(cinst->constant.date_microseconds % 1000000);
-                    dt = DateTimeNode::makeAbsolute(currentTZ(), epoch_seconds, us);
+                    // Use the stored timezone when available. nullptr means UTC.
+                    // Fall back to currentTZ() only for legacy IR without date_zone.
+                    const AbstractQoreZoneInfo* zone = cinst->constant.date_zone_set
+                        ? cinst->constant.date_zone : currentTZ();
+                    dt = DateTimeNode::makeAbsolute(zone, epoch_seconds, us);
                 }
                 setValueSlotDirect(values, cinst->result.id, QoreValue(dt));
                 cleanup.push_back(cinst->result.id);
