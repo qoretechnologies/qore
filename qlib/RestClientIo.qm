@@ -25,7 +25,7 @@
 %modern
 
 %requires Logger
-%requires RestClient >= 2.4
+%requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
 %requires(reexport) RestSchemaValidator >= 1.0
 %requires Mime >= 1.7
@@ -1907,6 +1907,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             if (opts.proxy) {
                 mgr_opts.proxy_url = opts.proxy;
+            }
+            if (exists opts.max_redirects) {
+                mgr_opts.max_redirects = opts.max_redirects;
+            }
+            if (opts.redirect_passthru) {
+                mgr_opts.redirect_passthru = opts.redirect_passthru.toBool();
+            }
+            if (exists opts.enable_cookies && !opts.enable_cookies) {
+                mgr_opts.enable_cookies = False;
             }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
         }

@@ -131,7 +131,7 @@ public class HttpClientConnectionManager {
             pooled connections — cookies set by one request are sent with
             subsequent matching requests regardless of which connection is used.
 
-            @since HttpClientIo 1.1
+            @since HttpClientIo 1.0
         */
         *CookieJar cookie_jar;
     }
@@ -218,7 +218,7 @@ public class HttpClientConnectionManager {
     #! Returns the cookie jar (NOTHING if cookies are disabled)
     /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
 
-        @since HttpClientIo 1.1
+        @since HttpClientIo 1.0
     */
     *CookieJar getCookieJar() {
         return cookie_jar;
@@ -409,23 +409,83 @@ public class HttpClientConnectionManager {
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
-        # Inject cookies from jar into request headers
-        if (cookie_jar) {
-            hash<UrlInfo> url_info = parse_url(url);
-            bool is_secure = url_info.protocol == "https";
-            *string cookie_hdr = cookie_jar.getCookieHeader(
-                url_info.host, path, is_secure);
-            if (cookie_hdr) {
-                headers = headers ?? {};
-                # Append to existing Cookie header if present
-                if (headers.Cookie) {
-                    headers.Cookie += "; " + cookie_hdr;
-                } else {
-                    headers.Cookie = cookie_hdr;
+        int redirect_count = 0;
+
+        while (True) {
+            # Inject cookies from jar into request headers
+            hash<auto> req_headers = headers ?? {};
+            if (cookie_jar) {
+                hash<UrlInfo> url_info = parse_url(url);
+                bool is_secure = url_info.protocol == "https";
+                *string cookie_hdr = cookie_jar.getCookieHeader(
+                    url_info.host, path, is_secure);
+                if (cookie_hdr) {
+                    if (req_headers.Cookie) {
+                        req_headers.Cookie += "; " + cookie_hdr;
+                    } else {
+                        req_headers.Cookie = cookie_hdr;
+                    }
                 }
             }
-        }
 
+            hash<auto> resp = requestIntern(url, method, path, req_headers, body, timeout_ms);
+
+            # Process Set-Cookie before checking redirect
+            if (cookie_jar && resp.headers) {
+                hash<UrlInfo> url_info = parse_url(url);
+                bool is_secure = url_info.protocol == "https";
+                cookie_jar.processResponseHeaders(
+                    url_info.host, path, is_secure, resp.headers);
+            }
+
+            # Follow redirects (301, 302, 303, 307, 308)
+            if (!opts.redirect_passthru
+                    && resp.status_code >= 301 && resp.status_code <= 308
+                    && resp.status_code != 304 && resp.status_code != 305
+                    && resp.headers.location) {
+                if (++redirect_count > opts.max_redirects) {
+                    throw "HTTP-REDIRECT-ERROR",
+                        sprintf("maximum redirects (%d) exceeded", opts.max_redirects);
+                }
+                string location = resp.headers.location;
+                log(LoggerLevel::DEBUG, "redirect %d/%d: %d -> %s",
+                    redirect_count, opts.max_redirects, resp.status_code, location);
+
+                # Parse redirect URL
+                if (location =~ /^https?:\/\//) {
+                    # Absolute URL — update base URL and path
+                    hash<UrlInfo> loc_info = parse_url(location);
+                    url = sprintf("%s://%s", loc_info.protocol, loc_info.host);
+                    if (loc_info.port) {
+                        url += sprintf(":%d", loc_info.port);
+                    }
+                    path = loc_info.path ?? "/";
+                } else {
+                    # Relative path
+                    path = location;
+                }
+
+                # 303: change method to GET and drop body (RFC 7231 Section 6.4.4)
+                if (resp.status_code == 303) {
+                    method = "GET";
+                    body = NOTHING;
+                }
+                # 301/302: historically change POST to GET (RFC 7231 Section 6.4.2/6.4.3)
+                if ((resp.status_code == 301 || resp.status_code == 302)
+                        && method == "POST") {
+                    method = "GET";
+                    body = NOTHING;
+                }
+                continue;
+            }
+
+            return resp;
+        }
+    }
+
+    #! Performs a single HTTP request with connection retry (no redirect following)
+    private hash<auto> requestIntern(string url, string method, string path,
+            *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
         while (True) {
             *HttpClientStreamHandle stream;
@@ -433,26 +493,14 @@ public class HttpClientConnectionManager {
                 stream = acquireStream(url);
                 hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
                 checkAltSvc(url, resp);
-
-                # Extract Set-Cookie from response and store in jar
-                if (cookie_jar && resp.headers) {
-                    hash<UrlInfo> url_info = parse_url(url);
-                    bool is_secure = url_info.protocol == "https";
-                    cookie_jar.processResponseHeaders(
-                        url_info.host, path, is_secure, resp.headers);
-                }
-
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
-                # NOTE: no manual reservation release needed — request() calls
-                # submitAsync() internally which releases on all failure paths
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, MaxRequestRetries);
                         evictDeadConnections(url);
-                        # h2c failure on plain HTTP → fall back to h1 for this host
                         handleProtocolFallback(url, ex.err);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
@@ -1319,7 +1367,7 @@ public class HttpClientConnectionManager {
     returning.  No extra threads — cookie extraction happens synchronously
     on the caller's thread when they call \c get().
 
-    @since HttpClientIo 1.1
+    @since HttpClientIo 1.0
 */
 class CookieExtractingFuture inherits Future {
     private {

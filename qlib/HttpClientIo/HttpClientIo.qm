@@ -381,8 +381,26 @@ public namespace HttpClientIo {
             Set to False to disable automatic cookie handling (e.g., when the
             application manages cookies manually).
 
-            @since HttpClientIo 1.1
+            @since HttpClientIo 1.0
         */
         bool enable_cookies = True;
+
+        #! Maximum number of HTTP redirects to follow (default: 5)
+        /** Set to 0 to disable automatic redirect following.
+            Redirects with status 301, 302, 303, 307, and 308 are followed.
+            Set-Cookie headers in redirect responses are processed before
+            following the redirect (when cookies are enabled).
+
+            @since HttpClientIo 1.0
+        */
+        int max_redirects = 5;
+
+        #! Pass redirect responses to the caller instead of following them
+        /** When True, 3xx responses are returned as-is without following
+            the Location header.  Overrides \c max_redirects.
+
+            @since HttpClientIo 1.0
+        */
+        bool redirect_passthru = False;
     }
 }

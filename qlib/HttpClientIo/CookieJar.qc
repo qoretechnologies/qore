@@ -29,7 +29,7 @@ public namespace HttpClientIo {
 /** Thread-safe cookie storage for use with HttpClientConnectionManager.
     Delegates parsing and matching to the shared HttpUtil module.
 
-    @since HttpClientIo 1.1
+    @since HttpClientIo 1.0
 */
 public class CookieJar {
     private {

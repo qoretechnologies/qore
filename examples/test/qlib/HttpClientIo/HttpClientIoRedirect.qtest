@@ -1,0 +1,244 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTP redirect following unit tests.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpUtil.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class HttpClientIoRedirectTest
+
+#! Handler that implements redirect chains and final endpoints
+class RedirectHandler inherits AbstractHttpRequestHandler {
+    public { int server_port; }
+
+    constructor(int port) { server_port = port; }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # /redirect/<n> — redirect n times, then return 200
+        if (hdr.path =~ /^redirect\//) {
+            *list<*string> m = (hdr.path =~ x/redirect\/(\d+)/);
+            int n = m ? m[0].toInt() : 0;
+            if (n > 0) {
+                return makeResponse(
+                    {"Location": sprintf("/redirect/%d", n - 1), "Content-Type": "text/plain"},
+                    302, "redirecting");
+            }
+            return makeResponse({"Content-Type": "text/plain"}, 200, "final destination");
+        }
+
+        # /redirect-abs — redirect to absolute URL
+        if (hdr.path == "redirect-abs") {
+            return makeResponse(
+                {"Location": sprintf("http://localhost:%d/target", server_port),
+                 "Content-Type": "text/plain"},
+                301, "redirecting");
+        }
+
+        # /redirect-cookie — set cookie then redirect
+        if (hdr.path == "redirect-cookie") {
+            return makeResponse(
+                {"Location": "/check-cookie", "Set-Cookie": "auth=token123; Path=/",
+                 "Content-Type": "text/plain"},
+                302, "redirecting with cookie");
+        }
+
+        # /check-cookie — verify cookie was sent
+        if (hdr.path == "check-cookie") {
+            string cookie_val = hdr.cookie ?? "(none)";
+            return makeResponse({"Content-Type": "text/plain"}, 200, "cookie=%s", cookie_val);
+        }
+
+        # /redirect-303 — 303 See Other (POST -> GET)
+        if (hdr.path == "redirect-303") {
+            return makeResponse(
+                {"Location": "/method-check", "Content-Type": "text/plain"},
+                303, "see other");
+        }
+
+        # /method-check — echo the method
+        if (hdr.path == "method-check") {
+            return makeResponse({"Content-Type": "text/plain"}, 200, "method=%s", hdr.method);
+        }
+
+        # /target — final endpoint
+        if (hdr.path == "target") {
+            return makeResponse({"Content-Type": "text/plain"}, 200, "reached target");
+        }
+
+        return makeResponse({"Content-Type": "text/plain"}, 404, "not found: %s", hdr.path);
+    }
+}
+
+public class HttpClientIoRedirectTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+        Logger logger;
+    }
+
+    constructor() : Test("HttpClientIoRedirectTest", "1.0") {
+        addTestCase("basic redirect following", \testBasicRedirect());
+        addTestCase("redirect chain", \testRedirectChain());
+        addTestCase("max redirects exceeded", \testMaxRedirects());
+        addTestCase("absolute URL redirect", \testAbsoluteRedirect());
+        addTestCase("cookie in redirect response", \testCookieRedirect());
+        addTestCase("303 See Other changes method to GET", \test303SeeOther());
+        addTestCase("redirect_passthru option", \testRedirectPassthru());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+        };
+        mServer = new HttpServer(http_opts);
+        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        port = linfo.port;
+        RedirectHandler handler(port);
+        mServer.setHandler("redirect-handler", "", NOTHING, handler);
+        mServer.setDefaultHandler("redirect-handler", handler);
+
+        set_return_value(main());
+
+        mServer.stop();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    testBasicRedirect() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+
+        hash<auto> resp = mgr.request(url, "GET", "/redirect/1");
+        assertEq(200, resp.status_code, "should follow single redirect to 200");
+        assertEq("final destination", resp.body, "should reach final destination");
+
+        mgr.closeAll();
+    }
+
+    testRedirectChain() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+
+        hash<auto> resp = mgr.request(url, "GET", "/redirect/3");
+        assertEq(200, resp.status_code, "should follow 3 redirects to 200");
+        assertEq("final destination", resp.body, "should reach final destination after chain");
+
+        mgr.closeAll();
+    }
+
+    testMaxRedirects() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_redirects": 2,
+        });
+
+        try {
+            hash<auto> resp = mgr.request(url, "GET", "/redirect/5");
+            assertTrue(False, "should have thrown HTTP-REDIRECT-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTP-REDIRECT-ERROR", ex.err, "should throw HTTP-REDIRECT-ERROR");
+            assertRegex("maximum redirects.*2.*exceeded", ex.desc,
+                "error should mention max redirect count");
+        }
+
+        mgr.closeAll();
+    }
+
+    testAbsoluteRedirect() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+
+        hash<auto> resp = mgr.request(url, "GET", "/redirect-abs");
+        assertEq(200, resp.status_code, "should follow absolute URL redirect");
+        assertEq("reached target", resp.body, "should reach target via absolute redirect");
+
+        mgr.closeAll();
+    }
+
+    testCookieRedirect() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": logger,
+        });
+
+        # Server sets cookie in 302 response, then redirects to /check-cookie
+        # The cookie should be sent in the redirected request
+        hash<auto> resp = mgr.request(url, "GET", "/redirect-cookie");
+        assertEq(200, resp.status_code, "should follow redirect after cookie set");
+        assertRegex("auth=token123", resp.body,
+            "cookie from redirect response should be sent in follow-up request");
+
+        mgr.closeAll();
+    }
+
+    test303SeeOther() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+
+        # POST to /redirect-303 should follow to /method-check as GET
+        hash<auto> resp = mgr.request(url, "POST", "/redirect-303", NOTHING, "some body");
+        assertEq(200, resp.status_code, "should follow 303 redirect");
+        assertEq("method=GET", resp.body, "303 should change POST to GET");
+
+        mgr.closeAll();
+    }
+
+    testRedirectPassthru() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "redirect_passthru": True,
+        });
+
+        hash<auto> resp = mgr.request(url, "GET", "/redirect/1");
+        assertEq(302, resp.status_code, "should return 302 without following");
+        assertTrue(resp.headers.location.val(), "should have Location header");
+
+        mgr.closeAll();
+    }
+}
