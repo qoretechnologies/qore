@@ -1814,16 +1814,11 @@ const AbstractQoreFunctionVariant* QoreFunction::parseFindVariant(const QoreProg
 
                 // Handle runtime matching based on type of mismatch
                 if (variant_runtime_match) {
-                    if (variant_hard_match) {
-                        // HARD: missing type info, must do runtime dispatch and clear any previous match
-                        runtime_match = true;
-                        if (variant) {
-                            variant = nullptr;
-                        }
-                        break;  // stop searching - hard match requires runtime dispatch
+                    runtime_match = true;
+                    if (variant) {
+                        variant = nullptr;
                     }
-                    // SOFT: union type partial match - don't clear variant, continue checking other variants
-                    // The soft match case is handled below after all variants are checked
+                    break;
                 }
 
                 //printd(5, "QoreFunction::parseFindVariant() this: %p tested %s(%s) ok: %d pscore: %d max_pscore: %d "
