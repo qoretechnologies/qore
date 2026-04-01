@@ -4505,6 +4505,9 @@ load_local_done:
             }
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
+                //printd(2, "UNINST: %s is_closure=%d slot=%d\n",
+                //    local_inst->local ? local_inst->local->getName() : "null",
+                //    local_inst->is_closure, (int)local_inst->slot_id);
                 // Uninstantiate the local variable (calls destructor for objects)
                 if (local_inst->local) {
                     bool is_pre = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
@@ -4630,11 +4633,25 @@ load_local_done:
                         // At function exit, cleanupLocalCaches() re-pushes an empty CVV
                         // for evalTiered's cleanup to pop (maintaining the stack invariant).
                         if (local_inst->is_closure) {
-                            // Clear slot cache for closure-use locals too
+                            // Clear slot cache for closure-use locals
                             if (local_inst->slot_id != UINT32_MAX
                                     && local_inst->slot_id < locals_slot_cache.size()) {
                                 locals_slot_cache[local_inst->slot_id].discard(xsink);
                                 locals_slot_cache[local_inst->slot_id] = QoreValue();
+                            }
+                            // Clear init/load slots for closure vars too
+                            cleanupLocalSlots(local_inst->slot_id);
+                            // Trigger deterministic destruction at block scope exit:
+                            // when the CVV's only remaining reference is the cvstack entry
+                            // (refcount == 1), clearValue releases the contained value
+                            // and fires the destructor immediately — matching the
+                            // qore_rt_clear_local() pattern in JITRuntime.cpp
+                            {
+                                ClosureVarValue* cvv = thread_try_find_closure_var(
+                                    local_inst->local->getName());
+                                if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
+                                    cvv->clearValue(xsink);
+                                }
                             }
                             local_inst->local->uninstantiate(xsink);
                         } else {
@@ -4672,6 +4689,21 @@ load_local_done:
                         // Non-pre-instantiated: full uninstantiate (pop + destructor)
                         // Clean up value slots (init + load) BEFORE uninstantiating
                         cleanupLocalSlots(local_inst->slot_id);
+                        // Clear slot cache
+                        if (local_inst->slot_id != UINT32_MAX
+                                && local_inst->slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[local_inst->slot_id].discard(xsink);
+                            locals_slot_cache[local_inst->slot_id] = QoreValue();
+                        }
+                        // For closure-use vars: trigger deterministic destruction when
+                        // CVV's only remaining reference is the cvstack entry (refcount==1)
+                        if (local_inst->is_closure) {
+                            ClosureVarValue* cvv = thread_try_find_closure_var(
+                                local_inst->local->getName());
+                            if (cvv && cvv->references.load(std::memory_order_acquire) == 1) {
+                                cvv->clearValue(xsink);
+                            }
+                        }
                         local_inst->local->uninstantiate(xsink);
                         // Destructor runs in its own scope and cannot modify our locals
                         invalidateExternalCaches();
