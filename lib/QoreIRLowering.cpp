@@ -8458,12 +8458,20 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
 
-    // Only enter single-value path when we have positive evidence it's NOT a list:
+    // Only enter single-value path when we have positive evidence it's NOT a list or iterator:
     // - elem_type must be null (no list element type extracted)
     // - list_type must be non-null (we have type information)
     // - parseReturns must confirm it's NOT a list
+    // - type must not be an iterator class (iterator objects produce lists at runtime)
     // This guard prevents entering single-value path for unknown types (like method calls)
-    if (!elem_type && list_type && !QoreTypeInfo::parseReturns(list_type, NT_LIST)) {
+    bool is_iterator = false;
+    if (list_type) {
+        const QoreClass* obj_class = QoreTypeInfo::getUniqueReturnClass(list_type);
+        if (obj_class && qore_class_private::parseCheckCompatibleClass(obj_class, QC_ABSTRACTITERATOR)) {
+            is_iterator = true;
+        }
+    }
+    if (!elem_type && list_type && !is_iterator && !QoreTypeInfo::parseReturns(list_type, NT_LIST)) {
         QoreIRValue input_val = lowerExpression(map->getRight(), error);
         if (!input_val.isValid()) {
             return QoreIRValue();
