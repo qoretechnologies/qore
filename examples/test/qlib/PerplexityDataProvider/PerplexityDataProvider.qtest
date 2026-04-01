@@ -1,0 +1,612 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/PerplexityDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class PerplexityDataProviderTest
+
+class FakePerplexityRestClient inherits PerplexityRestClient::PerplexityRestClientIo {
+    public {
+        hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+        hash<auto> last_stream_request;
+        list<hash<SseMessageInfo>> stream_events;
+    }
+
+    constructor() : PerplexityRestClientIo({"apikey": "x"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        if (!response_body) {
+            response_body = {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 1711000000,
+                "model": "sonar",
+                "choices": (
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "Hello! How can I help you?",
+                        },
+                        "finish_reason": "stop",
+                    },
+                ),
+                "usage": {
+                    "prompt_tokens": 10,
+                    "completion_tokens": 20,
+                    "total_tokens": 30,
+                },
+                "citations": (
+                    "https://example.com/source1",
+                    "https://example.com/source2",
+                ),
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    auto openChatStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        last_stream_request = req;
+        return new FakePerplexitySseStream(stream_events);
+    }
+}
+
+class FakePerplexitySseStream {
+    public {
+        list<hash<SseMessageInfo>> events;
+        int idx;
+    }
+
+    constructor(*list<hash<SseMessageInfo>> events) {
+        self.events = events ?? ();
+    }
+
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (idx >= events.lsize()) {
+            return;
+        }
+        return events[idx++];
+    }
+
+    bool isDone() {
+        return idx >= events.lsize();
+    }
+
+    close() {
+    }
+}
+
+class FailingPerplexityRestClient inherits FakePerplexityRestClient {
+    auto openChatStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        throw "SSE-ERROR", "stream failed";
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        throw "REST-ERROR", "request failed";
+    }
+}
+
+class StreamObserver inherits Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    private {
+        Mutex m();
+        Condition cond();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        events += data_;
+        m.lock();
+        on_exit m.unlock();
+        cond.broadcast();
+    }
+
+    wait(int count) {
+        date start = now_us();
+        m.lock();
+        on_exit m.unlock();
+        while (events.lsize() < count) {
+            cond.wait(m, 1s);
+            if ((now_us() - start) > 5s) {
+                throw "ERROR", "no stream events in timeout";
+            }
+        }
+    }
+}
+
+public class PerplexityDataProviderTest inherits QUnit::Test {
+    public {
+%ifndef NoJson
+        *PerplexityRestClient::PerplexityRestConnection rc;
+%endif
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("PerplexityDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("connection scheme test", \connectionSchemeTest());
+        addTestCase("data type test", \dataTypeTest());
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog test", \actionCatalogTest());
+        addTestCase("multi-chat test", \multiChatTest());
+        addTestCase("simple-chat test", \simpleChatTest());
+        addTestCase("search test", \searchTest());
+        addTestCase("stream-chat events test", \streamChatEventsTest());
+        addTestCase("stream-chat error test", \streamChatErrorTest());
+        addTestCase("example event data test", \exampleEventDataTest());
+        addTestCase("live test", \liveTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    private setupConnection() {
+%ifndef NoJson
+        *string conn_name = m_options.conn ?? ENV.PERPLEXITY_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof PerplexityRestClient::PerplexityRestConnection) {
+                rc = conn;
+            }
+        } else {
+            *string apikey = ENV.PERPLEXITY_API_KEY;
+            if (apikey) {
+                rc = new PerplexityRestClient::PerplexityRestConnection("test", "test", NOTHING, NOTHING, {
+                    "apikey": apikey,
+                });
+            }
+        }
+%endif
+    }
+
+    connectionSchemeTest() {
+        checkModule();
+%ifndef NoJson
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("perplexity");
+        assertEq("Perplexity AI REST Connection", scheme.display_name);
+        assertEq("apikey", scheme.required_options);
+%endif
+    }
+
+    dataTypeTest() {
+        checkModule();
+%ifndef NoJson
+        # Test chat completion request type
+        PerplexityChatCompletionRequestType req_type();
+        hash<string, AbstractDataField> fields = req_type.getFields();
+        assertTrue(fields.hasKey("model"));
+        assertTrue(fields.hasKey("messages"));
+        assertTrue(fields.hasKey("search_mode"));
+        assertTrue(fields.hasKey("search_recency_filter"));
+        assertTrue(fields.hasKey("return_images"));
+        assertTrue(fields.hasKey("return_related_questions"));
+        assertTrue(fields.hasKey("search_domain_filter"));
+        assertTrue(fields.hasKey("disable_search"));
+        assertTrue(fields.hasKey("web_search_options"));
+        assertTrue(fields.hasKey("enable_search_classifier"));
+        assertTrue(fields.hasKey("last_updated_after_filter"));
+        assertTrue(fields.hasKey("last_updated_before_filter"));
+        assertTrue(fields.hasKey("image_format_filter"));
+        assertTrue(fields.hasKey("image_domain_filter"));
+        assertTrue(fields.hasKey("language_preference"));
+        # Verify deprecated fields are removed
+        assertFalse(fields.hasKey("frequency_penalty"));
+        assertFalse(fields.hasKey("presence_penalty"));
+
+        # Test chat completion response type
+        PerplexityChatCompletionResponseType resp_type();
+        fields = resp_type.getFields();
+        assertTrue(fields.hasKey("id"));
+        assertTrue(fields.hasKey("choices"));
+        assertTrue(fields.hasKey("usage"));
+        assertTrue(fields.hasKey("citations"));
+        assertTrue(fields.hasKey("search_results"));
+        assertTrue(fields.hasKey("images"));
+        assertTrue(fields.hasKey("related_questions"));
+
+        # Test message type
+        PerplexityMessageDataType msg_type();
+        fields = msg_type.getFields();
+        assertTrue(fields.hasKey("role"));
+        assertTrue(fields.hasKey("content"));
+
+        # Test search request type
+        PerplexitySearchRequestType search_req_type();
+        fields = search_req_type.getFields();
+        assertTrue(fields.hasKey("query"));
+        assertTrue(fields.hasKey("max_results"));
+        assertTrue(fields.hasKey("country"));
+
+        # Test search response type
+        PerplexitySearchResponseType search_resp_type();
+        fields = search_resp_type.getFields();
+        assertTrue(fields.hasKey("id"));
+        assertTrue(fields.hasKey("results"));
+
+        # Test simple chat types
+        PerplexitySimpleChatCompletionRequestType simple_req_type();
+        fields = simple_req_type.getFields();
+        assertTrue(fields.hasKey("role"));
+        assertTrue(fields.hasKey("content"));
+        assertTrue(fields.hasKey("model"));
+        assertFalse(fields.hasKey("messages"));
+
+        PerplexitySimpleChatCompletionResponseType simple_resp_type();
+        fields = simple_resp_type.getFields();
+        assertTrue(fields.hasKey("choice"));
+        assertFalse(fields.hasKey("choices"));
+        assertTrue(fields.hasKey("citations"));
+
+        # Test stream event type
+        PerplexityChatStreamEventDataType stream_type();
+        fields = stream_type.getFields();
+        assertTrue(fields.hasKey("type"));
+        assertTrue(fields.hasKey("event"));
+        assertTrue(fields.hasKey("raw_data"));
+        assertTrue(fields.hasKey("error"));
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        hash<auto> fake_opts = {
+            "apikey": "x",
+        };
+        PerplexityRestClient::PerplexityRestConnection rc("test", "test", NOTHING, NOTHING, fake_opts);
+        PerplexityDataProvider prov(rc.getAsync());
+        assertEq("perplexity", prov.getName());
+
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("multi-chat"));
+        assertTrue(children.contains("simple-chat"));
+        assertTrue(children.contains("stream-chat"));
+        assertTrue(children.contains("search"));
+%endif
+    }
+
+    actionCatalogTest() {
+        # Test multi-chat action
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            PerplexityDataProvider::AppName, "multi-chat"
+        );
+        assertEq("/multi-chat", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertTrue(action.output_type instanceof AbstractDataProviderType,
+            "multi-chat should have output_type");
+        assertEq("PerplexityChatCompletionResponse", action.output_type.getName());
+
+        # Test simple-chat action
+        action = DataProviderActionCatalog::getAppAction(
+            PerplexityDataProvider::AppName, "simple-chat"
+        );
+        assertEq("/simple-chat", action.path);
+        assertEq(DPAT_API, action.action_code);
+
+        # Test stream-chat action
+        action = DataProviderActionCatalog::getAppAction(
+            PerplexityDataProvider::AppName, "stream-chat"
+        );
+        assertEq("/stream-chat", action.path);
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(EVENT_PERPLEXITY_CHAT_STREAM, action.action_val);
+        assertTrue(action.output_type instanceof AbstractDataProviderType,
+            "stream-chat should have output_type");
+
+        # Test search action
+        action = DataProviderActionCatalog::getAppAction(
+            PerplexityDataProvider::AppName, "search"
+        );
+        assertEq("/search", action.path);
+        assertEq(DPAT_API, action.action_code);
+    }
+
+    multiChatTest() {
+        checkModule();
+%ifndef NoJson
+        FakePerplexityRestClient rest();
+        PerplexityChatCompletionDataProvider prov(rest);
+
+        hash<auto> req = {
+            "model": "sonar",
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "What is the weather today?",
+                },
+            ),
+            "search_mode": "web",
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        assertEq("sonar", rest.last_request.model);
+        assertEq(1, rest.last_request.messages.lsize());
+        assertEq("web", rest.last_request.search_mode);
+        assertEq("chatcmpl-test", resp.id);
+        assertEq(1, resp.choices.lsize());
+        assertEq("Hello! How can I help you?", resp.choices[0].message.content);
+        assertEq(2, resp.citations.lsize());
+        assertEq(30, resp.usage.total_tokens);
+%endif
+    }
+
+    simpleChatTest() {
+        checkModule();
+%ifndef NoJson
+        FakePerplexityRestClient rest();
+        PerplexitySimpleChatCompletionDataProvider prov(rest);
+
+        hash<auto> req = {
+            "model": "sonar",
+            "role": "user",
+            "content": "Hello",
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        # Verify request was wrapped into messages array
+        assertEq(1, rest.last_request.messages.lsize());
+        assertEq("user", rest.last_request.messages[0].role);
+        assertEq("Hello", rest.last_request.messages[0].content);
+        # Verify response has single choice (not choices array)
+        assertTrue(resp.hasKey("choice"));
+        assertFalse(resp.hasKey("choices"));
+        assertEq("Hello! How can I help you?", resp.choice.message.content);
+        assertEq(2, resp.citations.lsize());
+%endif
+    }
+
+    searchTest() {
+        checkModule();
+%ifndef NoJson
+        FakePerplexityRestClient rest();
+        rest.response_body = {
+            "id": "search-test",
+            "results": (
+                {
+                    "title": "Test Result",
+                    "url": "https://example.com",
+                    "snippet": "A test search result",
+                    "date": "2026-01-01",
+                },
+            ),
+        };
+        PerplexitySearchDataProvider prov(rest);
+
+        hash<auto> req = {
+            "query": "test search",
+            "max_results": 5,
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("search", rest.last_path);
+        # Verify query was wrapped in an array for the API
+        assertEq(("test search",), rest.last_request.query);
+        assertEq(5, rest.last_request.max_results);
+        assertEq("search-test", resp.id);
+        assertEq(1, resp.results.lsize());
+        assertEq("Test Result", resp.results[0].title);
+        assertEq("https://example.com", resp.results[0].url);
+%endif
+    }
+
+    streamChatEventsTest() {
+        checkModule();
+%ifndef NoJson
+        FakePerplexityRestClient rest();
+        rest.stream_events = (
+            <SseMessageInfo>{
+                "data": '{"id":"chatcmpl-stream","choices":[{"delta":{"content":"Hello"}}]}',
+            },
+            <SseMessageInfo>{
+                "data": '{"id":"chatcmpl-stream","choices":[{"delta":{"content":" world"}}]}',
+            },
+            <SseMessageInfo>{
+                "data": "[DONE]",
+            },
+        );
+        PerplexityChatStreamDataProvider prov(rest);
+
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+
+        prov.doRequest({
+            "model": "sonar",
+            "messages": (
+                {"role": "user", "content": "Hello"},
+            ),
+        });
+
+        observer.wait(3);
+        assertEq(3, observer.events.lsize());
+        # First event should have delta content
+        assertEq("chatcmpl-stream", observer.events[0].id);
+        # Last event should be done
+        assertEq("done", observer.events[2].type);
+
+        # Verify stream was called with stream=True
+        assertTrue(rest.last_stream_request.stream);
+%endif
+    }
+
+    streamChatErrorTest() {
+        checkModule();
+%ifndef NoJson
+        FailingPerplexityRestClient rest();
+        PerplexityChatStreamDataProvider prov(rest);
+
+        StreamObserver observer();
+        prov.registerObserver(observer);
+        prov.observersReady();
+
+        prov.doRequest({
+            "model": "sonar",
+            "messages": (
+                {"role": "user", "content": "Hello"},
+            ),
+        });
+
+        observer.wait(1);
+        assertEq("error", observer.events[0].type);
+        assertEq("SSE-ERROR", observer.events[0].error.err);
+%endif
+    }
+
+    exampleEventDataTest() {
+        checkModule();
+%ifndef NoJson
+        # Test with fake REST client - getExampleEventDataImpl transforms to delta shape
+        FakePerplexityRestClient rest();
+        PerplexityChatStreamDataProvider prov(rest);
+        hash<auto> example = prov.getExampleEventData(EVENT_PERPLEXITY_CHAT_STREAM);
+        assertTrue(example.hasKey("id"));
+        assertTrue(example.hasKey("model"));
+        assertTrue(example.hasKey("choices"));
+        assertTrue(example.hasKey("type"));
+        assertEq("delta", example.type);
+        assertEq("chat.completion.chunk", example.object);
+        # Verify message was transformed to delta
+        assertTrue(example.choices[0].hasKey("delta"));
+        assertFalse(example.choices[0].hasKey("message"));
+
+        # Test fallback to fake data when the API call fails
+        FailingPerplexityRestClient failing_rest();
+        PerplexityChatStreamDataProvider prov2(failing_rest);
+        hash<auto> fake = prov2.getExampleEventData(EVENT_PERPLEXITY_CHAT_STREAM);
+        assertTrue(fake.hasKey("id"));
+        assertTrue(fake.hasKey("model"));
+        assertTrue(fake.hasKey("choices"));
+        assertTrue(fake.hasKey("type"));
+        assertEq("sonar", fake.model);
+        assertEq("delta", fake.type);
+%endif
+    }
+
+    liveTest() {
+        checkModule();
+%ifndef NoJson
+        if (!rc) {
+            testSkip("no connection; set PERPLEXITY_API_KEY to run live tests");
+        }
+
+        # Test connection ping
+        hash<auto> ping_result = rc.ping(True);
+        assertTrue(ping_result.ok, "connection ping should return ok: True");
+
+        # Test multi-chat
+        AbstractDataProvider prov = new PerplexityDataProvider(rc.get());
+        AbstractDataProvider chat = prov.getChildProvider("multi-chat");
+        hash<auto> resp = chat.doRequest({
+            "model": "sonar",
+            "messages": (
+                {"role": "user", "content": "What is 2+2? Reply with just the number."},
+            ),
+        });
+        assertEq("chat.completion", resp.object);
+        assertGt(0, resp.choices.lsize());
+        assertTrue(resp.choices[0].message.content.val());
+        # Perplexity always returns citations
+        assertTrue(resp.hasKey("citations"));
+        assertGt(0, resp.usage.total_tokens);
+
+        # Test simple-chat
+        AbstractDataProvider simple = prov.getChildProvider("simple-chat");
+        resp = simple.doRequest({
+            "model": "sonar",
+            "role": "user",
+            "content": "What is the capital of France? Reply with just the city name.",
+        });
+        assertTrue(resp.choice.message.content.val());
+
+        # Test search
+        AbstractDataProvider search = prov.getChildProvider("search");
+        try {
+            resp = search.doRequest({
+                "query": "Qore programming language",
+                "max_results": 3,
+            });
+            assertTrue(resp.hasKey("results"));
+        } catch (hash<ExceptionInfo> ex) {
+            # Search API may require specific subscription
+            if (ex.arg.status_code == 403 || ex.arg.status_code == 401) {
+                testSkip("search API not available with current API key");
+            }
+            rethrow;
+        }
+
+        # Test stream-chat
+        AbstractDataProvider stream = prov.getChildProvider("stream-chat");
+        StreamObserver stream_observer();
+        stream.registerObserver(stream_observer);
+        stream.observersReady();
+        stream.doRequest({
+            "model": "sonar",
+            "messages": (
+                {"role": "user", "content": "Say hello in one word."},
+            ),
+        });
+        # Wait for at least one event (content or done)
+        stream_observer.wait(1);
+        assertGt(0, stream_observer.events.lsize());
+        # Verify we received streaming events with expected structure
+        bool has_content = False;
+        bool has_done = False;
+        for (int i = 0; i < stream_observer.events.lsize(); i++) {
+            hash<auto> ev = stream_observer.events[i];
+            if (ev.type == "content" || ev.type == "delta") {
+                has_content = True;
+            } else if (ev.type == "done") {
+                has_done = True;
+            }
+        }
+        # Should have received at least content or done event
+        assertTrue(has_content || has_done);
+%endif
+    }
+}

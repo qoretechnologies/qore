@@ -1,0 +1,221 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore PerplexityDataProvider module definition
+
+/*  PerplexityDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+
+%requires(reexport) DataProvider
+%requires(reexport) PerplexityRestClient
+
+module PerplexityDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Perplexity AI services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new PerplexityDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": PerplexityDataProvider::AppName,
+            "display_name": "Perplexity AI",
+            "short_desc": "Perplexity AI services",
+            "desc": "Perplexity AI provides web-grounded AI search and chat completions with citations.\n\n"
+                "**Key Features:**\n"
+                "- Real-time web search grounding for up-to-date responses\n"
+                "- Automatic citation of sources\n"
+                "- Multiple search modes: web, academic, and SEC filings\n"
+                "- Streaming support via Server-Sent Events\n"
+                "- Structured JSON output with schema validation",
+            "scheme": "perplexity",
+            "logo": PerplexityLogo,
+            "logo_file_name": "perplexity-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register all supported actions
+
+        # multi-chat action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": PerplexityDataProvider::AppName,
+            "path": "/multi-chat",
+            "action": "multi-chat",
+            "display_name": "Multi Chat",
+            "short_desc": "Chat with a Perplexity AI model by sending multiple messages at once and getting "
+                "web-grounded responses with citations",
+            "desc": "Chat with a Perplexity AI model by sending multiple messages at once and getting "
+                "web-grounded responses with citations",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields(){"model", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields(){"search_mode", "search_recency_filter"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields()
+                    - ("model", "messages", "search_mode", "search_recency_filter")
+            ),
+            "output_type": PerplexityChatCompletionDataProvider::ResponseType,
+        });
+
+        # simple-chat action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": PerplexityDataProvider::AppName,
+            "path": "/simple-chat",
+            "action": "simple-chat",
+            "display_name": "Simple Chat",
+            "short_desc": "Chat with a Perplexity AI model by sending a single message and receiving a single "
+                "web-grounded reply with citations",
+            "desc": "Chat with a Perplexity AI model by sending a single message and receiving a single "
+                "web-grounded reply with citations",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySimpleChatCompletionRequestType.getFields(){"model", "role", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySimpleChatCompletionRequestType.getFields(){"search_mode", "search_recency_filter"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySimpleChatCompletionRequestType.getFields()
+                    - ("model", "role", "content", "search_mode", "search_recency_filter")
+            ),
+            "output_type": PerplexitySimpleChatCompletionDataProvider::ResponseType,
+        });
+
+        # stream-chat action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": PerplexityDataProvider::AppName,
+            "path": "/stream-chat",
+            "action": "stream-chat",
+            "display_name": "Stream Chat",
+            "short_desc": "Stream a chat response from Perplexity AI via Server-Sent Events",
+            "desc": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token "
+                "delivery",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_PERPLEXITY_CHAT_STREAM,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields(){"model", "messages"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields(){"search_mode", "search_recency_filter"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexityChatCompletionRequestType.getFields()
+                    - ("model", "messages", "stream", "search_mode", "search_recency_filter")
+            ),
+            "output_type": PerplexityChatStreamEventDataType,
+        });
+
+        # search action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": PerplexityDataProvider::AppName,
+            "path": "/search",
+            "action": "search",
+            "display_name": "Web Search",
+            "short_desc": "Search the web using Perplexity's dedicated search API",
+            "desc": "Search the web using Perplexity's dedicated search API returning structured results with "
+                "titles, URLs, and snippets",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySearchRequestType.getFields(){"query",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySearchRequestType.getFields(){"max_results",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                PerplexitySearchRequestType.getFields() - ("query", "max_results")
+            ),
+            "output_type": PerplexitySearchDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage PerplexityDataProvider Module
+
+    @tableofcontents
+
+    @section perplexitydataproviderintro Introduction to the PerplexityDataProvider Module
+
+    The %PerplexityDataProvider module provides a @ref dataproviderintro "data provider" API for Perplexity AI
+    services.
+
+    Perplexity AI provides web-grounded AI models that return responses with citations from real-time web search
+    results.
+
+    @section perplexitydataprovider_examples Examples
+
+    @subsection perplexitydataprovider_simple_chat Simple Chat Example
+
+    @code{.py}
+%requires PerplexityDataProvider
+
+PerplexityRestConnection rc = get_connection("perplexity");
+PerplexityDataProvider::PerplexityDataProvider prov(rc.get());
+
+AbstractDataProvider chat = prov.getChildProvider("simple-chat");
+hash<auto> result = chat.doRequest({
+    "model": "sonar",
+    "role": "user",
+    "content": "What is the current population of Tokyo?",
+    "search_mode": "web",
+});
+printf("Response: %s\n", result.choice.message.content);
+printf("Citations: %y\n", result.citations);
+    @endcode
+
+    @section perplexitydataprovider_relnotes Release Notes
+
+    @subsection perplexitydataproviderv1_0 PerplexityDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the PerplexityDataProvider module
+public namespace PerplexityDataProvider {
+#! Perplexity application name
+public const AppName = "Perplexity";
+
+#! Perplexity logo
+const PerplexityLogo = File::readTextFile(get_script_dir() + "/perplexity-logo.svg");
+}

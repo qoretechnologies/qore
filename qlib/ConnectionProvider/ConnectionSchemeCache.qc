@@ -175,6 +175,8 @@ public class ConnectionSchemeCache {
 
             "openai": "OpenAiRestClient",
 
+            "perplexity": "PerplexityRestClient",
+
             "pdfco": "PdfCoRestClient",
 
             "pop3": "Pop3Client",
