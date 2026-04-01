@@ -825,6 +825,12 @@ cargo install tree-sitter-cli@0.26.5
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
+    - @ref aftershiprestclientintro "AftershipRestClient" module
+      - new module providing a REST client for the <a href="https://www.aftership.com/">Aftership</a> tracking and returns API
+      - supports API key authentication via as-api-key header
+      - provides AftershipRestConnection for connection management with \c aftership:// URL scheme
+    - @ref aftershipdataproviderintro "AftershipDataProvider" module
+      - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
     - @ref anthropicrestclientintro "AnthropicRestClient" module
       - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
       - supports API key authentication via x-api-key header

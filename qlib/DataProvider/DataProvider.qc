@@ -80,6 +80,7 @@ public class DataProvider {
             # provided by the jni module
             "accessread": "AccessDataProvider",
 
+            "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
 
