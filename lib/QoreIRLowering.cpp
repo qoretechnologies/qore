@@ -946,12 +946,16 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             builder.createRefForeachFinalize(state, fill_false, stmt->loc);
             builder.createBranch(merge_block);
 
-            // Catch: landing pad, cleanup without write-back, rethrow
+            // Catch: landing pad, cleanup without write-back, rethrow to outer handler
             builder.setBlock(catch_block);
             builder.createLandingPad(try_scope_depth, try_scope_id, stmt->loc);
             builder.createRefForeachCleanup(state, stmt->loc);
             {
-                auto* rethrow_inst = builder.createRethrow(nullptr, stmt->loc);
+                // Route the synthetic rethrow to the outer exception handler (if any)
+                // so try/catch blocks around the ref foreach can catch the exception
+                QoreIRBasicBlock* outer_handler = exception_stack.empty()
+                    ? nullptr : exception_stack.back();
+                auto* rethrow_inst = builder.createRethrow(outer_handler, stmt->loc);
                 rethrow_inst->synthetic = true;
             }
 
