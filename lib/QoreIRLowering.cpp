@@ -205,12 +205,14 @@ static const QoreTypeInfo* getExprTypeInfo(const QoreValue& val) {
                 return ce->typeInfo;
             }
         }
-        // Operator nodes with parse-time type info (e.g., range/index slice returns string)
-        if (auto* range_op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
-            return range_op->getTypeInfo();
-        }
-        if (auto* sq_op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
-            return sq_op->getTypeInfo();
+        // Generic operator type info: any operator node with parse-time result type.
+        // This covers Map, Select, Keys, Plus, SquareBrackets, Range, and all other
+        // operators that override getTypeInfo() — no need for per-type dynamic_casts.
+        if (node->getType() == NT_OPERATOR) {
+            const QoreTypeInfo* ti = static_cast<const QoreOperatorNode*>(node)->getTypeInfo();
+            if (ti) {
+                return ti;
+            }
         }
     }
     return val.getTypeInfo();

@@ -61,6 +61,12 @@ public:
    // returns the type name as a c string
    DLLLOCAL virtual const char *getTypeName() const = 0;
 
+   //! Returns the expression's result type info, or nullptr if unknown
+   /** Overridden by operator subclasses that know their result type at parse time.
+       Used by getExprTypeInfo() in IR lowering for type-aware code generation.
+   */
+   DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const { return nullptr; }
+
    DLLLOCAL void ignoreReturnValue() {
       ref_rv = false;
       ignoreReturnValueImpl();
