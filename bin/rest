@@ -637,7 +637,9 @@ class RestCmd {
             conn.setLogger(logger);
 
             TestPollingConnectionMonitor monitor(logger);
-            on_exit delete monitor;
+            # Stop the monitor before destruction to ensure I/O callbacks complete
+            # and release the monitor's lock before its Mutex is destroyed
+            on_exit monitor.stop();
 
             monitor.add(conn);
 
@@ -764,7 +766,15 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 
     hash<auto> waitForResult(timeout to) {
-        return msgq.get(to);
+        try {
+            return msgq.get(to);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "QUEUE-TIMEOUT") {
+                rethrow "PING-TIMEOUT", sprintf("no ping result received within the %y timeout; "
+                    "the connection may be unreachable or the async I/O operation stalled", to);
+            }
+            rethrow;
+        }
     }
 
     private failedToStartPing(string name, hash<ExceptionInfo> ex) {
