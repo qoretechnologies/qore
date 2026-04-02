@@ -1086,8 +1086,9 @@ AbstractPollOperation Socket::startPollSendHttpChunkedResponseAndReadHeader(int 
     }
 
     // Ensure Transfer-Encoding: chunked is set
+    // copy() ensures unique ownership (refcount == 1) before mutation
     ReferenceHolder<QoreHashNode> hdr_copy(headers
-        ? headers->hashRefSelf() : new QoreHashNode(autoTypeInfo), xsink);
+        ? headers->copy() : new QoreHashNode(autoTypeInfo), xsink);
     hdr_copy->setKeyValue("Transfer-Encoding", new QoreStringNode("chunked"), xsink);
     // Remove Content-Length if present (incompatible with chunked)
     hdr_copy->removeKey("Content-Length", xsink);

@@ -1345,7 +1345,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initHttp3ServerPollOperationClass(qns));
     // Add class-level constant DefaultDrainTimeout (5 seconds as relative date)
     // QPP does not support class constants; add manually
-    QC_HTTP3SERVERPOLLOPERATION->addBuiltinStaticVar("DefaultDrainTimeout",
+    QC_HTTP3SERVERPOLLOPERATION->addBuiltinConstant("DefaultDrainTimeout",
         DateTimeNode::makeRelative(0, 0, 0, 0, 0, 5));
     qns.addSystemClass(initHttp2ClientPollOperationBaseClass(qns));
     // HttpClientPingPollOperationBase must be after SocketPollOperationBase
