@@ -107,10 +107,20 @@ public:
         }
     }
 
+    //! Returns true when the inner op is a Qore object (not a C++ SocketPollOperationBase).
+    /** Causes the async I/O controller to dispatch continuePoll() to a worker thread
+        instead of running it on the I/O thread, preventing Qore evalMethod calls,
+        blocking waits, and synchronous I/O on the I/O thread.
+    */
+    DLLLOCAL bool needsWorkerDispatch() const override {
+        return inner_base == nullptr;
+    }
+
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override {
         if (inner_base) {
             return inner_base->continuePoll(xsink);
         }
+        // inner op is Qore — only called from a worker thread (needsWorkerDispatch() == true)
         ValueHolder rv(inner_obj->evalMethod("continuePoll", nullptr, xsink), xsink);
         if (*xsink) {
             return nullptr;

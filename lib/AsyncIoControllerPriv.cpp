@@ -383,6 +383,33 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                     completed = true;
                 }
 
+                // Dispatch stream-data-ready notifications for Http2/Http3 Qore poll ops.
+                // Called here (on the worker) instead of the I/O thread so the I/O thread
+                // is never blocked by Qore method invocations.
+                if (!completed && !ex_hash) {
+                    ExceptionSink stream_xsink;
+                    ValueHolder streams_val(async_item.spop_obj->evalMethod(
+                        "getAndClearDataReadyStreams", nullptr, &stream_xsink), &stream_xsink);
+                    if (!stream_xsink && streams_val->getType() == NT_LIST) {
+                        const QoreListNode* sl = streams_val->get<const QoreListNode>();
+                        if (sl && sl->size() > 0) {
+                            for (size_t i = 0; i < sl->size(); ++i) {
+                                QoreValue v = sl->retrieveEntry(i);
+                                std::string skey;
+                                if (v.getType() == NT_STRING) {
+                                    skey = v.get<const QoreStringNode>()->c_str();
+                                } else {
+                                    skey = std::to_string(v.getAsBigInt());
+                                }
+                                async_item.controller->enqueueStreamDataDispatch(
+                                    async_item.spop_obj, skey);
+                            }
+                        }
+                    }
+                    // Method may not exist — that's fine, not all Qore poll ops have it
+                    stream_xsink.clear();
+                }
+
                 // Send result back to the I/O thread
                 async_item.controller->enqueueContinuePollResult(
                     async_item.key, new_poll_info, ex_hash, completed);
@@ -1668,7 +1695,28 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     result.ex_hash = ex.release();
                 }
             } else if (op.spop_base) {
-                // C++ poll operation — safe to call directly on I/O thread
+                // C++ poll operation.  Ops that call Qore evalMethod(), block, or do
+                // synchronous I/O must signal this via needsWorkerDispatch() == true;
+                // those are dispatched to the worker pool just like Qore-only ops.
+                if (op.spop_base->needsWorkerDispatch()) {
+                    // C++ base delegates to Qore inner op — dispatch to worker thread
+                    {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        auto it = cache.find(op.key);
+                        if (it != cache.end()) {
+                            it->second.continue_poll_in_flight = true;
+                        }
+                    }
+                    this->ref();
+                    op.spop_obj->ref();
+                    call_dispatcher->dispatchContinuePollAsync(op.spop_obj, this, op.key);
+                    continue;  // do NOT add to poll_results
+                }
+
+                // Pure C++ — safe to call directly on the I/O thread
                 ExceptionSink poll_xsink;
                 ASYNC_IO_TRACE("Phase2 C++ continuePoll key='%s'\n", op.key.c_str());
                 printd(5, "AsyncIoController Phase2: C++ continuePoll key='%s'\n",
@@ -1761,97 +1809,29 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
                 }
             } else {
-                // Qore poll operation — check trust level via QDOM_PROCESS.
-                // Trusted code (modules, framework) runs on I/O thread.
-                // Sandboxed code (without QDOM_PROCESS) is dispatched to the
-                // worker pool to prevent blocking the event loop.
-                // NOTE: server-side Qore poll ops (Http2PollOperation, etc.)
-                // still require I/O thread execution for correct timing.
-                // These will be migrated to PollPipeline or C++ in follow-on work.
-                QoreProgram* pgm = op.spop_obj->getProgram();
-                bool trusted = pgm && !(pgm->getParseOptions() & PO_NO_PROCESS_CONTROL);
-                if (trusted) {
-                    // Trusted Qore code — run on I/O thread
-                    ExceptionSink poll_xsink;
-                    ASYNC_IO_TRACE("Phase2 Qore evalMethod BEFORE key='%s'\n", op.key.c_str());
-                    int64 eval_start = get_epoch_us();
-                    ValueHolder rv(op.spop_obj->evalMethod("continuePoll", nullptr,
-                        &poll_xsink), &poll_xsink);
-                    int64 eval_elapsed = get_epoch_us() - eval_start;
-                    ASYNC_IO_TRACE("Phase2 Qore evalMethod AFTER key='%s' elapsed=%lldms\n",
-                        op.key.c_str(), (long long)(eval_elapsed / 1000));
-                    if (eval_elapsed > 100000) { // > 100ms
-                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' SLOW: %lldms\n",
-                            op.key.c_str(), (long long)(eval_elapsed / 1000));
+                // Qore poll operation — always dispatch to worker thread.
+                // The I/O thread must remain clean: no Qore-language callbacks,
+                // no blocking calls (e.g. waitForReady(), Condition::wait()),
+                // and no synchronous I/O on the I/O thread.  Dispatching to a
+                // worker satisfies all three constraints regardless of whether
+                // the Qore program is trusted or sandboxed.
+                // getAndClearDataReadyStreams() is called by the worker after
+                // continuePoll() (see DT_CONTINUE_POLL handler) and dispatched
+                // via enqueueStreamDataDispatch() without returning to the I/O thread.
+                {
+                    AutoLocker al(m);
+                    if (!call_dispatcher) {
+                        call_dispatcher = new QoreCallDispatcher(max_callback_workers);
                     }
-                    if (poll_xsink) {
-                        QoreException* ex_obj = poll_xsink.getException();
-                        if (ex_obj) {
-                            result.ex_hash = ex_obj->makeExceptionObject();
-                        }
-                        poll_xsink.clear();
-                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> EXCEPTION\n",
-                            op.key.c_str());
-                    } else if (rv->getType() == NT_HASH) {
-                        result.new_poll_info = rv.release().get<QoreHashNode>();
-                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> poll_info\n",
-                            op.key.c_str());
-                    } else {
-                        result.completed = true;
-                        ASYNC_IO_TRACE("Phase2 Qore continuePoll key='%s' -> COMPLETED (type=%d)\n",
-                            op.key.c_str(), rv->getType());
+                    auto it = cache.find(op.key);
+                    if (it != cache.end()) {
+                        it->second.continue_poll_in_flight = true;
                     }
-
-                    // Check for stream data ready (H3 extended CONNECT streams)
-                    if (!result.completed && !result.ex_hash) {
-                        ExceptionSink stream_xsink;
-                        ValueHolder streams(op.spop_obj->evalMethod(
-                            "getAndClearDataReadyStreams", nullptr, &stream_xsink),
-                            &stream_xsink);
-                        if (!stream_xsink && streams->getType() == NT_LIST) {
-                            const QoreListNode* sl = streams->get<const QoreListNode>();
-                            if (sl && sl->size() > 0) {
-                                AutoLocker al(m);
-                                if (!call_dispatcher) {
-                                    call_dispatcher = new QoreCallDispatcher(max_callback_workers);
-                                }
-                                for (size_t i = 0; i < sl->size(); ++i) {
-                                    QoreValue v = sl->retrieveEntry(i);
-                                    std::string skey;
-                                    if (v.getType() == NT_STRING) {
-                                        skey = v.get<const QoreStringNode>()->c_str();
-                                    } else {
-                                        skey = std::to_string(v.getAsBigInt());
-                                    }
-                                    op.spop_obj->ref();
-                                    call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
-                                        skey);
-                                }
-                            }
-                        }
-                        if (stream_xsink) {
-                            // Method doesn't exist — that's fine, not all Qore ops have it
-                            stream_xsink.clear();
-                        }
-                    }
-                } else {
-                    // Sandboxed Qore code — dispatch to worker thread; result
-                    // comes back via IoCommand::ContinuePollResult
-                    {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
-                        }
-                        auto it = cache.find(op.key);
-                        if (it != cache.end()) {
-                            it->second.continue_poll_in_flight = true;
-                        }
-                    }
-                    this->ref();  // keep controller alive until worker delivers result
-                    op.spop_obj->ref();
-                    call_dispatcher->dispatchContinuePollAsync(op.spop_obj, this, op.key);
-                    continue;  // do NOT add to poll_results
                 }
+                this->ref();  // keep controller alive until worker delivers result
+                op.spop_obj->ref();
+                call_dispatcher->dispatchContinuePollAsync(op.spop_obj, this, op.key);
+                continue;  // do NOT add to poll_results
             }
 
             poll_results.push_back(std::move(result));
@@ -2599,12 +2579,15 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                             pinfo.cleanup(xsink);
                             cache.erase(it);
                         } else {
-                            // Still pending — update poll_info and target
-                            // this socket for re-poll so the operation is
-                            // included in the next Phase 1 even if the socket
-                            // isn't marked ready by epoll (application-level
-                            // data may be buffered in the Http2Session)
-                            if (cmd.continue_poll_result) {
+                            // Still pending — for C++ operations, target the new
+                            // socket for immediate re-poll so the op is included
+                            // in the next Phase 1 even if epoll hasn't fired yet
+                            // (application-level data may be buffered in Http2Session).
+                            // Qore worker-dispatched ops must NOT be woken here: their
+                            // sockets are event-driven (EventNotifier, etc.) and a
+                            // spurious wake causes continuePoll() to consume the notifier
+                            // before it has actually fired, causing premature state transitions.
+                            if (cmd.continue_poll_result && pinfo.spop_base) {
                                 std::string sh;
                                 int ev = 0;
                                 ExceptionSink sh_xsink;
@@ -3151,6 +3134,16 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
     if (do_signal) {
         notifier->notify();
     }
+}
+
+void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,
+        const std::string& stream_key) {
+    AutoLocker al(m);
+    if (!call_dispatcher) {
+        call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+    }
+    spop_obj->ref();
+    call_dispatcher->dispatchStreamDataAsync(spop_obj, stream_key);
 }
 
 void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink) {

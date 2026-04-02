@@ -572,6 +572,16 @@ private:
     DLLLOCAL void enqueueContinuePollResult(const std::string& key, QoreHashNode* new_poll_info,
         QoreHashNode* ex_hash, bool completed);
 
+    //! Dispatch a stream-data-ready notification from a worker thread
+    /** Called by the DT_CONTINUE_POLL worker after getAndClearDataReadyStreams() to
+        notify a Qore poll operation that data is available on a substream.
+        Thread-safe: acquires the controller lock internally.
+        @param spop_obj the poll operation Qore object (caller holds no extra ref; this
+               method adds its own ref before dispatching)
+        @param stream_key the stream identifier to pass to onStreamData()
+    */
+    DLLLOCAL void enqueueStreamDataDispatch(QoreObject* spop_obj, const std::string& stream_key);
+
     //! Call abort on an AbstractPollOperation object
     DLLLOCAL static void callAbort(QoreObject* spop_obj, ExceptionSink* xsink);
 

@@ -118,6 +118,22 @@ public:
     */
     DLLEXPORT virtual QoreHashNode* continuePoll(ExceptionSink* xsink) = 0;
 
+    //! Returns true if continuePoll() must be dispatched to a worker thread
+    /** C++ poll operations call continuePoll() on the I/O thread by default.
+        Override and return true when continuePoll() (or any code it calls) invokes
+        Qore-language methods (evalMethod), makes blocking calls, or performs
+        synchronous I/O — all of which must not run on the I/O thread.
+
+        The async I/O controller checks this after fetching the C++ base pointer;
+        if it returns true, the controller dispatches via the worker pool instead.
+
+        @return false by default (safe to call on the I/O thread)
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual bool needsWorkerDispatch() const {
+        return false;
+    }
+
     //! Returns the output of the operation (default: nothing)
     DLLEXPORT virtual QoreValue getOutput() const {
         return QoreValue();

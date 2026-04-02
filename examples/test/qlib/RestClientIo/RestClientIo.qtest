@@ -429,6 +429,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll 401 retry", \testPingPoll401Retry());
         addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
+        addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
 
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
@@ -2627,6 +2628,65 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "connect_timeout": 1s,
             });
         assertThrows("QOREADDRINFO-GETINFO-ERROR", sub () { rc.startPollConnect(); });
+    }
+
+    #! Regression test: connection-closed notifier must trigger a retry, not throw HTTPCLIENT-NOT-READY
+    /** The bug: when connection_ready_notifier fired because the connection went to CLOSED
+        (not READY), continuePoll() called doSubmitPing() on the non-ready replacement
+        connection, throwing HTTPCLIENT-NOT-READY and crashing the ping.
+
+        The fix: call doStartConnecting() instead of doSubmitPing() after the notifier fires.
+        doStartConnecting() re-evaluates readiness:
+        - READY: calls doSubmitPing() immediately (SPS_IO_WAITING)
+        - CLOSED/DRAINING: registers a new notifier for the replacement connection (SPS_CONNECTING retry)
+    */
+    testPingPollConnectionClosedRetry() {
+        # Bind to a random port and immediately close — the port has nothing listening
+        # when the test runs, so all TCP connection attempts get ECONNREFUSED (→ CLOSED).
+        int refused_port;
+        {
+            Socket s();
+            s.bindINET("127.0.0.1", 0, True);
+            refused_port = s.getSocketInfo().port;
+        }
+
+        RestConnection rc("ping-conn-closed", "ping-conn-closed",
+            sprintf("http://127.0.0.1:%d", refused_port), {}, {
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        # Drive for up to 2s. With the fix the ping retries on each CLOSED notifier
+        # (continuePoll() keeps returning poll info). Without the fix it throws
+        # HTTPCLIENT-NOT-READY on the very first CLOSED notifier.
+        date deadline = now_us() + 2s;
+        *hash<ExceptionInfo> caught;
+        try {
+            while (now_us() < deadline) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                date remaining = deadline - now_us();
+                if (remaining > 0) {
+                    Socket::poll((info,), min(remaining, 250ms));
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex;
+        }
+
+        # The critical assertion: must NOT be the old HTTPCLIENT-NOT-READY crash
+        if (caught) {
+            assertNeq("HTTPCLIENT-NOT-READY", caught.err,
+                sprintf("ping should retry on connection close, not throw %s: %s",
+                    caught.err, caught.desc));
+        }
+        # Goal must not be reached — the port has nothing listening
+        assertFalse(op.goalReached());
     }
 }
 

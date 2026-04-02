@@ -401,21 +401,24 @@ public class HttpClientStreamHandle {
             state = HttpClientStreamState::Open;
         }
 
-        # Wait for connection to become ready if not already
+        # The caller must ensure the connection is ready before calling this method.
+        # submitAsyncWithNotifier() must never block (waitForReady() would deadlock
+        # if called from the async I/O thread, since the I/O thread drives the
+        # connection to READY).  If the connection is not ready, throw immediately.
         if (!conn.isReady()) {
-            if (!conn.waitForReady(request_timeout)) {
-                {
-                    AutoLock al(lock);
-                    if (state == HttpClientStreamState::Open) {
-                        state = HttpClientStreamState::Pending;
-                    }
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
                 }
-                releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
+            releaseReservationIfHeld();
+            throw "HTTPCLIENT-NOT-READY",
+                "connection is not ready for async request; "
+                "caller must ensure readiness via SPS_CONNECTING before calling submitAsyncWithNotifier()";
         }
 
-        # Re-check state after readiness wait
+        # Re-check state
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Open) {
