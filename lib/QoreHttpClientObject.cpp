@@ -5586,14 +5586,9 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             info, timeout_ms, code, xsink);
     }
 
-    // Use HTTP/2 if active (check before HTTP/3 upgrade attempt below)
-    if (http2_active && getH2Session()) {
-        return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
-            send_callback, is, max_chunk_size, trailer_callback,
-            info, timeout_ms, code, aborted, xsink);
-    }
-
-    // Try HTTP/3 upgrade if Alt-Svc is cached and no active multiplexed connection.
+    // Try HTTP/3 upgrade if Alt-Svc is cached — even when HTTP/2 is active.
+    // Alt-Svc from the server signals that QUIC is available; attempt the upgrade
+    // before falling back to the current HTTP/2 session.
     // Skip QUIC if a prior exception is already set — xsink->clear() below must
     // only clear exceptions from the QUIC attempt itself, not unrelated errors.
     if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
@@ -5618,6 +5613,13 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             }
             xsink->clear();
         }
+    }
+
+    // Use HTTP/2 if active (after HTTP/3 upgrade attempt above)
+    if (http2_active && getH2Session()) {
+        return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            send_callback, is, max_chunk_size, trailer_callback,
+            info, timeout_ms, code, aborted, xsink);
     }
 
     // send the message (HTTP/1.x path)
