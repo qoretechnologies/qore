@@ -140,9 +140,14 @@ Requires: %{name} = %{version}-%{release}
 BuildArch: noarch
 
 %description misc-tools
-This package contains tool for working with:
- - REST APIs
- - SQL Databases
+This package contains tools for working with:
+ - REST APIs (rest, saprest, sfrest)
+ - SQL Databases (sqlutil, schema-reverse, qschema)
+ - Data Providers (qdp)
+ - Code Formatting (qfmt)
+ - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
+ - Language Server (qls)
+ - File Downloads (qget)
 
 %files misc-tools
 %{_bindir}/qdp
@@ -152,7 +157,24 @@ This package contains tool for working with:
 %{_bindir}/saprest
 %{_bindir}/sqlutil
 %{_bindir}/schema-reverse
+%{_bindir}/qschema
 %{_bindir}/qfmt
+%{_bindir}/qls
+%{_bindir}/qore-openapi3-gen
+%{_bindir}/qore-asyncapi-gen
+%{_bindir}/qore-extract-qm-metadata
+%{_mandir}/man1/qdp.1.*
+%{_mandir}/man1/qget.1.*
+%{_mandir}/man1/rest.1.*
+%{_mandir}/man1/sfrest.1.*
+%{_mandir}/man1/saprest.1.*
+%{_mandir}/man1/sqlutil.1.*
+%{_mandir}/man1/schema-reverse.1.*
+%{_mandir}/man1/qschema.1.*
+%{_mandir}/man1/qfmt.1.*
+%{_mandir}/man1/qls.1.*
+%{_mandir}/man1/qore-openapi3-gen.1.*
+%{_mandir}/man1/qore-asyncapi-gen.1.*
 %license COPYING.LGPL COPYING.GPL COPYING.MIT README-LICENSE
 
 %prep
@@ -188,6 +210,7 @@ export QORE_MODULE_DIR=qlib:modules/reflection:${RPM_BUILD_ROOT}%{module_dir}/%{
 %{_bindir}/qdbg-remote
 %{_bindir}/qdbg-vsc-adapter
 %{_mandir}/man1/qore.1.*
+%{_mandir}/man1/qdbg.1.*
 
 %changelog
 * Mon Feb 9 2026 David Nichols <david@qore.org> 2.3.0-3
