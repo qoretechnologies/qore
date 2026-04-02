@@ -608,7 +608,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         list<hash<auto>> results();
         Mutex mtx();
 
-        # Launch many concurrent file stream requests on the same connection
+        # Launch many concurrent file stream requests — each thread uses its own
+        # connection because synchronous RestClient.get() serializes requests on a
+        # single connection (holds the connection lock), causing timeouts under load
         for (int i = 0; i < num_streams; ++i) {
             int idx = i;
             # Vary sizes to exercise different io_uring read patterns
@@ -616,7 +618,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             background sub() {
                 on_exit cnt.dec();
                 try {
-                    hash<auto> resp = rc.get("/file-stream/" + size);
+                    RestClient thread_rc = getClient(60000);
+                    hash<auto> resp = thread_rc.get("/file-stream/" + size);
                     int body_size;
                     if (resp.body.typeCode() == NT_BINARY) {
                         body_size = resp.body.size();

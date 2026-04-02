@@ -2158,6 +2158,37 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         timer_events.push_back({tid_val, it->second.udata});
                         timer_info_map.erase(it);
                     }
+
+#if defined(__linux__) && defined(HAVE_IO_URING)
+                } else if (events[i].events & QORE_EV_IOURING) {
+                    // io_uring completions ready — process them and deliver
+                    // data to Http2Sessions.  After delivery, affected sessions
+                    // need continuePoll() to submit the next read and flush
+                    // response data.  Mark all registered sockets as ready to
+                    // ensure Phase 1 includes them in ops_to_poll.
+                    QoreIoUring* uring = loop->getIoUring();
+                    if (uring) {
+                        std::vector<QoreIoUring::CompletedRead> completions;
+                        uring->processCompletions(completions);
+                        for (auto& cr : completions) {
+                            if (auto session = cr.session.lock()) {
+                                session->handleAsyncReadCompletion(
+                                    cr.stream_id, cr.data, cr.length, cr.error,
+                                    std::move(cr.buffer), xsink);
+                                if (*xsink) {
+                                    xsink->clear();
+                                }
+                            }
+                        }
+                        if (!completions.empty()) {
+                            // Mark all registered socket hashes as ready so that
+                            // Phase 1 includes all H2 ops for continuePoll()
+                            for (auto& [hash, fd] : registered_fds) {
+                                ready_socket_hashes.insert(hash);
+                            }
+                        }
+                    }
+#endif
                 } else if (events[i].fd >= 0 && events[i].udata) {
                     QoreObject* obj = static_cast<QoreObject*>(events[i].udata);
                     // Find the socket hash for this object
