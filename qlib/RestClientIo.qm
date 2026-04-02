@@ -903,6 +903,27 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 prepared.serialized_body, notifier);
         }
 
+        #! Submits a raw async request with a pre-serialized body and signals an EventNotifier
+        /** Like restDoRequestAsyncWithNotifier() but skips prepareRequest() — the body
+            and headers are sent as-is.  Used for OAuth2 token requests where the body
+            is already form-urlencoded.
+
+            @param method HTTP method
+            @param path request path
+            @param hdr request headers
+            @param body pre-serialized request body
+            @param notifier EventNotifier to signal on response completion
+
+            @return hash with "future" (Future) and "stream_id" (int)
+
+            @since %RestClientIo 1.2
+        */
+        hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
+                *data body, EventNotifier notifier) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
+        }
+
         #! Returns True if the current OAuth2 token needs to be refreshed
         /** @return True if the token exists, has a refresh token, and is within the expiry window
 
@@ -921,7 +942,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             @since %RestClientIo 1.2
         */
-        AbstractPollOperation startOAuth2PollRefreshToken() {
+        hash<auto> startOAuth2PollRefreshToken() {
             # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
             string token_url_str;
             hash<auto> login;
@@ -981,10 +1002,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # Serialize body as form-urlencoded
             string body_str = mime_get_form_urlencoded_string(login);
 
-            # Create a minimal RestClient pointing at the token endpoint.
-            # Uses socket-level polling (startPollSendRecv) — no blocking I/O.
-            RestClient::RestClient auth_client({"url": base_url_str});
-            return auth_client.startPollSendRecv("POST", req_path, body_str, auth_hdr);
+            # Return a RestClientIo pointing at the token endpoint plus the request
+            # parameters. The caller starts the connection async and submits the
+            # request once the connection is ready — fully event-driven.
+            return {
+                "rcio": new RestClientIo({"url": base_url_str}),
+                "path": req_path,
+                "headers": auth_hdr,
+                "body": body_str,
+            };
         }
 
         #! Updates the stored OAuth2 token from a parsed token response
@@ -2198,7 +2224,9 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
 */
 public class RestClientIo::RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
     public {
-        #! OAuth2 token refresh state
+        #! Waiting for the OAuth2 token endpoint connection to become ready
+        const SPS_OAUTH2_CONNECTING = "oauth2-connecting";
+        #! Waiting for the OAuth2 token refresh response via EventNotifier
         const SPS_OAUTH2_REFRESH = "oauth2-refresh";
         #! Waiting for the underlying TCP/TLS connection to become ready
         const SPS_CONNECTING = "connecting";
@@ -2239,8 +2267,23 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
         #! Raw HTTP response Future (resolved by C++ PromiseAction on I/O thread)
         *Future pending_future;
 
-        #! Inner poll operation for OAuth2 token refresh
-        *AbstractPollOperation oauth2_poller;
+        #! EventNotifier for OAuth2 token refresh (signaled when response arrives)
+        *EventNotifier oauth2_notifier;
+
+        #! EventNotifier for OAuth2 endpoint connection readiness
+        *EventNotifier oauth2_conn_notifier;
+
+        #! True after the first continuePoll() in SPS_OAUTH2_CONNECTING
+        bool waiting_for_oauth2_conn = False;
+
+        #! Future for OAuth2 token refresh response
+        *Future oauth2_future;
+
+        #! RestClientIo for OAuth2 token endpoint (kept alive for connection lifetime)
+        *RestClientIo oauth2_rcio;
+
+        #! Pending OAuth2 request parameters (set in doStartOAuth2Refresh, used after connection ready)
+        *hash<auto> oauth2_req;
 
         #! Whether we have already attempted an OAuth2 refresh + retry after a 401
         bool auth_retried = False;
@@ -2317,7 +2360,7 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
     }
 
     string getState() {
-        return state + (oauth2_poller ? ("-" + oauth2_poller.getState()) : "");
+        return state;
     }
 
     bool goalReached() {
@@ -2326,12 +2369,39 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
 
     *hash<SocketPollInfo> continuePoll() {
         while (True) {
-            if (state == SPS_OAUTH2_REFRESH) {
-                *hash<SocketPollInfo> pinfo = oauth2_poller.continuePoll();
-                if (pinfo) {
-                    return pinfo;
+            if (state == SPS_OAUTH2_CONNECTING) {
+                if (!waiting_for_oauth2_conn) {
+                    # First call — return poll info for the connection notifier
+                    waiting_for_oauth2_conn = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": oauth2_conn_notifier,
+                    };
                 }
-                # OAuth2 refresh complete — parse the token response and store it
+                # Notifier fired — connection ready or closed
+                oauth2_conn_notifier.acknowledge();
+                delete oauth2_conn_notifier;
+                waiting_for_oauth2_conn = False;
+                # Re-check: start a new connection if closed/failed
+                oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+                if (oauth2_conn_notifier) {
+                    # Still not ready — retry with new notifier
+                    continue;
+                }
+                # Connection ready — submit the OAuth2 token request
+                doSubmitOAuth2Request();
+                # Fall through to SPS_OAUTH2_REFRESH below
+            }
+
+            if (state == SPS_OAUTH2_REFRESH) {
+                if (!oauth2_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": oauth2_notifier,
+                    };
+                }
+                # Notifier fired — acknowledge and retrieve the OAuth2 response
+                oauth2_notifier.acknowledge();
                 processOAuth2RefreshResult();
                 # Start connecting (or submit ping immediately if already connected)
                 doStartConnecting();
@@ -2425,25 +2495,54 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
         return;
     }
 
-    #! Starts an OAuth2 token refresh via startOAuth2PollRefreshToken()
+    #! Starts an OAuth2 token refresh using a fully async RestClientIo request
+    /** Creates the RestClientIo for the token endpoint and starts the connection
+        async. If the connection is immediately ready, submits the request and
+        enters SPS_OAUTH2_REFRESH. Otherwise enters SPS_OAUTH2_CONNECTING to
+        wait for the connection notifier.
+    */
     private doStartOAuth2Refresh() {
+        hash<auto> refresh_info = rcio.startOAuth2PollRefreshToken();
+        oauth2_rcio = refresh_info.rcio;
+        oauth2_req = refresh_info{"path", "headers", "body"};
+
+        # Start connection to the token endpoint asynchronously
+        oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+        if (!oauth2_conn_notifier) {
+            # Connection already ready — submit request immediately
+            doSubmitOAuth2Request();
+        } else {
+            state = SPS_OAUTH2_CONNECTING;
+        }
+    }
+
+    #! Submits the OAuth2 token request after the connection is ready
+    private doSubmitOAuth2Request() {
         state = SPS_OAUTH2_REFRESH;
-        oauth2_poller = rcio.startOAuth2PollRefreshToken();
+        oauth2_notifier = new EventNotifier();
+        hash<auto> result = oauth2_rcio.doRequestRawAsyncWithNotifier("POST", oauth2_req.path,
+            oauth2_req.headers, oauth2_req.body, oauth2_notifier);
+        oauth2_future = result.future;
+        delete oauth2_req;
     }
 
     #! Parses the OAuth2 token refresh response and stores the new token
     private processOAuth2RefreshResult() {
-        hash<auto> resp = oauth2_poller.getOutput();
-        delete oauth2_poller;
+        hash<auto> resp = oauth2_future.get();
+        delete oauth2_future;
+        delete oauth2_notifier;
+        delete oauth2_rcio;
 
 %ifndef NoJson
-        if ((resp."code" / 100) == 2) {
-            string body = resp."response-body"
-                ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
-                : "";
-            resp.info."response-headers"."content-type" =~ s/;.*//;
+        int status_code = resp.status_code.toInt();
+        if ((status_code / 100) == 2) {
+            *string content_type = resp.headers."content-type";
+            if (content_type) {
+                content_type =~ s/;.*//;
+            }
+            string body = resp.body ? resp.body.toString() : "";
             auto parsed_body;
-            switch (resp.info."response-headers"."content-type") {
+            switch (content_type) {
                 case MimeTypeJson:
                     parsed_body = parse_json(body);
                     break;
@@ -2453,13 +2552,13 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
                 default:
                     throw "REST-PING-ERROR",
                         sprintf("cannot parse OAuth2 token response with Content-Type: %y",
-                            resp.info."response-headers"."content-type");
+                            content_type);
             }
             rcio.updateOAuth2Token(parsed_body);
         } else {
             conn.authFailure();
-            throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d from %y",
-                resp."code", resp.info."response-uri");
+            throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d",
+                status_code);
         }
 %else
         throw "REST-PING-ERROR", "cannot process OAuth2 token response without the json module";

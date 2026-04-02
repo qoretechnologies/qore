@@ -2583,10 +2583,6 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                             // socket for immediate re-poll so the op is included
                             // in the next Phase 1 even if epoll hasn't fired yet
                             // (application-level data may be buffered in Http2Session).
-                            // Qore worker-dispatched ops must NOT be woken here: their
-                            // sockets are event-driven (EventNotifier, etc.) and a
-                            // spurious wake causes continuePoll() to consume the notifier
-                            // before it has actually fired, causing premature state transitions.
                             if (cmd.continue_poll_result && pinfo.spop_base) {
                                 std::string sh;
                                 int ev = 0;

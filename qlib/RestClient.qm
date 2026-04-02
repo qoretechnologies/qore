@@ -3895,17 +3895,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "ping_body": ping_body,
         };
 
-        # TODO: RestClientIoPingPollOperation is under active debugging for Gmail/OAuth2 connections;
-        # temporarily disabled to restore working pings via RestPingPollOperation.
-        # Re-enable once the async ping issue is diagnosed and fixed.
-        #try {
-        #    load_module("RestClientIo");
-        #    return create_object("RestClientIo::RestClientIoPingPollOperation", self, ping_opts, logger);
-        #} catch (hash<ExceptionInfo> ex) {
-        #    if (ex.err != "LOAD-MODULE-ERROR") {
-        #        rethrow;
-        #    }
-        #}
+        try {
+            load_module("RestClientIo");
+            return create_object("RestClientIo::RestClientIoPingPollOperation", self, ping_opts, logger);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+        }
 
         # RestClient poll-based ping (sync fallback)
         RestClient client = getPollImpl();
@@ -4114,6 +4111,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Returns options for creating a new connection
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         return real_opts + {
+            # Always use the current real_url — real_opts.url is set at construction time
+            # and becomes stale for auto_url connections when the URL is updated later
+            "url": real_url,
             "logger": logger,
             "update_options": update_options,
         } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING)
