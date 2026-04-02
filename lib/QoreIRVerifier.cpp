@@ -270,6 +270,7 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RegexSubstAny:
         case QoreIROpcode::RegexSubstString:
         case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::IsCollectionType:
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::ElementsAny:
@@ -578,6 +579,7 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::InstanceOfBool:
+        case QoreIROpcode::IsCollectionType:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt:
         case QoreIROpcode::DotEvalAny:
@@ -843,7 +845,9 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                     return false;
                 }
             } else if (inst->result.isValid()) {
-                error = "unexpected result value";
+                error = "unexpected result value: opcode="
+                    + std::to_string(static_cast<int>(inst->opcode))
+                    + " in block '" + block->name + "'";
                 return false;
             }
         }
