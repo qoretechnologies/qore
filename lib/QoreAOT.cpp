@@ -1720,7 +1720,8 @@ static bool linkExecutable(const std::string& obj_path, const std::string& exe_p
 */
 static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
         const std::vector<uint8_t>& metadata, const char* label,
-        const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs) {
+        const QoreParseOptions& parse_options, const std::vector<AOTCompiledFunc>& compiled_funcs,
+        const std::vector<AOTCompiledInitFunc>& compiled_init_funcs = {}) {
     auto* i8_type = llvm::Type::getInt8Ty(ctx);
     auto* i32_type = llvm::Type::getInt32Ty(ctx);
     auto* i64_type = llvm::Type::getInt64Ty(ctx);
@@ -1765,6 +1766,30 @@ static void generateMainAndTableV2(llvm::LLVMContext& ctx, llvm::Module& module,
             llvm::ConstantInt::get(i32_type, cf.num_exprs),
             llvm::ConstantInt::get(i32_type, cf.num_stmts),
             llvm::ConstantInt::get(i32_type, cf.num_regex_cases)
+        });
+        func_entries.push_back(entry);
+    }
+
+    // Also add init functions to the function table so they can be found at runtime
+    for (auto& cif : compiled_init_funcs) {
+        llvm::Constant* name_str = llvm::ConstantDataArray::getString(ctx, cif.name, true);
+        auto* name_gv = new llvm::GlobalVariable(module,
+            name_str->getType(), true, llvm::GlobalValue::PrivateLinkage,
+            name_str, "qore_aot_fname_" + cif.llvm_symbol);
+
+        llvm::Function* fn = module.getFunction(cif.llvm_symbol);
+        if (!fn) {
+            continue;
+        }
+
+        llvm::Constant* entry = llvm::ConstantStruct::get(func_entry_type, {
+            name_gv,
+            fn,
+            llvm::ConstantInt::get(i32_type, cif.num_locals),
+            llvm::ConstantInt::get(i32_type, cif.num_globals),
+            llvm::ConstantInt::get(i32_type, cif.num_exprs),
+            llvm::ConstantInt::get(i32_type, cif.num_stmts),
+            llvm::ConstantInt::get(i32_type, cif.num_regex_cases)
         });
         func_entries.push_back(entry);
     }
@@ -2141,7 +2166,8 @@ bool QoreAOT::compile(QoreProgram* pgm,
         } else {
             printf("\n");
         }
-        generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs);
+        generateMainAndTableV2(ctx, *module, metadata, label, parse_options, compiled_funcs,
+            compiled_init_funcs);
     }
 
     // Finalize shared debug info after all functions are lowered
@@ -6070,6 +6096,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
         id.ref2 = call->getName();
         id.call_args = call->getArgs();
+        id.parse_args = call->getParseArgs();
         return id;
     }
 
@@ -6079,6 +6106,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         const QoreClass* qc = no->getClass();
         id.ref1 = qc ? qc->getPath() : "";
         id.call_args = no->getArgs();
+        id.parse_args = no->getParseArgs();
         return id;
     }
 
@@ -6099,6 +6127,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.kind = AOTExprKind::NEW_OBJECT;
             id.ref1 = qc->getPath();
             id.call_args = vrn->getArgs();
+            id.parse_args = vrn->getParseArgs();
             return id;
         }
         // Complex hash construction (e.g., hash<string, int> h())
@@ -6234,6 +6263,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.ref1 = sc->oc->getPath();
         }
         id.call_args = sc->getArgs();
+        id.parse_args = sc->getParseArgs();
         return id;
     }
 

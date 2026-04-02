@@ -411,6 +411,22 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
                 *pp->RootNS, ref1, cns);
             if (!ce) {
+                // Try class constant lookup: path format "ClassName::ConstName"
+                // Split on last "::" to get class path and constant name
+                std::string path(ref1);
+                size_t sep = path.rfind("::");
+                if (sep != std::string::npos && sep > 0) {
+                    std::string class_path = path.substr(0, sep);
+                    std::string const_name = path.substr(sep + 2);
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, class_path.c_str(), found_ns);
+                    if (qc) {
+                        ce = qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str());
+                    }
+                }
+            }
+            if (!ce) {
                 printd(0, "AOT v2: cannot resolve constant '%s'\n", ref1);
                 return 0;
             }
@@ -3587,7 +3603,6 @@ static void registerAOTFunctionsFromSlotMaps(
             skipSlotMapEntry(reader, ptr, end);
             continue;
         }
-
         const QoreAOTFunc* aot_func = it->second;
 
         // Find the UserVariantBase in the namespace tree
@@ -4613,6 +4628,12 @@ extern "C" DLLEXPORT int qore_aot_run(
 
 // ---- Source-Stripped AOT Runtime (V2) ----
 
+// Forward declarations for init function execution
+static void executeInitFunctions(QoreProgram* pgm,
+    const std::vector<AOTInitFuncExecInfo>& exec_infos,
+    const std::vector<AOTInitFuncDescriptor>& descriptors,
+    const char* mod_name);
+
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
@@ -4730,12 +4751,28 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
             // Use slot maps from the binary metadata to build contexts
+            // Collect init functions for execution after slot map registration
+            std::vector<AOTInitFuncExecInfo> init_func_contexts;
             printd(2, "AOT v2: calling registerAOTFunctionsFromSlotMaps with %d func_map entries, "
                 "toplevel=%p\n", (int)func_map.size(), (void*)toplevel_func);
             registerAOTFunctionsFromSlotMaps(
-                deserializer.getReader(), root_ns, *qpgm, func_map, registered);
-            printd(2, "AOT v2: after slot map registration: %d registered, %d remaining\n",
-                registered, (int)func_map.size());
+                deserializer.getReader(), root_ns, *qpgm, func_map, registered,
+                &init_func_contexts);
+            printd(2, "AOT v2: after slot map registration: %d registered, %d remaining, "
+                "%d init functions\n",
+                registered, (int)func_map.size(), (int)init_func_contexts.size());
+
+            // Execute init functions (constant and static var initialization)
+            if (!init_func_contexts.empty()) {
+                std::vector<AOTInitFuncDescriptor> init_descriptors;
+                std::string init_error;
+                readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
+                    init_descriptors, init_error);
+                if (!init_descriptors.empty()) {
+                    executeInitFunctions(*qpgm, init_func_contexts,
+                        init_descriptors, label);
+                }
+            }
 
             // Parse fallback source if available.
             // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
@@ -5397,12 +5434,28 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
             qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
 
             // Use slot maps from the binary metadata to build contexts
+            // Collect init functions for execution after slot map registration
+            std::vector<AOTInitFuncExecInfo> init_func_contexts;
             printd(2, "AOT v3: calling registerAOTFunctionsFromSlotMaps with %d func_map entries, "
                 "toplevel=%p, debug=%d\n", (int)func_map.size(), (void*)toplevel_func, debug);
             registerAOTFunctionsFromSlotMaps(
-                deserializer.getReader(), root_ns, *qpgm, func_map, registered);
-            printd(2, "AOT v3: after slot map registration: %d registered, %d remaining\n",
-                registered, (int)func_map.size());
+                deserializer.getReader(), root_ns, *qpgm, func_map, registered,
+                &init_func_contexts);
+            printd(2, "AOT v3: after slot map registration: %d registered, %d remaining, "
+                "%d init functions\n",
+                registered, (int)func_map.size(), (int)init_func_contexts.size());
+
+            // Execute init functions (constant and static var initialization)
+            if (!init_func_contexts.empty()) {
+                std::vector<AOTInitFuncDescriptor> init_descriptors;
+                std::string init_error;
+                readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
+                    init_descriptors, init_error);
+                if (!init_descriptors.empty()) {
+                    executeInitFunctions(*qpgm, init_func_contexts,
+                        init_descriptors, label);
+                }
+            }
 
             // Parse fallback source if available.
             // Needed for: (1) functions with stmt_slots that couldn't resolve from slot map,
@@ -6221,10 +6274,8 @@ static void executeInitFunctions(
                     ++failed;
                     break;
                 }
-                // Discard old value and store new one
-                ce->val.discard(&xsink);
-                ce->val = result;
-                ce->init = true;
+                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works
+                ce->setRuntimeValue(result, &xsink);
                 ++executed;
                 printd(2, "AOT init: initialized namespace constant '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
@@ -6253,9 +6304,8 @@ static void executeInitFunctions(
                     ++failed;
                     break;
                 }
-                ce->val.discard(&xsink);
-                ce->val = result;
-                ce->init = true;
+                // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works
+                ce->setRuntimeValue(result, &xsink);
                 ++executed;
                 printd(2, "AOT init: initialized class constant '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());

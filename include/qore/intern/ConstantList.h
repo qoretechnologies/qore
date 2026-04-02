@@ -137,6 +137,15 @@ public:
 
     DLLLOCAL const QoreValue getValue() const;
 
+    //! Sets the runtime value (val + saved_val) for AOT init functions
+    DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
+        val.discard(xsink);
+        val = result;
+        saved_val.discard(xsink);
+        saved_val = result.refSelf();
+        init = true;
+    }
+
     DLLLOCAL int parseInit(ClassNs ptr);
 
     DLLLOCAL int parseCommitRuntimeInit();

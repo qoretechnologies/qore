@@ -51,6 +51,15 @@ static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
             ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
                 ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
         }
+    } else if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        // Fallback to parse_args (VarRefNewObjectNode stores args here, not in call_args)
+        uint8_t num_args = ctx.expr.parse_args->size() <= 255
+            ? static_cast<uint8_t>(ctx.expr.parse_args->size()) : 0;
+        ctx.writer.writeU8(num_args);
+        for (uint8_t j = 0; j < num_args; ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
     } else {
         ctx.writer.writeU8(0);
     }
@@ -216,6 +225,15 @@ static bool write_slot_STATIC_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
         ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
         for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
             ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
+                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+        }
+    } else if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
+        // Fallback to parse_args when call_args is not yet populated
+        uint8_t num_args = ctx.expr.parse_args->size() <= 255
+            ? static_cast<uint8_t>(ctx.expr.parse_args->size()) : 0;
+        ctx.writer.writeU8(num_args);
+        for (uint8_t j = 0; j < num_args; ++j) {
+            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
                 ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
         }
     } else {

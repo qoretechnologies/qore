@@ -334,10 +334,28 @@ static QoreValue read_expr_runtime_const_ref(AOTExprReadCtx& ctx) {
     const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
         *pp->RootNS, const_name, cns);
     if (!ce) {
+        // Try class constant lookup: path format "ClassName::ConstName"
+        std::string path(const_name);
+        size_t sep = path.rfind("::");
+        if (sep != std::string::npos && sep > 0) {
+            std::string class_path = path.substr(0, sep);
+            std::string cname = path.substr(sep + 2);
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                *pp->RootNS, class_path.c_str(), found_ns);
+            if (qc) {
+                ce = qore_class_private::get(*qc)->constlist.findEntry(cname.c_str());
+            }
+        }
+    }
+    if (!ce) {
+        printd(0, "AOT: cannot resolve constant '%s'\n", const_name);
         return QoreValue();
     }
-    QoreValue cv = ce->getReferencedValue();
-    return cv;
+    // Return a RuntimeConstantRefNode so evaluation is deferred until runtime
+    // (the constant may not be initialized yet if it has an init function)
+    auto* rcr = new RuntimeConstantRefNode(&loc_builtin, const_cast<ConstantEntry*>(ce));
+    return QoreValue(rcr);
 }
 
 // ============================================================================

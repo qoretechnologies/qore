@@ -51,6 +51,7 @@
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/QoreParseHashNode.h"
+#include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include <qore/intern/ParseReferenceNode.h>
@@ -1866,11 +1867,6 @@ static void writeMethodsSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     if (is_constructor) {
                         const ConstructorMethodVariant* cmv = CONMV_const(mvb);
                         const BCAList* bcal = cmv->getBaseClassArgumentList();
-                        if (debug) {
-                            fprintf(stderr, "AOT BCA: %s::constructor bcal=%p size=%d\n",
-                                mi.method->getClass()->getName(),
-                                (const void*)bcal, bcal ? (int)bcal->size() : -1);
-                        }
                         if (bcal && !bcal->empty()) {
                             writer.writeU8(1);  // has_bca = true
                             writer.writeU16(static_cast<uint16_t>(bcal->size()));
@@ -2588,6 +2584,39 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                 delete owned_ir;
                 return true;
             }
+        }
+    }
+
+    // RuntimeConstantRefNode: reference to a compile-time constant
+    // Look up the constant's evaluated value node in the reverse map
+    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+        ConstantEntry* ce = rcr->getConstantEntry();
+        if (ce && const_reverse_map) {
+            // ce->val may be:
+            // 1. The actual value (QoreHashNode etc.) — check if it's in the reverse map
+            // 2. Another RuntimeConstantRefNode — follow the chain to saved_val
+            const AbstractQoreNode* val_node = nullptr;
+            if (ce->val.hasNode()) {
+                val_node = ce->val.getInternalNode();
+                auto it = const_reverse_map->find(val_node);
+                if (it != const_reverse_map->end()) {
+                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+                    writer.writeStringRef(it->second.c_str());
+                    return true;
+                }
+            }
+            // Try saved_val (the resolved constant value after all indirection)
+            QoreValue sv = ce->getReferencedValue();
+            if (sv.hasNode() && sv.getInternalNode() != val_node) {
+                auto it = const_reverse_map->find(sv.getInternalNode());
+                if (it != const_reverse_map->end()) {
+                    writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
+                    writer.writeStringRef(it->second.c_str());
+                    sv.discard(nullptr);
+                    return true;
+                }
+            }
+            sv.discard(nullptr);
         }
     }
 
