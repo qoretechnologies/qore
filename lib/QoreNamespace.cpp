@@ -178,6 +178,8 @@ DLLLOCAL QoreClass* initWebSocketClientPollOperationBaseClass(QoreNamespace& ns)
 DLLLOCAL QoreClass* initPollPipelineClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp1ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp3ServerPollOperationClass(QoreNamespace& ns);
+extern QoreClass* QC_HTTP3SERVERPOLLOPERATION;
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpClientPingPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
@@ -1340,6 +1342,11 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // Http{1,2,3}ClientPollOperationBase must be after SocketPollOperationBase and AbstractHttpPollConnection
     qns.addSystemClass(initHttp1ClientPollOperationBaseClass(qns));
     qns.addSystemClass(initHttp3ClientPollOperationBaseClass(qns));
+    qns.addSystemClass(initHttp3ServerPollOperationClass(qns));
+    // Add class-level constant DefaultDrainTimeout (5 seconds as relative date)
+    // QPP does not support class constants; add manually
+    QC_HTTP3SERVERPOLLOPERATION->addBuiltinStaticVar("DefaultDrainTimeout",
+        DateTimeNode::makeRelative(0, 0, 0, 0, 0, 5));
     qns.addSystemClass(initHttp2ClientPollOperationBaseClass(qns));
     // HttpClientPingPollOperationBase must be after SocketPollOperationBase
     qns.addSystemClass(initHttpClientPingPollOperationBaseClass(qns));

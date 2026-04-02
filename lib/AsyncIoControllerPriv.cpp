@@ -39,6 +39,7 @@
 #include "qore/intern/QC_Http2PollOperationBase.h"
 #include "qore/intern/QC_Http2ClientPollOperationBase.h"
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
+#include "qore/intern/QC_Http3ServerPollOperation.h"
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
@@ -1791,6 +1792,22 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             op.spop_obj->ref();
                             call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
                                 std::to_string(sid));
+                        }
+                    }
+                }
+
+                // Same for HTTP/3 server poll ops (WebSocket/SSE over H3 server CONNECT)
+                auto* h3_server_op = dynamic_cast<Http3ServerPollOperationPriv*>(op.spop_base);
+                if (h3_server_op) {
+                    std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
+                    if (!ready.empty()) {
+                        AutoLocker al(m);
+                        if (!call_dispatcher) {
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        }
+                        for (auto& skey : ready) {
+                            op.spop_obj->ref();
+                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj, skey);
                         }
                     }
                 }

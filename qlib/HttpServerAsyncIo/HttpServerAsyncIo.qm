@@ -61,7 +61,7 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpKeepAlivePollOperation "HttpKeepAlivePollOperation" - Combined idle + header read for HTTP/1.x keep-alive
     - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
-    - @ref HttpServerAsyncIo::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC
+    - @ref Qore::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC (built-in C++ class)
     - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller

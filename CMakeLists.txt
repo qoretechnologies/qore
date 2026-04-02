@@ -292,6 +292,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_PollPipeline.qpp
     lib/QC_Http1ClientPollOperationBase.qpp
     lib/QC_Http3ClientPollOperationBase.qpp
+    lib/QC_Http3ServerPollOperation.qpp
     lib/QC_HttpClientPingPollOperationBase.qpp
     lib/QC_Http2ClientPollOperationBase.qpp
     lib/QC_EventLoop.qpp
@@ -1540,6 +1541,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_PollPipeline.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http1ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http3ClientPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http3ServerPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientPingPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
