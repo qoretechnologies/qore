@@ -1700,6 +1700,10 @@ const char* PollPipelinePriv::getStateImpl() const {
         case StepType::TRANSFORM:   return "transform";
         case StepType::GOTO:        return "goto";
         case StepType::DELIVER_RESULT: return "deliver-result";
+        case StepType::RECV_FRAMED: return "recv-framed";
+        case StepType::PUSH_QUEUE: return "push-queue";
+        case StepType::DRAIN_QUEUE_SEND: return "drain-queue-send";
+        case StepType::YIELD: return "yield";
     }
     return "unknown";
 }
