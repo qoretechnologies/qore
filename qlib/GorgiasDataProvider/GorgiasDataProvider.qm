@@ -1,0 +1,617 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore GorgiasDataProvider module definition
+
+/*  GorgiasDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) GorgiasRestClient
+%requires RestClientIo
+
+module GorgiasDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Gorgias customer support operations";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new GorgiasDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": GorgiasDataProvider::AppName,
+            "display_name": "Gorgias",
+            "short_desc": "Gorgias customer support and helpdesk platform",
+            "desc": "Gorgias is a customer support and helpdesk platform for e-commerce "
+                "and SaaS businesses.\n\n"
+                "This integration supports managing tickets, customers, tags, messages, "
+                "and monitoring ticket events.",
+            "scheme": "gorgiasrest",
+            "logo": GorgiasLogo,
+            "logo_file_name": "gorgias-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CustomerSupport, DataProvider::AppGroup::Ecommerce,),
+        });
+
+        # ========== TICKET ACTIONS ==========
+
+        # Create Ticket
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tickets/create",
+            "action": "create-ticket",
+            "groups": "Tickets",
+            "display_name": "Create a Ticket",
+            "short_desc": "Create a new support ticket",
+            "desc": "Create a new Gorgias support ticket with messages, channel, "
+                "and optional assignment",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasCreateTicketDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasTicketDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasCreateTicketRequestDataType::Fields),
+        });
+
+        # Update Ticket
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tickets/update",
+            "action": "update-ticket",
+            "groups": "Tickets",
+            "display_name": "Update a Ticket",
+            "short_desc": "Update an existing ticket",
+            "desc": "Update the status, priority, assignment, or other properties of a ticket",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasUpdateTicketDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasTicketDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasUpdateTicketRequestDataType::Fields),
+        });
+
+        # Delete Ticket
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tickets/delete",
+            "action": "delete-ticket",
+            "groups": "Tickets",
+            "display_name": "Delete a Ticket",
+            "short_desc": "Delete an existing ticket",
+            "desc": "Permanently delete a Gorgias ticket",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasDeleteTicketDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasDeleteTicketResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasDeleteTicketRequestDataType::Fields),
+        });
+
+        # List Tickets
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tickets",
+            "action": "list-tickets",
+            "groups": "Tickets",
+            "display_name": "List Tickets",
+            "short_desc": "List support tickets",
+            "desc": "List Gorgias support tickets with optional filtering by status, "
+                "assignee, customer, and channel",
+            "action_code": DPAT_FIND,
+            "options": {
+                "ticket_id": <ActionOptionInfo>{
+                    "display_name": "Ticket ID",
+                    "short_desc": "Get a specific ticket",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tickets",
+                    "preselected": True,
+                },
+                "status": <ActionOptionInfo>{
+                    "display_name": "Status",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": StatusAllowedValues,
+                    "preselected": True,
+                },
+                "assignee_user_id": <ActionOptionInfo>{
+                    "display_name": "Assignee User ID",
+                    "short_desc": "Filter by assigned agent",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "users",
+                },
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Filter by customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                },
+                "channel": <ActionOptionInfo>{
+                    "display_name": "Channel",
+                    "short_desc": "Filter by channel",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": ChannelAllowedValues,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Ticket
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tickets",
+            "action": "get-ticket",
+            "groups": "Tickets",
+            "display_name": "Get a Ticket",
+            "short_desc": "Get a single ticket by ID",
+            "desc": "Retrieve a single Gorgias ticket by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "ticket_id": <ActionOptionInfo>{
+                    "display_name": "Ticket ID",
+                    "short_desc": "The ticket ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "tickets",
+                },
+            },
+        });
+
+        # ========== CUSTOMER ACTIONS ==========
+
+        # Create Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/customers/create",
+            "action": "create-customer",
+            "groups": "Customers",
+            "display_name": "Create a Customer",
+            "short_desc": "Create a new customer",
+            "desc": "Create a new Gorgias customer profile",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasCreateCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasCustomerDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasCreateCustomerRequestDataType::Fields),
+        });
+
+        # Update Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/customers/update",
+            "action": "update-customer",
+            "groups": "Customers",
+            "display_name": "Update a Customer",
+            "short_desc": "Update an existing customer",
+            "desc": "Update the name, email, or other properties of a customer",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasUpdateCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasCustomerDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasUpdateCustomerRequestDataType::Fields),
+        });
+
+        # Delete Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/customers/delete",
+            "action": "delete-customer",
+            "groups": "Customers",
+            "display_name": "Delete a Customer",
+            "short_desc": "Delete an existing customer",
+            "desc": "Permanently delete a Gorgias customer",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasDeleteCustomerDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasDeleteCustomerResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasDeleteCustomerRequestDataType::Fields),
+        });
+
+        # List Customers
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/customers",
+            "action": "list-customers",
+            "groups": "Customers",
+            "display_name": "List Customers",
+            "short_desc": "List customers",
+            "desc": "List Gorgias customers with optional filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "Get a specific customer",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "customers",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Customer
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/customers",
+            "action": "get-customer",
+            "groups": "Customers",
+            "display_name": "Get a Customer",
+            "short_desc": "Get a single customer by ID",
+            "desc": "Retrieve a single Gorgias customer by their ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "customer_id": <ActionOptionInfo>{
+                    "display_name": "Customer ID",
+                    "short_desc": "The customer ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "customers",
+                },
+            },
+        });
+
+        # ========== TAG ACTIONS ==========
+
+        # Create Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tags/create",
+            "action": "create-tag",
+            "groups": "Tags",
+            "display_name": "Create a Tag",
+            "short_desc": "Create a new tag",
+            "desc": "Create a new Gorgias tag for organizing tickets",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasCreateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasTagDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasCreateTagRequestDataType::Fields),
+        });
+
+        # Update Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tags/update",
+            "action": "update-tag",
+            "groups": "Tags",
+            "display_name": "Update a Tag",
+            "short_desc": "Update an existing tag",
+            "desc": "Update the name or decoration of a tag",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasUpdateTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasTagDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasUpdateTagRequestDataType::Fields),
+        });
+
+        # Delete Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tags/delete",
+            "action": "delete-tag",
+            "groups": "Tags",
+            "display_name": "Delete a Tag",
+            "short_desc": "Delete an existing tag",
+            "desc": "Permanently delete a Gorgias tag",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasDeleteTagDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasDeleteTagResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasDeleteTagRequestDataType::Fields),
+        });
+
+        # List Tags
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tags",
+            "action": "list-tags",
+            "groups": "Tags",
+            "display_name": "List Tags",
+            "short_desc": "List tags",
+            "desc": "List all Gorgias tags",
+            "action_code": DPAT_FIND,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "Get a specific tag",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "tags",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Tag
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/tags",
+            "action": "get-tag",
+            "groups": "Tags",
+            "display_name": "Get a Tag",
+            "short_desc": "Get a single tag by ID",
+            "desc": "Retrieve a single Gorgias tag by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "tag_id": <ActionOptionInfo>{
+                    "display_name": "Tag ID",
+                    "short_desc": "The tag ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "tags",
+                },
+            },
+        });
+
+        # ========== MESSAGE ACTIONS ==========
+
+        # Create Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/messages/create",
+            "action": "create-message",
+            "groups": "Messages",
+            "display_name": "Create a Message",
+            "short_desc": "Add a message to a ticket",
+            "desc": "Add a new message (reply or internal note) to a Gorgias ticket",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasCreateMessageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasMessageDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasCreateMessageRequestDataType::Fields),
+        });
+
+        # List Messages
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/messages",
+            "action": "list-messages",
+            "groups": "Messages",
+            "display_name": "List Messages",
+            "short_desc": "List messages for a ticket",
+            "desc": "List all messages for a specific Gorgias ticket",
+            "action_code": DPAT_FIND,
+            "options": {
+                "ticket_id": <ActionOptionInfo>{
+                    "display_name": "Ticket ID",
+                    "short_desc": "The ticket to list messages for",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "tickets",
+                },
+                "message_id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "Get a specific message",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/messages",
+            "action": "get-message",
+            "groups": "Messages",
+            "display_name": "Get a Message",
+            "short_desc": "Get a single message by ID",
+            "desc": "Retrieve a single message from a Gorgias ticket",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "ticket_id": <ActionOptionInfo>{
+                    "display_name": "Ticket ID",
+                    "short_desc": "The ticket containing the message",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "tickets",
+                },
+                "message_id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The message ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # Update Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/messages/update",
+            "action": "update-message",
+            "groups": "Messages",
+            "display_name": "Update a Message",
+            "short_desc": "Update an existing message",
+            "desc": "Update the body, channel, or other properties of a message on a ticket",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasUpdateMessageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasMessageDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasUpdateMessageRequestDataType::Fields),
+        });
+
+        # Delete Message
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/messages/delete",
+            "action": "delete-message",
+            "groups": "Messages",
+            "display_name": "Delete a Message",
+            "short_desc": "Delete an existing message",
+            "desc": "Permanently delete a message from a Gorgias ticket",
+            "action_code": DPAT_API,
+            "data_provider_info": GorgiasDeleteMessageDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new GorgiasDeleteMessageResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GorgiasDeleteMessageRequestDataType::Fields),
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # List Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/users",
+            "action": "list-users",
+            "groups": "Users",
+            "display_name": "List Users",
+            "short_desc": "List helpdesk agents",
+            "desc": "List all Gorgias helpdesk agents (users)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Get a specific user",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "users",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/users",
+            "action": "get-user",
+            "groups": "Users",
+            "display_name": "Get a User",
+            "short_desc": "Get a single user by ID",
+            "desc": "Retrieve a single Gorgias user (agent) by their ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "user_id": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "The user ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "users",
+                },
+            },
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # New Ticket Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_TICKET,
+            "action": EVENT_NEW_TICKET,
+            "groups": "Events",
+            "display_name": "New Ticket Event",
+            "short_desc": "Watch for new tickets",
+            "desc": "Poll for new Gorgias tickets. "
+                "Emits events when new tickets are created",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_TICKET,
+        });
+
+        # Ticket Update Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GorgiasDataProvider::AppName,
+            "path": "/events/" + EVENT_TICKET_UPDATE,
+            "action": EVENT_TICKET_UPDATE,
+            "groups": "Events",
+            "display_name": "Ticket Update Event",
+            "short_desc": "Watch for ticket updates",
+            "desc": "Poll for updated Gorgias tickets. "
+                "Emits events when tickets are modified",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_TICKET_UPDATE,
+        });
+    };
+}
+
+/** @mainpage GorgiasDataProvider Module
+
+    @tableofcontents
+
+    @section gorgiasdataproviderintro GorgiasDataProvider Introduction
+
+    The %GorgiasDataProvider module provides a data provider API for Gorgias customer
+    support and helpdesk operations.
+
+    To use this module, use \c "%requires GorgiasDataProvider" in your code.
+
+    @section gorgiasdataproviderrelnotes Release Notes
+
+    @subsection gorgiasdataproviderv1_0 GorgiasDataProvider v1.0
+    - the initial version of the %GorgiasDataProvider module
+*/

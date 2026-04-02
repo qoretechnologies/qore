@@ -53,9 +53,9 @@ class SlowWatchDataProvider inherits DataProvider::AbstractWatchDataProviderBase
         {
             AutoLock al(poll_m);
             poll_started = True;
+            poll_counter.inc();
             poll_cond.broadcast();
         }
-        poll_counter.inc();
         # Block here until the gate is released (simulates a blocking HTTP request)
         poll_gate.enter();
         poll_gate.exit();

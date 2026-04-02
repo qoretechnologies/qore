@@ -131,6 +131,8 @@ public class ConnectionSchemeCache {
 
             "gohighlevelres": "GoHighLevelRestClient",
 
+            "gorgiasrest": "GorgiasRestClient",
+
             "qdrantrest": "QdrantDataProvider",
             "qdrantrests": "QdrantDataProvider",
 

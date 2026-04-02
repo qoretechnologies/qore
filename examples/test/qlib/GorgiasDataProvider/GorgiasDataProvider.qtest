@@ -1,0 +1,660 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  GorgiasDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/GorgiasRestClient.qm
+%requires ../../../../qlib/GorgiasDataProvider
+
+%exec-class GorgiasDataProviderTest
+
+public class GorgiasDataProviderTest inherits QUnit::Test {
+    private {
+        #! Gorgias REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testTicketId;
+        *int testCustomerId;
+        *int testTagId;
+    }
+
+    constructor() : Test("GorgiasDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Gorgias credentials)
+        addTestCase("connection ping tests", \connectionPingTests());
+        addTestCase("tag CRUD tests", \tagCrudTests());
+        addTestCase("customer CRUD tests", \customerCrudTests());
+        addTestCase("ticket CRUD tests", \ticketCrudTests());
+        addTestCase("message tests", \messageTests());
+        addTestCase("user tests", \userTests());
+        addTestCase("cleanup tests", \cleanupTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Gorgias client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.GORGIAS_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof GorgiasRestClient::GorgiasRestConnection) {
+                client = (cast<GorgiasRestClient::GorgiasRestConnection>(conn)).getAsync(True);
+            }
+            return;
+        }
+        # Allow direct token + subdomain for testing without Qorus
+        *string token = ENV.GORGIAS_TOKEN;
+        *string subdomain = ENV.GORGIAS_SUBDOMAIN;
+        if (token && subdomain) {
+            client = new GorgiasRestClient::GorgiasRestClientIo({
+                "subdomain": subdomain,
+                "headers": {
+                    "Accept": "application/json",
+                    "Authorization": "Bearer " + token,
+                },
+            });
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Gorgias credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private GorgiasDataProvider::GorgiasDataProvider getProvider() {
+        return new GorgiasDataProvider::GorgiasDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Gorgias", GorgiasDataProvider::AppName);
+        assertEq(30, GorgiasDataProvider::DefaultPageSize);
+        assertEq(60, GorgiasDataProvider::DefaultPollInterval);
+        assertEq(30, GorgiasDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("new-ticket", GorgiasDataProvider::EVENT_NEW_TICKET);
+        assertEq("ticket-update", GorgiasDataProvider::EVENT_TICKET_UPDATE);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("gorgias");
+        assertEq(True, factory instanceof GorgiasDataProvider::GorgiasDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("gorgias", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Gorgias");
+        assertEq(True, app.val(), "Gorgias app registered in action catalog");
+        assertEq("Gorgias", app.display_name);
+        assertEq("gorgiasrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Gorgias");
+        assertEq(True, actions.size() >= 22, "at least 22 actions registered");
+
+        bool found_create_ticket = False;
+        bool found_list_tickets = False;
+        bool found_new_ticket_event = False;
+        bool found_create_message = False;
+        bool found_update_message = False;
+        bool found_delete_message = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-ticket") {
+                found_create_ticket = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-tickets") {
+                found_list_tickets = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "new-ticket") {
+                found_new_ticket_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+            if (action.action == "create-message") {
+                found_create_message = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "update-message") {
+                found_update_message = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "delete-message") {
+                found_delete_message = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+        }
+        assertEq(True, found_create_ticket, "create-ticket action registered");
+        assertEq(True, found_list_tickets, "list-tickets action registered");
+        assertEq(True, found_new_ticket_event, "new-ticket event registered");
+        assertEq(True, found_create_message, "create-message action registered");
+        assertEq(True, found_update_message, "update-message action registered");
+        assertEq(True, found_delete_message, "delete-message action registered");
+    }
+
+    dataTypeTests() {
+        GorgiasDataProvider::GorgiasTicketDataType ticket_type();
+        hash<auto> fields = ticket_type.getFields();
+        assertEq(True, fields.hasKey("id"), "ticket type has id field");
+        assertEq(True, fields.hasKey("subject"), "ticket type has subject field");
+        assertEq(True, fields.hasKey("status"), "ticket type has status field");
+        assertEq(True, fields.hasKey("channel"), "ticket type has channel field");
+        assertEq(True, fields.hasKey("customer"), "ticket type has customer field");
+        assertEq(True, fields.hasKey("tags"), "ticket type has tags field");
+        assertEq(True, fields.hasKey("created_datetime"), "ticket type has created_datetime");
+
+        GorgiasDataProvider::GorgiasCustomerDataType customer_type();
+        hash<auto> cfields = customer_type.getFields();
+        assertEq(True, cfields.hasKey("id"), "customer type has id field");
+        assertEq(True, cfields.hasKey("email"), "customer type has email field");
+        assertEq(True, cfields.hasKey("name"), "customer type has name field");
+        assertEq(True, cfields.hasKey("firstname"), "customer type has firstname field");
+        assertEq(True, cfields.hasKey("channels"), "customer type has channels field");
+
+        GorgiasDataProvider::GorgiasTagDataType tag_type();
+        hash<auto> tfields = tag_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "tag type has id field");
+        assertEq(True, tfields.hasKey("name"), "tag type has name field");
+        assertEq(True, tfields.hasKey("description"), "tag type has description field");
+        assertEq(True, tfields.hasKey("usage"), "tag type has usage field");
+        assertEq(True, tfields.hasKey("decoration"), "tag type has decoration field");
+
+        GorgiasDataProvider::GorgiasMessageDataType msg_type();
+        hash<auto> mfields = msg_type.getFields();
+        assertEq(True, mfields.hasKey("id"), "message type has id field");
+        assertEq(True, mfields.hasKey("ticket_id"), "message type has ticket_id field");
+        assertEq(True, mfields.hasKey("body_text"), "message type has body_text field");
+        assertEq(True, mfields.hasKey("body_html"), "message type has body_html field");
+        assertEq(True, mfields.hasKey("channel"), "message type has channel field");
+        assertEq(True, mfields.hasKey("from_agent"), "message type has from_agent field");
+
+        GorgiasDataProvider::GorgiasUserDataType user_type();
+        hash<auto> ufields = user_type.getFields();
+        assertEq(True, ufields.hasKey("id"), "user type has id field");
+        assertEq(True, ufields.hasKey("email"), "user type has email field");
+        assertEq(True, ufields.hasKey("name"), "user type has name field");
+        assertEq(True, ufields.hasKey("role"), "user type has role field");
+
+        GorgiasDataProvider::GorgiasSatisfactionSurveyDataType survey_type();
+        hash<auto> sfields = survey_type.getFields();
+        assertEq(True, sfields.hasKey("id"), "survey type has id field");
+        assertEq(True, sfields.hasKey("score"), "survey type has score field");
+        assertEq(True, sfields.hasKey("body_text"), "survey type has body_text field");
+        assertEq(True, sfields.hasKey("scored_datetime"), "survey type has scored_datetime field");
+        assertEq(True, sfields.hasKey("sent_datetime"), "survey type has sent_datetime field");
+        assertEq(True, sfields.hasKey("should_send_datetime"),
+            "survey type has should_send_datetime field");
+
+        GorgiasDataProvider::GorgiasTicketMessageMacroDataType macro_type();
+        hash<auto> macfields = macro_type.getFields();
+        assertEq(True, macfields.hasKey("id"), "macro type has id field");
+
+        GorgiasDataProvider::GorgiasCreateTicketMessageDataType msg_req_type();
+        hash<auto> mrfields = msg_req_type.getFields();
+        assertEq(True, mrfields.hasKey("channel"), "message request type has channel field");
+        assertEq(True, mrfields.hasKey("from_agent"), "message request type has from_agent field");
+        assertEq(True, mrfields.hasKey("via"), "message request type has via field");
+        assertEq(True, mrfields.hasKey("body_text"), "message request type has body_text field");
+        assertEq(True, mrfields.hasKey("body_html"), "message request type has body_html field");
+        assertEq(True, mrfields.hasKey("subject"), "message request type has subject field");
+    }
+
+    connectionTests() {
+        *hash<auto> scheme = ConnectionSchemeCache::getScheme("gorgiasrest");
+        assertEq(True, scheme.val(), "gorgiasrest scheme registered");
+        assertEq("Gorgias REST Connection", scheme.display_name);
+        assertEq(True, scheme.options.hasKey("subdomain"), "scheme has subdomain option");
+        assertEq(True, scheme.required_options.val(), "scheme has required_options");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    connectionPingTests() {
+        skipIfNoCredentials();
+
+        *string conn_name = m_options.conn ?? ENV.GORGIAS_CONNECTION;
+        if (!conn_name) {
+            testSkip("no connection name available for ping test");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+
+        if (m_options.verbose) {
+            printf("Ping result: %y\n", ping_result);
+        }
+    }
+
+    tagCrudTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+
+        # Create tag
+        AbstractDataProvider create_dp = provider.getChildProvider("tags")
+            .getChildProvider("create");
+        string tag_name = "test-tag-" + now_us().toString();
+        hash<auto> result = create_dp.doRequest({
+            "name": tag_name,
+        });
+
+        assertEq(True, result.hasKey("id"), "tag has id");
+        assertEq(tag_name, result.name, "tag name matches");
+        testTagId = result.id;
+
+        if (m_options.verbose) {
+            printf("Created tag: %s (ID: %d)\n", tag_name, testTagId);
+        }
+
+        # Update tag
+        AbstractDataProvider update_dp = provider.getChildProvider("tags")
+            .getChildProvider("update");
+        string new_name = "updated-" + tag_name;
+        hash<auto> updated = update_dp.doRequest({
+            "tag_id": testTagId,
+            "name": new_name,
+        });
+        assertEq(new_name, updated.name, "tag name updated");
+
+        # Verify persistence
+        AbstractDataProvider tags_dp = provider.getChildProvider("tags");
+        AbstractDataProviderRecordIterator iter = tags_dp.searchRecords(NOTHING, {
+            "tag_id": testTagId,
+        });
+        assertEq(True, iter.next());
+        hash<auto> re_read = iter.getValue();
+        assertEq(new_name, re_read.name, "tag name persisted after update");
+    }
+
+    customerCrudTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+
+        # Create customer
+        AbstractDataProvider create_dp = provider.getChildProvider("customers")
+            .getChildProvider("create");
+        string email = "test-" + now_us().toString() + "@qoretest.example.com";
+        hash<auto> result = create_dp.doRequest({
+            "email": email,
+            "name": "Test Customer",
+            "firstname": "Test",
+            "lastname": "Customer",
+        });
+
+        assertEq(True, result.hasKey("id"), "customer has id");
+        assertEq(email, result.email, "customer email matches");
+        testCustomerId = result.id;
+
+        if (m_options.verbose) {
+            printf("Created customer: %s (ID: %d)\n", email, testCustomerId);
+        }
+
+        # Update customer
+        AbstractDataProvider update_dp = provider.getChildProvider("customers")
+            .getChildProvider("update");
+        hash<auto> updated = update_dp.doRequest({
+            "customer_id": testCustomerId,
+            "name": "Updated Test Customer",
+        });
+        assertEq("Updated Test Customer", updated.name, "customer name updated");
+
+        # Verify persistence
+        AbstractDataProvider customers_dp = provider.getChildProvider("customers");
+        AbstractDataProviderRecordIterator iter = customers_dp.searchRecords(NOTHING, {
+            "customer_id": testCustomerId,
+        });
+        assertEq(True, iter.next());
+        hash<auto> re_read = iter.getValue();
+        assertEq("Updated Test Customer", re_read.name, "customer name persisted after update");
+    }
+
+    ticketCrudTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+
+        # Create ticket
+        AbstractDataProvider create_dp = provider.getChildProvider("tickets")
+            .getChildProvider("create");
+        string subject = "Test Ticket " + now_us().toString();
+        # Get a user to use as sender (required by Gorgias API)
+        AbstractDataProvider users_dp = provider.getChildProvider("users");
+        AbstractDataProviderRecordIterator user_iter = users_dp.searchRecords(
+            NOTHING, {"limit": 1});
+        if (!user_iter.next()) {
+            testSkip("no users available for ticket sender");
+        }
+        hash<auto> user = user_iter.getValue();
+
+        hash<auto> result = create_dp.doRequest({
+            "subject": subject,
+            "via": "api",
+            "channel": "api",
+            "customer": {
+                "email": "test@qoretest.example.com",
+            },
+            "messages": ({
+                "channel": "api",
+                "via": "api",
+                "body_text": "This is a test ticket created by automated tests.",
+                "from_agent": True,
+                "sender": {
+                    "id": user.id,
+                    "email": user.email,
+                },
+            },),
+        });
+
+        assertEq(True, result.hasKey("id"), "ticket has id");
+        testTicketId = result.id;
+
+        if (m_options.verbose) {
+            printf("Created ticket: %s (ID: %d)\n", subject, testTicketId);
+        }
+
+        # Update ticket
+        AbstractDataProvider update_dp = provider.getChildProvider("tickets")
+            .getChildProvider("update");
+        update_dp.doRequest({
+            "ticket_id": testTicketId,
+            "status": "closed",
+            "priority": "high",
+        });
+
+        # Verify persistence
+        AbstractDataProvider tickets_dp = provider.getChildProvider("tickets");
+        AbstractDataProviderRecordIterator iter = tickets_dp.searchRecords(NOTHING, {
+            "ticket_id": testTicketId,
+        });
+        assertEq(True, iter.next());
+        hash<auto> re_read = iter.getValue();
+        assertEq(testTicketId, re_read.id, "ticket id matches");
+        assertEq("closed", re_read.status, "ticket status updated to closed");
+        assertEq("high", re_read.priority, "ticket priority updated to high");
+
+        # List tickets
+        iter = tickets_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, iter.next(), "at least one ticket exists");
+        hash<auto> ticket = iter.getValue();
+        assertEq(True, ticket.hasKey("id"), "listed ticket has id");
+    }
+
+    messageTests() {
+        skipIfNoCredentials();
+        if (!testTicketId) {
+            testSkip("no test ticket created");
+        }
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+
+        # Get a user for sender (required by Gorgias API)
+        AbstractDataProvider users_dp = provider.getChildProvider("users");
+        AbstractDataProviderRecordIterator user_iter = users_dp.searchRecords(
+            NOTHING, {"limit": 1});
+        if (!user_iter.next()) {
+            testSkip("no users available for message sender");
+        }
+        hash<auto> user = user_iter.getValue();
+
+        # Create message on ticket
+        AbstractDataProvider create_dp = provider.getChildProvider("messages")
+            .getChildProvider("create");
+        hash<auto> result = create_dp.doRequest({
+            "ticket_id": testTicketId,
+            "channel": "internal-note",
+            "via": "api",
+            "body_text": "This is a test internal note.",
+            "from_agent": True,
+            "sender": {
+                "id": user.id,
+                "email": user.email,
+            },
+        });
+
+        assertEq(True, result.hasKey("id"), "message has id");
+        int test_message_id = result.id;
+
+        if (m_options.verbose) {
+            printf("Created message on ticket %d (Message ID: %d)\n", testTicketId,
+                test_message_id);
+        }
+
+        # Update message
+        AbstractDataProvider update_dp = provider.getChildProvider("messages")
+            .getChildProvider("update");
+        hash<auto> updated = update_dp.doRequest({
+            "ticket_id": testTicketId,
+            "message_id": test_message_id,
+            "body_text": "This is an updated test internal note.",
+        });
+        assertEq(test_message_id, updated.id, "updated message id matches");
+
+        if (m_options.verbose) {
+            printf("Updated message %d on ticket %d\n", test_message_id, testTicketId);
+        }
+
+        # List messages for ticket and verify update
+        AbstractDataProvider messages_dp = provider.getChildProvider("messages");
+        AbstractDataProviderRecordIterator iter = messages_dp.searchRecords(NOTHING, {
+            "ticket_id": testTicketId,
+            "message_id": test_message_id,
+        });
+        assertEq(True, iter.next(), "ticket has messages");
+        hash<auto> msg = iter.getValue();
+        assertEq(True, msg.hasKey("id"), "message has id field");
+        assertEq(True, msg.hasKey("body_text") || msg.hasKey("body_html"),
+            "message has body content");
+
+        # Create a second message to test deletion (keep the first one for ticket integrity)
+        hash<auto> delete_msg = create_dp.doRequest({
+            "ticket_id": testTicketId,
+            "channel": "internal-note",
+            "via": "api",
+            "body_text": "This message will be deleted.",
+            "from_agent": True,
+            "sender": {
+                "id": user.id,
+                "email": user.email,
+            },
+        });
+        assertEq(True, delete_msg.hasKey("id"), "delete-target message has id");
+
+        # Delete message
+        AbstractDataProvider delete_dp = provider.getChildProvider("messages")
+            .getChildProvider("delete");
+        hash<auto> del_result = delete_dp.doRequest({
+            "ticket_id": testTicketId,
+            "message_id": delete_msg.id,
+        });
+        assertEq(True, del_result.deleted, "message deleted");
+
+        if (m_options.verbose) {
+            printf("Deleted message %d from ticket %d\n", delete_msg.id, testTicketId);
+        }
+    }
+
+    userTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+        AbstractDataProvider users_dp = provider.getChildProvider("users");
+
+        # List users
+        AbstractDataProviderRecordIterator iter = users_dp.searchRecords(NOTHING, {"limit": 5});
+        assertEq(True, iter.next(), "at least one user exists");
+        hash<auto> user = iter.getValue();
+        assertEq(True, user.hasKey("id"), "user has id");
+        assertEq(True, user.hasKey("email"), "user has email");
+
+        if (m_options.verbose) {
+            printf("Found user: %s (%s)\n", user.name ?? user.email, user.id);
+        }
+    }
+
+    triggerExampleDataTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+        AbstractDataProvider events_dp = provider.getChildProvider("events");
+
+        # Test new-ticket event provider
+        AbstractDataProvider new_ticket_dp = events_dp.getChildProvider(
+            GorgiasDataProvider::EVENT_NEW_TICKET);
+        assertEq(True, new_ticket_dp.val(), "new-ticket event provider exists");
+
+        auto example = new_ticket_dp.getExampleEventData(GorgiasDataProvider::EVENT_NEW_TICKET);
+        assertEq(True, example.val(), "new-ticket example event data returned");
+        assertEq(True, example.hasKey("id"), "new-ticket example has id field");
+        assertEq(True, example.hasKey("status"), "new-ticket example has status field");
+        assertEq(True, example.hasKey("subject"), "new-ticket example has subject field");
+        assertEq(True, example.hasKey("channel"), "new-ticket example has channel field");
+
+        if (m_options.verbose) {
+            printf("New-ticket example data keys: %y\n", keys example);
+        }
+
+        # Test ticket-update event provider
+        AbstractDataProvider update_dp = events_dp.getChildProvider(
+            GorgiasDataProvider::EVENT_TICKET_UPDATE);
+        assertEq(True, update_dp.val(), "ticket-update event provider exists");
+
+        auto update_example = update_dp.getExampleEventData(
+            GorgiasDataProvider::EVENT_TICKET_UPDATE);
+        assertEq(True, update_example.val(), "ticket-update example event data returned");
+        assertEq(True, update_example.hasKey("id"), "ticket-update example has id field");
+        assertEq(True, update_example.hasKey("status"), "ticket-update example has status field");
+        assertEq(True, update_example.hasKey("subject"), "ticket-update example has subject field");
+
+        if (m_options.verbose) {
+            printf("Ticket-update example data keys: %y\n", keys update_example);
+        }
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        GorgiasDataProvider::GorgiasDataProvider provider = getProvider();
+
+        # Delete test ticket
+        if (testTicketId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("tickets")
+                    .getChildProvider("delete");
+                hash<auto> result = delete_dp.doRequest({"ticket_id": testTicketId});
+                assertEq(True, result.deleted, "ticket deleted");
+
+                if (m_options.verbose) {
+                    printf("Deleted test ticket: %d\n", testTicketId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete ticket %d: %s: %s\n", testTicketId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test customer
+        if (testCustomerId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("customers")
+                    .getChildProvider("delete");
+                hash<auto> result = delete_dp.doRequest({"customer_id": testCustomerId});
+                assertEq(True, result.deleted, "customer deleted");
+
+                if (m_options.verbose) {
+                    printf("Deleted test customer: %d\n", testCustomerId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete customer %d: %s: %s\n", testCustomerId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test tag
+        if (testTagId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("tags")
+                    .getChildProvider("delete");
+                hash<auto> result = delete_dp.doRequest({"tag_id": testTagId});
+                assertEq(True, result.deleted, "tag deleted");
+
+                if (m_options.verbose) {
+                    printf("Deleted test tag: %d\n", testTagId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete tag %d: %s: %s\n", testTagId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}
