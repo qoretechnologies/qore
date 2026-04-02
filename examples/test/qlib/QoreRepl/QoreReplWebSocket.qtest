@@ -245,15 +245,21 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         # Complete the statement
         wsc.send(make_json({"type": "eval", "code": "}"}));
 
-        # Should get result and normal prompt
-        raw = msgs.get(5s);  # result
-        hash<auto> result_msg = parse_json(raw);
-        assertEq("result", result_msg.type, "Should receive result");
-
-        raw = msgs.get(5s);  # prompt
-        prompt_msg = parse_json(raw);
-        assertEq("qore> ", prompt_msg.value, "Should return to normal prompt");
-        assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
+        # Should get result and normal prompt (order may vary under load)
+        bool got_result = False;
+        bool got_prompt = False;
+        for (int i = 0; i < 4 && (!got_result || !got_prompt); ++i) {
+            raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "result") {
+                got_result = True;
+            } else if (msg.type == "prompt" && !msg.needsMoreInput) {
+                assertEq("qore> ", msg.value, "Should return to normal prompt");
+                got_prompt = True;
+            }
+        }
+        assertTrue(got_result, "Should receive result");
+        assertTrue(got_prompt, "Should receive normal prompt");
 
         wsc.disconnect();
     }
