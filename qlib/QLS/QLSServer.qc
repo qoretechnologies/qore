@@ -577,7 +577,7 @@ public class QLSServer {
         # create a list of file URIs
         int rootPathSize = rootPath.size();
         qoreFiles = map rootUri + $1.substr(rootPathSize), qoreFiles;
-        log(1, "qore files in workspace: %N", qoreFiles);
+        log(1, "qore files in workspace: %Y", qoreFiles);
 
         # measure start time
         date start = now_us();
@@ -741,7 +741,7 @@ public class QLSServer {
 
     #! "initialize" method handler
     private *string meth_initialize(hash<auto> request) {
-        log(0, "initialize request received: %N", request);
+        log(0, "initialize request received: %Y", request);
         jsonRpcVer = request.jsonrpc;
 
         # validate request
@@ -782,14 +782,14 @@ public class QLSServer {
             # parse all Qore files in the current workspace
             parseFilesInWorkspace();
         } catch (hash<ExceptionInfo> ex) {
-            return ErrorResponse::invalidParams(request, sprintf("%s: %s: %N", ex.err, ex.desc, ex));
+            return ErrorResponse::invalidParams(request, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
         }
 
         try {
             # parse standard Qore modules
             parseStdModules();
         } catch (hash<ExceptionInfo> ex) {
-            return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %N", ex.err, ex.desc, ex));
+            return ErrorResponse::internalError(jsonRpcVer, sprintf("%s: %s: %Y", ex.err, ex.desc, ex));
         }
 
         try {
@@ -858,7 +858,7 @@ public class QLSServer {
         }
 
         clientConfig = request.params.settings;
-        log(0, "changed configuration received: %N", clientConfig);
+        log(0, "changed configuration received: %Y", clientConfig);
 
         logging = clientConfig.qore.logging ?? False;
         appendToLog = clientConfig.qore.appendToLog ?? True;

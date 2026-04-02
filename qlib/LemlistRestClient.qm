@@ -78,7 +78,7 @@ module LemlistRestClient {
 
 LemlistRestClient lemlist({"apikey": ENV.LEMLIST_API_KEY});
 hash<auto> result = lemlist.get("/campaigns?version=v2");
-printf("Campaigns: %N\n", result.body);
+printf("Campaigns: %Y\n", result.body);
     @endcode
 
     @section lemlistrestclientrelnotes Release Notes

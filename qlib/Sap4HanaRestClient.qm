@@ -81,7 +81,7 @@ hash<auto> opts = (
 
 Sap4HanaRestClient rest(opts);
 hash<auto> ans = rest.get("API_BUSINESS_PARTNER/A_AddressEmailAddress?%24top=1");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section sap4hanarestclientrelnotes Release Notes

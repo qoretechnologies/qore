@@ -295,9 +295,9 @@ public class TestResultValue inherits QUnit::AbstractTestResult {
             case NT_LIST:
             case NT_HASH:
             case NT_BINARY:
-                return sprintf("%N", m_value);
+                return sprintf("%Y", m_value);
         }
-        return sprintf("%s: %N", m_value.type(), m_value);
+        return sprintf("%s: %Y", m_value.type(), m_value);
     }
 }
 
@@ -332,7 +332,7 @@ public class TestResultPartialHashMatch inherits QUnit::AbstractTestResult {
     }
 
     public string toString() {
-        return sprintf("Partial Hash match: %N", m_value);
+        return sprintf("Partial Hash match: %Y", m_value);
     }
 }
 
@@ -1188,8 +1188,8 @@ addTestCase(obj);
                     string nact = convert_encoding(exp.encoding(), act);
                     if (exp === nact) {
                         done = True;
-                        expected = sprintf("(string %y) %N", exp.encoding(), exp);
-                        actual = neg ? "<identical>" : sprintf("(string %y) %N", act.encoding(), act);
+                        expected = sprintf("(string %y) %Y", exp.encoding(), exp);
+                        actual = neg ? "<identical>" : sprintf("(string %y) %Y", act.encoding(), act);
                     }
                 } catch (hash<ExceptionInfo> ex) {
                 }
@@ -1197,26 +1197,26 @@ addTestCase(obj);
             if (!done) {
                 switch (exp.typeCode()) {
                     case NT_NUMBER:
-                        expected = sprintf("(%s) %N (%s)", exp.type(), exp, exp.toString(NF_Raw));
+                        expected = sprintf("(%s) %Y (%s)", exp.type(), exp, exp.toString(NF_Raw));
                         break;
                     case NT_FLOAT:
-                        expected = sprintf("(%s) %N (%s)", exp.type(), exp, exp.toString());
+                        expected = sprintf("(%s) %Y (%s)", exp.type(), exp, exp.toString());
                         break;
                     default:
-                        expected = sprintf("(%s) %N", exp.type(), exp);
+                        expected = sprintf("(%s) %Y", exp.type(), exp);
                 }
                 if (neg) {
                     actual = "<identical>";
                 } else {
                     switch (act.typeCode()) {
                         case NT_NUMBER:
-                            actual = sprintf("(%s) %N (%s)", act.type(), act, act.toString(NF_Raw));
+                            actual = sprintf("(%s) %Y (%s)", act.type(), act, act.toString(NF_Raw));
                             break;
                         case NT_FLOAT:
-                            actual = sprintf("(%s) %N (%s)", act.type(), act, act.toString());
+                            actual = sprintf("(%s) %Y (%s)", act.type(), act, act.toString());
                             break;
                         default:
-                            actual = sprintf("(%s) %N", act.type(), act);
+                            actual = sprintf("(%s) %Y", act.type(), act);
                     }
                 }
             }
@@ -1227,16 +1227,16 @@ addTestCase(obj);
                     expected = sprintf("(binary: size %d) <%s>", exp.size(), make_hex_string(exp));
                     break;
                 case NT_NUMBER:
-                    expected = sprintf("(%s) %N (%s)", exp.type(), exp, exp.toString(NF_Raw));
+                    expected = sprintf("(%s) %Y (%s)", exp.type(), exp, exp.toString(NF_Raw));
                     break;
                 case NT_FLOAT:
-                    expected = sprintf("(%s) %N (%s)", exp.type(), exp, exp.toString());
+                    expected = sprintf("(%s) %Y (%s)", exp.type(), exp, exp.toString());
                     break;
                 case NT_STRING:
                     expected = sprintf("%y (%s size %d)", exp, exp.encoding(), exp.size());
                     break;
                 default:
-                    expected = sprintf("%N", exp);
+                    expected = sprintf("%Y", exp);
             }
             if (neg) {
                 actual = "<identical>";
@@ -1246,16 +1246,16 @@ addTestCase(obj);
                         actual = sprintf("(binary: size %d) <%s>", act.size(), make_hex_string(act));
                         break;
                     case NT_NUMBER:
-                        actual = sprintf("(%s) %N (%s)", act.type(), act, act.toString(NF_Raw));
+                        actual = sprintf("(%s) %Y (%s)", act.type(), act, act.toString(NF_Raw));
                         break;
                     case NT_FLOAT:
-                        actual = sprintf("(%s) %N (%s)", act.type(), act, act.toString());
+                        actual = sprintf("(%s) %Y (%s)", act.type(), act, act.toString());
                         break;
                     case NT_STRING:
                         actual = sprintf("%y (%s size %d)", act, act.encoding(), act.size());
                         break;
                     default:
-                        actual = sprintf("%N", act);
+                        actual = sprintf("%Y", act);
                 }
             }
         }
@@ -1314,7 +1314,7 @@ addTestCase(obj);
             value =~ s/\r/\r/g;
             value =~ s/\t/\t/g;
         }
-        string v = sprintf("%N", value);
+        string v = sprintf("%Y", value);
         # issue #2680: when truncating complex data structures, indicate the truncation
         list<string> l = v.split("\n");
         if (l.size() > 1) {
@@ -1347,12 +1347,12 @@ addTestCase(obj);
             if (h2.hasKey(key)) {
                 compare(h1{key}, h2{key}, \out, path + "." + key, soft_comparisons);
             } else {
-                out += sprintf("Missing expected key %s.%s (with value %N)", path, key, h1{key});
+                out += sprintf("Missing expected key %s.%s (with value %Y)", path, key, h1{key});
             }
         }
         foreach string key in (keys h2) {
             if (!h1.hasKey(key)) {
-                out += sprintf("Unexpected key %s.%s (with value %N)", path, key, h2{key});
+                out += sprintf("Unexpected key %s.%s (with value %Y)", path, key, h2{key});
             }
         }
     }

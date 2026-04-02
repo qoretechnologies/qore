@@ -86,7 +86,7 @@ hash<auto> action_data = {
 };
 
 hash<auto> response = billwerk.put("/api/v1/actionsteps", action_data, NOTHING, NOTHING);
-printf("Response body: %N\n", response.body);
+printf("Response body: %Y\n", response.body);
 
     @endcode
 

@@ -106,7 +106,7 @@ const MapInput = ((
 
 Mapper mapv(DataMap);
 list l = mapv.mapAll(MapInput);
-printf("%N\n", l);
+printf("%Y\n", l);
     @endcode
 
     The result will be:

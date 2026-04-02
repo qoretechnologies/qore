@@ -119,7 +119,7 @@ module RestClient {
 
 RestClient rest({"url": "http://localhost:8001/rest"});
 hash<auto> ans = rest.get("orders/1?option=full");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @see \c "rest" in the bin directory for a user-friendly command-line interface to REST

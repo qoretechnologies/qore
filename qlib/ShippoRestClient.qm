@@ -78,7 +78,7 @@ module ShippoRestClient {
 
 ShippoRestClient shippo({"apikey": ENV.SHIPPO_API_TOKEN});
 hash<auto> result = shippo.get("/addresses");
-printf("Addresses: %N\n", result.body);
+printf("Addresses: %Y\n", result.body);
     @endcode
 
     @section shipporestclientrelnotes Release Notes

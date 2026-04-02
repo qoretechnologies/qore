@@ -954,7 +954,7 @@ sse.setEventQueue();
         hash<auto> rh;
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %Y",
                     (url, info));
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }

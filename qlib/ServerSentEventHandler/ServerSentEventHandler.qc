@@ -176,8 +176,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         ServerSentEvent connections are identified by their HTTP connection ID as passed in \c "cx.id"
     */
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
-        #logDebug("SSE request: cx: %N", cx);
-        #logDebug("SSE request: hdr: %N", hdr);
+        #logDebug("SSE request: cx: %Y", cx);
+        #logDebug("SSE request: hdr: %Y", hdr);
         return <HttpResponseInfo>{
             "code": 200,
             "hdr": SseResponseHeader,

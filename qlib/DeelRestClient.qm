@@ -74,7 +74,7 @@ module DeelRestClient {
 
 DeelRestClient deel({"apikey": ENV.DEEL_API_TOKEN});
 hash<auto> result = deel.get("legal-entities");
-printf("Legal Entities: %N\n", result.body);
+printf("Legal Entities: %Y\n", result.body);
     @endcode
 
     @section deelrestclientrelnotes Release Notes

@@ -138,7 +138,7 @@ server.addListener({"service": 8443, "cert": cert, "key": key});
 
 class MyHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        # NOTE: change "%y" to "%N" to get a more readable multi-line output format for container values
+        # NOTE: change "%y" to "%Y" to get a more readable multi-line output format for container values
         log("request received on %s from %s: context: %y hdr: %y body size: %d byte%s", cx."peer-info".desc,
             cx."socket-info".desc, cx, hdr, body.size(), body.size() == 1 ? "" : "s");
         return {
@@ -3100,7 +3100,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             }
             remove cx.persistent;
         } else {
-            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %N\n", rv."code", rv.hdr."Content-Type",
+            #printf("**** RESPONSE: %d ct: %s (te: %y) encoding: %y: %Y\n", rv."code", rv.hdr."Content-Type",
             #    rv.hdr."Transfer-Encoding", cx.encoding, rv.body);
 
             # compress body if eligible for compression; skip InputStream bodies (streaming),

@@ -83,7 +83,7 @@ hash<auto> opts = (
 
 SalesforceRestClient rest(opts);
 hash ans = rest.get("sobjects");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     The composite API can be used to work with multiple objects at once as in the following example:
@@ -99,7 +99,7 @@ list<string> sub create_accounts(list account_list) {
 
     # create accounts
     hash<auto> info;
-    on_error printf("ERROR info: %N", info);
+    on_error printf("ERROR info: %Y", info);
     # maximum 200 accounts can be created; if any errors occur, an exception is thrown
     rc.post("composite/tree/Account", ("records": account_list), \info);
 

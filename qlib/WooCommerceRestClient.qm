@@ -81,7 +81,7 @@ WooCommerceRestClient wc({
     "consumer_secret": ENV.WC_CONSUMER_SECRET,
 });
 hash<auto> result = wc.get("system_status");
-printf("Status: %N\n", result.body);
+printf("Status: %Y\n", result.body);
     @endcode
 
     @section woocommercerestclientrelnotes Release Notes

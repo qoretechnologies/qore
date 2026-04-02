@@ -78,7 +78,7 @@ module InstantlyRestClient {
 
 InstantlyRestClient instantly({"apikey": ENV.INSTANTLY_API_KEY});
 hash<auto> result = instantly.get("/campaigns");
-printf("Campaigns: %N\n", result.body);
+printf("Campaigns: %Y\n", result.body);
     @endcode
 
     @section instantlyrestclientrelnotes Release Notes
