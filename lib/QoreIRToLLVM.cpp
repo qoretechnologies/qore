@@ -3699,87 +3699,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 cond = cond_val;
             } else if (cond_val->getType() == i64_type
                     && nanboxed_values.count(br->condition.id)) {
-                // NaN-boxed value: inline fast-paths for all value types,
-                // only fall back to qore_rt_to_bool for pointer/node types
-                // (strings, hashes, lists, objects).
-                //
-                // Dispatch by tag (top 16 bits of NaN-boxed value):
-                //   0x0000 (NOTHING)  -> false
-                //   0xFFF9 (INT48)    -> payload != 0
-                //   0xFFFB (SPECIAL)  -> val == VAL_TRUE
-                //   < 0xFFF9 (DOUBLE) -> decode to double, != 0.0
-                //   0xFFFA (POINTER)  -> qore_rt_to_bool (slow path)
-                printd(3, "BranchIf: condition %%%d is NaN-boxed i64 -> inline bool\n",
-                    br->condition.id);
-
-                llvm::BasicBlock* bb_true = llvm::BasicBlock::Create(ctx, "brif.true", llvm_func);
-                llvm::BasicBlock* bb_false = llvm::BasicBlock::Create(ctx, "brif.false", llvm_func);
-                llvm::BasicBlock* bb_chk_tag = llvm::BasicBlock::Create(ctx, "brif.chk_tag", llvm_func);
-                llvm::BasicBlock* bb_int48 = llvm::BasicBlock::Create(ctx, "brif.int48", llvm_func);
-                llvm::BasicBlock* bb_special = llvm::BasicBlock::Create(ctx, "brif.special", llvm_func);
-                llvm::BasicBlock* bb_double = llvm::BasicBlock::Create(ctx, "brif.double", llvm_func);
-                llvm::BasicBlock* bb_slow = llvm::BasicBlock::Create(ctx, "brif.slow", llvm_func);
-                llvm::BasicBlock* bb_merge = llvm::BasicBlock::Create(ctx, "brif.merge", llvm_func);
-
-                // NOTHING (0) is the most common falsy value -> check first
-                llvm::Value* is_nothing = builder->CreateICmpEQ(cond_val,
-                        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
-                builder->CreateCondBr(is_nothing, bb_false, bb_chk_tag);
-
-                // Extract tag (top 16 bits) and dispatch
-                builder->SetInsertPoint(bb_chk_tag);
-                llvm::Value* tag = builder->CreateLShr(cond_val,
-                        llvm::ConstantInt::get(i64_type, 48));
-                llvm::SwitchInst* sw = builder->CreateSwitch(tag, bb_double, 3);
-                sw->addCase(llvm::ConstantInt::get(
-                        static_cast<llvm::IntegerType*>(i64_type), 0xFFF9), bb_int48);
-                sw->addCase(llvm::ConstantInt::get(
-                        static_cast<llvm::IntegerType*>(i64_type), 0xFFFB), bb_special);
-                sw->addCase(llvm::ConstantInt::get(
-                        static_cast<llvm::IntegerType*>(i64_type), 0xFFFA), bb_slow);
-
-                // INT48: truthy if 48-bit payload != 0
-                builder->SetInsertPoint(bb_int48);
-                llvm::Value* payload = builder->CreateAnd(cond_val,
-                        llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
-                llvm::Value* int_truthy = builder->CreateICmpNE(payload,
-                        llvm::ConstantInt::get(i64_type, 0));
-                builder->CreateCondBr(int_truthy, bb_true, bb_false);
-
-                // SPECIAL (0xFFFB): TRUE/FALSE/NULL - only VAL_TRUE is truthy
-                builder->SetInsertPoint(bb_special);
-                llvm::Value* is_true = builder->CreateICmpEQ(cond_val,
-                        llvm::ConstantInt::get(i64_type, VAL_TRUE));
-                builder->CreateCondBr(is_true, bb_true, bb_false);
-
-                // DOUBLE: subtract offset, bitcast to double, compare != 0.0
-                builder->SetInsertPoint(bb_double);
-                llvm::Value* raw_bits = builder->CreateSub(cond_val,
-                        llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
-                llvm::Value* dval = builder->CreateBitCast(raw_bits, double_type);
-                llvm::Value* dbl_truthy = builder->CreateFCmpONE(dval,
-                        llvm::ConstantFP::get(double_type, 0.0));
-                builder->CreateCondBr(dbl_truthy, bb_true, bb_false);
-
-                // Slow path: pointer/node -> call qore_rt_to_bool
-                builder->SetInsertPoint(bb_slow);
+                // NaN-boxed value: call qore_rt_to_bool for proper boolean conversion.
+                // This replaces the 7-BB inline tag dispatch with a single function call.
+                // qore_rt_to_bool handles all NaN-box tags (NOTHING, INT48, SPECIAL,
+                // DOUBLE, POINTER) internally.
                 auto helper = module.getOrInsertFunction("qore_rt_to_bool",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
                 llvm::Value* bool_val = builder->CreateCall(helper, {cond_val});
-                llvm::Value* slow_result = builder->CreateICmpNE(bool_val,
+                cond = builder->CreateICmpNE(bool_val,
                         llvm::ConstantInt::get(i64_type, 0));
-                builder->CreateCondBr(slow_result, bb_true, bb_false);
-
-                // Merge
-                builder->SetInsertPoint(bb_true);
-                builder->CreateBr(bb_merge);
-                builder->SetInsertPoint(bb_false);
-                builder->CreateBr(bb_merge);
-                builder->SetInsertPoint(bb_merge);
-                llvm::PHINode* phi = builder->CreatePHI(i1_type, 2, "brif.result");
-                phi->addIncoming(llvm::ConstantInt::getTrue(ctx), bb_true);
-                phi->addIncoming(llvm::ConstantInt::getFalse(ctx), bb_false);
-                cond = phi;
             } else if (cond_val->getType() == i64_type) {
                 printd(3, "BranchIf: condition %%%d is raw i64 -> compare against 0\n", br->condition.id);
                 cond = builder->CreateICmpNE(cond_val, llvm::ConstantInt::get(i64_type, 0));
