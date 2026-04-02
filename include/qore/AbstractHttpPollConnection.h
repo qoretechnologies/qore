@@ -38,6 +38,12 @@
 #include <qore/QoreCondition.h>
 
 #include <atomic>
+#include <utility>
+#include <vector>
+
+// Forward declarations for ready-notifier support
+class QoreEventNotifier;
+class QoreObject;
 
 //! C++ base class providing connection state management for HTTP poll connections
 /** This class implements the connection state machine (CONNECTING, READY,
@@ -79,16 +85,10 @@ public:
     // --- I/O thread safe (pure C++, no Qore interpreter) ---
 
     //! Called by poll op from I/O thread when connection is established
-    /** Pure C++: atomic state set + condition broadcast.
+    /** Pure C++: atomic state set + condition broadcast + notifier signaling.
         No evalMethod, no Qore Mutex — safe on the I/O thread.
     */
-    DLLEXPORT void onConnectionReady() {
-        AutoLocker al(lock);
-        if (state.load(std::memory_order_acquire) == CONNECTING) {
-            state.store(READY, std::memory_order_release);
-            ready_cond.broadcast();
-        }
-    }
+    DLLEXPORT void onConnectionReady();
 
     // --- App thread ---
 
@@ -133,11 +133,7 @@ public:
     }
 
     //! Transitions to CLOSED
-    DLLEXPORT void setClosed() {
-        AutoLocker al(lock);
-        state.store(CLOSED, std::memory_order_release);
-        ready_cond.broadcast();
-    }
+    DLLEXPORT void setClosed();
 
     // --- Lock-free accessors ---
 
@@ -158,6 +154,21 @@ public:
         return state.load(std::memory_order_acquire);
     }
 
+    //! Registers an EventNotifier to be signaled when the connection becomes ready or closed
+    /** If the connection is already in a decided state (READY, DRAINING, or CLOSED), returns
+        \c false immediately — the caller should not poll and may proceed directly.
+        If the connection is still CONNECTING, queues the notifier and returns \c true —
+        the caller should poll the notifier and re-check state when it fires.
+
+        The \a notifier and \a notifier_obj must be ref'd by the caller before this call
+        (the priv takes ownership of both refs and will deref them after signaling).
+
+        @param notifier the raw QoreEventNotifier private data pointer (caller ref'd)
+        @param notifier_obj the QoreObject owning the EventNotifier (caller ref'd)
+        @return true if the notifier was queued (caller should poll), false if already decided
+    */
+    DLLEXPORT bool registerReadyNotifier(QoreEventNotifier* notifier, QoreObject* notifier_obj);
+
     DLLEXPORT void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
             delete this;
@@ -173,6 +184,13 @@ private:
 
     //! Condition for waitForReady() and state transitions
     QoreCondition ready_cond;
+
+    //! EventNotifiers to signal when connection becomes ready or closes
+    /** Each entry holds a ref'd QoreEventNotifier* and its owning QoreObject*.
+        Populated by registerReadyNotifier(); drained (and signaled) by
+        onConnectionReady() and setClosed().
+    */
+    std::vector<std::pair<QoreEventNotifier*, QoreObject*>> ready_notifiers;
 };
 
 #endif // _QORE_ABSTRACTHTTPPOLLCONNECTION_H

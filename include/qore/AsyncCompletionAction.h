@@ -234,4 +234,24 @@ DLLEXPORT AbstractAsyncAction* createChannelAction(QoreObject* channel_obj, Exce
 */
 DLLEXPORT AbstractAsyncAction* createEventNotifierAction(QoreObject* notifier_obj, ExceptionSink* xsink);
 
+//! Factory: creates a CompositeAction that resolves a Promise AND signals an EventNotifier
+/** Combines PromiseAction + EventNotifierAction so that a single async I/O completion
+    both delivers the result to the caller (via Future::get()) and wakes a poll loop
+    (via EventNotifier) — without any background thread.
+
+    The I/O thread calls execute() which:
+      1. Resolves the Promise (Future::get() becomes non-blocking)
+      2. Writes to the EventNotifier fd (wakes the poll loop)
+
+    The continuePoll() in the poll operation then calls Future::get() which returns
+    immediately because the Promise is already resolved.
+
+    @param promise_obj the Promise QoreObject (private data extracted internally)
+    @param notifier_obj the EventNotifier QoreObject (private data extracted internally)
+    @param xsink exception sink
+    @return new CompositeAction (caller owns ref) or nullptr on error
+*/
+DLLEXPORT AbstractAsyncAction* createPromiseWithNotifierAction(QoreObject* promise_obj,
+    QoreObject* notifier_obj, ExceptionSink* xsink);
+
 #endif // _QORE_ASYNCCOMPLETIONACTION_H

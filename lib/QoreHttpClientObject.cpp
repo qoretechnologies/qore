@@ -3530,6 +3530,10 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
         return -1;
     }
 
+    if (!response_headers->is_unique()) {
+        response_headers = response_headers->copy();
+    }
+
     // Get response body
     recv_data_holder = h2_poll->getResponseBody(xsink);
     if (*xsink) {
@@ -3649,6 +3653,10 @@ int HttpClientConnectSendRecvPollOperation::processH3Response(ExceptionSink* xsi
     info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
     if (*xsink) {
         return -1;
+    }
+
+    if (!response_headers->is_unique()) {
+        response_headers = response_headers->copy();
     }
 
     // Get response body

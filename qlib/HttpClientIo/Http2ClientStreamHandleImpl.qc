@@ -78,6 +78,12 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return conn.submitRequest(method, path, headers, body);
     }
 
+    #! Protocol-specific async submission with EventNotifier signaling
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
+    }
+
     #! Starts a streaming request (for WebSocket or SSE over HTTP/2)
     /** @param method HTTP method (typically GET for SSE, or CONNECT for WebSocket)
         @param path request path

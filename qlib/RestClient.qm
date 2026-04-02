@@ -3895,25 +3895,17 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             "ping_body": ping_body,
         };
 
-        # Try RestClientIo for native HTTP/2 and HTTP/3 support; skip if ping_path is a
-        # full URL to a different server (RestClientIo is bound to the connection's base URL)
-        if (!ping_path || ping_path !~ /^http/) {
-            try {
-                load_module("RestClientIo");
-                return new RestClientIoPingPollOperation(self, ping_opts, logger);
-            } catch (hash<ExceptionInfo> ex) {
-                # RestClientIo module not available or construction failed; fall back.
-                # Log at WARN for unexpected errors, DEBUG for expected (module missing)
-                if (logger) {
-                    int level = ex.err == "LOAD-MODULE-ERROR" ? LoggerLevel::DEBUG
-                        : LoggerLevel::WARN;
-                    logger.log(level, "RestClientIo ping unavailable (%s: %s); "
-                        "falling back to sync RestClient", ex.err, ex.desc);
-                }
+        # Use RestClientIo for native async HTTP/2+HTTP/3 support with proper state machine
+        try {
+            load_module("RestClientIo");
+            return new RestClientIoPingPollOperation(self, ping_opts, logger);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
             }
         }
 
-        # Fallback: sync RestClient + poll-based ping
+        # Fallback: RestClient poll-based ping when RestClientIo is not available
         RestClient client = getPollImpl();
         # update real_url from the module's actual URL; for auto_url connections the stored
         # URL is a placeholder (e.g. "https://x") overridden by the module's getImpl()
@@ -4836,9 +4828,18 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 }
 
 #! REST ping poll operation using RestClientIo for native HTTP/2 and HTTP/3 support
-/** Uses an EventNotifier to bridge the RestClientIo callback-based response to the
-    AbstractPollOperation poll interface.  All I/O is non-blocking — connection establishment,
-    HTTP/2 and HTTP/3 frame exchange are handled by the global AsyncSocketIoController.
+/** Pure async state machine — no background threads.  Uses CompositeAction
+    (PromiseAction + EventNotifierAction) so the C++ I/O thread signals the
+    EventNotifier when the HTTP response arrives, making Future::get() non-blocking
+    in continuePoll().
+
+    State machine:
+    - \c oauth2-refresh: refreshing the OAuth2 token via startOAuth2PollRefreshToken()
+    - \c io-waiting: HTTP ping submitted; polling EventNotifier for completion
+    - \c complete: ping finished
+
+    OAuth2 token refresh is attempted once before the first request (if the token is
+    in the expiry window) and once after a 401 response (if not already retried).
 
     @since %RestClient 2.6
 
@@ -4846,10 +4847,14 @@ public class RestPingPollOperation inherits Qore::AbstractPollOperation {
 */
 public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
     public {
-        #! Waiting for response
+        #! OAuth2 token refresh state
+        const SPS_OAUTH2_REFRESH = "oauth2-refresh";
+        #! Waiting for the underlying TCP/TLS connection to become ready
+        const SPS_CONNECTING = "connecting";
+        #! Waiting for HTTP ping response via EventNotifier
         const SPS_IO_WAITING = "io-waiting";
         #! Complete
-        const SPS_COMPLETE = "io-complete";
+        const SPS_COMPLETE = "complete";
     }
 
     private {
@@ -4862,14 +4867,11 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         #! Logger
         *Logger::LoggerInterface logger;
 
-        #! EventNotifier bridges the I/O completion to the poll loop
-        EventNotifier notifier();
-
-        #! Channel for receiving the ping response from the I/O thread
-        /** The I/O thread resolves the Future, the background waiter pushes
-            the result to this Channel, and continuePoll reads it non-blockingly.
+        #! EventNotifier — signaled by C++ CompositeAction (PromiseAction + EventNotifierAction)
+        /** The I/O thread resolves the Future AND signals this notifier atomically.
+            continuePoll() polls this FD and calls Future::get() non-blockingly when it fires.
         */
-        Channel result_channel(1);
+        EventNotifier notifier();
 
         #! Loaded schema validator
         *RestSchemaValidator::AbstractRestSchemaValidator schema_validator;
@@ -4882,76 +4884,61 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
 
         #! Goal reached
         bool goal_reached = False;
+
+        #! Raw HTTP response Future (resolved by C++ PromiseAction on I/O thread)
+        *Future pending_future;
+
+        #! Inner poll operation for OAuth2 token refresh
+        *AbstractPollOperation oauth2_poller;
+
+        #! Whether we have already attempted an OAuth2 refresh + retry after a 401
+        bool auth_retried = False;
+
+        #! EventNotifier for connection-readiness polling in SPS_CONNECTING state
+        *EventNotifier connection_ready_notifier;
+
+        #! True after the first continuePoll() call in SPS_CONNECTING (poll info returned)
+        bool waiting_for_connection = False;
+
+        #! HTTP method for the ping request
+        string ping_method;
+
+        #! HTTP path for the ping request
+        string ping_path;
+
+        #! HTTP body for the ping request
+        auto ping_body;
+
+        #! HTTP headers for the ping request
+        *hash<auto> ping_headers;
     }
 
-    #! Creates the poll operation
+    #! Creates the poll operation and submits the first ping (or queues a token refresh)
+    /** @param conn the REST connection to ping
+        @param ping_opts ping options (ping_method, ping_path, ping_body, ping_headers,
+            openapi3, swagger, oauth2_auto_refresh, etc.)
+        @param logger optional logger
+    */
     constructor(RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
         self.conn := conn;
         self.ping_opts = ping_opts;
         self.logger = logger;
 
-        # Load schema synchronously in the constructor (not on the I/O thread).
-        # doSubmitPing() blocks on waitForReady() which requires the I/O thread;
-        # calling it from continuePoll() (which runs on the I/O thread) deadlocks.
+        ping_method = ping_opts.ping_method ?? "GET";
+        ping_path = ping_opts.ping_path ?? "/";
+        ping_body = ping_method != "GET" ? ping_opts.ping_body : NOTHING;
+        ping_headers = ping_opts.ping_headers;
+
+        # Load schema synchronously in the constructor (safe: constructor runs on a user
+        # thread, not the I/O event thread).
         if (ping_opts.openapi3) {
             schema_validator = OpenApi3Loader::fromUrl(ping_opts.openapi3);
         } else if (ping_opts.swagger) {
             schema_validator = SwaggerLoader::fromUrl(ping_opts.swagger);
         }
-        doSubmitPing();
-    }
 
-    string getGoal() {
-        return "ping";
-    }
-
-    string getState() {
-        return state;
-    }
-
-    bool goalReached() {
-        return goal_reached;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        # Waiting for response via EventNotifier + Channel
-        if (state == SPS_IO_WAITING) {
-            # Non-blocking check: is the result available?
-            *hash<auto> recv_result = result_channel.tryRecv();
-            if (!recv_result.has_value) {
-                return <SocketPollInfo>{
-                    "events": SOCK_POLLIN,
-                    "socket": notifier,
-                };
-            }
-
-            notifier.acknowledge();
-            state = SPS_COMPLETE;
-
-            hash<auto> resp = recv_result.value;
-            if (resp._error) {
-                conn.authFailure();
-                throw resp.err, resp.desc;
-            }
-
-            int status_code = resp.status_code.toInt();
-            if ((status_code / 100) == 2) {
-                goal_reached = True;
-                conn.authSuccess();
-                return;
-            }
-
-            conn.authFailure();
-            throw "REST-PING-ERROR", sprintf("HTTP %d from RestClientIo ping %s %y",
-                status_code, ping_opts.ping_method ?? "GET", ping_opts.ping_path ?? "/");
-        }
-
-        return;
-    }
-
-    #! Creates RestClientIo and submits the ping — fully non-blocking
-    private doSubmitPing() {
-        # Create RestClientIo with skip_login to avoid blocking OAuth2 I/O
+        # Create RestClientIo with skip_login to avoid blocking OAuth2 I/O in the
+        # constructor — token refresh is handled by the state machine if needed.
         rcio = conn.getAsync(False, {"skip_login": True});
 
         if (schema_validator) {
@@ -4961,34 +4948,196 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         # Update real_url from the RestClientIo's actual URL (fixes auto_url placeholders)
         conn.real_url = call_object_method(rcio, "getUrl").toString();
 
-        string method = ping_opts.ping_method ?? "GET";
-        string path = ping_opts.ping_path ?? "/";
-        auto body = method != "GET" ? ping_opts.ping_body : NOTHING;
-        *hash<auto> hdr = ping_opts.ping_headers;
+        # If the token is in the expiry window, refresh it before the first request
+        if (call_object_method(rcio, "tokenRequiresRefresh")) {
+            doStartOAuth2Refresh();
+            # Pre-warm the connection concurrently with the OAuth2 refresh — discard the
+            # notifier here; doStartConnecting() will get a fresh one after the refresh
+            call_object_method(rcio, "startConnectionAsync");
+        } else {
+            # Submit the ping now (safe to block on waitForReady() from the constructor
+            # thread; by the time continuePoll() is first called, the connection is ready)
+            doSubmitPing();
+        }
+    }
 
-        state = SPS_IO_WAITING;
+    string getGoal() {
+        return "ping";
+    }
 
-        # Submit and get Future — resolved by C++ PromiseAction on I/O thread
-        Future f = call_object_method(rcio, "restDoRequestAsync", method, path, body, hdr,
-            True);  # skip_ensure_token
+    string getState() {
+        return state + (oauth2_poller ? ("-" + oauth2_poller.getState()) : "");
+    }
 
-        # Background waiter: blocks on the Future (off the I/O thread), then
-        # pushes the result to the Channel and notifies the EventNotifier.
-        # The I/O thread's continuePoll reads the Channel non-blockingly.
-        # Capture members as locals BEFORE the background statement to hold
-        # strong refs — the closure captures self with a weak ref, so the
-        # object can be destroyed before the background thread starts.
-        Channel rc = result_channel;
-        EventNotifier n = notifier;
-        background sub () {
-            try {
-                hash<auto> resp = f.get();
-                rc.send(resp);
-            } catch (hash<ExceptionInfo> ex) {
-                rc.send({"err": ex.err, "desc": ex.desc, "_error": True});
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            if (state == SPS_OAUTH2_REFRESH) {
+                *hash<SocketPollInfo> pinfo = oauth2_poller.continuePoll();
+                if (pinfo) {
+                    return pinfo;
+                }
+                # OAuth2 refresh complete — parse the token response and store it
+                processOAuth2RefreshResult();
+                # Start connecting (or submit ping immediately if already connected)
+                doStartConnecting();
+                # Fall through to SPS_CONNECTING or SPS_IO_WAITING handling below
             }
-            n.notify();
-        }();
+
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    # First call in SPS_CONNECTING — return poll info to the PollingConnectionMonitor
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+                # Notifier fired — connection is ready (or closed/failed)
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                # Check if connection is ready; doSubmitPing() will throw if it is not
+                doSubmitPing();
+                # Fall through to SPS_IO_WAITING handling below
+            }
+
+            if (state == SPS_IO_WAITING) {
+                # Non-blocking check: has the C++ I/O thread resolved the Future?
+                if (!pending_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": notifier,
+                    };
+                }
+
+                # Notifier has fired — acknowledge it and retrieve the response
+                notifier.acknowledge();
+                # Future::get() is non-blocking here: isDone() confirmed it is resolved
+                hash<auto> resp = pending_future.get();
+                delete pending_future;
+
+                int status_code = resp.status_code.toInt();
+                if ((status_code / 100) == 2) {
+                    # Run schema validation if configured (mirrors buildResponse() logic)
+                    if (schema_validator) {
+                        auto resp_body = resp.body;
+                        *string content_type = resp.headers."content-type";
+                        # Convert binary body to string for text-based content types
+                        if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
+                            if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
+                                    || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
+                                resp_body = resp_body.toString();
+                            }
+                        }
+                        on_error {
+                            conn.authFailure();
+                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, conn.real_url,
+                                ping_method, ping_path);
+                        }
+                        schema_validator.parseResponse(ping_method, ping_path, status_code,
+                            resp_body, resp.headers);
+                    }
+                    goal_reached = True;
+                    state = SPS_COMPLETE;
+                    conn.authSuccess();
+                    return;
+                }
+
+                # 401: attempt OAuth2 token refresh + retry once
+                if (status_code == 401 && !auth_retried
+                        && (ping_opts.oauth2_auto_refresh ?? True)) {
+                    auth_retried = True;
+                    doStartOAuth2Refresh();
+                    continue;
+                }
+
+                conn.authFailure();
+                throw "REST-PING-ERROR", sprintf("HTTP %d from RestClientIo ping %s %y",
+                    status_code, ping_method, ping_path);
+            }
+
+            break;
+        }
+        return;
+    }
+
+    #! Starts an OAuth2 token refresh via startOAuth2PollRefreshToken()
+    private doStartOAuth2Refresh() {
+        state = SPS_OAUTH2_REFRESH;
+        oauth2_poller = call_object_method(rcio, "startOAuth2PollRefreshToken");
+    }
+
+    #! Parses the OAuth2 token refresh response and stores the new token
+    private processOAuth2RefreshResult() {
+        hash<auto> resp = oauth2_poller.getOutput();
+        delete oauth2_poller;
+
+%ifndef NoJson
+        if ((resp."code" / 100) == 2) {
+            string body = resp."response-body"
+                ? resp."response-body".toString(resp.info.charset ?? "ISO-8859-1")
+                : "";
+            resp.info."response-headers"."content-type" =~ s/;.*//;
+            auto parsed_body;
+            switch (resp.info."response-headers"."content-type") {
+                case MimeTypeJson:
+                    parsed_body = parse_json(body);
+                    break;
+                case MimeTypeFormUrlEncoded:
+                    parsed_body = mime_parse_form_urlencoded_string(body);
+                    break;
+                default:
+                    throw "REST-PING-ERROR",
+                        sprintf("cannot parse OAuth2 token response with Content-Type: %y",
+                            resp.info."response-headers"."content-type");
+            }
+            call_object_method(rcio, "updateOAuth2Token", parsed_body);
+        } else {
+            conn.authFailure();
+            throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d from %y",
+                resp."code", resp.info."response-uri");
+        }
+%else
+        throw "REST-PING-ERROR", "cannot process OAuth2 token response without the json module";
+%endif
+    }
+
+    #! Checks connection readiness and either submits the ping or enters SPS_CONNECTING
+    /** Called after OAuth2 refresh completes to bridge the gap between token refresh and
+        ping submission.  If the connection is already ready, delegates to doSubmitPing()
+        directly.  If not, registers a connection-readiness EventNotifier and sets state to
+        SPS_CONNECTING so continuePoll() can poll without blocking.
+
+        @note The connection may have been pre-warmed in the constructor concurrently with
+        the OAuth2 refresh, so it is often already ready by the time this is called.
+    */
+    private doStartConnecting() {
+        connection_ready_notifier = call_object_method(rcio, "startConnectionAsync");
+        if (!connection_ready_notifier) {
+            # Connection is already ready — submit the ping immediately
+            doSubmitPing();
+            return;
+        }
+        # Connection still establishing — enter connecting state
+        state = SPS_CONNECTING;
+    }
+
+    #! Submits the ping request with EventNotifier signaling — no background thread
+    /** Uses restDoRequestAsyncWithNotifier() so the C++ I/O thread signals @c notifier
+        when the response arrives.  continuePoll() then calls Future::get() non-blockingly.
+
+        @note Safe to call from continuePoll(): connection is always established before
+        this method is called (either directly in constructor, or via SPS_CONNECTING wait).
+    */
+    private doSubmitPing() {
+        state = SPS_IO_WAITING;
+        hash<auto> result = call_object_method(rcio, "restDoRequestAsyncWithNotifier",
+            ping_method, ping_path, ping_body, ping_headers, notifier);
+        pending_future = result.future;
     }
 }
 

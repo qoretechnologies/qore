@@ -35,8 +35,6 @@
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Channel.h"
-#include "qore/intern/QoreObjectIntern.h"
-#include "qore/intern/QoreClassIntern.h"
 
 /** @cond INTERNAL */
 
@@ -56,8 +54,8 @@ Http1ClientPollOperationPriv::Http1ClientPollOperationPriv(QoreObject* self,
       connection_priv(conn_priv) {
     // sock and connect_op are ref'd by the caller; ownership transferred
     // connection_priv is a raw (unrefed) pointer to the C++ priv data;
-    // the internal_members Qore member holds the only strong QoreObject ref
-    // (visible to DGC for cycle detection)
+    // the strong QoreObject ref (for DGC cycle detection) is held in the
+    // Qore-level connection_ref member (private, stored in the data hash)
 }
 
 Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
@@ -94,7 +92,7 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         response_body->deref(xsink);
         response_body = nullptr;
     }
-    connection_priv = nullptr;  // raw pointer — Qore internal_members handles ref
+    connection_priv = nullptr;  // raw pointer — Qore data member (connection_ref) holds the ref
     if (current_op) {
         current_op->deref(xsink);
         current_op = nullptr;
@@ -1477,7 +1475,6 @@ bool Http1ClientPollOperationPriv::cancelStream(int64_t stream_id, ExceptionSink
 */
 qclass Http1ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
-    internal_members=AbstractHttpPollConnection connection;
     ns=Qore;
     arg=Http1ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase
@@ -1519,20 +1516,13 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     self->setMemberValue("goal", QC_HTTP1CLIENTPOLLOPERATIONBASE,
         new QoreStringNode("http1_client"), xsink);
 
-    // Store the connection as an internal member (single ref, DGC-visible)
-    {
-        qore_object_private* o = qore_object_private::get(*self);
-        const qore_class_private* cls = qore_class_private::get(*QC_HTTP1CLIENTPOLLOPERATIONBASE);
-        o->setValueIntern(cls, "connection", static_cast<QoreObject*>(obj_connection->refSelf()), xsink);
-    }
-
     // Set self on the connect op so it can build SocketPollInfo hashes
     SocketConnectPollOperation* connect_ptr = connect_op.release();
     connect_ptr->setSelf(self);
 
     // Create the private data — ref sock for private data ownership
     // Extract the raw C++ priv pointer for direct I/O-thread calls;
-    // the internal_members slot holds the only strong QoreObject ref
+    // the Qore-level connection_ref member holds the only strong QoreObject ref
     AbstractHttpPollConnectionPriv* conn_priv = *connection;
     sock_ptr->ref();
     self->setPrivate(CID_HTTP1CLIENTPOLLOPERATIONBASE,
@@ -1589,20 +1579,6 @@ nothing Http1ClientPollOperationBase::abort() {
 */
 auto Http1ClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
-}
-
-//! Called when the operation completes
-/** Dispatches to connection_ref.handleCompletion() for deterministic result delivery.
-*/
-nothing Http1ClientPollOperationBase::onComplete(hash<SocketPollResultInfo> result) {
-    // Read connection from internal_members (Qore member, DGC-visible)
-    ValueHolder conn_val(self->getReferencedMemberNoMethod("connection", xsink), xsink);
-    if (!*xsink && conn_val->getType() == NT_OBJECT) {
-        QoreObject* conn = conn_val->get<QoreObject>();
-        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
-        call_args->push(result->refSelf(), xsink);
-        ValueHolder rv(conn->evalMethod("handleCompletion", *call_args, xsink), xsink);
-    }
 }
 
 //! Returns True if the connection is closed
@@ -1682,6 +1658,66 @@ int Http1ClientPollOperationBase::submitRequest(string method, string path,
     // Create PromiseAction — caller creates with refcount 1,
     // priv->submitRequest takes ownership (stores or derefs on failure)
     PromiseAction* action = new PromiseAction(*promise, promise_obj);
+    return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
+        body_ptr, body_len, false, action, (int)max_streams, xsink);
+}
+
+//! Submits an HTTP/1.1 request with Promise + EventNotifier for poll-based delivery
+/** Like submitRequest() but additionally signals @a notifier when the response
+    arrives so that a continuePoll() state machine can call Future::get()
+    non-blockingly — eliminating the need for a background thread.
+
+    @param method HTTP method (GET, POST, etc.)
+    @param path request path
+    @param headers optional request headers (pseudo-headers are skipped)
+    @param body optional request body (string or binary)
+    @param promise Promise to resolve with the response
+    @param notifier EventNotifier to signal after the Promise is resolved
+    @param max_streams maximum concurrent streams (should be 1 for HTTP/1.1)
+    @return the stream ID assigned to this request
+
+    @since %Qore 2.3
+*/
+int Http1ClientPollOperationBase::submitRequestWithNotifier(string method, string path,
+        *hash<auto> headers, *data body, Promise[QorePromise] promise,
+        EventNotifier[QoreEventNotifier] notifier, int max_streams) {
+    const void* body_ptr = nullptr;
+    size_t body_len = 0;
+    if (body) {
+        switch (body->getType()) {
+            case NT_BINARY: {
+                const BinaryNode* b = static_cast<const BinaryNode*>(body);
+                body_ptr = b->getPtr();
+                body_len = b->size();
+                break;
+            }
+            case NT_STRING: {
+                const QoreStringNode* str = static_cast<const QoreStringNode*>(body);
+                body_ptr = str->c_str();
+                body_len = str->size();
+                break;
+            }
+            default:
+                xsink->raiseException("HTTP1-ERROR",
+                    "body must be string or binary, got type '%s'",
+                    body->getTypeName());
+                return -1;
+        }
+    }
+
+    // Get QoreObject pointers for the Promise and EventNotifier (prevent GC)
+    QoreObject* promise_obj = const_cast<QoreObject*>(
+        get_param_value(args, 4).get<const QoreObject>());
+    QoreObject* notifier_obj = const_cast<QoreObject*>(
+        get_param_value(args, 5).get<const QoreObject>());
+
+    // Create CompositeAction: PromiseAction resolves Future, then EventNotifierAction
+    // signals the notifier fd — both are pure C++, safe on the I/O thread
+    AbstractAsyncAction* action = createPromiseWithNotifierAction(
+        promise_obj, notifier_obj, xsink);
+    if (!action) {
+        return -1;
+    }
     return (int)priv->submitRequest(method->c_str(), path->c_str(), headers,
         body_ptr, body_len, false, action, (int)max_streams, xsink);
 }

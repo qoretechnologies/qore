@@ -80,6 +80,8 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
                 proxy_info && url_info.protocol == "https" ? True : False,
                 connection) {
         h2_logger = logger;
+        # Store connection in Qore data hash for DGC cycle detection
+        setConnection(connection);
     }
 
     #! Prevent copying — shared socket/mutex/state would corrupt

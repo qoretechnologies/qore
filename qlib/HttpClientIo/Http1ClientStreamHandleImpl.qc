@@ -259,6 +259,12 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         return conn.submitRequest(method, path, headers, body);
     }
 
+    #! Protocol-specific async submission with EventNotifier signaling
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
+    }
+
 }
 
 } # namespace HttpClientIo

@@ -135,6 +135,15 @@ public class HttpClientStreamHandle {
     abstract hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
         *data body);
 
+    #! Protocol-specific async request submission with EventNotifier signaling
+    /** Override in subclasses to use submitRequestWithNotifier (H1/H2) or
+        registerStreamWithPromiseAndNotifier (H3).
+
+        @return hash with "stream_id" (int) and "future" (Future)
+    */
+    abstract hash<auto> submitAsyncWithNotifierImpl(string method, string path,
+        *hash<auto> headers, *data body, EventNotifier notifier);
+
     #! Returns the stream ID (NOTHING if not yet submitted)
     *int getStreamId() {
         return stream_id;
@@ -366,6 +375,77 @@ public class HttpClientStreamHandle {
         return result;
     }
 
+    #! Submits an async request and signals an EventNotifier on completion
+    /** Like submitAsync() but uses a CompositeAction (PromiseAction + EventNotifierAction)
+        so the I/O thread signals @a notifier when the response arrives.  The caller's
+        continuePoll() can then call Future::get() non-blockingly — no background thread.
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param notifier EventNotifier to signal on response completion
+
+        @return hash with "stream_id" (int) and "future" (Future)
+
+        @since %HttpClientIo 1.2
+    */
+    hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        # Wait for connection to become ready if not already
+        if (!conn.isReady()) {
+            if (!conn.waitForReady(request_timeout)) {
+                {
+                    AutoLock al(lock);
+                    if (state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::Pending;
+                    }
+                }
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
+            }
+        }
+
+        # Re-check state after readiness wait
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "submitting async request with notifier: %s %s", method, path);
+
+        hash<auto> result;
+        try {
+            result = submitAsyncWithNotifierImpl(method, path, headers, body, notifier);
+            stream_id = result.stream_id;
+            @assert(stream_id >= 0);
+            reservation_held = False;
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            rethrow;
+        }
+
+        return result;
+    }
+
     #! Submits an asynchronous request without blocking on connection establishment
     /** If the connection is not ready, throws HTTPCLIENT-STATE-ERROR.
         Use waitForReady() first if needed, or use submitAsync() which blocks.
@@ -542,6 +622,33 @@ public class HttpClientStreamHandle {
         }
         # Note: cancelRequest() above rejects the Promise in the poll operation,
         # which resolves the Future with a cancellation error.
+    }
+
+    #! Returns an EventNotifier that fires when the connection becomes ready (or closes)
+    /** If the underlying connection is already ready (or in a terminal state), returns
+        \c NOTHING — the caller can proceed immediately without polling.
+
+        Otherwise, registers an EventNotifier with the connection's C++ priv via
+        \c AbstractHttpPollConnection::registerReadyNotifier().  When the I/O thread
+        transitions the connection to READY or CLOSED, it signals the notifier.
+        The caller should poll the notifier FD for \c SOCK_POLLIN and check
+        \c conn.isReady() when it fires to determine whether to proceed or raise an error.
+
+        @return an EventNotifier to poll, or NOTHING if already decided
+
+        @since %HttpClientIo 1.2
+    */
+    *EventNotifier getConnectionReadyNotifier() {
+        if (conn.isReady()) {
+            return NOTHING;
+        }
+        EventNotifier notifier();
+        # registerReadyNotifier returns True if queued (CONNECTING), False if already decided
+        if (!conn.registerReadyNotifier(notifier)) {
+            # State transitioned (READY/DRAINING/CLOSED) between isReady() and registration
+            return NOTHING;
+        }
+        return notifier;
     }
 
     #! Internal: converts binary body to string for text-based content types

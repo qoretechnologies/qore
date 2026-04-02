@@ -867,6 +867,149 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return result.future;
         }
 
+        #! Submits an async REST request and signals an EventNotifier on completion
+        /** Like restDoRequestAsync() but uses CompositeAction (Promise + EventNotifier) so
+            the I/O thread signals @a notifier when the response arrives.  The caller's
+            continuePoll() can then call Future::get() non-blockingly — no background thread.
+
+            The caller is responsible for ensuring the token is fresh before calling
+            (check requiresRefresh(), call startOAuth2PollRefreshToken() if needed).
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr request headers (optional)
+            @param notifier EventNotifier to signal on response completion
+
+            @return hash with "future" (Future) and "stream_id" (int)
+
+            @since %RestClientIo 1.2
+        */
+        hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
+                *hash<auto> hdr, EventNotifier notifier) {
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            return stream.submitAsyncWithNotifier(method, path, hdr,
+                prepared.serialized_body, notifier);
+        }
+
+        #! Returns True if the current OAuth2 token needs to be refreshed
+        /** @return True if the token exists, has a refresh token, and is within the expiry window
+
+            @since %RestClientIo 1.2
+        */
+        bool tokenRequiresRefresh() {
+            return requiresRefresh();
+        }
+
+        #! Starts an async OAuth2 token refresh poll operation
+        /** Returns an AbstractPollOperation that drives an HTTP POST to the token endpoint
+            using socket-level polling (no background threads, no blocking I/O on the I/O thread).
+            When the poll operation completes, call updateOAuth2Token() with the parsed response.
+
+            @return an AbstractPollOperation for the token refresh HTTP request
+
+            @since %RestClientIo 1.2
+        */
+        AbstractPollOperation startOAuth2PollRefreshToken() {
+            # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
+            string token_url_str;
+            hash<auto> login;
+            bool use_basic_auth;
+            bool auth_secret_only;
+            bool has_alt_token_url;
+            {
+                AutoReadLock al(config_lock);
+                token_url_str = oauth2_alt_token_url ?? oauth2_token_url;
+                has_alt_token_url = oauth2_alt_token_url.val();
+                use_basic_auth = oauth2_token_use_basic_auth;
+                auth_secret_only = oauth2_token_auth_secret_only;
+                login = refresh_token.val()
+                    ? getOAuth2RefreshInfo()
+                    : getOAuth2LoginInfo(oauth2_grant_type);
+            }
+
+            # Determine base URL and request path (same logic as doOAuth2TokenRequest)
+            string base_url_str;
+            string req_path;
+            if (token_url_str =~ /^https?:\/\//) {
+                hash<UrlInfo> ui = parse_url(token_url_str);
+                base_url_str = sprintf("%s://%s", ui.protocol, ui.host);
+                if (ui.port) {
+                    base_url_str += sprintf(":%d", ui.port);
+                }
+                req_path = ui.path ?? "/";
+            } else {
+                base_url_str = url;
+                req_path = token_url_str;
+            }
+
+            # Build request headers — same logic as doOAuth2TokenRequest()
+            hash<auto> auth_hdr = {
+                "accept": MimeTypeFormUrlEncoded + "," + MimeTypeJson,
+                "content-type": MimeTypeFormUrlEncoded,
+            };
+            if (!has_alt_token_url) {
+                if (use_basic_auth && login.client_id.val() && login.client_secret.val()) {
+                    auth_hdr."authorization" = "Basic "
+                        + make_base64_string(login.client_id + ":" + login.client_secret);
+                    login -= ("client_id", "client_secret");
+                } else if (auth_secret_only && login.client_secret.val()) {
+                    auth_hdr."authorization" = "Basic "
+                        + make_base64_string(":" + login.client_secret);
+                    login -= ("client_id", "client_secret");
+                }
+            }
+            if (has_alt_token_url && alt_token_signer && alt_token_signer_header) {
+                string body_str = mime_get_form_urlencoded_string(login);
+                auth_hdr{alt_token_signer_header} = alt_token_signer({
+                    "method": "POST", "path": req_path,
+                    "body": body_str, "hdr": auth_hdr,
+                });
+            }
+
+            # Serialize body as form-urlencoded
+            string body_str = mime_get_form_urlencoded_string(login);
+
+            # Create a minimal RestClient pointing at the token endpoint.
+            # Uses socket-level polling (startPollSendRecv) — no blocking I/O.
+            RestClient::RestClient auth_client({"url": base_url_str});
+            return auth_client.startPollSendRecv("POST", req_path, body_str, auth_hdr);
+        }
+
+        #! Updates the stored OAuth2 token from a parsed token response
+        /** Called after startOAuth2PollRefreshToken() completes to store the new token.
+
+            @param h the parsed OAuth2 token response hash
+
+            @since %RestClientIo 1.2
+        */
+        updateOAuth2Token(hash<auto> h) {
+            gotOAuth2LoginInfo(h);
+        }
+
+        #! Initiates the underlying HTTP connection asynchronously
+        /** Ensures a connection to the configured URL is being established without
+            blocking.  Returns an EventNotifier that fires when the connection becomes
+            ready (or closes due to an error).  Returns NOTHING if the connection is
+            already ready.
+
+            Use this to pre-warm the connection concurrently with other async work
+            (e.g., an OAuth2 token refresh) so that \c restDoRequestAsyncWithNotifier()
+            can submit the request immediately after both complete.
+
+            @return an EventNotifier to poll for connection readiness, or NOTHING if
+            the connection is already ready
+
+            @since %RestClientIo 1.2
+        */
+        *EventNotifier startConnectionAsync() {
+            return mgr.ensureConnectionAsync(url);
+        }
+
         #! Sends a signed REST request
         /** The signer callback receives a hash with \c path (effective, including connection_path),
             \c body (serialized), and \c hdr (merged headers minus the signature header).

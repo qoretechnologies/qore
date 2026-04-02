@@ -98,6 +98,12 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         return conn.submitRequest(method, path, headers, body);
     }
 
+    #! Protocol-specific async submission with EventNotifier signaling
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
+    }
+
     #! Protocol-specific async request + datagram submission for HTTP/3
     /** Queues both the HTTP/3 request (with suppress_wake) and a QUIC datagram
         before issuing a single wake, ensuring both are written in the same

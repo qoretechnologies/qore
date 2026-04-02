@@ -5439,6 +5439,7 @@ void SocketReadHttpHeaderPollOperation::abort(ExceptionSink* xsink) {
 
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QC_Promise.h"
 #include "qore/intern/QoreEventNotifier.h"
 
 AbstractAsyncAction* createChannelAction(QoreObject* channel_obj, ExceptionSink* xsink) {
@@ -5467,6 +5468,42 @@ AbstractAsyncAction* createEventNotifierAction(QoreObject* notifier_obj, Excepti
     EventNotifierAction* action = new EventNotifierAction(en);
     en->deref(xsink);  // EventNotifierAction refs internally; release getReferencedPrivateData ref
     return action;
+}
+
+AbstractAsyncAction* createPromiseWithNotifierAction(QoreObject* promise_obj,
+        QoreObject* notifier_obj, ExceptionSink* xsink) {
+    // Extract Promise private data
+    QorePromise* promise = static_cast<QorePromise*>(
+        const_cast<QoreObject*>(promise_obj)->getReferencedPrivateData(CID_PROMISE, xsink));
+    if (!promise) {
+        if (!*xsink) {
+            xsink->raiseException("PROMISE-ERROR", "invalid Promise object");
+        }
+        return nullptr;
+    }
+
+    // Extract EventNotifier private data
+    QoreEventNotifier* en = static_cast<QoreEventNotifier*>(
+        const_cast<QoreObject*>(notifier_obj)->getReferencedPrivateData(CID_EVENTNOTIFIER, xsink));
+    if (!en) {
+        promise->deref(xsink);
+        if (!*xsink) {
+            xsink->raiseException("EVENTNOTIFIER-ERROR", "invalid EventNotifier object");
+        }
+        return nullptr;
+    }
+
+    // Build CompositeAction: PromiseAction resolves first, then EventNotifierAction wakes poll loop
+    CompositeAction* composite = new CompositeAction();
+    PromiseAction* pa = new PromiseAction(promise, promise_obj);
+    promise->deref(xsink);  // PromiseAction refs internally
+    EventNotifierAction* ena = new EventNotifierAction(en);
+    en->deref(xsink);       // EventNotifierAction refs internally
+    composite->add(pa);
+    pa->deref(xsink);       // composite holds ref
+    composite->add(ena);
+    ena->deref(xsink);      // composite holds ref
+    return composite;
 }
 
 // --- End of out-of-line implementations ---

@@ -35,8 +35,6 @@
 #include "qore/intern/QC_Http3ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
 #include "qore/intern/QC_Channel.h"
-#include "qore/intern/QoreObjectIntern.h"
-#include "qore/intern/QoreClassIntern.h"
 
 /** @cond INTERNAL */
 
@@ -51,7 +49,8 @@ Http3ClientPollOperationPriv::Http3ClientPollOperationPriv(QoreObject* self,
       connection_priv(conn_priv) {
     // Both sock and inner are already ref'd by the caller; ownership transferred
     // connection_priv is a raw (unrefed) pointer to the C++ priv data;
-    // the internal_members Qore member holds the only strong QoreObject ref
+    // the strong QoreObject ref (for DGC cycle detection) is held in the
+    // Qore-level connection_ref member (private, stored in the data hash)
 }
 
 Http3ClientPollOperationPriv::~Http3ClientPollOperationPriv() {
@@ -97,7 +96,7 @@ void Http3ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         error_info->deref(xsink);
         error_info = nullptr;
     }
-    connection_priv = nullptr;  // raw pointer — Qore internal_members handles ref
+    connection_priv = nullptr;  // raw pointer — Qore data member (connection_ref) holds the ref
     if (inner_op) {
         inner_op->deref(xsink);
         inner_op = nullptr;
@@ -595,7 +594,6 @@ void Http3ClientPollOperationPriv::setSubmitError(const char* err, const char* d
 */
 qclass Http3ClientPollOperationBase [
     private_members=object sock,string goal,auto data_save;
-    internal_members=AbstractHttpPollConnection connection;
     ns=Qore;
     arg=Http3ClientPollOperationPriv* priv;
     vparent=SocketPollOperationBase
@@ -639,13 +637,6 @@ Http3ClientPollOperationBase::constructor(Socket[QoreSocketObject] sock, string 
     }
     self->setMemberValue("goal", QC_HTTP3CLIENTPOLLOPERATIONBASE,
         new QoreStringNode("http3_client_multiplex"), xsink);
-
-    // Store the connection as an internal member (single ref, DGC-visible)
-    {
-        qore_object_private* o = qore_object_private::get(*self);
-        const qore_class_private* cls = qore_class_private::get(*QC_HTTP3CLIENTPOLLOPERATIONBASE);
-        o->setValueIntern(cls, "connection", static_cast<QoreObject*>(obj_connection->refSelf()), xsink);
-    }
 
     // Set self on the inner op so it can build SocketPollInfo hashes
     // (getSocketPollInfoHash reads "sock" from self)
@@ -708,20 +699,6 @@ nothing Http3ClientPollOperationBase::abort() {
 */
 auto Http3ClientPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
     return priv->getOutput();
-}
-
-//! Called when the operation completes
-/** Dispatches to connection_ref.handleCompletion() for deterministic result delivery.
-*/
-nothing Http3ClientPollOperationBase::onComplete(hash<SocketPollResultInfo> result) {
-    // Read connection from internal_members (Qore member, DGC-visible)
-    ValueHolder conn_val(self->getReferencedMemberNoMethod("connection", xsink), xsink);
-    if (!*xsink && conn_val->getType() == NT_OBJECT) {
-        QoreObject* conn = conn_val->get<QoreObject>();
-        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
-        call_args->push(result->refSelf(), xsink);
-        ValueHolder rv(conn->evalMethod("handleCompletion", *call_args, xsink), xsink);
-    }
 }
 
 //! Returns True if the connection is closed
@@ -841,6 +818,48 @@ nothing Http3ClientPollOperationBase::endSubmitFail() {
     QoreObject* promise_obj = const_cast<QoreObject*>(
         get_param_value(args, 1).get<const QoreObject>());
     ReferenceHolder<PromiseAction> action(new PromiseAction(*promise, promise_obj), xsink);
+    QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
+    if (!*xsink) {
+        action.release();  // ownership transferred to priv
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("need_cancel", need_cancel, xsink);
+    if (buffered) {
+        rv->setKeyValue("buffered", buffered, xsink);
+    }
+    return rv.release();
+}
+
+//! Phase 3: register stream with Promise + EventNotifier for poll-based delivery
+/** Like registerStreamWithPromise() but additionally signals @a notifier when
+    the response arrives so that a continuePoll() state machine can call
+    Future::get() non-blockingly — eliminating the need for a background thread.
+
+    @param stream_id the QUIC stream ID
+    @param promise the Promise to resolve with the response
+    @param notifier EventNotifier to signal after the Promise is resolved
+
+    @return hash with: "need_cancel" (bool), "buffered" (list or NOTHING)
+
+    @since %Qore 2.3
+*/
+*hash<auto> Http3ClientPollOperationBase::registerStreamWithPromiseAndNotifier(
+        int stream_id, Promise[QorePromise] promise,
+        EventNotifier[QoreEventNotifier] notifier) {
+    // Get QoreObject pointers for the Promise and EventNotifier (prevent GC)
+    QoreObject* promise_obj = const_cast<QoreObject*>(
+        get_param_value(args, 1).get<const QoreObject>());
+    QoreObject* notifier_obj = const_cast<QoreObject*>(
+        get_param_value(args, 2).get<const QoreObject>());
+
+    // Create CompositeAction: PromiseAction resolves Future, then EventNotifierAction signals
+    bool need_cancel = false;
+    ReferenceHolder<AbstractAsyncAction> action(
+        createPromiseWithNotifierAction(promise_obj, notifier_obj, xsink), xsink);
+    if (!action) {
+        return QoreValue();
+    }
     QoreListNode* buffered = priv->registerStream(stream_id, *action, need_cancel, xsink);
     if (!*xsink) {
         action.release();  // ownership transferred to priv

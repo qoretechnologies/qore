@@ -163,6 +163,13 @@ public class Http3ClientConnection inherits HttpClientConnection {
             max_concurrent_streams);
     }
 
+    #! Submits a request using CompositeAction (Promise + EventNotifier) — HTTP/3
+    int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, Promise promise, EventNotifier notifier) {
+        return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
+            notifier, max_concurrent_streams);
+    }
+
     #! Cancels a request (protocol-specific)
     cancelRequestImpl(int stream_id) {
         poll_op.cancelRequest(stream_id);

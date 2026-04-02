@@ -90,6 +90,8 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 connection) {
         h3_url_info = url_info;
         h3_logger = logger;
+        # Store connection in Qore data hash for DGC cycle detection
+        setConnection(connection);
     }
 
     #! Copying is not supported
@@ -267,6 +269,123 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
                 if (resp.end_stream.toBool()) {
                     # Final response — resolve the Promise and clean up
                     try { promise.set(resp); } catch () {}
+                    self.cancelStream(stream_id);
+                    break;
+                }
+            }
+        }
+
+        return stream_id;
+    }
+
+    #! Submits a new HTTP/3 request with Promise + EventNotifier for poll-based delivery
+    /** Like submitRequest() but uses registerStreamWithPromiseAndNotifier() so that
+        the I/O thread signals @a notifier when the response arrives, allowing the
+        caller's continuePoll() to call Future::get() non-blockingly.
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers
+        @param body request body (optional)
+        @param promise Promise to resolve with the response
+        @param notifier EventNotifier to signal after the Promise is resolved
+        @param max_streams maximum concurrent streams allowed on this connection
+
+        @return the stream ID assigned to this request
+
+        @throw HTTP3-STATE-ERROR if the connection is not ready for requests
+        @throw HTTP3-CAPACITY-ERROR if the connection is at capacity
+    */
+    int submitRequestWithNotifier(string method, string path, *hash<auto> headers, *data body,
+            Promise promise, EventNotifier notifier, int max_streams) {
+        if (!self.isReady()) {
+            throw "HTTP3-STATE-ERROR", sprintf("cannot submit request in state: %y", self.getState());
+        }
+
+        # Filter pseudo-headers — C++ layer handles them
+        hash<auto> req_headers = {};
+        if (headers) {
+            foreach string key in (keys headers) {
+                if (key[0] != ":") {
+                    req_headers{key} = headers{key};
+                }
+            }
+        }
+        if (!req_headers.host) {
+            req_headers.host = h3_url_info.port == 443
+                ? h3_url_info.host
+                : sprintf("%s:%d", h3_url_info.host, h3_url_info.port);
+        }
+
+        self.checkCapacity(max_streams);
+        self.beginSubmit();
+
+        Socket sock = self.getSocket();
+        int stream_id;
+        int retries = 0;
+        try {
+            while (True) {
+                try {
+                    stream_id = sock.submitQuicRequest(method, path, req_headers, body);
+                    break;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/
+                            && retries < MaxStreamBlockedRetries) {
+                        ++retries;
+                        int backoff_val = 1 << (retries - 1);
+                        self.waitStreamCapacity(backoff_val);
+                        if (!self.isReady()) {
+                            throw "HTTP3-STATE-ERROR",
+                                sprintf("connection closed during STREAM_ID_BLOCKED "
+                                    "retry (state: %y)", self.getState());
+                        }
+                        continue;
+                    }
+                    if (ex.err == "QUIC-ERROR" && ex.desc =~ /STREAM_ID_BLOCKED/) {
+                        int captured_active = self.getActiveStreamCount();
+                        if (!max_streams || captured_active < max_streams) {
+                            self.setQuicStreamLimit(captured_active);
+                        }
+                        throw "HTTP3-CAPACITY-ERROR",
+                            sprintf("QUIC stream limit reached on connection"
+                                " (active_streams: %d)", captured_active);
+                    }
+                    if (ex.err == "QUIC-HTTP3-ERROR" || ex.err == "QUIC-READ-ERROR"
+                            || ex.err == "QUIC-RECV-ERROR") {
+                        self.setSubmitError(ex.err, ex.desc);
+                    }
+                    rethrow;
+                }
+            }
+        } catch () {
+            self.endSubmitFail();
+            rethrow;
+        }
+
+        self.endSubmitOk(stream_id);
+
+        # Phase 3: register CompositeAction (PromiseAction + EventNotifierAction)
+        *hash<auto> reg_result = self.registerStreamWithPromiseAndNotifier(stream_id, promise, notifier);
+        if (reg_result.need_cancel) {
+            try {
+                int sid = self.getSessionId();
+                if (sid) {
+                    sock.cancelQuicStream(sid, stream_id);
+                }
+            } catch () {}
+            throw "HTTP3-STATE-ERROR",
+                sprintf("connection closed during request submission (state: %y)",
+                    self.getState());
+        }
+
+        # Deliver buffered responses directly — also signal notifier since the
+        # CompositeAction won't fire for data buffered before registration
+        if (reg_result.buffered) {
+            foreach hash<auto> resp in (reg_result.buffered) {
+                resp.protocol = "h3";
+                if (resp.end_stream.toBool()) {
+                    try { promise.set(resp); } catch () {}
+                    notifier.notify();
                     self.cancelStream(stream_id);
                     break;
                 }

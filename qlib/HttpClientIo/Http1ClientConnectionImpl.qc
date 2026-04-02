@@ -116,6 +116,13 @@ public class Http1ClientConnection inherits HttpClientConnection {
         return sid;
     }
 
+    #! Submits a request using CompositeAction (Promise + EventNotifier) — HTTP/1.1
+    int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, Promise promise, EventNotifier notifier) {
+        return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
+            notifier, max_concurrent_streams);
+    }
+
     #! Submits a streaming request on this connection
     /** Each response phase is pushed to the Channel:
         - Headers: hash with \c status_code and \c headers

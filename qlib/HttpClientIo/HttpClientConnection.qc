@@ -100,6 +100,13 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
     abstract int submitRequestImpl(string method, string path, *hash<auto> headers,
         *data body, Promise promise);
 
+    #! Submits a request using CompositeAction (Promise + EventNotifier) — protocol-specific
+    /** @param promise Promise to resolve with the response
+        @param notifier EventNotifier to signal after the Promise is resolved
+    */
+    abstract int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
+        *data body, Promise promise, EventNotifier notifier);
+
     #! Cancels a request (protocol-specific)
     abstract cancelRequestImpl(int stream_id);
 
@@ -287,6 +294,64 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
         # Return the Promise alongside the Future so the caller keeps it alive
         # until the Future is consumed. The Promise must not be destroyed before
         # the I/O thread resolves it.
+        return {
+            "stream_id": stream_id,
+            "future": f,
+            "promise": p,
+        };
+    }
+
+    #! Submits an async request using CompositeAction (Promise + EventNotifier)
+    /** Like submitRequest() but additionally signals @a notifier when the
+        response arrives, allowing a continuePoll() state machine to call
+        Future::get() non-blockingly — no background thread needed.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param notifier EventNotifier to signal on response completion
+
+        @return a hash with "stream_id" (int), "future" (Future), and "promise" (Promise)
+    */
+    hash<auto> submitRequestWithNotifier(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            if (!self.isReady()) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("connection not ready: state=%y", self.getConnectionState());
+            }
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting request with notifier: %s %s", method, path);
+        Promise p();
+        Future f = p.getFuture();
+        int stream_id;
+        try {
+            stream_id = submitRequestWithNotifierImpl(method, path, headers, body, p, notifier);
+        } catch (hash<ExceptionInfo> ex) {
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                self.setClosed();
+            }
+            rethrow;
+        }
+        @assert(stream_id >= 0);
+
+        {
+            AutoLock al(lock);
+            if (pending_stream_count > 0) {
+                --pending_stream_count;
+            }
+        }
+
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+
         return {
             "stream_id": stream_id,
             "future": f,

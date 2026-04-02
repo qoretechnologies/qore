@@ -33,6 +33,61 @@
 
 #include "qore/Qore.h"
 #include "qore/intern/QC_AbstractHttpPollConnection.h"
+#include "qore/intern/QoreEventNotifier.h"
+
+// Forward declaration for EventNotifier QPP type references
+extern QoreClass* QC_EVENTNOTIFIER;
+
+// --- AbstractHttpPollConnectionPriv out-of-line method implementations ---
+
+void AbstractHttpPollConnectionPriv::onConnectionReady() {
+    std::vector<std::pair<QoreEventNotifier*, QoreObject*>> to_notify;
+    {
+        AutoLocker al(lock);
+        if (state.load(std::memory_order_acquire) == CONNECTING) {
+            state.store(READY, std::memory_order_release);
+            ready_cond.broadcast();
+            to_notify = std::move(ready_notifiers);
+        }
+    }
+    // Signal outside lock to avoid lock inversion; deref to release our refs
+    for (auto& [ptr, obj] : to_notify) {
+        ptr->notify();
+        ExceptionSink xsink;
+        ptr->deref(&xsink);
+        obj->deref(&xsink);
+    }
+}
+
+void AbstractHttpPollConnectionPriv::setClosed() {
+    std::vector<std::pair<QoreEventNotifier*, QoreObject*>> to_notify;
+    {
+        AutoLocker al(lock);
+        state.store(CLOSED, std::memory_order_release);
+        ready_cond.broadcast();
+        to_notify = std::move(ready_notifiers);
+    }
+    for (auto& [ptr, obj] : to_notify) {
+        ptr->notify();
+        ExceptionSink xsink;
+        ptr->deref(&xsink);
+        obj->deref(&xsink);
+    }
+}
+
+bool AbstractHttpPollConnectionPriv::registerReadyNotifier(QoreEventNotifier* notifier,
+        QoreObject* notifier_obj) {
+    AutoLocker al(lock);
+    if (state.load(std::memory_order_acquire) == CONNECTING) {
+        ready_notifiers.push_back({notifier, notifier_obj});
+        return true;
+    }
+    // Already decided — caller takes back the refs we were given
+    ExceptionSink xsink;
+    notifier->deref(&xsink);
+    notifier_obj->deref(&xsink);
+    return false;
+}
 
 //! C++ base class for HTTP client connection state management
 /** This class provides the connection state machine (CONNECTING → READY →
@@ -132,4 +187,28 @@ nothing AbstractHttpPollConnection::setClosed() {
 */
 nothing AbstractHttpPollConnection::setDraining() {
     priv->setDraining();
+}
+
+//! Registers an EventNotifier to be signaled when the connection becomes ready or closed
+/** If the connection is already in a decided state (READY, DRAINING, or CLOSED), returns
+    \c False immediately — the caller should not wait.  If the connection is still
+    CONNECTING, queues the notifier and returns \c True — the caller should poll the
+    notifier's FD for SOCK_POLLIN and re-check state when it fires.
+
+    The caller must ensure the EventNotifier object remains alive until the notifier fires
+    (or until the caller cancels and stops polling it).
+
+    @param notifier the EventNotifier to signal
+
+    @return True if the notifier was queued (caller should poll), False if already decided
+
+    @since %Qore 2.3
+*/
+bool AbstractHttpPollConnection::registerReadyNotifier(EventNotifier[QoreEventNotifier] notifier) {
+    // Transfer the ref from the QPP ReferenceHolder — priv takes ownership
+    QoreEventNotifier* ptr = notifier.release();
+    QoreObject* obj = const_cast<QoreObject*>(obj_notifier);
+    // Ref the QoreObject so it stays alive until we deref it after signaling
+    obj->ref();
+    return priv->registerReadyNotifier(ptr, obj);
 }

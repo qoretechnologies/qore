@@ -284,6 +284,30 @@ public class HttpClientConnectionManager {
         return stream;
     }
 
+    #! Ensures a connection to the given URL is being established, returning an EventNotifier
+    /** Acquires a stream handle (initiating TCP/TLS connection if needed) and returns an
+        EventNotifier that fires when the connection becomes ready or closes.  The stream
+        handle is immediately released after getting the notifier, so it does not hold a
+        concurrent stream slot.
+
+        Use this to pre-warm a connection asynchronously while performing other work (e.g.,
+        an OAuth2 token refresh).  The returned notifier can be polled in a state-machine
+        continuePoll() to detect connection readiness without blocking.
+
+        @param url the target URL (only scheme, host, and port are used)
+
+        @return an EventNotifier to poll for readiness, or NOTHING if the connection is
+        already ready
+
+        @since %HttpClientIo 1.2
+    */
+    *EventNotifier ensureConnectionAsync(string url) {
+        HttpClientStreamHandle stream = acquireStream(url);
+        *EventNotifier notifier = stream.getConnectionReadyNotifier();
+        # stream destructs here, releasing its reservation if not yet submitted
+        return notifier;
+    }
+
     #! Acquires a stream and starts streaming with automatic retry on stale connections
     /** If the server closed the connection between acquisition and streaming start
         (a race inherent in pooled HTTP/1.1 connections), this method retries with a
