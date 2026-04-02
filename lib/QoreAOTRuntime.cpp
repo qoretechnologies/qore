@@ -4763,14 +4763,18 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
 
             // Execute init functions (constant and static var initialization)
+            // Requires program context for closure creation (thread_get_all_closure_vars)
             if (!init_func_contexts.empty()) {
                 std::vector<AOTInitFuncDescriptor> init_descriptors;
                 std::string init_error;
                 readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
                     init_descriptors, init_error);
                 if (!init_descriptors.empty()) {
-                    executeInitFunctions(*qpgm, init_func_contexts,
-                        init_descriptors, label);
+                    ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
+                    if (!xsink.isException()) {
+                        executeInitFunctions(*qpgm, init_func_contexts,
+                            init_descriptors, label);
+                    }
                 }
             }
 
@@ -5446,14 +5450,18 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                 registered, (int)func_map.size(), (int)init_func_contexts.size());
 
             // Execute init functions (constant and static var initialization)
+            // Requires program context for closure creation (thread_get_all_closure_vars)
             if (!init_func_contexts.empty()) {
                 std::vector<AOTInitFuncDescriptor> init_descriptors;
                 std::string init_error;
                 readInitFuncs(metadata, static_cast<uint32_t>(metadata_len),
                     init_descriptors, init_error);
                 if (!init_descriptors.empty()) {
-                    executeInitFunctions(*qpgm, init_func_contexts,
-                        init_descriptors, label);
+                    ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
+                    if (!xsink.isException()) {
+                        executeInitFunctions(*qpgm, init_func_contexts,
+                            init_descriptors, label);
+                    }
                 }
             }
 
