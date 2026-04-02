@@ -3077,6 +3077,10 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // IR tier: execute via IR interpreter
     // Also handles JIT→IR fallback when cached_jit_fn was invalidated by recompilation
     if ((tier == TIER_IR || (tier == TIER_JIT && !jit_fn && !cached_aot_fn)) && cached_ir) {
+        // Push frame boundary for debugger introspection (get_local_vars, etc.)
+        // AST path does this via UserVariantExecHelper; IR path needs it explicitly.
+        ThreadFrameBoundaryHelper tfbh(true);
+
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
         }
