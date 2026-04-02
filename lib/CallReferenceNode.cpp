@@ -169,8 +169,13 @@ int CallReferenceCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse
         parse_args = nullptr;
     }
 
-    // call reference calls can return any value
-    parse_context.typeInfo = nullptr;
+    // For typed code references (code<RetType(ArgTypes...)>), extract and
+    // propagate the return type. This enables map/select and other functional
+    // operators to preserve element type information through closure calls.
+    {
+        const QoreComplexCodeTypeInfo* cct = QoreTypeInfo::getComplexCodeType(expTypeInfo);
+        parse_context.typeInfo = cct ? cct->getReturnType() : nullptr;
+    }
     parse_context.analysis.clear();
     if (arg_analysis.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);

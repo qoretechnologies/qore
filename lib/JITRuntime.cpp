@@ -1129,8 +1129,12 @@ extern "C" DLLEXPORT void qore_rt_list_append(uint64_t list_bits, uint64_t value
 
     QoreListNode* list = list_val.get<QoreListNode>();
     if (list) {
-        // Use pushIntern() to preserve complex types (e.g., hash<string, bool>)
-        qore_list_private::get(*list)->pushIntern(value.refSelf());
+        QoreValue ref_val = value.refSelf();
+        qore_list_private* priv = qore_list_private::get(*list);
+        // Track element type to maintain correct list<T> type info at runtime,
+        // matching AST mode's vtype/vcommon tracking in map/select operators.
+        priv->setListTypeFromNewElementType(ref_val.getFullTypeInfo());
+        priv->pushIntern(ref_val);
     }
 }
 
@@ -1761,6 +1765,8 @@ extern "C" DLLEXPORT void qore_rt_list_set_value(uint64_t list_bits, int64_t ind
         QoreListNode* l = v.get<QoreListNode>();
         QoreValue val = fromBits(value_bits);
         qore_list_private* priv = qore_list_private::get(*l);
+        // Track element type for correct list<T> type info at runtime
+        priv->setListTypeFromNewElementType(val.getFullTypeInfo());
         priv->getEntryReference(static_cast<size_t>(index)) = val;
         if (static_cast<size_t>(index) >= priv->length) {
             priv->length = static_cast<size_t>(index) + 1;

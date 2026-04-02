@@ -2529,7 +2529,11 @@ next_instruction:
                 QoreValue value = getIRValue(values, inst->operands[1]);
                 QoreListNode* list = list_val.get<QoreListNode>();
                 if (list) {
-                    list->push(value.hasNode() ? value.refSelf() : value, xsink);
+                    QoreValue push_val = value.hasNode() ? value.refSelf() : value;
+                    // Track element type for correct list<T> type info at runtime
+                    qore_list_private::get(*list)->setListTypeFromNewElementType(
+                        push_val.getFullTypeInfo());
+                    list->push(push_val, xsink);
                 }
                 ++ip;
                 break;
@@ -2703,6 +2707,8 @@ next_instruction:
                     int64_t index = idx_val.getAsBigInt();
                     QoreValue stored = val.hasNode() ? val.refSelf() : val;
                     qore_list_private* priv = qore_list_private::get(*l);
+                    // Track element type for correct list<T> type info at runtime
+                    priv->setListTypeFromNewElementType(stored.getTypeInfo());
                     priv->getEntryReference(static_cast<size_t>(index)) = stored;
                     if (static_cast<size_t>(index) >= priv->length) {
                         priv->length = static_cast<size_t>(index) + 1;
