@@ -2222,7 +2222,9 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
 
     @since %RestClientIo 1.2
 */
-public class RestClientIo::RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
+public namespace RestClientIo {
+
+public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
     public {
         #! Waiting for the OAuth2 token endpoint connection to become ready
         const SPS_OAUTH2_CONNECTING = "oauth2-connecting";
@@ -2599,3 +2601,5 @@ public class RestClientIo::RestClientIoPingPollOperation inherits Qore::Abstract
         pending_future = result.future;
     }
 }
+
+} # namespace RestClientIo
