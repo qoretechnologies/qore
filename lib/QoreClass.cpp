@@ -376,6 +376,20 @@ void AbstractMethodMap::runtimeInit(qore_class_private& qc, BCList* scl) {
             // if there is a matching non-abstract variant in any parent class, then move the variant from vlist to
             // pending_save
             MethodVariantBase* v = scl->runtimeMatchNonAbstractVariant(i->first, vi->second, relaxed_match);
+            if (!v) {
+                // also check the class's own local methods for a matching non-abstract variant;
+                // this handles the case where initializeBuiltin() merged abstract variants from
+                // parents before local methods were added (e.g. JNI classes where methods are
+                // populated after class initialization to support recursive class loading)
+                QoreMethod* m = qc.findLocalCommittedMethod(i->first.c_str());
+                if (m) {
+                    MethodFunctionBase* f = qore_method_private::get(*m)->getFunction();
+                    v = f->runtimeHasVariantWithSignature(vi->second, relaxed_match);
+                    if (v && v->isAbstract()) {
+                        v = nullptr;
+                    }
+                }
+            }
             if (v) {
                 const char* sig = vi->second->getAbstractSignature();
                 i->second->pending_save.insert(vmap_t::value_type(sig, vi->second));
