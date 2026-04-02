@@ -8589,6 +8589,28 @@ QoreIRValue QoreIRLowering::lowerMapSelect(const QoreValue& expr, std::string& e
         return QoreIRValue();
     }
 
+    // Single-value path: when the input (e[1]) is a single value (not a list or
+    // iterator), delegate to AST evaluation which correctly handles single-element
+    // map-select by returning the result directly (not wrapped in a list).
+    {
+        const QoreTypeInfo* list_type = getExprTypeInfo(map_select->get(1));
+        bool is_iterator = false;
+        if (list_type) {
+            const QoreClass* obj_class = QoreTypeInfo::getUniqueReturnClass(list_type);
+            if (obj_class && qore_class_private::parseCheckCompatibleClass(obj_class, QC_ABSTRACTITERATOR)) {
+                is_iterator = true;
+            }
+        }
+        const QoreTypeInfo* elem_type = list_type
+            ? QoreTypeInfo::getUniqueReturnComplexList(list_type)
+            : nullptr;
+        if (!elem_type && list_type && !is_iterator
+                && !QoreTypeInfo::parseReturns(list_type, NT_LIST)) {
+            std::vector<QoreIRValue> operands;
+            return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, map_select->loc, error);
+        }
+    }
+
     // Native IR lowering with implicit argument context
     return lowerMapSelectNative(map_select, expr, error);
 }
