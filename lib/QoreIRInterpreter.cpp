@@ -4736,10 +4736,19 @@ load_local_done:
                                     }
                                     // DGC container scan: when an object leaves block scope,
                                     // also release unowned container temporaries (lists,
-                                    // hashes) that may hold transitive refs to the object.
-                                    // Skip slots owned by local variables to avoid clearing
-                                    // active containers (loop iterators, function args).
+                                    // hashes, other objects) that may hold transitive refs
+                                    // to the object. Skip slots owned by local variables to
+                                    // avoid clearing active containers (loop iterators, etc).
+                                    // Also remove this variable's init slot from
+                                    // local_owned_slots so its constructor result can be
+                                    // cleaned up (prevents Program objects from persisting
+                                    // past block scope).
                                     if (is_obj && local_inst->is_block_exit) {
+                                        // Remove this variable's owned slots
+                                        if (local_inst->slot_id != UINT32_MAX
+                                                && local_inst->slot_id < local_init_slots.size()) {
+                                            local_owned_slots.erase(local_init_slots[local_inst->slot_id]);
+                                        }
                                         for (size_t vi = 0; vi < values.size(); ++vi) {
                                             if (!values[vi].hasNode()) {
                                                 continue;
