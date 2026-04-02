@@ -145,10 +145,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_check_throw",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
-    // Runtime cleanup stack functions
+    // Runtime cleanup functions
     module.getOrInsertFunction("qore_rt_cleanup_push",
             llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i64_type}, false));
     module.getOrInsertFunction("qore_rt_cleanup_run",
+            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
             llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
 
     // Guard helpers
@@ -1079,27 +1081,53 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
-    // Use runtime cleanup stack instead of per-alloca iteration.
-    // This reduces the error_return block from O(N) instructions to O(1).
-    if (!cleanup_stack_ptr) {
-        // No cleanup tracking was emitted — nothing to clean up
-        // But check for legacy per-alloca tracking too
-        if (invoke_result_allocas.empty()) {
-            return;
-        }
-        auto helper = module.getOrInsertFunction("qore_rt_decref",
+    if (invoke_result_allocas.empty()) {
+        return;
+    }
+
+    // For small numbers of cleanup allocas, inline the load+decref pairs.
+    // For large functions (50+), use a runtime function call to avoid O(N)
+    // error_return blocks that cause LLVM optimization pathology.
+    if (invoke_result_allocas.size() < 50) {
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         for (llvm::Value* alloca_ptr : invoke_result_allocas) {
             llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-            builder->CreateCall(helper, {val, xsink_arg});
+            builder->CreateCall(decref_fn, {val, xsink_arg});
         }
         return;
     }
-    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run",
-            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-    llvm::Value* stack = builder->CreateLoad(ptr_type, cleanup_stack_ptr);
-    llvm::Value* count = builder->CreateLoad(llvm::Type::getInt32Ty(ctx), cleanup_count_ptr);
-    builder->CreateCall(helper, {stack, count, xsink_arg});
+
+    // Large function: store alloca pointers into a contiguous array in the
+    // entry block, then call qore_rt_cleanup_run_allocas() which loops at
+    // runtime. This reduces the error_return block from O(N) to O(1).
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* entry = &func->getEntryBlock();
+    size_t n = invoke_result_allocas.size();
+
+    // Allocate a contiguous array of pointers to the cleanup allocas
+    llvm::ArrayType* arr_type = llvm::ArrayType::get(ptr_type, n);
+    llvm::IRBuilder<> entry_builder(entry, entry->begin());
+    llvm::AllocaInst* arr = entry_builder.CreateAlloca(arr_type, nullptr, "cleanup_ptrs");
+
+    // Store each cleanup alloca pointer into the array
+    for (size_t i = 0; i < n; ++i) {
+        llvm::Value* gep = entry_builder.CreateGEP(arr_type, arr,
+            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0),
+             llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
+        entry_builder.CreateStore(invoke_result_allocas[i], gep);
+    }
+
+    // Cast array to ptr for the runtime call
+    llvm::Value* arr_ptr = builder->CreateGEP(arr_type, arr,
+        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0),
+         llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
+
+    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
+        llvm::FunctionType::get(void_type,
+            {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+    builder->CreateCall(helper,
+        {arr_ptr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), n), xsink_arg});
 }
 
 void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {

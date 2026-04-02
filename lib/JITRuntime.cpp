@@ -341,6 +341,18 @@ extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count,
     *count = n + 1;
 }
 
+//! Run all cleanup actions from an array of alloca pointers.
+/** Each element in the array is a pointer to an i64 alloca. The function loads
+    the value from each alloca and decrefs it. Used by emitInvokeCleanup() for
+    large functions (50+ cleanup allocas) to avoid O(N) error_return blocks.
+*/
+extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink) {
+    for (int32_t i = 0; i < count; ++i) {
+        QoreValue v = fromBits(*alloca_ptrs[i]);
+        v.discard(xsink);
+    }
+}
+
 //! Run all cleanup actions (decref all tracked values) and free the array.
 extern "C" DLLEXPORT void qore_rt_cleanup_run(uint64_t* stack, int32_t count, ExceptionSink* xsink) {
     if (!stack || count <= 0) {
