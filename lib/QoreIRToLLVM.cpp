@@ -1459,6 +1459,7 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
+    // Determine the exception handler block (try/catch target or function-level)
     llvm::BasicBlock* exception_block = nullptr;
     if (inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -1467,42 +1468,40 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         }
     }
     if (!exception_block) {
-        // Outside try block: use the function-level error return block.
-        // Create it lazily on first use — terminator is added later in
-        // finalizeErrorReturnBlock() after all invoke_result_allocas are known.
         if (!error_return_block) {
             error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
         }
         exception_block = error_return_block;
     }
-    // Inline exception check as direct memory loads instead of function call
-    // ExceptionSink::priv at offset 0 -> qore_es_private*
-    // qore_es_private::head at offset 0 within priv -> QoreException*
-    // qore_es_private::thread_exit at offset 20 within priv -> bool
 
-    // Load priv pointer from xsink at offset 0
-    auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
+    // Use invoke @qore_rt_check_throw(%xsink) with C++ exception handling.
+    // If xsink has an exception, qore_rt_check_throw throws QoreJITException
+    // which LLVM unwinds to the shared landingpad for this exception handler.
+    // This replaces the 7-instruction inline check + condBr + new BB pattern
+    // with a single invoke instruction + shared landingpad.
 
-    // Load head pointer from priv at offset 0
-    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
+    // Get or create shared landingpad for this exception handler
+    llvm::BasicBlock* lpad_block;
+    auto lpad_it = landingpad_blocks.find(exception_block);
+    if (lpad_it != landingpad_blocks.end()) {
+        lpad_block = lpad_it->second;
+    } else {
+        lpad_block = llvm::BasicBlock::Create(ctx, "lpad", llvm_func);
+        landingpad_blocks[exception_block] = lpad_block;
+        auto saved_ip = builder->saveIP();
+        builder->SetInsertPoint(lpad_block);
+        auto* lp = builder->CreateLandingPad(
+            llvm::StructType::get(ctx, {ptr_type, llvm::Type::getInt32Ty(ctx)}), 1, "lp");
+        lp->addClause(llvm::ConstantPointerNull::get(
+            llvm::cast<llvm::PointerType>(ptr_type)));
+        builder->CreateBr(exception_block);
+        builder->restoreIP(saved_ip);
+    }
 
-    // Check if head != nullptr
-    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
-            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
-            "has_exception_head");
-
-    // Also check thread_exit at offset 20 within priv
-    // thread_exit is a bool at offset 20 in qore_es_private
-    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
-            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
-    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
-    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
-            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
-
-    // Combine: exception exists if (head != nullptr) OR (thread_exit)
-    auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
-    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
-    builder->CreateCondBr(has_exception, exception_block, cont);
+    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "cont", llvm_func);
+    auto check_throw = module.getOrInsertFunction("qore_rt_check_throw",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+    builder->CreateInvoke(check_throw, cont, lpad_block, {xsink_arg});
     builder->SetInsertPoint(cont);
 }
 
