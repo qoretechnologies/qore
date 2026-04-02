@@ -5956,7 +5956,13 @@ extern "C" DLLEXPORT void qore_aot_module_delete() {
         auto it = aot_module_map.find(mod_name);
         if (it != aot_module_map.end()) {
             if (it->second.pgm) {
-                it->second.pgm->waitForTerminationAndDeref(nullptr);
+                // Clear namespace data before deref to release cross-program
+                // closure references. Without this, the module's ClosureVarValues
+                // may reference objects from the main program that have already
+                // been freed during global cleanup, causing dangling pointer access.
+                ExceptionSink xsink;
+                qore_program_private::get(*it->second.pgm)->waitForTerminationAndClear(&xsink);
+                it->second.pgm->waitForTerminationAndDeref(&xsink);
             }
             aot_module_map.erase(it);
         }
