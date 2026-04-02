@@ -31,6 +31,7 @@
 
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
+#include "qore/intern/QoreJITException.h"
 
 #include <cstring>
 #include <optional>
@@ -307,6 +308,18 @@ extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
 }
 
 // --- Exception helpers ---
+
+//! Check xsink and throw C++ exception for LLVM stack unwinding
+/** Called by JIT/AOT-compiled code after each qore_rt_* call that can
+    raise a Qore exception. If xsink has an exception, throws QoreJITException
+    which LLVM's invoke/landingpad mechanism catches for proper cleanup.
+    This replaces the manual per-instruction xsink flag checking pattern.
+*/
+extern "C" DLLEXPORT void qore_rt_check_throw(ExceptionSink* xsink) {
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+}
 
 extern "C" DLLEXPORT void qore_rt_throw(ExceptionSink* xsink, const char* err, const char* desc) {
     if (xsink) {
