@@ -9037,9 +9037,10 @@ QoreIRValue QoreIRLowering::lowerSelectNative(const QoreSelectOperatorNode* sele
         builder.createBranch(preheader_block, select->loc);
 
         // Preheader: create empty result list (filtered, size unknown)
+        // Preserve input element type so the result has correct type info
         builder.setBlock(preheader_block);
         QoreIRValue zero = builder.createConstInt(0, select->loc)->result;
-        QoreIRValue result_list = builder.createEmptyList(select->loc)->result;
+        QoreIRValue result_list = builder.createEmptyList(select->loc, elem_type)->result;
         builder.createBranch(header_block, select->loc);
 
         // Header block: check if index < size
