@@ -145,6 +145,12 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_check_throw",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
+    // Runtime cleanup stack functions
+    module.getOrInsertFunction("qore_rt_cleanup_push",
+            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i64_type}, false));
+    module.getOrInsertFunction("qore_rt_cleanup_run",
+            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+
     // Guard helpers
     module.getOrInsertFunction("qore_rt_guard_not_nothing",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -1073,15 +1079,27 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
 }
 
 void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
-    if (invoke_result_allocas.empty()) {
+    // Use runtime cleanup stack instead of per-alloca iteration.
+    // This reduces the error_return block from O(N) instructions to O(1).
+    if (!cleanup_stack_ptr) {
+        // No cleanup tracking was emitted — nothing to clean up
+        // But check for legacy per-alloca tracking too
+        if (invoke_result_allocas.empty()) {
+            return;
+        }
+        auto helper = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        for (llvm::Value* alloca_ptr : invoke_result_allocas) {
+            llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+            builder->CreateCall(helper, {val, xsink_arg});
+        }
         return;
     }
-    auto helper = module.getOrInsertFunction("qore_rt_decref",
-            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-    for (llvm::Value* alloca_ptr : invoke_result_allocas) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-        builder->CreateCall(helper, {val, xsink_arg});
-    }
+    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run",
+            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
+    llvm::Value* stack = builder->CreateLoad(ptr_type, cleanup_stack_ptr);
+    llvm::Value* count = builder->CreateLoad(llvm::Type::getInt32Ty(ctx), cleanup_count_ptr);
+    builder->CreateCall(helper, {stack, count, xsink_arg});
 }
 
 void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
@@ -1107,16 +1125,12 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
 
     if (!deferred_exception_checking) {
         // In normal mode: pre-store decref (handles re-assignment in loops).
-        // Decref previous value before overwriting (handles loop bodies where
-        // the same alloca is stored to each iteration; first iteration old_val
-        // = NOTHING which is a no-op for decref)
         auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
         builder->CreateStore(result, cleanup_alloca);
         builder->CreateCall(decref_fn, {old_val, xsink_arg});
     } else {
-        // In deferred mode: init functions have no loops; old is always NOTHING
         builder->CreateStore(result, cleanup_alloca);
     }
 
@@ -1740,6 +1754,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();
+    cleanup_stack_ptr = nullptr;
+    cleanup_count_ptr = nullptr;
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore

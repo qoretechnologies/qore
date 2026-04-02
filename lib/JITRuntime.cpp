@@ -307,6 +307,53 @@ extern "C" DLLEXPORT void qore_rt_decref_nothrow(uint64_t val) {
     v.discard(nullptr);
 }
 
+// --- Cleanup stack for JIT/AOT compiled functions ---
+// Replaces per-alloca cleanup tracking with a single runtime-managed array.
+// This reduces the error_return block from O(N) instructions to O(1), eliminating
+// LLVM optimization pathology on large functions.
+
+//! Track a value for cleanup at scope exit.  Replaces the old per-cleanup-alloca
+//! pattern with a single dynamically-grown array.
+//! @param stack pointer to the stack pointer (alloca in LLVM IR)
+//! @param count pointer to the count (alloca in LLVM IR)
+//! @param val the NaN-boxed value to track
+extern "C" DLLEXPORT void qore_rt_cleanup_push(uint64_t** stack, int32_t* count, uint64_t val) {
+    QoreValue v = fromBits(val);
+    if (!v.hasNode()) {
+        return;  // Simple types (int, float, bool, NOTHING) don't need cleanup
+    }
+    int32_t n = *count;
+    // Grow array if needed (initial allocation or doubling)
+    if (n == 0) {
+        *stack = (uint64_t*)malloc(16 * sizeof(uint64_t));
+        if (!*stack) {
+            return;
+        }
+    } else if ((n & (n - 1)) == 0 && n >= 16) {
+        // Power of 2 — double the allocation
+        uint64_t* new_stack = (uint64_t*)realloc(*stack, n * 2 * sizeof(uint64_t));
+        if (!new_stack) {
+            return;
+        }
+        *stack = new_stack;
+    }
+    (*stack)[n] = val;
+    *count = n + 1;
+}
+
+//! Run all cleanup actions (decref all tracked values) and free the array.
+extern "C" DLLEXPORT void qore_rt_cleanup_run(uint64_t* stack, int32_t count, ExceptionSink* xsink) {
+    if (!stack || count <= 0) {
+        return;
+    }
+    // Process in reverse order (LIFO — matches scope-based cleanup)
+    for (int32_t i = count - 1; i >= 0; --i) {
+        QoreValue v = fromBits(stack[i]);
+        v.discard(xsink);
+    }
+    free(stack);
+}
+
 // --- Exception helpers ---
 
 //! Check xsink and throw C++ exception for LLVM stack unwinding
