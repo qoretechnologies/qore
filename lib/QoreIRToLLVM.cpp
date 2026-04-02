@@ -140,6 +140,11 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     auto* has_ex_fn = llvm::cast<llvm::Function>(has_ex.getCallee());
     has_ex_fn->addFnAttr(llvm::Attribute::NoUnwind);
 
+    // C++ exception check-and-throw for invoke/landingpad EH
+    // Throws QoreJITException if xsink has an exception
+    module.getOrInsertFunction("qore_rt_check_throw",
+            llvm::FunctionType::get(void_type, {ptr_type}, false));
+
     // Guard helpers
     module.getOrInsertFunction("qore_rt_guard_not_nothing",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -1497,12 +1502,6 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
     // Combine: exception exists if (head != nullptr) OR (thread_exit)
     auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
     llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
-    if (getenv("QORE_LLVM_DEBUG")) {
-        fprintf(stderr, "LLVM-EXCEPT-CHECK: creating no_exception block, moving from %s to %s\n",
-                builder->GetInsertBlock()->getName().str().c_str(),
-                cont->getName().str().c_str());
-        fflush(stderr);
-    }
     builder->CreateCondBr(has_exception, exception_block, cont);
     builder->SetInsertPoint(cont);
 }
@@ -1541,6 +1540,15 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     if (!llvm_func) {
         error = "failed to create LLVM function '" + fn_name + "'";
         return false;
+    }
+
+    // Set C++ exception handling personality function for invoke/landingpad EH.
+    // This tells LLVM to use the GNU C++ personality for stack unwinding when
+    // qore_rt_check_throw() throws a QoreJITException.
+    {
+        auto personality = module.getOrInsertFunction("__gxx_personality_v0",
+            llvm::FunctionType::get(llvm::Type::getInt32Ty(ctx), true));
+        llvm_func->setPersonalityFn(llvm::cast<llvm::Constant>(personality.getCallee()));
     }
 
     // RAII cleanup: remove incomplete function from module on failure
@@ -1732,6 +1740,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     local_reload_trackers.clear();
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
+    landingpad_blocks.clear();
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore

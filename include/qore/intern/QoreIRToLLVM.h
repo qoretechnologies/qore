@@ -294,6 +294,11 @@ private:
     // Created lazily on first guard with deopt_target.
     llvm::BasicBlock* jit_deopt_block = nullptr;
 
+    // Shared landingpad blocks: maps exception handler block → landingpad block.
+    // Multiple invoke instructions targeting the same handler share a single
+    // landingpad, avoiding BB explosion.
+    std::unordered_map<llvm::BasicBlock*, llvm::BasicBlock*> landingpad_blocks;
+
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 
