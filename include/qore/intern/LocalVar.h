@@ -104,14 +104,15 @@ public:
     int frame_marker_id = -1;  // frame count value at time of pushFrameBoundary(), -1 if not a marker
     bool finalized : 1;
     bool frame_boundary : 1;
+    bool block_cleared : 1;  // set by del() when block-scoped var is cleared at block exit
 
-    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase(const char* n_id, valtype_t t = QV_Node) : val(t), id(n_id), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase(const char* n_id, const QoreTypeInfo* varTypeInfo) : val(varTypeInfo), id(n_id), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
-    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false) {
+    DLLLOCAL VarValueBase() : val(QV_Bool), id(nullptr), finalized(false), frame_boundary(false), block_cleared(false) {
     }
 
     DLLLOCAL void setDeclOrder(uint64_t order) {
@@ -135,6 +136,7 @@ public:
         } else {
             val.removeValue(true).discard(xsink);
         }
+        block_cleared = true;
     }
 
     DLLLOCAL bool isRef() const {
@@ -184,6 +186,7 @@ public:
         }
 
         id = n_id;
+        block_cleared = false;
 
         // try to set an optimized value type for the value holder if possible
         val.set(varTypeInfo);
