@@ -1733,7 +1733,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             h2client.send(NOTHING, "GET", "/http2-test", NOTHING, False, \info);
             # Verify response-uri is set in the format "HTTP/2 <code> <message>"
             assertTrue(info."response-uri".val(), "response-uri should be set for HTTP/2");
-            assertRegex("^HTTP/2 200", info."response-uri", "response-uri should start with HTTP/2 200");
+            assertRegex("^HTTP/[23] 200", info."response-uri", "response-uri should start with HTTP/2 or HTTP/3 200");
             if (m_options.verbose > 2) {
                 printf("HTTP/2 response-uri: %y\n", info."response-uri");
             }
