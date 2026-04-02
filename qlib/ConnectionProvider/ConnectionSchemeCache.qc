@@ -74,6 +74,8 @@ public class ConnectionSchemeCache {
     public {
         #! Map of known connection schemes to modules
         const SchemeMap = {
+            "aftership": "AftershipRestClient",
+
             "anthropic": "AnthropicRestClient",
 
             "awsrests": "AwsRestClient",
@@ -129,6 +131,8 @@ public class ConnectionSchemeCache {
 
             "gohighlevelres": "GoHighLevelRestClient",
 
+            "gorgiasrest": "GorgiasRestClient",
+
             "qdrantrest": "QdrantDataProvider",
             "qdrantrests": "QdrantDataProvider",
 
@@ -172,6 +176,8 @@ public class ConnectionSchemeCache {
             "netsuite": "NetSuiteRestClient",
 
             "openai": "OpenAiRestClient",
+
+            "perplexity": "PerplexityRestClient",
 
             "pdfco": "PdfCoRestClient",
 

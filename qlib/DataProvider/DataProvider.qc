@@ -80,6 +80,7 @@ public class DataProvider {
             # provided by the jni module
             "accessread": "AccessDataProvider",
 
+            "aftership": "AftershipDataProvider",
             "anthropic": "AnthropicDataProvider",
             "asyncapi": "AsyncApiDataProvider",
 
@@ -131,6 +132,7 @@ public class DataProvider {
             "freshbooks": "FreshBooksDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "gemini": "GeminiDataProvider",
+            "gorgias": "GorgiasDataProvider",
             "ftppoller": "FtpPoller",
             "gcal": "GoogleCalendarDataProvider",
             "gohighlevel": "GoHighLevelDataProvider",
@@ -212,6 +214,7 @@ public class DataProvider {
 
             "grok": "GrokDataProvider",
             "openai": "OpenAiDataProvider",
+            "perplexity": "PerplexityDataProvider",
             "pdfco": "PdfCoDataProvider",
             "pop3": "Pop3ClientDataProvider",
 

@@ -1019,6 +1019,12 @@ cargo install tree-sitter-cli@0.26.5
       - requires utf8proc for Unicode normalization (NFC/NFD/NFKC/NFKD) and character classification
 
     @subsection qore_2_3_0_new_user_modules New User Modules
+    - @ref aftershiprestclientintro "AftershipRestClient" module
+      - new module providing a REST client for the <a href="https://www.aftership.com/">Aftership</a> tracking and returns API
+      - supports API key authentication via as-api-key header
+      - provides AftershipRestConnection for connection management with \c aftership:// URL scheme
+    - @ref aftershipdataproviderintro "AftershipDataProvider" module
+      - new module providing a data provider API for <a href="https://www.aftership.com/">Aftership</a> tracking and returns services
     - @ref anthropicrestclientintro "AnthropicRestClient" module
       - new module providing a REST client for <a href="https://www.anthropic.com/">Anthropic</a>'s Claude AI API
       - supports API key authentication via x-api-key header
@@ -1113,6 +1119,20 @@ cargo install tree-sitter-cli@0.26.5
       - custom bitlink support
       - polling-based event triggers for bitlink click activity
       - action catalog integration with 21 actions and 1 trigger
+    - @ref gorgiasrestclientintro "GorgiasRestClient" module
+      - new module providing a REST client for <a href="https://www.gorgias.com/">Gorgias</a>'s customer support API
+      - supports OAuth2 authentication with subdomain-based URL configuration
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides GorgiasRestConnection for connection management with \c gorgiasrest:// URL scheme
+    - @ref gorgiasdataproviderintro "GorgiasDataProvider" module
+      - new module providing a data provider API for <a href="https://www.gorgias.com/">Gorgias</a> helpdesk
+      - ticket management (create, update, delete, list)
+      - customer management (create, update, delete, list)
+      - tag management (create, update, delete, list)
+      - message management (create, list per ticket)
+      - user listing (read-only)
+      - polling-based event triggers for new and updated tickets
+      - action catalog integration with 20 actions and 2 triggers
     - @ref chargebeerestclientintro "ChargebeeRestClient" module
       - new module providing a REST client for <a href="https://www.chargebee.com/">Chargebee</a>'s subscription billing API
       - supports HTTP Basic Authentication with API Key as username
@@ -1981,6 +2001,8 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - <a href="../../modules/NetSuiteRestClient/html/index.html#netsuiterestclientintro">NetSuiteRestClient</a>
       - <a href="../../modules/OpenAiDataProvider/html/index.html#openaidataproviderintro">OpenAiDataProvider</a>
       - <a href="../../modules/OpenAiRestClient/html/index.html#openairestclientintro">OpenAiRestClient</a>
+      - <a href="../../modules/PerplexityDataProvider/html/index.html#perplexitydataproviderintro">PerplexityDataProvider</a>
+      - <a href="../../modules/PerplexityRestClient/html/index.html#perplexityrestclientintro">PerplexityRestClient</a>
       - <a href="../../modules/OpenApi3/html/index.html#openapi3intro">OpenApi3</a>
       - <a href="../../modules/Pop3ClientDataProvider/html/index.html#pop3clientdataproviderintro">Pop3ClientDataProvider</a>
       - <a href="../../modules/ServerSentEventClient/html/index.html#serversenteventclientintro">ServerSentEventClient</a>
