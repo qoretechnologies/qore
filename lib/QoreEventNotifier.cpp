@@ -108,9 +108,14 @@ QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
 }
 
 QoreEventNotifier::~QoreEventNotifier() {
+    closeFd();
+}
+
+void QoreEventNotifier::closeFd() {
 #ifdef __linux__
     if (notify_fd >= 0) {
         ::close(notify_fd);
+        notify_fd = -1;
     }
 #elif defined(DARWIN)
     // Note: we don't need to explicitly remove the EVFILT_USER from kqueue
@@ -118,16 +123,20 @@ QoreEventNotifier::~QoreEventNotifier() {
     // kqueue is closed. We just close the fallback pipe if still open.
     if (pipe_fd[0] >= 0) {
         ::close(pipe_fd[0]);
+        pipe_fd[0] = -1;
     }
     if (pipe_fd[1] >= 0) {
         ::close(pipe_fd[1]);
+        pipe_fd[1] = -1;
     }
 #else
     if (pipe_fd[0] >= 0) {
         ::close(pipe_fd[0]);
+        pipe_fd[0] = -1;
     }
     if (pipe_fd[1] >= 0) {
         ::close(pipe_fd[1]);
+        pipe_fd[1] = -1;
     }
 #endif
 }
