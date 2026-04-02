@@ -72,7 +72,11 @@ DLLLOCAL void qore_async_io_logger_cleanup();
 DLLLOCAL bool qore_async_io_trace_enabled();
 
 //! Writes a trace line to stderr (only if tracing is enabled)
-DLLLOCAL void qore_async_io_trace(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+DLLLOCAL void qore_async_io_trace(const char* fmt, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 1, 2)))
+#endif
+    ;
 
 #define ASYNC_IO_TRACE(...) do { \
     if (qore_async_io_trace_enabled()) { \
