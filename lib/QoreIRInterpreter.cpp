@@ -590,6 +590,10 @@ struct IRCallFrame {
     std::unordered_map<const void*, QoreValue> closures;
     std::unordered_set<FunctionalOperatorInterface*> active_iterators;
     std::vector<IROnBlockExitHandler> on_block_exit_handlers;
+    // Tracks which value slot IDs are associated with local variables (via StoreLocal).
+    // Used by UninstantiateLocal's container DGC scan to distinguish temporary expression
+    // results from variable-held values — only temporaries are cleared at block exit.
+    std::unordered_set<uint32_t> local_owned_slots;
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
@@ -623,6 +627,7 @@ struct IRCallFrame {
         closures.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
+        local_owned_slots.clear();
     }
 };
 
@@ -1697,6 +1702,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& local_init_slots = frame.local_init_slots;
     auto& local_load_slots = frame.local_load_slots;
     auto& load_slot_registered = frame.load_slot_registered;
+    auto& local_owned_slots = frame.local_owned_slots;
 
     // Phase B2: Build reverse map for parent slot TLS access (for LLVM-compiled parents)
     // Maps slot_id -> LocalVar* for slots 0..parent_slot_count-1
@@ -3256,6 +3262,10 @@ next_instruction:
                 }
 load_local_done:
                 setValueSlot(values, local_inst->result.id, out, xsink);
+                // Mark as local-owned for DGC container scan
+                if (local_inst->result.id >= 0) {
+                    local_owned_slots.insert(local_inst->result.id);
+                }
                 if (out.hasNode() && local_inst->auto_ref) {
                     cleanup.push_back(local_inst->result.id);
                 }
@@ -4383,6 +4393,11 @@ load_local_done:
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
 
+                // Track this slot as local-owned for DGC container scan
+                if (operand.id >= 0) {
+                    local_owned_slots.insert(operand.id);
+                }
+
                 // Handle weak assignment by wrapping in WeakReferenceNode at runtime
                 if (local_inst->weak && val.hasNode()) {
                     qore_type_t type = val.getType();
@@ -4711,11 +4726,31 @@ load_local_done:
                                 QoreValue lval = lvar->eval(nd, xsink);
                                 if (lval.hasNode()) {
                                     const AbstractQoreNode* node_ptr = lval.getInternalNode();
+                                    bool is_obj = (lval.getType() == NT_OBJECT);
                                     for (size_t vi = 0; vi < values.size(); ++vi) {
                                         if (values[vi].hasNode()
                                             && values[vi].getInternalNode() == node_ptr) {
                                             values[vi].discard(xsink);
                                             values[vi] = QoreValue();
+                                        }
+                                    }
+                                    // DGC container scan: when an object leaves block scope,
+                                    // also release unowned container temporaries (lists,
+                                    // hashes) that may hold transitive refs to the object.
+                                    // Skip slots owned by local variables to avoid clearing
+                                    // active containers (loop iterators, function args).
+                                    if (is_obj && local_inst->is_block_exit) {
+                                        for (size_t vi = 0; vi < values.size(); ++vi) {
+                                            if (!values[vi].hasNode()) {
+                                                continue;
+                                            }
+                                            if (local_owned_slots.count(vi)) {
+                                                continue;
+                                            }
+                                            if (needs_scan(values[vi].getInternalNode())) {
+                                                values[vi].discard(xsink);
+                                                values[vi] = QoreValue();
+                                            }
                                         }
                                     }
                                 }
