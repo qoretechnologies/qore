@@ -1098,24 +1098,23 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
         return;
     }
 
-    // Large function: store alloca pointers into a contiguous array in the
-    // entry block, then call qore_rt_cleanup_run_allocas() which loops at
-    // runtime. This reduces the error_return block from O(N) to O(1).
-    llvm::Function* func = builder->GetInsertBlock()->getParent();
-    llvm::BasicBlock* entry = &func->getEntryBlock();
+    // Large function: store alloca pointers into a contiguous array, then
+    // call qore_rt_cleanup_run_allocas() which loops at runtime. This
+    // reduces the error_return block from O(N) to O(1).
     size_t n = invoke_result_allocas.size();
 
-    // Allocate a contiguous array of pointers to the cleanup allocas
+    // Allocate array in the error_return block (current insert point),
+    // NOT in the entry block — avoids domination issues where cleanup
+    // allocas created later in entry would not dominate early stores.
     llvm::ArrayType* arr_type = llvm::ArrayType::get(ptr_type, n);
-    llvm::IRBuilder<> entry_builder(entry, entry->begin());
-    llvm::AllocaInst* arr = entry_builder.CreateAlloca(arr_type, nullptr, "cleanup_ptrs");
+    llvm::AllocaInst* arr = builder->CreateAlloca(arr_type, nullptr, "cleanup_ptrs");
 
     // Store each cleanup alloca pointer into the array
     for (size_t i = 0; i < n; ++i) {
-        llvm::Value* gep = entry_builder.CreateGEP(arr_type, arr,
+        llvm::Value* gep = builder->CreateGEP(arr_type, arr,
             {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0),
              llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
-        entry_builder.CreateStore(invoke_result_allocas[i], gep);
+        builder->CreateStore(invoke_result_allocas[i], gep);
     }
 
     // Cast array to ptr for the runtime call
