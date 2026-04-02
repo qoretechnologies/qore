@@ -3183,9 +3183,6 @@ ws.setEventQueue();
         processExtensions(rhdr);
 
         use_hcio = True;
-        @debug {
-            stderr.printf("HCIO H2 CONNECT: OK stream_id=%d status=%d\n", h2_stream_id, status_code);
-        }
         finishConnect();
 
         return rh;
@@ -5327,10 +5324,6 @@ public class WebSocketClientHcioPollOp {
             auto data;
             try {
                 data = stream.readData(1ms);
-                @debug {
-                    stderr.printf("HCIO-ADAPTER: readData type=%y\n",
-                        exists data ? data.fullType() : "NOTHING");
-                }
             } catch (hash<ExceptionInfo> ex) {
                 if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
                     if (!closed) {
