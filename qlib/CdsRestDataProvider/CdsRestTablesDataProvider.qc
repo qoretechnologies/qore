@@ -120,7 +120,7 @@ public class CdsRestTablesDataProvider inherits CdsRestDataProviderBase {
             hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
             rethrow ex.err, ex.desc, ex.arg + ex_arg;
         }
-        #printf("%N\n", resp.EntityType);
+        #printf("%Y\n", resp.EntityType);
 
         meta = map {$1."^attributes^".Name: $1}, resp.EntityType, ($1.Property || ($1.Abstract == "true"));
         return meta;

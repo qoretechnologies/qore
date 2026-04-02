@@ -407,7 +407,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
                     }
                 }
                 e.threadId = event.tid;
-                e.text = sprintf("%N", event);
+                e.text = sprintf("%Y", event);
                 # e.allThreadsStopped =    is not used in vscode
                 m_programState{event.pgmid}.thread{event.tid}.frameId = event.frame;
                 m_programState{event.pgmid}.thread{event.tid}.debugVar = event.debugvar;
@@ -632,7 +632,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
     }
 
     private:internal string printValue(auto value, *hash format) {
-        return sprintf("%N", value);
+        return sprintf("%Y", value);
     }
 
     private:internal auto vscParseValue(string val) {
@@ -838,7 +838,7 @@ public class VscDebugAdapter inherits DebugCommandLine {
             res.breakMode = "always";    # 'never' | 'always' | 'unhandled' | 'userUnhandled';
             res.details.message = ex.desc;
             res.details.typeName = ex.err;
-            res.details.stackTrace = sprintf("%N", ex);
+            res.details.stackTrace = sprintf("%Y", ex);
         } else {
             res.exceptionId = "N/A";
             res.breakMode = "never";

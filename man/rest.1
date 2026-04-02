@@ -1,0 +1,159 @@
+.\" rest.1 - man page for the Qore REST client CLI
+.\"
+.\" Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH REST 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+rest \- command-line REST client
+.SH SYNOPSIS
+.B rest
+[\fIoptions\fP]
+[\fImethod\fP]
+\fIURL\fP
+[\fIbody\fP]
+.SH DESCRIPTION
+\fBrest\fR is a command-line client for interacting with REST APIs.
+It supports Swagger/OpenAPI schema validation, multiple HTTP versions
+(1.0, 1.1, 2.0, 3.0), OAuth2 authentication, compression, and
+multiplexed I/O.
+.PP
+If no \fImethod\fP is given, GET is used by default.
+.SH OPTIONS
+.SS "Connection"
+.TP
+.BR \-A ", " \-\-http\-version =\fIversion\fP
+HTTP version: \fBauto\fP, \fB1.0\fP, \fB1.1\fP, \fB2.0\fP, or \fB3.0\fP.
+.TP
+.BR \-c ", " \-\-connection =\fIname\fP
+Use a named connection from the connection provider.
+.TP
+.BR \-P ", " \-\-proxy\-url =\fIURL\fP
+Use the specified HTTP proxy.
+.TP
+.BR \-T ", " \-\-timeout =\fIseconds\fP
+HTTP timeout in seconds.
+.TP
+.BR \-V ", " \-\-verify\-cert
+Require and verify X.509 server certificates.
+.SS "Authentication"
+.TP
+.BR \-u ", " \-\-userpass =\fIuser:password\fP
+HTTP basic authentication credentials.
+.TP
+.BR \-t ", " \-\-token =\fItoken\fP
+Authorization bearer token.
+.TP
+.BR \-y ", " \-\-token\-type =\fItype\fP
+Token type (default: \fBBearer\fP).
+.TP
+.B \-\-grant\-type =\fItype\fP
+OAuth2 grant type.
+.TP
+.B \-\-client\-id =\fIid\fP
+OAuth2 client ID.
+.TP
+.B \-\-client\-secret =\fIsecret\fP
+OAuth2 client secret.
+.TP
+.B \-\-token\-url =\fIURL\fP
+OAuth2 token endpoint URL.
+.SS "Data Format"
+.TP
+.BR \-S ", " \-\-serialization =\fItype\fP
+Data serialization: \fBauto\fP, \fBjson\fP, \fByaml\fP, \fBxml\fP,
+\fBrawxml\fP, or \fBurl\fP.
+.TP
+.BR \-e ", " \-\-send\-encoding [=\fItype\fP]
+Compress request body: \fBgzip\fP, \fBdeflate\fP, \fBbzip2\fP, or
+\fBidentity\fP.
+.TP
+.BR \-H ", " \-\-header =\fIname:value\fP
+Add a custom HTTP header (repeatable).
+.SS "Swagger/OpenAPI"
+.TP
+.BR \-s ", " \-\-swagger =\fIfile\fP
+Swagger 2.0 / OpenAPI schema file for request/response validation.
+.TP
+.BR \-p ", " \-\-base\-path =\fIpath\fP
+Override the base path from the Swagger schema.
+.TP
+.BR \-L ", " \-\-list
+List all paths and methods defined in the schema.
+.TP
+.BR \-X ", " \-\-lax\-parsing
+Use lax parsing for Swagger schema validation.
+.TP
+.BR \-x ", " \-\-example [=\fItype\fP]
+Generate an example request or response from the schema.
+.SS "Output"
+.TP
+.BR \-l ", " \-\-literal
+Show literal API calls.
+Repeat for more detail.
+.TP
+.BR \-R ", " \-\-reformat
+Reformat output for readability (use with \fB\-l+\fP).
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Save response body to \fIfile\fP.
+.TP
+.BR \-i ", " \-\-ignore\-errors
+Do not exit with an error on HTTP error responses.
+.TP
+.BR \-E ", " \-\-full\-exception
+Show full exception output on errors.
+.SS "Polling"
+.TP
+.BR \-g ", " \-\-ping =\fIURL\fP
+Ping the URL and exit.
+.TP
+.BR \-G ", " \-\-poll\-ping =\fIURL\fP
+Ping the URL using polling and exit.
+.SS "General"
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH METHODS
+.B GET
+(default),
+.BR PUT ,
+.BR POST ,
+.BR DELETE ,
+.BR PATCH ,
+.BR OPTIONS ,
+.BR HEAD .
+.SH EXAMPLES
+Simple GET request:
+.RS
+.B rest http://api.example.com/users
+.RE
+.PP
+POST with JSON body:
+.RS
+.B rest post http://api.example.com/users '{"name": "foo"}'
+.RE
+.PP
+Use a Swagger schema with verbose output:
+.RS
+.B rest \-s api.yaml \-lR get /users
+.RE
+.PP
+With bearer token authentication:
+.RS
+.B rest \-t mytoken123 http://api.example.com/data
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qdp (1),
+.BR qget (1),
+.BR saprest (1),
+.BR sfrest (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2013 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

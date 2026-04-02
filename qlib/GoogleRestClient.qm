@@ -83,7 +83,7 @@ module GoogleRestClient {
 
 GoogleRestClient rest = get_connection("my-google-connection");
 hash<auto> ans = rest.get("/calendar/users/me/calendarList");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section Googlerestclientrelnotes Release Notes

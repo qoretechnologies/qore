@@ -222,9 +222,14 @@ Requires: qore = %{version}-%{release}
 BuildArch: noarch
 
 %description misc-tools
-This package contains tool for working with:
- - REST APIs
- - SQL Databases
+This package contains tools for working with:
+ - REST APIs (rest, saprest, sfrest)
+ - SQL Databases (sqlutil, schema-reverse, qschema)
+ - Data Providers (qdp)
+ - Code Formatting (qfmt)
+ - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
+ - Language Server (qls)
+ - File Downloads (qget)
 
 %files misc-tools
 %defattr(-,root,root,-)
@@ -235,7 +240,24 @@ This package contains tool for working with:
 %{_bindir}/saprest
 %{_bindir}/sqlutil
 %{_bindir}/schema-reverse
+%{_bindir}/qschema
 %{_bindir}/qfmt
+%{_bindir}/qls
+%{_bindir}/qore-openapi3-gen
+%{_bindir}/qore-asyncapi-gen
+%{_bindir}/qore-extract-qm-metadata
+%{_mandir}/man1/qdp.1.*
+%{_mandir}/man1/qget.1.*
+%{_mandir}/man1/rest.1.*
+%{_mandir}/man1/sfrest.1.*
+%{_mandir}/man1/saprest.1.*
+%{_mandir}/man1/sqlutil.1.*
+%{_mandir}/man1/schema-reverse.1.*
+%{_mandir}/man1/qschema.1.*
+%{_mandir}/man1/qfmt.1.*
+%{_mandir}/man1/qls.1.*
+%{_mandir}/man1/qore-openapi3-gen.1.*
+%{_mandir}/man1/qore-asyncapi-gen.1.*
 
 %prep
 %setup -q
@@ -276,16 +298,20 @@ rm -rf $RPM_BUILD_ROOT
 /usr/bin/qdbg-vsc-adapter
 %if 0%{?_mandir:1}
 %{_mandir}/man1/qore.1.*
+%{_mandir}/man1/qdbg.1.*
 %else
 %if 0%{?rh_dist}
 %if %{?rh_dist} <= 5
 /usr/man/man1/qore.1.*
+/usr/man/man1/qdbg.1.*
 %else
 /usr/share/man/man1/qore.1.*
+/usr/share/man/man1/qdbg.1.*
 %endif
 %else
 %if 0%{?mdkversion}
 /usr/share/man/man1/qore.1.*
+/usr/share/man/man1/qdbg.1.*
 %endif
 %endif
 %endif

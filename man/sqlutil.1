@@ -1,0 +1,112 @@
+.\" sqlutil.1 - man page for sqlutil
+.\"
+.\" Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH SQLUTIL 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+sqlutil \- SQL utility and database schema tool
+.SH SYNOPSIS
+.B sqlutil
+[\fIoptions\fP]
+\fIconnection\fP
+.SH DESCRIPTION
+\fBsqlutil\fR is a comprehensive SQL utility for database schema analysis,
+alignment, data export/import, and DDL generation.
+It supports bulk operations and multiple database types.
+.SH OPTIONS
+.SS "Schema Alignment (requires \-T)"
+.TP
+.BR \-A ", " \-\-align\-all =\fItable\fP
+Align structure and data in the target database.
+.TP
+.BR \-D ", " \-\-align\-data =\fItable\fP
+Align data in the target database.
+.TP
+.BR \-s ", " \-\-align\-data\-strict
+Delete extra rows in the target when aligning data.
+.TP
+.BR \-a ", " \-\-align\-table =\fItable\fP
+Align table structure in the target database.
+.SS "Listing"
+.TP
+.BR \-L ", " \-\-list\-tables
+List all tables in the source database.
+.TP
+.B \-\-list =\fItype\fP
+List objects of the given type: \fBtables\fP, \fBviews\fP, \fBmviews\fP,
+\fBsequences\fP, \fBfunctions\fP, \fBprocedures\fP, \fBpackages\fP,
+\fBtypes\fP, \fBsynonyms\fP, \fBall\fP, \fBselectable\fP, or \fBcode\fP.
+.SS "DDL Dump"
+.TP
+.BR \-t ", " \-\-dump\-table =\fItable\fP
+Dump DDL for the named table (repeatable).
+.TP
+.BR \-S ", " \-\-dump\-sequence =\fIsequence\fP
+Dump DDL for the named sequence (repeatable).
+.TP
+.B \-\-dump =\fItype:name\fP
+Dump DDL for an object of the given type and name.
+.SS "Data Export/Import"
+.TP
+.B \-\-export =\fItable\fP
+Export table data to stdout in YAML format.
+.TP
+.B \-\-import =\fItable:file\fP
+Import YAML data from \fIfile\fP into \fItable\fP.
+.TP
+.B \-\-select =\fIhash\fP
+Select hash for filtering exported data.
+.SS "General"
+.TP
+.BR \-T ", " \-\-target\-ds =\fIdatasource\fP
+Target datasource for alignment operations.
+.TP
+.BR \-O ", " \-\-omit =\fIoption\fP
+Omit from DDL: \fBtriggers\fP, \fBforeign_constraints\fP, or
+\fBindexes\fP (repeatable).
+.TP
+.BR \-d ", " \-\-data\-tablespace =\fIname\fP
+Data tablespace name for DDL generation.
+.TP
+.BR \-i ", " \-\-index\-tablespace =\fIname\fP
+Index tablespace name for DDL generation.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH CONNECTION FORMAT
+.I driver:user/password@db[%host[:port]]
+.PP
+Or a named connection from the connection provider.
+.SH EXAMPLES
+List all tables:
+.RS
+.B sqlutil \-L oracle:user/pass@mydb
+.RE
+.PP
+Dump DDL for a table:
+.RS
+.B sqlutil \-t users pgsql:user/pass@mydb%localhost
+.RE
+.PP
+Export table data:
+.RS
+.B sqlutil \-\-export=users myconn > users.yaml
+.RE
+.PP
+Align table structure to target:
+.RS
+.B sqlutil \-a users \-T pgsql:user/pass@targetdb myconn
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qschema (1),
+.BR schema\-reverse (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2013 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

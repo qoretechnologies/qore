@@ -1,0 +1,113 @@
+.\" qschema.1 - man page for qschema
+.\"
+.\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QSCHEMA 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qschema \- database schema management tool
+.SH SYNOPSIS
+.B qschema
+\fIcommand\fP
+\fIconnection\fP
+\fIschema-file\fP
+[\fIoptions\fP]
+.PP
+.B qschema
+\fIcommand\fP
+\fIschema-file\fP
+[\fIoptions\fP]
+.SH DESCRIPTION
+\fBqschema\fR manages database schemas from YAML (\fB.ysm\fP) or JSON
+(\fB.jsm\fP) schema definition files.
+It can align a database to match a schema, show differences, validate
+schema files, and export existing database schemas.
+.SH COMMANDS
+.SS "Database Commands (require connection + schema-file)"
+.TP
+.B align
+Align the database to match the schema definition.
+.TP
+.B drop
+Drop all objects defined in the schema from the database.
+.TP
+.B diff
+Show differences between the database and the schema.
+.TP
+.B export
+Export the current database schema to a file.
+.SS "File-Only Commands (require schema-file only)"
+.TP
+.B validate
+Validate a schema file for correctness.
+.TP
+.B info
+Display information about the schema file.
+.SH OPTIONS
+.TP
+.B \-\-data\-ts =\fIname\fP
+Data tablespace name.
+.TP
+.B \-\-index\-ts =\fIname\fP
+Index tablespace name.
+.TP
+.B \-\-access\-level =\fIlevel\fP
+Access level: \fBuntrusted\fP, \fBtrusted\fP (default), or \fBadmin\fP.
+.TP
+.BR \-f ", " \-\-force
+Force the operation without confirmation.
+.TP
+.BR \-n ", " \-\-dry\-run
+Show the SQL that would be executed without running it.
+.TP
+.BR \-C ", " \-\-no\-color
+Disable color output.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Output file (for export).
+.TP
+.B \-\-format =\fIformat\fP
+Export format: \fByaml\fP (default) or \fBjson\fP.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit.
+.SH EXAMPLES
+Align a database with a schema:
+.RS
+.B qschema align mydb schema.ysm
+.RE
+.PP
+Show differences:
+.RS
+.B qschema diff mydb schema.ysm
+.RE
+.PP
+Dry-run alignment:
+.RS
+.B qschema align mydb schema.ysm \-n
+.RE
+.PP
+Export a database schema:
+.RS
+.B qschema export mydb \-o exported.ysm
+.RE
+.PP
+Validate a schema file:
+.RS
+.B qschema validate schema.ysm
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR sqlutil (1),
+.BR schema\-reverse (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2019 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

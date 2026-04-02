@@ -1865,7 +1865,7 @@ end";
             if (!qh.column_name)
                 return new MysqlPrimaryKey();
 
-            #printf("MysqlTable::getPrimaryKeyImpl(): %s: %N\n", getName(), qh);
+            #printf("MysqlTable::getPrimaryKeyImpl(): %s: %Y\n", getName(), qh);
             foreach string col in (qh.column_name)
                 rv{col} = columns{col};
 

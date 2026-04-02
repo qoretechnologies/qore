@@ -2859,12 +2859,12 @@ ws.setEventQueue();
                 return;
             }
             if (ex.err == "SOCKET-SSL-ERROR" || ex.err == "SOCKET-CLOSED") {
-                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %Y", ex.err, ex);
                 return;
             }
             # ignore HTTP2-ERROR when closing (HTTP/2 session already inactive)
             if (ex.err == "HTTP2-ERROR") {
-                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %N", ex.err, ex);
+                logArgs(LoggerLevel::DEBUG, "Ignoring WebSocket close error %s in sendClose(): %Y", ex.err, ex);
                 return;
             }
             rethrow;
@@ -2881,7 +2881,7 @@ ws.setEventQueue();
         # Connect first to determine HTTP version
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error connecting to %s: %Y",
                     (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
@@ -2979,7 +2979,7 @@ ws.setEventQueue();
         hash<auto> rh;
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/1.1 WebSocket handshake to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/1.1 WebSocket handshake to %s: %Y",
                     (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
@@ -3045,7 +3045,7 @@ ws.setEventQueue();
         *hash<auto> rh;
         {
             on_error {
-                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/2 WebSocket CONNECT to %s: %N",
+                logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR, "error in HTTP/2 WebSocket CONNECT to %s: %Y",
                     (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
@@ -3226,7 +3226,7 @@ ws.setEventQueue();
         {
             on_error {
                 logArgs(reconnect ? LoggerLevel::DEBUG : LoggerLevel::ERROR,
-                    "error in HTTP/3 WebSocket CONNECT to %s: %N", (url, info));
+                    "error in HTTP/3 WebSocket CONNECT to %s: %Y", (url, info));
                 hc = new HTTPClient(http_opts);
                 rethrow $1.err, sprintf("%s: info: %y", $1.desc, info{"request-uri", "response-uri"});
             }

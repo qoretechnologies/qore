@@ -1569,8 +1569,8 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         Websocket connections are identified by their HTTP connection ID as passed in \c "cx.id"
     */
     hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data b) {
-        #logDebug("websocket request: cx: %N", cx);
-        #logDebug("websocket request: hdr: %N", hdr);
+        #logDebug("websocket request: cx: %Y", cx);
+        #logDebug("websocket request: hdr: %Y", hdr);
 
         # RFC 8441 / RFC 9220: HTTP/2 or HTTP/3 WebSocket uses CONNECT with :protocol=websocket
         bool is_extended_connect = is_websocket_extended_connect(cx, hdr);

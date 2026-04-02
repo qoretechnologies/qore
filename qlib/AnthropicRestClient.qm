@@ -80,7 +80,7 @@ module AnthropicRestClient {
 
 AnthropicRestClient rest = get_connection("my-anthropic-connection");
 hash<auto> ans = rest.get("/models");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @par Streaming Example:

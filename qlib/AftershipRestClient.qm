@@ -75,7 +75,7 @@ module AftershipRestClient {
 
 AftershipRestClient rest = get_connection("my-aftership-connection");
 hash<auto> ans = rest.get("/tracking/2026-01/couriers");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section AftershipRestClientRelnotes Release Notes

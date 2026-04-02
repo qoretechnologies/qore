@@ -82,7 +82,7 @@ Cin7CoreRestClient cin7core({
     "apikey": ENV.CIN7CORE_API_KEY,
 });
 hash<auto> result = cin7core.get("/Customer?Page=1&Limit=10");
-printf("Customers: %N\n", result.body);
+printf("Customers: %Y\n", result.body);
     @endcode
 
     @section cin7corerestclientrelnotes Release Notes

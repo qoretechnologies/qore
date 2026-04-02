@@ -1387,8 +1387,8 @@ public namespace RestHandler {
          */
         hash<HttpResponseInfo> handleRequest(HttpListenerInterface listener, Socket s, hash<auto> cx, hash<auto> hdr,
                 *data b) {
-            #logDebug("REST DBG: cx: %N", cx);
-            #logDebug("REST DBG: hdr: %N", hdr);
+            #logDebug("REST DBG: cx: %Y", cx);
+            #logDebug("REST DBG: hdr: %Y", hdr);
 
             auto body = b;
 
@@ -1632,7 +1632,7 @@ public namespace RestHandler {
                 }
             }
 
-            #logDebug("REST DBG: rv: %N", rv);
+            #logDebug("REST DBG: rv: %Y", rv);
 
             if (exists rv.raw_response) {
                 delete rv."raw_response";

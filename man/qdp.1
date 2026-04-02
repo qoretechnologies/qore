@@ -1,0 +1,151 @@
+.\" qdp.1 - man page for the Qore Data Provider CLI
+.\"
+.\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QDP 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qdp \- command-line interface for Qore data providers
+.SH SYNOPSIS
+.B qdp
+[\fIoptions\fP]
+\fIprovider\fP
+[\fIcommand\fP]
+[\fIargs\fP]...
+.SH DESCRIPTION
+\fBqdp\fR is an interactive command-line tool for querying and managing data
+providers.
+It supports databases, REST APIs, services, and other data sources through
+Qore's DataProvider framework with DPQL (Data Provider Query Language).
+.PP
+Data providers can be specified as connection names, factory references with
+options, or application actions.
+Child providers can be navigated with \fB/\fP-separated paths.
+.SH OPTIONS
+.SS "Format and Output"
+.TP
+.BR \-J ", " \-\-json
+Use JSON for input and output.
+.TP
+.BR \-Y ", " \-\-yaml
+Use YAML for input and output.
+.TP
+.BR \-C ", " \-\-no\-color
+Disable color output.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.SS "Search and Query"
+.TP
+.BR \-q ", " \-\-dpql
+Use DPQL search expressions.
+.TP
+.BR \-x ", " \-\-expressions
+Use legacy search expressions.
+.TP
+.BR \-Q ", " \-\-dpql\-help
+Show DPQL syntax help and exit.
+.TP
+.BR \-l ", " \-\-limit =\fIN\fP
+Limit the number of results returned.
+.TP
+.BR \-O ", " \-\-offset =\fIN\fP
+Skip the first \fIN\fP results.
+.TP
+.BR \-b ", " \-\-bulk
+Use the bulk API for operations.
+.TP
+.BR \-T ", " \-\-timeout =\fIseconds\fP
+Set the operation timeout.
+.SS "Execution"
+.TP
+.BR \-d ", " \-\-dry\-run
+Preview changes without executing them.
+.TP
+.BR \-M ", " \-\-mapper =\fIspec\fP
+Field mapper (inline hash or file path).
+.TP
+.BR \-o ", " \-\-options =\fIspec\fP
+Data provider options.
+.TP
+.BR \-s ", " \-\-subtype =\fItype\fP
+Provider subtype.
+.TP
+.BR \-H ", " \-\-host =\fIhostname\fP
+Hostname for webhook listeners.
+.TP
+.BR \-m ", " \-\-module =\fImodule\fP
+Load an additional module (repeatable).
+.TP
+.BR \-S ", " \-\-servers
+Enable background servers.
+.TP
+.BR \-R ", " \-\-show\-required
+Show only required fields in output.
+.SS "Information"
+.TP
+.BR \-c ", " \-\-list\-connections
+List all known connections.
+.TP
+.BR \-f ", " \-\-list\-factories
+List all known data provider factories.
+.TP
+.BR \-t ", " \-\-list\-types
+List all known types.
+.TP
+.BR \-a ", " \-\-list\-apps
+List all known applications.
+.TP
+.BR \-I ", " \-\-create\-index
+Create provider indices.
+.TP
+.BR \-P ", " \-\-pipeline\-help
+Show pipeline syntax help.
+.TP
+.BR \-V ", " \-\-version
+Show version information.
+.TP
+.BR \-h ", " \-\-help
+Show help text.
+.SH COMMANDS
+Common commands include:
+\fBlist\fP, \fBinfo\fP, \fBsearch\fP, \fBcreate\fP, \fBupdate\fP,
+\fBdelete\fP, \fBupsert\fP, \fBdorequest\fP, \fBlisten\fP,
+\fBinteractive\fP, \fBpipeline\fP, and many more.
+.PP
+Run \fBqdp\fP without arguments or with \fB\-h\fP for the complete command list.
+.SH PROVIDER FORMATS
+.TP
+.I connection
+A named connection from the connection provider.
+.TP
+.IR factory { options }
+A data provider factory with inline options.
+.TP
+.BI @ app / action
+An application action.
+.TP
+.IB provider / child /...
+Navigate a provider hierarchy with path separators.
+.SH EXAMPLES
+List records from a database table:
+.RS
+.B qdp mydb/mytable list
+.RE
+.PP
+Search with DPQL:
+.RS
+.B qdp \-q mydb/mytable search 'name = "foo"'
+.RE
+.PP
+List available connections:
+.RS
+.B qdp \-c
+.RE
+.SH SEE ALSO
+.BR qore (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2019 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

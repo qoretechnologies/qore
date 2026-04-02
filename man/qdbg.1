@@ -1,0 +1,126 @@
+.\" qdbg.1 - man page for the Qore debugger family
+.\"
+.\" Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QDBG 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qdbg \- interactive debugger for Qore programs
+.br
+qdbg-remote \- remote debugger client for Qore
+.br
+qdbg-server \- debug server for remote Qore debugging
+.br
+qdbg-vsc-adapter \- VS Code Debug Adapter Protocol bridge
+.SH SYNOPSIS
+.B qdbg
+[\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
+.PP
+.B qdbg-remote
+[\fIoptions\fP] \fIurl\fP
+.PP
+.B qdbg-server
+[\fIoptions\fP] \fIprogram\fP [\fIprogram-args\fP]...
+.PP
+.B qdbg-vsc-adapter
+[\fIoptions\fP]
+.SH DESCRIPTION
+The \fBqdbg\fR family provides debugging support for Qore programs.
+.SS qdbg
+Interactive local debugger with command-line editing via linenoise.
+Supports breakpoints, stepping, variable inspection, and session
+save/restore.
+.SS qdbg-remote
+Connects to a running \fBqdbg-server\fR instance via WebSocket for
+remote debugging.
+.SS qdbg-server
+HTTP server providing a WebSocket debug endpoint.
+Run the target program under this server, then attach with
+\fBqdbg-remote\fR or a DAP-compatible IDE.
+.SS qdbg-vsc-adapter
+Debug Adapter Protocol (DAP) implementation for Visual Studio Code.
+Can launch programs locally or attach to a remote \fBqdbg-server\fR.
+.SH "QDBG OPTIONS"
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-D ", " \-\-define =\fIkey\fP[=\fIvalue\fP]
+Set a parse define.
+.TP
+.BR \-p ", " \-\-set\-parse\-option =\fIoption\fP
+Set a parse option (e.g., \fB\-pno\-database\fP).
+.TP
+.BR \-z ", " \-\-time\-zone =\fIzone\fP
+Set the time zone.
+.TP
+.BR \-y ", " \-\-history =\fIfile\fP
+Load command-line history from \fIfile\fP.
+Use \fB.\fP to disable history.
+.TP
+.BR \-s ", " \-\-session =\fIfile\fP
+Load a saved debug session from \fIfile\fP.
+.TP
+.B \-\-color
+Force color output.
+.TP
+.B \-\-no\-color
+Disable color output.
+.SH "QDBG-REMOTE OPTIONS"
+In addition to the options above:
+.TP
+.BR \-u ", " \-\-url =\fIurl\fP
+Debug server URL (\fBws://host:port/path\fP) or connection name.
+.TP
+.BR \-m ", " \-\-max\-redir =\fIN\fP
+Maximum number of HTTP redirects (default: 5).
+.TP
+.BR \-H ", " \-\-header =\fIkey=value\fP
+Custom HTTP header for the connection (repeatable).
+.TP
+.BR \-P ", " \-\-proxy =\fIURL\fP
+HTTP proxy URL.
+.TP
+.BR \-t ", " \-\-timeout =\fIms\fP
+Connection timeout in milliseconds.
+.TP
+.BR \-c ", " \-\-conn\-timeout =\fIms\fP
+Socket connection timeout in milliseconds.
+.TP
+.BR \-w ", " \-\-resp\-timeout =\fIms\fP
+WebSocket response timeout (default: 1500ms).
+.SH "QDBG-SERVER OPTIONS"
+.TP
+.BR \-l ", " \-\-listen =\fIaddr:port\fP
+Listen address and port (repeatable).
+Use a path starting with \fB/\fP for UNIX sockets.
+Default: dynamic port.
+.TP
+.BR \-p ", " \-\-path =\fIpath\fP
+URL path for the debug HTTP handler.
+.SH EXAMPLES
+Debug a program locally:
+.RS
+.B qdbg \-v myprogram.q \-\-arg1 value
+.RE
+.PP
+Start a debug server:
+.RS
+.B qdbg-server \-l 127.0.0.1:10000 \-p debug myprogram.q
+.RE
+.PP
+Connect to a remote debug server:
+.RS
+.B qdbg-remote localhost:10000/debug
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qls (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2017 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

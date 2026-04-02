@@ -1,0 +1,80 @@
+.\" schema-reverse.1 - man page for schema-reverse
+.\"
+.\" Copyright (C) 2015 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH SCHEMA-REVERSE 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+schema\-reverse \- reverse-engineer database schemas to Qore code
+.SH SYNOPSIS
+.B schema\-reverse
+\fIoptions\fP
+\fIconnection\fP
+.SH DESCRIPTION
+\fBschema\-reverse\fR connects to a database and generates Qore class
+definitions representing the database schema.
+It supports tables, sequences, views, materialized views, types, functions,
+procedures, and packages.
+.SH OPTIONS
+.TP
+.BR \-s ", " \-\-schema =\fIname\fP
+Export the full schema as a Qore class with the given \fIname\fP.
+Cannot be combined with specific object options.
+.TP
+.BR \-t ", " \-\-table =\fIpattern\fP
+Export matching tables.
+\fIpattern\fP can be an exact name, comma-separated list, or regex.
+.TP
+.BR \-q ", " \-\-seq =\fIpattern\fP
+Export matching sequences.
+.TP
+.BR \-y ", " \-\-type =\fIpattern\fP
+Export matching types.
+.TP
+.BR \-v ", " \-\-view =\fIpattern\fP
+Export matching views.
+.TP
+.BR \-m ", " \-\-mview =\fIpattern\fP
+Export matching materialized views.
+.TP
+.BR \-p ", " \-\-proc =\fIpattern\fP
+Export matching procedures.
+.TP
+.BR \-f ", " \-\-func =\fIpattern\fP
+Export matching functions.
+.TP
+.BR \-g ", " \-\-pkg =\fIpattern\fP
+Export matching packages.
+.TP
+.B \-\-verbose
+Enable verbose output.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit.
+.SH EXAMPLES
+Export the full schema:
+.RS
+.B schema\-reverse \-s=MySchema oracle:user/pass@mydb
+.RE
+.PP
+Export specific tables (regex pattern):
+.RS
+.B schema\-reverse \-t="workflows,.*step.*" oracle:user/pass@mydb
+.RE
+.PP
+Export all sequences:
+.RS
+.B schema\-reverse \-q=".*" pgsql:user/pass@mydb
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qschema (1),
+.BR sqlutil (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2015 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

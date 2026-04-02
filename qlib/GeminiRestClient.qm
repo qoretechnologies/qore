@@ -76,7 +76,7 @@ module GeminiRestClient {
 
 GeminiRestClient rest({"apikey": api_key});
 hash<auto> ans = rest.get("v1beta/models");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @par Streaming Example:

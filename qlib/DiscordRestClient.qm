@@ -81,7 +81,7 @@ module DiscordRestClient {
 
 DiscordRestClient rest = get_connection("my-discord-connection");
 hash<auto> ans = rest.get("/calendar/users/me/calendarList");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section discordrestclientrelnotes Release Notes

@@ -362,7 +362,7 @@ void qore_cleanup() {
     // delete all loadable modules
     QMM.cleanup();
 
-#ifdef HAVE_MPFR_BUILDOPT_TLS_T
+#ifdef HAVE_MPFR_BUILDOPT_TLS_P
     // ensure MPFR caches are released for the main thread
     mpfr_free_cache2(static_cast<mpfr_free_cache_t>(MPFR_FREE_LOCAL_CACHE | MPFR_FREE_GLOBAL_CACHE));
     mpfr_free_pool();

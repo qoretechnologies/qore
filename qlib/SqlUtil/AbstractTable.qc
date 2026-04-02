@@ -6478,7 +6478,7 @@ list<auto> l = table.getAlignSql(table2);
             # rename column in indexes
             foreach AbstractIndex ix in (indexes.iterator()) {
                 if (ix.columns.hasKey(key)) {
-                    #printf("%s.%s: col %y %N\n", getName(), ix.name, key, ix.columns);
+                    #printf("%s.%s: col %y %Y\n", getName(), ix.name, key, ix.columns);
                     AbstractColumn rc = ix.columns{key};
                     rc.name = value;
                     ix.columns.renameKey(key, value);
@@ -6684,7 +6684,7 @@ list<auto> l = table.getAlignSql(table2);
                 if (!primaryKey.equal(t.primaryKey)) {
                     # see if pk has the same definition but a different name; if so, it will be renamed later
                     if (primaryKey.getName() == t.primaryKey.getName() || primaryKey.matchKeys(t.primaryKey)) {
-                        #printf("pk1: %N\nXXXXXXX\npk2: %N\n", primaryKey, t.primaryKey);
+                        #printf("pk1: %Y\nXXXXXXX\npk2: %Y\n", primaryKey, t.primaryKey);
                         l += AbstractDatabase::doCallback(opt, primaryKey.getDropSql(getSqlName()),
                             AbstractDatabase::AC_Drop, "primary key", t.primaryKey.getName(), name);
                         # clear supporting constraint from index in the template since we've dropped the PK constraint

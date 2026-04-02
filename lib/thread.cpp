@@ -2684,7 +2684,7 @@ void register_thread(int tid, pthread_t ptid, QoreProgram* p, bool foreign, int 
 }
 
 static void qore_thread_cleanup(void* n = nullptr) {
-#ifdef HAVE_MPFR_BUILDOPT_TLS_T
+#ifdef HAVE_MPFR_BUILDOPT_TLS_P
     // only call mpfr_free_cache if MPFR uses TLS
     if (mpfr_buildopt_tls_p()) {
         mpfr_free_cache();
@@ -3379,7 +3379,7 @@ void delete_qore_threads() {
     thread_list.deleteDataRelease(initial_thread);
     initial_thread = -1;
 
-#ifdef HAVE_MPFR_BUILDOPT_TLS_T
+#ifdef HAVE_MPFR_BUILDOPT_TLS_P
     // only call mpfr_free_cache if MPFR uses TLS
     if (mpfr_buildopt_tls_p())
         mpfr_free_cache();

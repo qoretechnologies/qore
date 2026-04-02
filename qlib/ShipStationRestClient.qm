@@ -78,7 +78,7 @@ module ShipStationRestClient {
 
 ShipStationRestClient shipstation({"api_key": ENV.SHIPSTATION_API_KEY, "api_secret": ENV.SHIPSTATION_API_SECRET});
 hash<auto> result = shipstation.get("/stores");
-printf("Stores: %N\n", result.body);
+printf("Stores: %Y\n", result.body);
     @endcode
 
     @section shipstationrestclientrelnotes Release Notes

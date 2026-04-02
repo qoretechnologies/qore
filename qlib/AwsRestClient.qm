@@ -86,7 +86,7 @@ hash<auto> opts = {
 
 AwsRestClient rest(opts);
 hash<auto> ans = rest.get(...);
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section Awsrestclientrelnotes Release Notes

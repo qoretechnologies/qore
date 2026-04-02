@@ -1,0 +1,131 @@
+.\" sfrest.1 - man page for sfrest
+.\"
+.\" Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH SFREST 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+sfrest \- Salesforce.com REST client
+.SH SYNOPSIS
+.B sfrest
+[\fIoptions\fP]
+[\fImethod\fP]
+\fIpath\fP|\fIURL\fP
+[\fIbody\fP]
+.SH DESCRIPTION
+\fBsfrest\fR is a command-line REST client for Salesforce.com APIs.
+It supports OAuth2 authentication, the Bulk API, compression, and
+multiple data serialization formats.
+.PP
+If no \fImethod\fP is given, GET is used by default.
+.SH OPTIONS
+.SS "Authentication (or use environment variables)"
+.TP
+.BR \-c ", " \-\-connection =\fIname\fP
+Salesforce connection name from the connection provider.
+.TP
+.BR \-i ", " \-\-client_id =\fIkey\fP
+Salesforce consumer key.
+Alternatively set \fB$SALESFORCE_CONSUMER_KEY\fP.
+.TP
+.BR \-s ", " \-\-client_secret =\fIsecret\fP
+Salesforce consumer secret.
+Alternatively set \fB$SALESFORCE_CONSUMER_SECRET\fP.
+.TP
+.BR \-u ", " \-\-username =\fIuser\fP
+Salesforce username.
+Alternatively set \fB$SALESFORCE_USER\fP.
+.TP
+.BR \-p ", " \-\-password =\fIpassword\fP
+Salesforce password.
+Alternatively set \fB$SALESFORCE_PASS\fP.
+.SS "Bulk API"
+.TP
+.BR \-b ", " \-\-bulk\-api
+Use the Salesforce Bulk REST API.
+.TP
+.BR \-j ", " \-\-job\-command =\fIcommand\fP
+Bulk API with batch job serialization.
+.SS "Conditional Requests"
+.TP
+.BR \-m ", " \-\-if\-modified\-since =\fIdate\fP
+Set the If-Modified-Since header.
+.TP
+.BR \-n ", " \-\-if\-unmodified\-since =\fIdate\fP
+Set the If-Unmodified-Since header.
+.SS "Request Options"
+.TP
+.BR \-e ", " \-\-send\-encoding [=\fItype\fP]
+Compress request body: \fBgzip\fP, \fBdeflate\fP, \fBbzip2\fP, or
+\fBidentity\fP.
+.TP
+.BR \-H ", " \-\-header =\fIname:value\fP
+Add a custom HTTP header (repeatable).
+.TP
+.BR \-P ", " \-\-proxy\-url =\fIURL\fP
+Use the specified HTTP proxy.
+.TP
+.BR \-S ", " \-\-serialization =\fItype\fP
+Data serialization: \fBauto\fP, \fBjson\fP, \fByaml\fP, \fBxml\fP,
+\fBrawxml\fP, or \fBurl\fP.
+.TP
+.BR \-t ", " \-\-timeout =\fIseconds\fP
+HTTP timeout in seconds.
+.TP
+.BR \-U ", " \-\-oauth\-token\-url =\fIURL\fP
+OAuth2 token endpoint URL.
+.SS "Output"
+.TP
+.BR \-l ", " \-\-literal
+Show literal API calls (repeat for more detail).
+.TP
+.BR \-R ", " \-\-reformat
+Reformat output for readability.
+.TP
+.BR \-E ", " \-\-full\-exception
+Show full exception output on errors.
+.TP
+.BR \-W ", " \-\-show\-url
+Show the API URL and exit.
+.TP
+.BR \-x ", " \-\-show\-examples
+Show usage examples and exit.
+.SS "General"
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH ENVIRONMENT
+.TP
+.B SALESFORCE_CONSUMER_KEY
+Consumer key (alternative to \fB\-i\fP).
+.TP
+.B SALESFORCE_CONSUMER_SECRET
+Consumer secret (alternative to \fB\-s\fP).
+.TP
+.B SALESFORCE_USER
+Username (alternative to \fB\-u\fP).
+.TP
+.B SALESFORCE_PASS
+Password (alternative to \fB\-p\fP).
+.SH EXAMPLES
+Query an account:
+.RS
+.B sfrest sobjects/Account/0012A000022K3zxQAC
+.RE
+.PP
+SOQL query:
+.RS
+.B sfrest query?q="select id from account where name like 'test_%'"
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR rest (1),
+.BR saprest (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2016 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

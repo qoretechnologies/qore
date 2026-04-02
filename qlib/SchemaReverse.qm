@@ -90,7 +90,7 @@ on_exit ds.commit();
 TableReverse t = SchemaReverse::get_object("table", ds, "schema_reverse_t1");
 string str = t.toString();
 
-printf("%N\n", str);
+printf("%Y\n", str);
 @endcode
 
 The output will be:
@@ -529,7 +529,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
 
             # PK
             AbstractPrimaryKey pk = t.getPrimaryKey();
-            #printf("PK: %N\n", pk);
+            #printf("PK: %Y\n", pk);
             if (!pk.empty()) {
                 ret.primary_key = ( "name" : pk.getName(),
                                     "columns" : pk.keys(),
@@ -565,7 +565,7 @@ class <X_SCHEMA_NAME> inherits AbstractSchema {
 
         any columnToQore(AbstractColumn c) {
             hash ret = {};
-            #printf("%N\n", c);
+            #printf("%Y\n", c);
             switch (c.native_type) {
                 case "varchar":
                 case "varchar2":

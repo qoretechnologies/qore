@@ -313,7 +313,7 @@ StaticTextTemplateBase::add(p, "/html/index.qhtml", qhtml, "t0");
             };
         }
 
-        #printf("DBG l: %N\n", l);
+        #printf("DBG l: %Y\n", l);
 
         # now process and rebuild source
         src = "";

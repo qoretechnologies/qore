@@ -1706,7 +1706,8 @@ install(DIRECTORY include/qore
         PATTERN qore-version.h EXCLUDE)
 install(FILES ${CMAKE_BINARY_DIR}/include/qore/qore-version.h
         DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore)
-install(FILES qore.1
+file(GLOB QORE_MAN_PAGES man/*.1)
+install(FILES ${QORE_MAN_PAGES}
         DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1)
 install(FILES
             doxygen/Doxyfile.in

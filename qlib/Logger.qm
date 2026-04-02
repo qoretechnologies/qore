@@ -221,7 +221,7 @@ module Logger {
 
     When using asynchronous logging with queues, if log messages are generated faster than they can be processed,
     the queue can grow without limit, potentially causing out-of-memory conditions. This is especially problematic
-    when log messages contain large serialized data (such as context hashes formatted with \c %%N).
+    when log messages contain large serialized data (such as context hashes formatted with \c %%Y).
 
     @par Enabling Backpressure
 
