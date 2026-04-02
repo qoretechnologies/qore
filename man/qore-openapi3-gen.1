@@ -1,0 +1,56 @@
+.\" qore-openapi3-gen.1 - man page for qore-openapi3-gen
+.\"
+.\" Copyright (C) 2024 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE-OPENAPI3-GEN 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qore\-openapi3\-gen \- generate OpenAPI 3.0 specifications from Qore sources
+.SH SYNOPSIS
+.B qore\-openapi3\-gen
+[\fIoptions\fP]
+\fIsource-file\fP...
+.SH DESCRIPTION
+\fBqore\-openapi3\-gen\fR parses \fB@SCHEMA\fP blocks in Qore source files
+and generates an OpenAPI 3.0.3 specification describing the REST API endpoints.
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Write output to \fIfile\fP (default: stdout).
+.TP
+.BR \-f ", " \-\-format =\fIformat\fP
+Output format: \fByaml\fP (default) or \fBjson\fP.
+.TP
+.BR \-t ", " \-\-title =\fItitle\fP
+API title (default: \fBAPI\fP).
+.TP
+.BR \-V ", " \-\-api\-version =\fIversion\fP
+API version (default: \fB1.0.0\fP).
+.TP
+.BR \-d ", " \-\-description =\fItext\fP
+API description.
+.TP
+.BR \-s ", " \-\-server =\fIURL\fP
+Server URL (repeatable).
+.TP
+.BR \-b ", " \-\-base\-path =\fIpath\fP
+Base path prefix for all endpoints.
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH EXAMPLES
+Generate an OpenAPI spec:
+.RS
+.B qore\-openapi3\-gen \-t 'My API' \-V 2.0 \-o api.yaml src/*.qclass
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qore\-asyncapi\-gen (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2024 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

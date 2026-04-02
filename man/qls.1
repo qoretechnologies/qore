@@ -1,0 +1,35 @@
+.\" qls.1 - man page for the Qore Language Server
+.\"
+.\" Copyright (C) 2017 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QLS 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qls \- Qore Language Server (LSP)
+.SH SYNOPSIS
+.B qls
+.SH DESCRIPTION
+\fBqls\fR is a Language Server Protocol (LSP) implementation for Qore.
+It provides IDE features such as code completion, diagnostics,
+go-to-definition, hover information, and symbol search to editors and
+IDEs that support the LSP protocol.
+.PP
+\fBqls\fR communicates over stdin/stdout using the LSP JSON-RPC protocol
+and is typically started automatically by an editor or IDE plugin.
+.SH USAGE
+\fBqls\fR is normally configured as the language server in your editor's
+Qore extension.
+It should not be run manually.
+.PP
+For VS Code, install the Qore extension which manages \fBqls\fR
+automatically.
+For other editors (Neovim, Emacs, etc.), configure the LSP client
+to run \fBqls\fR as the command for Qore files.
+.SH SEE ALSO
+.BR qore (1),
+.BR qdbg (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2017 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

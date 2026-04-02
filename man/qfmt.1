@@ -1,0 +1,77 @@
+.\" qfmt.1 - man page for the Qore code formatter
+.\"
+.\" Copyright (C) 2026 Qore Technologies, s.r.o.
+.\"
+.TH QFMT 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qfmt \- canonical code formatter for Qore
+.SH SYNOPSIS
+.B qfmt
+[\fIoptions\fP]
+[\fIfile\fP]...
+.SH DESCRIPTION
+\fBqfmt\fR formats Qore source code according to the canonical Qore coding
+style.
+It supports formatting in-place, showing a unified diff, or checking whether
+files are already formatted (for CI pipelines).
+.PP
+When no files are given and stdin is not a terminal, \fBqfmt\fR reads from
+stdin and writes the formatted output to stdout.
+.PP
+The following file extensions are processed:
+\fB.qc\fP, \fB.qm\fP, \fB.qore\fP, \fB.qr\fP, \fB.qsd\fP, \fB.qfd\fP,
+\fB.qrd\fP, \fB.qtest\fP.
+.SH OPTIONS
+.TP
+.BR \-i ", " \-\-in\-place
+Format files in-place (overwrite the originals).
+.TP
+.BR \-d ", " \-\-diff
+Show a unified diff of the changes instead of the formatted output.
+.TP
+.BR \-c ", " \-\-check
+Exit with status 0 if all files are already formatted, or 1 if changes
+are needed.
+Useful for CI checks.
+.TP
+.B \-\-stdin
+Read from stdin (this is the default when no files are given and stdin
+is not a terminal).
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH EXIT STATUS
+.TP
+.B 0
+All files are already formatted (with \fB\-c\fP), or formatting succeeded.
+.TP
+.B 1
+One or more files need formatting (with \fB\-c\fP), or an error occurred.
+.SH EXAMPLES
+Format a file in-place:
+.RS
+.B qfmt \-i mymodule.qm
+.RE
+.PP
+Show what would change:
+.RS
+.B qfmt \-d qlib/MyModule/*.qc
+.RE
+.PP
+Check formatting in CI:
+.RS
+.B qfmt \-c qlib/
+.RE
+.PP
+Format stdin:
+.RS
+.B cat myfile.q | qfmt
+.RE
+.SH SEE ALSO
+.BR qore (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

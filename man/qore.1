@@ -1,0 +1,224 @@
+.\" qore.1 - man page for the Qore programming language interpreter
+.\"
+.\" Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qore \- interpreter for the Qore programming language
+.SH SYNOPSIS
+.B qore
+[\fIoption\fP]...
+[\fIprogram\-file\fP]
+[\fIprogram\-args\fP]...
+.SH DESCRIPTION
+\fBQore\fR is a modular, multi-threaded scripting language with optional strong
+typing, procedural and object-oriented features, built-in SQL integration,
+HTTP/2 and HTTP/3 support, and a clean syntax designed for readability.
+.PP
+When invoked without a program file and standard input is a terminal,
+\fBqore\fR starts an interactive REPL (read-eval-print loop).
+When a program file is given, it is parsed and executed.
+The \fB\-e\fR option allows executing code supplied on the command line.
+.SH OPTIONS
+.SS "General Options"
+.TP
+.BR \-h ", " \-\-help
+Display usage information and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version, build, and library information, then exit.
+.TP
+.B \-\-short\-version
+Show only the version number and exit.
+.TP
+.B \-\-version\-animation
+Show an animated 3D version logo and exit.
+.TP
+.BR \-c ", " \-\-charset =\fIencoding\fP
+Set the default character set encoding for the program.
+.TP
+.BR \-D ", " \-\-define =\fIkey\fP[=\fIvalue\fP]
+Set a parse define.
+Multiple \fB\-D\fP flags may be given.
+.TP
+.BR \-e ", " \-\-exec =\fIcode\fP
+Execute the Qore program given as a string on the command line.
+.TP
+.BR \-l ", " \-\-load =\fImodule\fP
+Load the named module immediately at startup.
+.TP
+.BR \-m ", " \-\-show\-module\-errors
+Display errors encountered while loading and initializing modules.
+.TP
+.BR \-p ", " \-\-set\-parse\-option =\fIoption\fP
+Set a parse option (e.g., \fB\-penable\-debug\fP, \fB\-pno\-database\fP).
+Use \fB\-H\fP to list available parse options.
+.TP
+.BR \-x ", " \-\-exec\-class [=\fIclassname\fP]
+Instantiate a class with the same name as the file (or \fIclassname\fP
+if given).
+Implies \fB\-\-no\-top\-level\fP.
+.TP
+.BR \-X ", " \-\-eval =\fIexpression\fP
+Evaluate a Qore expression and display the result.
+.TP
+.BR \-z ", " \-\-time\-zone =\fIzone\fP
+Set the time zone.
+\fIzone\fP is either a region name (e.g., \fBEurope/Prague\fP)
+or a UTC offset like \fB+02:00\fP.
+.TP
+.BR \-b ", " \-\-disable\-signals
+Disable signal handling (required for running under valgrind).
+.TP
+.BR \-g ", " \-\-disable\-gc
+Disable the garbage collector for deterministic collection.
+.TP
+.BR \-r ", " \-\-warnings\-are\-errors
+Treat warnings as errors.
+.TP
+.BR \-W ", " \-\-enable\-all\-warnings
+Enable all non-strict warnings (recommended).
+.TP
+.B \-\-strict\-warnings
+Enable strict warnings (ambiguous overloads/calls).
+.TP
+.BR \-w ", " \-\-enable\-warning =\fIwarning\fP
+Enable a specific warning by name.
+.TP
+.BR \-i ", " \-\-list\-warnings
+List all available warning names and exit.
+.TP
+.BR \-o ", " \-\-list\-parse\-options
+List all parse option names and exit.
+.TP
+.BR \-H ", " \-\-parse\-option\-help
+Display descriptions of all parse options and exit.
+.TP
+.B \-\-lgpl\fR, \fB\-\-mit
+Set the library license flag to LGPL or MIT.
+GPL-licensed modules cannot be loaded when this is set.
+.SS "Module and Path Information"
+.TP
+.B \-\-module\-dir
+Show the binary module directory and exit.
+.TP
+.B \-\-user\-module\-dir
+Show the user module directory and exit.
+.TP
+.B \-\-module\-path
+Show the full module search path and exit.
+.TP
+.B \-\-module\-api
+Show the compatible module API version and exit.
+.TP
+.B \-\-module\-apis
+Show all supported module API versions and exit.
+.TP
+.B \-\-latest\-module\-api
+Show the most recent module API version and exit.
+.SS "Character Set Information"
+.TP
+.BR \-s ", " \-\-show\-charsets
+Display the list of known character set encodings.
+.TP
+.BR \-a ", " \-\-show\-aliases
+Display the list of character set aliases.
+.TP
+.BR \-B ", " \-\-show\-build\-options
+Show Qore build options and exit.
+.SS "REPL Options"
+.TP
+.B \-\-interactive
+Force interactive REPL mode even when stdin is not a terminal.
+.TP
+.B \-\-no\-repl
+Disable the automatic REPL when stdin is a terminal.
+.SS "Parse Options"
+These options restrict what constructs are legal in the parsed program,
+enabling sandboxing.
+.TP
+.BR \-G ", " \-\-enable\-debug
+Enable @debug and @assert statements.
+.TP
+.BR \-M ", " \-\-modern
+Turn on recommended parse options.
+.TP
+.B \-\-no\-global\-vars
+Make global variable definitions illegal.
+.SS "Debugging Options"
+.TP
+.BR \-d ", " \-\-debug =\fIlevel\fP
+Set the internal debugging level (higher = more output).
+Only available in debug builds.
+.TP
+.BR \-t ", " \-\-trace
+Enable function call tracing.
+Only available in debug builds.
+.TP
+.B \-\-only\-first\-exception
+Stop after the first parsing exception instead of showing all.
+.SH ENVIRONMENT
+.TP
+.B QORE_MODULE_DIR
+Colon-separated list of directories to search for Qore modules,
+prepended to the default module path.
+.TP
+.B QORE_INCLUDE_DIR
+Colon-separated list of directories to search for include files.
+.TP
+.B QORE_CHARSET
+Default character encoding if not specified with \fB\-c\fP.
+.TP
+.B TZ
+Fallback time zone if not specified with \fB\-z\fP.
+.SH EXIT STATUS
+\fBqore\fR returns 0 on success.
+A non-zero exit status indicates an error occurred during parsing or execution,
+or reflects the value passed to \fBexit()\fP by the program.
+.SH FILES
+.TP
+.I /usr/local/bin/qore
+The \fBqore\fP interpreter (default installation path).
+.SH EXAMPLES
+Run a script:
+.RS
+.B qore myprog.q
+.RE
+.PP
+Evaluate an expression:
+.RS
+.B qore \-X '2 + 2'
+.RE
+.PP
+Execute inline code:
+.RS
+.B qore \-e 'printf("hello world\\n");'
+.RE
+.PP
+Start an interactive REPL:
+.RS
+.B qore
+.RE
+.SH SEE ALSO
+.BR qdp (1),
+.BR qget (1),
+.BR qls (1),
+.BR rest (1),
+.BR qfmt (1),
+.BR qdbg (1),
+.BR qschema (1),
+.BR sqlutil (1),
+.BR schema\-reverse (1)
+.PP
+Full documentation: \fIhttps://qore.org/\fP
+.PP
+GitHub: \fIhttps://github.com/qoretechnologies/qore\fP
+.SH AUTHORS
+David Nichols and the Qore Technologies team.
+.SH COPYRIGHT
+Copyright \(co 2003 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT, LGPL 2+, or GPL 2+.
+See README\-LICENSE for details.
+.SH BUGS
+Report bugs at \fIhttps://github.com/qoretechnologies/qore/issues\fP.
