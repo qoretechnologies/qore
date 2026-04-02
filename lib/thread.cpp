@@ -1303,6 +1303,7 @@ QoreHashNode* thread_get_local_vars(int frame, ExceptionSink* xsink) {
         tlpd->cvstack.getLocalVars(**rv, frame, xsink);
         if (*xsink)
             return nullptr;
+    } else {
     }
     return rv.release();
 }

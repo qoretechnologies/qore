@@ -2893,7 +2893,7 @@ void UserVariantBase::attemptJITRecompilation() const {
 }
 
 QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, bool caller_has_frame_boundary) const {
     assert(pgm);
     // Note: statements can be null for AOT-only functions (deserialized from binary metadata)
     // assert(statements);
@@ -3078,8 +3078,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // Also handles JIT→IR fallback when cached_jit_fn was invalidated by recompilation
     if ((tier == TIER_IR || (tier == TIER_JIT && !jit_fn && !cached_aot_fn)) && cached_ir) {
         // Push frame boundary for debugger introspection (get_local_vars, etc.)
-        // AST path does this via UserVariantExecHelper; IR path needs it explicitly.
-        ThreadFrameBoundaryHelper tfbh(true);
+        // Only when the caller hasn't already pushed one (eval() does via
+        // UserVariantExecHelper; callTieredPublic() does not).
+        ThreadFrameBoundaryHelper tfbh(!caller_has_frame_boundary);
 
         if (self && signature.selfid) {
             signature.selfid->instantiateSelf(self);
@@ -3292,12 +3293,12 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // The AOT context is valid because registerPrecompiledAOTFunction()
             // set it up during program initialization.
             if (has_aot) {
-                return evalTiered(name, argv, self, xsink);
+                return evalTiered(name, argv, self, xsink, true);
             }
             // IR-only dispatch: closure variants reconstructed from AOT binary
             // with cached IR but no AST body and no native AOT function
             if (!statements && cached_ir) {
-                return evalTiered(name, argv, self, xsink);
+                return evalTiered(name, argv, self, xsink, true);
             }
             // Tiered promotion for JIT/IR/tiered modes with %modern code.
             // Skip if function already has an AOT fn registered — the AOT path
@@ -3307,7 +3308,7 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
                     && (mode == QEM_TIERED || mode == QEM_JIT || mode == QEM_IR)) {
                 const QoreParseOptions& po = pgm->getParseOptions();
                 if ((po & QoreParseOptions(PO_MODERN)) == QoreParseOptions(PO_MODERN)) {
-                    return evalTiered(name, argv, self, xsink);
+                    return evalTiered(name, argv, self, xsink, true);
                 }
             }
         }

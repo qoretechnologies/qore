@@ -679,7 +679,7 @@ protected:
 
     //! Tiered compilation dispatch path
     DLLLOCAL QoreValue evalTiered(const char* name, ReferenceHolder<QoreListNode>& argv, QoreObject* self,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, bool caller_has_frame_boundary = false) const;
     //! Attempt to lower to IR; called via std::call_once
     DLLLOCAL void attemptIRLowering(const char* name) const;
 
