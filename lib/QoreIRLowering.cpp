@@ -1003,8 +1003,10 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
             list_val = builder.createConstNothing(stmt->loc)->result;
         }
 
-        // Create the iterator
-        auto* iter_inst = builder.createIteratorCreate(list_val, foreach_stmt->getIteratorFunc(), stmt->loc);
+        // Create the iterator.  Pass nullptr for iterator_func to use the generic
+        // runtime path.  The parse-tree iterator_func pointer is a compile-time artifact
+        // that doesn't exist at runtime in AOT-compiled binaries.
+        auto* iter_inst = builder.createIteratorCreate(list_val, nullptr, stmt->loc);
         QoreIRValue iter_val = iter_inst->result;
 
         // Create basic blocks for the loop structure AFTER evaluating the list
