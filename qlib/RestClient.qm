@@ -4955,9 +4955,9 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
             # notifier here; doStartConnecting() will get a fresh one after the refresh
             call_object_method(rcio, "startConnectionAsync");
         } else {
-            # Submit the ping now (safe to block on waitForReady() from the constructor
-            # thread; by the time continuePoll() is first called, the connection is ready)
-            doSubmitPing();
+            # Start connecting asynchronously — never block in the constructor.
+            # doSubmitPing() is called by continuePoll() once the connection is ready.
+            doStartConnecting();
         }
     }
 
@@ -5107,13 +5107,13 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     }
 
     #! Checks connection readiness and either submits the ping or enters SPS_CONNECTING
-    /** Called after OAuth2 refresh completes to bridge the gap between token refresh and
-        ping submission.  If the connection is already ready, delegates to doSubmitPing()
-        directly.  If not, registers a connection-readiness EventNotifier and sets state to
+    /** Called from the constructor (always) and after OAuth2 refresh completes.
+        If the connection is already ready, delegates to doSubmitPing() directly.
+        If not, registers a connection-readiness EventNotifier and sets state to
         SPS_CONNECTING so continuePoll() can poll without blocking.
 
-        @note The connection may have been pre-warmed in the constructor concurrently with
-        the OAuth2 refresh, so it is often already ready by the time this is called.
+        @note Never blocks — this is safe to call from any context including a task
+        thread spawned by the PollingConnectionMonitor.
     */
     private doStartConnecting() {
         connection_ready_notifier = call_object_method(rcio, "startConnectionAsync");
@@ -5131,7 +5131,7 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
         when the response arrives.  continuePoll() then calls Future::get() non-blockingly.
 
         @note Safe to call from continuePoll(): connection is always established before
-        this method is called (either directly in constructor, or via SPS_CONNECTING wait).
+        this method is called (via SPS_CONNECTING wait in doStartConnecting()).
     */
     private doSubmitPing() {
         state = SPS_IO_WAITING;

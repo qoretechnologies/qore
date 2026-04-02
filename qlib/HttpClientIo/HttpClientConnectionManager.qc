@@ -1115,6 +1115,7 @@ public class HttpClientConnectionManager {
         return err == "QUIC-HTTP3-ERROR"
             || err == "QUIC-READ-ERROR"
             || err == "QUIC-RECV-ERROR"
+            || err == "QUIC-SEND-ERROR"
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
@@ -1297,7 +1298,9 @@ public class HttpClientConnectionManager {
             cacheProtocol(key, "h1");
         } else if (url_info.protocol == "https") {
             bool is_h3_err = err == "HTTP3-CONNECT-ERROR" || err == "HTTP3-STATE-ERROR"
-                || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR";
+                || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR"
+                || err == "QUIC-SEND-ERROR" || err == "QUIC-READ-ERROR"
+                || err == "QUIC-RECV-ERROR";
             # HTTPCLIENT-CONNECT-ERROR is raised when the connection closes with an error
             # while waiting for readiness (waitForReady()).  When H3 is currently cached
             # (from a prior Alt-Svc response), this means the QUIC connection failed —

@@ -628,10 +628,8 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
         if (result.ex) {
             if (result.ex.err == "SOCKET-TIMEOUT") {
-                handlePingTimeoutIntern(name, delta);
-                # handlePingTimeoutIntern does not clean up spop/start
-                delete cache{name}.spop;
-                cache{name}.start = now_us();
+                # Delegate to virtual handlePingTimeout() so subclasses can observe timeouts
+                handlePingTimeout(name, delta);
             } else {
                 # handlePingFailed cleans up spop and sets start
                 handlePingFailed(name, delta, result.ex);
