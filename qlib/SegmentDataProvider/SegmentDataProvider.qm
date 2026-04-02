@@ -1,0 +1,596 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SegmentDataProvider module definition
+
+/*  SegmentDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SegmentRestClient
+
+module SegmentDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Twilio Segment services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new SegmentDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SegmentDataProvider::AppName,
+            "display_name": "Segment",
+            "short_desc": "Twilio Segment CDP services",
+            "desc": "Twilio Segment is a Customer Data Platform (CDP) that helps you collect, clean, and "
+                "control your customer data.\n\n"
+                "**Key Features:**\n"
+                "- Manage data collection sources\n"
+                "- Configure integration destinations\n"
+                "- Connect data warehouses\n"
+                "- Define and enforce tracking plans\n"
+                "- Organize resources with labels",
+            "scheme": "segment",
+            "logo": SegmentLogo,
+            "logo_file_name": "segment-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Analytics, DataProvider::AppGroup::ApiIntegration),
+        });
+
+        # ==================== SOURCES ====================
+
+        # list-sources action (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/sources",
+            "action": "list-sources",
+            "groups": "Sources",
+            "display_name": "List Sources",
+            "short_desc": "List sources with cursor-based pagination",
+            "desc": "Retrieve a list of sources from Segment with cursor-based pagination.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SegmentSourcesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("SourceList", new SegmentSourceDataType(), True);
+            },
+            "options": {
+                "count": <ActionOptionInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of results per page",
+                    "desc": "Number of results per page (`1`-`1000`, default: `100`)",
+                    "type": "int",
+                },
+            },
+        });
+
+        # get-source action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/get-source",
+            "action": "get-source",
+            "groups": "Sources",
+            "display_name": "Get Source",
+            "short_desc": "Get a source by ID",
+            "desc": "Retrieve a single Segment source by its unique ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentGetSourceDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentGetSourceDataProvider::ResponseType,
+        });
+
+        # create-source action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/create-source",
+            "action": "create-source",
+            "groups": "Sources",
+            "display_name": "Create Source",
+            "short_desc": "Create a new source",
+            "desc": "Create a new data collection source in Segment.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateSourceDataProvider::RequestType.getFields(){"slug", "name", "catalogId"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateSourceDataProvider::RequestType.getFields()
+                    - ("slug", "name", "catalogId")
+            ),
+            "output_type": SegmentCreateSourceDataProvider::ResponseType,
+        });
+
+        # update-source action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/update-source",
+            "action": "update-source",
+            "groups": "Sources",
+            "display_name": "Update Source",
+            "short_desc": "Update an existing source",
+            "desc": "Update an existing Segment source by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateSourceDataProvider::RequestType.getFields(){"sourceId",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateSourceDataProvider::RequestType.getFields() - "sourceId", {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SegmentUpdateSourceDataProvider::ResponseType,
+        });
+
+        # delete-source action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/delete-source",
+            "action": "delete-source",
+            "groups": "Sources",
+            "display_name": "Delete Source",
+            "short_desc": "Delete a source",
+            "desc": "Delete a Segment source by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentDeleteSourceDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentDeleteSourceDataProvider::ResponseType,
+        });
+
+        # ==================== DESTINATIONS ====================
+
+        # list-destinations action (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/destinations",
+            "action": "list-destinations",
+            "groups": "Destinations",
+            "display_name": "List Destinations",
+            "short_desc": "List destinations with cursor-based pagination",
+            "desc": "Retrieve a list of destinations from Segment with cursor-based pagination.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SegmentDestinationsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("DestinationList", new SegmentDestinationDataType(), True);
+            },
+            "options": {
+                "count": <ActionOptionInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of results per page",
+                    "desc": "Number of results per page (`1`-`1000`, default: `100`)",
+                    "type": "int",
+                },
+            },
+        });
+
+        # get-destination action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/get-destination",
+            "action": "get-destination",
+            "groups": "Destinations",
+            "display_name": "Get Destination",
+            "short_desc": "Get a destination by ID",
+            "desc": "Retrieve a single Segment destination by its unique ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentGetDestinationDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentGetDestinationDataProvider::ResponseType,
+        });
+
+        # create-destination action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/create-destination",
+            "action": "create-destination",
+            "groups": "Destinations",
+            "display_name": "Create Destination",
+            "short_desc": "Create a new destination",
+            "desc": "Create a new integration destination in Segment.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateDestinationDataProvider::RequestType.getFields(){"sourceId", "catalogId", "settings"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateDestinationDataProvider::RequestType.getFields()
+                    - ("sourceId", "catalogId", "settings")
+            ),
+            "output_type": SegmentCreateDestinationDataProvider::ResponseType,
+        });
+
+        # update-destination action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/update-destination",
+            "action": "update-destination",
+            "groups": "Destinations",
+            "display_name": "Update Destination",
+            "short_desc": "Update an existing destination",
+            "desc": "Update an existing Segment destination by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateDestinationDataProvider::RequestType.getFields(){"destinationId",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateDestinationDataProvider::RequestType.getFields() - "destinationId", {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SegmentUpdateDestinationDataProvider::ResponseType,
+        });
+
+        # delete-destination action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/delete-destination",
+            "action": "delete-destination",
+            "groups": "Destinations",
+            "display_name": "Delete Destination",
+            "short_desc": "Delete a destination",
+            "desc": "Delete a Segment destination by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentDeleteDestinationDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentDeleteDestinationDataProvider::ResponseType,
+        });
+
+        # ==================== WAREHOUSES ====================
+
+        # list-warehouses action (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/warehouses",
+            "action": "list-warehouses",
+            "groups": "Warehouses",
+            "display_name": "List Warehouses",
+            "short_desc": "List warehouses with cursor-based pagination",
+            "desc": "Retrieve a list of warehouses from Segment with cursor-based pagination.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SegmentWarehousesDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("WarehouseList", new SegmentWarehouseDataType(), True);
+            },
+            "options": {
+                "count": <ActionOptionInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of results per page",
+                    "desc": "Number of results per page (`1`-`1000`, default: `100`)",
+                    "type": "int",
+                },
+            },
+        });
+
+        # get-warehouse action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/get-warehouse",
+            "action": "get-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Get Warehouse",
+            "short_desc": "Get a warehouse by ID",
+            "desc": "Retrieve a single Segment warehouse by its unique ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentGetWarehouseDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentGetWarehouseDataProvider::ResponseType,
+        });
+
+        # create-warehouse action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/create-warehouse",
+            "action": "create-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Create Warehouse",
+            "short_desc": "Create a new warehouse",
+            "desc": "Create a new data warehouse connection in Segment.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateWarehouseDataProvider::RequestType.getFields(){"catalogId", "settings"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateWarehouseDataProvider::RequestType.getFields()
+                    - ("catalogId", "settings")
+            ),
+            "output_type": SegmentCreateWarehouseDataProvider::ResponseType,
+        });
+
+        # update-warehouse action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/update-warehouse",
+            "action": "update-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Update Warehouse",
+            "short_desc": "Update an existing warehouse",
+            "desc": "Update an existing Segment warehouse by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateWarehouseDataProvider::RequestType.getFields(){"warehouseId",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateWarehouseDataProvider::RequestType.getFields() - "warehouseId", {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SegmentUpdateWarehouseDataProvider::ResponseType,
+        });
+
+        # delete-warehouse action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/delete-warehouse",
+            "action": "delete-warehouse",
+            "groups": "Warehouses",
+            "display_name": "Delete Warehouse",
+            "short_desc": "Delete a warehouse",
+            "desc": "Delete a Segment warehouse by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentDeleteWarehouseDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentDeleteWarehouseDataProvider::ResponseType,
+        });
+
+        # ==================== TRACKING PLANS ====================
+
+        # list-tracking-plans action (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/tracking-plans",
+            "action": "list-tracking-plans",
+            "groups": "Tracking Plans",
+            "display_name": "List Tracking Plans",
+            "short_desc": "List tracking plans with cursor-based pagination",
+            "desc": "Retrieve a list of tracking plans from Segment with cursor-based pagination.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SegmentTrackingPlansDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("TrackingPlanList", new SegmentTrackingPlanDataType(), True);
+            },
+            "options": {
+                "count": <ActionOptionInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of results per page",
+                    "desc": "Number of results per page (`1`-`1000`, default: `100`)",
+                    "type": "int",
+                },
+                "type": <ActionOptionInfo>{
+                    "display_name": "Type",
+                    "short_desc": "Filter by tracking plan type",
+                    "desc": "Filter tracking plans by type: `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
+                    "type": "string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "LIVE", "display_name": "Live",
+                            "desc": "Live tracking plan"},
+                        <AllowedValueInfo>{"value": "PROPERTY_LIBRARY", "display_name": "Property Library",
+                            "desc": "Property library"},
+                        <AllowedValueInfo>{"value": "RULE_LIBRARY", "display_name": "Rule Library",
+                            "desc": "Rule library"},
+                        <AllowedValueInfo>{"value": "TEMPLATE", "display_name": "Template",
+                            "desc": "Template tracking plan"},
+                    ),
+                },
+            },
+        });
+
+        # get-tracking-plan action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/get-tracking-plan",
+            "action": "get-tracking-plan",
+            "groups": "Tracking Plans",
+            "display_name": "Get Tracking Plan",
+            "short_desc": "Get a tracking plan by ID",
+            "desc": "Retrieve a single Segment tracking plan by its unique ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentGetTrackingPlanDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentGetTrackingPlanDataProvider::ResponseType,
+        });
+
+        # create-tracking-plan action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/create-tracking-plan",
+            "action": "create-tracking-plan",
+            "groups": "Tracking Plans",
+            "display_name": "Create Tracking Plan",
+            "short_desc": "Create a new tracking plan",
+            "desc": "Create a new tracking plan in Segment for defining and enforcing event schemas.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateTrackingPlanDataProvider::RequestType.getFields(){"name", "type"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateTrackingPlanDataProvider::RequestType.getFields() - ("name", "type")
+            ),
+            "output_type": SegmentCreateTrackingPlanDataProvider::ResponseType,
+        });
+
+        # update-tracking-plan action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/update-tracking-plan",
+            "action": "update-tracking-plan",
+            "groups": "Tracking Plans",
+            "display_name": "Update Tracking Plan",
+            "short_desc": "Update an existing tracking plan",
+            "desc": "Update an existing Segment tracking plan by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateTrackingPlanDataProvider::RequestType.getFields(){"trackingPlanId",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentUpdateTrackingPlanDataProvider::RequestType.getFields() - "trackingPlanId", {
+                    "preselected": True,
+                }
+            ),
+            "output_type": SegmentUpdateTrackingPlanDataProvider::ResponseType,
+        });
+
+        # delete-tracking-plan action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/delete-tracking-plan",
+            "action": "delete-tracking-plan",
+            "groups": "Tracking Plans",
+            "display_name": "Delete Tracking Plan",
+            "short_desc": "Delete a tracking plan",
+            "desc": "Delete a Segment tracking plan by its ID.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentDeleteTrackingPlanDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentDeleteTrackingPlanDataProvider::ResponseType,
+        });
+
+        # ==================== LABELS ====================
+
+        # list-labels action (DPAT_FIND)
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/labels",
+            "action": "list-labels",
+            "groups": "Labels",
+            "display_name": "List Labels",
+            "short_desc": "List labels with cursor-based pagination",
+            "desc": "Retrieve a list of labels from Segment with cursor-based pagination.",
+            "action_code": DPAT_FIND,
+            "data_provider_info": SegmentLabelsDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new ListDataType("LabelList", new SegmentLabelDataType(), True);
+            },
+            "options": {
+                "count": <ActionOptionInfo>{
+                    "display_name": "Count",
+                    "short_desc": "Number of results per page",
+                    "desc": "Number of results per page (`1`-`1000`, default: `100`)",
+                    "type": "int",
+                },
+            },
+        });
+
+        # create-label action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/create-label",
+            "action": "create-label",
+            "groups": "Labels",
+            "display_name": "Create Label",
+            "short_desc": "Create a new label",
+            "desc": "Create a new label in Segment for organizing resources.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateLabelDataProvider::RequestType.getFields(){"key", "value"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentCreateLabelDataProvider::RequestType.getFields() - ("key", "value")
+            ),
+            "output_type": SegmentCreateLabelDataProvider::ResponseType,
+        });
+
+        # delete-label action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SegmentDataProvider::AppName,
+            "path": "/delete-label",
+            "action": "delete-label",
+            "groups": "Labels",
+            "display_name": "Delete Label",
+            "short_desc": "Delete a label",
+            "desc": "Delete a Segment label by its key and value.",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SegmentDeleteLabelDataProvider::RequestType.getFields(), {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": SegmentDeleteLabelDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage SegmentDataProvider Module
+
+    @tableofcontents
+
+    @section segmentdataproviderintro SegmentDataProvider Introduction
+
+    The %SegmentDataProvider module provides a data provider API for Twilio Segment services.
+
+    To use this module, use \c "%requires SegmentDataProvider" in your code.
+
+    @section segmentdataproviderrelnotes Release Notes
+
+    @subsection segmentdataproviderv1_0 SegmentDataProvider v1.0
+    - initial release of the module
+*/

@@ -1,0 +1,479 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SegmentDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/Mime.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/SegmentRestClient.qm
+%requires ../../../../qlib/SegmentDataProvider
+
+%exec-class SegmentDataProviderTest
+
+public class SegmentDataProviderTest inherits QUnit::Test {
+    private {
+        #! Segment REST client for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Logger for verbose output
+        Logger logger;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "token": "t,token=s",
+            "region": "r,region=s",
+            "conn": "c,connection=s",
+        };
+
+        #! Test tracking plan ID created during tests (for cleanup)
+        *string testTrackingPlanId;
+
+        #! Test label created during tests (for cleanup)
+        *hash<auto> testLabel;
+    }
+
+    constructor() : Test("SegmentDataProvider Test", "1.0", \ARGV, MyOpts) {
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("child provider tests", \childProviderTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require credentials)
+        addTestCase("integration: list sources", \integrationListSourcesTests());
+        addTestCase("integration: list destinations", \integrationListDestinationsTests());
+        addTestCase("integration: list warehouses", \integrationListWarehousesTests());
+        addTestCase("integration: tracking plan lifecycle", \integrationTrackingPlanLifecycleTests());
+        addTestCase("integration: label lifecycle", \integrationLabelLifecycleTests());
+        addTestCase("integration: cleanup", \integrationCleanup());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Segment client for integration tests
+    private setupConnection() {
+        if (m_options.conn) {
+            AbstractConnection conn = get_connection(m_options.conn);
+            client = conn.getAsync();
+            return;
+        }
+
+        *string token = m_options.token ?? ENV.SEGMENT_API_TOKEN;
+        *string region = m_options.region ?? ENV.SEGMENT_REGION ?? "us";
+
+        if (!token) {
+            if (m_options.verbose) {
+                printf("No Segment token provided; skipping integration tests\n");
+                printf("  Use -t <token> or set SEGMENT_API_TOKEN env var\n");
+                printf("  Or use -c <connection_name> with Qorus connection\n");
+            }
+            return;
+        }
+
+        client = new SegmentRestClient::SegmentRestClientIo({
+            "apikey": token,
+            "region": region,
+        });
+    }
+
+    #! Returns a data provider for integration tests
+    private *SegmentDataProvider getProvider() {
+        if (!client) {
+            return;
+        }
+        return new SegmentDataProvider(client);
+    }
+
+    #! Skips test if no connection available
+    private skipIfNoConnection() {
+        if (!client) {
+            testSkip("no Segment connection available");
+        }
+    }
+
+    # ==================== UNIT TESTS ====================
+
+    sanityTests() {
+        # Test that module loads correctly
+        SegmentDataProvider dp({"apikey": "test-token"});
+        assertEq("segment", dp.getName());
+        assertEq(True, dp.getStaticInfoImpl().supports_children);
+    }
+
+    factoryTests() {
+        SegmentDataProviderFactory factory();
+        assertEq("segment", factory.getInfo().name);
+        assertEq(True, factory.getInfo().children_can_support_apis);
+    }
+
+    metadataTests() {
+        SegmentDataProvider dp({"apikey": "test-token"});
+        *list<string> children = dp.getChildProviderNames();
+        assertEq(True, children.size() > 0);
+
+        # Verify all expected children exist
+        assertEq(True, inlist("sources", children));
+        assertEq(True, inlist("destinations", children));
+        assertEq(True, inlist("warehouses", children));
+        assertEq(True, inlist("tracking-plans", children));
+        assertEq(True, inlist("labels", children));
+        assertEq(True, inlist("get-source", children));
+        assertEq(True, inlist("create-source", children));
+        assertEq(True, inlist("update-source", children));
+        assertEq(True, inlist("delete-source", children));
+        assertEq(True, inlist("get-destination", children));
+        assertEq(True, inlist("create-destination", children));
+        assertEq(True, inlist("update-destination", children));
+        assertEq(True, inlist("delete-destination", children));
+        assertEq(True, inlist("get-warehouse", children));
+        assertEq(True, inlist("create-warehouse", children));
+        assertEq(True, inlist("update-warehouse", children));
+        assertEq(True, inlist("delete-warehouse", children));
+        assertEq(True, inlist("get-tracking-plan", children));
+        assertEq(True, inlist("create-tracking-plan", children));
+        assertEq(True, inlist("update-tracking-plan", children));
+        assertEq(True, inlist("delete-tracking-plan", children));
+        assertEq(True, inlist("create-label", children));
+        assertEq(True, inlist("delete-label", children));
+    }
+
+    childProviderTests() {
+        SegmentDataProvider dp({"apikey": "test-token"});
+
+        # Test that child providers can be created
+        AbstractDataProvider sources = dp.getChildProviderEx("sources");
+        assertEq("sources", sources.getName());
+        assertEq(True, sources.getInfo().supports_read);
+
+        AbstractDataProvider getSource = dp.getChildProviderEx("get-source");
+        assertEq("get-source", getSource.getName());
+        assertEq(True, getSource.getInfo().supports_request);
+    }
+
+    dataTypeTests() {
+        # Test source data type
+        SegmentSourceDataType sourceType();
+        hash<string, AbstractDataField> fields = sourceType.getFields();
+        assertEq(True, fields.hasKey("id"));
+        assertEq(True, fields.hasKey("name"));
+        assertEq(True, fields.hasKey("slug"));
+        assertEq(True, fields.hasKey("enabled"));
+
+        # Test destination data type
+        SegmentDestinationDataType destType();
+        fields = destType.getFields();
+        assertEq(True, fields.hasKey("id"));
+        assertEq(True, fields.hasKey("name"));
+        assertEq(True, fields.hasKey("sourceId"));
+
+        # Test warehouse data type
+        SegmentWarehouseDataType whType();
+        fields = whType.getFields();
+        assertEq(True, fields.hasKey("id"));
+        assertEq(True, fields.hasKey("metadata"));
+        assertEq(True, fields.hasKey("settings"));
+
+        # Test tracking plan data type
+        SegmentTrackingPlanDataType tpType();
+        fields = tpType.getFields();
+        assertEq(True, fields.hasKey("id"));
+        assertEq(True, fields.hasKey("name"));
+        assertEq(True, fields.hasKey("type"));
+
+        # Test label data type
+        SegmentLabelDataType labelType();
+        fields = labelType.getFields();
+        assertEq(True, fields.hasKey("key"));
+        assertEq(True, fields.hasKey("value"));
+
+        # Test metadata data type
+        SegmentMetadataDataType metaType();
+        fields = metaType.getFields();
+        assertEq(True, fields.hasKey("id"));
+        assertEq(True, fields.hasKey("slug"));
+        assertEq(True, fields.hasKey("name"));
+        assertEq(True, fields.hasKey("categories"));
+        assertEq(True, fields.hasKey("description"));
+        assertEq(True, fields.hasKey("logos"));
+
+        # Test label item data type
+        SegmentLabelItemDataType labelItemType();
+        fields = labelItemType.getFields();
+        assertEq(True, fields.hasKey("key"));
+        assertEq(True, fields.hasKey("value"));
+    }
+
+    connectionTests() {
+        # Test connection scheme info
+        assertEq(True, SegmentRestConnection::ConnectionScheme.schemes.segment);
+        assertEq("segment", SegmentRestConnection::ConnectionScheme.schemes.firstKey());
+        assertEq(True, SegmentRestConnection::ConnectionScheme.auto_url);
+    }
+
+    # ==================== INTEGRATION TESTS ====================
+
+    integrationListSourcesTests() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        AbstractDataProvider sources = dp.getChildProviderEx("sources");
+        AbstractDataProviderRecordIterator i = sources.searchRecords();
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (count == 0) {
+                # Verify first record has expected fields
+                assertEq(True, exists rec.id, "source record must have an id field");
+                assertEq(True, exists rec.name || exists rec.slug,
+                    "source record must have a name or slug");
+                assertEq(Type::Boolean, rec.enabled.type(),
+                    "source enabled field must be a boolean");
+            }
+            if (m_options.verbose) {
+                printf("  Source: %s (ID: %s, enabled: %y)\n", rec.name ?? "N/A", rec.id ?? "N/A", rec.enabled);
+            }
+            ++count;
+        }
+        if (m_options.verbose) {
+            printf("  Total sources: %d\n", count);
+        }
+    }
+
+    integrationListDestinationsTests() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        AbstractDataProvider dests = dp.getChildProviderEx("destinations");
+        AbstractDataProviderRecordIterator i = dests.searchRecords();
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (count == 0) {
+                assertEq(True, exists rec.id, "destination record must have an id field");
+                assertEq(True, exists rec.sourceId, "destination record must have a sourceId");
+                assertEq(True, exists rec.metadata, "destination record must have metadata");
+            }
+            if (m_options.verbose) {
+                printf("  Destination: %s (ID: %s, enabled: %y)\n",
+                    rec.name ?? "N/A", rec.id ?? "N/A", rec.enabled);
+            }
+            ++count;
+        }
+        if (m_options.verbose) {
+            printf("  Total destinations: %d\n", count);
+        }
+    }
+
+    integrationListWarehousesTests() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        AbstractDataProvider warehouses = dp.getChildProviderEx("warehouses");
+        AbstractDataProviderRecordIterator i = warehouses.searchRecords();
+        int count = 0;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (count == 0) {
+                assertEq(True, exists rec.id, "warehouse record must have an id field");
+                assertEq(True, exists rec.metadata, "warehouse record must have metadata");
+                assertEq(True, exists rec.settings, "warehouse record must have settings");
+            }
+            if (m_options.verbose) {
+                printf("  Warehouse: %s (ID: %s)\n", rec.id ?? "N/A", rec.metadata.name ?? "N/A");
+            }
+            ++count;
+        }
+        if (m_options.verbose) {
+            printf("  Total warehouses: %d\n", count);
+        }
+    }
+
+    integrationTrackingPlanLifecycleTests() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        # Create tracking plan
+        string tpName = sprintf("Test Tracking Plan %d", clock_getmicros());
+        AbstractDataProvider createTp = dp.getChildProviderEx("create-tracking-plan");
+        auto result = createTp.doRequest({
+            "name": tpName,
+            "type": "LIVE",
+        });
+        if (m_options.verbose) {
+            printf("  Created tracking plan: %y\n", result);
+        }
+        assertEq(True, exists result, "create-tracking-plan must return a result");
+        *string tpId = result.id;
+        if (tpId) {
+            testTrackingPlanId = tpId;
+        }
+        assertEq(True, exists tpId, "created tracking plan must have an ID");
+        assertEq(tpName, result.name, "created tracking plan name must match");
+        assertEq("LIVE", result.type, "created tracking plan type must match");
+
+        # Get tracking plan
+        AbstractDataProvider getTp = dp.getChildProviderEx("get-tracking-plan");
+        result = getTp.doRequest({"trackingPlanId": tpId});
+        assertEq(True, exists result, "get-tracking-plan must return a result");
+        assertEq(tpName, result.name, "retrieved tracking plan name must match");
+        assertEq("LIVE", result.type, "retrieved tracking plan type must match");
+        if (m_options.verbose) {
+            printf("  Got tracking plan: %s (type: %s)\n", result.name ?? "N/A", result.type ?? "N/A");
+        }
+
+        # Update tracking plan
+        string updatedName = tpName + " Updated";
+        AbstractDataProvider updateTp = dp.getChildProviderEx("update-tracking-plan");
+        result = updateTp.doRequest({
+            "trackingPlanId": tpId,
+            "name": updatedName,
+            "description": "Updated by integration test",
+        });
+        assertEq(True, exists result, "update-tracking-plan must return a result");
+        if (m_options.verbose) {
+            printf("  Updated tracking plan: %y\n", result);
+        }
+
+        # Verify update persisted
+        result = getTp.doRequest({"trackingPlanId": tpId});
+        assertEq(updatedName, result.name, "updated tracking plan name must persist");
+        assertEq("Updated by integration test", result.description,
+            "updated tracking plan description must persist");
+
+        # Delete tracking plan
+        AbstractDataProvider deleteTp = dp.getChildProviderEx("delete-tracking-plan");
+        result = deleteTp.doRequest({"trackingPlanId": tpId});
+        assertEq(True, result.success);
+        testTrackingPlanId = NOTHING;
+        if (m_options.verbose) {
+            printf("  Deleted tracking plan: %s\n", tpId);
+        }
+    }
+
+    integrationLabelLifecycleTests() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        # Create label
+        string labelKey = sprintf("test-key-%d", clock_getmicros());
+        string labelValue = "test-value";
+        AbstractDataProvider createLabel = dp.getChildProviderEx("create-label");
+        auto result = createLabel.doRequest({
+            "key": labelKey,
+            "value": labelValue,
+            "description": "Created by integration test",
+        });
+        if (m_options.verbose) {
+            printf("  Created label: %y\n", result);
+        }
+        assertEq(True, exists result, "create-label must return a result");
+        assertEq(labelKey, result.key, "created label key must match");
+        assertEq(labelValue, result.value, "created label value must match");
+        testLabel = {"key": labelKey, "value": labelValue};
+
+        # List labels
+        AbstractDataProvider labels = dp.getChildProviderEx("labels");
+        AbstractDataProviderRecordIterator i = labels.searchRecords();
+        bool found = False;
+        while (i.next()) {
+            hash<auto> rec = i.getValue();
+            if (rec.key == labelKey && rec.value == labelValue) {
+                found = True;
+                break;
+            }
+        }
+        assertEq(True, found, "created label should appear in list");
+
+        # Delete label
+        AbstractDataProvider deleteLabel = dp.getChildProviderEx("delete-label");
+        result = deleteLabel.doRequest({
+            "key": labelKey,
+            "value": labelValue,
+        });
+        assertEq(True, result.success);
+        testLabel = NOTHING;
+        if (m_options.verbose) {
+            printf("  Deleted label: %s=%s\n", labelKey, labelValue);
+        }
+    }
+
+    integrationCleanup() {
+        skipIfNoConnection();
+        *SegmentDataProvider dp = getProvider();
+
+        # Clean up tracking plan if test failed
+        if (testTrackingPlanId) {
+            try {
+                AbstractDataProvider deleteTp = dp.getChildProviderEx("delete-tracking-plan");
+                deleteTp.doRequest({"trackingPlanId": testTrackingPlanId});
+                if (m_options.verbose) {
+                    printf("  Cleaned up tracking plan: %s\n", testTrackingPlanId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("  Failed to clean up tracking plan %s: %s\n", testTrackingPlanId, ex.desc);
+                }
+            }
+        }
+
+        # Clean up label if test failed
+        if (testLabel) {
+            try {
+                AbstractDataProvider deleteLabel = dp.getChildProviderEx("delete-label");
+                deleteLabel.doRequest(testLabel);
+                if (m_options.verbose) {
+                    printf("  Cleaned up label: %s=%s\n", testLabel.key, testLabel.value);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("  Failed to clean up label: %s\n", ex.desc);
+                }
+            }
+        }
+    }
+}

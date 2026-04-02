@@ -195,6 +195,8 @@ public class ConnectionSchemeCache {
 
             "pdfco": "PdfCoRestClient",
 
+            "segment": "SegmentRestClient",
+
             "pop3": "Pop3Client",
             "pop3s": "Pop3Client",
 
