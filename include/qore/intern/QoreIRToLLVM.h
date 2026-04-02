@@ -299,12 +299,6 @@ private:
     // landingpad, avoiding BB explosion.
     std::unordered_map<llvm::BasicBlock*, llvm::BasicBlock*> landingpad_blocks;
 
-    // Runtime cleanup stack: replaces per-alloca cleanup tracking.
-    // cleanup_stack_ptr: alloca ptr — points to dynamically-grown array of NaN-boxed values
-    // cleanup_count_ptr: alloca i32 — number of values in the array
-    llvm::Value* cleanup_stack_ptr = nullptr;
-    llvm::Value* cleanup_count_ptr = nullptr;
-
     // Deferred PHI nodes: (LLVM PHI, IR PHI instruction) pairs to fixup after all blocks lowered
     std::vector<std::pair<llvm::PHINode*, const QoreIRPhiInstruction*>> pending_phis;
 

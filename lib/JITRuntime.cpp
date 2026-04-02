@@ -33,6 +33,16 @@
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
 
+// Macro for JIT runtime functions: check xsink and throw C++ exception
+// if a Qore exception was raised. Used at return points of qore_rt_*
+// functions that take ExceptionSink*. This enables LLVM's invoke/landingpad
+// to handle exceptions via stack unwinding instead of manual flag checking.
+#define QORE_RT_CHECK_THROW(xsink) do { \
+    if ((xsink) && *(xsink)) { \
+        throw QoreJITException(); \
+    } \
+} while(0)
+
 #include <cstring>
 #include <optional>
 

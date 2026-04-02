@@ -145,14 +145,6 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     module.getOrInsertFunction("qore_rt_check_throw",
             llvm::FunctionType::get(void_type, {ptr_type}, false));
 
-    // Runtime cleanup functions
-    module.getOrInsertFunction("qore_rt_cleanup_push",
-            llvm::FunctionType::get(void_type, {ptr_type, ptr_type, i64_type}, false));
-    module.getOrInsertFunction("qore_rt_cleanup_run",
-            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-    module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-            llvm::FunctionType::get(void_type, {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-
     // Guard helpers
     module.getOrInsertFunction("qore_rt_guard_not_nothing",
             llvm::FunctionType::get(i64_type, {i64_type}, false));
@@ -1084,49 +1076,12 @@ void QoreIRToLLVM::emitInvokeCleanup(llvm::Module& module) {
     if (invoke_result_allocas.empty()) {
         return;
     }
-
-    // For small numbers of cleanup allocas, inline the load+decref pairs.
-    // For large functions (50+), use a runtime function call to avoid O(N)
-    // error_return blocks that cause LLVM optimization pathology.
-    if (invoke_result_allocas.size() < 50) {
-        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
-                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
-        for (llvm::Value* alloca_ptr : invoke_result_allocas) {
-            llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
-            builder->CreateCall(decref_fn, {val, xsink_arg});
-        }
-        return;
+    auto helper = module.getOrInsertFunction("qore_rt_decref",
+            llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+    for (llvm::Value* alloca_ptr : invoke_result_allocas) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca_ptr);
+        builder->CreateCall(helper, {val, xsink_arg});
     }
-
-    // Large function: store alloca pointers into a contiguous array, then
-    // call qore_rt_cleanup_run_allocas() which loops at runtime. This
-    // reduces the error_return block from O(N) to O(1).
-    size_t n = invoke_result_allocas.size();
-
-    // Allocate array in the error_return block (current insert point),
-    // NOT in the entry block — avoids domination issues where cleanup
-    // allocas created later in entry would not dominate early stores.
-    llvm::ArrayType* arr_type = llvm::ArrayType::get(ptr_type, n);
-    llvm::AllocaInst* arr = builder->CreateAlloca(arr_type, nullptr, "cleanup_ptrs");
-
-    // Store each cleanup alloca pointer into the array
-    for (size_t i = 0; i < n; ++i) {
-        llvm::Value* gep = builder->CreateGEP(arr_type, arr,
-            {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0),
-             llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), i)});
-        builder->CreateStore(invoke_result_allocas[i], gep);
-    }
-
-    // Cast array to ptr for the runtime call
-    llvm::Value* arr_ptr = builder->CreateGEP(arr_type, arr,
-        {llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0),
-         llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0)});
-
-    auto helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-        llvm::FunctionType::get(void_type,
-            {ptr_type, llvm::Type::getInt32Ty(ctx), ptr_type}, false));
-    builder->CreateCall(helper,
-        {arr_ptr, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), n), xsink_arg});
 }
 
 void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
@@ -1152,12 +1107,16 @@ void QoreIRToLLVM::trackResultForCleanup(llvm::Value* result, uint32_t result_id
 
     if (!deferred_exception_checking) {
         // In normal mode: pre-store decref (handles re-assignment in loops).
+        // Decref previous value before overwriting (handles loop bodies where
+        // the same alloca is stored to each iteration; first iteration old_val
+        // = NOTHING which is a no-op for decref)
         auto decref_fn = current_module->getOrInsertFunction("qore_rt_decref",
                 llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
         llvm::Value* old_val = builder->CreateLoad(i64_type, cleanup_alloca);
         builder->CreateStore(result, cleanup_alloca);
         builder->CreateCall(decref_fn, {old_val, xsink_arg});
     } else {
+        // In deferred mode: init functions have no loops; old is always NOTHING
         builder->CreateStore(result, cleanup_alloca);
     }
 
@@ -1500,7 +1459,6 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         return;
     }
 
-    // Determine the exception handler block (try/catch target or function-level)
     llvm::BasicBlock* exception_block = nullptr;
     if (inst->exception_target) {
         auto except_it = block_map.find(inst->exception_target);
@@ -1509,40 +1467,42 @@ void QoreIRToLLVM::emitExceptionCheck(llvm::Module& module, llvm::Function* llvm
         }
     }
     if (!exception_block) {
+        // Outside try block: use the function-level error return block.
+        // Create it lazily on first use — terminator is added later in
+        // finalizeErrorReturnBlock() after all invoke_result_allocas are known.
         if (!error_return_block) {
             error_return_block = llvm::BasicBlock::Create(ctx, "error_return", llvm_func);
         }
         exception_block = error_return_block;
     }
+    // Inline exception check as direct memory loads instead of function call
+    // ExceptionSink::priv at offset 0 -> qore_es_private*
+    // qore_es_private::head at offset 0 within priv -> QoreException*
+    // qore_es_private::thread_exit at offset 20 within priv -> bool
 
-    // Use invoke @qore_rt_check_throw(%xsink) with C++ exception handling.
-    // If xsink has an exception, qore_rt_check_throw throws QoreJITException
-    // which LLVM unwinds to the shared landingpad for this exception handler.
-    // This replaces the 7-instruction inline check + condBr + new BB pattern
-    // with a single invoke instruction + shared landingpad.
+    // Load priv pointer from xsink at offset 0
+    auto* xsink_priv_ptr = builder->CreateLoad(ptr_type, xsink_arg, "xsink_priv_ptr");
 
-    // Get or create shared landingpad for this exception handler
-    llvm::BasicBlock* lpad_block;
-    auto lpad_it = landingpad_blocks.find(exception_block);
-    if (lpad_it != landingpad_blocks.end()) {
-        lpad_block = lpad_it->second;
-    } else {
-        lpad_block = llvm::BasicBlock::Create(ctx, "lpad", llvm_func);
-        landingpad_blocks[exception_block] = lpad_block;
-        auto saved_ip = builder->saveIP();
-        builder->SetInsertPoint(lpad_block);
-        auto* lp = builder->CreateLandingPad(
-            llvm::StructType::get(ctx, {ptr_type, llvm::Type::getInt32Ty(ctx)}), 1, "lp");
-        lp->addClause(llvm::ConstantPointerNull::get(
-            llvm::cast<llvm::PointerType>(ptr_type)));
-        builder->CreateBr(exception_block);
-        builder->restoreIP(saved_ip);
-    }
+    // Load head pointer from priv at offset 0
+    auto* head_ptr = builder->CreateLoad(ptr_type, xsink_priv_ptr, "priv_head");
 
-    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "cont", llvm_func);
-    auto check_throw = module.getOrInsertFunction("qore_rt_check_throw",
-            llvm::FunctionType::get(void_type, {ptr_type}, false));
-    builder->CreateInvoke(check_throw, cont, lpad_block, {xsink_arg});
+    // Check if head != nullptr
+    auto* has_exception_head = builder->CreateICmpNE(head_ptr,
+            llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type)),
+            "has_exception_head");
+
+    // Also check thread_exit at offset 20 within priv
+    // thread_exit is a bool at offset 20 in qore_es_private
+    auto* thread_exit_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(ctx),
+            xsink_priv_ptr, {llvm::ConstantInt::get(i64_type, 20)}, "thread_exit_ptr");
+    auto* thread_exit_byte = builder->CreateLoad(llvm::Type::getInt8Ty(ctx), thread_exit_ptr, "thread_exit_byte");
+    auto* has_exception_thread_exit = builder->CreateICmpNE(thread_exit_byte,
+            llvm::ConstantInt::get(llvm::Type::getInt8Ty(ctx), 0), "has_thread_exit");
+
+    // Combine: exception exists if (head != nullptr) OR (thread_exit)
+    auto* has_exception = builder->CreateOr(has_exception_head, has_exception_thread_exit, "has_exception");
+    llvm::BasicBlock* cont = llvm::BasicBlock::Create(ctx, "no_exception", llvm_func);
+    builder->CreateCondBr(has_exception, exception_block, cont);
     builder->SetInsertPoint(cont);
 }
 
@@ -1781,8 +1741,6 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     error_return_block = nullptr;
     jit_deopt_block = nullptr;
     landingpad_blocks.clear();
-    cleanup_stack_ptr = nullptr;
-    cleanup_count_ptr = nullptr;
 
     // Collect all unique LocalVar* pointers from the function and emit
     // instantiation calls at the start of the entry block so the Qore
@@ -3699,15 +3657,87 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 cond = cond_val;
             } else if (cond_val->getType() == i64_type
                     && nanboxed_values.count(br->condition.id)) {
-                // NaN-boxed value: call qore_rt_to_bool for proper boolean conversion.
-                // This replaces the 7-BB inline tag dispatch with a single function call.
-                // qore_rt_to_bool handles all NaN-box tags (NOTHING, INT48, SPECIAL,
-                // DOUBLE, POINTER) internally.
+                // NaN-boxed value: inline fast-paths for all value types,
+                // only fall back to qore_rt_to_bool for pointer/node types
+                // (strings, hashes, lists, objects).
+                //
+                // Dispatch by tag (top 16 bits of NaN-boxed value):
+                //   0x0000 (NOTHING)  -> false
+                //   0xFFF9 (INT48)    -> payload != 0
+                //   0xFFFB (SPECIAL)  -> val == VAL_TRUE
+                //   < 0xFFF9 (DOUBLE) -> decode to double, != 0.0
+                //   0xFFFA (POINTER)  -> qore_rt_to_bool (slow path)
+                printd(3, "BranchIf: condition %%%d is NaN-boxed i64 -> inline bool\n",
+                    br->condition.id);
+
+                llvm::BasicBlock* bb_true = llvm::BasicBlock::Create(ctx, "brif.true", llvm_func);
+                llvm::BasicBlock* bb_false = llvm::BasicBlock::Create(ctx, "brif.false", llvm_func);
+                llvm::BasicBlock* bb_chk_tag = llvm::BasicBlock::Create(ctx, "brif.chk_tag", llvm_func);
+                llvm::BasicBlock* bb_int48 = llvm::BasicBlock::Create(ctx, "brif.int48", llvm_func);
+                llvm::BasicBlock* bb_special = llvm::BasicBlock::Create(ctx, "brif.special", llvm_func);
+                llvm::BasicBlock* bb_double = llvm::BasicBlock::Create(ctx, "brif.double", llvm_func);
+                llvm::BasicBlock* bb_slow = llvm::BasicBlock::Create(ctx, "brif.slow", llvm_func);
+                llvm::BasicBlock* bb_merge = llvm::BasicBlock::Create(ctx, "brif.merge", llvm_func);
+
+                // NOTHING (0) is the most common falsy value -> check first
+                llvm::Value* is_nothing = builder->CreateICmpEQ(cond_val,
+                        llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                builder->CreateCondBr(is_nothing, bb_false, bb_chk_tag);
+
+                // Extract tag (top 16 bits) and dispatch
+                builder->SetInsertPoint(bb_chk_tag);
+                llvm::Value* tag = builder->CreateLShr(cond_val,
+                        llvm::ConstantInt::get(i64_type, 48));
+                llvm::SwitchInst* sw = builder->CreateSwitch(tag, bb_double, 3);
+                sw->addCase(llvm::ConstantInt::get(
+                        static_cast<llvm::IntegerType*>(i64_type), 0xFFF9), bb_int48);
+                sw->addCase(llvm::ConstantInt::get(
+                        static_cast<llvm::IntegerType*>(i64_type), 0xFFFB), bb_special);
+                sw->addCase(llvm::ConstantInt::get(
+                        static_cast<llvm::IntegerType*>(i64_type), 0xFFFA), bb_slow);
+
+                // INT48: truthy if 48-bit payload != 0
+                builder->SetInsertPoint(bb_int48);
+                llvm::Value* payload = builder->CreateAnd(cond_val,
+                        llvm::ConstantInt::get(i64_type, PAYLOAD_MASK));
+                llvm::Value* int_truthy = builder->CreateICmpNE(payload,
+                        llvm::ConstantInt::get(i64_type, 0));
+                builder->CreateCondBr(int_truthy, bb_true, bb_false);
+
+                // SPECIAL (0xFFFB): TRUE/FALSE/NULL - only VAL_TRUE is truthy
+                builder->SetInsertPoint(bb_special);
+                llvm::Value* is_true = builder->CreateICmpEQ(cond_val,
+                        llvm::ConstantInt::get(i64_type, VAL_TRUE));
+                builder->CreateCondBr(is_true, bb_true, bb_false);
+
+                // DOUBLE: subtract offset, bitcast to double, compare != 0.0
+                builder->SetInsertPoint(bb_double);
+                llvm::Value* raw_bits = builder->CreateSub(cond_val,
+                        llvm::ConstantInt::get(i64_type, DOUBLE_ENCODE_OFFSET));
+                llvm::Value* dval = builder->CreateBitCast(raw_bits, double_type);
+                llvm::Value* dbl_truthy = builder->CreateFCmpONE(dval,
+                        llvm::ConstantFP::get(double_type, 0.0));
+                builder->CreateCondBr(dbl_truthy, bb_true, bb_false);
+
+                // Slow path: pointer/node -> call qore_rt_to_bool
+                builder->SetInsertPoint(bb_slow);
                 auto helper = module.getOrInsertFunction("qore_rt_to_bool",
                         llvm::FunctionType::get(i64_type, {i64_type}, false));
                 llvm::Value* bool_val = builder->CreateCall(helper, {cond_val});
-                cond = builder->CreateICmpNE(bool_val,
+                llvm::Value* slow_result = builder->CreateICmpNE(bool_val,
                         llvm::ConstantInt::get(i64_type, 0));
+                builder->CreateCondBr(slow_result, bb_true, bb_false);
+
+                // Merge
+                builder->SetInsertPoint(bb_true);
+                builder->CreateBr(bb_merge);
+                builder->SetInsertPoint(bb_false);
+                builder->CreateBr(bb_merge);
+                builder->SetInsertPoint(bb_merge);
+                llvm::PHINode* phi = builder->CreatePHI(i1_type, 2, "brif.result");
+                phi->addIncoming(llvm::ConstantInt::getTrue(ctx), bb_true);
+                phi->addIncoming(llvm::ConstantInt::getFalse(ctx), bb_false);
+                cond = phi;
             } else if (cond_val->getType() == i64_type) {
                 printd(3, "BranchIf: condition %%%d is raw i64 -> compare against 0\n", br->condition.id);
                 cond = builder->CreateICmpNE(cond_val, llvm::ConstantInt::get(i64_type, 0));
@@ -5901,9 +5931,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_EQ,
                 llvm::CmpInst::FCMP_OEQ, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            // Store as native i1 — avoids 7-BB NaN-box tag dispatch in BrIf.
-            // boxValue() re-boxes to i64 if any consumer needs NaN-boxed format.
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -5916,7 +5945,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_eq_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::NeAny: {
@@ -5928,7 +5958,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_NE,
                 llvm::CmpInst::FCMP_ONE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -5941,7 +5972,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_ne_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::LtString: {
@@ -5953,7 +5985,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_lt_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::LeString: {
@@ -5965,7 +5998,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_le_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::GtString: {
@@ -5977,7 +6011,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_gt_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::GeString: {
@@ -5989,7 +6024,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_ge_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::LtAny: {
@@ -6001,7 +6037,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLT,
                 llvm::CmpInst::FCMP_OLT, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6014,7 +6051,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLE,
                 llvm::CmpInst::FCMP_OLE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6027,7 +6065,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGT,
                 llvm::CmpInst::FCMP_OGT, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6040,7 +6079,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGE,
                 llvm::CmpInst::FCMP_OGE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6156,7 +6196,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitHardEqualityFastPath(true, lhs_boxed, rhs_boxed,
                     llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
         case QoreIROpcode::NeHard: {
@@ -6167,7 +6208,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitHardEqualityFastPath(false, lhs_boxed, rhs_boxed,
                     llvm_func, module);
-            values[inst->result.id] = unboxBool(result);
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
             return true;
         }
 
