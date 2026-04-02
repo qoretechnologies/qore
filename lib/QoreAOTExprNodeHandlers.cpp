@@ -1546,7 +1546,11 @@ static QoreValue read_node_EN_FUNC_REF(AOTExprNodeReadCtx& ctx) {
     const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
         *pp->RootNS, name.c_str());
     if (fe) {
-        return QoreValue(new FunctionCallNode(&loc_builtin, fe, (QoreListNode*)nullptr, ctx.pgm));
+        // Create a call reference (\func()), not a function call (func())
+        QoreFunction* f = fe->getFunction();
+        if (f) {
+            return QoreValue(new LocalFunctionCallReferenceNode(&loc_builtin, f));
+        }
     }
     printd(0, "AOT EXPR_TREE: cannot resolve function ref '%s'\n", name.c_str());
     ctx.failed = true;
