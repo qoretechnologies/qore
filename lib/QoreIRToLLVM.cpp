@@ -5930,8 +5930,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_EQ,
                 llvm::CmpInst::FCMP_OEQ, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            // Store as native i1 — avoids 7-BB NaN-box tag dispatch in BrIf.
+            // boxValue() re-boxes to i64 if any consumer needs NaN-boxed format.
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -5944,8 +5945,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_eq_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::NeAny: {
@@ -5957,8 +5957,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_NE,
                 llvm::CmpInst::FCMP_ONE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -5971,8 +5970,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_ne_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::LtString: {
@@ -5984,8 +5982,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_lt_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::LeString: {
@@ -5997,8 +5994,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_le_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::GtString: {
@@ -6010,8 +6006,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_gt_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::GeString: {
@@ -6023,8 +6018,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto helper = module.getOrInsertFunction("qore_rt_string_ge_typed",
                 llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::LtAny: {
@@ -6036,8 +6030,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLT,
                 llvm::CmpInst::FCMP_OLT, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6050,8 +6043,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SLE,
                 llvm::CmpInst::FCMP_OLE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6064,8 +6056,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGT,
                 llvm::CmpInst::FCMP_OGT, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6078,8 +6069,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* result = emitAnyCmpFastPath(llvm::CmpInst::ICMP_SGE,
                 llvm::CmpInst::FCMP_OGE, static_cast<int>(inst->opcode),
                 lhs_boxed, rhs_boxed, llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
@@ -6195,8 +6185,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitHardEqualityFastPath(true, lhs_boxed, rhs_boxed,
                     llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
         case QoreIROpcode::NeHard: {
@@ -6207,8 +6196,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             llvm::Value* result = emitHardEqualityFastPath(false, lhs_boxed, rhs_boxed,
                     llvm_func, module);
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            values[inst->result.id] = unboxBool(result);
             return true;
         }
 
