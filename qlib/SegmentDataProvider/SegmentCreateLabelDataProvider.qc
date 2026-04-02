@@ -53,6 +53,7 @@ public class SegmentCreateLabelRequestDataType inherits HashDataType {
                 "display_name": "Description",
                 "short_desc": "Label description",
                 "desc": "An optional human-readable description explaining the purpose of this label",
+                "preselected": True,
                 "example_value": "Identifies production resources",
             },
         };
@@ -75,8 +76,9 @@ public class SegmentCreateLabelDataProvider inherits SegmentDataProviderBase {
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
-        const ConstructorOptions = SegmentDataProviderBase::ConstructorOptions;
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
 
         #! Request type
         static SegmentCreateLabelRequestDataType RequestType();
@@ -112,7 +114,7 @@ public class SegmentCreateLabelDataProvider inherits SegmentDataProviderBase {
         if (exists req.description) {
             body.description = req.description;
         }
-        auto response = doPost("labels", body);
+        auto response = doPost("labels", {"label": body});
         return response.data.label ?? response;
     }
 

@@ -81,7 +81,8 @@ module SegmentDataProvider {
                     "display_name": "Count",
                     "short_desc": "Number of results per page",
                     "desc": "Number of results per page (`1`-`1000`, default: `100`)",
-                    "type": "int",
+                    "type": AbstractDataProviderType::get(IntOrNothingType),
+                    "preselected": True,
                 },
             },
         });
@@ -116,13 +117,13 @@ module SegmentDataProvider {
             "desc": "Create a new data collection source in Segment.",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                SegmentCreateSourceDataProvider::RequestType.getFields(){"slug", "name", "catalogId"}, {
+                SegmentCreateSourceDataProvider::RequestType.getFields(){"slug", "enabled", "metadataId"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentCreateSourceDataProvider::RequestType.getFields()
-                    - ("slug", "name", "catalogId")
+                    - ("slug", "enabled", "metadataId")
             ),
             "output_type": SegmentCreateSourceDataProvider::ResponseType,
         });
@@ -190,7 +191,8 @@ module SegmentDataProvider {
                     "display_name": "Count",
                     "short_desc": "Number of results per page",
                     "desc": "Number of results per page (`1`-`1000`, default: `100`)",
-                    "type": "int",
+                    "type": AbstractDataProviderType::get(IntOrNothingType),
+                    "preselected": True,
                 },
             },
         });
@@ -225,13 +227,13 @@ module SegmentDataProvider {
             "desc": "Create a new integration destination in Segment.",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                SegmentCreateDestinationDataProvider::RequestType.getFields(){"sourceId", "catalogId", "settings"}, {
+                SegmentCreateDestinationDataProvider::RequestType.getFields(){"sourceId", "metadataId", "settings"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentCreateDestinationDataProvider::RequestType.getFields()
-                    - ("sourceId", "catalogId", "settings")
+                    - ("sourceId", "metadataId", "settings")
             ),
             "output_type": SegmentCreateDestinationDataProvider::ResponseType,
         });
@@ -299,7 +301,8 @@ module SegmentDataProvider {
                     "display_name": "Count",
                     "short_desc": "Number of results per page",
                     "desc": "Number of results per page (`1`-`1000`, default: `100`)",
-                    "type": "int",
+                    "type": AbstractDataProviderType::get(IntOrNothingType),
+                    "preselected": True,
                 },
             },
         });
@@ -334,13 +337,13 @@ module SegmentDataProvider {
             "desc": "Create a new data warehouse connection in Segment.",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                SegmentCreateWarehouseDataProvider::RequestType.getFields(){"catalogId", "settings"}, {
+                SegmentCreateWarehouseDataProvider::RequestType.getFields(){"metadataId", "settings"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 SegmentCreateWarehouseDataProvider::RequestType.getFields()
-                    - ("catalogId", "settings")
+                    - ("metadataId", "settings")
             ),
             "output_type": SegmentCreateWarehouseDataProvider::ResponseType,
         });
@@ -408,14 +411,19 @@ module SegmentDataProvider {
                     "display_name": "Count",
                     "short_desc": "Number of results per page",
                     "desc": "Number of results per page (`1`-`1000`, default: `100`)",
-                    "type": "int",
+                    "type": AbstractDataProviderType::get(IntOrNothingType),
+                    "preselected": True,
                 },
                 "type": <ActionOptionInfo>{
                     "display_name": "Type",
                     "short_desc": "Filter by tracking plan type",
-                    "desc": "Filter tracking plans by type: `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
-                    "type": "string",
+                    "desc": "Filter tracking plans by type: `ENGAGE`, `LIVE`, `PROPERTY_LIBRARY`, "
+                        "`RULE_LIBRARY`, or `TEMPLATE`",
+                    "type": AbstractDataProviderType::get(StringOrNothingType),
+                    "preselected": True,
                     "allowed_values": (
+                        <AllowedValueInfo>{"value": "ENGAGE", "display_name": "Engage",
+                            "desc": "Engage tracking plan"},
                         <AllowedValueInfo>{"value": "LIVE", "display_name": "Live",
                             "desc": "Live tracking plan"},
                         <AllowedValueInfo>{"value": "PROPERTY_LIBRARY", "display_name": "Property Library",
@@ -532,7 +540,8 @@ module SegmentDataProvider {
                     "display_name": "Count",
                     "short_desc": "Number of results per page",
                     "desc": "Number of results per page (`1`-`1000`, default: `100`)",
-                    "type": "int",
+                    "type": AbstractDataProviderType::get(IntOrNothingType),
+                    "preselected": True,
                 },
             },
         });

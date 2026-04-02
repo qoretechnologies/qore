@@ -58,7 +58,7 @@ public class SegmentTrackingPlanDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "display_name": "Type",
                 "short_desc": "Tracking plan type",
-                "desc": "The type of tracking plan: `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
+                "desc": "The type of tracking plan: `ENGAGE`, `LIVE`, `PROPERTY_LIBRARY`, `RULE_LIBRARY`, or `TEMPLATE`",
             },
             "updatedAt": {
                 "type": DateOrNothingType,

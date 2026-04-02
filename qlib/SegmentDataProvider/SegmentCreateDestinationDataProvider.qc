@@ -39,14 +39,13 @@ public class SegmentCreateDestinationRequestDataType inherits HashDataType {
                 "ref_data": "sources",
                 "example_value": "qHHHsJnDpL",
             },
-            "catalogId": {
-                "display_name": "Catalog ID",
+            "metadataId": {
+                "display_name": "Metadata ID",
                 "short_desc": "Catalog ID of the destination type",
-                "desc": "The catalog ID of the destination type from the Segment catalog "
+                "desc": "The metadata ID of the destination type from the Segment catalog "
                     "(e.g., `catalog/destinations/google-analytics`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "preselected": True,
                 "example_value": "catalog/destinations/google-analytics",
             },
             "name": {
@@ -62,7 +61,7 @@ public class SegmentCreateDestinationRequestDataType inherits HashDataType {
                 "short_desc": "Destination configuration settings",
                 "desc": "Configuration settings required by the destination type, including "
                     "connection credentials and options; the available keys depend on the "
-                    "selected `catalogId`",
+                    "selected `metadataId`",
                 "type": AbstractDataProviderType::get(AutoHashType),
                 "required": True,
                 "preselected": True,
@@ -72,6 +71,7 @@ public class SegmentCreateDestinationRequestDataType inherits HashDataType {
                 "short_desc": "Whether the destination should be enabled",
                 "desc": "Set to `True` to enable the destination or `False` to create it in a disabled state",
                 "type": AbstractDataProviderType::get(BoolOrNothingType),
+                "preselected": True,
             },
         };
     }
@@ -108,9 +108,7 @@ public class SegmentCreateDestinationDataProvider inherits SegmentDataProviderBa
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = {
             "sourceId": req.sourceId,
-            "metadata": {
-                "id": req.catalogId,
-            },
+            "metadataId": req.metadataId,
         };
         if (exists req.name) {
             body.name = req.name;

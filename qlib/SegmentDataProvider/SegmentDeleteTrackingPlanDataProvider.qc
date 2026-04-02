@@ -59,8 +59,9 @@ public class SegmentDeleteTrackingPlanDataProvider inherits SegmentDataProviderB
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
-        const ConstructorOptions = SegmentDataProviderBase::ConstructorOptions;
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
 
         #! Request type
         static SegmentDeleteTrackingPlanRequestDataType RequestType();

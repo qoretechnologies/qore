@@ -29,14 +29,13 @@ public namespace SegmentDataProvider {
 public class SegmentCreateWarehouseRequestDataType inherits HashDataType {
     public {
         const Fields = {
-            "catalogId": {
-                "display_name": "Catalog ID",
+            "metadataId": {
+                "display_name": "Metadata ID",
                 "short_desc": "Catalog ID of the warehouse type",
-                "desc": "The catalog ID of the warehouse type from the Segment catalog "
+                "desc": "The metadata ID of the warehouse type from the Segment catalog "
                     "(e.g., `catalog/warehouses/bigquery`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "preselected": True,
                 "example_value": "catalog/warehouses/bigquery",
             },
             "settings": {
@@ -44,8 +43,8 @@ public class SegmentCreateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Warehouse connection settings",
                 "desc": "Configuration settings required by the warehouse type, including "
                     "connection details such as `hostname`, `port`, `database`, and `schema`; "
-                    "the available keys depend on the selected `catalogId`",
-                "type": AbstractDataProviderType::get(AutoHashOrNothingType),
+                    "the available keys depend on the selected `metadataId`",
+                "type": AbstractDataProviderType::get(AutoHashType),
                 "required": True,
                 "preselected": True,
             },
@@ -54,12 +53,14 @@ public class SegmentCreateWarehouseRequestDataType inherits HashDataType {
                 "short_desc": "Whether the warehouse should be enabled",
                 "desc": "Set to `True` to enable the warehouse or `False` to create it in a disabled state",
                 "type": AbstractDataProviderType::get(BoolOrNothingType),
+                "preselected": True,
             },
             "name": {
                 "display_name": "Name",
                 "short_desc": "Warehouse name",
                 "desc": "A human-readable display name for the warehouse",
                 "type": AbstractDataProviderTypeMap."*string",
+                "preselected": True,
                 "example_value": "My BigQuery Warehouse",
             },
         };
@@ -96,9 +97,7 @@ public class SegmentCreateWarehouseDataProvider inherits SegmentDataProviderBase
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = {
-            "metadata": {
-                "id": req.catalogId,
-            },
+            "metadataId": req.metadataId,
             "settings": req.settings,
         };
         if (exists req.enabled) {

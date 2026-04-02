@@ -54,6 +54,8 @@ public class SegmentTrackingPlansDataProvider inherits SegmentDataProviderBase {
                 "type": AbstractDataProviderType::get(StringOrNothingType),
                 "desc": "Filter tracking plans by type",
                 "allowed_values": (
+                    <AllowedValueInfo>{"value": "ENGAGE", "display_name": "Engage",
+                        "desc": "Engage tracking plan"},
                     <AllowedValueInfo>{"value": "LIVE", "display_name": "Live", "desc": "Live tracking plan"},
                     <AllowedValueInfo>{"value": "PROPERTY_LIBRARY", "display_name": "Property Library",
                         "desc": "Property library"},

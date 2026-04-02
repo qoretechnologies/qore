@@ -35,40 +35,31 @@ public class SegmentCreateSourceRequestDataType inherits HashDataType {
                 "desc": "A URL-friendly identifier for the source; must be unique within the workspace",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "preselected": True,
                 "example_value": "my-javascript-source",
             },
-            "name": {
-                "display_name": "Name",
-                "short_desc": "Human-readable source name",
-                "desc": "A human-readable display name for the source",
-                "type": AbstractDataProviderTypeMap."string",
+            "enabled": {
+                "display_name": "Enabled",
+                "short_desc": "Whether the source should be enabled",
+                "desc": "Set to `True` to enable the source or `False` to create it in a disabled state",
+                "type": AbstractDataProviderType::get(BoolType),
                 "required": True,
-                "preselected": True,
-                "example_value": "My JavaScript Source",
             },
-            "catalogId": {
-                "display_name": "Catalog ID",
+            "metadataId": {
+                "display_name": "Metadata ID",
                 "short_desc": "Catalog ID of the source type",
-                "desc": "The catalog ID of the source type from the Segment catalog "
+                "desc": "The metadata ID of the source type from the Segment catalog "
                     "(e.g., `catalog/sources/javascript`)",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "preselected": True,
                 "example_value": "catalog/sources/javascript",
             },
             "settings": {
                 "display_name": "Settings",
                 "short_desc": "Source configuration settings",
                 "desc": "Configuration settings specific to the source type; the available keys "
-                    "depend on the selected `catalogId`",
+                    "depend on the selected `metadataId`",
                 "type": AbstractDataProviderType::get(AutoHashOrNothingType),
-            },
-            "enabled": {
-                "display_name": "Enabled",
-                "short_desc": "Whether the source should be enabled",
-                "desc": "Set to `True` to enable the source or `False` to create it in a disabled state",
-                "type": AbstractDataProviderType::get(BoolOrNothingType),
+                "preselected": True,
             },
         };
     }
@@ -105,16 +96,11 @@ public class SegmentCreateSourceDataProvider inherits SegmentDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         hash<auto> body = {
             "slug": req.slug,
-            "name": req.name,
-            "metadata": {
-                "id": req.catalogId,
-            },
+            "enabled": req.enabled,
+            "metadataId": req.metadataId,
         };
         if (exists req.settings) {
             body.settings = req.settings;
-        }
-        if (exists req.enabled) {
-            body.enabled = req.enabled;
         }
         auto response = doPost("sources", body);
         return response.data.source ?? response;

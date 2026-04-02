@@ -67,8 +67,9 @@ public class SegmentDeleteLabelDataProvider inherits SegmentDataProviderBase {
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
-        const ConstructorOptions = SegmentDataProviderBase::ConstructorOptions;
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
 
         #! Request type
         static SegmentDeleteLabelRequestDataType RequestType();
@@ -97,7 +98,7 @@ public class SegmentDeleteLabelDataProvider inherits SegmentDataProviderBase {
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        doDelete(sprintf("labels?key=%s&value=%s",
+        doDelete(sprintf("labels/%s/%s",
             encode_url(req.key, True), encode_url(req.value, True)));
         return {"success": True};
     }

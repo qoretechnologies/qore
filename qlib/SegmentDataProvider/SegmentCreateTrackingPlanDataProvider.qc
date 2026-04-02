@@ -46,6 +46,8 @@ public class SegmentCreateTrackingPlanRequestDataType inherits HashDataType {
                 "required": True,
                 "preselected": True,
                 "allowed_values": (
+                    <AllowedValueInfo>{"value": "ENGAGE", "display_name": "Engage",
+                        "desc": "Engage tracking plan"},
                     <AllowedValueInfo>{"value": "LIVE", "display_name": "Live", "desc": "Live tracking plan"},
                     <AllowedValueInfo>{"value": "PROPERTY_LIBRARY", "display_name": "Property Library",
                         "desc": "Property library"},
@@ -60,6 +62,7 @@ public class SegmentCreateTrackingPlanRequestDataType inherits HashDataType {
                 "display_name": "Description",
                 "short_desc": "Description",
                 "desc": "A description of the tracking plan",
+                "preselected": True,
             },
         };
     }
@@ -81,8 +84,9 @@ public class SegmentCreateTrackingPlanDataProvider inherits SegmentDataProviderB
             "constructor_options": ConstructorOptions,
         };
 
-        #! Constructor options
-        const ConstructorOptions = SegmentDataProviderBase::ConstructorOptions;
+        const ProviderSummaryInfo = cast<hash<DataProviderSummaryInfo>>(ProviderInfo{
+            AbstractDataProvider::DataProviderSummaryInfoKeys
+        });
 
         #! Request type
         static SegmentCreateTrackingPlanRequestDataType RequestType();

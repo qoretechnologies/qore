@@ -142,7 +142,7 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         # Test that module loads correctly
         SegmentDataProvider dp({"apikey": "test-token"});
         assertEq("segment", dp.getName());
-        assertEq(True, dp.getStaticInfoImpl().supports_children);
+        assertEq(True, dp.getInfo().supports_children);
     }
 
     factoryTests() {
@@ -264,6 +264,7 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         AbstractDataProvider sources = dp.getChildProviderEx("sources");
         AbstractDataProviderRecordIterator i = sources.searchRecords();
         int count = 0;
+        *string firstSourceId;
         while (i.next()) {
             hash<auto> rec = i.getValue();
             if (count == 0) {
@@ -273,6 +274,7 @@ public class SegmentDataProviderTest inherits QUnit::Test {
                     "source record must have a name or slug");
                 assertEq(Type::Boolean, rec.enabled.type(),
                     "source enabled field must be a boolean");
+                firstSourceId = rec.id;
             }
             if (m_options.verbose) {
                 printf("  Source: %s (ID: %s, enabled: %y)\n", rec.name ?? "N/A", rec.id ?? "N/A", rec.enabled);
@@ -281,6 +283,18 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         }
         if (m_options.verbose) {
             printf("  Total sources: %d\n", count);
+        }
+
+        # Verify get-source returns consistent data
+        if (firstSourceId) {
+            AbstractDataProvider getSource = dp.getChildProviderEx("get-source");
+            auto result = getSource.doRequest({"sourceId": firstSourceId});
+            assertEq(firstSourceId, result.id, "get-source must return matching ID");
+            assertEq(True, exists result.name || exists result.slug,
+                "get-source must return name or slug");
+            if (m_options.verbose) {
+                printf("  Verified get-source: %s (slug: %s)\n", result.name ?? "N/A", result.slug ?? "N/A");
+            }
         }
     }
 
@@ -291,12 +305,14 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         AbstractDataProvider dests = dp.getChildProviderEx("destinations");
         AbstractDataProviderRecordIterator i = dests.searchRecords();
         int count = 0;
+        *string firstDestId;
         while (i.next()) {
             hash<auto> rec = i.getValue();
             if (count == 0) {
                 assertEq(True, exists rec.id, "destination record must have an id field");
                 assertEq(True, exists rec.sourceId, "destination record must have a sourceId");
                 assertEq(True, exists rec.metadata, "destination record must have metadata");
+                firstDestId = rec.id;
             }
             if (m_options.verbose) {
                 printf("  Destination: %s (ID: %s, enabled: %y)\n",
@@ -307,6 +323,18 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         if (m_options.verbose) {
             printf("  Total destinations: %d\n", count);
         }
+
+        # Verify get-destination returns consistent data
+        if (firstDestId) {
+            AbstractDataProvider getDest = dp.getChildProviderEx("get-destination");
+            auto result = getDest.doRequest({"destinationId": firstDestId});
+            assertEq(firstDestId, result.id, "get-destination must return matching ID");
+            assertEq(True, exists result.sourceId, "get-destination must return sourceId");
+            assertEq(True, exists result.metadata, "get-destination must return metadata");
+            if (m_options.verbose) {
+                printf("  Verified get-destination: %s (ID: %s)\n", result.name ?? "N/A", result.id);
+            }
+        }
     }
 
     integrationListWarehousesTests() {
@@ -316,12 +344,14 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         AbstractDataProvider warehouses = dp.getChildProviderEx("warehouses");
         AbstractDataProviderRecordIterator i = warehouses.searchRecords();
         int count = 0;
+        *string firstWarehouseId;
         while (i.next()) {
             hash<auto> rec = i.getValue();
             if (count == 0) {
                 assertEq(True, exists rec.id, "warehouse record must have an id field");
                 assertEq(True, exists rec.metadata, "warehouse record must have metadata");
                 assertEq(True, exists rec.settings, "warehouse record must have settings");
+                firstWarehouseId = rec.id;
             }
             if (m_options.verbose) {
                 printf("  Warehouse: %s (ID: %s)\n", rec.id ?? "N/A", rec.metadata.name ?? "N/A");
@@ -330,6 +360,19 @@ public class SegmentDataProviderTest inherits QUnit::Test {
         }
         if (m_options.verbose) {
             printf("  Total warehouses: %d\n", count);
+        }
+
+        # Verify get-warehouse returns consistent data
+        if (firstWarehouseId) {
+            AbstractDataProvider getWh = dp.getChildProviderEx("get-warehouse");
+            auto result = getWh.doRequest({"warehouseId": firstWarehouseId});
+            assertEq(firstWarehouseId, result.id, "get-warehouse must return matching ID");
+            assertEq(True, exists result.metadata, "get-warehouse must return metadata");
+            assertEq(True, exists result.settings, "get-warehouse must return settings");
+            if (m_options.verbose) {
+                printf("  Verified get-warehouse: %s (ID: %s)\n",
+                    result.metadata.name ?? "N/A", result.id);
+            }
         }
     }
 
