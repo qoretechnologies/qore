@@ -22,7 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-public namespace HttpServerAsyncIo;
+public namespace HttpServerAsyncIo {
 
 #! Common base class for HTTP server connection poll operations
 /** Provides onComplete() handling that calls handleConnectionResult() on the
@@ -32,7 +32,7 @@ public namespace HttpServerAsyncIo;
 
     @since Qore 2.3
 */
-public class HttpServerAsyncIo::HttpConnectionPollOperationBase inherits AbstractPollOperation {
+public class HttpConnectionPollOperationBase inherits AbstractPollOperation {
     private {
         #! Controller for completion dispatch
         *HttpAsyncSocketIoController completion_controller;
@@ -63,3 +63,5 @@ public class HttpServerAsyncIo::HttpConnectionPollOperationBase inherits Abstrac
         }
     }
 }
+
+} # namespace HttpServerAsyncIo
