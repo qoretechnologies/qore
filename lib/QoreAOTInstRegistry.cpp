@@ -33,6 +33,7 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
@@ -749,7 +750,21 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
         return false;
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
-    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    // Always write the method name — when method is null (unresolved at parse time),
+    // extract it from the DotEvalOperatorNode's MethodCallNode in the AST expression.
+    // Without this, the method name is lost during AOT serialization of closures where
+    // classifyAndWriteExpr can't serialize the QoreDotEvalOperatorNode expression.
+    const char* mname = ci->method ? ci->method->getName() : nullptr;
+    if (!mname && ci->expr.hasNode()) {
+        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(ci->expr.getInternalNode());
+        if (dot_eval) {
+            MethodCallNode* mcn = dot_eval->getMethodCall();
+            if (mcn) {
+                mname = mcn->getName();
+            }
+        }
+    }
+    ctx.writer.writeStringRef(mname ? mname : "");
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
     return true;
@@ -784,6 +799,10 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
     }
     auto* ci = new QoreIRDotEvalMethodDirectInstruction(method, qc, nullptr, expr, pseudo);
     ci->has_ref_args = has_ref_args;
+    // Store method name for fallback dynamic dispatch when method ptr is null
+    if (!method && method_name && *method_name) {
+        ci->fallback_method_name = strdup(method_name);
+    }
     expr.discard(nullptr);
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;
@@ -797,11 +816,23 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
 
 static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(ctx.inst);
+    // Write NOTHING for the expr (same rationale as writeDotEvalMethodDirect)
     if (!ctx.writeExpr(ctx.writer, ci->expr)) {
         return false;
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
-    ctx.writer.writeStringRef(ci->method ? ci->method->getName() : "");
+    // Always write method name — extract from AST when method ptr is null
+    const char* mname = ci->method ? ci->method->getName() : nullptr;
+    if (!mname && ci->expr.hasNode()) {
+        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(ci->expr.getInternalNode());
+        if (dot_eval) {
+            MethodCallNode* mcn = dot_eval->getMethodCall();
+            if (mcn) {
+                mname = mcn->getName();
+            }
+        }
+    }
+    ctx.writer.writeStringRef(mname ? mname : "");
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
     auto it_n = ctx.block_idx.find(ci->normal_target);
@@ -843,6 +874,9 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
     auto* ci = new QoreIRInvokeDotEvalMethodDirectInstruction(method, qc, nullptr, expr,
         pseudo, ctx.resolveBlock(normal_idx), ctx.resolveBlock(exception_idx));
     ci->has_ref_args = has_ref_args;
+    if (!method && method_name && *method_name) {
+        ci->fallback_method_name = strdup(method_name);
+    }
     expr.discard(nullptr);
     ci->result = QoreIRValue(result_id);
     ci->operands = operands;

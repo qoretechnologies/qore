@@ -1593,6 +1593,7 @@ public:
     ~QoreIRDotEvalMethodDirectInstruction() override {
         ExceptionSink xsink;
         expr.discard(&xsink);
+        free(const_cast<char*>(fallback_method_name));
     }
 
     const QoreMethod* method = nullptr;     //!< The resolved method pointer
@@ -1601,6 +1602,7 @@ public:
     QoreValue expr;                         //!< Original AST expression (for AOT)
     bool pseudo = false;                    //!< True if this is a pseudo-method call
     bool has_ref_args = false;              //!< True if any operand is a reference type (may be modified by callee)
+    const char* fallback_method_name = nullptr; //!< Method name for dynamic dispatch when method ptr is null (AOT)
     //!< operands[0] is the base expression, operands[1..n-1] are arguments
 };
 
@@ -1621,6 +1623,7 @@ public:
     ~QoreIRInvokeDotEvalMethodDirectInstruction() override {
         ExceptionSink xsink;
         expr.discard(&xsink);
+        free(const_cast<char*>(fallback_method_name));
     }
 
     const QoreMethod* method = nullptr;         //!< The resolved method pointer
@@ -1629,6 +1632,7 @@ public:
     QoreValue expr;                             //!< Original AST expression (for AOT)
     bool pseudo = false;                        //!< True if this is a pseudo-method call
     bool has_ref_args = false;                  //!< True if any operand is a reference type (may be modified by callee)
+    const char* fallback_method_name = nullptr;           //!< Method name for dynamic dispatch when method ptr is null (AOT)
     QoreIRBasicBlock* normal_target = nullptr;  //!< Target block on success
     QoreIRBasicBlock* exception_target = nullptr; //!< Target block on exception
     //!< operands[0] is the base expression, operands[1..n-1] are arguments

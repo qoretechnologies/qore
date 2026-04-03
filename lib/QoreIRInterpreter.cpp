@@ -6928,6 +6928,10 @@ load_local_done:
                         auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
                             direct_inst->expr.getInternalNode());
                         const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
+                        // Fallback to stored method name (from AOT deserialization)
+                        if (!mname && direct_inst->fallback_method_name != nullptr) {
+                            mname = direct_inst->fallback_method_name;
+                        }
                         if (mname) {
                             res = fromBits(dot_eval_fallback_with_args(base, mname,
                                 nanboxed_args, nargs, xsink));
@@ -7071,6 +7075,9 @@ load_local_done:
                         auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
                             de_invoke_inst->expr.getInternalNode());
                         const char* mname = dot_eval ? dot_eval->getMethodCall()->getName() : nullptr;
+                        if (!mname && de_invoke_inst->fallback_method_name != nullptr) {
+                            mname = de_invoke_inst->fallback_method_name;
+                        }
                         if (mname) {
                             res = fromBits(dot_eval_fallback_with_args(base, mname,
                                 nanboxed_args, nargs, xsink));
