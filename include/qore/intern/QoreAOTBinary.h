@@ -645,6 +645,7 @@ enum class AOTExprKind : uint8_t {
     CONST_NOTHING      = 32,  //!< Nothing constant: no data
     LIST_LITERAL       = 33,  //!< List literal: count(u8) + [value(AOTExprKind)] * N
     CONST_NULL         = 34,  //!< NULL constant: no data
+    DOT_EVAL_TARGET    = 35,  //!< Dot-eval method target: ref1=class_path, ref2=method_name, flags=is_pseudo
     EXPR_TREE          = 0xFE, //!< Recursive expression tree: binary blob (inline bytes)
     GENERIC_EVAL       = 0xFF //!< Unsupported expression — function needs source fallback
 };
@@ -824,6 +825,7 @@ struct AOTExprSlotId {
     AOTExprKind kind = AOTExprKind::GENERIC_EVAL; //!< expression kind
     std::string ref1;        //!< kind-specific: function name or class path
     std::string ref2;        //!< kind-specific: method name (for method calls)
+    uint8_t flags = 0;       //!< kind-specific flags (e.g., DOT_EVAL_TARGET: bit 0 = is_pseudo)
     const QoreListNode* call_args = nullptr; //!< call args for NEW_OBJECT/SCOPED_NEW_OBJECT/STATIC_METHOD_CALL
     const QoreParseListNode* parse_args = nullptr; //!< parse args for HASHDECL_NEW
     const UserClosureFunction* closure_func = nullptr; //!< For CLOSURE_CREATE: source closure function

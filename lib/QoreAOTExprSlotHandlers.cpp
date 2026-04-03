@@ -209,6 +209,14 @@ static bool write_slot_CONST_NULL(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! DOT_EVAL_TARGET: ref1 = class path, ref2 = method name, flags = is_pseudo
+static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    ctx.writer.writeU8(ctx.expr.flags);
+    return true;
+}
+
 //! SELF_METHOD_CALL: ref1 = class path, ref2 = method name
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());

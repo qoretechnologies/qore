@@ -1374,6 +1374,41 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::DOT_EVAL_TARGET: {
+                // Dot-eval method target: resolve class/method from strings
+                // and populate call_targets directly — no AST node needed
+                ref1 = reader.readStringRef(ptr);    // class_path
+                ref2 = reader.readStringRef(ptr);    // method_name
+                uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ptr);
+
+                const QoreMethod* method = nullptr;
+                const QoreClass* qc = nullptr;
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
+                    if (qc && ref2 && *ref2) {
+                        method = qc->findMethod(ref2);
+                        if (!method) {
+                            method = qc->findStaticMethod(ref2);
+                        }
+                    }
+                }
+                ctx->call_targets[i].method = method;
+                ctx->call_targets[i].qc = qc;
+                ctx->call_targets[i].is_pseudo = is_pseudo != 0;
+                ctx->call_targets[i].method_name = (ref2 && *ref2) ? ref2 : nullptr;
+                // Resolve variant from method if available
+                if (method) {
+                    MethodFunctionBase* mfb = qore_method_private::get(
+                        *method)->getFunction();
+                    if (mfb && mfb->numVariants() > 0) {
+                        ctx->call_targets[i].variant = mfb->first();
+                    }
+                }
+                // Store NOTHING in exprs — slot-based dispatch uses call_targets
+                ctx->exprs[i] = toBitsNB(QoreValue());
+                continue;
+            }
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
@@ -3461,6 +3496,11 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 }
                 break;
             }
+            case AOTExprKind::DOT_EVAL_TARGET:
+                reader.readStringRef(ptr);  // class_path
+                reader.readStringRef(ptr);  // method_name
+                QoreAOTBinaryReader::readU8(ptr);  // is_pseudo
+                break;
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:

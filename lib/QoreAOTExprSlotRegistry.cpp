@@ -164,8 +164,10 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 34: CONST_NULL
     {"CONST_NULL", 34, true, write_slot_CONST_NULL, "NULL constant"},
 
-    // 35-253: Unused
-    {nullptr, 35, false, nullptr, nullptr},
+    // 35: DOT_EVAL_TARGET
+    {"DOT_EVAL_TARGET", 35, true, write_slot_DOT_EVAL_TARGET, "Dot-eval method target"},
+
+    // 36-253: Unused
     {nullptr, 36, false, nullptr, nullptr},
     {nullptr, 37, false, nullptr, nullptr},
     {nullptr, 38, false, nullptr, nullptr},

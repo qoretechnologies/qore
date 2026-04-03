@@ -6286,6 +6286,21 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
+    // QoreDotEvalOperatorNode: dot-eval method call (obj.method())
+    // Classified as DOT_EVAL_TARGET with class_path + method_name instead of EXPR_TREE,
+    // so deserialization can resolve the method directly without reconstructing the AST.
+    if (auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        auto* mc = dot_eval->getMethodCall();
+        if (mc) {
+            id.kind = AOTExprKind::DOT_EVAL_TARGET;
+            const QoreClass* qc = mc->getClass();
+            id.ref1 = qc ? qc->getPath() : "";
+            id.ref2 = mc->getName() ? mc->getName() : "";
+            id.flags = mc->isPseudo() ? 1 : 0;
+            return id;
+        }
+    }
+
     // Try recursive expression tree serialization before falling back to GENERIC_EVAL
     {
         ExprTreeSerializer serializer(slots, const_reverse_map);

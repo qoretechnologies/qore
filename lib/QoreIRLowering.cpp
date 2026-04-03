@@ -7144,8 +7144,10 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
     // embedded expression. This is essential for AOT correctness: DotEvalAny evaluates args
     // from the EXPR_TREE which reads locals from TLS, but IR-only locals aren't on TLS.
     // copy() calls have getRawName() == nullptr but DO have method+class resolved.
+    // Use getName() which returns "copy" when getRawName() is null, ensuring copy()
+    // calls also produce DotEvalMethodDirect instead of falling back to DotEvalAny.
     MethodCallNode* m = op->getMethodCall();
-    if (m->getRawName()) {
+    if (m->getName()) {
         // Lower arguments
         std::vector<QoreIRValue> lowered_args;
         if (lowerCallArgs(m->getParseArgs(), m->getArgs(), lowered_args, error)) {
@@ -7168,13 +7170,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 QoreIRBasicBlock* handler = exception_stack.back();
                 auto* inst = builder.createInvokeDotEvalMethodDirect(m->getMethod(), m->getClass(),
                     m->getVariant(), expr, m->isPseudo(), operands, normal_block, handler, op->loc);
-                inst->fallback_method_name = strdup(m->getRawName());
+                inst->fallback_method_name = strdup(m->getName());
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
                 auto* inst = builder.createDotEvalMethodDirect(m->getMethod(), m->getClass(),
                     m->getVariant(), expr, m->isPseudo(), operands, op->loc);
-                inst->fallback_method_name = strdup(m->getRawName());
+                inst->fallback_method_name = strdup(m->getName());
                 result = inst->result;
             }
             return result;
