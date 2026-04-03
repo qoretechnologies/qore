@@ -137,6 +137,11 @@ public:
 
     DLLLOCAL const QoreValue getValue() const;
 
+    //! Returns true if the constant's value has been initialized (saved_val is set)
+    DLLLOCAL bool hasValue() const {
+        return static_cast<bool>(saved_val) || (val.hasNode() && val.getType() != NT_RTCONSTREF);
+    }
+
     //! Sets the runtime value (val + saved_val) for AOT init functions
     DLLLOCAL void setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
         val.discard(xsink);
@@ -471,6 +476,14 @@ public:
     DLLLOCAL RuntimeConstantRefNode(const QoreProgramLocation* loc, ConstantEntry* n_ce) : ParseNode(loc,
             NT_RTCONSTREF, true, false), ce(n_ce) {
         assert(ce->saved_val);
+    }
+
+    //! Constructor for AOT deferred evaluation — saved_val may not be set yet
+    /** The init function will populate saved_val via setRuntimeValue() before
+        evalImpl() is called at runtime.
+    */
+    DLLLOCAL RuntimeConstantRefNode(const QoreProgramLocation* loc, ConstantEntry* n_ce, bool aot_deferred)
+            : ParseNode(loc, NT_RTCONSTREF, true, false), ce(n_ce) {
     }
 
     DLLLOCAL ConstantEntry* getConstantEntry() const {

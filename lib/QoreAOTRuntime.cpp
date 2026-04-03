@@ -2288,16 +2288,14 @@ static QoreAOTContext* buildContextFromSlotMap(
     // If any expression slots have unsupported types, skip AOT
     // registration for this function — it will fall through to JIT at runtime
     if (has_unsupported) {
-        printd(2, "AOT buildCtx: SKIP '%s' (unsupported) locals=%d globals=%d "
-            "exprs=%d stmts=%d body_locals=%d\n",
-            name, num_locals, num_globals, num_exprs, num_stmts, num_body_locals);
+        printd(2, "AOT buildCtx: SKIP '%s' (unsupported expr slots)\n", name);
         delete ctx;
         return nullptr;
     }
 
     // Closure IR errors are hard failures (Phase 2: no source fallback)
     if (closure_ir_missing) {
-        printd(2, "AOT buildCtx: '%s' failed to register (closure IR missing/invalid, no fallback available)\n", name);
+        printd(2, "AOT buildCtx: '%s' failed (closure IR missing)\n", name);
         delete ctx;
         return nullptr;
     }
@@ -3820,6 +3818,8 @@ static void registerAOTFunctionsFromSlotMaps(
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
             printd(5, "  buildContextFromSlotMap('%s'): ctx=%p uvb=%p\n",
                 func_name, (void*)ctx, (void*)uvb);
+        }
+        if (strncmp(func_name, "__const_init::", 14) == 0) {
         }
         if (ctx && uvb) {
             uvb->registerPrecompiledAOTFunction(aot_func->fn_ptr, ctx);
@@ -6267,7 +6267,6 @@ static void executeInitFunctions(
     for (auto& desc : descriptors) {
         auto it = exec_map.find(desc.name);
         if (it == exec_map.end()) {
-            printd(2, "AOT init: no context for '%s' — skipping\n", desc.name.c_str());
             continue;
         }
 
