@@ -873,7 +873,8 @@ nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream
         }
         QoreHashNode* queue_objs;
         if (existing->getType() == NT_HASH) {
-            queue_objs = existing.release().get<QoreHashNode>();
+            // copy() ensures unique ownership (refcount == 1) before mutation
+            queue_objs = existing->get<QoreHashNode>()->copy();
         } else {
             queue_objs = new QoreHashNode(objectTypeInfo);
         }
@@ -908,7 +909,8 @@ nothing Http3ServerPollOperation::registerStreamListener(int session_id, int str
         }
         QoreHashNode* listeners;
         if (existing->getType() == NT_HASH) {
-            listeners = existing.release().get<QoreHashNode>();
+            // copy() ensures unique ownership (refcount == 1) before mutation
+            listeners = existing->get<QoreHashNode>()->copy();
         } else {
             listeners = new QoreHashNode(objectTypeInfo);
         }
