@@ -320,6 +320,14 @@ private:
     llvm::DISubprogram* di_sp = nullptr;
     std::unordered_map<const char*, llvm::DIFile*> di_file_cache;
 
+    // Runtime location tracking: per-function cached TLS pointers
+    llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
+    llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
+    int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+
+    //! Emit a runtime_loc update if the instruction's source line changed
+    void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);
+
     // Initialize types and helpers
     void initTypes();
 

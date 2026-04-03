@@ -79,6 +79,20 @@
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
 
+// --- Runtime location tracking for LLVM-generated code ---
+// Returns pointer to the thread-local runtime_loc variable for per-line location updates.
+// Called once at function entry; the returned pointer is stored and reused for each line change.
+extern "C" DLLEXPORT const QoreProgramLocation** qore_rt_get_loc_ptr() {
+    RuntimeLocationCache cache = get_runtime_location_cache();
+    return cache.loc_ptr;
+}
+
+// Returns pointer to the thread-local runtime_statement variable.
+extern "C" DLLEXPORT const AbstractStatement** qore_rt_get_stmt_ptr() {
+    RuntimeLocationCache cache = get_runtime_location_cache();
+    return cache.stmt_ptr;
+}
+
 // --- Exported check_stack wrapper for LLVM-generated code ---
 extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK

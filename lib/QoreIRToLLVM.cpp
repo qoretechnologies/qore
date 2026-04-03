@@ -1425,6 +1425,27 @@ llvm::DIFile* QoreIRToLLVM::getDIFile(const char* file_path) {
     return f;
 }
 
+void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module) {
+    if (!loc_cache_ptr || !stmt_cache_ptr) {
+        return;
+    }
+    if (!inst->loc || inst->loc->start_line <= 0) {
+        return;
+    }
+    if (inst->loc->start_line == last_runtime_line) {
+        return;
+    }
+    last_runtime_line = inst->loc->start_line;
+    // Store nullptr to stmt_ptr (clear statement pointer)
+    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
+        stmt_cache_ptr);
+    // Store new QoreProgramLocation* to loc_ptr
+    llvm::Value* loc_val = builder->CreateIntToPtr(
+        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
+        llvm::PointerType::getUnqual(ctx));
+    builder->CreateStore(loc_val, loc_cache_ptr);
+}
+
 void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
     if (!di_sp) {
         return;
@@ -1783,6 +1804,21 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         builder->SetInsertPoint(body_bb);
     }
 
+    // Initialize runtime location tracking: cache TLS pointers for per-line updates.
+    // Only for non-AOT (JIT) mode — AOT mode's inst->loc pointers are dangling at runtime
+    // since the parse tree doesn't exist in the loaded AOT binary.
+    loc_cache_ptr = nullptr;
+    stmt_cache_ptr = nullptr;
+    last_runtime_line = -1;
+    if (!aot_mode) {
+        auto loc_fn = module.getOrInsertFunction("qore_rt_get_loc_ptr",
+            llvm::FunctionType::get(ptr_type, {}, false));
+        loc_cache_ptr = builder->CreateCall(loc_fn, {}, "loc_ptr");
+        auto stmt_fn = module.getOrInsertFunction("qore_rt_get_stmt_ptr",
+            llvm::FunctionType::get(ptr_type, {}, false));
+        stmt_cache_ptr = builder->CreateCall(stmt_fn, {}, "stmt_ptr");
+    }
+
     // Lower each block
     for (const auto& block : func.blocks) {
         llvm::BasicBlock* llvm_block = block_map[block.get()];
@@ -1814,6 +1850,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             // Phase 5c: Set debug location for this instruction
             setDebugLocation(inst);
+            // Update runtime_loc for exception stack traces (per source line change)
+            emitRuntimeLocationUpdate(inst, module);
             if (getenv("QORE_LLVM_DEBUG")) {
                 fprintf(stderr, "LLVM-INST: opcode=%d in block=%s\n",
                         static_cast<int>(inst->opcode), builder->GetInsertBlock()->getName().str().c_str());
