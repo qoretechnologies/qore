@@ -1589,6 +1589,10 @@ static bool write_expr_generic_eval(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_generic_eval(AOTExprReadCtx& ctx) {
-    // Unsupported — function needs source fallback
+    // Signal that this expression cannot be deserialized — the calling code
+    // must set has_unsupported to trigger source fallback for the function.
+    // Without this error, GENERIC_EVAL in nested expressions (e.g., constructor args)
+    // silently becomes NOTHING, corrupting argument lists at runtime.
+    ctx.error = "unsupported nested expression (GENERIC_EVAL)";
     return QoreValue();
 }

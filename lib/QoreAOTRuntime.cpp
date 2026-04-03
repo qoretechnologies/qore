@@ -1139,12 +1139,20 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
                             call_args->push(QoreValue(), nullptr);
+                            has_unsupported = true;
                         } else {
                             call_args->push(arg, nullptr);
                         }
                     }
                 }
                 // Resolve the class and create the node with args
+                if (has_unsupported) {
+                    // Unsupported arg expression — function needs source fallback
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    break;
+                }
                 if (ref1 && *ref1) {
                     const qore_ns_private* found_ns = nullptr;
                     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
@@ -1210,10 +1218,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
                             call_args->push(QoreValue(), nullptr);
+                            has_unsupported = true;
                         } else {
                             call_args->push(arg, nullptr);
                         }
                     }
+                }
+                if (has_unsupported) {
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    break;
                 }
                 // Resolve type and create node with args
                 if (ref1 && *ref1) {
@@ -1266,7 +1281,11 @@ static QoreAOTContext* buildContextFromSlotMap(
                             ref1 ? ref1 : "", arg_err.c_str());
                         arg_val.discard(nullptr);
                         arg_val = QoreValue();
+                        has_unsupported = true;
                     }
+                }
+                if (has_unsupported) {
+                    break;
                 }
                 // Resolve type and create node with arg
                 if (ref1 && *ref1) {
@@ -1304,10 +1323,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 j, ref1 ? ref1 : "", arg_err.c_str());
                             arg.discard(nullptr);
                             call_args->push(QoreValue(), nullptr);
+                            has_unsupported = true;
                         } else {
                             call_args->push(arg, nullptr);
                         }
                     }
+                }
+                if (has_unsupported) {
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    break;
                 }
                 // Resolve hashdecl and create node with args
                 if (ref1 && *ref1) {
@@ -1368,10 +1394,17 @@ static QoreAOTContext* buildContextFromSlotMap(
                                 j, ref1 ? ref1 : "", ref2 ? ref2 : "", arg_err.c_str());
                             arg.discard(nullptr);
                             call_args->push(QoreValue(), nullptr);
+                            has_unsupported = true;
                         } else {
                             call_args->push(arg, nullptr);
                         }
                     }
+                }
+                if (has_unsupported) {
+                    if (call_args) {
+                        call_args->deref(nullptr);
+                    }
+                    break;
                 }
                 // Resolve class and method, create node with args
                 if (ref1 && ref2) {
