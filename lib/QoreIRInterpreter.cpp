@@ -9130,6 +9130,12 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
 
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    // Hold an extra reference on the RHS to ensure COW triggers correctly
+    // when the LHS is a member of the RHS (e.g., h.b += h).
+    // Without this, the hash appears unique (refcount 1) and self-assignment
+    // creates a cycle. Matches AST path's ensureReferencedValue().
+    ValueHolder right_holder(right.refSelf(), xsink);
+
     // values requiring dereferencing must be dereferenced outside the lock
     SafeDerefHelper sdh(xsink);
 
