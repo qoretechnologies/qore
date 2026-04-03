@@ -1195,6 +1195,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store(uint64_t lvalue_bits, uint64_
     }
     QoreValue lvalue = fromBits(lvalue_bits);
     QoreValue value = fromBits(value_bits);
+    // Hold an extra reference on the RHS value so that LValueHelper::ensureUnique()
+    // sees the correct refcount for COW. Without this, self-assignment (e.g., h.b = h)
+    // creates a circular reference because the hash appears unique at refcount 1.
+    ValueHolder val_holder(value.refSelf(), xsink);
     QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink);
     return toBits(result);
 }
@@ -1208,6 +1212,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_store_weak(uint64_t lvalue_bits, ui
     }
     QoreValue lvalue = fromBits(lvalue_bits);
     QoreValue value = fromBits(value_bits);
+    ValueHolder val_holder(value.refSelf(), xsink);
     QoreValue result = QoreIRInterpreter::evalLValueStore(lvalue, value, xsink, true);
     return toBits(result);
 }
