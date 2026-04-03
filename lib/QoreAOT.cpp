@@ -3797,6 +3797,17 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::Invoke: {
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    // Skip expression slot for pure computation opcodes (binary, unary)
+                    // whose operands are already lowered IR values. LLVM codegen dispatches
+                    // these directly via qore_rt_binary_op/qore_rt_unary_op without using
+                    // the expression slot. Creating an EXPR_TREE slot for these would fail
+                    // at runtime when the AST expression can't be deserialized in AOT context.
+                    if ((!ii->operands.empty() && isBinaryInvokeOpcode(ii->invoke_opcode)
+                                && ii->operands.size() >= 2)
+                            || (!ii->operands.empty() && isUnaryInvokeOpcode(ii->invoke_opcode)
+                                && ii->operands.size() >= 1)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     slots.getExprSlot(bits);
