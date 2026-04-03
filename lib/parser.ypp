@@ -1931,6 +1931,17 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
     struct MethodDef* methoddef;
 }
 
+// Clean up heap-allocated parser values discarded during error recovery.
+// Without these, parse errors leak scanner-allocated nodes (DateTimeNode, etc.).
+%destructor { if ($$) $$->deref(nullptr); } <datetime>
+%destructor { if ($$) $$->deref(nullptr); } <String>
+%destructor { if ($$) $$->deref(nullptr); } <binary>
+%destructor { if ($$) $$->deref(nullptr); } <node>
+%destructor { if ($$) $$->deref(nullptr); } <num>
+%destructor { if ($$) delete $$; } <hash>
+%destructor { if ($$) delete $$; } <parse_list>
+%destructor { if ($$) free($$); } <string>
+
 %{
 #define LEX_PARAMETERS YYSTYPE *lvalp, YYLTYPE *loc, yyscan_t scanner
 
