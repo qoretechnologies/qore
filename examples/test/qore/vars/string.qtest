@@ -741,7 +741,11 @@ class StringTest inherits QUnit::Test {
     }
 
     testConversions() {
-        assertEq("", string(NULL));
+        # NULL is treated like NOTHING for soft types — rejected for non-optional softstring
+        assertThrows("PARSE-TYPE-ERROR", sub () {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            p.parse("string s = string(NULL);", "test", WARN_DEFAULT);
+        });
     }
 
     testTrim() {
