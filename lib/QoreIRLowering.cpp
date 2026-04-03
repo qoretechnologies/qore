@@ -7156,6 +7156,9 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
 
             QoreIRValue result;
             bool should_invoke = !exception_stack.empty();
+            // Always set fallback_method_name so consumers (LLVM codegen, IR interpreter,
+            // AOT deserialization) don't need to extract it from the AST expr field.
+            // The expr is still stored for the LLVM AOT slot system (call target resolution).
             if (should_invoke) {
                 QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
                 if (!normal_block) {
@@ -7165,11 +7168,13 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
                 QoreIRBasicBlock* handler = exception_stack.back();
                 auto* inst = builder.createInvokeDotEvalMethodDirect(m->getMethod(), m->getClass(),
                     m->getVariant(), expr, m->isPseudo(), operands, normal_block, handler, op->loc);
+                inst->fallback_method_name = strdup(m->getRawName());
                 builder.setBlock(normal_block);
                 result = inst->result;
             } else {
                 auto* inst = builder.createDotEvalMethodDirect(m->getMethod(), m->getClass(),
                     m->getVariant(), expr, m->isPseudo(), operands, op->loc);
+                inst->fallback_method_name = strdup(m->getRawName());
                 result = inst->result;
             }
             return result;

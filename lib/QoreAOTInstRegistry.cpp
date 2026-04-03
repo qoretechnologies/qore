@@ -33,7 +33,6 @@
 #include "qore/intern/QoreAOTInstRegistry.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/CaseNodeRegex.h"
-#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/QoreValue.h"
 
 // Forward declarations for recursive serialization functions
@@ -769,20 +768,8 @@ static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
         return false;
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
-    // Always write the method name — when method is null (unresolved at parse time),
-    // extract it from the DotEvalOperatorNode's MethodCallNode in the AST expression.
-    // Without this, the method name is lost during AOT serialization of closures where
-    // classifyAndWriteExpr can't serialize the QoreDotEvalOperatorNode expression.
-    const char* mname = ci->method ? ci->method->getName() : nullptr;
-    if (!mname && ci->expr.hasNode()) {
-        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(ci->expr.getInternalNode());
-        if (dot_eval) {
-            MethodCallNode* mcn = dot_eval->getMethodCall();
-            if (mcn) {
-                mname = mcn->getName();
-            }
-        }
-    }
+    // Use resolved method name or fallback_method_name (always set during IR lowering)
+    const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     ctx.writer.writeStringRef(mname ? mname : "");
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);
@@ -841,16 +828,8 @@ static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
     // Always write method name — extract from AST when method ptr is null
-    const char* mname = ci->method ? ci->method->getName() : nullptr;
-    if (!mname && ci->expr.hasNode()) {
-        auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(ci->expr.getInternalNode());
-        if (dot_eval) {
-            MethodCallNode* mcn = dot_eval->getMethodCall();
-            if (mcn) {
-                mname = mcn->getName();
-            }
-        }
-    }
+    // Use resolved method name or fallback_method_name (always set during IR lowering)
+    const char* mname = ci->method ? ci->method->getName() : ci->fallback_method_name;
     ctx.writer.writeStringRef(mname ? mname : "");
     ctx.writer.writeU8(ci->pseudo ? 1 : 0);
     ctx.writer.writeU8(ci->has_ref_args ? 1 : 0);

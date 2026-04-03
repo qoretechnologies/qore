@@ -5713,10 +5713,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         xsink_arg});
             } else {
                 // Unresolved method (abstract/dynamic): use name-based dispatch with
-                // pre-evaluated args via the embedded expression's method name
-                auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(
-                        direct_inst->expr.getInternalNode());
-                const char* method_name = dot_eval ? dot_eval->getMethodCall()->getName() : "";
+                // pre-evaluated args via the stored method name
+                const char* method_name = direct_inst->fallback_method_name
+                    ? direct_inst->fallback_method_name : "";
                 llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
                 auto helper = module.getOrInsertFunction(
                         "qore_rt_dot_eval_method_by_name",
