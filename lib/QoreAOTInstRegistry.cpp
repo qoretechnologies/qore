@@ -88,6 +88,16 @@ static bool writeConst(AOTInstWriteCtx& ctx) {
         case QoreIRConstant::Kind::Date:
             ctx.writer.writeI64(ci->constant.date_microseconds);
             ctx.writer.writeU8(ci->constant.date_is_relative ? 1 : 0);
+            if (ci->constant.date_is_relative) {
+                // Relative date components (years/months can't be converted to microseconds losslessly)
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_years));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_months));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_days));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_hours));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_minutes));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_seconds));
+                ctx.writer.writeU32(static_cast<uint32_t>(ci->constant.rel_us));
+            }
             break;
         case QoreIRConstant::Kind::Enum:
             if (ci->constant.enum_member) {
@@ -130,6 +140,15 @@ static std::unique_ptr<QoreIRInstruction> readConst(
         case QoreIRConstant::Kind::Date:
             ci->constant.date_microseconds = QoreAOTBinaryReader::readI64(ctx.ptr);
             ci->constant.date_is_relative = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+            if (ci->constant.date_is_relative) {
+                ci->constant.rel_years = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_months = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_days = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_hours = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_minutes = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_seconds = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+                ci->constant.rel_us = static_cast<int>(QoreAOTBinaryReader::readU32(ctx.ptr));
+            }
             break;
         case QoreIRConstant::Kind::Enum: {
             const char* enum_path = ctx.reader.readStringRef(ctx.ptr);
@@ -774,11 +793,11 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
+    // Expr read failure is non-fatal: the instruction has method_name, class_path,
+    // and fallback_method_name for runtime dispatch. The expr field is only used
+    // as a backup to extract the method name, which fallback_method_name replaces.
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-    if (!error.empty()) {
-        return nullptr;
-    }
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
     bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
@@ -846,11 +865,9 @@ static std::unique_ptr<QoreIRInstruction> readInvokeDotEvalMethodDirect(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
+    // Expr read failure is non-fatal (same rationale as readDotEvalMethodDirect)
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-    if (!error.empty()) {
-        return nullptr;
-    }
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
     const char* method_name = ctx.reader.readStringRef(ctx.ptr);
     bool pseudo = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
