@@ -572,6 +572,7 @@ struct IRCallFrame {
     std::vector<QoreValue> locals_slot_cache;
     std::vector<LocalVarValue*> locals_lvar_cache;
     std::unordered_set<const LocalVar*> instantiated_locals;
+    std::vector<const LocalVar*> instantiated_locals_ordered;
     std::unordered_set<const LocalVar*> locally_uninstantiated;
     std::vector<bool> locals_ir_only;
     std::vector<bool> locals_instantiated;
@@ -620,6 +621,7 @@ struct IRCallFrame {
         }
         load_slot_registered.assign(reserve_size, false);
         instantiated_locals.clear();
+        instantiated_locals_ordered.clear();
         locally_uninstantiated.clear();
         ephemeral_weak_ref_slots.clear();
         globals.clear();
@@ -744,6 +746,7 @@ static void storeValue(std::unordered_map<const void*, QoreValue>& values, const
 }
 
 static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const LocalVar*>& locals,
+        std::vector<const LocalVar*>& locals_ordered,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
         std::unordered_set<const LocalVar*>* locally_uninstantiated = nullptr) {
@@ -760,6 +763,7 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
         return;
     }
     if (locals.insert(var).second) {
+        locals_ordered.push_back(var);
         // Pre-instantiated variables (params, argvid, selfid, ast_visible_body_locals)
         // are already on the thread-local stack from evalTiered.  We skip re-instantiation
         // UNLESS the variable was explicitly uninstantiated mid-execution (e.g., a
@@ -784,11 +788,15 @@ static void ensureLocalInstantiated(LocalVar* var, std::unordered_set<const Loca
     }
 }
 
-static void cleanupInstantiatedLocals(const std::unordered_set<const LocalVar*>& locals, ExceptionSink* xsink,
+static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals_ordered, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr) {
-    for (auto* var : locals) {
+    // Iterate in REVERSE instantiation order so that closures that capture
+    // other closures release their references before the captured CVVs are deref'd.
+    // This matches AST mode's reverse-declaration-order finalization and prevents
+    // DGC scanner deadlocks (QoreVarRWLock contention in ClosureVarValue::deref).
+    for (auto it = locals_ordered.rbegin(); it != locals_ordered.rend(); ++it) {
+        const LocalVar* var = *it;
         if (var) {
-            // Skip uninstantiation for locals managed by the caller
             if (pre_instantiated && pre_instantiated->find(var) != pre_instantiated->end()) {
                 continue;
             }
@@ -859,7 +867,9 @@ static void assignGlobalVarValue(Var* var, const QoreValue& value, ExceptionSink
 
 
 static void updateLocalVarFromLvalue(
-        std::unordered_set<const LocalVar*>& instantiated_locals, const QoreValue& lvalue,
+        std::unordered_set<const LocalVar*>& instantiated_locals,
+        std::vector<const LocalVar*>& instantiated_locals_ordered,
+        const QoreValue& lvalue,
         const QoreValue& value, ExceptionSink* xsink,
         const std::unordered_set<const LocalVar*>* pre_instantiated = nullptr,
         const std::unordered_set<const void*>* function_own_locals = nullptr,
@@ -876,7 +886,7 @@ static void updateLocalVarFromLvalue(
     }
     qore_var_t type = var_ref->getType();
     if ((type == VT_LOCAL || type == VT_LOCAL_TS) && var_ref->ref.id) {
-        ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, pre_instantiated,
+        ensureLocalInstantiated(var_ref->ref.id, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                 function_own_locals, locally_uninstantiated);
         // Invalidate the slot cache entry (don't pre-populate) because
         // assignLocalVarValue() → acceptAssignment() may coerce the value type.
@@ -1696,6 +1706,7 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     auto& locals_slot_cache = frame.locals_slot_cache;
     auto& locals_lvar_cache = frame.locals_lvar_cache;
     auto& instantiated_locals = frame.instantiated_locals;
+    auto& instantiated_locals_ordered = frame.instantiated_locals_ordered;
     auto& locally_uninstantiated = frame.locally_uninstantiated;
     auto& locals_ir_only = frame.locals_ir_only;
     auto& locals_instantiated = frame.locals_instantiated;
@@ -2053,13 +2064,13 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
 
     struct LocalInstantiationCleanup {
-        std::unordered_set<const LocalVar*>& locals;
+        std::vector<const LocalVar*>& locals_ordered;
         ExceptionSink* xsink;
         const std::unordered_set<const LocalVar*>* pre_instantiated;
         ~LocalInstantiationCleanup() {
-            cleanupInstantiatedLocals(locals, xsink, pre_instantiated);
+            cleanupInstantiatedLocals(locals_ordered, xsink, pre_instantiated);
         }
-    } local_cleanup{instantiated_locals, xsink, pre_instantiated};
+    } local_cleanup{instantiated_locals_ordered, xsink, pre_instantiated};
 
     // RAII guard: discard all slot cache entries on any function exit path.
     // The slot cache holds refSelf() references to local variable values for O(1) access.
@@ -3173,7 +3184,7 @@ next_instruction:
                     // modify the value between IR instructions)
                     if (local_inst->slot_id >= locals_instantiated.size()
                             || !locals_instantiated[local_inst->slot_id]) {
-                        ensureLocalInstantiated(local_inst->local, instantiated_locals,
+                        ensureLocalInstantiated(local_inst->local, instantiated_locals, instantiated_locals_ordered,
                             pre_instantiated, function_own_locals, &locally_uninstantiated);
                         if (local_inst->slot_id < locals_instantiated.size()) {
                             locals_instantiated[local_inst->slot_id] = true;
@@ -3212,7 +3223,7 @@ next_instruction:
                     if (local_inst->local) {
                         if (local_inst->slot_id >= locals_instantiated.size()
                                 || !locals_instantiated[local_inst->slot_id]) {
-                            ensureLocalInstantiated(local_inst->local, instantiated_locals,
+                            ensureLocalInstantiated(local_inst->local, instantiated_locals, instantiated_locals_ordered,
                                 pre_instantiated, function_own_locals, &locally_uninstantiated);
                             if (local_inst->slot_id < locals_instantiated.size()) {
                                 locals_instantiated[local_inst->slot_id] = true;
@@ -3243,7 +3254,7 @@ next_instruction:
                     if (local_inst->local) {
                         if (local_inst->slot_id >= locals_instantiated.size()
                                 || !locals_instantiated[local_inst->slot_id]) {
-                            ensureLocalInstantiated(local_inst->local, instantiated_locals,
+                            ensureLocalInstantiated(local_inst->local, instantiated_locals, instantiated_locals_ordered,
                                 pre_instantiated, function_own_locals, &locally_uninstantiated);
                             if (local_inst->slot_id < locals_instantiated.size()) {
                                 locals_instantiated[local_inst->slot_id] = true;
@@ -3616,7 +3627,7 @@ load_local_done:
                         && !locals_slot_cache[fused_inst->target_slot_id].isNothing()) {
                     target_val = locals_slot_cache[fused_inst->target_slot_id].getAsBigInt();
                 } else {
-                    ensureLocalInstantiated(fused_inst->target, instantiated_locals,
+                    ensureLocalInstantiated(fused_inst->target, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
                     if (fused_inst->target_slot_id < locals_instantiated.size()) {
                         locals_instantiated[fused_inst->target_slot_id] = true;
@@ -3639,7 +3650,7 @@ load_local_done:
                         && !locals_slot_cache[fused_inst->source_slot_id].isNothing()) {
                     source_val = locals_slot_cache[fused_inst->source_slot_id].getAsBigInt();
                 } else {
-                    ensureLocalInstantiated(fused_inst->source, instantiated_locals,
+                    ensureLocalInstantiated(fused_inst->source, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
                     if (fused_inst->source_slot_id < locals_instantiated.size()) {
                         locals_instantiated[fused_inst->source_slot_id] = true;
@@ -3697,7 +3708,7 @@ load_local_done:
                         && !locals_slot_cache[fused_inst->slot_id].isNothing()) {
                     local_val = locals_slot_cache[fused_inst->slot_id].getAsBigInt();
                 } else {
-                    ensureLocalInstantiated(fused_inst->local, instantiated_locals,
+                    ensureLocalInstantiated(fused_inst->local, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
                     if (fused_inst->slot_id < locals_instantiated.size()) {
                         locals_instantiated[fused_inst->slot_id] = true;
@@ -3755,7 +3766,7 @@ load_local_done:
                         && !locals_slot_cache[fused_inst->lhs_slot_id].isNothing()) {
                     lhs_val = locals_slot_cache[fused_inst->lhs_slot_id].getAsBigInt();
                 } else {
-                    ensureLocalInstantiated(fused_inst->lhs, instantiated_locals,
+                    ensureLocalInstantiated(fused_inst->lhs, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
                     if (fused_inst->lhs_slot_id < locals_instantiated.size()) {
                         locals_instantiated[fused_inst->lhs_slot_id] = true;
@@ -3777,7 +3788,7 @@ load_local_done:
                         && !locals_slot_cache[fused_inst->rhs_slot_id].isNothing()) {
                     rhs_val = locals_slot_cache[fused_inst->rhs_slot_id].getAsBigInt();
                 } else {
-                    ensureLocalInstantiated(fused_inst->rhs, instantiated_locals,
+                    ensureLocalInstantiated(fused_inst->rhs, instantiated_locals, instantiated_locals_ordered,
                         pre_instantiated, function_own_locals, &locally_uninstantiated);
                     if (fused_inst->rhs_slot_id < locals_instantiated.size()) {
                         locals_instantiated[fused_inst->rhs_slot_id] = true;
@@ -4108,7 +4119,7 @@ load_local_done:
                     const LVarSet* vlist = cc_inst->closure_node->getVList();
                     if (vlist) {
                         for (LocalVar* var : *vlist) {
-                            ensureLocalInstantiated(var, instantiated_locals, pre_instantiated,
+                            ensureLocalInstantiated(var, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
                         }
                     }
@@ -4127,7 +4138,7 @@ load_local_done:
                     const LVarSet* vlist = closure_node->getVList();
                     if (vlist) {
                         for (LocalVar* var : *vlist) {
-                            ensureLocalInstantiated(var, instantiated_locals, pre_instantiated,
+                            ensureLocalInstantiated(var, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
                         }
                     }
@@ -4390,7 +4401,7 @@ load_local_done:
                 // Fast path: skip hash lookups if already instantiated (bitset check)
                 if (local_inst->slot_id >= locals_instantiated.size()
                         || !locals_instantiated[local_inst->slot_id]) {
-                    ensureLocalInstantiated(local_inst->local, instantiated_locals, pre_instantiated,
+                    ensureLocalInstantiated(local_inst->local, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                             function_own_locals, &locally_uninstantiated);
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         locals_instantiated[local_inst->slot_id] = true;
@@ -4537,7 +4548,7 @@ load_local_done:
             case QoreIROpcode::InstantiateLocal: {
                 auto* linst = static_cast<QoreIRLocalInstruction*>(inst);
                 if (linst->local) {
-                    ensureLocalInstantiated(linst->local, instantiated_locals, pre_instantiated,
+                    ensureLocalInstantiated(linst->local, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                         function_own_locals, &locally_uninstantiated);
                 }
                 ++ip;
@@ -4568,6 +4579,14 @@ load_local_done:
                     bool was_instantiated = instantiated_locals.count(local_inst->local) > 0;
                     // Remove from instantiated_locals since we're explicitly cleaning it up
                     instantiated_locals.erase(local_inst->local);
+                    // Mark as null in ordered list (reverse scan finds most recent first)
+                    for (auto rit = instantiated_locals_ordered.rbegin();
+                            rit != instantiated_locals_ordered.rend(); ++rit) {
+                        if (*rit == local_inst->local) {
+                            *rit = nullptr;
+                            break;
+                        }
+                    }
                     // Clear the fast-path instantiation flag
                     if (local_inst->slot_id < locals_instantiated.size()) {
                         locals_instantiated[local_inst->slot_id] = false;
@@ -5838,7 +5857,7 @@ load_local_done:
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
                 }
-                updateLocalVarFromLvalue(instantiated_locals, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
+                updateLocalVarFromLvalue(instantiated_locals, instantiated_locals_ordered, lval_inst->lvalue, res, xsink, pre_instantiated, function_own_locals, &locally_uninstantiated,
                     &func.local_var_slots, &locals_slot_cache);
                 ++ip;
                 break;
@@ -5861,7 +5880,7 @@ load_local_done:
                 if (base_var) {
                     qore_var_t type = base_var->getType();
                     if ((type == VT_LOCAL || type == VT_LOCAL_TS) && base_var->ref.id) {
-                        ensureLocalInstantiated(base_var->ref.id, instantiated_locals, pre_instantiated,
+                        ensureLocalInstantiated(base_var->ref.id, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
                     }
                 }
@@ -6564,7 +6583,7 @@ load_local_done:
                         // Check all local variable types (including closure-use variants)
                         if ((vtype == VT_LOCAL || vtype == VT_CLOSURE || vtype == VT_LOCAL_TS)
                                 && var_new_obj->ref.id) {
-                            ensureLocalInstantiated(var_new_obj->ref.id, instantiated_locals, pre_instantiated,
+                            ensureLocalInstantiated(var_new_obj->ref.id, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                     function_own_locals, &locally_uninstantiated);
                             // Track the result slot for this local's initialization
                             // so we can clean it up when UninstantiateLocal is processed
