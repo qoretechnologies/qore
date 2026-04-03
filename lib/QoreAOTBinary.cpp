@@ -2630,6 +2630,29 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    // Try ExprTreeSerializer as a last resort before falling back to GENERIC_EVAL.
+    // Build a minimal AOTSlotMap from parent_locals so the serializer can resolve
+    // local variable references by pointer identity.
+    {
+        AOTSlotMap tree_slots;
+        for (size_t i = 0; i < parent_locals.size(); ++i) {
+            if (parent_locals[i].local_var_ptr) {
+                tree_slots.local_slots[parent_locals[i].local_var_ptr] = static_cast<int32_t>(i);
+            }
+        }
+        std::vector<uint8_t> blob;
+        if (serializeExprTreeToBlob(expr, tree_slots, blob, false, const_reverse_map)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXPR_TREE));
+            writer.writeU32(static_cast<uint32_t>(blob.size()));
+            if (!blob.empty()) {
+                writer.writeBytes(blob.data(), static_cast<uint32_t>(blob.size()));
+            }
+            printd(3, "AOT: serialized expr type '%s' as EXPR_TREE (%u bytes)\n",
+                node->getTypeName(), (unsigned)blob.size());
+            return true;
+        }
+    }
+
     // Unsupported — write GENERIC_EVAL placeholder
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
