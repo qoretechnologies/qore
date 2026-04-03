@@ -96,8 +96,20 @@ public:
     //! Shuts down and closes the socket
     DLLEXPORT void closeIo(ExceptionSink* xsink) override;
 
-    //! Returns true if the SSL layer has buffered data ready to read
+    //! Returns true if there is buffered data ready to read
+    /** Checks the socket's internal read buffer (from a previous SSL_read that
+        read more data than the caller consumed) and the SSL pending buffer.
+    */
     DLLEXPORT bool hasPendingData() const override;
+
+    //! Drains any data in the socket's internal read buffer
+    /** Returns the buffered data and resets the buffer pointers.
+        Used during protocol upgrades (HTTP→WebSocket) to transfer leftover
+        data from the HTTP header reader to the new protocol handler.
+        @return the buffered data, or nullptr if no data is pending
+        @since %Qore 2.3
+    */
+    DLLEXPORT BinaryNode* drainPendingBuffer();
 
     //! Invalidates the socket
     /** Normally called only in the %Qore object's destructor

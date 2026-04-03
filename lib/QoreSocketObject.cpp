@@ -87,6 +87,14 @@ void QoreSocketObject::closeIo(ExceptionSink* xsink) {
 }
 
 bool QoreSocketObject::hasPendingData() const {
+    // Check the socket's internal read buffer for unread data left over from
+    // a previous read operation.  This handles protocol upgrades (HTTP→WS)
+    // where SSL_read() reads a full TLS record containing both HTTP headers
+    // and the first WebSocket frame; the header reader consumes only headers,
+    // leaving frame data in rbuf that the next poll op must process.
+    if (priv->socket->priv->buflen > priv->socket->priv->bufoffset) {
+        return true;
+    }
     // Check SSL buffer without syscalls or locking — safe from any thread
     // SSL_pending() is documented as thread-safe for read-only queries
     if (priv->socket->priv->ssl && priv->socket->priv->ssl->pending() > 0) {
@@ -107,6 +115,18 @@ bool QoreSocketObject::hasPendingData() const {
         }
     }
     return false;
+}
+
+BinaryNode* QoreSocketObject::drainPendingBuffer() {
+    qore_socket_private* sp = priv->socket->priv;
+    if (sp->buflen <= sp->bufoffset) {
+        return nullptr;
+    }
+    size_t avail = sp->buflen - sp->bufoffset;
+    BinaryNode* result = new BinaryNode(sp->rbuf + sp->bufoffset, avail);
+    sp->bufoffset = 0;
+    sp->buflen = 0;
+    return result;
 }
 
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {

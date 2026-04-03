@@ -753,7 +753,18 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
                 return nullptr;
             }
-            if (on_async_io_thread) {
+            // When re-submitting the SAME poll operation object (e.g.,
+            // WebSocket connection re-submission after request dispatch),
+            // skip abort — aborting a live op destroys connection state.
+            if (it->second.spop_obj == spop_obj) {
+                ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_SAME key='%s' owner='%s'\n",
+                    uh.c_str(), it->second.owner.c_str());
+                direct_pinfo = it->second;
+                it->second = PollInfo();
+                cache.erase(it);
+                // Clean up without abort — just release references
+                direct_pinfo.cleanup(xsink);
+            } else if (on_async_io_thread) {
                 // On an async I/O thread — cancel directly to avoid deadlock
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());

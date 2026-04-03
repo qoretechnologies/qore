@@ -168,6 +168,7 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             // Process any complete frames in the decoder buffer
             processDecodedFrames(xsink);
             if (*xsink) {
+                setError(xsink);
                 return nullptr;
             }
             if (goalReached()) {
@@ -177,6 +178,23 @@ QoreHashNode* WebSocketClientPollOperationPriv::continuePoll(ExceptionSink* xsin
             // Recv needs more I/O
             recv_info->deref(xsink);
             poll_events |= SOCK_POLLIN;
+        }
+    }
+
+    // --- Phase 2b: Drain any data left in the socket's internal read buffer ---
+    if (!recv_op && !goalReached()) {
+        SimpleRefHolder<BinaryNode> pending(sock->drainPendingBuffer());
+        if (pending && pending->size() > 0) {
+            decoder.appendData(reinterpret_cast<const char*>(pending->getPtr()),
+                pending->size());
+            processDecodedFrames(xsink);
+            if (*xsink) {
+                setError(xsink);
+                return nullptr;
+            }
+            if (goalReached()) {
+                return nullptr;
+            }
         }
     }
 

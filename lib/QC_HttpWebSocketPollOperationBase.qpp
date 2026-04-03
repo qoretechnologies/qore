@@ -32,6 +32,7 @@
 */
 
 #include "qore/Qore.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 #include "qore/intern/QC_HttpWebSocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -148,24 +149,51 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             }
             releaseRecvOp(xsink);
 
-            // Check for EOF — the peer closed the connection
-            if (!sock->isOpen()) {
-                setClosed(1006, "Connection lost");
-                return nullptr;
-            }
-
-            // Process any complete frames in the decoder buffer
+            // Process any complete frames in the decoder buffer BEFORE the
+            // EOF check — frames decoded in this cycle must be pushed to
+            // recv_queue so the worker can process them.
             processDecodedFrames(xsink);
             if (*xsink) {
+                setError(xsink);
                 return nullptr;
             }
             if (goalReached()) {
+                return nullptr;
+            }
+
+            // Check for EOF — the peer closed the connection.
+            // If frames were pushed in this cycle, defer the close to keep
+            // the op alive for the worker to send responses (echo).
+            if (!sock->isOpen() && !frames_pushed_in_cycle) {
+                setClosed(1006, "Connection lost");
                 return nullptr;
             }
         } else {
             // Recv needs more I/O
             recv_info->deref(xsink);
             poll_events |= SOCK_POLLIN;
+        }
+    }
+
+    // --- Phase 2b: Drain any data left in the socket's internal read buffer ---
+    // After a protocol upgrade (HTTP→WebSocket), SSL_read() may have read a
+    // full TLS record containing both HTTP headers and the first WS frame.
+    // The header reader consumed only the headers; the frame data stays in
+    // the socket's internal buffer.  Drain it into the decoder before
+    // starting a new recv op.
+    if (!recv_op && !goalReached()) {
+        SimpleRefHolder<BinaryNode> pending(sock->drainPendingBuffer());
+        if (pending && pending->size() > 0) {
+            decoder.appendData(reinterpret_cast<const char*>(pending->getPtr()),
+                pending->size());
+            processDecodedFrames(xsink);
+            if (*xsink) {
+                setError(xsink);
+                return nullptr;
+            }
+            if (goalReached()) {
+                return nullptr;
+            }
         }
     }
 
