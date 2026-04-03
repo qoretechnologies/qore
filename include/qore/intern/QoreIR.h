@@ -1863,6 +1863,9 @@ public:
 
     ~QoreIRFunction() {
         delete cached_pre_instantiated;
+        for (auto* loc : owned_locations) {
+            delete loc;
+        }
     }
 
     QoreIRBasicBlock* createBlock(const std::string& block_name) {
@@ -1940,6 +1943,13 @@ public:
     // Return type info for the function (populated in attemptIRLowering()).
     // Used by Return opcode lowering in QoreIRToLLVM to apply type coercion.
     const QoreTypeInfo* return_type_info = nullptr;
+
+    // Owned source location objects for AOT-deserialized instructions.
+    // In JIT mode, inst->loc points into the parse tree (owned elsewhere).
+    // In AOT mode, the parse tree doesn't exist, so these are allocated here
+    // and inst->loc is set to point into this vector.
+    // Uses raw pointers because QoreProgramLocation is forward-declared here.
+    std::vector<QoreProgramLocation*> owned_locations;
 
     // All body locals from the statement tree (top-level + all nested blocks
     // from fully-lowered statements: if/for/while/try/switch).

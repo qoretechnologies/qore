@@ -3162,9 +3162,21 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
     }
     if (ginfo->write_fn) {
         AOTInstWriteCtx wctx{writer, inst, block_idx, writeExpr};
-        return ginfo->write_fn(wctx);
+        if (!ginfo->write_fn(wctx)) {
+            return false;
+        }
     }
-    // Base group: no extra bytes written
+
+    // Write source location for runtime exception stack traces (AOT location table)
+    if (inst->loc && inst->loc->start_line > 0) {
+        writer.writeU16(static_cast<uint16_t>(inst->loc->start_line));
+        writer.writeU16(static_cast<uint16_t>(inst->loc->end_line));
+        writer.writeStringRef(inst->loc->getFile() ? inst->loc->getFile() : "");
+    } else {
+        writer.writeU16(0);  // start_line=0 signals "no location"
+        writer.writeU16(0);
+        writer.writeStringRef("");
+    }
 
     return true;
 }

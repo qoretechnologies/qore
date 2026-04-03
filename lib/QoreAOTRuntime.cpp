@@ -2470,6 +2470,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         const uint8_t*& ptr, const uint8_t* end,
         const std::vector<std::unique_ptr<QoreIRBasicBlock>>& blocks,
         const std::unordered_map<std::string, LocalVar*>& local_map,
+        QoreIRFunction* owner_func,
         const std::unordered_map<uint32_t, LocalVar*>* slot_to_local,
         const AOTExprReadFunc& readExpr,
         QoreProgram* pgm,
@@ -3316,6 +3317,16 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     inst->operands = std::move(operands);
     inst->exception_target = exc_target;
 
+    // Read source location (AOT location table)
+    uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
+    uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+    const char* loc_file = reader.readStringRef(ptr);
+    if (start_line > 0 && owner_func) {
+        auto* loc = new QoreProgramLocation(loc_file ? loc_file : "", start_line, end_line);
+        owner_func->owned_locations.push_back(loc);
+        inst->loc = loc;
+    }
+
     return inst;
 }
 
@@ -3440,7 +3451,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
         for (int j = 0; j < num_insts; ++j) {
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
-                &slot_to_local, readExpr, pgm, error);
+                func.get(), &slot_to_local, readExpr, pgm, error);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i) + ": " + error;

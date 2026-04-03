@@ -1805,8 +1805,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // Initialize runtime location tracking: cache TLS pointers for per-line updates.
-    // Only for non-AOT (JIT) mode — AOT mode's inst->loc pointers are dangling at runtime
-    // since the parse tree doesn't exist in the loaded AOT binary.
+    // JIT mode: inst->loc pointers point into the parse tree (valid in current process).
+    // AOT mode: inst->loc pointers are from compile-time parse tree (dangling at load time).
+    // AOT location tracking requires a location table in QoreAOTContext (future work).
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
     last_runtime_line = -1;
