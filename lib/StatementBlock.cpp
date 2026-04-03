@@ -1137,9 +1137,40 @@ void NarrowedTypeHelper::mergeAndApply() {
 
         // Apply the merged type
         QORE_DEBUG_NARROW_MERGE_DECISION(lvar->getName(), found_in_all, common_type);
-        printd(5, "  applying: found_in_all=%d, common_type=%s\n",
-            found_in_all, common_type ? QoreTypeInfo::getName(common_type) : "nullptr");
+        printd(5, "  applying: found_in_all=%d, common_type=%s, pre_branch=%s\n",
+            found_in_all, common_type ? QoreTypeInfo::getName(common_type) : "nullptr",
+            saved_entry.second ? QoreTypeInfo::getName(saved_entry.second) : "nullptr");
         if (found_in_all && common_type) {
+            // If the variable was un-narrowed (auto) before the branches, don't apply
+            // a merged narrowing unless all branches had the same concrete type.
+            // Merging different branch types (e.g., Mutex + nothing → *Mutex) would
+            // incorrectly restrict an auto variable's type.
+            if (!saved_entry.second && common_type != saved_entry.second) {
+                // Check if all branches agreed on the same type (no merge happened)
+                bool all_same = true;
+                const QoreTypeInfo* first_type = nullptr;
+                for (const auto& branch : branch_types) {
+                    for (const auto& branch_entry : branch) {
+                        if (branch_entry.first == lvar) {
+                            if (!first_type) {
+                                first_type = branch_entry.second;
+                            } else if (branch_entry.second != first_type) {
+                                all_same = false;
+                            }
+                            break;
+                        }
+                    }
+                    if (!all_same) {
+                        break;
+                    }
+                }
+                if (!all_same) {
+                    // Different types in branches with un-narrowed pre-branch → reset
+                    printd(5, "    pre-branch was unnarrow, branches differ → resetting\n");
+                    lvar->parseResetNarrowedType();
+                    continue;
+                }
+            }
             QORE_DEBUG_NARROW_MERGE_ACTION("setting narrowed type");
             printd(5, "    setting narrowed type\n");
             lvar->parseSetNarrowedType(common_type);
