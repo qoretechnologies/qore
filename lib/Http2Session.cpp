@@ -2523,6 +2523,10 @@ void Http2Session::handleAsyncReadCompletion(int32_t stream_id, const char* data
         }
     }
 }
+
+int Http2Session::getSocketFd() const {
+    return sock ? sock->sock : -1;
+}
 #endif
 
 // httpMultiHeadersToQoreHash is a template defined in Http2Session.h

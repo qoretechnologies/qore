@@ -2170,6 +2170,17 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (uring) {
                         std::vector<QoreIoUring::CompletedRead> completions;
                         uring->processCompletions(completions);
+                        // Collect affected socket fds before delivery (buffer
+                        // ownership transfers during handleAsyncReadCompletion)
+                        std::unordered_set<int> affected_fds;
+                        for (auto& cr : completions) {
+                            if (auto session = cr.session.lock()) {
+                                int fd = session->getSocketFd();
+                                if (fd >= 0) {
+                                    affected_fds.insert(fd);
+                                }
+                            }
+                        }
                         for (auto& cr : completions) {
                             if (auto session = cr.session.lock()) {
                                 session->handleAsyncReadCompletion(
@@ -2180,10 +2191,11 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                 }
                             }
                         }
-                        if (!completions.empty()) {
-                            // Mark all registered socket hashes as ready so that
-                            // Phase 1 includes all H2 ops for continuePoll()
-                            for (auto& [hash, fd] : registered_fds) {
+                        // Mark only the affected sockets as ready so Phase 1
+                        // includes them for continuePoll() to submit next
+                        // io_uring reads and flush response data
+                        for (auto& [hash, fd] : registered_fds) {
+                            if (affected_fds.count(fd)) {
                                 ready_socket_hashes.insert(hash);
                             }
                         }

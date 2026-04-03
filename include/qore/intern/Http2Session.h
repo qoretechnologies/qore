@@ -864,6 +864,9 @@ public:
                                             size_t length, int error,
                                             std::unique_ptr<char[]> buffer,
                                             ExceptionSink* xsink);
+
+    //! Returns the underlying socket fd for io_uring socket lookup
+    DLLLOCAL int getSocketFd() const;
 #endif
 };
 
