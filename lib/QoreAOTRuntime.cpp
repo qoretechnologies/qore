@@ -81,6 +81,7 @@
 #include "qore/intern/QoreExtractOperatorNode.h"
 #include "qore/intern/QoreSpliceOperatorNode.h"
 #include "qore/intern/ObjectMethodReferenceNode.h"
+#include "qore/intern/CallReferenceNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreRegexMatchOperatorNode.h"
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
@@ -1407,6 +1408,112 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 // Store NOTHING in exprs — slot-based dispatch uses call_targets
                 ctx->exprs[i] = toBitsNB(QoreValue());
+                continue;
+            }
+            case AOTExprKind::FUNC_CALL_REF: {
+                // Function call reference: resolve function by name
+                ref1 = reader.readStringRef(ptr);   // function_name
+                if (ref1 && *ref1) {
+                    const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
+                        *pp->RootNS, ref1);
+                    if (fe) {
+                        QoreFunction* f = fe->getFunction();
+                        if (f) {
+                            ctx->exprs[i] = toBitsNB(QoreValue(
+                                new LocalFunctionCallReferenceNode(&loc_builtin, f)));
+                            continue;
+                        }
+                    }
+                }
+                printd(0, "AOT v2: cannot resolve function ref '%s'\n",
+                    ref1 ? ref1 : "(null)");
+                has_unsupported = true;
+                continue;
+            }
+            case AOTExprKind::BOUND_METHOD_REF: {
+                // Bound method reference: resolve class + method
+                ref1 = reader.readStringRef(ptr);   // class_path
+                ref2 = reader.readStringRef(ptr);   // method_name
+                const QoreMethod* method = nullptr;
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, ref1, found_ns);
+                    if (qc && ref2 && *ref2) {
+                        method = qc->findMethod(ref2);
+                        if (!method) {
+                            method = qc->findStaticMethod(ref2);
+                        }
+                    }
+                }
+                if (method) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new LocalMethodCallReferenceNode(&loc_builtin, method)));
+                } else {
+                    printd(0, "AOT v2: cannot resolve bound method ref '%s::%s'\n",
+                        ref1 ? ref1 : "", ref2 ? ref2 : "");
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::STATIC_METHOD_REF: {
+                // Static method reference: resolve class + static method
+                ref1 = reader.readStringRef(ptr);   // class_path
+                ref2 = reader.readStringRef(ptr);   // method_name
+                const QoreMethod* method = nullptr;
+                if (ref1 && *ref1) {
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, ref1, found_ns);
+                    if (qc && ref2 && *ref2) {
+                        method = qc->findStaticMethod(ref2);
+                        if (!method) {
+                            method = qc->findMethod(ref2);
+                        }
+                    }
+                }
+                if (method) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new LocalStaticMethodCallReferenceNode(&loc_builtin, method)));
+                } else {
+                    printd(0, "AOT v2: cannot resolve static method ref '%s::%s'\n",
+                        ref1 ? ref1 : "", ref2 ? ref2 : "");
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::SELF_METHOD_REF: {
+                // Self method reference: just needs method name
+                ref1 = reader.readStringRef(ptr);   // method_name
+                if (ref1 && *ref1) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new ParseSelfMethodReferenceNode(&loc_builtin, strdup(ref1))));
+                } else {
+                    printd(0, "AOT v2: empty self method ref name\n");
+                    has_unsupported = true;
+                }
+                continue;
+            }
+            case AOTExprKind::OBJ_METHOD_REF_EXPR: {
+                // Object method reference with target expression
+                ref1 = reader.readStringRef(ptr);   // method_name
+                std::string child_err;
+                QoreValue target = readOneExpr(reader, ptr, end, child_err, pgm,
+                    ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
+                if (!child_err.empty()) {
+                    printd(0, "AOT v2: error reading obj method ref target for '%s': %s\n",
+                        ref1 ? ref1 : "", child_err.c_str());
+                    target.discard(nullptr);
+                    has_unsupported = true;
+                } else if (ref1 && *ref1) {
+                    ctx->exprs[i] = toBitsNB(QoreValue(
+                        new ParseObjectMethodReferenceNode(&loc_builtin,
+                            target, strdup(ref1))));
+                } else {
+                    printd(0, "AOT v2: empty obj method ref name\n");
+                    target.discard(nullptr);
+                    has_unsupported = true;
+                }
                 continue;
             }
             case AOTExprKind::SELF_METHOD_CALL:
@@ -3500,6 +3607,19 @@ static void skipSlotMapEntry(const QoreAOTBinaryReader& reader, const uint8_t*& 
                 reader.readStringRef(ptr);  // class_path
                 reader.readStringRef(ptr);  // method_name
                 QoreAOTBinaryReader::readU8(ptr);  // is_pseudo
+                break;
+            case AOTExprKind::FUNC_CALL_REF:
+            case AOTExprKind::SELF_METHOD_REF:
+                reader.readStringRef(ptr);  // function/method name
+                break;
+            case AOTExprKind::BOUND_METHOD_REF:
+            case AOTExprKind::STATIC_METHOD_REF:
+                reader.readStringRef(ptr);  // class_path
+                reader.readStringRef(ptr);  // method_name
+                break;
+            case AOTExprKind::OBJ_METHOD_REF_EXPR:
+                reader.readStringRef(ptr);  // method_name
+                skipOneExpr(reader, ptr, end);  // child target expression
                 break;
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:

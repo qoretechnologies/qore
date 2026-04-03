@@ -217,6 +217,41 @@ static bool write_slot_DOT_EVAL_TARGET(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! FUNC_CALL_REF: ref1 = function name
+static bool write_slot_FUNC_CALL_REF(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    return true;
+}
+
+//! BOUND_METHOD_REF: ref1 = class path, ref2 = method name
+static bool write_slot_BOUND_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    return true;
+}
+
+//! STATIC_METHOD_REF: ref1 = class path, ref2 = method name
+static bool write_slot_STATIC_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
+    return true;
+}
+
+//! SELF_METHOD_REF: ref1 = method name
+static bool write_slot_SELF_METHOD_REF(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    return true;
+}
+
+//! OBJ_METHOD_REF_EXPR: ref1 = method name + inline child expression
+static bool write_slot_OBJ_METHOD_REF_EXPR(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    // The child expression (target object) is serialized inline using classifyAndWriteExpr
+    classifyAndWriteExpr(ctx.writer, ctx.expr.child_expr,
+        ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
+    return true;
+}
+
 //! SELF_METHOD_CALL: ref1 = class path, ref2 = method name
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());

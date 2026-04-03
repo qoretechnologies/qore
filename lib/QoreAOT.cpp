@@ -6301,6 +6301,42 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         }
     }
 
+    // Call/method reference nodes: classified with identity strings instead of EXPR_TREE.
+    // Check most-derived types first (LocalMethodCallReferenceNode before LocalStaticMethodCallReferenceNode).
+    if (auto* mcr = dynamic_cast<const LocalMethodCallReferenceNode*>(node)) {
+        id.kind = AOTExprKind::BOUND_METHOD_REF;
+        const QoreMethod* method = mcr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        id.ref1 = qc ? qc->getPath() : "";
+        id.ref2 = method ? method->getName() : "";
+        return id;
+    }
+    if (auto* scr = dynamic_cast<const LocalStaticMethodCallReferenceNode*>(node)) {
+        id.kind = AOTExprKind::STATIC_METHOD_REF;
+        const QoreMethod* method = scr->getMethod();
+        const QoreClass* qc = method ? method->getClass() : nullptr;
+        id.ref1 = qc ? qc->getPath() : "";
+        id.ref2 = method ? method->getName() : "";
+        return id;
+    }
+    if (auto* fcr = dynamic_cast<const LocalFunctionCallReferenceNode*>(node)) {
+        id.kind = AOTExprKind::FUNC_CALL_REF;
+        QoreFunction* f = fcr->getFunction();
+        id.ref1 = f ? f->getName() : "";
+        return id;
+    }
+    if (auto* smr = dynamic_cast<const ParseSelfMethodReferenceNode*>(node)) {
+        id.kind = AOTExprKind::SELF_METHOD_REF;
+        id.ref1 = smr->getMethodName().c_str();
+        return id;
+    }
+    if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
+        id.kind = AOTExprKind::OBJ_METHOD_REF_EXPR;
+        id.ref1 = omr->getMethodName().c_str();
+        id.child_expr = omr->getExp();
+        return id;
+    }
+
     // Try recursive expression tree serialization before falling back to GENERIC_EVAL
     {
         ExprTreeSerializer serializer(slots, const_reverse_map);

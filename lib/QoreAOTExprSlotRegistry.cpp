@@ -167,12 +167,22 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 35: DOT_EVAL_TARGET
     {"DOT_EVAL_TARGET", 35, true, write_slot_DOT_EVAL_TARGET, "Dot-eval method target"},
 
-    // 36-253: Unused
-    {nullptr, 36, false, nullptr, nullptr},
-    {nullptr, 37, false, nullptr, nullptr},
-    {nullptr, 38, false, nullptr, nullptr},
-    {nullptr, 39, false, nullptr, nullptr},
-    {nullptr, 40, false, nullptr, nullptr},
+    // 36: FUNC_CALL_REF
+    {"FUNC_CALL_REF", 36, true, write_slot_FUNC_CALL_REF, "Function call reference"},
+
+    // 37: BOUND_METHOD_REF
+    {"BOUND_METHOD_REF", 37, true, write_slot_BOUND_METHOD_REF, "Bound method reference"},
+
+    // 38: STATIC_METHOD_REF
+    {"STATIC_METHOD_REF", 38, true, write_slot_STATIC_METHOD_REF, "Static method reference"},
+
+    // 39: SELF_METHOD_REF
+    {"SELF_METHOD_REF", 39, true, write_slot_SELF_METHOD_REF, "Self method reference"},
+
+    // 40: OBJ_METHOD_REF_EXPR
+    {"OBJ_METHOD_REF_EXPR", 40, true, write_slot_OBJ_METHOD_REF_EXPR, "Object method reference with expression"},
+
+    // 41-253: Unused
     {nullptr, 41, false, nullptr, nullptr},
     {nullptr, 42, false, nullptr, nullptr},
     {nullptr, 43, false, nullptr, nullptr},
