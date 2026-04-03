@@ -352,10 +352,12 @@ static QoreValue read_expr_runtime_const_ref(AOTExprReadCtx& ctx) {
         printd(0, "AOT: cannot resolve constant '%s'\n", const_name);
         return QoreValue();
     }
-    // Return a RuntimeConstantRefNode so evaluation is deferred until runtime
-    // (the constant may not be initialized yet if it has an init function)
-    auto* rcr = new RuntimeConstantRefNode(&loc_builtin, const_cast<ConstantEntry*>(ce));
-    return QoreValue(rcr);
+    // Return the constant's value directly via getReferencedValue(), which
+    // returns val.refSelf() for all constant types including builtin module
+    // constants where saved_val is empty. RuntimeConstantRefNode can't be
+    // used here because it reads from saved_val which is only set for
+    // user constants with init expressions.
+    return ce->getReferencedValue();
 }
 
 // ============================================================================
