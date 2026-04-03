@@ -2569,9 +2569,29 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
                     uint32_t size_pos = writer.position();
                     writer.writeU32(0);  // placeholder
 
-                    auto writeExpr = [&parent_locals, &parent_globals, const_reverse_map](
+                    // Build extended locals list including the closure's own parameters
+                    // so VarRefNodes to closure params can be serialized (not GENERIC_EVAL)
+                    std::vector<AOTLocalSlotId> closure_locals = parent_locals;
+                    if (sig) {
+                        for (unsigned p = 0; p < sig->numParams(); ++p) {
+                            if (sig->lv[p]) {
+                                AOTLocalSlotId slot;
+                                slot.local_var_ptr = reinterpret_cast<const void*>(sig->lv[p]);
+                                slot.name = sig->lv[p]->getName();
+                                closure_locals.push_back(slot);
+                            }
+                        }
+                        if (sig->argvid) {
+                            AOTLocalSlotId slot;
+                            slot.local_var_ptr = reinterpret_cast<const void*>(sig->argvid);
+                            slot.name = "argv";
+                            closure_locals.push_back(slot);
+                        }
+                    }
+
+                    auto writeExpr = [&closure_locals, &parent_globals, const_reverse_map](
                             QoreAOTBinaryWriter& w, const QoreValue& e) -> bool {
-                        return classifyAndWriteExpr(w, e, parent_locals, parent_globals,
+                        return classifyAndWriteExpr(w, e, closure_locals, parent_globals,
                             const_reverse_map);
                     };
 
