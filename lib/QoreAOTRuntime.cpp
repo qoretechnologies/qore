@@ -728,12 +728,6 @@ static void skipOneExpr(const QoreAOTBinaryReader& rdr, const uint8_t*& p, const
         QoreAOTBinaryReader::readU8(p);
         return;
     }
-    // EXPR_TREE: u32 blob size + skip blob bytes
-    if (ek == AOTExprKind::EXPR_TREE) {
-        uint32_t blob_size = QoreAOTBinaryReader::readU32(p);
-        p += blob_size;
-        return;
-    }
     // CONST_NOTHING, GENERIC_EVAL or unknown: no bytes to skip
 }
 
