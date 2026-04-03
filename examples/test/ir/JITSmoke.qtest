@@ -4146,6 +4146,24 @@ try {
                     sprintf("VRN hashdecl invoke %s", mode));
         }
 
+        # VarRefNewObjectNode hashdecl with local variable references
+        # Verifies that local var values are used at runtime, not pre-evaluated at parse time
+        code = "%modern
+hashdecl MyVrnLocalTest {
+    string name;
+    int value;
+}
+string n = \"hello\";
+int v = 99;
+hash<MyVrnLocalTest> h({\"name\": n, \"value\": v});
+printf(\"%s:%d\\n\", h.name, h.value);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("hello:99", result,
+                    sprintf("VRN hashdecl local var refs %s", mode));
+        }
+
         # VarRefNewObjectNode complex hash construction (VRN_COMPLEXHASH)
         code = "%modern
 hash<string, int> h({\"a\": 10, \"b\": 20});
