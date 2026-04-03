@@ -1,0 +1,637 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SmartSheetDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/SmartSheetRestClient.qm
+%requires ../../../../qlib/SmartSheetDataProvider
+
+%exec-class SmartSheetDataProviderTest
+
+public class SmartSheetDataProviderTest inherits QUnit::Test {
+    private {
+        #! Smartsheet REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+            "token": "t,token=s",
+        };
+
+        #! IDs of test resources to clean up
+        *string testSheetId;
+        *string testWorkspaceId;
+        *string testFolderId;
+        *string testGroupId;
+    }
+
+    constructor() : Test("SmartSheetDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Smartsheet credentials)
+        addTestCase("list sheets tests", \listSheetsTests());
+        addTestCase("sheet CRUD tests", \sheetCrudTests());
+        addTestCase("row CRUD tests", \rowCrudTests());
+        addTestCase("workspace CRUD tests", \workspaceCrudTests());
+        addTestCase("folder CRUD tests", \folderCrudTests());
+        addTestCase("reports tests", \reportsTests());
+        addTestCase("users tests", \usersTests());
+        addTestCase("groups tests", \groupsTests());
+        addTestCase("trigger example data tests", \triggerExampleDataTests());
+        addTestCase("cleanup tests", \cleanupTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Smartsheet client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.SMARTSHEET_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof SmartSheetRestClient::SmartSheetRestConnection) {
+                client = (cast<SmartSheetRestClient::SmartSheetRestConnection>(conn))
+                    .getAsync(True);
+            }
+            return;
+        }
+
+        *string token = m_options.token ?? ENV.SMARTSHEET_ACCESS_TOKEN;
+        if (token) {
+            client = new SmartSheetRestClient::SmartSheetRestClientIo({"token": token});
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Smartsheet credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private SmartSheetDataProvider::SmartSheetDataProvider getProvider() {
+        return new SmartSheetDataProvider::SmartSheetDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Smartsheet", SmartSheetDataProvider::AppName);
+        assertEq(100, SmartSheetDataProvider::DefaultPageSize);
+        assertEq(500, SmartSheetDataProvider::MaxBatchRows);
+        assertEq(120, SmartSheetDataProvider::DefaultPollInterval);
+        assertEq(60, SmartSheetDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("sheet-updated", SmartSheetDataProvider::EVENT_SHEET_UPDATED);
+        assertEq("row-created", SmartSheetDataProvider::EVENT_ROW_CREATED);
+        assertEq("row-updated", SmartSheetDataProvider::EVENT_ROW_UPDATED);
+        assertEq("row-deleted", SmartSheetDataProvider::EVENT_ROW_DELETED);
+
+        # Verify column type map
+        assertEq(True, SmartSheetDataProvider::ColumnTypeMap.hasKey("TEXT_NUMBER"));
+        assertEq(True, SmartSheetDataProvider::ColumnTypeMap.hasKey("CHECKBOX"));
+        assertEq(True, SmartSheetDataProvider::ColumnTypeMap.hasKey("PICKLIST"));
+        assertEq(True, SmartSheetDataProvider::ColumnTypeMap.hasKey("DATE"));
+        assertEq(True, SmartSheetDataProvider::ColumnTypeMap.hasKey("DATETIME"));
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("smartsheet");
+        assertEq(True, factory instanceof SmartSheetDataProvider::SmartSheetDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("smartsheet", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Smartsheet");
+        assertEq(True, app.val(), "Smartsheet app registered in action catalog");
+        assertEq("Smartsheet", app.display_name);
+        assertEq("smartsheetrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Smartsheet");
+        assertEq(True, actions.size() >= 20, "at least 20 actions registered");
+
+        bool found_create_sheet = False;
+        bool found_list_sheets = False;
+        bool found_create_workspace = False;
+        bool found_list_users = False;
+        bool found_row_created_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-sheet") {
+                found_create_sheet = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-sheets") {
+                found_list_sheets = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "create-workspace") {
+                found_create_workspace = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-users") {
+                found_list_users = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "row-created") {
+                found_row_created_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_sheet, "create-sheet action registered");
+        assertEq(True, found_list_sheets, "list-sheets action registered");
+        assertEq(True, found_create_workspace, "create-workspace action registered");
+        assertEq(True, found_list_users, "list-users action registered");
+        assertEq(True, found_row_created_event, "row-created event registered");
+    }
+
+    dataTypeTests() {
+        SmartSheetDataProvider::SmartSheetSheetDataType sheet_type();
+        hash<auto> fields = sheet_type.getFields();
+        assertEq(True, fields.hasKey("id"), "sheet type has id field");
+        assertEq(True, fields.hasKey("name"), "sheet type has name field");
+        assertEq(True, fields.hasKey("accessLevel"), "sheet type has accessLevel field");
+        assertEq(True, fields.hasKey("permalink"), "sheet type has permalink field");
+        assertEq(True, fields.hasKey("createdAt"), "sheet type has createdAt field");
+        assertEq(True, fields.hasKey("modifiedAt"), "sheet type has modifiedAt field");
+
+        SmartSheetDataProvider::SmartSheetWorkspaceDataType ws_type();
+        hash<auto> ws_fields = ws_type.getFields();
+        assertEq(True, ws_fields.hasKey("id"), "workspace type has id field");
+        assertEq(True, ws_fields.hasKey("name"), "workspace type has name field");
+
+        SmartSheetDataProvider::SmartSheetUserDataType user_type();
+        hash<auto> user_fields = user_type.getFields();
+        assertEq(True, user_fields.hasKey("id"), "user type has id field");
+        assertEq(True, user_fields.hasKey("email"), "user type has email field");
+        assertEq(True, user_fields.hasKey("firstName"), "user type has firstName field");
+        assertEq(True, user_fields.hasKey("lastName"), "user type has lastName field");
+
+        SmartSheetDataProvider::SmartSheetGroupDataType group_type();
+        hash<auto> group_fields = group_type.getFields();
+        assertEq(True, group_fields.hasKey("id"), "group type has id field");
+        assertEq(True, group_fields.hasKey("name"), "group type has name field");
+        assertEq(True, group_fields.hasKey("owner"), "group type has owner field");
+
+        SmartSheetDataProvider::SmartSheetFolderDataType folder_type();
+        hash<auto> folder_fields = folder_type.getFields();
+        assertEq(True, folder_fields.hasKey("id"), "folder type has id field");
+        assertEq(True, folder_fields.hasKey("name"), "folder type has name field");
+
+        SmartSheetDataProvider::SmartSheetReportDataType report_type();
+        hash<auto> report_fields = report_type.getFields();
+        assertEq(True, report_fields.hasKey("id"), "report type has id field");
+        assertEq(True, report_fields.hasKey("name"), "report type has name field");
+    }
+
+    connectionTests() {
+        *hash<auto> scheme = ConnectionSchemeCache::getScheme("smartsheetrest");
+        assertEq(True, scheme.val(), "smartsheetrest scheme registered");
+        assertEq("Smartsheet REST Connection", scheme.display_name);
+        assertEq(True, scheme.options.hasKey("domain"), "scheme has domain option");
+        assertEq(True, scheme.required_options.val(), "scheme has required_options");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    listSheetsTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+        AbstractDataProvider sheets_dp = provider.getChildProvider("sheets");
+        assertEq(True, sheets_dp.val());
+
+        # List sheets
+        AbstractDataProviderRecordIterator iter = sheets_dp.searchRecords();
+        if (iter.next()) {
+            hash<auto> sheet = iter.getValue();
+            assertEq(True, sheet.hasKey("id"), "sheet has id");
+            assertEq(True, sheet.hasKey("name"), "sheet has name");
+
+            if (m_options.verbose) {
+                printf("Found sheet: %s (ID: %s)\n", sheet.name, sheet.id);
+            }
+        } else {
+            if (m_options.verbose) {
+                printf("No sheets found in account\n");
+            }
+        }
+        assertEq(True, True, "sheets listing endpoint accessible");
+    }
+
+    sheetCrudTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Create a test sheet
+        AbstractDataProvider create_dp = provider.getChildProvider("sheets")
+            .getChildProvider("create");
+        string sheet_name = "QoreTest_" + now_us().toString();
+        hash<auto> result = create_dp.doRequest({
+            "name": sheet_name,
+            "columns": (
+                {"title": "Primary", "type": "TEXT_NUMBER", "primary": True},
+                {"title": "Status", "type": "PICKLIST",
+                    "options": ("Active", "Inactive", "Pending")},
+                {"title": "Due Date", "type": "DATE"},
+                {"title": "Complete", "type": "CHECKBOX"},
+            ),
+        });
+
+        assertEq(True, result.hasKey("id"), "created sheet has id");
+        assertEq(True, result.hasKey("name"), "created sheet has name");
+        testSheetId = string(result.id);
+
+        if (m_options.verbose) {
+            printf("Created test sheet: %s (ID: %s)\n", sheet_name, testSheetId);
+        }
+
+        # Verify the sheet exists by fetching it
+        sleep(1s);
+        AbstractDataProviderRecordIterator iter = provider.getChildProvider("sheets")
+            .searchRecords(NOTHING, {"sheetId": testSheetId});
+        assertEq(True, iter.next(), "created sheet found");
+        hash<auto> fetched = iter.getValue();
+        assertEq(sheet_name, fetched.name, "sheet name matches");
+
+        # Update the sheet name
+        AbstractDataProvider update_dp = provider.getChildProvider("sheets")
+            .getChildProvider("update");
+        string new_name = "QoreTest_Updated_" + now_us().toString();
+        hash<auto> updated = update_dp.doRequest({
+            "sheetId": testSheetId.toInt(),
+            "name": new_name,
+        });
+
+        # Verify update persisted
+        sleep(1s);
+        iter = provider.getChildProvider("sheets")
+            .searchRecords(NOTHING, {"sheetId": testSheetId});
+        assertEq(True, iter.next());
+        hash<auto> re_read = iter.getValue();
+        assertEq(new_name, re_read.name, "sheet name updated and persisted");
+
+        if (m_options.verbose) {
+            printf("Updated sheet name to: %s\n", new_name);
+        }
+    }
+
+    rowCrudTests() {
+        skipIfNoCredentials();
+        if (!testSheetId) {
+            testSkip("no test sheet created");
+        }
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Access the sheet as a dynamic table provider
+        AbstractDataProvider sheet_dp = provider.getChildProvider("sheets")
+            .getChildProvider(testSheetId);
+        assertEq(True, sheet_dp.val(), "sheet data provider created");
+
+        # Verify dynamic column mapping
+        *hash<string, AbstractDataField> record_type = sheet_dp.getRecordType();
+        assertEq(True, record_type.hasKey("id"), "record type has id field");
+        assertEq(True, record_type.hasKey("rowNumber"), "record type has rowNumber field");
+        assertEq(True, record_type.hasKey("Primary"), "record type has Primary column");
+        assertEq(True, record_type.hasKey("Status"), "record type has Status column");
+        assertEq(True, record_type.hasKey("Due Date"), "record type has Due Date column");
+        assertEq(True, record_type.hasKey("Complete"), "record type has Complete column");
+
+        if (m_options.verbose) {
+            printf("Sheet has %d fields in record type\n", record_type.size());
+        }
+
+        # Create a row
+        hash<auto> new_row = sheet_dp.createRecord({
+            "Primary": "Test Row 1",
+            "Status": "Active",
+            "Complete": False,
+        });
+        assertEq(True, new_row.hasKey("id"), "created row has id");
+        int row_id = new_row.id;
+
+        if (m_options.verbose) {
+            printf("Created row ID: %d\n", row_id);
+        }
+
+        # Read back and verify
+        sleep(1s);
+        AbstractDataProviderRecordIterator iter = sheet_dp.searchRecords(
+            NOTHING, {"rowId": row_id});
+        assertEq(True, iter.next(), "row found after create");
+        hash<auto> fetched_row = iter.getValue();
+        assertEq("Test Row 1", fetched_row."Primary", "Primary field matches");
+        assertEq("Active", fetched_row."Status", "Status field matches");
+
+        # Update the row
+        int updated_count = sheet_dp.updateRecords(
+            {"Primary": "Test Row 1 Updated", "Status": "Inactive"},
+            {"id": row_id},
+        );
+        assertEq(1, updated_count, "one row updated");
+
+        # Verify update persisted
+        sleep(1s);
+        iter = sheet_dp.searchRecords(NOTHING, {"rowId": row_id});
+        assertEq(True, iter.next());
+        hash<auto> updated_row = iter.getValue();
+        assertEq("Test Row 1 Updated", updated_row."Primary", "Primary updated and persisted");
+        assertEq("Inactive", updated_row."Status", "Status updated and persisted");
+
+        # Delete the row
+        int deleted_count = sheet_dp.deleteRecords({"id": row_id});
+        assertEq(1, deleted_count, "one row deleted");
+
+        if (m_options.verbose) {
+            printf("Row CRUD test passed\n");
+        }
+    }
+
+    workspaceCrudTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Create workspace
+        AbstractDataProvider create_dp = provider.getChildProvider("workspaces")
+            .getChildProvider("create");
+        string ws_name = "QoreTest_WS_" + now_us().toString();
+        try {
+            hash<auto> result = create_dp.doRequest({"name": ws_name});
+            assertEq(True, result.hasKey("id"), "workspace has id");
+            testWorkspaceId = string(result.id);
+
+            if (m_options.verbose) {
+                printf("Created workspace: %s (ID: %s)\n", ws_name, testWorkspaceId);
+            }
+
+            # List and verify
+            sleep(1s);
+            AbstractDataProvider ws_dp = provider.getChildProvider("workspaces");
+            AbstractDataProviderRecordIterator iter = ws_dp.searchRecords(NOTHING, {
+                "workspaceId": testWorkspaceId,
+            });
+            assertEq(True, iter.next(), "workspace found after create");
+            assertEq(ws_name, iter.getValue().name, "workspace name matches");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                testSkip("workspace creation requires admin permissions");
+            }
+            rethrow;
+        }
+    }
+
+    folderCrudTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Create folder
+        AbstractDataProvider create_dp = provider.getChildProvider("folders")
+            .getChildProvider("create");
+        string folder_name = "QoreTest_Folder_" + now_us().toString();
+        try {
+            hash<auto> result = create_dp.doRequest({"name": folder_name});
+            assertEq(True, result.hasKey("id"), "folder has id");
+            testFolderId = string(result.id);
+
+            if (m_options.verbose) {
+                printf("Created folder: %s (ID: %s)\n", folder_name, testFolderId);
+            }
+
+            # List and verify
+            sleep(1s);
+            AbstractDataProvider folders_dp = provider.getChildProvider("folders");
+            AbstractDataProviderRecordIterator iter = folders_dp.searchRecords(NOTHING, {
+                "folderId": testFolderId,
+            });
+            assertEq(True, iter.next(), "folder found after create");
+            assertEq(folder_name, iter.getValue().name, "folder name matches");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                testSkip("folder creation requires permissions");
+            }
+            rethrow;
+        }
+    }
+
+    reportsTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+        AbstractDataProvider reports_dp = provider.getChildProvider("reports");
+
+        AbstractDataProviderRecordIterator iter = reports_dp.searchRecords();
+        if (iter.next()) {
+            hash<auto> report = iter.getValue();
+            assertEq(True, report.hasKey("id"), "report has id");
+            assertEq(True, report.hasKey("name"), "report has name");
+
+            if (m_options.verbose) {
+                printf("Found report: %s (ID: %s)\n", report.name, report.id);
+            }
+        } else {
+            if (m_options.verbose) {
+                printf("No reports found\n");
+            }
+        }
+        assertEq(True, True, "reports endpoint accessible");
+    }
+
+    usersTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+        AbstractDataProvider users_dp = provider.getChildProvider("users");
+
+        try {
+            AbstractDataProviderRecordIterator iter = users_dp.searchRecords();
+            if (iter.next()) {
+                hash<auto> user = iter.getValue();
+                assertEq(True, user.hasKey("id"), "user has id");
+                assertEq(True, user.hasKey("email"), "user has email");
+
+                if (m_options.verbose) {
+                    printf("Found user: %s %s (%s)\n", user.firstName ?? "",
+                        user.lastName ?? "", user.email);
+                }
+            }
+            assertEq(True, True, "users endpoint accessible");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                testSkip("user listing requires admin permissions");
+            }
+            rethrow;
+        }
+    }
+
+    groupsTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+        AbstractDataProvider groups_dp = provider.getChildProvider("groups");
+
+        try {
+            AbstractDataProviderRecordIterator iter = groups_dp.searchRecords();
+            if (iter.next()) {
+                hash<auto> group = iter.getValue();
+                assertEq(True, group.hasKey("id"), "group has id");
+                assertEq(True, group.hasKey("name"), "group has name");
+
+                if (m_options.verbose) {
+                    printf("Found group: %s (ID: %s)\n", group.name, group.id);
+                }
+            }
+            assertEq(True, True, "groups endpoint accessible");
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.arg.status_code == 403) {
+                testSkip("group listing requires admin permissions");
+            }
+            rethrow;
+        }
+    }
+
+    triggerExampleDataTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+        AbstractDataProvider events_dp = provider.getChildProvider("events");
+
+        # Test each event provider
+        foreach string event_name in (
+            SmartSheetDataProvider::EVENT_SHEET_UPDATED,
+            SmartSheetDataProvider::EVENT_ROW_CREATED,
+            SmartSheetDataProvider::EVENT_ROW_UPDATED,
+            SmartSheetDataProvider::EVENT_ROW_DELETED,
+        ) {
+            AbstractDataProvider event_dp = events_dp.getChildProvider(event_name);
+            assertEq(True, event_dp.val(), event_name + " event provider exists");
+
+            auto example = event_dp.getExampleEventData(event_name);
+            assertEq(True, example.val(), event_name + " example event data returned");
+            assertEq(True, example.hasKey("objectType"),
+                event_name + " example has objectType field");
+            assertEq(True, example.hasKey("action"),
+                event_name + " example has action field");
+
+            if (m_options.verbose) {
+                printf("Example event data for %s: %y\n", event_name, example);
+            }
+        }
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Delete test sheet
+        if (testSheetId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("sheets")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"sheetId": testSheetId.toInt()});
+
+                if (m_options.verbose) {
+                    printf("Deleted test sheet: %s\n", testSheetId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete sheet %s: %s: %s\n", testSheetId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test workspace
+        if (testWorkspaceId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("workspaces")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"workspaceId": testWorkspaceId.toInt()});
+
+                if (m_options.verbose) {
+                    printf("Deleted test workspace: %s\n", testWorkspaceId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete workspace %s: %s: %s\n", testWorkspaceId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test folder
+        if (testFolderId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("folders")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"folderId": testFolderId.toInt()});
+
+                if (m_options.verbose) {
+                    printf("Deleted test folder: %s\n", testFolderId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete folder %s: %s: %s\n", testFolderId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+    }
+}

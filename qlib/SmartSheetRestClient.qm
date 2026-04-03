@@ -1,0 +1,508 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file SmartSheetRestClient.qm Qore user module for calling Smartsheet REST API services
+
+/*  SmartSheetRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module SmartSheetRestClient {
+    version = "1.0";
+    desc = "User module for calling Smartsheet REST API services";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("smartsheetrest",
+            SmartSheetRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage SmartSheetRestClient Module
+
+    @tableofcontents
+
+    @section smartsheetrestclientintro SmartSheetRestClient Introduction
+
+    The %SmartSheetRestClient module provides an API for calling Smartsheet REST API services.
+
+    To use this module, use \c "%requires SmartSheetRestClient" in your code.
+
+    All the public symbols in the module are defined in the SmartSheetRestClient namespace.
+
+    The main classes are:
+    - @ref SmartSheetRestClient::SmartSheetRestClient "SmartSheetRestClient":
+      this class provides the REST client API for communication with the Smartsheet API;
+      it handles OAuth2 and API token authentication
+    - @ref SmartSheetRestClient::SmartSheetRestConnection "SmartSheetRestConnection":
+      provides a connection object to Smartsheet services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @section smartsheetrestclientrelnotes Release Notes
+
+    @subsection smartsheetrestclientv1_0 SmartSheetRestClient v1.0
+    - the initial version of the %SmartSheetRestClient module
+*/
+
+#! the SmartSheetRestClient namespace contains all the objects in the SmartSheetRestClient module
+public namespace SmartSheetRestClient {
+
+#! Common base class for SmartSheetRestClient functionality
+public class SmartSheetRestClientBase {
+    public {
+        #! Default Smartsheet API URL (US region)
+        const DefaultUrl = "https://api.smartsheet.com/2.0";
+
+        #! Default OAuth2 authorization URL
+        const DefaultAuthUrl = "https://app.smartsheet.com/b/authorize";
+
+        #! Default OAuth2 token URL
+        const DefaultTokenUrl = "https://api.smartsheet.com/2.0/token";
+
+        #! Default OAuth2 grant type
+        const DefaultGrantType = "authorization_code";
+
+        #! Default OAuth2 scopes (must be a list, not a string)
+        const DefaultScopes = (
+            "READ_SHEETS", "WRITE_SHEETS", "CREATE_SHEETS", "ADMIN_SHEETS", "SHARE_SHEETS",
+            "DELETE_SHEETS", "READ_SIGHTS", "CREATE_SIGHTS", "SHARE_SIGHTS", "DELETE_SIGHTS",
+            "READ_USERS", "ADMIN_USERS", "ADMIN_WORKSPACES", "ADMIN_WEBHOOKS",
+            "READ_CONTACTS", "READ_EVENTS",
+        );
+
+        #! Default data format
+        const DefaultData = "json";
+
+        #! Default domain
+        const DefaultDomain = ".com";
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (relative - no leading slash since base URL includes /2.0)
+        const DefaultPingPath = "users/me";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default headers for all requests
+        const DefaultHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default OAuth2 auth args for refresh tokens
+        const DefaultAuthArgs = {
+            "access_type": "offline",
+            "prompt": "consent",
+        };
+
+        #! Domain to API URL map
+        const DomainUrlMap = {
+            ".com": "https://api.smartsheet.com/2.0",
+            ".eu": "https://api.smartsheet.eu/2.0",
+            ".au": "https://api.smartsheet.au/2.0",
+            ".gov": "https://api.smartsheetgov.com/2.0",
+        };
+
+        #! Domain to OAuth2 auth URL map
+        const DomainAuthUrlMap = {
+            ".com": "https://app.smartsheet.com/b/authorize",
+            ".eu": "https://app.smartsheet.eu/b/authorize",
+            ".au": "https://app.smartsheet.au/b/authorize",
+            ".gov": "https://app.smartsheetgov.com/b/authorize",
+        };
+
+        #! Domain to OAuth2 token URL map
+        const DomainTokenUrlMap = {
+            ".com": "https://api.smartsheet.com/2.0/token",
+            ".eu": "https://api.smartsheet.eu/2.0/token",
+            ".au": "https://api.smartsheet.au/2.0/token",
+            ".gov": "https://api.smartsheetgov.com/2.0/token",
+        };
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "data": DefaultData,
+            "headers": DefaultHeaders,
+            "oauth2_auth_args": DefaultAuthArgs,
+            "oauth2_scopes": DefaultScopes,
+            "ping_headers": DefaultPingHeaders,
+            "ping_method": DefaultPingMethod,
+            "ping_path": DefaultPingPath,
+        };
+
+        #! Default connection URL
+        const DefaultConnectionUrl = "smartsheetrest://api.smartsheet.com/2.0";
+    }
+
+    #! returns options for the SmartSheetRestClient constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+
+        # Build URL from domain option
+        string domain = opts.domain ?? DefaultDomain;
+        if (!rv.url || rv.url == DefaultUrl) {
+            rv.url = DomainUrlMap{domain} ?? DefaultUrl;
+        }
+
+        if (opts.oauth2_client_id) {
+            # Build OAuth2 URLs from domain
+            rv.oauth2_auth_url = DomainAuthUrlMap{domain} ?? DefaultAuthUrl;
+            rv.oauth2_token_url = DomainTokenUrlMap{domain} ?? DefaultTokenUrl;
+            if (!rv.oauth2_grant_type) {
+                rv.oauth2_grant_type = DefaultGrantType;
+            }
+        } else if (opts.token) {
+            # API token / Bearer token mode
+            rv.headers.Authorization = "Bearer " + opts.token;
+        }
+
+        # Remove domain from options passed to RestClient
+        remove rv.domain;
+
+        return rv;
+    }
+}
+
+#! This class provides the REST client API for communication with Smartsheet servers
+/** Smartsheet uses a REST API at https://api.smartsheet.com/2.0 with OAuth2 or Bearer token
+    authentication.
+
+    @par Authentication:
+    - OAuth2 with Bearer tokens (authorization code grant)
+    - API access token via Authorization header
+
+    @par Regional Support:
+    - US: api.smartsheet.com
+    - EU: api.smartsheet.eu
+    - AU: api.smartsheet.au
+    - Gov: api.smartsheetgov.com
+*/
+public class SmartSheetRestClient inherits RestClient::RestClient, SmartSheetRestClientBase {
+    #! creates the object with the given options
+    /** @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient"
+        class plus:
+        - \c domain: the Smartsheet regional domain (".com", ".eu", ".au", ".gov")
+        - \c token: the Smartsheet API access token (alternative to OAuth2)
+
+        @param do_not_connect if \c False (the default), then a connection will be immediately
+        established to the remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data
+        serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(SmartSheetRestClientBase::getOptions(opts), do_not_connect) {
+        setAssumedEncoding("UTF-8");
+    }
+}
+
+#! Class for Smartsheet REST connections; returns @ref SmartSheetRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref SmartSheetRestClient::SmartSheetRestClient::constructor() for more information on the
+    above options
+*/
+public class SmartSheetRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Smartsheet REST Connection",
+            "short_desc": "A connection to the Smartsheet REST API",
+            "desc": "A connection to the Smartsheet REST API for spreadsheet and work management, "
+                "including sheets, rows, columns, workspaces, folders, reports, users, and groups",
+            "cls": Class::forName("SmartSheetRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "smartsheetrest": True,
+            },
+            "base_scheme_map": {
+                "https": "smartsheetrest",
+            },
+            "required_options": "oauth2_client_id,oauth2_client_secret",
+            "options": RestConnection::ConnectionScheme.options + {
+                "domain": <ConnectionOptionInfo>{
+                    "display_name": "Region",
+                    "short_desc": "Smartsheet data center region",
+                    "type": "string",
+                    "desc": "Select the Smartsheet data center region for your account.\n\n"
+                        "**Available regions:**\n"
+                        "- `.com` — United States\n"
+                        "- `.eu` — European Union\n"
+                        "- `.au` — Australia\n"
+                        "- `.gov` — US Government\n\n"
+                        "**Note:** Tokens are region-specific. A token from one region cannot "
+                        "be used with another region's API endpoint",
+                    "default_value": SmartSheetRestClientBase::DefaultDomain,
+                    "preselected": True,
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": ".com",
+                            "display_name": "US",
+                            "desc": "United States (api.smartsheet.com)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".eu",
+                            "display_name": "EU",
+                            "desc": "European Union (api.smartsheet.eu)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".au",
+                            "display_name": "AU",
+                            "desc": "Australia (api.smartsheet.au)",
+                        },
+                        <AllowedValueInfo>{
+                            "value": ".gov",
+                            "display_name": "Gov",
+                            "desc": "US Government (api.smartsheetgov.com)",
+                        },
+                    ),
+                },
+                "data": RestConnection::ConnectionScheme.options."data"
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultData,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options."ping_method"
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options."ping_path"
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultPingPath,
+                },
+                "oauth2_auth_args": RestConnection::ConnectionScheme.options.oauth2_auth_args
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultAuthArgs,
+                },
+                "oauth2_auth_url": RestConnection::ConnectionScheme.options.oauth2_auth_url
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultAuthUrl,
+                },
+                "oauth2_grant_type": RestConnection::ConnectionScheme.options.oauth2_grant_type
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultGrantType,
+                },
+                "oauth2_token_url": RestConnection::ConnectionScheme.options.oauth2_token_url
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultTokenUrl,
+                },
+                "oauth2_scopes": RestConnection::ConnectionScheme.options.oauth2_scopes
+                + <ConnectionOptionInfo>{
+                    "default_value": SmartSheetRestClientBase::DefaultScopes,
+                },
+            },
+        };
+    }
+
+    #! creates the SmartSheetRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and
+        \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description,
+            string url = SmartSheetRestClientBase::DefaultConnectionUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the SmartSheetRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(SmartSheetRestConnection::getConfig(config), attr) {
+    }
+
+    #! returns config for @ref SmartSheetRestConnection::constructor()
+    /** Constructs the connection URL from the domain option
+    */
+    private static hash<auto> getConfig(hash<auto> config) {
+        # Get domain from options, default to .com
+        string domain = config.opts.domain ?? SmartSheetRestClientBase::DefaultDomain;
+        # Build URL from domain
+        *string api_url = SmartSheetRestClientBase::DomainUrlMap{domain};
+        config.url = sprintf("smartsheetrest://%s", (api_url ?? SmartSheetRestClientBase::DefaultUrl)
+            .regex_subst("^https://", ""));
+        return config;
+    }
+
+    #! returns \c "smartsheetrest"
+    string getType() {
+        return "smartsheetrest";
+    }
+
+    #! Returns connection options
+    /** The OAuth2 URLs are built based on the domain option
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> rv = RestConnection::getConnectionOptions(rtopts);
+        # Always rebuild OAuth2 URLs from domain to ensure they match
+        string domain = rv.domain ?? SmartSheetRestClientBase::DefaultDomain;
+        rv.oauth2_auth_url = SmartSheetRestClientBase::DomainAuthUrlMap{domain}
+            ?? SmartSheetRestClientBase::DefaultAuthUrl;
+        rv.oauth2_token_url = SmartSheetRestClientBase::DomainTokenUrlMap{domain}
+            ?? SmartSheetRestClientBase::DefaultTokenUrl;
+        if (!rv.oauth2_grant_type) {
+            rv.oauth2_grant_type = SmartSheetRestClientBase::DefaultGrantType;
+        }
+        if (!rv.oauth2_auth_args) {
+            rv.oauth2_auth_args = SmartSheetRestClientBase::DefaultAuthArgs;
+        }
+        return rv;
+    }
+
+    #! returns @ref True as this connection returns a data provider with the @ref getDataProvider()
+    #! method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the data provider application name this connection serves, if any
+    *string getAppName() {
+        return "Smartsheet";
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the SmartSheetDataProvider and creates
+        # the data provider object dynamically
+        load_module("SmartSheetDataProvider");
+        return create_object("SmartSheetDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_records = True;
+        children_can_support_apis = True;
+        children_can_support_observers = True;
+    }
+
+    #! Sets the update options code for the connection
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            # Build correct URL from domain option
+            string domain = opts.domain ?? SmartSheetRestClientBase::DefaultDomain;
+            *string correct_api_url = SmartSheetRestClientBase::DomainUrlMap{domain};
+            string correct_url = sprintf("smartsheetrest://%s",
+                (correct_api_url ?? SmartSheetRestClientBase::DefaultUrl)
+                .regex_subst("^https://", ""));
+            if (url != correct_url) {
+                update.url = correct_url;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            # Rebuild OAuth2 URLs from domain
+            string correct_auth_url = SmartSheetRestClientBase::DomainAuthUrlMap{domain}
+                ?? SmartSheetRestClientBase::DefaultAuthUrl;
+            string correct_token_url = SmartSheetRestClientBase::DomainTokenUrlMap{domain}
+                ?? SmartSheetRestClientBase::DefaultTokenUrl;
+            if (opts.oauth2_auth_url != correct_auth_url) {
+                update.oauth2_auth_url = correct_auth_url;
+            }
+            if (opts.oauth2_token_url != correct_token_url) {
+                update.oauth2_token_url = correct_token_url;
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
+    }
+
+    #! returns a @ref SmartSheetRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter
+        is ignored
+
+        @return a @ref SmartSheetRestClient object
+    */
+    private SmartSheetRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SmartSheetRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    /** @since SmartSheetRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SmartSheetRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Smartsheet REST API using multiplexed HTTP connections
+/** @see SmartSheetRestClient for more information
+*/
+public class SmartSheetRestClientIo inherits RestClientIo::RestClientIo, SmartSheetRestClientBase {
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SmartSheetRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}
