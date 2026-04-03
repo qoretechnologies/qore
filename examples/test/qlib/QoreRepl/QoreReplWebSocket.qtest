@@ -279,19 +279,24 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         # Test /help command
         wsc.send(make_json({"type": "command", "command": "/help"}));
 
-        string raw = msgs.get(5s);
-        hash<auto> result_msg = parse_json(raw);
-        assertEq("result", result_msg.type, "Should receive result");
-        assertRegex("Commands:", result_msg.value, "Help should mention commands");
-
-        msgs.get(5s);  # prompt
+        # Server may send prompt before or after the result under load
+        *hash<auto> help_result;
+        for (int i = 0; i < 3 && !help_result; ++i) {
+            string raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "result") {
+                help_result = msg;
+            }
+        }
+        assertTrue(exists help_result, "Should receive result");
+        assertRegex("Commands:", help_result.value, "Help should mention commands");
 
         # Test unknown command — server may send prompt before or after the error
         wsc.send(make_json({"type": "command", "command": "/unknown"}));
 
         *hash<auto> error_msg;
         for (int i = 0; i < 3; ++i) {
-            raw = msgs.get(5s);
+            string raw = msgs.get(5s);
             hash<auto> msg = parse_json(raw);
             if (msg.type == "error") {
                 error_msg = msg;
