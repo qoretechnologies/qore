@@ -94,24 +94,26 @@ public class FreshsalesCreateNoteRequestDataType inherits HashDataType {
                 "desc": "The content/body of the note",
                 "example_value": "Follow-up call scheduled for next week",
             },
-            "targetable_id": {
-                "type": SoftIntType,
-                "display_name": "Target ID",
-                "required": True,
-                "short_desc": "Associated record ID",
-                "desc": "The ID of the contact, account, or deal to associate",
-            },
             "targetable_type": {
                 "type": StringType,
                 "display_name": "Target Type",
                 "required": True,
                 "short_desc": "Associated record type",
                 "desc": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+                "has_dependents": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
                     <AllowedValueInfo>{"value": "SalesAccount", "display_name": "Account"},
                     <AllowedValueInfo>{"value": "Deal", "display_name": "Deal"},
                 ),
+            },
+            "targetable_id": {
+                "type": SoftIntType,
+                "display_name": "Target ID",
+                "required": True,
+                "short_desc": "Associated record ID",
+                "desc": "The ID of the contact, account, or deal to associate",
+                "depends_on": ("targetable_type",),
             },
         };
     }

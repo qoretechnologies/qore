@@ -688,6 +688,32 @@ module FreshsalesDataProvider {
             "action_code": DPAT_EVENT,
             "action_val": EVENT_NEW_ACCOUNT,
         });
+
+        # New Task Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_TASK,
+            "action": EVENT_NEW_TASK,
+            "groups": "Events",
+            "display_name": "New Task Event",
+            "short_desc": "Watch for new tasks",
+            "desc": "Poll for new tasks created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_TASK,
+        });
+
+        # New Appointment Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_APPOINTMENT,
+            "action": EVENT_NEW_APPOINTMENT,
+            "groups": "Events",
+            "display_name": "New Appointment Event",
+            "short_desc": "Watch for new appointments",
+            "desc": "Poll for new appointments created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_APPOINTMENT,
+        });
     };
 }
 

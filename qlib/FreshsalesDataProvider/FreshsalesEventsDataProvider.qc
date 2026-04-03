@@ -46,6 +46,9 @@ public class FreshsalesEventsDataProvider inherits FreshsalesDataProviderBase {
             "watch-new-contacts": Class::forName("FreshsalesWatchNewContactsDataProvider"),
             "watch-new-deals": Class::forName("FreshsalesWatchNewDealsDataProvider"),
             "watch-new-accounts": Class::forName("FreshsalesWatchNewAccountsDataProvider"),
+            "watch-new-tasks": Class::forName("FreshsalesWatchNewTasksDataProvider"),
+            "watch-new-appointments":
+                Class::forName("FreshsalesWatchNewAppointmentsDataProvider"),
         };
     }
 

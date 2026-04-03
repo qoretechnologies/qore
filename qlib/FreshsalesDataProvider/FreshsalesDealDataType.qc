@@ -300,8 +300,8 @@ public class FreshsalesUpdateDealRequestDataType inherits HashDataType {
                 "short_desc": "The deal ID to update",
                 "desc": "The unique identifier of the deal to update",
             },
-        } + (map {$1.key: $1.value + {"required": False}},
-            FreshsalesCreateDealRequestDataType::Fields.pairIterator());
+        } + FreshsalesDataProviderBase::makeFieldsOptional(
+            FreshsalesCreateDealRequestDataType::Fields);
     }
 
     #! Creates the type

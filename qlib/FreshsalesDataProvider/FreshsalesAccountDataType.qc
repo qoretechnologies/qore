@@ -308,8 +308,8 @@ public class FreshsalesUpdateAccountRequestDataType inherits HashDataType {
                 "short_desc": "The account ID to update",
                 "desc": "The unique identifier of the account to update",
             },
-        } + (map {$1.key: $1.value + {"required": False}},
-            FreshsalesCreateAccountRequestDataType::Fields.pairIterator());
+        } + FreshsalesDataProviderBase::makeFieldsOptional(
+            FreshsalesCreateAccountRequestDataType::Fields);
     }
 
     #! Creates the type

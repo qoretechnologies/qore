@@ -166,23 +166,26 @@ public class FreshsalesCreateTaskRequestDataType inherits HashDataType {
                 "desc": "The ID of the user to assign to this task",
                 "ref_data": "owners",
             },
+            "targetable_type": {
+                "type": StringOrNothingType,
+                "display_name": "Target Type",
+                "short_desc": "Associated record type",
+                "desc": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+                "has_dependents": True,
+                "preselected": True,
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
+                    <AllowedValueInfo>{"value": "SalesAccount", "display_name": "Account"},
+                    <AllowedValueInfo>{"value": "Deal", "display_name": "Deal"},
+                ),
+            },
             "targetable_id": {
                 "type": SoftIntOrNothingType,
                 "display_name": "Target ID",
                 "short_desc": "Associated record ID",
                 "desc": "The ID of the contact, account, or deal to associate",
                 "preselected": True,
-            },
-            "targetable_type": {
-                "type": StringOrNothingType,
-                "display_name": "Target Type",
-                "short_desc": "Associated record type",
-                "desc": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
-                "allowed_values": (
-                    <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
-                    <AllowedValueInfo>{"value": "SalesAccount", "display_name": "Account"},
-                    <AllowedValueInfo>{"value": "Deal", "display_name": "Deal"},
-                ),
+                "depends_on": ("targetable_type",),
             },
             "outcome_id": {
                 "type": SoftIntOrNothingType,
@@ -219,8 +222,8 @@ public class FreshsalesUpdateTaskRequestDataType inherits HashDataType {
                 "short_desc": "The task ID to update",
                 "desc": "The unique identifier of the task to update",
             },
-        } + (map {$1.key: $1.value + {"required": False}},
-            FreshsalesCreateTaskRequestDataType::Fields.pairIterator());
+        } + FreshsalesDataProviderBase::makeFieldsOptional(
+            FreshsalesCreateTaskRequestDataType::Fields);
     }
 
     #! Creates the type

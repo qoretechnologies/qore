@@ -340,6 +340,30 @@ public class FreshsalesDataProviderBase inherits DataProvider::AbstractDataProvi
         return rv;
     }
 
+    #! Converts create request fields to optional fields for update request types
+    /** Makes all fields non-required and converts non-optional types to their or-nothing variants.
+        Used by update request data types to derive fields from create request data types.
+    */
+    static hash<auto> makeFieldsOptional(hash<auto> fields) {
+        hash<auto> or_nothing_map = {
+            "string": StringOrNothingType,
+            "softstring": SoftStringOrNothingType,
+            "int": IntOrNothingType,
+            "softint": SoftIntOrNothingType,
+            "float": FloatOrNothingType,
+            "softfloat": SoftFloatOrNothingType,
+            "bool": BoolOrNothingType,
+            "softbool": SoftBoolOrNothingType,
+            "date": DateOrNothingType,
+            "softdate": SoftDateOrNothingType,
+        };
+        return map {$1.key: $1.value + {
+            "required": False,
+        } + (or_nothing_map{$1.value.type.getName()}
+            ? {"type": or_nothing_map{$1.value.type.getName()}} : {})},
+            fields.pairIterator();
+    }
+
     #! Builds a query string from a hash of parameters
     private string buildQueryString(hash<auto> params) {
         list<string> parts;

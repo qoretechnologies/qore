@@ -159,22 +159,24 @@ public class FreshsalesCreateAppointmentRequestDataType inherits HashDataType {
                 "short_desc": "Meeting location",
                 "desc": "The location of the appointment",
             },
-            "targetable_id": {
-                "type": SoftIntOrNothingType,
-                "display_name": "Target ID",
-                "short_desc": "Associated record ID",
-                "desc": "The ID of the contact, account, or deal to associate",
-            },
             "targetable_type": {
                 "type": StringOrNothingType,
                 "display_name": "Target Type",
                 "short_desc": "Associated record type",
                 "desc": "The type of record to associate: `Contact`, `SalesAccount`, or `Deal`",
+                "has_dependents": True,
                 "allowed_values": (
                     <AllowedValueInfo>{"value": "Contact", "display_name": "Contact"},
                     <AllowedValueInfo>{"value": "SalesAccount", "display_name": "Account"},
                     <AllowedValueInfo>{"value": "Deal", "display_name": "Deal"},
                 ),
+            },
+            "targetable_id": {
+                "type": SoftIntOrNothingType,
+                "display_name": "Target ID",
+                "short_desc": "Associated record ID",
+                "desc": "The ID of the contact, account, or deal to associate",
+                "depends_on": ("targetable_type",),
             },
         };
     }
@@ -197,8 +199,8 @@ public class FreshsalesUpdateAppointmentRequestDataType inherits HashDataType {
                 "short_desc": "The appointment ID to update",
                 "desc": "The unique identifier of the appointment to update",
             },
-        } + (map {$1.key: $1.value + {"required": False}},
-            FreshsalesCreateAppointmentRequestDataType::Fields.pairIterator());
+        } + FreshsalesDataProviderBase::makeFieldsOptional(
+            FreshsalesCreateAppointmentRequestDataType::Fields);
     }
 
     #! Creates the type

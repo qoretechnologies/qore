@@ -350,8 +350,8 @@ public class FreshsalesUpdateContactRequestDataType inherits HashDataType {
                 "short_desc": "The contact ID to update",
                 "desc": "The unique identifier of the contact to update",
             },
-        } + (map {$1.key: $1.value + {"required": False}},
-            FreshsalesCreateContactRequestDataType::Fields.pairIterator());
+        } + FreshsalesDataProviderBase::makeFieldsOptional(
+            FreshsalesCreateContactRequestDataType::Fields);
     }
 
     #! Creates the type

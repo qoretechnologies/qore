@@ -58,6 +58,12 @@ public namespace FreshsalesDataProvider {
     #! Event name for new account
     public const EVENT_NEW_ACCOUNT = "new-account";
 
+    #! Event name for new task
+    public const EVENT_NEW_TASK = "new-task";
+
+    #! Event name for new appointment
+    public const EVENT_NEW_APPOINTMENT = "new-appointment";
+
     #! Freshsales logo in SVG format (loaded from file)
     public const FreshsalesLogo = File::readTextFile(get_script_dir() + "/freshsales-logo.svg");
 }
