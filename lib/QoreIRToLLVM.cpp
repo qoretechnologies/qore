@@ -2828,9 +2828,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     boxed = val;
                 }
 
-                // Check if complex-typed: apply coercion before runtime assignment
-                bool is_complex_typed_outer = QoreTypeInfo::isComplex(linst->local->getTypeInfo())
-                        && !QoreTypeInfo::isReference(linst->local->getTypeInfo());
+                // Check if typed: apply coercion or type stripping
+                const QoreTypeInfo* outer_ti = linst->local->getTypeInfo();
+                bool is_complex_typed_outer = QoreTypeInfo::isComplex(outer_ti)
+                        && !QoreTypeInfo::isReference(outer_ti);
+                bool needs_type_strip_outer = !QoreTypeInfo::isComplex(outer_ti)
+                        && !QoreTypeInfo::isReference(outer_ti)
+                        && (QoreTypeInfo::isHashType(outer_ti)
+                            || QoreTypeInfo::isListType(outer_ti));
                 if (is_complex_typed_outer) {
                     // Apply type coercion for outer-scope complex-typed locals
                     llvm::Function* func = builder->GetInsertBlock()->getParent();
@@ -2862,10 +2867,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     emitExceptionCheck(module, llvm_func, inst);
                     boxed = coerced;
                     invoke_result_allocas.push_back(cleanup);
+                } else if (needs_type_strip_outer) {
+                    // Strip narrowed complex type in place for plain hash/list vars
+                    auto strip_fn = module.getOrInsertFunction("qore_rt_strip_complex_type",
+                            llvm::FunctionType::get(void_type, {i64_type}, false));
+                    builder->CreateCall(strip_fn, {boxed});
                 }
 
                 if (aot_mode) {
-                    const char* helper_name = is_complex_typed_outer ? "qore_rt_assign_local_no_coerce_aot"
+                    bool use_no_coerce_outer = is_complex_typed_outer || needs_type_strip_outer;
+                    const char* helper_name = use_no_coerce_outer ? "qore_rt_assign_local_no_coerce_aot"
                             : "qore_rt_assign_local_aot";
                     auto assign_helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(void_type, {ptr_type, i32_type, i64_type, ptr_type}, false));
@@ -2873,7 +2884,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->CreateCall(assign_helper, {aot_ctx_arg,
                             llvm::ConstantInt::get(i32_type, slot), boxed, xsink_arg});
                 } else {
-                    const char* helper_name = is_complex_typed_outer ? "qore_rt_assign_local_no_coerce"
+                    bool use_no_coerce_outer_jit = is_complex_typed_outer || needs_type_strip_outer;
+                    const char* helper_name = use_no_coerce_outer_jit ? "qore_rt_assign_local_no_coerce"
                             : "qore_rt_assign_local";
                     auto assign_helper = module.getOrInsertFunction(helper_name,
                             llvm::FunctionType::get(void_type, {ptr_type, i64_type, ptr_type}, false));
@@ -3026,31 +3038,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
                 builder->CreateCall(decref_fn, {old_val, xsink_arg});
             }
-            // Complex type coercion: acceptAssignment() sets complexTypeInfo on
-            // lists/hashes so runtime variant resolution can match typed signatures
-            // like translate(list<hash<auto>>, string).  This must happen BEFORE
-            // storing to the alloca because LoadLocal reads from the alloca directly.
+            // Type handling before storing to the local alloca.
             bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
-            // Apply type coercion for complex hash/list types (not hashdecl types).
-            // Hashdecl types are also "complex" per isComplex(), but they use
-            // priv->hashdecl (not complexTypeInfo) for type identity. Coercing
-            // them through acceptAssignment can strip hashdecl annotations —
-            // a hash with complexTypeInfo set instead of hashdecl is rejected
-            // by QTS_HASHDECL type checking. The runtime assign (below) already
-            // handles type checking for hashdecl types correctly.
-            // Hashdecl types (including *hash<T>) are "complex" per isComplex() but
-            // must NOT go through qore_rt_coerce_value — coercion strips hashdecl
-            // annotations. Use getTypedHash() which handles or-nothing hashdecl types.
+            const QoreTypeInfo* local_ti = linst->local ? linst->local->getTypeInfo() : nullptr;
+
+            // Case 1: Complex hash/list types (not hashdecl) need type coercion
+            // via acceptAssignment() to set complexTypeInfo for runtime variant
+            // matching (e.g., list<hash<auto>> matches typed signatures).
+            // Hashdecl types must NOT go through coercion — it strips hashdecl
+            // annotations.  Use getTypedHash() to detect hashdecl types.
             bool is_complex_typed = linst->local
-                && QoreTypeInfo::isComplex(linst->local->getTypeInfo())
-                && !QoreTypeInfo::isReference(linst->local->getTypeInfo())
-                && !QoreTypeInfo::getTypedHash(linst->local->getTypeInfo());
+                && QoreTypeInfo::isComplex(local_ti)
+                && !QoreTypeInfo::isReference(local_ti)
+                && !QoreTypeInfo::getTypedHash(local_ti);
+
+            // Case 2: Plain hash/list types need type STRIPPING.
+            // When a hash literal like (key: 1) is created by qore_rt_make_hash,
+            // it gets a narrowed type (e.g., hash<string, int>) from value
+            // inference. Storing this to a plain "hash" variable must strip the
+            // narrowed type to prevent spurious RUNTIME-TYPE-ERROR when
+            // heterogeneous values are later assigned to hash keys.
+            // Unlike complex coercion (which copies), this modifies in place.
+            bool needs_type_strip = linst->local
+                && !QoreTypeInfo::isComplex(local_ti)
+                && !QoreTypeInfo::isReference(local_ti)
+                && (QoreTypeInfo::isHashType(local_ti)
+                    || QoreTypeInfo::isListType(local_ti));
 
             if (is_complex_typed && !is_ir_only) {
-                // Apply type coercion: stores complexTypeInfo on the value for runtime
-                // variant matching (e.g., list<hash<auto>> matches typed signatures).
-                // Must happen BEFORE storing to alloca. Coerce once here; use no-coerce
-                // assign variant below to avoid double-coercion on the runtime stack.
+                // Complex type coercion: stores complexTypeInfo on the value for
+                // runtime variant matching.  Must happen BEFORE storing to alloca.
+                // Coerce once here; use no-coerce assign variant below to avoid
+                // double-coercion on the runtime stack.
                 llvm::Function* func = builder->GetInsertBlock()->getParent();
                 llvm::BasicBlock* entry = &func->getEntryBlock();
                 llvm::IRBuilder<> alloca_builder(entry, entry->begin());
@@ -3080,6 +3099,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 emitExceptionCheck(module, llvm_func, inst);
                 boxed = coerced;
                 invoke_result_allocas.push_back(cleanup);
+            } else if (needs_type_strip && !is_ir_only) {
+                // Plain hash/list type stripping: clear complexTypeInfo in place.
+                // This is safe because the value is unique (just created by
+                // MakeHash/MakeHashConstKeys/map). No copy needed, no ownership
+                // transfer, no cleanup alloca complications.
+                auto strip_fn = module.getOrInsertFunction("qore_rt_strip_complex_type",
+                        llvm::FunctionType::get(void_type, {i64_type}, false));
+                builder->CreateCall(strip_fn, {boxed});
             }
 
             builder->CreateStore(boxed, it->second);
@@ -3124,12 +3151,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(after_reinst);
                 }
 
-                // For complex-typed locals (including hashdecl), use no-coerce variant.
+                // For complex-typed or type-stripped locals (and hashdecl), use no-coerce variant.
                 // Complex types: coercion was already applied above via qore_rt_coerce_value.
+                // Type-stripped: complexTypeInfo was cleared via qore_rt_strip_complex_type.
                 // Hashdecl types: runtime type checking via acceptAssignment rejects hashes
                 // that have complexTypeInfo set instead of hashdecl (a valid state that the
                 // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
-                bool use_no_coerce = is_complex_typed
+                bool use_no_coerce = is_complex_typed || needs_type_strip
                     || QoreTypeInfo::getTypedHash(linst->local->getTypeInfo());
                 const char* aot_helper_name = use_no_coerce ? "qore_rt_assign_local_no_coerce_aot"
                         : "qore_rt_assign_local_aot";
@@ -5943,10 +5971,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             auto helper = module.getOrInsertFunction("qore_rt_string_eq_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::NeAny: {
@@ -5970,10 +5999,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
             llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
             auto helper = module.getOrInsertFunction("qore_rt_string_ne_typed",
-                llvm::FunctionType::get(i64_type, {i64_type, i64_type}, false));
-            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed});
+                llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+            llvm::Value* result = builder->CreateCall(helper, {lhs_boxed, rhs_boxed, xsink_arg});
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
+            emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
         case QoreIROpcode::LtString: {

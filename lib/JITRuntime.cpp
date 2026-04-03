@@ -609,6 +609,28 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_value(const QoreTypeInfo* ti, uint6
     return result;
 }
 
+// Strip complex type info from hash/list values in place.
+// Used when storing to plain "hash" or "list" typed variables:
+// the IR/JIT creates hashes with narrowed types (e.g., hash<string, int>)
+// but plain hash/list variables must not retain these narrowed types.
+// Unlike map_get_plain_hash (which copies and frees the original), this
+// modifies the value in place when it's unique (refcount 1), avoiding
+// ownership transfer issues in the LLVM cleanup alloca tracking.
+extern "C" DLLEXPORT void qore_rt_strip_complex_type(uint64_t value) {
+    QoreValue val = fromBits(value);
+    if (val.getType() == NT_HASH) {
+        QoreHashNode* h = val.get<QoreHashNode>();
+        if (h && !h->getHashDecl()) {
+            qore_hash_private::get(*h)->complexTypeInfo = nullptr;
+        }
+    } else if (val.getType() == NT_LIST) {
+        QoreListNode* l = val.get<QoreListNode>();
+        if (l) {
+            qore_list_private::get(*l)->complexTypeInfo = nullptr;
+        }
+    }
+}
+
 extern "C" DLLEXPORT void qore_rt_assign_local_no_coerce(LocalVar* var, uint64_t value, ExceptionSink* xsink) {
     if (!var || *xsink) {
         return;
@@ -2669,22 +2691,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_concat_multi(uint64_t* args, int na
 }
 
 // Typed string equality - both operands are known to be strings at compile time
-extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right) {
+// Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
+extern "C" DLLEXPORT uint64_t qore_rt_string_eq_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     const QoreStringNode* ls = lv.get<const QoreStringNode>();
     const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = ls && rs && ls->equal(rs);
+    bool result = ls && rs && ls->equalSoft(*rs, xsink);
     return toBits(QoreValue(result));
 }
 
 // Typed string inequality - both operands are known to be strings at compile time
-extern "C" DLLEXPORT uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right) {
+// Uses equalSoft() for encoding-aware comparison (e.g. UTF-8 vs ISO-8859-1)
+extern "C" DLLEXPORT uint64_t qore_rt_string_ne_typed(uint64_t left, uint64_t right, ExceptionSink* xsink) {
     QoreValue lv = fromBits(left);
     QoreValue rv = fromBits(right);
     const QoreStringNode* ls = lv.get<const QoreStringNode>();
     const QoreStringNode* rs = rv.get<const QoreStringNode>();
-    bool result = !ls || !rs || !ls->equal(rs);
+    bool result = !ls || !rs || !ls->equalSoft(*rs, xsink);
     return toBits(QoreValue(result));
 }
 

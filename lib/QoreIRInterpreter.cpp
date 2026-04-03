@@ -315,7 +315,7 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::EqString: {
             const QoreStringNode* lstr = left.get<const QoreStringNode>();
             const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(lstr && rstr && lstr->equal(rstr));
+            return QoreValue(lstr && rstr && lstr->equalSoft(*rstr, xsink));
         }
         case QoreIROpcode::EqAny:
             return QoreValue(QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
@@ -326,7 +326,7 @@ QoreValue QoreIRInterpreter::evalComparison(QoreIROpcode op, const QoreValue& le
         case QoreIROpcode::NeString: {
             const QoreStringNode* lstr = left.get<const QoreStringNode>();
             const QoreStringNode* rstr = right.get<const QoreStringNode>();
-            return QoreValue(!lstr || !rstr || !lstr->equal(rstr));
+            return QoreValue(!lstr || !rstr || !lstr->equalSoft(*rstr, xsink));
         }
         case QoreIROpcode::NeAny:
             return QoreValue(!QoreLogicalEqualsOperatorNode::softEqual(left, right, xsink));
