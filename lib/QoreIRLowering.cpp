@@ -8685,6 +8685,38 @@ QoreIRValue QoreIRLowering::lowerMapNative(const QoreMapOperatorNode* map, const
     const QoreTypeInfo* list_type = getExprTypeInfo(map->getRight());
     const QoreTypeInfo* elem_type = QoreTypeInfo::getUniqueReturnComplexList(list_type);
 
+    // For nested map/select operators, use returnTypeInfo which provides the definitive
+    // return type (set to iteratorTypeInfo for scalar inputs). This is more precise than
+    // getExprTypeInfo() which may return autoTypeInfo for the body expression.
+    // For nested map/select operators, use returnTypeInfo (via getMapReturnType) which
+    // provides the definitive return type — set to iteratorTypeInfo for scalar inputs.
+    // This is more precise than getExprTypeInfo() which may return autoTypeInfo.
+    // Walk the chain of nested maps to find the innermost concrete return type.
+    if (!list_type || list_type == autoTypeInfo) {
+        const AbstractQoreNode* rhs = map->getRight().getInternalNode();
+        while (rhs) {
+            if (auto* inner_map = dynamic_cast<const QoreMapOperatorNode*>(rhs)) {
+                const QoreTypeInfo* rti = inner_map->getMapReturnType();
+                if (rti && rti != autoTypeInfo) {
+                    list_type = rti;
+                    break;
+                }
+                // Continue walking into the inner map's right side
+                rhs = inner_map->getRight().getInternalNode();
+            } else if (auto* inner_sel = dynamic_cast<const QoreMapSelectOperatorNode*>(rhs)) {
+                const QoreTypeInfo* rti = inner_sel->getMapReturnType();
+                if (rti && rti != autoTypeInfo) {
+                    list_type = rti;
+                    break;
+                }
+                // Continue walking into the inner select's iterator
+                rhs = inner_sel->getIteratorExpr().getInternalNode();
+            } else {
+                break;
+            }
+        }
+    }
+
     // Only enter single-value path when we have positive evidence it's NOT a list or iterator:
     // - elem_type must be null (no list element type extracted)
     // - list_type must be non-null (we have type information)

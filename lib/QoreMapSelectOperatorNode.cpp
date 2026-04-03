@@ -118,8 +118,12 @@ int QoreMapSelectOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& p
             if (qc && qore_class_private::parseCheckCompatibleClass(qc, QC_ABSTRACTITERATOR)) {
                 parse_context.typeInfo = QoreMapOperatorNode::setReturnTypeInfo(returnTypeInfo, expTypeInfo,
                     iteratorTypeInfo);
-            }else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
+            } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
+                // Scalar input: map-select returns the mapped scalar, not a list.
+                // Set returnTypeInfo to the iterator type (concrete scalar) for IR lowering.
+                // parse_context.typeInfo stays as expTypeInfo for correct caller type checking.
+                returnTypeInfo = iteratorTypeInfo;
                 parse_context.typeInfo = expTypeInfo;
             } else {
                 parse_context.typeInfo = nullptr;

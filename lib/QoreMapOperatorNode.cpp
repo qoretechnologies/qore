@@ -169,6 +169,12 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                     iteratorTypeInfo);
             } else if ((QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_LIST) == QTI_NOT_EQUAL)
                 && (QoreTypeInfo::parseReturns(iteratorTypeInfo, QC_ABSTRACTITERATOR) == QTI_NOT_EQUAL)) {
+                // Scalar input: map returns the mapped scalar, not a list.
+                // Set returnTypeInfo to the iterator type (concrete scalar) so that
+                // getTypeInfo() returns a non-list type, enabling the IR lowering's
+                // single-value path for nested map expressions.
+                // parse_context.typeInfo stays as expTypeInfo for correct caller type checking.
+                returnTypeInfo = iteratorTypeInfo;
                 parse_context.typeInfo = expTypeInfo;
             } else {
                 parse_context.typeInfo = nullptr;
