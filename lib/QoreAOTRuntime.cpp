@@ -889,6 +889,9 @@ public:
         }
         return toBitsNB(v);
     }
+
+    //! Returns true if deserialization failed (distinct from a successful NOTHING result)
+    bool hasFailed() const { return failed; }
 };
 
 QoreValue deserializeExprTreeFromBlob(const uint8_t* data, uint32_t size, QoreProgram* pgm,
@@ -2009,11 +2012,24 @@ static QoreAOTContext* buildContextFromSlotMap(
     assert(ptr <= end && "buildContextFromSlotMap overran section boundary");
 
     // Process deferred EXPR_TREE blobs now that all CLOSURE_CREATE slots are resolved
+    // Init functions (__const_init::, __svar_init::) use LLVM-compiled code that
+    // dispatches via invoke_opcode + operands for binary/unary ops. Their EXPR_TREE
+    // slots are only used for call target resolution, which tolerates empty slots.
+    // Constant references in init function EXPR_TREE blobs may evaluate to NOTHING
+    // because the referenced constant's own init hasn't run yet (init order dependency).
+    // Tolerating this is safe because the LLVM code doesn't use the slot for the
+    // binary-op path (it uses qore_rt_binary_op directly).
+    bool is_init_func = (strncmp(name, "__const_init::", 14) == 0
+        || strncmp(name, "__svar_init::", 12) == 0);
     for (auto& dt : deferred_expr_trees) {
         ExprTreeDeserializer deser(dt.blob_data, dt.blob_size, pgm, ctx);
         uint64_t bits = deser.deserialize();
-        if (bits) {
+        if (bits || !deser.hasFailed()) {
             ctx->exprs[dt.slot] = bits;
+        } else if (is_init_func) {
+            // Init function: tolerate EXPR_TREE failure (init order dependency)
+            printd(3, "AOT v2: EXPR_TREE slot %d of init func '%s' failed (tolerated)\n",
+                dt.slot, name);
         } else {
             printd(2, "AOT v2: EXPR_TREE deserialization failed for expr slot %d of '%s'\n",
                 dt.slot, name);
