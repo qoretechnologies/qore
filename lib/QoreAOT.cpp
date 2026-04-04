@@ -6439,6 +6439,16 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         return id;
     }
 
+    // Runtime constant reference: look up in const_reverse_map before EXPR_TREE fallback
+    if (const_reverse_map) {
+        auto cit = const_reverse_map->find(node);
+        if (cit != const_reverse_map->end()) {
+            id.kind = AOTExprKind::RUNTIME_CONST_REF;
+            id.ref1 = cit->second;
+            return id;
+        }
+    }
+
     // Try recursive expression tree serialization before falling back to GENERIC_EVAL
     {
         ExprTreeSerializer serializer(slots, const_reverse_map);
