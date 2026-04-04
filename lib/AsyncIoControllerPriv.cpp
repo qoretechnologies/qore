@@ -2163,33 +2163,21 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         std::vector<TimerEvent> timer_events;
         ResolvedCallReferenceNode* cb_snapshot = nullptr;
 
+        // Process poll results in two passes:
+        // Pass 1: socket events (I/O-thread-only state, no lock needed)
+        // Pass 2: timer events (need lock for timer_info_map + timer_callback)
         if (count > 0) {
-            AutoLocker al(m);
+            bool has_timer_events = false;
             for (int i = 0; i < count; ++i) {
                 if (events[i].events & QORE_EV_TIMER) {
-                    // Timer event — extract user data under lock
-                    // If the entry is not found, it was already canceled by cancelTimer();
-                    // silently drop the event to avoid delivering a stale callback
-                    int64_t tid_val = events[i].timer_id;
-                    auto it = timer_info_map.find(tid_val);
-                    if (it != timer_info_map.end()) {
-                        timer_events.push_back({tid_val, it->second.udata});
-                        timer_info_map.erase(it);
-                    }
-
+                    has_timer_events = true;
 #if defined(__linux__) && defined(HAVE_IO_URING)
                 } else if (events[i].events & QORE_EV_IOURING) {
-                    // io_uring completions ready — process them and deliver
-                    // data to Http2Sessions.  After delivery, affected sessions
-                    // need continuePoll() to submit the next read and flush
-                    // response data.  Mark all registered sockets as ready to
-                    // ensure Phase 1 includes them in ops_to_poll.
+                    // io_uring completions — I/O thread only
                     QoreIoUring* uring = loop->getIoUring();
                     if (uring) {
                         std::vector<QoreIoUring::CompletedRead> completions;
                         uring->processCompletions(completions);
-                        // Collect affected socket fds before delivery (buffer
-                        // ownership transfers during handleAsyncReadCompletion)
                         std::unordered_set<int> affected_fds;
                         for (auto& cr : completions) {
                             if (auto session = cr.session.lock()) {
@@ -2209,9 +2197,6 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                 }
                             }
                         }
-                        // Mark only the affected sockets as ready so Phase 1
-                        // includes them for continuePoll() to submit next
-                        // io_uring reads and flush response data
                         for (int afd : affected_fds) {
                             auto fsh_it = fd_to_sock_hash.find(afd);
                             if (fsh_it != fd_to_sock_hash.end()) {
@@ -2221,17 +2206,30 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
 #endif
                 } else if (events[i].fd >= 0) {
-                    // O(1) fd → sock_hash lookup replaces O(n) registered_sockets scan
+                    // O(1) fd → sock_hash lookup (I/O thread only, no lock)
                     auto fsh_it = fd_to_sock_hash.find(events[i].fd);
                     if (fsh_it != fd_to_sock_hash.end()) {
                         ready_socket_hashes.insert(fsh_it->second);
                     }
                 }
             }
-            // Snapshot timer callback under lock
-            if (!timer_events.empty() && timer_callback) {
-                cb_snapshot = timer_callback;
-                cb_snapshot->ref();
+            // Pass 2: timer events under lock (only when timers actually fired)
+            if (has_timer_events) {
+                AutoLocker al(m);
+                for (int i = 0; i < count; ++i) {
+                    if (events[i].events & QORE_EV_TIMER) {
+                        int64_t tid_val = events[i].timer_id;
+                        auto it = timer_info_map.find(tid_val);
+                        if (it != timer_info_map.end()) {
+                            timer_events.push_back({tid_val, it->second.udata});
+                            timer_info_map.erase(it);
+                        }
+                    }
+                }
+                if (!timer_events.empty() && timer_callback) {
+                    cb_snapshot = timer_callback;
+                    cb_snapshot->ref();
+                }
             }
         }
 
