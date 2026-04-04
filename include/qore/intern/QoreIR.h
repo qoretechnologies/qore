@@ -608,6 +608,11 @@ inline bool isUnaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::ExistsAny:
         case QoreIROpcode::ExistsBool:
         case QoreIROpcode::IsCollectionType:
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash:
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt:
             return true;
         default:
             return false;

@@ -3900,6 +3900,19 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     registerLValueBaseVars(lvi->lvalue, slots);  // Pre-register base vars for serialization
                     break;
                 }
+                // Pure unary ops with pre-evaluated operands: skip expr slot
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    if (!ei->operands.empty()) {
+                        break;  // skip — operand is pre-evaluated
+                    }
+                    // Fallthrough: no operands, need expr slot for AST evaluation
+                    [[fallthrough]];
+                }
                 // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
                 case QoreIROpcode::PopAny:
                 case QoreIROpcode::PushAny:
@@ -3913,9 +3926,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::KeysAny:
-                case QoreIROpcode::KeysList:
-                case QoreIROpcode::KeysHash:
                 case QoreIROpcode::RegexMatchAny:
                 case QoreIROpcode::RegexMatchBool:
                 case QoreIROpcode::RegexNMatchBool:
@@ -3932,8 +3942,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:
                 case QoreIROpcode::DotEvalAny:
                 case QoreIROpcode::DotEvalInt:
@@ -4225,6 +4233,19 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                // Pure unary ops with pre-evaluated operands: skip expr slot
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    if (!ei->operands.empty()) {
+                        break;  // skip — operand is pre-evaluated
+                    }
+                    // Fallthrough: no operands, need expr slot for AST evaluation
+                    [[fallthrough]];
+                }
                 // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
                 case QoreIROpcode::PopAny:
                 case QoreIROpcode::PushAny:
@@ -4238,9 +4259,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::KeysAny:
-                case QoreIROpcode::KeysList:
-                case QoreIROpcode::KeysHash:
                 case QoreIROpcode::RegexMatchAny:
                 case QoreIROpcode::RegexMatchBool:
                 case QoreIROpcode::RegexNMatchBool:
@@ -4257,8 +4275,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:
                 case QoreIROpcode::DotEvalAny:
                 case QoreIROpcode::DotEvalInt:
@@ -4666,6 +4682,19 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                // Pure unary ops with pre-evaluated operands: skip expr slot
+                case QoreIROpcode::KeysAny:
+                case QoreIROpcode::KeysList:
+                case QoreIROpcode::KeysHash:
+                case QoreIROpcode::ElementsAny:
+                case QoreIROpcode::ElementsInt: {
+                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    if (!ei->operands.empty()) {
+                        break;  // skip — operand is pre-evaluated
+                    }
+                    // Fallthrough: no operands, need expr slot for AST evaluation
+                    [[fallthrough]];
+                }
                 // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
                 case QoreIROpcode::PopAny:
                 case QoreIROpcode::PushAny:
@@ -4679,9 +4708,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::KeysAny:
-                case QoreIROpcode::KeysList:
-                case QoreIROpcode::KeysHash:
                 case QoreIROpcode::RegexMatchAny:
                 case QoreIROpcode::RegexMatchBool:
                 case QoreIROpcode::RegexNMatchBool:
@@ -4698,8 +4724,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::TransliterateString:
                 case QoreIROpcode::BackgroundInt:
                 case QoreIROpcode::ListAssignAny:
-                case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt:
                 case QoreIROpcode::DotEvalHash:
                 case QoreIROpcode::DotEvalAny:
                 case QoreIROpcode::DotEvalInt:

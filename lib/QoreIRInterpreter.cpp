@@ -7724,6 +7724,50 @@ QoreValue QoreIRInterpreter::evalUnary(QoreIROpcode op, const QoreValue& value, 
             qore_type_t t = value.getType();
             return QoreValue(t == NT_LIST || t == NT_OBJECT);
         }
+        case QoreIROpcode::KeysAny:
+        case QoreIROpcode::KeysList:
+        case QoreIROpcode::KeysHash: {
+            qore_type_t t = value.getType();
+            if (t == NT_HASH) {
+                return value.get<const QoreHashNode>()->getKeys();
+            }
+            if (t == NT_OBJECT) {
+                QoreObject* o = const_cast<QoreObject*>(value.get<const QoreObject>());
+                AutoVLock vl(xsink);
+                QoreValue members = qore_object_private::get(*o)->getRuntimeMemberHash(xsink);
+                if (xsink && *xsink) {
+                    return QoreValue();
+                }
+                if (members.getType() == NT_HASH) {
+                    QoreValue keys = members.get<const QoreHashNode>()->getKeys();
+                    members.discard(xsink);
+                    return keys;
+                }
+                members.discard(xsink);
+            }
+            return QoreValue();
+        }
+        case QoreIROpcode::ElementsAny:
+        case QoreIROpcode::ElementsInt: {
+            qore_type_t t = value.getType();
+            if (t == NT_LIST) {
+                return QoreValue(static_cast<int64>(value.get<const QoreListNode>()->size()));
+            }
+            if (t == NT_HASH) {
+                return QoreValue(static_cast<int64>(value.get<const QoreHashNode>()->size()));
+            }
+            if (t == NT_STRING) {
+                return QoreValue(static_cast<int64>(value.get<const QoreStringNode>()->strlen()));
+            }
+            if (t == NT_BINARY) {
+                return QoreValue(static_cast<int64>(value.get<const BinaryNode>()->size()));
+            }
+            if (t == NT_OBJECT) {
+                return QoreValue(static_cast<int64>(
+                    const_cast<QoreObject*>(value.get<const QoreObject>())->size(xsink)));
+            }
+            return QoreValue(0ll);
+        }
         default:
             break;
     }

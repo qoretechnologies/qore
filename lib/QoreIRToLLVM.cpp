@@ -9061,14 +9061,52 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Pure expression ops (no variable modification) ===
+        // === Unary ops with pre-evaluated operands (Keys, Elements) ===
         case QoreIROpcode::KeysAny:
         case QoreIROpcode::KeysList:
         case QoreIROpcode::KeysHash:
-        case QoreIROpcode::BackgroundInt:
         case QoreIROpcode::ElementsAny:
         case QoreIROpcode::ElementsInt: {
-            // Pure expression ops — delegate to qore_rt_invoke_expr via the AST node
+            const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
+            llvm::Value* result;
+            if (!expr_inst->operands.empty()) {
+                // Pre-evaluated operand: dispatch via qore_rt_unary_op (no expr slot needed)
+                auto* operand = getVal(inst->operands[0].id, error);
+                if (!operand) { return false; }
+                llvm::Value* operand_boxed = boxValue(operand, inst->operands[0].id);
+                llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                    static_cast<int>(inst->opcode));
+                auto helper = module.getOrInsertFunction("qore_rt_unary_op",
+                    llvm::FunctionType::get(i64_type,
+                        {llvm::Type::getInt32Ty(ctx), i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper, {opcode_val, operand_boxed, xsink_arg});
+            } else {
+                // No operands: delegate to AST expression
+                QoreValue expr_val = expr_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                }
+            }
+            values[inst->result.id] = result;
+            nanboxed_values.insert(inst->result.id);
+            trackResultForCleanup(result, inst->result.id, llvm_func);
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
+
+        // === Background op (always uses AST) ===
+        case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
             QoreValue expr_val = expr_inst->expr;
             uint64_t expr_bits;
