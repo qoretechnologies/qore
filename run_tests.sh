@@ -199,7 +199,11 @@ if [ $MEASURE_TIME -eq 1 ]; then
     fi
 fi
 
-LD_PRELOAD=$LIBQORE
+if [ -n "$LD_PRELOAD" ]; then
+    LD_PRELOAD=$LIBQORE:$LD_PRELOAD
+else
+    LD_PRELOAD=$LIBQORE
+fi
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
