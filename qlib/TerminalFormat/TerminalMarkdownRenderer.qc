@@ -56,7 +56,7 @@ public class TerminalMarkdownRenderer {
     /** @param no_color if True, disables ANSI color output
     */
     constructor(bool no_color = False) {
-        color = new Util::TerminalColor(no_color);
+        color = new Util::TerminalColor(!no_color);
     }
 
     #! Renders markdown text to a single ANSI-formatted string
