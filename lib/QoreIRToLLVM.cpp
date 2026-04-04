@@ -1436,12 +1436,9 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         return;
     }
     last_runtime_line = inst->loc->start_line;
-    // Store nullptr to stmt_ptr (clear statement pointer)
-    builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
-        stmt_cache_ptr);
 
     if (aot_mode) {
-        // AOT mode: look up location from ctx->locs[loc_index]
+        // AOT mode: call runtime helper to update location from ctx->locs table
         auto it = aot_loc_slots.find(inst->loc);
         int32_t loc_index;
         if (it != aot_loc_slots.end()) {
@@ -1457,7 +1454,9 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         builder->CreateCall(helper, {aot_ctx_arg,
             llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), loc_index)});
     } else {
-        // JIT mode: embed QoreProgramLocation* directly
+        // JIT mode: inline store of statement + location pointers
+        builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
+            stmt_cache_ptr);
         llvm::Value* loc_val = builder->CreateIntToPtr(
             llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
             llvm::PointerType::getUnqual(ctx));
@@ -1838,6 +1837,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         auto stmt_fn = module.getOrInsertFunction("qore_rt_get_stmt_ptr",
             llvm::FunctionType::get(ptr_type, {}, false));
         stmt_cache_ptr = builder->CreateCall(stmt_fn, {}, "stmt_ptr");
+        // AOT mode: no preloading needed — qore_rt_set_runtime_loc_aot handles
+        // null checks and TLS access internally per line change.
     }
 
     // Lower each block
