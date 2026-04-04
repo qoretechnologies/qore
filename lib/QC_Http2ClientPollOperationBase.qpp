@@ -68,11 +68,13 @@ void Http2ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
     // Clean up stream queues
     clearStreamQueues(xsink);
 
-    // Clean up stream actions
+    // Clean up stream actions — reject pending Promises so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
         for (auto& [sid, action] : stream_actions) {
             if (action) {
+                action->executeError("HTTP2-ABORT",
+                    "poll operation cleaned up before response was received", xsink);
                 action->deref(xsink);
             }
         }
@@ -169,6 +171,10 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     if (poll_xsink) {
         const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        ASYNC_IO_TRACE("H2 handleConnecting: CONNECT ERROR: %s: %s target=%s:%d\n",
+            err_str ? err_str->c_str() : "?",
+            desc_str ? desc_str->c_str() : "?",
+            target_host.c_str(), target_port);
         setError(err_str ? err_str->c_str() : "HTTP2-CONNECT-ERROR",
             desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
         poll_xsink.clear();
@@ -180,7 +186,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     }
 
     if (current_op->goalReached()) {
-        printd(5, "Http2ClientPollOperationPriv::handleConnecting() TCP connection established\n");
+        ASYNC_IO_TRACE("H2 handleConnecting: TCP connected to %s:%d ssl=%d\n",
+            target_host.c_str(), target_port, (int)ssl_required);
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
@@ -567,6 +574,9 @@ void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
     }
     clearStreamQueues(xsink);
     notifyPendingStreams("HTTP2-ABORT", "connection aborted", xsink);
+    if (connection_priv) {
+        connection_priv->setClosed();
+    }
     connection_priv = nullptr;
     // Note: do NOT close socket or delete current_op here to avoid
     // Note: do NOT close socket or delete current_op here to avoid
@@ -584,7 +594,15 @@ void Http2ClientPollOperationPriv::setError(const char* err, const char* desc,
         }
     }
     h2_state.store(H2State::CLOSED, std::memory_order_release);
+    // Close the socket to release the fd and prevent CLOSE-WAIT accumulation.
+    // Safe here: setError() is called from continuePoll() on the I/O thread.
+    if (sock_obj && sock_obj->getSocket() >= 0) {
+        sock_obj->close();
+    }
     notifyPendingStreams(err, desc, xsink);
+    if (connection_priv) {
+        connection_priv->setClosed();
+    }
     connection_priv = nullptr;
 }
 

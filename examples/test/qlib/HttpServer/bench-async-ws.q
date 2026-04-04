@@ -1,19 +1,18 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #
-# Benchmark server for measuring async HTTP I/O throughput.
+# WebSocket echo benchmark server for measuring async I/O throughput.
 #
 # Usage:
-#   QORE_MODULE_DIR=qlib qore bench-async-http.q [options]
+#   QORE_MODULE_DIR=qlib qore bench-async-ws.q [options]
 #
 # Options:
 #   --port=N         Listen port (default 0 = auto)
 #   --duration=N     Run for N seconds then exit (default: run until killed)
-#   --sync           Use sync mode (no async I/O) for baseline comparison
 #   --quiet          Suppress info messages
+#   --port-file=F    Write the bound port to this file
 #
-# The server binds to 127.0.0.1 and prints the port on stdout so the
-# benchmark driver can connect.
+# The server echoes every WebSocket text/binary message back to the sender.
 
 %modern
 
@@ -23,21 +22,46 @@
 %requires ../../../../qlib/HttpServerUtil.qm
 %requires ../../../../qlib/HttpServerAsyncIo
 %requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebSocketUtil.qm
+%requires ../../../../qlib/WebSocketHandler.qm
 
-%exec-class BenchServer
+%exec-class WsBenchServer
 
-class BenchHandler inherits AbstractHttpRequestHandler {
-    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
-        return makeResponse(200, "OK");
+class EchoWebSocketHandler inherits WebSocketHandler {
+    constructor() : WebSocketHandler() {
+    }
+
+    WebSocketConnection getConnectionImpl(hash<auto> cx, hash<auto> hdr, string cid) {
+        return new EchoWebSocketConnection(self);
     }
 }
 
-class BenchServer {
+class EchoWebSocketConnection inherits WebSocketConnection {
+    constructor(WebSocketHandler handler) : WebSocketConnection(handler) {
+    }
+
+    #! Called when the connection is registered — enable C++ echo mode
+    registered() {
+        # Enable C++ I/O-thread echo: frames are echoed back in pure C++
+        # with zero context switches (no gotMessage callback)
+        setEchoMode();
+    }
+
+    gotMessage(string msg) {
+        # Fallback for non-async paths (not called when echo mode is active)
+        send(msg);
+    }
+
+    gotMessage(binary msg) {
+        send(msg);
+    }
+}
+
+class WsBenchServer {
     private {
         const Opts = {
             "port":      "port=i",
             "duration":  "duration=i",
-            "sync":      "sync",
             "quiet":     "quiet",
             "port_file": "port-file=s",
             "help":      "help,h",
@@ -48,14 +72,14 @@ class BenchServer {
         GetOpt g(Opts);
         hash<auto> opt = g.parse3(\ARGV);
         if (opt.help) {
-            printf("Usage: %s [--port=N] [--duration=N] [--sync] [--quiet]\n",
+            printf("Usage: %s [--port=N] [--duration=N] [--quiet] [--port-file=F]\n",
                 get_script_name());
             exit(0);
         }
 
         int listen_port = opt.port ?? 0;
 
-        Logger logger("bench", LoggerLevel::getLevelInfo());
+        Logger logger("ws-bench", LoggerLevel::getLevelInfo());
         # no appender — suppress all log output during benchmarks
 
         hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
@@ -63,7 +87,11 @@ class BenchServer {
             "debug": False,
         };
         HttpServer server(http_opts);
-        server.setDefaultHandler("bench", new BenchHandler());
+
+        EchoWebSocketHandler ws_handler();
+        server.setHandler("ws-echo", "/ws", MimeTypeHtml, ws_handler);
+        server.setDefaultHandler("ws-echo", ws_handler);
+
         int bound_port = server.addListener(<HttpListenerOptionInfo>{
             "service": listen_port,
             "node": "127.0.0.1",
@@ -82,15 +110,15 @@ class BenchServer {
 
         if (opt.duration) {
             if (!opt.quiet) {
-                stderr.printf("Running for %d seconds in async mode...\n", opt.duration);
+                stderr.printf("WS echo server running for %d seconds on port %d...\n",
+                    opt.duration, bound_port);
             }
             sleep(opt.duration);
         } else {
             if (!opt.quiet) {
-                stderr.printf("Server ready on port %d in async mode. "
-                    "Press Ctrl-C to stop.\n", bound_port);
+                stderr.printf("WS echo server ready on port %d. Press Ctrl-C to stop.\n",
+                    bound_port);
             }
-            # Block until killed
             Counter c(1);
             c.waitForZero();
         }

@@ -395,6 +395,23 @@ public class WebSocketConnection {
         self.async_ws_poll_op = poll_op;
     }
 
+    #! Enables C++ echo mode for zero-context-switch echo
+    /** When enabled, text and binary frames are echoed back to the sender
+        entirely on the I/O thread with no worker dispatch, no Qore
+        interpreter overhead, and no context switches.
+
+        @ref gotMessage() is NOT called when echo mode is active.
+
+        @param enabled True to enable, False to disable
+
+        @since WebSocketHandler 2.8
+    */
+    setEchoMode(bool enabled = True) {
+        if (async_ws_poll_op) {
+            async_ws_poll_op.setEchoMode(enabled);
+        }
+    }
+
     #! Sets the stream processor for async HTTP/2 or HTTP/3 I/O
     /** @param proc the stream processor, or @ref nothing to clear
 

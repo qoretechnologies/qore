@@ -171,7 +171,8 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
 
 // --- QoreCallDispatcher implementation ---
 
-QoreCallDispatcher::QoreCallDispatcher(int max_workers) {
+QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* controller)
+    : ctrl(controller) {
     if (max_workers <= 0) {
         int hw = std::thread::hardware_concurrency();
         this->max_workers = hw > 0 ? std::min(hw, (int)MAX_WORKER_CAP) : 4;
@@ -437,10 +438,19 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (work_xsink) {
             const QoreStringNode* err_str = work_xsink.getExceptionErr().get<const QoreStringNode>();
             const QoreStringNode* desc_str = work_xsink.getExceptionDesc().get<const QoreStringNode>();
-            printd(0, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
-                method_name ? method_name : "unknown",
-                err_str ? err_str->c_str() : "?",
-                desc_str ? desc_str->c_str() : "?");
+            // Use the controller's logger if available; fall back to stderr
+            if (ctrl) {
+                ctrl->log(QORE_LOG_LEVEL_ERROR,
+                    "QoreCallDispatcher::workerLoop() %s exception: %s: %s",
+                    method_name ? method_name : "unknown",
+                    err_str ? err_str->c_str() : "?",
+                    desc_str ? desc_str->c_str() : "?");
+            } else {
+                fprintf(stderr, "QoreCallDispatcher::workerLoop() %s exception: %s: %s\n",
+                    method_name ? method_name : "unknown",
+                    err_str ? err_str->c_str() : "?",
+                    desc_str ? desc_str->c_str() : "?");
+            }
             work_xsink.clear();
         }
 
@@ -1109,6 +1119,7 @@ void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
             do_signal = true;
         }
     }
+    ASYNC_IO_TRACE("wakeSocket: hash='%s' signal=%d\n", sock_hash.c_str(), (int)do_signal);
     if (do_signal) {
         notifier->notify();
     }
@@ -1146,6 +1157,8 @@ void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSi
             s->deref(xsink);
         }
     }
+    ASYNC_IO_TRACE("wakeSocketByObject: obj=%p hash='%s' (empty=%d)\n",
+        sock_obj, sock_hash.c_str(), (int)sock_hash.empty());
     if (!sock_hash.empty()) {
         wakeSocket(sock_hash);
     }
@@ -1699,7 +1712,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         auto it = cache.find(op.key);
                         if (it != cache.end()) {
@@ -1745,7 +1758,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (!ready.empty()) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         for (int32_t sid : ready) {
                             op.spop_obj->ref();
@@ -1764,7 +1777,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (!ready.empty()) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         for (int32_t sid : ready) {
                             op.spop_obj->ref();
@@ -1781,7 +1794,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (!ready.empty()) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         for (int64_t sid : ready) {
                             op.spop_obj->ref();
@@ -1798,7 +1811,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (!ready.empty()) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         for (auto& skey : ready) {
                             op.spop_obj->ref();
@@ -1814,7 +1827,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     if (pushed > 0) {
                         AutoLocker al(m);
                         if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                         }
                         op.spop_obj->ref();
                         call_dispatcher->dispatchPollCompleteAsync(op.spop_obj);
@@ -1833,7 +1846,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 {
                     AutoLocker al(m);
                     if (!call_dispatcher) {
-                        call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                        call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                     }
                     auto it = cache.find(op.key);
                     if (it != cache.end()) {
@@ -1909,6 +1922,29 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         cit->second->broadcast();
                         delete cit->second;
                         cancel_cond_map.erase(cit);
+                    }
+
+                    // On error or timeout, close the socket to release the fd and
+                    // prevent CLOSE-WAIT accumulation.  Without this, dead sockets
+                    // leak when the remote closes the connection and degrade epoll
+                    // performance over time.
+                    //
+                    // Skip for:
+                    // - successful completions (socket may be reused by the pool)
+                    // - SOCK_DGRAM sockets (HTTP/3 QUIC uses a shared UDP socket
+                    //   across sessions; closing it would break other sessions)
+                    if (result.ex_hash && pinfo.sock) {
+                        int fd = pinfo.sock->getPollableDescriptor();
+                        if (fd >= 0) {
+                            int sock_type = 0;
+                            socklen_t optlen = sizeof(sock_type);
+                            if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &sock_type, &optlen) == 0
+                                    && sock_type != SOCK_DGRAM) {
+                                ASYNC_IO_TRACE("Phase3 CLOSE fd=%d key='%s'\n", fd,
+                                    result.key.c_str());
+                                pinfo.sock->closeIo(xsink);
+                            }
+                        }
                     }
 
                     // Clean up and remove from cache
@@ -2040,6 +2076,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Deliver results outside lock — onComplete dispatched to worker threads
         for (auto& dd : deferred_deliveries) {
+            ASYNC_IO_TRACE("deliverResult key='%s' onComplete=%d\n",
+                dd.key.c_str(), (int)dd.has_on_complete);
             deliverResult(dd.queue, dd.spop_obj, dd.has_on_complete, dd.result, xsink);
             dd.spop_obj = nullptr;
             dd.result = nullptr;
@@ -2104,9 +2142,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 timeout_ms = 0;
             } else {
                 timeout_ms = (int)(remaining_us / 1000);
-                if (timeout_ms == 0) {
-                    timeout_ms = 1;  // Minimum 1ms to avoid busy loop
-                }
+                // When remaining_us < 1000, timeout_ms truncates to 0.
+                // This is correct: the deadline is sub-millisecond away,
+                // so poll immediately rather than oversleeping by up to 1ms.
+                // Not a busy loop — only triggers with a real pending deadline.
             }
         }
 
@@ -2225,7 +2264,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             if (!timer_events.empty()) {
                 AutoLocker al(m);
                 if (!call_dispatcher) {
-                    call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                    call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
                 }
             }
         }
@@ -2731,7 +2770,7 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
         {
             AutoLocker al(m);
             if (!call_dispatcher) {
-                call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
             }
         }
         pinfo.spop_obj->ref();
@@ -3191,7 +3230,7 @@ void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,
         const std::string& stream_key) {
     AutoLocker al(m);
     if (!call_dispatcher) {
-        call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+        call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
     }
     spop_obj->ref();
     call_dispatcher->dispatchStreamDataAsync(spop_obj, stream_key);
@@ -3215,7 +3254,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         {
             AutoLocker al(m);
             if (!call_dispatcher) {
-                call_dispatcher = new QoreCallDispatcher(max_callback_workers);
+                call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
             }
         }
         call_dispatcher->dispatchOnCompleteAsync(spop_obj, result);

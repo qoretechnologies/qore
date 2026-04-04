@@ -42,6 +42,22 @@
 /** @cond INTERNAL */
 
 // ============================================================
+// WsEchoFrameHandler implementation
+// ============================================================
+
+BinaryNode* WsEchoFrameHandler::handleTextFrame(const QoreStringNode* text,
+        ExceptionSink* xsink) {
+    return WebSocketFrameEncoder::encode(WSOP_TEXT,
+        text->c_str(), text->size(), true, false);
+}
+
+BinaryNode* WsEchoFrameHandler::handleBinaryFrame(const BinaryNode* data,
+        ExceptionSink* xsink) {
+    return WebSocketFrameEncoder::encode(WSOP_BINARY,
+        data->getPtr(), data->size(), true, false);
+}
+
+// ============================================================
 // HttpWebSocketPollOperationPriv implementation
 // ============================================================
 
@@ -238,7 +254,25 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
             if (startSendOp(xsink)) {
                 return nullptr;
             }
-            poll_events |= SOCK_POLLOUT;
+            // Try to complete the send inline — for small messages on
+            // localhost, the kernel buffer has space and send() completes
+            // immediately.  This eliminates one poll cycle per echo.
+            QoreHashNode* send_info = send_op->continuePoll(xsink);
+            if (*xsink) {
+                releaseSendOp(xsink);
+                xsink->clear();
+            } else if (!send_info) {
+                if (send_op->goalReached()) {
+                    releaseSendOp(xsink);
+                    // Send complete — no POLLOUT needed
+                } else {
+                    releaseSendOp(xsink);
+                }
+            } else {
+                // Send needs more I/O — register for POLLOUT
+                send_info->deref(xsink);
+                poll_events |= SOCK_POLLOUT;
+            }
         }
     }
 
@@ -414,36 +448,62 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
     }
 
     if (complete) {
+        WsOpcode msg_opcode = frame.opcode;
+        uint8_t msg_rsv = frame.rsv;
+        const void* msg_data = nullptr;
+        size_t msg_len = 0;
+        SimpleRefHolder<BinaryNode> reassembled_payload;
+
         if (reassembler.isFragmenting() || frame.opcode == WSOP_CONTINUATION) {
             // Reassembled fragmented message
-            WsOpcode msg_opcode;
-            uint8_t msg_rsv;
-            SimpleRefHolder<BinaryNode> msg_payload(reassembler.getCompleteMessage(msg_opcode, msg_rsv));
-            if (msg_payload) {
-                if (msg_opcode == WSOP_TEXT) {
-                    QoreStringNode* text = new QoreStringNode(
-                        reinterpret_cast<const char*>(msg_payload->getPtr()),
-                        msg_payload->size(), QCS_UTF8);
-                    pushRecvFrame("text", text, msg_rsv, xsink);
-                } else {
-                    pushRecvFrame("binary", msg_payload.release(), msg_rsv, xsink);
-                }
+            reassembled_payload = reassembler.getCompleteMessage(msg_opcode, msg_rsv);
+            if (*reassembled_payload) {
+                msg_data = reassembled_payload->getPtr();
+                msg_len = reassembled_payload->size();
             }
-        } else {
-            // Non-fragmented frame
-            if (frame.opcode == WSOP_TEXT) {
-                QoreStringNode* text = nullptr;
-                if (frame.payload && frame.payload->size() > 0) {
-                    text = new QoreStringNode(
-                        reinterpret_cast<const char*>(frame.payload->getPtr()),
-                        frame.payload->size(), QCS_UTF8);
-                } else {
-                    text = new QoreStringNode(QCS_UTF8);
-                }
-                pushRecvFrame("text", text, frame.rsv, xsink);
-            } else if (frame.opcode == WSOP_BINARY) {
-                pushRecvFrame("binary", frame.payload ? frame.payload->refSelf() : new BinaryNode(), frame.rsv, xsink);
+        } else if (frame.payload) {
+            msg_data = frame.payload->getPtr();
+            msg_len = frame.payload->size();
+        }
+
+        // I/O-thread fast path: handle the frame in C++ without context switch
+        if (io_frame_handler) {
+            BinaryNode* response = nullptr;
+            if (msg_opcode == WSOP_TEXT) {
+                SimpleRefHolder<QoreStringNode> text(new QoreStringNode(
+                    reinterpret_cast<const char*>(msg_data), msg_len, QCS_UTF8));
+                response = io_frame_handler->handleTextFrame(*text, xsink);
+            } else if (msg_opcode == WSOP_BINARY) {
+                SimpleRefHolder<BinaryNode> bin(msg_data && msg_len
+                    ? new BinaryNode(const_cast<void*>(msg_data), msg_len)
+                    : new BinaryNode());
+                response = io_frame_handler->handleBinaryFrame(*bin, xsink);
             }
+            if (response && !*xsink) {
+                if (*pending_send) {
+                    pending_send->append(response);
+                    response->deref(xsink);
+                } else {
+                    pending_send = response;
+                }
+            } else if (response) {
+                response->deref(xsink);
+            }
+            last_recv_activity_ms = q_clock_getmillis();
+            return;
+        }
+
+        // Standard path: push to recv_queue for worker thread processing
+        if (msg_opcode == WSOP_TEXT) {
+            QoreStringNode* text = msg_data
+                ? new QoreStringNode(reinterpret_cast<const char*>(msg_data),
+                    msg_len, QCS_UTF8)
+                : new QoreStringNode(QCS_UTF8);
+            pushRecvFrame("text", text, msg_rsv, xsink);
+        } else if (msg_opcode == WSOP_BINARY) {
+            pushRecvFrame("binary",
+                msg_data ? new BinaryNode(const_cast<void*>(msg_data), msg_len) : new BinaryNode(),
+                msg_rsv, xsink);
         }
     }
     // If not complete, more fragments expected — nothing to push yet
@@ -682,6 +742,10 @@ void HttpWebSocketPollOperationPriv::cleanup(ExceptionSink* xsink) {
     if (frame_callback) {
         frame_callback->deref(xsink);
         frame_callback = nullptr;
+    }
+    if (io_frame_handler) {
+        io_frame_handler->deref(xsink);
+        io_frame_handler = nullptr;
     }
     if (error_info) {
         error_info->deref(xsink);
@@ -1003,6 +1067,27 @@ int HttpWebSocketPollOperationBase::getSendTimeout() [flags=RET_VALUE_ONLY] {
 */
 nothing HttpWebSocketPollOperationBase::setHeartbeat(int ms) {
     priv->setHeartbeat(static_cast<int64>(ms));
+}
+
+//! Enables the built-in C++ echo mode for zero-context-switch echo
+/** When enabled, text and binary frames are echoed back to the sender
+    entirely on the I/O thread — no worker thread dispatch, no Qore
+    interpreter overhead. Control frames (ping/pong/close) are still
+    handled automatically.
+
+    This is the fastest possible echo implementation.
+
+    @param enabled True to enable echo mode, False to disable (back to
+    normal recv_queue + worker dispatch path)
+
+    @since %Qore 2.3
+*/
+nothing HttpWebSocketPollOperationBase::setEchoMode(bool enabled) {
+    if (enabled) {
+        priv->setIoFrameHandler(new WsEchoFrameHandler());
+    } else {
+        priv->setIoFrameHandler(nullptr);
+    }
 }
 
 //! Called by the I/O controller when frames have been pushed during continuePoll

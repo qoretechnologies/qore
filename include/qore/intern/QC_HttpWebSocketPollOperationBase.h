@@ -39,6 +39,54 @@
 #include "qore/QoreQueue.h"
 #include "qore/WebSocketFrameCodec.h"
 
+//! Abstract callback for processing WebSocket frames on the I/O thread
+/** Implementations handle frames entirely in C++ with zero context switches.
+    The I/O thread calls handleTextFrame/handleBinaryFrame when a complete
+    message arrives; the handler returns pre-encoded response data (or nullptr
+    for no response). Control frames (ping/pong/close) are handled automatically
+    by the poll operation and are NOT dispatched to this callback.
+
+    Built-in implementations:
+    - WsEchoFrameHandler: echoes text/binary frames back to the sender
+
+    @since %Qore 2.3
+*/
+class WsIoThreadFrameHandler : public AbstractPrivateData {
+public:
+    //! Called on the I/O thread when a complete text message is received
+    /** @param text the message text (ref'd by caller, do not deref)
+        @param xsink exception sink
+        @return pre-encoded response frame(s) to send, or nullptr for no response.
+                Caller takes ownership (must deref).
+    */
+    virtual BinaryNode* handleTextFrame(const QoreStringNode* text,
+        ExceptionSink* xsink) = 0;
+
+    //! Called on the I/O thread when a complete binary message is received
+    /** @param data the message data (ref'd by caller, do not deref)
+        @param xsink exception sink
+        @return pre-encoded response frame(s) to send, or nullptr for no response.
+                Caller takes ownership (must deref).
+    */
+    virtual BinaryNode* handleBinaryFrame(const BinaryNode* data,
+        ExceptionSink* xsink) = 0;
+};
+
+//! Built-in echo handler: reflects text/binary frames back to the sender
+/** Pure C++, zero allocation overhead — reuses the raw frame bytes where
+    possible. Runs entirely on the I/O thread.
+
+    @since %Qore 2.3
+*/
+class WsEchoFrameHandler : public WsIoThreadFrameHandler {
+public:
+    DLLLOCAL BinaryNode* handleTextFrame(const QoreStringNode* text,
+            ExceptionSink* xsink) override;
+
+    DLLLOCAL BinaryNode* handleBinaryFrame(const BinaryNode* data,
+            ExceptionSink* xsink) override;
+};
+
 //! C++ private data for HttpWebSocketPollOperationBase
 /** Core WebSocket frame I/O state machine in pure C++, enabling the
     AsyncIoController I/O thread to drive the poll without Qore interpreter
@@ -194,6 +242,23 @@ public:
     */
     DLLLOCAL void setFrameCallback(ResolvedCallReferenceNode* cb, ExceptionSink* xsink);
 
+    //! Sets the I/O-thread frame handler for zero-context-switch processing
+    /** When set, data frames (text/binary) are dispatched to this handler
+        on the I/O thread instead of being pushed to recv_queue. Control
+        frames (ping/pong/close) are still handled automatically.
+        The handler's response data is appended to pending_send for immediate
+        transmission in the same continuePoll cycle.
+
+        @param handler the handler (ref'd, ownership transferred), or nullptr to clear
+    */
+    DLLLOCAL void setIoFrameHandler(WsIoThreadFrameHandler* handler) {
+        if (io_frame_handler) {
+            ExceptionSink xsink;
+            io_frame_handler->deref(&xsink);
+        }
+        io_frame_handler = handler;
+    }
+
     //! Sets the maximum frame/message size in bytes
     DLLLOCAL void setMaxFrameSize(size_t size) {
         max_frame_size = size;
@@ -259,6 +324,9 @@ private:
 
     //! Frame callback — invoked on I/O thread when a frame is pushed to recv_queue
     ResolvedCallReferenceNode* frame_callback = nullptr;
+
+    //! Optional I/O-thread frame handler — bypasses recv_queue entirely
+    WsIoThreadFrameHandler* io_frame_handler = nullptr;
 
     //! Send timeout in milliseconds (0 = no timeout)
     int64 send_timeout_ms = 0;

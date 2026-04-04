@@ -38,6 +38,13 @@
 
 /** @cond INTERNAL */
 
+// Returns epoch time in microseconds
+static inline int64 h1_epoch_us() {
+    int us;
+    int64 secs = q_epoch_us(us);
+    return secs * 1000000LL + us;
+}
+
 // ============================================================
 // Http1ClientPollOperationPriv implementation
 // ============================================================
@@ -66,10 +73,12 @@ Http1ClientPollOperationPriv::~Http1ClientPollOperationPriv() {
 }
 
 void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
-    // Clean up single stream action
+    // Clean up single stream action — reject pending Promise so Future::get() doesn't hang
     {
         AutoLocker al(stream_lock);
         if (stream_action) {
+            stream_action->executeError("HTTP1-ABORT",
+                "poll operation cleaned up before response was received", xsink);
             stream_action->deref(xsink);
             stream_action = nullptr;
         }
@@ -160,8 +169,28 @@ QoreHashNode* Http1ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 h1_state.store(H1State::READING, std::memory_order_release);
                 continue;
 
-            case H1State::CLOSED:
+            case H1State::CLOSED: {
+                // If an error caused the close, raise it so the controller
+                // removes this op from its cache.  The pending stream was
+                // already notified by setError() → notifyPendingStreams().
+                // For clean closes (Connection: close), just return nullptr —
+                // the controller will keep the op but it's harmless since the
+                // connection manager evicts it on next use.
+                AutoLocker al(stream_lock);
+                if (error_info) {
+                    QoreValue err_v = error_info->getKeyValue("err");
+                    QoreValue desc_v = error_info->getKeyValue("desc");
+                    xsink->raiseException(
+                        err_v.getType() == NT_STRING
+                            ? err_v.get<const QoreStringNode>()->c_str()
+                            : "HTTP1-CLOSED",
+                        desc_v.getType() == NT_STRING
+                            ? new QoreStringNode(
+                                *desc_v.get<const QoreStringNode>())
+                            : new QoreStringNode("connection closed"));
+                }
                 return nullptr;
+            }
         }
     }
 }
@@ -177,6 +206,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     if (poll_xsink) {
         const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        ASYNC_IO_TRACE("H1 handleConnecting: CONNECT ERROR: %s: %s target=%s:%d\n",
+            err_str ? err_str->c_str() : "?",
+            desc_str ? desc_str->c_str() : "?",
+            target_host.c_str(), target_port);
         setError(err_str ? err_str->c_str() : "HTTP1-CONNECT-ERROR",
             desc_str ? desc_str->c_str() : "TCP connection failed", xsink);
         poll_xsink.clear();
@@ -188,7 +221,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleConnecting(ExceptionSink* xsin
     }
 
     if (current_op->goalReached()) {
-        printd(5, "Http1ClientPollOperationPriv::handleConnecting() TCP connection established\n");
+        ASYNC_IO_TRACE("H1 handleConnecting: TCP connected to %s:%d ssl=%d\n",
+            target_host.c_str(), target_port, (int)ssl_required);
         if (proxy_tunnel) {
             startProxyConnect(xsink);
         } else if (ssl_required) {
@@ -378,6 +412,8 @@ void Http1ClientPollOperationPriv::startReady(ExceptionSink* xsink) {
 // --- Main reading/processing state handler ---
 
 QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) {
+    ASYNC_IO_TRACE("H1 handleReading: req_state=%d fd=%d\n", (int)req_state,
+        sock_obj ? sock_obj->getSocket() : -1);
     switch (req_state) {
         case ReqState::IDLE:
             return handleIdle(xsink);
@@ -414,9 +450,35 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     }
 
     if (req_data) {
-        // Start sending the request
-        printd(5, "Http1ClientPollOperationPriv::handleIdle() starting request send (%lu bytes)\n",
-            (unsigned long)req_data->size());
+        // Before sending on a keep-alive connection, do a non-blocking recv to
+        // detect server-initiated close (EOF).  This avoids sending a request on
+        // a stale connection and waiting for a response that will never arrive.
+        // We use a raw recv(MSG_PEEK) instead of isDataAvailable() — this is an
+        // async I/O path and must not call sync poll APIs.
+        int fd = sock_obj->getSocket();
+        if (fd >= 0) {
+            char peek_buf;
+            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (peek_rc == 0) {
+                // EOF — server closed the keep-alive connection
+                ASYNC_IO_TRACE("H1 handleIdle: recv peek=0 (EOF), server closed fd=%d\n", fd);
+                // Put request data back so it can be retried on a new connection
+                {
+                    AutoLocker al(stream_lock);
+                    pending_request_data = req_data;
+                    streaming_active = is_streaming;
+                }
+                setError("HTTP1-CONNECTION-CLOSED", "server closed the keep-alive connection", xsink);
+                return nullptr;
+            }
+            // peek_rc > 0: unexpected data from server (protocol error on idle connection)
+            // peek_rc < 0 + EAGAIN: no data, connection alive — proceed with send
+            ASYNC_IO_TRACE("H1 handleIdle: recv peek=%zd errno=%d fd=%d\n", peek_rc, errno, fd);
+        }
+
+        // Connection is alive — start sending the request
+        ASYNC_IO_TRACE("H1 handleIdle: start send (%lu bytes) fd=%d\n",
+            (unsigned long)req_data->size(), sock_obj ? sock_obj->getSocket() : -1);
         releaseCurrentOp(xsink);
         sock_obj->ref();
         streaming_active_io = is_streaming;
@@ -431,21 +493,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
         return handleSending(xsink);
     }
 
-    // Detect server-initiated close: if the socket has data available
-    // while idle (no pending request), it's likely EOF from the server.
-    if (sock_obj->isDataAvailable(xsink, 0)) {
-        if (*xsink) {
+    // No pending request — wait for wake or socket events.
+    // If the event loop fires POLLIN on an idle connection (server FIN),
+    // continuePoll() will be called and we'll reach this point again with
+    // no pending request.  Do a non-blocking recv to detect EOF.
+    int fd = sock_obj->getSocket();
+    if (fd >= 0) {
+        char peek_buf;
+        ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+        if (peek_rc == 0) {
+            ASYNC_IO_TRACE("H1 handleIdle: recv peek=0 (EOF), closing fd=%d (no pending req)\n", fd);
+            sock_obj->close();
+            setError("HTTP1-CONNECTION-CLOSED", "server closed the connection", xsink);
             return nullptr;
         }
-        printd(5, "Http1ClientPollOperationPriv::handleIdle() idle socket has data — server close\n");
-        setError("HTTP1-CONNECTION-CLOSED", "server closed the connection", xsink);
-        return nullptr;
-    }
-    if (*xsink) {
-        return nullptr;
+        ASYNC_IO_TRACE("H1 handleIdle: no pending req, recv peek=%zd errno=%d fd=%d\n",
+            peek_rc, errno, fd);
     }
 
-    // No pending request, no socket data — wait for wake or socket events
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
     return getSocketPollInfoHash(xsink, SOCK_POLLIN);
 }
@@ -473,6 +538,31 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
 
     if (current_op->goalReached()) {
         printd(5, "Http1ClientPollOperationPriv::handleSending() request sent, reading response header\n");
+
+        // Stale keep-alive detection (curl Curl_retry_request pattern):
+        // On a REUSED connection (not the first request), check for EOF
+        // immediately after sending.  If the server closed the connection
+        // between requests, recv() returns 0.  Detecting this here avoids
+        // waiting the full response timeout on a dead connection.
+        if (next_stream_id > 1) {
+            int fd = sock_obj->getSocket();
+            if (fd >= 0) {
+                char peek_buf;
+                ssize_t rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+                if (rc == 0) {
+                    // EOF — server closed the keep-alive connection before
+                    // our request could be processed
+                    ASYNC_IO_TRACE("H1 handleSending: stale connection detected "
+                        "(recv peek=0 EOF) fd=%d stream=%d\n", fd, next_stream_id);
+                    setError("HTTP1-CONNECTION-CLOSED",
+                        "server closed the keep-alive connection", xsink);
+                    return nullptr;
+                }
+                // rc > 0: unexpected early response data (possible)
+                // rc < 0 + EAGAIN: normal — no data yet, connection alive
+            }
+        }
+
         releaseCurrentOp(xsink);
         sock_obj->ref();
         current_op = new SocketReadHttpHeaderPollOperation(xsink, sock_obj);
@@ -483,6 +573,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
         }
         current_op->setSelf(*self);
         req_state = ReqState::RECV_HEADER;
+        // Start the stale-detect clock on reused connections
+        stale_detect_start_us = (next_stream_id > 1) ? h1_epoch_us() : 0;
         return handleRecvHeader(xsink);
     }
 
@@ -496,11 +588,52 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         return nullptr;
     }
 
+    // Stale keep-alive detection (curl Curl_retry_request pattern):
+    // On a reused connection, check for EOF or stale state.
+    // - recv peek returns 0: FIN arrived → connection closed (immediate)
+    // - recv peek returns EAGAIN after STALE_DETECT_TIMEOUT_MS elapsed:
+    //   no FIN and no response data → assume stale (server silently closed)
+    // Curl checks "reused connection + zero bytes received" on error.
+    // We can't rely on the OS to report the error in time (no FIN case),
+    // so we use a time-based fallback.
+    if (stale_detect_start_us > 0 && sock_obj) {
+        int fd = sock_obj->getSocket();
+        if (fd >= 0) {
+            char peek_buf;
+            ssize_t rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (rc == 0) {
+                ASYNC_IO_TRACE("H1 handleRecvHeader: stale connection (EOF) fd=%d\n", fd);
+                setError("HTTP1-CONNECTION-CLOSED",
+                    "server closed the keep-alive connection", xsink);
+                return nullptr;
+            }
+            if (rc < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                int64 elapsed_us = h1_epoch_us() - stale_detect_start_us;
+                if (elapsed_us >= STALE_DETECT_TIMEOUT_MS * 1000) {
+                    // Stale timer expired and still no data — assume dead
+                    // connection.  Fail fast so the connection manager can
+                    // retry on a fresh connection.
+                    ASYNC_IO_TRACE("H1 handleRecvHeader: stale timeout "
+                        "(%lldms) + no data, assuming dead fd=%d\n",
+                        (long long)(elapsed_us / 1000), fd);
+                    setError("HTTP1-CONNECTION-CLOSED",
+                        "no response on reused connection (stale detect timeout)",
+                        xsink);
+                    return nullptr;
+                }
+            }
+        }
+    }
+
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
+    ASYNC_IO_TRACE("H1 handleRecvHeader: poll_info=%p xsink=%d fd=%d\n",
+        poll_info, (int)(bool)poll_xsink, sock_obj ? sock_obj->getSocket() : -1);
     if (poll_xsink) {
         const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        ASYNC_IO_TRACE("H1 handleRecvHeader: ERROR %s: %s\n",
+            err_str ? err_str->c_str() : "?", desc_str ? desc_str->c_str() : "?");
         setError(err_str ? err_str->c_str() : "HTTP1-RECV-ERROR",
             desc_str ? desc_str->c_str() : "header read failed", xsink);
         poll_xsink.clear();
@@ -508,6 +641,25 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
     }
 
     if (poll_info) {
+        // On a reused connection, add a stale-detect timeout so the controller
+        // wakes us after STALE_DETECT_TIMEOUT_MS even if no socket event
+        // arrives.  This gives us another chance to recv-peek for EOF from a
+        // delayed server close.
+        if (stale_detect_start_us > 0) {
+            ExceptionSink hash_xsink;
+            QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+            if (ptv.isNullOrNothing()) {
+                // Compute remaining time until stale deadline
+                int64 elapsed_us = h1_epoch_us() - stale_detect_start_us;
+                int64 remaining_ms = STALE_DETECT_TIMEOUT_MS
+                    - elapsed_us / 1000;
+                if (remaining_ms <= 0) {
+                    remaining_ms = 1;  // force immediate re-poll
+                }
+                poll_info->setKeyValue("poll_timeout_ms",
+                    remaining_ms, &hash_xsink);
+            }
+        }
         return poll_info;
     }
 
@@ -1272,6 +1424,9 @@ void Http1ClientPollOperationPriv::abort(ExceptionSink* xsink) {
         current_op->abort(xsink);
     }
     notifyPendingStreams("HTTP1-ABORT", "connection aborted", xsink);
+    if (connection_priv) {
+        connection_priv->setClosed();
+    }
     connection_priv = nullptr;
     // Note: do NOT close socket or delete current_op here to avoid
     // use-after-free if a driver thread is still inside continuePoll
@@ -1288,7 +1443,17 @@ void Http1ClientPollOperationPriv::setError(const char* err, const char* desc,
         }
     }
     h1_state.store(H1State::CLOSED, std::memory_order_release);
+    // Close the socket to release the fd and transition from CLOSE-WAIT to CLOSED.
+    // Without this, dead sockets accumulate when the remote closes the connection
+    // and degrade I/O controller performance.  The epoll cleanup handles EBADF
+    // gracefully when the controller unregisters the fd after this returns.
+    if (sock_obj && sock_obj->getSocket() >= 0) {
+        sock_obj->close();
+    }
     notifyPendingStreams(err, desc, xsink);
+    if (connection_priv) {
+        connection_priv->setClosed();
+    }
     connection_priv = nullptr;
 }
 

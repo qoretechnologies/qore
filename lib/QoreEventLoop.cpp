@@ -336,9 +336,8 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             effective_timeout_ms = 0;
         } else {
             int timer_ms = (int)(remaining_us / 1000);
-            if (timer_ms == 0) {
-                timer_ms = 1;
-            }
+            // Sub-millisecond deadline: poll immediately (truncation to 0
+            // is correct — don't oversleep by rounding up to 1ms)
             if (effective_timeout_ms < 0 || timer_ms < effective_timeout_ms) {
                 effective_timeout_ms = timer_ms;
             }
@@ -426,11 +425,13 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
             continue;
         } else if (kevents[i].filter == EVFILT_READ) {
             ev = QORE_EV_READ;
-        } else if (kevents[i].filter == EVFILT_WRITE) {
             if (kevents[i].flags & EV_EOF) {
-                ev = QORE_EV_ERROR;
-            } else {
-                ev = QORE_EV_WRITE;
+                ev |= QORE_EV_ERROR;
+            }
+        } else if (kevents[i].filter == EVFILT_WRITE) {
+            ev = QORE_EV_WRITE;
+            if (kevents[i].flags & EV_EOF) {
+                ev |= QORE_EV_ERROR;
             }
         }
 
@@ -501,14 +502,23 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         }
 #endif
 
+        // Map epoll events to QORE_EV flags.  EPOLLERR and EPOLLHUP can arrive
+        // alongside EPOLLIN/EPOLLOUT (e.g. peer FIN sets EPOLLIN|EPOLLHUP).
+        // Always include QORE_EV_READ/WRITE so the operation gets continuePoll()
+        // called and can detect EOF via recv()=0, instead of silently dropping
+        // the read-readiness event and causing a timeout.
+        if (epevents[i].events & EPOLLIN) {
+            ev |= QORE_EV_READ;
+        }
+        if (epevents[i].events & EPOLLOUT) {
+            ev |= QORE_EV_WRITE;
+        }
         if (epevents[i].events & (EPOLLERR | EPOLLHUP)) {
-            ev = QORE_EV_ERROR;
-        } else {
-            if (epevents[i].events & EPOLLIN) {
+            ev |= QORE_EV_ERROR;
+            // If only HUP/ERR without POLLIN/POLLOUT, ensure at least READ so
+            // the operation's continuePoll is invoked and can detect the error
+            if (!(ev & (QORE_EV_READ | QORE_EV_WRITE))) {
                 ev |= QORE_EV_READ;
-            }
-            if (epevents[i].events & EPOLLOUT) {
-                ev |= QORE_EV_WRITE;
             }
         }
 
@@ -563,14 +573,16 @@ int QoreEventLoop::poll(std::vector<QoreEventInfo>& events, int timeout_ms, Exce
         for (const auto& [fd, info] : fd_map) {
             if (pollfds[idx].revents) {
                 int ev = 0;
+                if (pollfds[idx].revents & POLLIN) {
+                    ev |= QORE_EV_READ;
+                }
+                if (pollfds[idx].revents & POLLOUT) {
+                    ev |= QORE_EV_WRITE;
+                }
                 if (pollfds[idx].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-                    ev = QORE_EV_ERROR;
-                } else {
-                    if (pollfds[idx].revents & POLLIN) {
+                    ev |= QORE_EV_ERROR;
+                    if (!(ev & (QORE_EV_READ | QORE_EV_WRITE))) {
                         ev |= QORE_EV_READ;
-                    }
-                    if (pollfds[idx].revents & POLLOUT) {
-                        ev |= QORE_EV_WRITE;
                     }
                 }
                 events.push_back({fd, ev, info.udata});

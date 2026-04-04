@@ -14,6 +14,7 @@
 %requires ../../../../qlib/WebSocketUtil.qm
 %requires ../../../../qlib/WebSocketHandler.qm
 %requires ../../../../qlib/WebSocketClient.qm
+%requires ../../../../qlib/RestClientIo.qm
 
 %exec-class HttpServerTest
 
@@ -339,6 +340,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("async mode cache cleanup", \asyncModeCacheCleanupTest());
         addTestCase("async mode bad SSL handshake resilience", \asyncModeBadSslHandshakeTest());
         addTestCase("async mode I/O thread non-blocking", \asyncModeIoThreadNonBlockingTest());
+        addTestCase("async mode H1 keep-alive server close", \asyncModeH1KeepAliveServerCloseTest());
+        addTestCase("async mode connection refused", \asyncModeConnectionRefusedTest());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -796,10 +799,6 @@ OKKqgBjNAlYDdPhOy8O8Agk=
     }
 
     asyncModeBasicTest() {
-        # Verify async mode is always enabled (deprecated methods always return True)
-        assertTrue(mAsyncServer.getAsyncMode());
-        assertTrue(mServer.getAsyncMode());
-
         # Create client with short timeout to ensure async operations don't block indefinitely
         HTTPClient client({"url": asyncUrl, "timeout": 5s});
         client.connect();
@@ -2911,6 +2910,374 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         verify.connect();
         assertEq("GET, final, /final", verify.get("/final"));
         verify.disconnect();
+    }
+
+    #! Tests that RestClientIo recovers when an HTTP/1.1 server closes a keep-alive
+    #! connection after N requests (the "hoppy:30000" scenario).
+    #!
+    #! A raw socket server serves max_requests HTTP/1.1 responses with keep-alive,
+    #! then closes the connection.  The client must detect the EOF and reconnect
+    #! transparently — not busy-loop until timeout.
+    asyncModeH1KeepAliveServerCloseTest() {
+        # Tests that RestClientIo (HttpClientIo) recovers when an HTTP/1.1 server
+        # closes a keep-alive connection.  Three scenarios:
+        #   1. Server closes after N requests (immediate next request)
+        #   2. Server closes during client idle (delayed close, like uvicorn)
+        #   3. Rapid-fire requests across multiple server close cycles
+        #
+        # The client must detect EOF and reconnect transparently.  Recovery must
+        # be fast (< 3s per stale detect), not wait the full request timeout.
+
+        bool server_stop = False;
+        int max_requests_per_conn = 3;
+
+        # Raw HTTP/1.1 server that closes after max_requests_per_conn
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        Counter serverDone(1);
+        background sub () {
+            on_exit serverDone.dec();
+            try {
+                while (!server_stop) {
+                    *Socket client = listener.accept(500ms);
+                    if (!client) {
+                        continue;
+                    }
+                    for (int req = 0; req < max_requests_per_conn; ++req) {
+                        *hash<auto> hdr;
+                        try {
+                            hdr = client.readHTTPHeader(2s);
+                        } catch () {
+                            break;
+                        }
+                        if (!hdr) {
+                            break;
+                        }
+                        string body = sprintf("{\"n\": %d}", req);
+                        string resp = sprintf(
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: application/json\r\n"
+                            "Content-Length: %d\r\n"
+                            "Connection: keep-alive\r\n"
+                            "\r\n"
+                            "%s", body.size(), body);
+                        client.send(resp);
+                    }
+                    client.close();
+                }
+            } catch () {
+                # ignore errors on shutdown
+            }
+        }();
+
+        on_exit {
+            server_stop = True;
+            listener.close();
+            serverDone.waitForZero(3s);
+        }
+
+        # --- Scenario 1: immediate requests across server close ---
+        {
+            RestClientIo rc({
+                "url": "http://localhost:" + port,
+                "data": "json",
+                "connect_timeout": 2s,
+                "timeout": 2s,
+            });
+            int total = max_requests_per_conn + 2;
+            int ok = 0;
+            for (int i = 0; i < total; ++i) {
+                try {
+                    rc.restGet("/health");
+                    ++ok;
+                } catch (hash<ExceptionInfo> ex) {
+                    if (m_options.verbose > 1) {
+                        printf("scenario1 req %d: %s: %s\n", i, ex.err, ex.desc);
+                    }
+                    assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
+                        sprintf("scenario1 req %d must not timeout", i));
+                }
+            }
+            assertEq(total, ok, "scenario1: all requests should succeed");
+        }
+
+        # --- Scenario 2: idle gap triggers server close, then request ---
+        {
+            RestClientIo rc({
+                "url": "http://localhost:" + port,
+                "data": "json",
+                "connect_timeout": 2s,
+                "timeout": 2s,
+            });
+            # First request establishes connection
+            rc.restGet("/health");
+
+            # Sleep long enough for the server to close (the raw server closes
+            # immediately after max_requests, so a new request after even a short
+            # sleep hits a fresh connection from the pool or triggers reconnect)
+            # Send max_requests to exhaust, then sleep, then send again
+            for (int i = 1; i < max_requests_per_conn; ++i) {
+                rc.restGet("/health");
+            }
+            # Server closes now; sleep to let FIN arrive
+            usleep(200ms);
+
+            # This request must detect the closed connection and reconnect
+            date start = now_us();
+            try {
+                rc.restGet("/health");
+            } catch (hash<ExceptionInfo> ex) {
+                assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
+                    "scenario2: post-close request must not timeout");
+            }
+            # Recovery should be fast — under 3s (stale detect timeout + reconnect)
+            date elapsed = now_us() - start;
+            assertTrue(elapsed < 3s,
+                sprintf("scenario2: recovery took %y, expected < 3s", elapsed));
+        }
+
+        # --- Scenario 3: server delays close (TCP FIN race) ---
+        # The server closes 500ms AFTER the last response.  The client sends the
+        # next request during that window — the request goes out on a connection
+        # that the server is about to close.  The client must detect the stale
+        # connection (via recv EOF or timeout) and reconnect within the stale
+        # detect window, not wait the full request timeout.
+        {
+            bool srv3_stop = False;
+            Socket srv3_listener();
+            srv3_listener.bind("localhost:0");
+            srv3_listener.listen();
+            int srv3_port = srv3_listener.getSocketInfo().port;
+
+            Counter srv3Done(1);
+            background sub () {
+                on_exit srv3Done.dec();
+                try {
+                    while (!srv3_stop) {
+                        *Socket client = srv3_listener.accept(500ms);
+                        if (!client) {
+                            continue;
+                        }
+                        # Serve one request, then delay close by 500ms
+                        *hash<auto> hdr;
+                        try {
+                            hdr = client.readHTTPHeader(2s);
+                        } catch () {
+                            client.close();
+                            continue;
+                        }
+                        if (!hdr) {
+                            client.close();
+                            continue;
+                        }
+                        string body = "{\"ok\": true}";
+                        string resp = sprintf(
+                            "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: application/json\r\n"
+                            "Content-Length: %d\r\n"
+                            "Connection: keep-alive\r\n"
+                            "\r\n"
+                            "%s", body.size(), body);
+                        client.send(resp);
+                        # Delayed close — simulates uvicorn keep-alive timeout
+                        usleep(500ms);
+                        client.close();
+                    }
+                } catch () {}
+            }();
+
+            on_exit {
+                srv3_stop = True;
+                srv3_listener.close();
+                srv3Done.waitForZero(3s);
+            }
+
+            RestClientIo rc({
+                "url": "http://localhost:" + srv3_port,
+                "data": "json",
+                "connect_timeout": 2s,
+                "timeout": 2s,
+            });
+
+            # First request succeeds
+            rc.restGet("/health");
+
+            # Second request sent immediately — races with the delayed close.
+            # Must succeed (reconnect if needed) within 3s, not the full timeout.
+            date start = now_us();
+            try {
+                rc.restGet("/health");
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose > 1) {
+                    printf("scenario3: %s: %s\n", ex.err, ex.desc);
+                }
+                assertNeq("HTTPCLIENT-TIMEOUT", ex.err,
+                    "scenario3: request during delayed close must not timeout");
+            }
+            date elapsed = now_us() - start;
+            assertTrue(elapsed < 3s,
+                sprintf("scenario3: recovery took %y, expected < 3s", elapsed));
+        }
+
+        # --- Scenario 4: server stops responding (no FIN, no RST) ---
+        # Simulates the worst case: the server accepts the connection, responds
+        # to the first request, then goes silent.  The client sends a second
+        # request but gets no response and no close notification.  The stale
+        # detect timer (2s poll_timeout_ms) should fire and the client should
+        # retry on a new connection within 3s.
+        {
+            bool srv4_stop = False;
+            Socket srv4_listener();
+            srv4_listener.bind("localhost:0");
+            srv4_listener.listen();
+            int srv4_port = srv4_listener.getSocketInfo().port;
+
+            Counter srv4Done(1);
+            *Socket srv4_stalled_client;
+            background sub () {
+                on_exit srv4Done.dec();
+                try {
+                    int conn_num = 0;
+                    while (!srv4_stop) {
+                        *Socket client = srv4_listener.accept(500ms);
+                        if (!client) {
+                            continue;
+                        }
+                        ++conn_num;
+                        if (conn_num == 1) {
+                            # First connection: respond to first request, then stall
+                            *hash<auto> hdr = client.readHTTPHeader(2s);
+                            if (hdr) {
+                                string body = "{\"ok\": true}";
+                                string resp = sprintf(
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: application/json\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: keep-alive\r\n"
+                                    "\r\n"
+                                    "%s", body.size(), body);
+                                client.send(resp);
+                            }
+                            # Hold the socket open (no close, no FIN) —
+                            # srv4_stalled_client keeps the reference alive so
+                            # the socket stays open without blocking the accept loop
+                            srv4_stalled_client = client;
+                        } else {
+                            # Subsequent connections: respond normally
+                            while (!srv4_stop) {
+                                *hash<auto> hdr;
+                                try {
+                                    hdr = client.readHTTPHeader(1s);
+                                } catch () {
+                                    break;
+                                }
+                                if (!hdr) {
+                                    break;
+                                }
+                                string body = "{\"ok\": true}";
+                                string resp = sprintf(
+                                    "HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: application/json\r\n"
+                                    "Content-Length: %d\r\n"
+                                    "Connection: keep-alive\r\n"
+                                    "\r\n"
+                                    "%s", body.size(), body);
+                                client.send(resp);
+                            }
+                            client.close();
+                        }
+                    }
+                } catch () {}
+            }();
+
+            on_exit {
+                srv4_stop = True;
+                srv4_listener.close();
+                srv4Done.waitForZero(5s);
+            }
+
+            RestClientIo rc({
+                "url": "http://localhost:" + srv4_port,
+                "data": "json",
+                "connect_timeout": 2s,
+                "timeout": 5s,
+            });
+
+            # First request succeeds
+            rc.restGet("/health");
+
+            # Second request: server stalls (no response, no close on conn 1).
+            # The stale detect timer should fire within 500ms, the client
+            # detects the dead connection and retries on a fresh connection
+            # (conn 2) which the server handles normally.
+            date start = now_us();
+            bool recovered = False;
+            try {
+                rc.restGet("/health");
+                recovered = True;
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose > 1) {
+                    printf("scenario4: %s: %s\n", ex.err, ex.desc);
+                }
+            }
+            date elapsed = now_us() - start;
+            assertTrue(recovered, "scenario4: retry on fresh connection must succeed");
+            assertTrue(elapsed < 3s,
+                sprintf("scenario4: took %y, expected < 3s", elapsed));
+        }
+    }
+
+    #! Tests that connecting to an unreachable port fails fast, not hangs
+    /** Regression test: setError()/abort() must call setClosed() on the
+        connection priv so waitForReady() returns immediately.  Without this,
+        connection-refused errors hang forever because the connection state
+        never transitions from CONNECTING.
+    */
+    asyncModeConnectionRefusedTest() {
+        # Use a port with nothing listening — kernel returns ECONNREFUSED
+        # immediately.  With async I/O, the poll op detects the error and
+        # the client must propagate it within the connect timeout.
+        {
+            date start = now_us();
+            try {
+                RestClientIo rc({
+                    "url": "http://localhost:59999",
+                    "connect_timeout": 2s,
+                    "timeout": 2s,
+                });
+                rc.restGet("/test");
+                assertTrue(False, "connection to closed port must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                date elapsed = now_us() - start;
+                # Must fail fast (< 1s), not wait the full connect timeout
+                assertTrue(elapsed < 1s,
+                    sprintf("connection refused took %y, expected < 1s", elapsed));
+                # Must be a connect error, not a timeout
+                assertRegex("CONNECT-ERROR|SOCKET-CONNECT-ERROR",
+                    ex.err, "connection refused error type");
+            }
+        }
+
+        # Test with HTTPS to verify SSL path also handles connection refused
+        {
+            date start = now_us();
+            try {
+                RestClientIo rc({
+                    "url": "https://localhost:59999",
+                    "connect_timeout": 2s,
+                    "timeout": 2s,
+                });
+                rc.restGet("/test");
+                assertTrue(False, "SSL connection to closed port must throw");
+            } catch (hash<ExceptionInfo> ex) {
+                date elapsed = now_us() - start;
+                assertTrue(elapsed < 1s,
+                    sprintf("SSL connection refused took %y, expected < 1s", elapsed));
+            }
+        }
     }
 }
 
