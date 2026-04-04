@@ -485,30 +485,37 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
 // --- AsyncIoControllerPriv implementation ---
 
 AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink)
-    : tid(0), autostop_flag(autostop), shutting_down(false),
+    : num_io_threads(1), autostop_flag(autostop), shutting_down(false),
       io_waiting(false), io_exiting(false), ready_flag(false),
-      submit_seq(0), processed_seq(0), autostop_idle_since(0),
-      logger(nullptr), timer_callback(nullptr),
-      loop(nullptr), notifier(nullptr) {
-    loop = new QoreEventLoop(xsink);
-    if (*xsink) {
-        return;
-    }
-    notifier = new QoreEventNotifier(xsink);
-    if (*xsink) {
-        return;
+      submit_seq(0), processed_seq(0),
+      logger(nullptr), timer_callback(nullptr) {
+    // Initialize I/O thread contexts (default: 1 thread)
+    io_threads.reserve(num_io_threads);
+    for (int i = 0; i < num_io_threads; ++i) {
+        io_threads.push_back(std::make_unique<IoThreadContext>());
+        auto& t = *io_threads.back();
+        t.loop = new QoreEventLoop(xsink);
+        if (*xsink) {
+            return;
+        }
+        t.notifier = new QoreEventNotifier(xsink);
+        if (*xsink) {
+            return;
+        }
     }
 }
 
 AsyncIoControllerPriv::~AsyncIoControllerPriv() {
-    delete loop;
-    ExceptionSink xsink;
-    if (notifier) {
-        notifier->deref(&xsink);
-        notifier = nullptr;
-    }
-    if (xsink) {
-        xsink.clear();
+    for (auto& tp : io_threads) {
+        delete tp->loop;
+        ExceptionSink xsink;
+        if (tp->notifier) {
+            tp->notifier->deref(&xsink);
+            tp->notifier = nullptr;
+        }
+        if (xsink) {
+            xsink.clear();
+        }
     }
 }
 
@@ -746,13 +753,13 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
     }
 
     // Ensure I/O thread is running (rare path: first submit or restart)
-    if (!io_running.load(std::memory_order_acquire)) {
+    if (!ctx().running.load(std::memory_order_acquire)) {
         AutoLocker al(m);
         if (shutting_down) {
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
             return nullptr;
         }
-        if (io_exiting || !tid) {
+        if (io_exiting || !ctx().tid) {
             startIntern(xsink);
             if (*xsink) {
                 return nullptr;
@@ -762,8 +769,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
 
     // For I/O thread callers (e.g., onComplete re-submissions), access cache directly
     if (on_async_io_thread) {
-        auto it = cache.find(uh);
-        if (it != cache.end()) {
+        auto it = ctx().cache.find(uh);
+        if (it != ctx().cache.end()) {
             if (!replace) {
                 xsink->raiseException("ASYNC-IO-ERROR",
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
@@ -774,21 +781,21 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = it->second;
                 it->second = PollInfo();
-                cache.erase(it);
+                ctx().cache.erase(it);
                 old_pinfo.cleanup(xsink);
             } else {
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());
                 PollInfo old_pinfo = it->second;
                 it->second = PollInfo();
-                cache.erase(it);
+                ctx().cache.erase(it);
                 doCancelIntern(old_pinfo, xsink);
                 old_pinfo.cleanup(xsink);
             }
         }
 
         // Direct cache insertion (I/O thread owns the cache)
-        PollInfo& pinfo = cache[uh];
+        PollInfo& pinfo = ctx().cache[uh];
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
         pinfo.sock = sock;
@@ -825,8 +832,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
-        cmdq.push(std::move(cmd));
-        notifier->notify();
+        ctx().cmdq.push(std::move(cmd));
+        ctx().notifier->notify();
 
         ++submit_seq;
     }
@@ -863,10 +870,10 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
 
     {
         AutoLocker al(m);
-        auto it = cache.find(uh);
-        if (it != cache.end()) {
+        auto it = ctx().cache.find(uh);
+        if (it != ctx().cache.end()) {
             rv = true;
-            if (tid && !io_exiting && !on_async_io_thread) {
+            if (ctx().tid && !io_exiting && !on_async_io_thread) {
                 // I/O thread is running and we're NOT on any async I/O thread —
                 // enqueue the cancel command
                 if (!cancel_cond_map.count(uh)) {
@@ -882,13 +889,13 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
                     uh.c_str(), it->second.owner.c_str());
                 direct_pinfo = it->second;
                 it->second = PollInfo();
-                cache.erase(it);
+                ctx().cache.erase(it);
             }
         }
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     if (direct_cancel) {
@@ -901,7 +908,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     // Check autostop
     {
         AutoLocker al(m);
-        if (autostop_flag && rv && cache.empty() && timer_info_map.empty() && tid) {
+        if (autostop_flag && rv && ctx().cache.empty() && timer_info_map.empty() && ctx().tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -910,7 +917,7 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     if (stopped && !on_async_io_thread) {
@@ -937,14 +944,14 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
         AutoLocker al(m);
 
         // Count matching operations in main cache
-        for (auto& it : cache) {
+        for (auto& it : ctx().cache) {
             if (it.second.owner == owner_str) {
                 ++cache_count;
             }
         }
 
         if (cache_count > 0) {
-            if (tid && !io_exiting && !on_async_io_thread) {
+            if (ctx().tid && !io_exiting && !on_async_io_thread) {
                 // I/O thread is running and we're NOT on any async I/O thread —
                 // enqueue the cancel command
                 do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
@@ -952,19 +959,19 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             } else {
                 // I/O thread not running OR we ARE the I/O thread — handle cancel directly
                 std::vector<std::string> keys;
-                for (auto& [key, pinfo] : cache) {
+                for (auto& [key, pinfo] : ctx().cache) {
                     if (pinfo.owner == owner_str) {
                         keys.push_back(key);
                     }
                 }
                 for (auto& key : keys) {
-                    auto it = cache.find(key);
-                    if (it != cache.end()) {
+                    auto it = ctx().cache.find(key);
+                    if (it != ctx().cache.end()) {
                         ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DIRECT key='%s' owner='%s'\n",
                             key.c_str(), owner_str.c_str());
                         direct_pinfos.push_back(it->second);
                         it->second = PollInfo();
-                        cache.erase(it);
+                        ctx().cache.erase(it);
                     }
                 }
             }
@@ -974,7 +981,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     count += cache_count;
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     if (!direct_pinfos.empty()) {
@@ -995,19 +1002,19 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             // (e.g., via autostop), it sets cancel_done in exit cleanup but ops may
             // still remain in cache — collect them for direct cancel
             std::vector<std::string> keys;
-            for (auto& [key, pinfo] : cache) {
+            for (auto& [key, pinfo] : ctx().cache) {
                 if (pinfo.owner == owner_str) {
                     keys.push_back(key);
                 }
             }
             for (auto& key : keys) {
-                auto it = cache.find(key);
-                if (it != cache.end()) {
+                auto it = ctx().cache.find(key);
+                if (it != ctx().cache.end()) {
                     ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_POSTSIGNAL key='%s' owner='%s'\n",
                         key.c_str(), owner_str.c_str());
                     direct_pinfos.push_back(it->second);
                     it->second = PollInfo();
-                    cache.erase(it);
+                    ctx().cache.erase(it);
                 }
             }
         }
@@ -1023,7 +1030,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool stopped = false;
     {
         AutoLocker al(m);
-        if (autostop_flag && count > 0 && cache.empty() && timer_info_map.empty() && tid) {
+        if (autostop_flag && count > 0 && ctx().cache.empty() && timer_info_map.empty() && ctx().tid) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
             stopped = true;
         } else {
@@ -1032,7 +1039,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     if (stopped && !on_async_io_thread) {
@@ -1054,15 +1061,15 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
     {
         AutoLocker al(m);
         std::vector<std::string> keys;
-        for (auto& [key, pinfo] : cache) {
+        for (auto& [key, pinfo] : ctx().cache) {
             if (pinfo.spop_obj && pinfo.spop_obj->getProgram() == pgm) {
                 keys.push_back(key);
             }
         }
         for (auto& key : keys) {
-            auto it = cache.find(key);
-            if (it != cache.end()) {
-                if (tid && !io_exiting) {
+            auto it = ctx().cache.find(key);
+            if (it != ctx().cache.end()) {
+                if (ctx().tid && !io_exiting) {
                     // Unregister from EventLoop via the I/O thread command queue
                     do_signal = enqueueCmdLocked(IoCommand::Cancel, key);
                 }
@@ -1070,13 +1077,13 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
                     key.c_str(), it->second.owner.c_str());
                 cancel_pinfos.push_back(it->second);
                 it->second = PollInfo();
-                cache.erase(it);
+                ctx().cache.erase(it);
             }
         }
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     // Deliver cancel results while program type info is still valid
@@ -1088,15 +1095,15 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
 
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
     // Lock-free: check atomic flag instead of acquiring mutex
-    if (!io_running.load(std::memory_order_acquire)) {
+    if (!ctx().running.load(std::memory_order_acquire)) {
         return;
     }
     Command cmd;
     cmd.cmd = IoCommand::WakeSocket;
     cmd.sock_hash = sock_hash;
-    cmdq.push(std::move(cmd));
+    ctx().cmdq.push(std::move(cmd));
     ASYNC_IO_TRACE("wakeSocket: hash='%s'\n", sock_hash.c_str());
-    notifier->notify();
+    ctx().notifier->notify();
 }
 
 void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
@@ -1109,10 +1116,10 @@ void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSi
     std::string sock_hash;
     {
         AutoLocker al(m);
-        for (auto& [key, obj] : registered_sockets) {
+        for (auto& [key, obj] : ctx().registered_sockets) {
             if (obj == sock_obj) {
                 // Found — look up the socket hash via sock_hash_to_keys reverse map
-                for (auto& [hash, keys] : sock_hash_to_keys) {
+                for (auto& [hash, keys] : ctx().sock_hash_to_keys) {
                     if (keys.count(key)) {
                         sock_hash = hash;
                         break;
@@ -1140,7 +1147,7 @@ void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSi
 
 void AsyncIoControllerPriv::start(ExceptionSink* xsink) {
     AutoLocker al(m);
-    if (!tid || io_exiting) {
+    if (!ctx().tid || io_exiting) {
         startIntern(xsink);
     }
 }
@@ -1150,13 +1157,13 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
     {
         AutoLocker al(m);
         shutting_down = true;
-        if (tid && !io_exiting) {
+        if (ctx().tid && !io_exiting) {
             do_signal = enqueueCmdLocked(IoCommand::Quit);
         }
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     waitStop(xsink);
@@ -1188,7 +1195,7 @@ void AsyncIoControllerPriv::stopClear(ExceptionSink* xsink) {
 
 bool AsyncIoControllerPriv::waitStop(ExceptionSink* xsink) {
     AutoLocker al(m);
-    while (tid) {
+    while (ctx().tid) {
         io_waiting = true;
         io_cond.wait(m);
         io_waiting = false;
@@ -1201,7 +1208,7 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
     if (ready_flag) {
         return true;
     }
-    while (!ready_flag && tid && !io_exiting) {
+    while (!ready_flag && ctx().tid && !io_exiting) {
         if (timeout_ms > 0) {
             int rc = io_cond.wait2(m, (int64)timeout_ms);
             if (rc) {
@@ -1216,7 +1223,7 @@ bool AsyncIoControllerPriv::waitReady(int timeout_ms, ExceptionSink* xsink) {
 
 bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsink) {
     AutoLocker al(m);
-    if (!tid) {
+    if (!ctx().tid) {
         return false;
     }
     int target = submit_seq;
@@ -1225,7 +1232,7 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
     }
     if (timeout_ms > 0) {
         int64 deadline_us = get_epoch_us() + (int64)timeout_ms * 1000;
-        while (processed_seq < target && tid) {
+        while (processed_seq < target && ctx().tid) {
             int64 remaining_us = deadline_us - get_epoch_us();
             if (remaining_us <= 0) {
                 return false;
@@ -1239,7 +1246,7 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
         return processed_seq >= target;
     }
     // No timeout - wait indefinitely
-    while (processed_seq < target && tid) {
+    while (processed_seq < target && ctx().tid) {
         processed_cond.wait(m);
     }
     return processed_seq >= target;
@@ -1247,12 +1254,12 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
 
 bool AsyncIoControllerPriv::running() const {
     AutoLocker al(m);
-    return tid != 0 && !io_exiting;
+    return ctx().tid != 0 && !io_exiting;
 }
 
 int AsyncIoControllerPriv::getCacheSize() const {
     AutoLocker al(m);
-    return (int)cache.size();
+    return (int)ctx().cache.size();
 }
 
 void AsyncIoControllerPriv::setAutostop(bool autostop) {
@@ -1268,15 +1275,15 @@ bool AsyncIoControllerPriv::getAutostop() const {
 QoreHashNode* AsyncIoControllerPriv::getInfo(ExceptionSink* xsink) const {
     AutoLocker al(m);
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
-    rv->setKeyValue("running", tid != 0 && !io_exiting, xsink);
-    rv->setKeyValue("cache_size", (int64)cache.size(), xsink);
+    rv->setKeyValue("running", ctx().tid != 0 && !io_exiting, xsink);
+    rv->setKeyValue("cache_size", (int64)ctx().cache.size(), xsink);
     rv->setKeyValue("autostop", autostop_flag, xsink);
     rv->setKeyValue("shutting_down", shutting_down, xsink);
-    rv->setKeyValue("tid", (int64)tid, xsink);
+    rv->setKeyValue("tid", (int64)ctx().tid, xsink);
 
     // Build cache key list
     ReferenceHolder<QoreListNode> keys(new QoreListNode(stringTypeInfo), xsink);
-    for (auto& it : cache) {
+    for (auto& it : ctx().cache) {
         keys->push(new QoreStringNode(it.first), xsink);
     }
     rv->setKeyValue("cache_keys", keys.release(), xsink);
@@ -1322,7 +1329,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         cmd.timer_id = id;
         cmd.done_cond = nullptr;
 
-        if (io_exiting || !tid) {
+        if (io_exiting || !ctx().tid) {
             startIntern(xsink);
             if (*xsink) {
                 return -1;
@@ -1337,12 +1344,12 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         tinfo.udata = udata.refSelf();
         timer_info_map[id] = tinfo;
 
-        cmdq.push(cmd);
+        ctx().cmdq.push(cmd);
         do_signal = true;
     }
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     return id;
@@ -1366,14 +1373,14 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
         discard_udata = it->second.udata;
         timer_info_map.erase(it);
 
-        if (tid && !io_exiting) {
+        if (ctx().tid && !io_exiting) {
             // I/O thread running — enqueue cancel command to remove from EventLoop
             Command cmd;
             cmd.cmd = IoCommand::CancelTimer;
             cmd.timer_id = id;
             cmd.done_cond = nullptr;
             cmd.timer_deadline_us = 0;
-            cmdq.push(cmd);
+            ctx().cmdq.push(cmd);
             do_signal = true;
         }
     }
@@ -1381,7 +1388,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
     discard_udata.discard(xsink);
 
     if (do_signal) {
-        notifier->notify();
+        ctx().notifier->notify();
     }
 
     return found;
@@ -1414,6 +1421,11 @@ void AsyncIoControllerPriv::ensureCallDispatcher() {
     }
 }
 
+struct IoThreadStartInfo {
+    AsyncIoControllerPriv* ctrl;
+    int thread_idx;
+};
+
 void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // Caller must hold lock
     // Wait for any exiting thread to finish
@@ -1426,17 +1438,17 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // Another thread may have already restarted the I/O thread while we were waiting
     // in the while(io_exiting) loop above (both threads released the lock via io_cond.wait,
     // and the first one to re-acquire it after the broadcast restarted the thread).
-    if (tid) {
+    if (ctx().tid) {
         return;
     }
 
     // Validate EventLoop and EventNotifier
-    if (!loop || !loop->isValid()) {
+    if (!ctx().loop || !ctx().loop->isValid()) {
         xsink->raiseException("ASYNC-IO-ERROR", "event loop is not valid");
         return;
     }
 
-    if (!notifier || !notifier->isValid()) {
+    if (!ctx().notifier || !ctx().notifier->isValid()) {
         xsink->raiseException("ASYNC-IO-ERROR", "event notifier is not valid");
         return;
     }
@@ -1445,18 +1457,18 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     int ev_flags = QORE_EV_READ;
 #ifdef DARWIN
     // macOS: use optimized EVFILT_USER
-    int rc = notifier->bindToKqueue(loop->getKqueueFd(), xsink);
+    int rc = ctx().notifier->bindToKqueue(ctx().loop->getKqueueFd(), xsink);
     if (rc < 0) {
         return;
     }
-    rc = loop->addUserEvent(notifier->getUserIdent(), nullptr, xsink);
+    rc = ctx().loop->addUserEvent(ctx().notifier->getUserIdent(), nullptr, xsink);
     if (rc < 0) {
-        notifier->unbindFromKqueue();
+        ctx().notifier->unbindFromKqueue();
         return;
     }
 #else
     // Linux/other: register notifier fd
-    int rc = loop->add(notifier->fd(), ev_flags, nullptr, xsink);
+    int rc = ctx().loop->add(ctx().notifier->fd(), ev_flags, nullptr, xsink);
     if (rc < 0) {
         return;
     }
@@ -1469,9 +1481,12 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // block QoreProgramHelper shutdown — it's stopped by qore_async_io_controller_cleanup()
     ref();  // Reference for the I/O thread
     int thread_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
-    tid = q_start_thread(xsink, ioThreadEntry, this, thread_flags);
-    if (tid == -1) {
-        tid = 0;
+    // Pass IoThreadStartInfo so the I/O thread knows which context to use
+    IoThreadStartInfo* start_info = new IoThreadStartInfo{this, 0};
+    ctx().tid = q_start_thread(xsink, ioThreadEntry, start_info, thread_flags);
+    if (ctx().tid == -1) {
+        ctx().tid = 0;
+        delete start_info;
         // Cannot call deref() here because the caller holds the lock;
         // deref() -> stop() -> AutoLocker(m) -> deadlock.
         // Since the caller always holds a reference (via QoreObject), this
@@ -1483,10 +1498,10 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         // re-register the same fd and fail with EEXIST.
         ExceptionSink cleanup_xsink;
 #ifdef DARWIN
-        loop->removeUserEvent(notifier->getUserIdent(), &cleanup_xsink);
-        notifier->unbindFromKqueue();
+        ctx().loop->removeUserEvent(ctx().notifier->getUserIdent(), &cleanup_xsink);
+        ctx().notifier->unbindFromKqueue();
 #else
-        loop->remove(notifier->fd(), &cleanup_xsink);
+        ctx().loop->remove(ctx().notifier->fd(), &cleanup_xsink);
 #endif
         cleanup_xsink.clear();
         return;
@@ -1497,8 +1512,11 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
 
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
     on_async_io_thread = true;
-    AsyncIoControllerPriv* self = static_cast<AsyncIoControllerPriv*>(arg);
-    self->ioThread(xsink);
+    IoThreadStartInfo* start_info = static_cast<IoThreadStartInfo*>(arg);
+    AsyncIoControllerPriv* self = start_info->ctrl;
+    IoThreadContext& t = *self->io_threads[start_info->thread_idx];
+    delete start_info;
+    self->ioThread(t, xsink);
     if (*xsink) {
         // Log exception
         self->log(QORE_LOG_LEVEL_ERROR, "I/O thread exception");
@@ -1507,9 +1525,9 @@ void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
     self->deref(xsink);
 }
 
-void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
+void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
     // Signal ready and enable lock-free command acceptance
-    io_running.store(true, std::memory_order_release);
+    t.running.store(true, std::memory_order_release);
     {
         AutoLocker al(m);
         ready_flag = true;
@@ -1534,7 +1552,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
     while (true) {
         // Process commands
-        if (processCommands(xsink)) {
+        if (processCommands(t, xsink)) {
             break;  // Quit command received
         }
 
@@ -1563,16 +1581,16 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
-        if (!wake_socket_hashes.empty()) {
-            woken_hashes = std::move(wake_socket_hashes);
-            wake_socket_hashes.clear();
+        if (!t.wake_socket_hashes.empty()) {
+            woken_hashes = std::move(t.wake_socket_hashes);
+            t.wake_socket_hashes.clear();
         }
 
         {
             // Cache is I/O-thread-only — no lock needed for iteration
             int64 now_us = get_epoch_us();
 
-            for (auto& [key, pinfo] : cache) {
+            for (auto& [key, pinfo] : t.cache) {
                 ASYNC_IO_TRACE("Phase1 iter key='%s' owner='%s' poll_info=%p "
                     "spop_base=%p in_flight=%d cached_sock='%s'\n",
                     key.c_str(), pinfo.owner.c_str(), (void*)pinfo.poll_info,
@@ -1689,8 +1707,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     ensureCallDispatcher();
                     {
                         AutoLocker al(m);
-                        auto it = cache.find(op.key);
-                        if (it != cache.end()) {
+                        auto it = t.cache.find(op.key);
+                        if (it != t.cache.end()) {
                             it->second.continue_poll_in_flight = true;
                         }
                     }
@@ -1806,8 +1824,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 {
                     AutoLocker al(m);
                     ensureCallDispatcher();
-                    auto it = cache.find(op.key);
-                    if (it != cache.end()) {
+                    auto it = t.cache.find(op.key);
+                    if (it != t.cache.end()) {
                         it->second.continue_poll_in_flight = true;
                     }
                 }
@@ -1826,8 +1844,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         {
             for (auto& result : poll_results) {
-                auto it = cache.find(result.key);
-                if (it == cache.end()) {
+                auto it = t.cache.find(result.key);
+                if (it == t.cache.end()) {
                     // Operation was canceled during Phase 2
                     if (result.new_poll_info) {
                         result.new_poll_info->deref(xsink);
@@ -1846,8 +1864,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         (int)result.completed);
                     // Operation finished (error, timeout, or completed)
                     // Clean up extra fds before unregistering main socket
-                    unregisterExtraFds(result.key, xsink);
-                    unregisterFromEventLoop(result.key, xsink);
+                    unregisterExtraFds(t, result.key, xsink);
+                    unregisterFromEventLoop(t, result.key, xsink);
 
                     // Build result hash (buildResultHash does refSelf on ex_hash)
                     QoreHashNode* result_hash = buildResultHash(pinfo, false, result.ex_hash, xsink);
@@ -1908,7 +1926,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
                     // Clean up and remove from cache
                     pinfo.cleanup(xsink);
-                    cache.erase(it);
+                    t.cache.erase(it);
                 } else {
                     // Operation still pending - update poll_info
                     if (pinfo.poll_info) {
@@ -1929,15 +1947,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             pinfo.cached_sock_hash = sock_hash;
                             ASYNC_IO_TRACE("Phase3 UPDATE key='%s' sock='%s' events=%d\n",
                                 result.key.c_str(), sock_hash.c_str(), events);
-                            updateEventLoopRegistration(result.key, poll_sock, sock_hash, events,
+                            updateEventLoopRegistration(t, result.key, poll_sock, sock_hash, events,
                                 xsink);
                             // Update extra fd registrations
-                            updateExtraFds(result.key, poll_sock, result.new_poll_info, xsink);
+                            updateExtraFds(t, result.key, poll_sock, result.new_poll_info, xsink);
 #if defined(__linux__) && defined(HAVE_IO_URING)
                             // Pass io_uring to any Http2Session on this socket (once).
                             // Use a local ExceptionSink to avoid hiding errors from
                             // the caller's xsink.
-                            if (loop->getIoUring()) {
+                            if (t.loop->getIoUring()) {
                                 ExceptionSink uring_xsink;
                                 AbstractPollableIoObjectBase* so = static_cast<AbstractPollableIoObjectBase*>(
                                     poll_sock->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE,
@@ -1945,7 +1963,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                                 if (so) {
                                     Http2SessionPtr h2s = so->priv->socket->priv->h2_session;
                                     if (h2s && !h2s->hasIoUring()) {
-                                        h2s->setIoUring(loop->getIoUring());
+                                        h2s->setIoUring(t.loop->getIoUring());
                                     }
                                     so->deref(&uring_xsink);
                                 }
@@ -2001,7 +2019,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock
-            if (cache.empty() && cmdq.empty() && deferred_deliveries.empty()) {
+            if (t.cache.empty() && t.cmdq.empty() && deferred_deliveries.empty()) {
                 bool timer_empty;
                 bool do_autostop_check;
                 bool is_shutting_down;
@@ -2021,9 +2039,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         do_autostop = true;
                     } else {
                         int64 now_us = get_epoch_us();
-                        if (!autostop_idle_since) {
-                            autostop_idle_since = now_us;
-                        } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                        if (!t.autostop_idle_since) {
+                            t.autostop_idle_since = now_us;
+                        } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
                             io_exiting = true;
                             if (io_waiting) {
@@ -2032,7 +2050,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             do_autostop = true;
                         }
                         if (!do_autostop) {
-                            int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                            int64 grace_deadline_us = t.autostop_idle_since + AUTOSTOP_GRACE_US;
                             if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
                                 poll_deadline_us = grace_deadline_us;
                             }
@@ -2040,7 +2058,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
                 }
             } else {
-                autostop_idle_since = 0;
+                t.autostop_idle_since = 0;
             }
         }
 
@@ -2059,7 +2077,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
         if (!do_autostop && !deferred_deliveries.empty()) {
-            if (cache.empty() && cmdq.empty()) {
+            if (t.cache.empty() && t.cmdq.empty()) {
                 bool timer_empty;
                 bool do_check;
                 bool is_shutting_down;
@@ -2079,9 +2097,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                         do_autostop = true;
                     } else {
                         int64 now_us = get_epoch_us();
-                        if (!autostop_idle_since) {
-                            autostop_idle_since = now_us;
-                        } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                        if (!t.autostop_idle_since) {
+                            t.autostop_idle_since = now_us;
+                        } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
                             io_exiting = true;
                             if (io_waiting) {
@@ -2090,7 +2108,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             do_autostop = true;
                         }
                         if (!do_autostop) {
-                            int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                            int64 grace_deadline_us = t.autostop_idle_since + AUTOSTOP_GRACE_US;
                             if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
                                 poll_deadline_us = grace_deadline_us;
                             }
@@ -2098,7 +2116,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
                 }
             } else {
-                autostop_idle_since = 0;
+                t.autostop_idle_since = 0;
             }
         }
 
@@ -2131,10 +2149,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // Poll for events
         ASYNC_IO_TRACE("poll: timeout_ms=%d deadline=%lld registered_fds=%d cache_size=%d\n",
             timeout_ms, (long long)poll_deadline_us,
-            (int)registered_fds.size(), (int)cache.size());
+            (int)t.registered_fds.size(), (int)t.cache.size());
         std::vector<QoreEventInfo> events;
         int64 poll_start_us = get_epoch_us();
-        int count = loop->poll(events, timeout_ms, xsink);
+        int count = t.loop->poll(events, timeout_ms, xsink);
         int64 poll_elapsed_us = get_epoch_us() - poll_start_us;
         if (*xsink) {
             const QoreStringNode* err = xsink->getExceptionErr().get<const QoreStringNode>();
@@ -2169,7 +2187,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #if defined(__linux__) && defined(HAVE_IO_URING)
                 } else if (events[i].events & QORE_EV_IOURING) {
                     // io_uring completions — I/O thread only
-                    QoreIoUring* uring = loop->getIoUring();
+                    QoreIoUring* uring = t.loop->getIoUring();
                     if (uring) {
                         std::vector<QoreIoUring::CompletedRead> completions;
                         uring->processCompletions(completions);
@@ -2193,8 +2211,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                             }
                         }
                         for (int afd : affected_fds) {
-                            auto fsh_it = fd_to_sock_hash.find(afd);
-                            if (fsh_it != fd_to_sock_hash.end()) {
+                            auto fsh_it = t.fd_to_sock_hash.find(afd);
+                            if (fsh_it != t.fd_to_sock_hash.end()) {
                                 ready_socket_hashes.insert(fsh_it->second);
                             }
                         }
@@ -2202,8 +2220,8 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
                 } else if (events[i].fd >= 0) {
                     // O(1) fd → sock_hash lookup (I/O thread only, no lock)
-                    auto fsh_it = fd_to_sock_hash.find(events[i].fd);
-                    if (fsh_it != fd_to_sock_hash.end()) {
+                    auto fsh_it = t.fd_to_sock_hash.find(events[i].fd);
+                    if (fsh_it != t.fd_to_sock_hash.end()) {
                         ready_socket_hashes.insert(fsh_it->second);
                     }
                 }
@@ -2270,7 +2288,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // processCompletions() sees the CQE.  Cancel SQEs and expired-session CQEs
         // still fire the eventfd.  If we skip draining the eventfd, epoll_wait returns
         // immediately on every iteration, causing a busy loop.
-        QoreIoUring* uring = loop->getIoUring();
+        QoreIoUring* uring = t.loop->getIoUring();
         if (uring) {
             std::vector<QoreIoUring::CompletedRead> completions;
             uring->processCompletions(completions);
@@ -2300,7 +2318,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
     }
 
     // Stop accepting new commands via the lock-free path before draining
-    io_running.store(false, std::memory_order_release);
+    t.running.store(false, std::memory_order_release);
 
     // Cleanup on exit — cancel results are collected under lock and delivered outside
     std::vector<PollInfo> exit_cancel_pinfos;
@@ -2309,29 +2327,29 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Remove notifier from event loop
 #ifdef DARWIN
-        loop->removeUserEvent(notifier->getUserIdent(), xsink);
-        notifier->unbindFromKqueue();
+        t.loop->removeUserEvent(t.notifier->getUserIdent(), xsink);
+        t.notifier->unbindFromKqueue();
 #else
-        loop->remove(notifier->fd(), xsink);
+        t.loop->remove(t.notifier->fd(), xsink);
 #endif
 
         // Clear all registrations
-        for (auto& [key, sock_obj] : registered_sockets) {
+        for (auto& [key, sock_obj] : t.registered_sockets) {
             if (sock_obj) {
                 sock_obj->deref(xsink);
             }
         }
-        registered_sockets.clear();
-        registered_events.clear();
-        registered_fds.clear();
-        fd_to_sock_hash.clear();
-        key_events.clear();
-        sock_hash_to_keys.clear();
-        socket_refcounts.clear();
+        t.registered_sockets.clear();
+        t.registered_events.clear();
+        t.registered_fds.clear();
+        t.fd_to_sock_hash.clear();
+        t.key_events.clear();
+        t.sock_hash_to_keys.clear();
+        t.socket_refcounts.clear();
 
         // Clean up any remaining timers
         for (auto& [id, tinfo] : timer_info_map) {
-            loop->cancelTimer(id);
+            t.loop->cancelTimer(id);
             tinfo.udata.discard(xsink);
         }
         timer_info_map.clear();
@@ -2339,18 +2357,18 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         // Deliver cancel results to all remaining cache entries so that
         // callers blocked on callback delivery are unblocked during shutdown.
         // Collect entries under lock, deliver outside lock to avoid deadlock.
-        for (auto& [key, pinfo] : cache) {
+        for (auto& [key, pinfo] : t.cache) {
             exit_cancel_pinfos.push_back(pinfo);
             pinfo = PollInfo();
         }
-        cache.clear();
+        t.cache.clear();
 
         // Drain the MPSC command queue and clean up pending commands.
         // Signal any pending CancelOwner done_cond waiters so cancelByOwner()
         // doesn't hang when the I/O thread exits.
         {
             std::vector<Command> pending_cmds;
-            cmdq.drain(pending_cmds);
+            t.cmdq.drain(pending_cmds);
             for (auto& pending_cmd : pending_cmds) {
                 if (pending_cmd.done_cond) {
                     if (pending_cmd.cancel_done_flag) {
@@ -2389,12 +2407,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
     {
         AutoLocker al(m);
-        tid = 0;
+        t.tid = 0;
         io_exiting = false;
         ready_flag = false;
         processed_seq = 0;
         submit_seq = 0;
-        autostop_idle_since = 0;
+        t.autostop_idle_since = 0;
         processed_cond.broadcast();
         if (io_waiting) {
             io_cond.broadcast();
@@ -2402,12 +2420,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
     }
 }
 
-bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
+bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* xsink) {
     // Batch drain all pending commands from the lock-free MPSC queue.
     // The outer loop handles commands that arrive during acknowledge.
     while (true) {
         std::vector<Command> batch;
-        cmdq.drain(batch);
+        t.cmdq.drain(batch);
         for (auto& cmd : batch) {
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
@@ -2417,20 +2435,20 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     {
                         AutoLocker al(m);
                         std::vector<std::string> keys;
-                        for (auto& [key, pinfo] : cache) {
+                        for (auto& [key, pinfo] : t.cache) {
                             keys.push_back(key);
                         }
 
                         for (auto& key : keys) {
-                            auto it = cache.find(key);
-                            if (it != cache.end()) {
+                            auto it = t.cache.find(key);
+                            if (it != t.cache.end()) {
                                 ASYNC_IO_TRACE("cache.erase IO_CMD_QUIT key='%s' owner='%s'\n",
                                     key.c_str(), it->second.owner.c_str());
-                                unregisterFromEventLoop(key, xsink);
+                                unregisterFromEventLoop(t, key, xsink);
                                 // Move PollInfo out of cache
                                 quit_pinfos.push_back(it->second);
                                 it->second = PollInfo();
-                                cache.erase(it);
+                                t.cache.erase(it);
 
                                 auto cit = cancel_cond_map.find(key);
                                 if (cit != cancel_cond_map.end()) {
@@ -2466,16 +2484,16 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     bool found = false;
 
                     // Cache access is I/O-thread-only (no lock)
-                    auto it = cache.find(cmd.key);
-                    if (it != cache.end()) {
+                    auto it = t.cache.find(cmd.key);
+                    if (it != t.cache.end()) {
                         found = true;
                         ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
                             cmd.key.c_str(), it->second.owner.c_str());
-                        unregisterExtraFds(cmd.key, xsink);
-                        unregisterFromEventLoop(cmd.key, xsink);
+                        unregisterExtraFds(t, cmd.key, xsink);
+                        unregisterFromEventLoop(t, cmd.key, xsink);
                         pinfo_copy = it->second;
                         it->second = PollInfo();
-                        cache.erase(it);
+                        t.cache.erase(it);
                     }
 
                     // cancel_cond_map is shared — brief lock
@@ -2504,7 +2522,7 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     std::vector<std::string> keys;
                     {
                         AutoLocker al(m);
-                        for (auto& [key, pinfo] : cache) {
+                        for (auto& [key, pinfo] : t.cache) {
                             if (pinfo.owner == cmd.owner) {
                                 keys.push_back(key);
                             }
@@ -2519,15 +2537,15 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
 
                         {
                             AutoLocker al(m);
-                            auto it = cache.find(key);
-                            if (it != cache.end() && it->second.owner == cmd.owner) {
+                            auto it = t.cache.find(key);
+                            if (it != t.cache.end() && it->second.owner == cmd.owner) {
                                 found = true;
                                 ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL_OWNER key='%s' owner='%s'\n",
                                     key.c_str(), cmd.owner.c_str());
-                                unregisterFromEventLoop(key, xsink);
+                                unregisterFromEventLoop(t, key, xsink);
                                 pinfo_copy = it->second;
                                 it->second = PollInfo();
-                                cache.erase(it);
+                                t.cache.erase(it);
 
                                 auto cit = cancel_cond_map.find(key);
                                 if (cit != cancel_cond_map.end()) {
@@ -2563,20 +2581,20 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
 
                 case IoCommand::WakeSocket: {
                     // I/O thread only — no lock needed
-                    wake_socket_hashes.insert(cmd.sock_hash);
+                    t.wake_socket_hashes.insert(cmd.sock_hash);
                     break;
                 }
 
                 case IoCommand::AddTimer: {
                     // Register timer in EventLoop with pre-allocated ID
-                    loop->addTimer(cmd.timer_deadline_us, nullptr, cmd.timer_id);
+                    t.loop->addTimer(cmd.timer_deadline_us, nullptr, cmd.timer_id);
                     break;
                 }
 
                 case IoCommand::CancelTimer: {
                     // Cancel timer in EventLoop; user data was already cleaned up
                     // in cancelTimer() when the entry was removed from timer_info_map
-                    loop->cancelTimer(cmd.timer_id);
+                    t.loop->cancelTimer(cmd.timer_id);
                     break;
                 }
 
@@ -2584,27 +2602,27 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     // Worker thread submitted an operation — insert into cache
                     // (cache is I/O-thread-only, no lock needed)
                     if (cmd.submit_replace) {
-                        auto it = cache.find(cmd.key);
-                        if (it != cache.end()) {
+                        auto it = t.cache.find(cmd.key);
+                        if (it != t.cache.end()) {
                             if (it->second.spop_obj == cmd.submit_spop_obj) {
                                 // Same spop — cleanup without abort
                                 PollInfo old_pinfo = it->second;
                                 it->second = PollInfo();
-                                cache.erase(it);
+                                t.cache.erase(it);
                                 old_pinfo.cleanup(xsink);
                             } else {
                                 // Different spop — cancel old entry
-                                unregisterExtraFds(cmd.key, xsink);
-                                unregisterFromEventLoop(cmd.key, xsink);
+                                unregisterExtraFds(t, cmd.key, xsink);
+                                unregisterFromEventLoop(t, cmd.key, xsink);
                                 PollInfo old_pinfo = it->second;
                                 it->second = PollInfo();
-                                cache.erase(it);
+                                t.cache.erase(it);
                                 doCancelIntern(old_pinfo, xsink);
                                 old_pinfo.cleanup(xsink);
                             }
                         }
                     }
-                    PollInfo& pinfo = cache[cmd.key];
+                    PollInfo& pinfo = t.cache[cmd.key];
                     pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
                     pinfo.sock = cmd.submit_sock;               // ownership transferred
                     pinfo.spop_obj = cmd.submit_spop_obj;       // ownership transferred
@@ -2635,8 +2653,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     DeferredDelivery dd;
 
                     {
-                        auto it = cache.find(cmd.key);
-                        if (it == cache.end()) {
+                        auto it = t.cache.find(cmd.key);
+                        if (it == t.cache.end()) {
                             // Operation was canceled while continuePoll was in flight
                             if (cmd.continue_poll_result) {
                                 cmd.continue_poll_result->deref(xsink);
@@ -2653,8 +2671,8 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                         if (cmd.continue_poll_ex || cmd.continue_poll_completed) {
                             // Operation finished (error or completed)
                             finished = true;
-                            unregisterExtraFds(cmd.key, xsink);
-                            unregisterFromEventLoop(cmd.key, xsink);
+                            unregisterExtraFds(t, cmd.key, xsink);
+                            unregisterFromEventLoop(t, cmd.key, xsink);
 
                             QoreHashNode* result_hash = buildResultHash(pinfo, false,
                                 cmd.continue_poll_ex, xsink);
@@ -2682,7 +2700,7 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                                 cmd.key.c_str(), pinfo.owner.c_str(),
                                 (void*)cmd.continue_poll_ex, (int)cmd.continue_poll_completed);
                             pinfo.cleanup(xsink);
-                            cache.erase(it);
+                            t.cache.erase(it);
                         } else {
                             // Still pending — for C++ operations, target the new
                             // socket for immediate re-poll so the op is included
@@ -2695,7 +2713,7 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                                 getSocketFromPollInfo(cmd.continue_poll_result,
                                     sh, ev, &sh_xsink);
                                 if (!sh.empty()) {
-                                    wake_socket_hashes.insert(sh);
+                                    t.wake_socket_hashes.insert(sh);
                                 }
                                 if (sh_xsink) {
                                     sh_xsink.clear();
@@ -2716,9 +2734,9 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                                     cmd.continue_poll_result, sock_hash, events, xsink);
                                 if (!*xsink && poll_sock) {
                                     pinfo.cached_sock_hash = sock_hash;
-                                    updateEventLoopRegistration(cmd.key, poll_sock,
+                                    updateEventLoopRegistration(t, cmd.key, poll_sock,
                                         sock_hash, events, xsink);
-                                    updateExtraFds(cmd.key, poll_sock,
+                                    updateExtraFds(t, cmd.key, poll_sock,
                                         cmd.continue_poll_result, xsink);
                                 }
 
@@ -2757,13 +2775,13 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
 
         // Acknowledge notifier — each command has already targeted specific
         // sockets via wake_socket_hashes; no blanket re-poll needed
-        notifier->acknowledge(xsink);
+        t.notifier->acknowledge(xsink);
         if (*xsink) {
             xsink->clear();
         }
 
         // Check if new commands arrived during processing/acknowledge
-        if (cmdq.empty()) {
+        if (t.cmdq.empty()) {
             break;
         }
     }
@@ -2796,7 +2814,7 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     deliverResult(pinfo.queue, pinfo.spop_obj, pinfo.has_qore_on_complete, result, xsink);
 }
 
-void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
+void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
         QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink) {
     // Convert SOCK_POLLIN/SOCK_POLLOUT to QORE_EV_READ/QORE_EV_WRITE
     int ev_flags = 0;
@@ -2808,11 +2826,11 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
     }
 
     // Track per-key events
-    key_events[key] = ev_flags;
+    t.key_events[key] = ev_flags;
 
     // Get previous socket for this key
-    auto prev_it = registered_sockets.find(key);
-    QoreObject* prev_sock = prev_it != registered_sockets.end() ? prev_it->second : nullptr;
+    auto prev_it = t.registered_sockets.find(key);
+    QoreObject* prev_sock = prev_it != t.registered_sockets.end() ? prev_it->second : nullptr;
     std::string prev_sock_hash;
     if (prev_sock) {
         AbstractPollableIoObjectBase* ps = static_cast<AbstractPollableIoObjectBase*>(
@@ -2835,8 +2853,8 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
         if (s) {
             int curr_fd = s->getPollableDescriptor();
             ASYNC_IO_TRACE("updateEventLoop key='%s' same_sock fd=%d\n", key.c_str(), curr_fd);
-            auto fd_it = registered_fds.find(sock_hash);
-            if (fd_it != registered_fds.end() && fd_it->second != curr_fd) {
+            auto fd_it = t.registered_fds.find(sock_hash);
+            if (fd_it != t.registered_fds.end() && fd_it->second != curr_fd) {
                 fd_changed = true;
                 printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
                     "fd changed for socket '%s': %d -> %d\n",
@@ -2844,19 +2862,19 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
                 // Remove old fd from EventLoop — on Linux, epoll auto-removes
                 // closed fds, but we must also clean up fd_map; remove()
                 // silently handles EBADF/ENOENT from already-closed fds
-                fd_to_sock_hash.erase(fd_it->second);
-                loop->remove(fd_it->second, xsink);
+                t.fd_to_sock_hash.erase(fd_it->second);
+                t.loop->remove(fd_it->second, xsink);
                 // Add new fd to EventLoop
-                int union_events = computeEventUnion(sock_hash);
-                loop->add(curr_fd, union_events, socket, xsink);
-                registered_fds[sock_hash] = curr_fd;
-                fd_to_sock_hash[curr_fd] = sock_hash;
-                registered_events[sock_hash] = union_events;
+                int union_events = computeEventUnion(t, sock_hash);
+                t.loop->add(curr_fd, union_events, socket, xsink);
+                t.registered_fds[sock_hash] = curr_fd;
+                t.fd_to_sock_hash[curr_fd] = sock_hash;
+                t.registered_events[sock_hash] = union_events;
             }
             s->deref(xsink);
         }
         if (!fd_changed) {
-            applyEventUnion(socket, sock_hash, xsink);
+            applyEventUnion(t, socket, sock_hash, xsink);
         }
         return;
     }
@@ -2864,39 +2882,39 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
     // Different socket (or new registration)
     if (prev_sock) {
         // Remove key from previous socket's reverse index
-        auto sit = sock_hash_to_keys.find(prev_sock_hash);
-        if (sit != sock_hash_to_keys.end()) {
+        auto sit = t.sock_hash_to_keys.find(prev_sock_hash);
+        if (sit != t.sock_hash_to_keys.end()) {
             sit->second.erase(key);
             if (sit->second.empty()) {
-                sock_hash_to_keys.erase(sit);
+                t.sock_hash_to_keys.erase(sit);
             }
         }
 
         // Decrement refcount for previous socket
-        auto rit = socket_refcounts.find(prev_sock_hash);
-        if (rit != socket_refcounts.end()) {
+        auto rit = t.socket_refcounts.find(prev_sock_hash);
+        if (rit != t.socket_refcounts.end()) {
             if (rit->second <= 1) {
                 // Last reference - remove from EventLoop using the registered fd
-                auto fd_it = registered_fds.find(prev_sock_hash);
-                if (fd_it != registered_fds.end()) {
-                    loop->remove(fd_it->second, xsink);
+                auto fd_it = t.registered_fds.find(prev_sock_hash);
+                if (fd_it != t.registered_fds.end()) {
+                    t.loop->remove(fd_it->second, xsink);
                 } else {
                     AbstractPollableIoObjectBase* ps = static_cast<AbstractPollableIoObjectBase*>(
                         prev_sock->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
                     if (ps) {
-                        loop->remove(ps->getPollableDescriptor(), xsink);
+                        t.loop->remove(ps->getPollableDescriptor(), xsink);
                         ps->deref(xsink);
                     }
                 }
-                registered_events.erase(prev_sock_hash);
-                if (fd_it != registered_fds.end()) {
-                    fd_to_sock_hash.erase(fd_it->second);
+                t.registered_events.erase(prev_sock_hash);
+                if (fd_it != t.registered_fds.end()) {
+                    t.fd_to_sock_hash.erase(fd_it->second);
                 }
-                registered_fds.erase(prev_sock_hash);
-                socket_refcounts.erase(rit);
+                t.registered_fds.erase(prev_sock_hash);
+                t.socket_refcounts.erase(rit);
             } else {
                 rit->second--;
-                applyEventUnion(prev_sock, prev_sock_hash, xsink);
+                applyEventUnion(t, prev_sock, prev_sock_hash, xsink);
             }
         }
 
@@ -2904,42 +2922,43 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(const std::string& key,
     }
 
     // Add key to new socket's reverse index
-    sock_hash_to_keys[sock_hash].insert(key);
+    t.sock_hash_to_keys[sock_hash].insert(key);
     socket->ref();
-    registered_sockets[key] = socket;
+    t.registered_sockets[key] = socket;
 
     // Increment refcount for new socket
-    auto rit = socket_refcounts.find(sock_hash);
-    if (rit == socket_refcounts.end() || rit->second == 0) {
+    auto rit = t.socket_refcounts.find(sock_hash);
+    if (rit == t.socket_refcounts.end() || rit->second == 0) {
         // First registration
-        int union_events = computeEventUnion(sock_hash);
+        int union_events = computeEventUnion(t, sock_hash);
         AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
             int fd = s->getPollableDescriptor();
             ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' fd=%d events=%d\n",
                 key.c_str(), sock_hash.c_str(), fd, union_events);
-            loop->add(fd, union_events, socket, xsink);
-            registered_fds[sock_hash] = fd;
-            fd_to_sock_hash[fd] = sock_hash;
+            t.loop->add(fd, union_events, socket, xsink);
+            t.registered_fds[sock_hash] = fd;
+            t.fd_to_sock_hash[fd] = sock_hash;
             s->deref(xsink);
         } else {
             ASYNC_IO_TRACE("updateEventLoop NEW key='%s' sock='%s' NO_FD (not pollable)\n",
                 key.c_str(), sock_hash.c_str());
         }
-        socket_refcounts[sock_hash] = 1;
-        registered_events[sock_hash] = union_events;
+        t.socket_refcounts[sock_hash] = 1;
+        t.registered_events[sock_hash] = union_events;
     } else {
-        socket_refcounts[sock_hash]++;
-        applyEventUnion(socket, sock_hash, xsink);
+        t.socket_refcounts[sock_hash]++;
+        applyEventUnion(t, socket, sock_hash, xsink);
     }
 }
 
-void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, ExceptionSink* xsink) {
-    key_events.erase(key);
+void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, const std::string& key,
+        ExceptionSink* xsink) {
+    t.key_events.erase(key);
 
-    auto prev_it = registered_sockets.find(key);
-    if (prev_it == registered_sockets.end()) {
+    auto prev_it = t.registered_sockets.find(key);
+    if (prev_it == t.registered_sockets.end()) {
         return;
     }
 
@@ -2952,25 +2971,25 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
         ps->deref(xsink);
     }
 
-    registered_sockets.erase(prev_it);
+    t.registered_sockets.erase(prev_it);
 
     if (!prev_sock_hash.empty()) {
         // Remove key from reverse index
-        auto sit = sock_hash_to_keys.find(prev_sock_hash);
-        if (sit != sock_hash_to_keys.end()) {
+        auto sit = t.sock_hash_to_keys.find(prev_sock_hash);
+        if (sit != t.sock_hash_to_keys.end()) {
             sit->second.erase(key);
             if (sit->second.empty()) {
-                sock_hash_to_keys.erase(sit);
+                t.sock_hash_to_keys.erase(sit);
             }
         }
 
         // Decrement refcount
-        auto rit = socket_refcounts.find(prev_sock_hash);
-        if (rit != socket_refcounts.end()) {
+        auto rit = t.socket_refcounts.find(prev_sock_hash);
+        if (rit != t.socket_refcounts.end()) {
             if (rit->second <= 1) {
                 // Last reference - remove from EventLoop using the registered fd
-                auto fd_it = registered_fds.find(prev_sock_hash);
-                if (fd_it != registered_fds.end()) {
+                auto fd_it = t.registered_fds.find(prev_sock_hash);
+                if (fd_it != t.registered_fds.end()) {
                     // Verify the socket still owns this fd before removing from epoll.
                     // When a socket is closed, its fd is released and may be recycled
                     // by a new socket.  Calling remove() on a recycled fd would
@@ -2992,16 +3011,16 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
                         check_sock->deref(xsink);
                     }
                     if (should_remove) {
-                        loop->remove(fd_it->second, xsink);
+                        t.loop->remove(fd_it->second, xsink);
                     }
-                    fd_to_sock_hash.erase(fd_it->second);
+                    t.fd_to_sock_hash.erase(fd_it->second);
                 }
-                registered_events.erase(prev_sock_hash);
-                registered_fds.erase(prev_sock_hash);
-                socket_refcounts.erase(rit);
+                t.registered_events.erase(prev_sock_hash);
+                t.registered_fds.erase(prev_sock_hash);
+                t.socket_refcounts.erase(rit);
             } else {
                 rit->second--;
-                applyEventUnion(prev_sock, prev_sock_hash, xsink);
+                applyEventUnion(t, prev_sock, prev_sock_hash, xsink);
             }
         }
     }
@@ -3009,13 +3028,14 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(const std::string& key, Exce
     prev_sock->deref(xsink);
 }
 
-int AsyncIoControllerPriv::computeEventUnion(const std::string& sock_hash) const {
+int AsyncIoControllerPriv::computeEventUnion(const IoThreadContext& t,
+        const std::string& sock_hash) const {
     int result = 0;
-    auto it = sock_hash_to_keys.find(sock_hash);
-    if (it != sock_hash_to_keys.end()) {
+    auto it = t.sock_hash_to_keys.find(sock_hash);
+    if (it != t.sock_hash_to_keys.end()) {
         for (auto& key : it->second) {
-            auto eit = key_events.find(key);
-            if (eit != key_events.end()) {
+            auto eit = t.key_events.find(key);
+            if (eit != t.key_events.end()) {
                 result |= eit->second;
             }
         }
@@ -3023,24 +3043,24 @@ int AsyncIoControllerPriv::computeEventUnion(const std::string& sock_hash) const
     return result;
 }
 
-void AsyncIoControllerPriv::applyEventUnion(QoreObject* socket, const std::string& sock_hash,
-        ExceptionSink* xsink) {
-    int union_events = computeEventUnion(sock_hash);
-    auto it = registered_events.find(sock_hash);
-    int prev_events = it != registered_events.end() ? it->second : 0;
+void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* socket,
+        const std::string& sock_hash, ExceptionSink* xsink) {
+    int union_events = computeEventUnion(t, sock_hash);
+    auto it = t.registered_events.find(sock_hash);
+    int prev_events = it != t.registered_events.end() ? it->second : 0;
     if (union_events != prev_events) {
         AbstractPollableIoObjectBase* s = static_cast<AbstractPollableIoObjectBase*>(
             socket->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
         if (s) {
-            loop->modify(s->getPollableDescriptor(), union_events, xsink);
+            t.loop->modify(s->getPollableDescriptor(), union_events, xsink);
             s->deref(xsink);
         }
-        registered_events[sock_hash] = union_events;
+        t.registered_events[sock_hash] = union_events;
     }
 }
 
-void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* socket,
-        QoreHashNode* poll_info, ExceptionSink* xsink) {
+void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string& key,
+        QoreObject* socket, QoreHashNode* poll_info, ExceptionSink* xsink) {
     std::unordered_set<int> new_fds;
 
     // Parse extra_fds from poll_info
@@ -3066,13 +3086,13 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
         }
     }
 
-    auto& prev_fds = key_extra_fds[key];
+    auto& prev_fds = t.key_extra_fds[key];
 
     // Remove stale fds (were registered before, not in new set)
     for (int fd : prev_fds) {
         if (!new_fds.count(fd)) {
-            loop->remove(fd, xsink);
-            fd_to_sock_hash.erase(fd);
+            t.loop->remove(fd, xsink);
+            t.fd_to_sock_hash.erase(fd);
         }
     }
 
@@ -3085,7 +3105,7 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
     for (int fd : new_fds) {
         if (!prev_fds.count(fd)) {
             int ev_flags = QORE_EV_READ;  // InputStreams only need read
-            loop->add(fd, ev_flags, socket, xsink);
+            t.loop->add(fd, ev_flags, socket, xsink);
             if (*xsink) {
                 // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)
                 // The I/O loop still drives streaming via POLLOUT on the socket fd
@@ -3093,7 +3113,7 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
                 xsink->clear();
                 failed_fds.push_back(fd);
             } else if (!sock_hash.empty()) {
-                fd_to_sock_hash[fd] = sock_hash;
+                t.fd_to_sock_hash[fd] = sock_hash;
             }
         }
     }
@@ -3102,27 +3122,28 @@ void AsyncIoControllerPriv::updateExtraFds(const std::string& key, QoreObject* s
     }
 
     if (new_fds.empty()) {
-        key_extra_fds.erase(key);
+        t.key_extra_fds.erase(key);
     } else {
         prev_fds = std::move(new_fds);
     }
 }
 
-void AsyncIoControllerPriv::unregisterExtraFds(const std::string& key, ExceptionSink* xsink) {
-    auto it = key_extra_fds.find(key);
-    if (it != key_extra_fds.end()) {
+void AsyncIoControllerPriv::unregisterExtraFds(IoThreadContext& t, const std::string& key,
+        ExceptionSink* xsink) {
+    auto it = t.key_extra_fds.find(key);
+    if (it != t.key_extra_fds.end()) {
         for (int fd : it->second) {
-            loop->remove(fd, xsink);
-            fd_to_sock_hash.erase(fd);
+            t.loop->remove(fd, xsink);
+            t.fd_to_sock_hash.erase(fd);
         }
-        key_extra_fds.erase(it);
+        t.key_extra_fds.erase(it);
     }
 }
 
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
         const std::string& owner, QoreCondition* done_cond, bool* cancel_done_flag) {
     // Caller must hold lock
-    if (io_exiting || !tid) {
+    if (io_exiting || !ctx().tid) {
         // Need to restart
         ExceptionSink xsink;
         startIntern(&xsink);
@@ -3137,7 +3158,7 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
     c.owner = owner;
     c.done_cond = done_cond;
     c.cancel_done_flag = cancel_done_flag;
-    cmdq.push(std::move(c));
+    ctx().cmdq.push(std::move(c));
     return true;
 }
 
@@ -3228,7 +3249,7 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
 void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
     // Lock-free: check atomic flag instead of acquiring mutex
-    if (!io_running.load(std::memory_order_acquire)) {
+    if (!ctx().running.load(std::memory_order_acquire)) {
         // I/O thread not running — discard results
         ExceptionSink xsink;
         if (new_poll_info) {
@@ -3245,8 +3266,8 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
     c.continue_poll_result = new_poll_info;
     c.continue_poll_ex = ex_hash;
     c.continue_poll_completed = completed;
-    cmdq.push(std::move(c));
-    notifier->notify();
+    ctx().cmdq.push(std::move(c));
+    ctx().notifier->notify();
 }
 
 void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,

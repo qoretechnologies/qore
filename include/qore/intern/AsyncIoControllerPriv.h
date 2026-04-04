@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <atomic>
 #include <deque>
+#include <memory>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -473,13 +474,62 @@ private:
         QoreValue udata;                //!< Referenced Qore user data
     };
 
-    // --- Lock-free state (MPSC: multiple producer threads, single I/O thread consumer) ---
-    MpscQueue<Command> cmdq;              //!< Lock-free command queue (replaces mutex-protected deque)
-    std::atomic<bool> io_running{false};  //!< True when I/O thread accepts commands (no lock needed to check)
+    //! Per-I/O-thread context — each thread owns its own event loop, cache, and socket state
+    /** Multiple IoThreadContext instances enable nginx-style per-thread isolation with
+        zero lock contention during normal I/O processing.
+        @since %Qore 2.3
+    */
+    struct IoThreadContext {
+        MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
+        std::atomic<bool> running{false};  //!< True when this thread accepts commands
+        int tid = 0;                       //!< Thread ID (0 if not running)
+        int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
+
+        QoreEventLoop* loop = nullptr;
+        QoreEventNotifier* notifier = nullptr;
+
+
+        //! Operation cache — fully owned by this I/O thread
+        std::unordered_map<std::string, PollInfo> cache;
+        std::unordered_map<std::string, int> socket_refcounts;
+
+        //! Socket hashes that need re-polling
+        std::unordered_set<std::string> wake_socket_hashes;
+
+        // Registered socket tracking
+        std::unordered_map<std::string, QoreObject*> registered_sockets;
+        std::unordered_map<std::string, int> registered_events;
+        std::unordered_map<std::string, int> registered_fds;
+        std::unordered_map<std::string, int> key_events;
+        std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys;
+        std::unordered_map<int, std::string> fd_to_sock_hash;
+        std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
+    };
+
+    //! Get the I/O thread index for a given operation key (hash-based affinity)
+    DLLLOCAL int getThreadIndex(const std::string& key) const {
+        if (io_threads.size() <= 1) {
+            return 0;
+        }
+        return std::hash<std::string>{}(key) % io_threads.size();
+    }
+
+    //! Get the I/O thread context for a given operation key
+    DLLLOCAL IoThreadContext& getThreadForKey(const std::string& key) {
+        return *io_threads[getThreadIndex(key)];
+    }
+
+    // --- I/O thread contexts ---
+    std::vector<std::unique_ptr<IoThreadContext>> io_threads;  //!< One per I/O thread (default: 1)
+    int num_io_threads;                       //!< Configured thread count
+
+    // Backward-compatible accessors for single-thread code paths
+    // (used during transition; will be removed when all code uses io_threads[])
+    DLLLOCAL IoThreadContext& ctx() { return *io_threads[0]; }
+    DLLLOCAL const IoThreadContext& ctx() const { return *io_threads[0]; }
 
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;
-    int tid;                              //!< I/O thread ID (0 if not running)
     bool autostop_flag;
     bool shutting_down;
     std::unordered_map<std::string, QoreCondition*> cancel_cond_map;
@@ -489,7 +539,6 @@ private:
     bool ready_flag;
     int submit_seq;                       //!< Incremented on each submit() call
     int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
-    int64 autostop_idle_since;            //!< Timestamp when cache first became empty (0 = not idle)
     QoreCondition processed_cond;         //!< Signaled when processed_seq advances
     QoreLoggerBridge* logger;              //!< Referenced or nullptr
     std::unordered_map<int64_t, TimerInfo> timer_info_map; //!< Timer ID -> user data
@@ -497,30 +546,6 @@ private:
 
     //! Atomic counter for pre-allocating timer IDs across threads
     std::atomic<int64_t> next_ctrl_timer_id{1};
-
-    // --- I/O thread only state (never accessed from other threads during normal operation) ---
-    QoreEventLoop* loop;
-    QoreEventNotifier* notifier;
-
-    //! Operation cache — fully owned by I/O thread (submit/cancel via MPSC commands)
-    std::unordered_map<std::string, PollInfo> cache;
-    std::unordered_map<std::string, int> socket_refcounts;
-
-    //! Socket hashes that need re-polling (set by WakeSocket cmd, consumed by Phase 1)
-    std::unordered_set<std::string> wake_socket_hashes;
-
-    // Registered socket tracking (I/O thread only)
-    std::unordered_map<std::string, QoreObject*> registered_sockets; //!< key -> Socket obj
-    std::unordered_map<std::string, int> registered_events;          //!< sock hash -> current events
-    std::unordered_map<std::string, int> registered_fds;             //!< sock hash -> registered fd
-    std::unordered_map<std::string, int> key_events;                 //!< key -> events for this key
-    std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys; //!< reverse index
-    std::unordered_map<int, std::string> fd_to_sock_hash;             //!< fd -> sock_hash (O(1) epoll dispatch)
-
-    //! Extra fd tracking: operation key -> set of registered extra fds
-    /** @since %Qore 2.3
-    */
-    std::unordered_map<std::string, std::unordered_set<int>> key_extra_fds;
 
     // --- Internal methods ---
 
@@ -530,49 +555,45 @@ private:
     //! Start the I/O thread (caller must hold lock)
     DLLLOCAL void startIntern(ExceptionSink* xsink);
 
-    //! The I/O thread main function
+    //! The I/O thread main function (arg points to IoThreadStartInfo)
     DLLLOCAL static void ioThreadEntry(ExceptionSink* xsink, void* arg);
 
     //! The I/O thread main loop
-    DLLLOCAL void ioThread(ExceptionSink* xsink);
+    DLLLOCAL void ioThread(IoThreadContext& t, ExceptionSink* xsink);
 
     //! Process commands from the command queue
     /** @return true if the I/O thread should exit
     */
-    DLLLOCAL bool processCommands(ExceptionSink* xsink);
+    DLLLOCAL bool processCommands(IoThreadContext& t, ExceptionSink* xsink);
 
     //! Cancel an operation internally (delivers result, called from I/O thread)
     DLLLOCAL void doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink);
 
     //! Update EventLoop registration for an operation
-    /** @param key the operation key
-        @param socket the new socket to register (nullptr to unregister)
-        @param sock_hash the socket's unique hash
-        @param events the events to monitor
-        @param xsink for exception handling
-    */
-    DLLLOCAL void updateEventLoopRegistration(const std::string& key, QoreObject* socket,
-        const std::string& sock_hash, int events, ExceptionSink* xsink);
+    DLLLOCAL void updateEventLoopRegistration(IoThreadContext& t, const std::string& key,
+        QoreObject* socket, const std::string& sock_hash, int events, ExceptionSink* xsink);
 
     //! Unregister an operation from the EventLoop
-    DLLLOCAL void unregisterFromEventLoop(const std::string& key, ExceptionSink* xsink);
+    DLLLOCAL void unregisterFromEventLoop(IoThreadContext& t, const std::string& key,
+        ExceptionSink* xsink);
 
     //! Update extra fd registrations for an operation
     /** @since %Qore 2.3
     */
-    DLLLOCAL void updateExtraFds(const std::string& key, QoreObject* socket,
+    DLLLOCAL void updateExtraFds(IoThreadContext& t, const std::string& key, QoreObject* socket,
         QoreHashNode* poll_info, ExceptionSink* xsink);
 
     //! Unregister extra fds for an operation
     /** @since %Qore 2.3
     */
-    DLLLOCAL void unregisterExtraFds(const std::string& key, ExceptionSink* xsink);
+    DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
 
     //! Compute the event union for a socket
-    DLLLOCAL int computeEventUnion(const std::string& sock_hash) const;
+    DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;
 
     //! Apply the event union for a socket
-    DLLLOCAL void applyEventUnion(QoreObject* socket, const std::string& sock_hash, ExceptionSink* xsink);
+    DLLLOCAL void applyEventUnion(IoThreadContext& t, QoreObject* socket,
+        const std::string& sock_hash, ExceptionSink* xsink);
 
     //! Enqueue a command (caller must hold lock)
     /** @return true if the notifier should be signaled
