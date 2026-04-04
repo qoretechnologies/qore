@@ -125,9 +125,17 @@ public:
         deferred_exception_checking = v;
     }
 
+    //! Owned AOT location entry — stores location data by value, not by pointer.
+    //! Data is captured during LLVM codegen when the IR function is alive.
+    struct AOTLocEntry {
+        int start_line = 0;
+        int end_line = 0;
+        std::string file;
+    };
+
     //! Get the AOT location table built during LLVM codegen.
-    //! Returns the ordered list of QoreProgramLocation pointers, indexed by slot.
-    const std::vector<const QoreProgramLocation*>& getAOTLocTable() const {
+    //! Returns owned location entries (safe — no dangling pointer risk).
+    const std::vector<AOTLocEntry>& getAOTLocTable() const {
         return aot_loc_table;
     }
 
@@ -331,10 +339,11 @@ private:
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
 
-    //! AOT location table: maps QoreProgramLocation* → slot index (AOT mode only).
-    //! Populated during LLVM codegen. Location count exposed via getNumLocSlots().
+    //! AOT location dedup: maps QoreProgramLocation* → slot index (AOT mode only).
+    //! The pointer is used only as a dedup key during the single LLVM codegen pass.
     std::unordered_map<const QoreProgramLocation*, int32_t> aot_loc_slots;
-    std::vector<const QoreProgramLocation*> aot_loc_table;
+    //! AOT location table: owns location data captured during LLVM codegen.
+    std::vector<AOTLocEntry> aot_loc_table;
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);

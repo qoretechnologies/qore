@@ -1921,7 +1921,10 @@ bool QoreIRLowering::emitBlockCleanups(size_t target_depth, std::string& error, 
     // (block-scoped locals), RefForeachRecord (pop $#, load var, record), and
     // RefForeach (finalize/write-back).
     for (size_t i = cleanup_stack.size(); i > target_depth; --i) {
-        const BlockCleanupEntry& entry = cleanup_stack[i - 1];
+        // Copy by value: lowerHandlersAtExit() can trigger cleanup_stack reallocation
+        // (when inlining handler bodies that push to cleanup_stack), which would
+        // invalidate a reference into the vector.
+        const BlockCleanupEntry entry = cleanup_stack[i - 1];
         switch (entry.type) {
             case BlockCleanupEntry::Scope: {
                 // Phase 1: Inline handlers on break/continue/return cleanup

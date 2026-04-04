@@ -1449,7 +1449,16 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
         } else {
             loc_index = static_cast<int32_t>(aot_loc_table.size());
             aot_loc_slots[inst->loc] = loc_index;
-            aot_loc_table.push_back(inst->loc);
+            // Copy location data by value immediately — the table owns the data,
+            // eliminating any dependency on inst->loc pointer lifetime.
+            AOTLocEntry entry;
+            entry.start_line = inst->loc->start_line;
+            entry.end_line = inst->loc->end_line;
+            const char* f = inst->loc->getFile();
+            if (f) {
+                entry.file = f;
+            }
+            aot_loc_table.push_back(std::move(entry));
         }
         auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot",
             llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
