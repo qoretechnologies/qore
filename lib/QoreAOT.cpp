@@ -3837,7 +3837,9 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     if ((!ii->operands.empty() && isBinaryInvokeOpcode(ii->invoke_opcode)
                                 && ii->operands.size() >= 2)
                             || (!ii->operands.empty() && isUnaryInvokeOpcode(ii->invoke_opcode)
-                                && ii->operands.size() >= 1)) {
+                                && ii->operands.size() >= 1)
+                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
+                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt) {
                         break;
                     }
                     uint64_t bits;
