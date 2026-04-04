@@ -37,23 +37,7 @@ static QoreThreadLock async_io_logger_lock;
 static QoreLoggerBridge* async_io_logger = nullptr;
 
 void qore_set_async_io_logger(QoreObject* logger_obj, ExceptionSink* xsink) {
-    if (logger_obj) {
-        // Validate the logger object has the required methods
-        const QoreClass* cls = logger_obj->getClass();
-        if (!cls->findMethod("logArgs")) {
-            xsink->raiseException("ASYNC-IO-LOGGER-ERROR",
-                "logger object of class '%s' does not implement logArgs() method",
-                cls->getName());
-            return;
-        }
-        if (!cls->findMethod("isEnabledFor")) {
-            xsink->raiseException("ASYNC-IO-LOGGER-ERROR",
-                "logger object of class '%s' does not implement isEnabledFor() method",
-                cls->getName());
-            return;
-        }
-    }
-
+    // Type safety is enforced at the Qore level via *LoggerInterfaceBase parameter type
     QoreLoggerBridge* old_logger;
     {
         AutoLocker al(async_io_logger_lock);
