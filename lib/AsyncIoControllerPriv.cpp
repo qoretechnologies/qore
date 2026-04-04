@@ -1108,21 +1108,16 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
 }
 
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
-    bool do_signal = false;
-    {
-        AutoLocker al(m);
-        if (tid && !io_exiting) {
-            Command cmd;
-            cmd.cmd = IoCommand::WakeSocket;
-            cmd.sock_hash = sock_hash;
-            cmdq.push_back(std::move(cmd));
-            do_signal = true;
-        }
+    // Lock-free: check atomic flag instead of acquiring mutex
+    if (!io_running.load(std::memory_order_acquire)) {
+        return;
     }
-    ASYNC_IO_TRACE("wakeSocket: hash='%s' signal=%d\n", sock_hash.c_str(), (int)do_signal);
-    if (do_signal) {
-        notifier->notify();
-    }
+    Command cmd;
+    cmd.cmd = IoCommand::WakeSocket;
+    cmd.sock_hash = sock_hash;
+    cmdq.push(std::move(cmd));
+    ASYNC_IO_TRACE("wakeSocket: hash='%s'\n", sock_hash.c_str());
+    notifier->notify();
 }
 
 void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
@@ -1363,7 +1358,7 @@ int64_t AsyncIoControllerPriv::addTimer(const DateTimeNode* deadline, QoreValue 
         tinfo.udata = udata.refSelf();
         timer_info_map[id] = tinfo;
 
-        cmdq.push_back(cmd);
+        cmdq.push(cmd);
         do_signal = true;
     }
 
@@ -1399,7 +1394,7 @@ bool AsyncIoControllerPriv::cancelTimer(int64_t id, ExceptionSink* xsink) {
             cmd.timer_id = id;
             cmd.done_cond = nullptr;
             cmd.timer_deadline_us = 0;
-            cmdq.push_back(cmd);
+            cmdq.push(cmd);
             do_signal = true;
         }
     }
@@ -1523,7 +1518,8 @@ void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
 }
 
 void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
-    // Signal ready
+    // Signal ready and enable lock-free command acceptance
+    io_running.store(true, std::memory_order_release);
     {
         AutoLocker al(m);
         ready_flag = true;
@@ -1576,13 +1572,14 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             ssl_deferred_hashes.clear();
         }
 
+        // Consume wake_socket_hashes (I/O-thread-only, no lock needed)
+        if (!wake_socket_hashes.empty()) {
+            woken_hashes = std::move(wake_socket_hashes);
+            wake_socket_hashes.clear();
+        }
+
         {
             AutoLocker al(m);
-
-            if (!wake_socket_hashes.empty()) {
-                woken_hashes = std::move(wake_socket_hashes);
-                wake_socket_hashes.clear();
-            }
 
             int64 now_us = get_epoch_us();
 
@@ -2317,6 +2314,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 #endif
     }
 
+    // Stop accepting new commands via the lock-free path before draining
+    io_running.store(false, std::memory_order_release);
+
     // Cleanup on exit — cancel results are collected under lock and delivered outside
     std::vector<PollInfo> exit_cancel_pinfos;
     {
@@ -2360,28 +2360,30 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
         cache.clear();
 
-        // Signal any pending CancelOwner done_cond waiters in the command queue
-        // so cancelByOwner() doesn't hang when the I/O thread exits.
-        // Must set cancel_done_flag under lock before broadcasting to prevent
-        // use-after-free of the stack-allocated done_cond.
-        for (auto& pending_cmd : cmdq) {
-            if (pending_cmd.done_cond) {
-                if (pending_cmd.cancel_done_flag) {
-                    *pending_cmd.cancel_done_flag = true;
+        // Drain the MPSC command queue and clean up pending commands.
+        // Signal any pending CancelOwner done_cond waiters so cancelByOwner()
+        // doesn't hang when the I/O thread exits.
+        {
+            std::vector<Command> pending_cmds;
+            cmdq.drain(pending_cmds);
+            for (auto& pending_cmd : pending_cmds) {
+                if (pending_cmd.done_cond) {
+                    if (pending_cmd.cancel_done_flag) {
+                        *pending_cmd.cancel_done_flag = true;
+                    }
+                    pending_cmd.done_cond->broadcast();
                 }
-                pending_cmd.done_cond->broadcast();
-            }
-            // Clean up refcounted fields from ContinuePollResult commands
-            if (pending_cmd.cmd == IoCommand::ContinuePollResult) {
-                if (pending_cmd.continue_poll_result) {
-                    pending_cmd.continue_poll_result->deref(xsink);
-                }
-                if (pending_cmd.continue_poll_ex) {
-                    pending_cmd.continue_poll_ex->deref(xsink);
+                // Clean up refcounted fields from ContinuePollResult commands
+                if (pending_cmd.cmd == IoCommand::ContinuePollResult) {
+                    if (pending_cmd.continue_poll_result) {
+                        pending_cmd.continue_poll_result->deref(xsink);
+                    }
+                    if (pending_cmd.continue_poll_ex) {
+                        pending_cmd.continue_poll_ex->deref(xsink);
+                    }
                 }
             }
         }
-        cmdq.clear();
     }
 
     // Deliver cancel results to remaining cache entries outside the lock
@@ -2416,19 +2418,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 }
 
 bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
-    // Double-check loop to handle race between enqueue and notify acknowledge
+    // Batch drain all pending commands from the lock-free MPSC queue.
+    // The outer loop handles commands that arrive during acknowledge.
     while (true) {
-        while (true) {
-            Command cmd;
-            {
-                AutoLocker al(m);
-                if (cmdq.empty()) {
-                    break;
-                }
-                cmd = cmdq.front();
-                cmdq.pop_front();
-            }
-
+        std::vector<Command> batch;
+        cmdq.drain(batch);
+        for (auto& cmd : batch) {
             switch (cmd.cmd) {
                 case IoCommand::Quit: {
                     // Collect PollInfo copies and cancel conditions under lock
@@ -2581,7 +2576,7 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                 }
 
                 case IoCommand::WakeSocket: {
-                    AutoLocker al(m);
+                    // I/O thread only — no lock needed
                     wake_socket_hashes.insert(cmd.sock_hash);
                     break;
                 }
@@ -2737,12 +2732,9 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
             xsink->clear();
         }
 
-        // Check if new commands arrived during acknowledge
-        {
-            AutoLocker al(m);
-            if (cmdq.empty()) {
-                break;
-            }
+        // Check if new commands arrived during processing/acknowledge
+        if (cmdq.empty()) {
+            break;
         }
     }
 
@@ -3120,7 +3112,7 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
     c.owner = owner;
     c.done_cond = done_cond;
     c.cancel_done_flag = cancel_done_flag;
-    cmdq.push_back(std::move(c));
+    cmdq.push(std::move(c));
     return true;
 }
 
@@ -3210,31 +3202,26 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
 
 void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
-    bool do_signal = false;
-    {
-        AutoLocker al(m);
-        if (!tid || io_exiting) {
-            ExceptionSink xsink;
-            if (new_poll_info) {
-                new_poll_info->deref(&xsink);
-            }
-            if (ex_hash) {
-                ex_hash->deref(&xsink);
-            }
-            return;
+    // Lock-free: check atomic flag instead of acquiring mutex
+    if (!io_running.load(std::memory_order_acquire)) {
+        // I/O thread not running — discard results
+        ExceptionSink xsink;
+        if (new_poll_info) {
+            new_poll_info->deref(&xsink);
         }
-        Command c;
-        c.cmd = IoCommand::ContinuePollResult;
-        c.key = key;
-        c.continue_poll_result = new_poll_info;
-        c.continue_poll_ex = ex_hash;
-        c.continue_poll_completed = completed;
-        cmdq.push_back(std::move(c));
-        do_signal = true;
+        if (ex_hash) {
+            ex_hash->deref(&xsink);
+        }
+        return;
     }
-    if (do_signal) {
-        notifier->notify();
-    }
+    Command c;
+    c.cmd = IoCommand::ContinuePollResult;
+    c.key = key;
+    c.continue_poll_result = new_poll_info;
+    c.continue_poll_ex = ex_hash;
+    c.continue_poll_completed = completed;
+    cmdq.push(std::move(c));
+    notifier->notify();
 }
 
 void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,

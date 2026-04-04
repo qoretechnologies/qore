@@ -42,6 +42,7 @@
 #include "qore/intern/QoreIoUring.h"
 
 #include "qore/intern/ThreadPool.h"
+#include "qore/intern/MpscQueue.h"
 
 #include <algorithm>
 #include <atomic>
@@ -459,16 +460,17 @@ private:
         QoreValue udata;                //!< Referenced Qore user data
     };
 
+    // --- Lock-free state (MPSC: multiple producer threads, single I/O thread consumer) ---
+    MpscQueue<Command> cmdq;              //!< Lock-free command queue (replaces mutex-protected deque)
+    std::atomic<bool> io_running{false};  //!< True when I/O thread accepts commands (no lock needed to check)
+
     // --- Mutex-protected state ---
     mutable QoreThreadLock m;
     std::unordered_map<std::string, PollInfo> cache;
     int tid;                              //!< I/O thread ID (0 if not running)
     bool autostop_flag;
     bool shutting_down;
-    //! Socket hashes that need re-polling (set by WakeSocket, consumed by Phase 1)
-    std::unordered_set<std::string> wake_socket_hashes;
     std::unordered_map<std::string, int> socket_refcounts;
-    std::deque<Command> cmdq;
     std::unordered_map<std::string, QoreCondition*> cancel_cond_map;
     QoreCondition io_cond;
     bool io_waiting;
@@ -488,6 +490,10 @@ private:
     // --- I/O thread only state ---
     QoreEventLoop* loop;
     QoreEventNotifier* notifier;
+
+    //! Socket hashes that need re-polling (set by WakeSocket cmd, consumed by Phase 1)
+    //! I/O thread only — both producer (processCommands) and consumer (Phase 1) are on I/O thread
+    std::unordered_set<std::string> wake_socket_hashes;
 
     // Registered socket tracking (I/O thread only, but updated under lock in phase 3)
     std::unordered_map<std::string, QoreObject*> registered_sockets; //!< key -> Socket obj
