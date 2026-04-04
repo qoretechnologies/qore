@@ -915,22 +915,8 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
         waitCancel(uh);
     }
 
-    // Check autostop
-    {
-        AutoLocker al(m);
-        if (autostop_flag && rv && ctx().cache.empty() && timer_info_map.empty() && ctx().tid) {
-            do_signal = enqueueCmdLocked(IoCommand::Quit);
-            stopped = true;
-        } else {
-            do_signal = false;
-        }
-    }
-
-    if (do_signal) {
-        for (auto& tp : io_threads) {
-            tp->notifier->notify();
-        }
-    }
+    // Autostop is handled by the I/O thread's main loop (cache is I/O-thread-only).
+    // Worker threads must NOT check cache.empty() or send Quit — that's a data race.
 
     if (stopped && !on_async_io_thread) {
         // Do NOT waitStop from the I/O thread — it would deadlock waiting for
@@ -1000,26 +986,9 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
             while (!cancel_done) {
                 done_cond.wait(m);
             }
-
-            // If the I/O thread exited without processing the CancelOwner command
-            // (e.g., via autostop), it sets cancel_done in exit cleanup but ops may
-            // still remain in cache — collect them for direct cancel
-            std::vector<std::string> keys;
-            for (auto& [key, pinfo] : ctx().cache) {
-                if (pinfo.owner == owner_str) {
-                    keys.push_back(key);
-                }
-            }
-            for (auto& key : keys) {
-                auto it = ctx().cache.find(key);
-                if (it != ctx().cache.end()) {
-                    ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_POSTSIGNAL key='%s' owner='%s'\n",
-                        key.c_str(), owner_str.c_str());
-                    direct_pinfos.push_back(it->second);
-                    it->second = PollInfo();
-                    ctx().cache.erase(it);
-                }
-            }
+            // The CancelOwner command was processed by the I/O thread (or the exit
+            // cleanup set cancel_done). The cache is I/O-thread-only — no post-signal
+            // scan from worker threads.
         }
 
         // Deliver cancel results for any remaining ops after I/O thread exit
@@ -1033,25 +1002,7 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     bool stopped = false;
     {
         AutoLocker al(m);
-        if (autostop_flag && count > 0 && ctx().cache.empty() && timer_info_map.empty() && ctx().tid) {
-            do_signal = enqueueCmdLocked(IoCommand::Quit);
-            stopped = true;
-        } else {
-            do_signal = false;
-        }
-    }
-
-    if (do_signal) {
-        for (auto& tp : io_threads) {
-            tp->notifier->notify();
-        }
-    }
-
-    if (stopped && !on_async_io_thread) {
-        // Do NOT waitStop from the I/O thread — it would deadlock waiting for
-        // itself to exit.  The Quit command has been enqueued; the I/O thread
-        // main loop will process it after returning from the current callback.
-        waitStop(xsink);
+        // Autostop handled by I/O thread main loop (cache is I/O-thread-only)
     }
 
     return count;
