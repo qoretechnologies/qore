@@ -54,6 +54,7 @@ class QoreIRFunction;
 class LocalVar;
 class Var;
 class QoreParseListNode;
+struct QoreProgramLocation;
 
 //! Reverse map from constant value node pointer to fully-qualified constant name
 typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
@@ -874,6 +875,10 @@ struct AOTCompiledFuncWithSlots {
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
     std::vector<const QoreIRFunction*> handler_irs;
+    //! AOT location table: compile-time QoreProgramLocation pointers indexed by slot.
+    //! Populated from QoreIRToLLVM::getAOTLocTable() after LLVM codegen.
+    //! Serialized as (start_line, end_line, file) per entry.
+    std::vector<const QoreProgramLocation*> aot_locs;
 };
 
 //! Descriptor for a compiled constant/static-var init function

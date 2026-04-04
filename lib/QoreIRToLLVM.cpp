@@ -1439,11 +1439,30 @@ void QoreIRToLLVM::emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm
     // Store nullptr to stmt_ptr (clear statement pointer)
     builder->CreateStore(llvm::ConstantPointerNull::get(llvm::PointerType::getUnqual(ctx)),
         stmt_cache_ptr);
-    // Store new QoreProgramLocation* to loc_ptr
-    llvm::Value* loc_val = builder->CreateIntToPtr(
-        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
-        llvm::PointerType::getUnqual(ctx));
-    builder->CreateStore(loc_val, loc_cache_ptr);
+
+    if (aot_mode) {
+        // AOT mode: look up location from ctx->locs[loc_index]
+        auto it = aot_loc_slots.find(inst->loc);
+        int32_t loc_index;
+        if (it != aot_loc_slots.end()) {
+            loc_index = it->second;
+        } else {
+            loc_index = static_cast<int32_t>(aot_loc_table.size());
+            aot_loc_slots[inst->loc] = loc_index;
+            aot_loc_table.push_back(inst->loc);
+        }
+        auto helper = module.getOrInsertFunction("qore_rt_set_runtime_loc_aot",
+            llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+                {ptr_type, llvm::Type::getInt32Ty(ctx)}, false));
+        builder->CreateCall(helper, {aot_ctx_arg,
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), loc_index)});
+    } else {
+        // JIT mode: embed QoreProgramLocation* directly
+        llvm::Value* loc_val = builder->CreateIntToPtr(
+            llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(inst->loc)),
+            llvm::PointerType::getUnqual(ctx));
+        builder->CreateStore(loc_val, loc_cache_ptr);
+    }
 }
 
 void QoreIRToLLVM::setDebugLocation(const QoreIRInstruction* inst) {
@@ -1805,13 +1824,14 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     }
 
     // Initialize runtime location tracking: cache TLS pointers for per-line updates.
-    // JIT mode: inst->loc pointers point into the parse tree (valid in current process).
-    // AOT mode: inst->loc pointers are from compile-time parse tree (dangling at load time).
-    // AOT location tracking requires a location table in QoreAOTContext (future work).
+    // JIT mode: inst->loc pointers embedded directly (valid in current process).
+    // AOT mode: location indices into ctx->locs[] table (populated at load time).
     loc_cache_ptr = nullptr;
     stmt_cache_ptr = nullptr;
     last_runtime_line = -1;
-    if (!aot_mode) {
+    aot_loc_slots.clear();
+    aot_loc_table.clear();
+    {
         auto loc_fn = module.getOrInsertFunction("qore_rt_get_loc_ptr",
             llvm::FunctionType::get(ptr_type, {}, false));
         loc_cache_ptr = builder->CreateCall(loc_fn, {}, "loc_ptr");

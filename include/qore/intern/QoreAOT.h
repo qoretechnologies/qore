@@ -106,6 +106,12 @@ struct QoreAOTContext {
     //! Size == num_exprs; entries with func==nullptr are not CallDirect slots.
     QoreAOTCallTarget* call_targets = nullptr;
 
+    //! Source locations for per-line runtime_loc tracking in AOT mode.
+    //! Indexed by location slot assigned during LLVM codegen. Populated from serialized
+    //! location table at load time. Used by qore_rt_set_runtime_loc_aot().
+    const QoreProgramLocation** locs = nullptr;
+    int num_locs = 0;
+
     //! Deserialized handler IR functions for on_exit/on_success/on_error handlers.
     //! Indexed by statement slot index. Non-null entries can be executed by the IR interpreter.
     //! Used in strip-source mode where AST-based stmts[] are not available.

@@ -125,6 +125,12 @@ public:
         deferred_exception_checking = v;
     }
 
+    //! Get the AOT location table built during LLVM codegen.
+    //! Returns the ordered list of QoreProgramLocation pointers, indexed by slot.
+    const std::vector<const QoreProgramLocation*>& getAOTLocTable() const {
+        return aot_loc_table;
+    }
+
 private:
     llvm::LLVMContext& ctx;
 
@@ -324,6 +330,11 @@ private:
     llvm::Value* loc_cache_ptr = nullptr;   //!< Cached ptr-to-ptr for runtime_loc TLS variable
     llvm::Value* stmt_cache_ptr = nullptr;  //!< Cached ptr-to-ptr for runtime_statement TLS variable
     int last_runtime_line = -1;             //!< Last source line emitted for location tracking
+
+    //! AOT location table: maps QoreProgramLocation* → slot index (AOT mode only).
+    //! Populated during LLVM codegen. Location count exposed via getNumLocSlots().
+    std::unordered_map<const QoreProgramLocation*, int32_t> aot_loc_slots;
+    std::vector<const QoreProgramLocation*> aot_loc_table;
 
     //! Emit a runtime_loc update if the instruction's source line changed
     void emitRuntimeLocationUpdate(const QoreIRInstruction* inst, llvm::Module& module);

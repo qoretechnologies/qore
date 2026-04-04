@@ -327,12 +327,17 @@ QoreAOTContext::~QoreAOTContext() {
             delete regex_cases[i];
         }
     }
+    // Delete owned location objects (created by buildContextFromSlotMap)
+    for (int i = 0; i < num_locs; ++i) {
+        delete locs[i];
+    }
     free(locals);
     free(globals);
     free(exprs);
     free(call_targets);
     free(stmts);
     free(regex_cases);
+    free(locs);
 }
 
 //! Descriptor for a function that was successfully compiled to LLVM IR
@@ -348,6 +353,8 @@ struct AOTCompiledFunc {
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Owned handler IR functions indexed by stmt slot; null = no IR (Foreach, or lowering failed)
     std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
+    //! AOT location table from LLVM codegen
+    std::vector<const QoreProgramLocation*> aot_locs;
 };
 
 // ---- Feature flag helpers ----
@@ -954,6 +961,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (!slots.stmt_slots.empty()) {
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                     }
+                    // Copy AOT location table from LLVM codegen
+                    cf.aot_locs = lowerer.getAOTLocTable();
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
@@ -1102,6 +1111,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (!slots.stmt_slots.empty()) {
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                         }
+                        // Copy AOT location table from LLVM codegen
+                        cf.aot_locs = lowerer.getAOTLocTable();
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
@@ -2100,6 +2111,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir.get());
             }
+            fws.aot_locs = cf.aot_locs;
             func_slots.push_back(std::move(fws));
         }
         // Add init functions to the slot maps (same calling convention as regular functions)
@@ -3219,6 +3231,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir.get());
             }
+            fws.aot_locs = cf.aot_locs;
             func_slots.push_back(std::move(fws));
         }
         // Add init functions to slot maps
@@ -3616,6 +3629,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir.get());
                 }
+                fws.aot_locs = cf.aot_locs;
                 func_slots.push_back(std::move(fws));
             }
             // Add init functions to slot maps

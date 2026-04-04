@@ -93,6 +93,16 @@ extern "C" DLLEXPORT const AbstractStatement** qore_rt_get_stmt_ptr() {
     return cache.stmt_ptr;
 }
 
+// AOT mode: set runtime location from context location table.
+// Called by LLVM-generated AOT code with a location slot index.
+extern "C" DLLEXPORT void qore_rt_set_runtime_loc_aot(QoreAOTContext* ctx, int32_t loc_index) {
+    if (ctx && loc_index >= 0 && loc_index < ctx->num_locs && ctx->locs[loc_index]) {
+        RuntimeLocationCache cache = get_runtime_location_cache();
+        *cache.stmt_ptr = nullptr;
+        *cache.loc_ptr = ctx->locs[loc_index];
+    }
+}
+
 // --- Exported check_stack wrapper for LLVM-generated code ---
 extern "C" DLLEXPORT int qore_rt_check_stack(ExceptionSink* xsink) {
 #ifdef QORE_MANAGE_STACK

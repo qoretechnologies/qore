@@ -935,7 +935,8 @@ static QoreAOTContext* buildContextFromSlotMap(
         const QoreAOTBinaryReader& reader,
         const uint8_t*& ptr, const uint8_t* end,
         UserVariantBase* uvb, QoreProgram* pgm,
-        const QoreAOTFunc& aot_func, const char* name) {
+        const QoreAOTFunc& aot_func, const char* name,
+        const uint8_t* entry_end = nullptr) {
     // Read the per-function slot map header
     // Format: name_ref(u32), num_locals(u16), num_globals(u16), num_exprs(u16),
     //         num_stmts(u16), num_regex_cases(u16), num_body_locals(u16), has_unsupported(u8), padding(u8)
@@ -2434,6 +2435,27 @@ static QoreAOTContext* buildContextFromSlotMap(
             // unless all stmt slots have handler IR
             if (!all_stmt_slots_have_ir) {
                 has_unsupported = true;
+            }
+        }
+    }
+
+    // Read location table (AOT runtime_loc tracking)
+    // Only read if entry_end is known and there's data remaining in the entry
+    const uint8_t* loc_boundary = entry_end ? entry_end : end;
+    if (ptr + 2 <= loc_boundary) {
+        uint16_t num_loc_entries = QoreAOTBinaryReader::readU16(ptr);
+        if (num_loc_entries > 0) {
+            ctx->num_locs = num_loc_entries;
+            ctx->locs = static_cast<const QoreProgramLocation**>(
+                calloc(num_loc_entries, sizeof(const QoreProgramLocation*)));
+            for (int i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
+                uint16_t start_line = QoreAOTBinaryReader::readU16(ptr);
+                uint16_t end_line = QoreAOTBinaryReader::readU16(ptr);
+                const char* loc_file = reader.readStringRef(ptr);
+                if (start_line > 0) {
+                    ctx->locs[i] = new QoreProgramLocation(
+                        loc_file ? loc_file : "", start_line, end_line);
+                }
             }
         }
     }
@@ -3999,7 +4021,7 @@ static void registerAOTFunctionsFromSlotMaps(
         }
 
         // Build context from slot map
-        QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func, func_name);
+        QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, end, uvb, pgm, *aot_func, func_name, entry_end);
         // Debug: trace init function context building
         if (init_func_contexts && (strncmp(func_name, "__const_init::", 14) == 0
                 || strncmp(func_name, "__svar_init::", 13) == 0)) {
@@ -5082,7 +5104,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                             if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
-                                    nullptr, *qpgm, *toplevel_func, "_toplevel");
+                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
@@ -5773,7 +5795,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                             if (entry_name && strcmp(entry_name, "_toplevel") == 0) {
                                 QoreAOTContext* ctx = buildContextFromSlotMap(
                                     deserializer.getReader(), sm_ptr, sm_end,
-                                    nullptr, *qpgm, *toplevel_func, "_toplevel");
+                                    nullptr, *qpgm, *toplevel_func, "_toplevel", entry_end);
                                 if (ctx) {
                                     pp->sb.registerPrecompiledAOTTopLevel(
                                         toplevel_func->fn_ptr, ctx);
