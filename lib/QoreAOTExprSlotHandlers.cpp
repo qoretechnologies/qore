@@ -252,6 +252,14 @@ static bool write_slot_OBJ_METHOD_REF_EXPR(AOTExprSlotWriteCtx& ctx) {
     return true;
 }
 
+//! CAST_HASHDECL/CAST_COMPLEX_HASH/CAST_COMPLEX_LIST/CAST_CLASS/CAST_ENUM:
+//! ref1 = type/class path, flags bit0 = or_nothing
+static bool write_slot_CAST(AOTExprSlotWriteCtx& ctx) {
+    ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
+    ctx.writer.writeU8(ctx.expr.flags);
+    return true;
+}
+
 //! SELF_METHOD_CALL: ref1 = class path, ref2 = method name
 static bool write_slot_SELF_METHOD_CALL(AOTExprSlotWriteCtx& ctx) {
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());

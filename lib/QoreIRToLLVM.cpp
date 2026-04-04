@@ -9045,7 +9045,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // No emitExceptionCheck — instanceof cannot throw
                 return true;
             }
-            // AOT mode: fall through to qore_rt_invoke_expr_aot (evaluates full AST)
+            // AOT mode: extract type path at codegen time, embed as string constant
+            auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
+                expr_inst->expr.getInternalNode());
+            if (io_node) {
+                auto* val = getVal(inst->operands[0].id, error);
+                if (!val) { return false; }
+                llvm::Value* val_boxed = boxValue(val, inst->operands[0].id);
+                const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                auto helper = module.getOrInsertFunction("qore_rt_instanceof_by_type_path",
+                    llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+                llvm::Value* result = builder->CreateCall(helper,
+                    {val_boxed, type_path_ptr, xsink_arg});
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                return true;
+            }
+            // Fallback: can't extract type info — use expr slot
             QoreValue expr_val = expr_inst->expr;
             uint64_t expr_bits;
             std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));

@@ -82,6 +82,7 @@
 #include "qore/intern/QoreSpliceOperatorNode.h"
 #include "qore/intern/ObjectMethodReferenceNode.h"
 #include "qore/intern/CallReferenceNode.h"
+#include "qore/intern/QoreCastOperatorNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreRegexMatchOperatorNode.h"
 #include "qore/intern/QoreRegexNMatchOperatorNode.h"
@@ -1517,6 +1518,72 @@ static QoreAOTContext* buildContextFromSlotMap(
                 }
                 continue;
             }
+            case AOTExprKind::CAST_HASHDECL:
+            case AOTExprKind::CAST_COMPLEX_HASH:
+            case AOTExprKind::CAST_COMPLEX_LIST:
+            case AOTExprKind::CAST_CLASS:
+            case AOTExprKind::CAST_ENUM: {
+                // Cast operator: resolve type from path and reconstruct cast node
+                ref1 = reader.readStringRef(ptr);   // type/class path
+                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
+                if (ref1 && *ref1) {
+                    std::string resolve_error;
+                    QoreAOTTypeResolver resolver(pgm);
+                    const QoreTypeInfo* ti = resolver.resolve(ref1, resolve_error);
+                    QoreCastOperatorNode* cast_node = nullptr;
+                    switch (kind) {
+                        case AOTExprKind::CAST_CLASS: {
+                            const qore_ns_private* found_ns = nullptr;
+                            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                                *pp->RootNS, ref1, found_ns);
+                            if (qc) {
+                                cast_node = new QoreClassCastOperatorNode(
+                                    &loc_builtin, qc, QoreValue(), or_nothing != 0);
+                            }
+                            break;
+                        }
+                        case AOTExprKind::CAST_HASHDECL: {
+                            const TypedHashDecl* hd = ti
+                                ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
+                            if (hd) {
+                                cast_node = new QoreHashDeclCastOperatorNode(
+                                    &loc_builtin, hd, QoreValue(), or_nothing != 0);
+                            }
+                            break;
+                        }
+                        case AOTExprKind::CAST_COMPLEX_HASH:
+                            if (ti) {
+                                cast_node = new QoreComplexHashCastOperatorNode(
+                                    &loc_builtin, ti, QoreValue(), or_nothing != 0);
+                            }
+                            break;
+                        case AOTExprKind::CAST_COMPLEX_LIST:
+                            if (ti) {
+                                cast_node = new QoreComplexListCastOperatorNode(
+                                    &loc_builtin, ti, QoreValue(), or_nothing != 0);
+                            }
+                            break;
+                        case AOTExprKind::CAST_ENUM: {
+                            const QoreEnumDecl* ed = ti
+                                ? QoreTypeInfo::getUniqueReturnEnum(ti) : nullptr;
+                            if (ed) {
+                                cast_node = new QoreEnumCastOperatorNode(
+                                    &loc_builtin, ed, ti, QoreValue(), or_nothing != 0);
+                            }
+                            break;
+                        }
+                        default:
+                            break;
+                    }
+                    if (cast_node) {
+                        ctx->exprs[i] = toBitsNB(QoreValue(cast_node));
+                        continue;
+                    }
+                }
+                printd(0, "AOT v2: cannot resolve cast type '%s'\n", ref1 ? ref1 : "(null)");
+                has_unsupported = true;
+                continue;
+            }
             case AOTExprKind::SELF_METHOD_CALL:
             case AOTExprKind::STATIC_VARREF:
             case AOTExprKind::CONST_ENUM:
@@ -1942,135 +2009,6 @@ static QoreAOTContext* buildContextFromSlotMap(
                 // Create QoreClosureParseNode
                 auto* closure_node = new QoreClosureParseNode(nullptr, ucf, is_lambda, is_in_method);
                 ctx->exprs[i] = toBitsNB(QoreValue(closure_node));
-                continue;
-            }
-            case AOTExprKind::CAST_HASHDECL: {
-                ref1 = reader.readStringRef(ptr);
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                // Read inner expression (may be serialized inline)
-                uint8_t has_inner = QoreAOTBinaryReader::readU8(ptr);
-                QoreValue inner;
-                if (has_inner) {
-                    std::string inner_err;
-                    inner = readOneExpr(reader, ptr, end, inner_err, pgm,
-                        ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
-                    if (!inner_err.empty()) {
-                        printd(0, "AOT v2: error reading cast inner expr for '%s': %s\n",
-                            ref1 ? ref1 : "", inner_err.c_str());
-                        inner.discard(nullptr);
-                        has_unsupported = true;
-                        continue;
-                    }
-                }
-                if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const TypedHashDecl* hd = qore_root_ns_private::runtimeFindHashDecl(
-                        *pp->RootNS, ref1, found_ns);
-                    if (hd) {
-                        // If no inner expression, use empty hash
-                        if (!inner.hasNode()) {
-                            inner = QoreValue(new QoreHashNode(autoTypeInfo));
-                        }
-                        auto* node = new QoreHashDeclCastOperatorNode(&loc_builtin, hd, inner, or_nothing != 0);
-                        ctx->exprs[i] = toBitsNB(QoreValue(node));
-                    } else {
-                        printd(0, "AOT v2: cannot resolve hashdecl '%s' for cast\n", ref1);
-                        inner.discard(nullptr);
-                        has_unsupported = true;
-                    }
-                } else {
-                    inner.discard(nullptr);
-                    has_unsupported = true;
-                }
-                continue;
-            }
-            case AOTExprKind::CAST_COMPLEX_HASH: {
-                ref1 = reader.readStringRef(ptr);
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                if (ref1 && *ref1) {
-                    std::string type_error;
-                    QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
-                    if (ti) {
-                        auto* node = new QoreComplexHashCastOperatorNode(&loc_builtin, ti, QoreValue(),
-                            or_nothing != 0);
-                        ctx->exprs[i] = toBitsNB(QoreValue(node));
-                    } else {
-                        printd(0, "AOT v2: cannot resolve type '%s' for complex hash cast: %s\n",
-                            ref1, type_error.c_str());
-                        has_unsupported = true;
-                    }
-                } else {
-                    has_unsupported = true;
-                }
-                continue;
-            }
-            case AOTExprKind::CAST_COMPLEX_LIST: {
-                ref1 = reader.readStringRef(ptr);
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                if (ref1 && *ref1) {
-                    std::string type_error;
-                    QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
-                    if (ti) {
-                        auto* node = new QoreComplexListCastOperatorNode(&loc_builtin, ti, QoreValue(),
-                            or_nothing != 0);
-                        ctx->exprs[i] = toBitsNB(QoreValue(node));
-                    } else {
-                        printd(0, "AOT v2: cannot resolve type '%s' for complex list cast: %s\n",
-                            ref1, type_error.c_str());
-                        has_unsupported = true;
-                    }
-                } else {
-                    has_unsupported = true;
-                }
-                continue;
-            }
-            case AOTExprKind::CAST_CLASS: {
-                ref1 = reader.readStringRef(ptr);
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                if (ref1 && *ref1) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, ref1, found_ns);
-                    if (qc) {
-                        auto* node = new QoreClassCastOperatorNode(&loc_builtin, qc, QoreValue(),
-                            or_nothing != 0);
-                        ctx->exprs[i] = toBitsNB(QoreValue(node));
-                    } else {
-                        printd(0, "AOT v2: cannot resolve class '%s' for cast\n", ref1);
-                        has_unsupported = true;
-                    }
-                } else {
-                    has_unsupported = true;
-                }
-                continue;
-            }
-            case AOTExprKind::CAST_ENUM: {
-                ref1 = reader.readStringRef(ptr);
-                uint8_t or_nothing = QoreAOTBinaryReader::readU8(ptr);
-                if (ref1 && *ref1) {
-                    std::string type_error;
-                    QoreAOTTypeResolver type_resolver(pgm);
-                    const QoreTypeInfo* ti = type_resolver.resolve(ref1, type_error);
-                    if (ti) {
-                        const QoreEnumDecl* ed = QoreTypeInfo::getUniqueReturnEnum(ti);
-                        if (ed) {
-                            auto* node = new QoreEnumCastOperatorNode(&loc_builtin, ed, ti, QoreValue(),
-                                or_nothing != 0);
-                            ctx->exprs[i] = toBitsNB(QoreValue(node));
-                        } else {
-                            printd(0, "AOT v2: cannot extract enum from type '%s' for cast\n", ref1);
-                            has_unsupported = true;
-                        }
-                    } else {
-                        printd(0, "AOT v2: cannot resolve type '%s' for enum cast: %s\n",
-                            ref1, type_error.c_str());
-                        has_unsupported = true;
-                    }
-                } else {
-                    has_unsupported = true;
-                }
                 continue;
             }
             case AOTExprKind::CONST_INT: {

@@ -3905,7 +3905,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::KeysList:
                 case QoreIROpcode::KeysHash:
                 case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt: {
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -3933,7 +3939,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
-                case QoreIROpcode::InstanceOfBool:
                 case QoreIROpcode::TrimAny:
                 case QoreIROpcode::TrimString:
                 case QoreIROpcode::ChompAny:
@@ -3956,11 +3961,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::CastAny:
-                case QoreIROpcode::CastList:
-                case QoreIROpcode::CastHash:
-                case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum:
                 case QoreIROpcode::InvokeSimError:
                 case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
@@ -4238,7 +4238,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::KeysList:
                 case QoreIROpcode::KeysHash:
                 case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt: {
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4266,7 +4272,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
-                case QoreIROpcode::InstanceOfBool:
                 case QoreIROpcode::TrimAny:
                 case QoreIROpcode::TrimString:
                 case QoreIROpcode::ChompAny:
@@ -4289,11 +4294,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::CastAny:
-                case QoreIROpcode::CastList:
-                case QoreIROpcode::CastHash:
-                case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum:
                 case QoreIROpcode::InvokeSimError:
                 case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
@@ -4687,7 +4687,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::KeysList:
                 case QoreIROpcode::KeysHash:
                 case QoreIROpcode::ElementsAny:
-                case QoreIROpcode::ElementsInt: {
+                case QoreIROpcode::ElementsInt:
+                case QoreIROpcode::InstanceOfBool:
+                case QoreIROpcode::CastAny:
+                case QoreIROpcode::CastList:
+                case QoreIROpcode::CastHash:
+                case QoreIROpcode::CastObject:
+                case QoreIROpcode::CastEnum: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4715,7 +4721,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
-                case QoreIROpcode::InstanceOfBool:
                 case QoreIROpcode::TrimAny:
                 case QoreIROpcode::TrimString:
                 case QoreIROpcode::ChompAny:
@@ -4738,11 +4743,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::CastAny:
-                case QoreIROpcode::CastList:
-                case QoreIROpcode::CastHash:
-                case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum:
                 case QoreIROpcode::InvokeSimError:
                 case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
@@ -6337,6 +6337,44 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
             id.flags = mc->isPseudo() ? 1 : 0;
             return id;
         }
+    }
+
+    // Cast operator nodes: classified with type path + or_nothing instead of EXPR_TREE.
+    if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
+        id.kind = AOTExprKind::CAST_COMPLEX_HASH;
+        id.ref1 = QoreTypeInfo::getPath(chc->getCastTypeInfo());
+        id.flags = chc->isOrNothing() ? 1 : 0;
+        return id;
+    }
+    if (auto* clc = dynamic_cast<const QoreComplexListCastOperatorNode*>(node)) {
+        id.kind = AOTExprKind::CAST_COMPLEX_LIST;
+        id.ref1 = QoreTypeInfo::getPath(clc->getCastTypeInfo());
+        id.flags = clc->isOrNothing() ? 1 : 0;
+        return id;
+    }
+    if (auto* cc = dynamic_cast<const QoreClassCastOperatorNode*>(node)) {
+        const QoreClass* cast_qc = QoreTypeInfo::getUniqueReturnClass(cc->getCastTypeInfo());
+        if (cast_qc) {
+            id.kind = AOTExprKind::CAST_CLASS;
+            id.ref1 = cast_qc->getPath();
+            id.flags = cc->isOrNothing() ? 1 : 0;
+            return id;
+        }
+    }
+    if (auto* hdc = dynamic_cast<const QoreHashDeclCastOperatorNode*>(node)) {
+        const TypedHashDecl* cast_hd = QoreTypeInfo::getUniqueReturnHashDecl(hdc->getCastTypeInfo());
+        if (cast_hd) {
+            id.kind = AOTExprKind::CAST_HASHDECL;
+            id.ref1 = cast_hd->getNamespacePath();
+            id.flags = hdc->isOrNothing() ? 1 : 0;
+            return id;
+        }
+    }
+    if (auto* ec = dynamic_cast<const QoreEnumCastOperatorNode*>(node)) {
+        id.kind = AOTExprKind::CAST_ENUM;
+        id.ref1 = QoreTypeInfo::getPath(ec->getCastTypeInfo());
+        id.flags = ec->isOrNothing() ? 1 : 0;
+        return id;
     }
 
     // Call/method reference nodes: classified with identity strings instead of EXPR_TREE.

@@ -131,20 +131,20 @@ const QoreAOTExprSlotKindInfo AOT_EXPR_SLOT_KIND_REGISTRY[256] = {
     // 23: PARSE_REF (unsupported in slot metadata)
     {nullptr, 23, false, nullptr, "Parse reference"},
 
-    // 24: CAST_HASHDECL (unsupported in slot metadata)
-    {nullptr, 24, false, nullptr, "Hashdecl cast"},
+    // 24: CAST_HASHDECL
+    {"CAST_HASHDECL", 24, true, write_slot_CAST, "Hashdecl cast"},
 
-    // 25: CAST_COMPLEX_HASH (unsupported in slot metadata)
-    {nullptr, 25, false, nullptr, "Complex hash cast"},
+    // 25: CAST_COMPLEX_HASH
+    {"CAST_COMPLEX_HASH", 25, true, write_slot_CAST, "Complex hash cast"},
 
-    // 26: CAST_COMPLEX_LIST (unsupported in slot metadata)
-    {nullptr, 26, false, nullptr, "Complex list cast"},
+    // 26: CAST_COMPLEX_LIST
+    {"CAST_COMPLEX_LIST", 26, true, write_slot_CAST, "Complex list cast"},
 
-    // 27: CAST_CLASS (unsupported in slot metadata)
-    {nullptr, 27, false, nullptr, "Class cast"},
+    // 27: CAST_CLASS
+    {"CAST_CLASS", 27, true, write_slot_CAST, "Class cast"},
 
-    // 28: CAST_ENUM (unsupported in slot metadata)
-    {nullptr, 28, false, nullptr, "Enum cast"},
+    // 28: CAST_ENUM
+    {"CAST_ENUM", 28, true, write_slot_CAST, "Enum cast"},
 
     // 29: CONST_INT
     {"CONST_INT", 29, true, write_slot_CONST_INT, "Integer constant"},

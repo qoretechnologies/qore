@@ -78,6 +78,7 @@
 #include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/VarRefNode.h>
 #include <qore/intern/QoreCastOperatorNode.h>
+#include <qore/intern/QoreAOTBinary.h>
 
 // --- Runtime location tracking for LLVM-generated code ---
 // Returns pointer to the thread-local runtime_loc variable for per-line location updates.
@@ -1487,6 +1488,24 @@ extern "C" DLLEXPORT uint64_t qore_rt_instanceof(uint64_t val_bits, const QoreTy
             break;
     }
     return toBits(QoreValue(result));
+}
+
+// AOT mode: instanceof check with type path string instead of QoreTypeInfo pointer.
+// Resolves the type path to QoreTypeInfo* using the program's type resolver, then
+// delegates to qore_rt_instanceof.
+extern "C" DLLEXPORT uint64_t qore_rt_instanceof_by_type_path(uint64_t val_bits,
+        const char* type_path, ExceptionSink* xsink) {
+    QoreProgram* pgm = getProgram();
+    if (!pgm || !type_path || !*type_path) {
+        return toBits(QoreValue(false));
+    }
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    if (!ti) {
+        return toBits(QoreValue(false));
+    }
+    return qore_rt_instanceof(val_bits, ti);
 }
 
 // --- Date construction helper ---
