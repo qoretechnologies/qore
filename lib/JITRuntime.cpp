@@ -4993,6 +4993,45 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* 
     return qore_rt_regex_op_with_operand(opcode, ctx->exprs[slot], operand_bits, xsink);
 }
 
+// AOT mode: regex op with pattern string instead of expr slot.
+// Compiles the regex at each call (no caching — regex compilation is fast relative to
+// the string matching it precedes). Eliminates EXPR_TREE for regex expression slots.
+extern "C" DLLEXPORT uint64_t qore_rt_regex_op_by_pattern(int32_t opcode, const char* pattern,
+        int64_t options, uint64_t operand_bits, ExceptionSink* xsink) {
+    QoreValue operand = fromBits(operand_bits);
+    QoreStringNodeValueHelper str(operand);
+
+    // Compile the regex from the pattern
+    QoreString pat_str(pattern);
+    QoreRegex regex(&pat_str, static_cast<int>(options), xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+
+    QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
+    switch (op) {
+        case QoreIROpcode::RegexMatchAny:
+        case QoreIROpcode::RegexMatchBool: {
+            bool match = regex.exec(*str, xsink);
+            return toBits(QoreValue(match));
+        }
+        case QoreIROpcode::RegexNMatchBool: {
+            bool match = !regex.exec(*str, xsink);
+            return toBits(QoreValue(match));
+        }
+        case QoreIROpcode::RegexExtractAny:
+        case QoreIROpcode::RegexExtractList: {
+            QoreListNode* result = regex.extractSubstrings(*str, xsink);
+            return toBits(QoreValue(result));
+        }
+        default:
+            if (xsink) {
+                xsink->raiseException("AOT-ERROR", "unsupported regex opcode %d", opcode);
+            }
+            return toBits(QoreValue());
+    }
+}
+
 // --- Iterator helpers ---
 
 // Creates an iterator from an iterable value.

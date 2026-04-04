@@ -45,6 +45,9 @@ static_assert(QORE_IR_MAX_OPCODE == 354,
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/CaseNodeRegex.h"
+#include "qore/intern/QoreRegexMatchOperatorNode.h"
+#include "qore/intern/QoreRegexExtractOperatorNode.h"
+#include "qore/intern/QoreRegexNMatchOperatorNode.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreSquareBracketsOperatorNode.h"
@@ -4272,12 +4275,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
 
                 if (aot_mode) {
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
+                    // Extract regex pattern at codegen time — avoids EXPR_TREE slot
+                    QoreRegex* re = nullptr;
+                    if (auto* mn = dynamic_cast<const QoreRegexMatchOperatorNode*>(
+                            inv->expr.getInternalNode())) {
+                        re = mn->getRegex();
+                    } else if (auto* nmn = dynamic_cast<const QoreRegexNMatchOperatorNode*>(
+                            inv->expr.getInternalNode())) {
+                        re = nmn->getRegex();
+                    } else if (auto* exn = dynamic_cast<const QoreRegexExtractOperatorNode*>(
+                            inv->expr.getInternalNode())) {
+                        re = exn->getRegex();
+                    }
+                    if (re && re->getPatternCStr()) {
+                        llvm::Value* pattern_ptr = builder->CreateGlobalStringPtr(re->getPatternCStr());
+                        llvm::Value* options_val = llvm::ConstantInt::get(i64_type, re->getOptions());
+                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
+                            llvm::FunctionType::get(i64_type,
+                                {i32_type, ptr_type, i64_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
+                            options_val, operand_boxed, xsink_arg});
+                    } else {
+                        // Fallback to slot-based dispatch
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
+                        result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
                             llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                    }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",
@@ -8862,12 +8888,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         static_cast<int>(inst->opcode));
 
                 if (aot_mode) {
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
+                    // Extract regex pattern at codegen time — avoids EXPR_TREE slot
+                    QoreRegex* re = nullptr;
+                    if (auto* mn = dynamic_cast<const QoreRegexMatchOperatorNode*>(
+                            expr_inst->expr.getInternalNode())) {
+                        re = mn->getRegex();
+                    } else if (auto* nmn = dynamic_cast<const QoreRegexNMatchOperatorNode*>(
+                            expr_inst->expr.getInternalNode())) {
+                        re = nmn->getRegex();
+                    } else if (auto* exn = dynamic_cast<const QoreRegexExtractOperatorNode*>(
+                            expr_inst->expr.getInternalNode())) {
+                        re = exn->getRegex();
+                    }
+                    if (re && re->getPatternCStr()) {
+                        llvm::Value* pattern_ptr = builder->CreateGlobalStringPtr(re->getPatternCStr());
+                        llvm::Value* options_val = llvm::ConstantInt::get(i64_type, re->getOptions());
+                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
+                            llvm::FunctionType::get(i64_type,
+                                {i32_type, ptr_type, i64_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
+                            options_val, operand_boxed, xsink_arg});
+                    } else {
+                        // Fallback to slot-based dispatch
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand_aot",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, i32_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
+                        result = builder->CreateCall(helper, {aot_ctx_arg, opcode_val,
                             llvm::ConstantInt::get(i32_type, slot), operand_boxed, xsink_arg});
+                    }
                 } else {
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_regex_op_with_operand",

@@ -3840,7 +3840,13 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                                 && ii->operands.size() >= 1)
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
-                            || ii->invoke_opcode == QoreIROpcode::CallClosureDirect) {
+                            || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
+                            || ((ii->invoke_opcode == QoreIROpcode::RegexMatchAny
+                                || ii->invoke_opcode == QoreIROpcode::RegexMatchBool
+                                || ii->invoke_opcode == QoreIROpcode::RegexNMatchBool
+                                || ii->invoke_opcode == QoreIROpcode::RegexExtractAny
+                                || ii->invoke_opcode == QoreIROpcode::RegexExtractList)
+                                && !ii->operands.empty())) {
                         break;
                     }
                     uint64_t bits;
@@ -3935,7 +3941,12 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
                 case QoreIROpcode::ListIndexDynamic:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::CallClosureDirect:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -3956,11 +3967,6 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::RegexMatchAny:
-                case QoreIROpcode::RegexMatchBool:
-                case QoreIROpcode::RegexNMatchBool:
-                case QoreIROpcode::RegexExtractAny:
-                case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
                 case QoreIROpcode::TrimAny:
@@ -4270,7 +4276,12 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
                 case QoreIROpcode::ListIndexDynamic:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::CallClosureDirect:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4291,11 +4302,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::RegexMatchAny:
-                case QoreIROpcode::RegexMatchBool:
-                case QoreIROpcode::RegexNMatchBool:
-                case QoreIROpcode::RegexExtractAny:
-                case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
                 case QoreIROpcode::TrimAny:
@@ -4721,7 +4727,12 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
                 case QoreIROpcode::ListIndexDynamic:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::CallClosureDirect:
+                case QoreIROpcode::RegexMatchAny:
+                case QoreIROpcode::RegexMatchBool:
+                case QoreIROpcode::RegexNMatchBool:
+                case QoreIROpcode::RegexExtractAny:
+                case QoreIROpcode::RegexExtractList: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4742,11 +4753,6 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::RemoveObject:
                 case QoreIROpcode::RemoveString:
                 case QoreIROpcode::RemoveBinary:
-                case QoreIROpcode::RegexMatchAny:
-                case QoreIROpcode::RegexMatchBool:
-                case QoreIROpcode::RegexNMatchBool:
-                case QoreIROpcode::RegexExtractAny:
-                case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::RegexSubstAny:
                 case QoreIROpcode::RegexSubstString:
                 case QoreIROpcode::TrimAny:
