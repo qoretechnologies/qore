@@ -3839,7 +3839,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                             || (!ii->operands.empty() && isUnaryInvokeOpcode(ii->invoke_opcode)
                                 && ii->operands.size() >= 1)
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
-                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt) {
+                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
+                            || ii->invoke_opcode == QoreIROpcode::CallClosureDirect) {
                         break;
                     }
                     uint64_t bits;
@@ -3933,7 +3934,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
-                case QoreIROpcode::ListIndexDynamic: {
+                case QoreIROpcode::ListIndexDynamic:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -3983,8 +3985,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::InvokeSimError:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
@@ -4268,7 +4269,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
-                case QoreIROpcode::ListIndexDynamic: {
+                case QoreIROpcode::ListIndexDynamic:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4318,8 +4320,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::InvokeSimError:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
@@ -4719,7 +4720,8 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastObject:
                 case QoreIROpcode::CastEnum:
                 case QoreIROpcode::HashDerefDynamic:
-                case QoreIROpcode::ListIndexDynamic: {
+                case QoreIROpcode::ListIndexDynamic:
+                case QoreIROpcode::CallClosureDirect: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4769,8 +4771,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::HashMapSelect:
                 case QoreIROpcode::HashMapAny:
                 case QoreIROpcode::HashMapSelectAny:
-                case QoreIROpcode::InvokeSimError:
-                case QoreIROpcode::CallClosureDirect: {
+                case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
