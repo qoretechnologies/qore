@@ -961,15 +961,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (!slots.stmt_slots.empty()) {
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                     }
-                    // Copy AOT location table from LLVM codegen
-                    // Copy location data from lowerer (own the strings before IR function is deleted)
-                    for (auto* loc : lowerer.getAOTLocTable()) {
+                    // Transfer owned location data from LLVM codegen directly.
+                    // The lowerer's AOTLocEntry already owns string copies — no raw
+                    // pointer dereference needed here (safe against corrupt inst->loc).
+                    for (const auto& loc : lowerer.getAOTLocTable()) {
                         AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                        if (loc && loc->start_line > 0) {
-                            entry.start_line = loc->start_line;
-                            entry.end_line = loc->end_line;
-                            entry.file = loc->getFile() ? loc->getFile() : "";
-                        }
+                        entry.start_line = static_cast<int16_t>(loc.start_line);
+                        entry.end_line = static_cast<int16_t>(loc.end_line);
+                        entry.file = loc.file;
                         cf.aot_locs.push_back(std::move(entry));
                     }
                     // Scan IR function for required features
@@ -1120,17 +1119,14 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (!slots.stmt_slots.empty()) {
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                         }
-                        // Copy AOT location table from LLVM codegen
-                        // Copy location data from lowerer (own the strings before IR function is deleted)
-                    for (auto* loc : lowerer.getAOTLocTable()) {
-                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                        if (loc && loc->start_line > 0) {
-                            entry.start_line = loc->start_line;
-                            entry.end_line = loc->end_line;
-                            entry.file = loc->getFile() ? loc->getFile() : "";
+                        // Transfer owned location data from LLVM codegen directly.
+                        for (const auto& loc : lowerer.getAOTLocTable()) {
+                            AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                            entry.start_line = static_cast<int16_t>(loc.start_line);
+                            entry.end_line = static_cast<int16_t>(loc.end_line);
+                            entry.file = loc.file;
+                            cf.aot_locs.push_back(std::move(entry));
                         }
-                        cf.aot_locs.push_back(std::move(entry));
-                    }
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
@@ -3829,24 +3825,24 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::Invoke: {
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
-                    // Skip expression slot for pure computation opcodes (binary, unary)
-                    // whose operands are already lowered IR values. LLVM codegen dispatches
-                    // these directly via qore_rt_binary_op/qore_rt_unary_op without using
-                    // the expression slot. Creating an EXPR_TREE slot for these would fail
-                    // at runtime when the AST expression can't be deserialized in AOT context.
-                    if ((!ii->operands.empty() && isBinaryInvokeOpcode(ii->invoke_opcode)
+                    // Skip expression slot for pure computation opcodes whose operands
+                    // are already lowered IR values. LLVM codegen dispatches these
+                    // directly via qore_rt_binary_op/qore_rt_unary_op without the expr slot.
+                    // NOTE: This is stricter than the ExprOp skip — only binary/unary
+                    // invoke opcodes and specific special cases skip here, because
+                    // other invoke_opcodes (e.g., Cast*) still need the expr slot
+                    // for type info even when operands are pre-evaluated.
+                    if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
+                                static_cast<int>(ii->invoke_opcode))
                                 && ii->operands.size() >= 2)
-                            || (!ii->operands.empty() && isUnaryInvokeOpcode(ii->invoke_opcode)
+                            || (!ii->operands.empty() && getOpcodeIsUnaryInvoke(
+                                static_cast<int>(ii->invoke_opcode))
                                 && ii->operands.size() >= 1)
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
                             || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
                             || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
-                            || ((ii->invoke_opcode == QoreIROpcode::RegexMatchAny
-                                || ii->invoke_opcode == QoreIROpcode::RegexMatchBool
-                                || ii->invoke_opcode == QoreIROpcode::RegexNMatchBool
-                                || ii->invoke_opcode == QoreIROpcode::RegexExtractAny
-                                || ii->invoke_opcode == QoreIROpcode::RegexExtractList)
+                            || (isRegexInvokeOpcode(ii->invoke_opcode)
                                 && !ii->operands.empty())) {
                         break;
                     }
@@ -3928,7 +3924,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     registerLValueBaseVars(lvi->lvalue, slots);  // Pre-register base vars for serialization
                     break;
                 }
-                // Pure unary ops with pre-evaluated operands: skip expr slot
+                // Expression-based opcodes: skip expr slot when registry says
+                // the opcode can be dispatched from pre-evaluated operands
                 case QoreIROpcode::KeysAny:
                 case QoreIROpcode::KeysList:
                 case QoreIROpcode::KeysHash:
@@ -3947,15 +3944,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::RegexMatchBool:
                 case QoreIROpcode::RegexNMatchBool:
                 case QoreIROpcode::RegexExtractAny:
-                case QoreIROpcode::RegexExtractList: {
-                    auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
-                    if (!ei->operands.empty()) {
-                        break;  // skip — operand is pre-evaluated
-                    }
-                    // Fallthrough: no operands, need expr slot for AST evaluation
-                    [[fallthrough]];
-                }
-                // Expression-based opcodes (DotEval*, Map*, Cast*, etc.)
+                case QoreIROpcode::RegexExtractList:
                 case QoreIROpcode::PopAny:
                 case QoreIROpcode::PushAny:
                 case QoreIROpcode::ExtractAny:
@@ -3994,6 +3983,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::HashMapSelectAny:
                 case QoreIROpcode::InvokeSimError: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
+                    // Skip expr slot when operands are pre-evaluated and registry allows it
+                    if (getOpcodeSkipAotExprSlot(static_cast<int>(inst->opcode))
+                            && !ei->operands.empty()) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ei->expr, sizeof(bits));
                     slots.getExprSlot(bits);
