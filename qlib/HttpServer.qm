@@ -1152,7 +1152,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "key": opts.key,
             "ssl_verify_flags": opts.ssl_verify_flags,
             "get_remote_certs": opts.get_remote_certs,
-            "no_start_main_thread": True,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -1360,9 +1359,15 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     # only called from the listeners - do not call externally
     listenerStopped(HttpListener l) {
-        # decrement listener count
+        # decrement listener count (guard against double-call from async cleanup + stop)
         on_exit {
-            c.done();
+            try {
+                c.done();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
         }
 
         lm.enter();
@@ -1537,14 +1542,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         background listeners{id}.stop();
-    }
-
-    #! gets the TID of a listener based on its listener ID
-    /** @deprecated Always returns 0; async I/O uses shared I/O threads rather than dedicated
-        listener threads.
-    */
-    deprecated int getListenerTID(softint id) {
-        return 0;
     }
 
     #! sets the default request handler when no other handler can be matched
@@ -2068,17 +2065,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return debug;
     }
 
-    #! Returns True; async I/O is always enabled
-    /** @return always returns True
-
-        @deprecated Async I/O is now the only mode; this method always returns True.
-
-        @since HttpServer 1.5
-    */
-    deprecated bool getAsyncMode() {
-        return True;
-    }
-
     #! Returns a connection to the async I/O controller for keep-alive handling
     /** @param sock the socket to return
         @param cx the connection context
@@ -2090,13 +2076,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (asyncIo && asyncTarget) {
             asyncIo.addIdleConnection(sock, listener, cx, asyncTarget, ttl);
         }
-    }
-
-    #! Returns True; async I/O is always enabled
-    /** @deprecated Async I/O is now the only mode; this method always returns True.
-    */
-    deprecated bool isAsyncMode() {
-        return True;
     }
 
     #! Waits for async I/O to be ready to accept connections
@@ -2302,9 +2281,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (nmap{info.name}) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("there is already an active listener with name %y", info.name);
         }
-
-        # Don't start the listener's main thread (async I/O handles connections)
-        info.no_start_main_thread = True;
 
         c.add();
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());

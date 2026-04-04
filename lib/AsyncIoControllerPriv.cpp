@@ -929,7 +929,9 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     }
 
     if (do_signal) {
-        ctx().notifier->notify();
+        for (auto& tp : io_threads) {
+            tp->notifier->notify();
+        }
     }
 
     if (stopped && !on_async_io_thread) {
@@ -1051,7 +1053,9 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     }
 
     if (do_signal) {
-        ctx().notifier->notify();
+        for (auto& tp : io_threads) {
+            tp->notifier->notify();
+        }
     }
 
     if (stopped && !on_async_io_thread) {
@@ -1184,7 +1188,9 @@ void AsyncIoControllerPriv::stop(ExceptionSink* xsink) {
     }
 
     if (do_signal) {
-        ctx().notifier->notify();
+        for (auto& tp : io_threads) {
+            tp->notifier->notify();
+        }
     }
 
     waitStop(xsink);
@@ -3218,13 +3224,24 @@ bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& k
             return false;
         }
     }
-    Command c;
-    c.cmd = cmd;
-    c.key = key;
-    c.owner = owner;
-    c.done_cond = done_cond;
-    c.cancel_done_flag = cancel_done_flag;
-    ctx().cmdq.push(std::move(c));
+    if (cmd == IoCommand::Quit) {
+        // Quit must be sent to ALL threads
+        for (auto& tp : io_threads) {
+            Command c;
+            c.cmd = cmd;
+            tp->cmdq.push(std::move(c));
+        }
+    } else {
+        // Route to the target thread (Cancel/CancelOwner go to thread that owns the key)
+        IoThreadContext& target = key.empty() ? ctx() : getThreadForKey(key);
+        Command c;
+        c.cmd = cmd;
+        c.key = key;
+        c.owner = owner;
+        c.done_cond = done_cond;
+        c.cancel_done_flag = cancel_done_flag;
+        target.cmdq.push(std::move(c));
+    }
     return true;
 }
 
