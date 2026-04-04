@@ -27,6 +27,10 @@ struct OpcodeInfo {
     bool may_have_side_effects;         //! Can modify global state (globals, statics, objects)
     bool may_throw_exception;           //! Can raise exceptions at runtime
     const char* corresponding_ast_node; //! AST node type this IR opcode comes from
+
+    // PHASE 5: AOT slot map and verifier properties
+    bool produces_result;               //! Instruction produces a result value (for verifier)
+    bool skip_aot_expr_slot;            //! Skip EXPR_TREE slot when operands are pre-evaluated (AOT)
 };
 
 //! Registry of all 346 IR opcodes (in enum ID order, accounting for removed IDs 134, 141, 142)
@@ -383,10 +387,10 @@ constexpr OpcodeInfo OPCODE_REGISTRY[355] = {
     { "Sprintf                             ", false, false, false, -1, "Sprintf", false, true , "ParseNode" }, // 348
     { "NewHashDeclFromHash                 ", false, false, false, -1, "NewHashDeclFromHash", false, true , "ParseNode" }, // 349
     { "InstantiateLocal                    ", false, false, false, -1, "InstantiateLocal", false, true , "ParseNode" }, // 350
-    { "AddTimeout                          ", false, false, false, -1, "AddTimeout", false, true , "ParseNode" }, // 351
-    { "SubTimeout                          ", false, false, false, -1, "SubTimeout", false, true , "ParseNode" }, // 352
-    { "HashDerefDynamic                    ", false, false, false, -1, "HashDerefDynamic", false, true , "ParseNode" }, // 353
-    { "ListIndexDynamic                    ", false, false, false, -1, "ListIndexDynamic", false, true , "ParseNode" }, // 354
+    { "AddTimeout                          ", false, false, false,  2, "AddTimeout", false, true , "ParseNode", true, true }, // 351
+    { "SubTimeout                          ", false, false, false,  2, "SubTimeout", false, true , "ParseNode", true, true }, // 352
+    { "HashDerefDynamic                    ", false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true, true }, // 353
+    { "ListIndexDynamic                    ", false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true, true }, // 354
 };
 
 //! Static assertion to verify registry completeness

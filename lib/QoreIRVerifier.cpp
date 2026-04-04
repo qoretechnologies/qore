@@ -57,10 +57,19 @@
 #include <qore/intern/DebugStatement.h>
 #include <qore/intern/AssertStatement.h>
 #include <qore/intern/ExpressionStatement.h>
+#include <qore/intern/QoreOpcodeRegistry.h>
 
 // isTerminator() is now defined in QoreIR.h
 
+// Check if opcode produces a result value — uses registry when available,
+// falls back to manual list for entries not yet updated in registry
 static bool requiresResult(QoreIROpcode op) {
+    int opcode_id = static_cast<int>(op);
+    const OpcodeInfo* info = getOpcodeInfo(opcode_id);
+    if (info && info->name && info->produces_result) {
+        return true;
+    }
+    // Fallback for entries not yet updated in registry
     switch (op) {
         case QoreIROpcode::ConstInt:
         case QoreIROpcode::ConstFloat:
