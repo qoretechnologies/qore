@@ -875,10 +875,14 @@ struct AOTCompiledFuncWithSlots {
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
     std::vector<const QoreIRFunction*> handler_irs;
-    //! AOT location table: compile-time QoreProgramLocation pointers indexed by slot.
-    //! Populated from QoreIRToLLVM::getAOTLocTable() after LLVM codegen.
-    //! Serialized as (start_line, end_line, file) per entry.
-    std::vector<const QoreProgramLocation*> aot_locs;
+    //! AOT location table entry (owns the file string copy)
+    struct AOTLocEntry {
+        int16_t start_line = 0;
+        int16_t end_line = 0;
+        std::string file;
+    };
+    //! AOT location table indexed by slot. Populated from QoreIRToLLVM::getAOTLocTable().
+    std::vector<AOTLocEntry> aot_locs;
 };
 
 //! Descriptor for a compiled constant/static-var init function

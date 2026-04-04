@@ -2761,16 +2761,10 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
 
         // Location table entries (AOT runtime_loc tracking)
         writer.writeU16(static_cast<uint16_t>(func.aot_locs.size()));
-        for (auto* loc : func.aot_locs) {
-            if (loc && loc->start_line > 0) {
-                writer.writeU16(static_cast<uint16_t>(loc->start_line));
-                writer.writeU16(static_cast<uint16_t>(loc->end_line));
-                writer.writeStringRef(loc->getFile() ? loc->getFile() : "");
-            } else {
-                writer.writeU16(0);
-                writer.writeU16(0);
-                writer.writeStringRef("");
-            }
+        for (auto& loc : func.aot_locs) {
+            writer.writeU16(static_cast<uint16_t>(loc.start_line));
+            writer.writeU16(static_cast<uint16_t>(loc.end_line));
+            writer.writeStringRef(loc.file.c_str());
         }
 
         // Patch the entry size field

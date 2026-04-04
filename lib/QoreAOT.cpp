@@ -353,8 +353,8 @@ struct AOTCompiledFunc {
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Owned handler IR functions indexed by stmt slot; null = no IR (Foreach, or lowering failed)
     std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
-    //! AOT location table from LLVM codegen
-    std::vector<const QoreProgramLocation*> aot_locs;
+    //! AOT location table from LLVM codegen (owns data, safe after IR function deletion)
+    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> aot_locs;
 };
 
 // ---- Feature flag helpers ----
@@ -962,7 +962,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                     }
                     // Copy AOT location table from LLVM codegen
-                    cf.aot_locs = lowerer.getAOTLocTable();
+                    // Copy location data from lowerer (own the strings before IR function is deleted)
+                    for (auto* loc : lowerer.getAOTLocTable()) {
+                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                        if (loc && loc->start_line > 0) {
+                            entry.start_line = loc->start_line;
+                            entry.end_line = loc->end_line;
+                            entry.file = loc->getFile() ? loc->getFile() : "";
+                        }
+                        cf.aot_locs.push_back(std::move(entry));
+                    }
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
                     compiled_funcs.push_back(std::move(cf));
@@ -1112,7 +1121,16 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             cf.handler_irs = extractHandlerIRs(*ir_func, slots);
                         }
                         // Copy AOT location table from LLVM codegen
-                        cf.aot_locs = lowerer.getAOTLocTable();
+                        // Copy location data from lowerer (own the strings before IR function is deleted)
+                    for (auto* loc : lowerer.getAOTLocTable()) {
+                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                        if (loc && loc->start_line > 0) {
+                            entry.start_line = loc->start_line;
+                            entry.end_line = loc->end_line;
+                            entry.file = loc->getFile() ? loc->getFile() : "";
+                        }
+                        cf.aot_locs.push_back(std::move(entry));
+                    }
                         // Scan IR function for required features
                         cf.feature_flags = scanIRFeatureFlags(*ir_func);
                         compiled_funcs.push_back(std::move(cf));
