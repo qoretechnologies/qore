@@ -516,10 +516,13 @@ void AsyncIoControllerPriv::deref(ExceptionSink* xsink) {
     if (ROdereference()) {
         stop(xsink);
         stopThreadPool(xsink);
-        if (call_dispatcher) {
-            call_dispatcher->stop(xsink);
-            delete call_dispatcher;
-            call_dispatcher = nullptr;
+        {
+            QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
+            if (cd) {
+                cd->stop(xsink);
+                delete cd;
+                call_dispatcher.store(nullptr, std::memory_order_release);
+            }
         }
         if (logger) {
             logger->deref(xsink);
@@ -1424,6 +1427,17 @@ void AsyncIoControllerPriv::setMaxCallbackWorkers(int max_workers) {
 
 // --- Internal methods ---
 
+void AsyncIoControllerPriv::ensureCallDispatcher() {
+    if (call_dispatcher.load(std::memory_order_acquire)) {
+        return;  // fast path: already created, no lock
+    }
+    AutoLocker al(m);
+    if (!call_dispatcher.load(std::memory_order_relaxed)) {
+        call_dispatcher.store(new QoreCallDispatcher(max_callback_workers, this),
+            std::memory_order_release);
+    }
+}
+
 void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
     // Caller must hold lock
     // Wait for any exiting thread to finish
@@ -1694,11 +1708,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 // those are dispatched to the worker pool just like Qore-only ops.
                 if (op.spop_base->needsWorkerDispatch()) {
                     // C++ base delegates to Qore inner op — dispatch to worker thread
+                    ensureCallDispatcher();
                     {
                         AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
                         auto it = cache.find(op.key);
                         if (it != cache.end()) {
                             it->second.continue_poll_in_flight = true;
@@ -1706,7 +1718,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     }
                     this->ref();
                     op.spop_obj->ref();
-                    call_dispatcher->dispatchContinuePollAsync(op.spop_obj, this, op.key);
+                    call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
                     continue;  // do NOT add to poll_results
                 }
 
@@ -1741,13 +1753,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 if (h2_op) {
                     std::vector<int32_t> ready = h2_op->getAndClearDataReadyStreams();
                     if (!ready.empty()) {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
+                        ensureCallDispatcher();
                         for (int32_t sid : ready) {
                             op.spop_obj->ref();
-                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj,
                                 std::to_string(sid));
                         }
                     }
@@ -1760,13 +1769,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     ASYNC_IO_TRACE("H2Client dispatch: key='%s' ready_streams=%d\n",
                         op.key.c_str(), (int)ready.size());
                     if (!ready.empty()) {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
+                        ensureCallDispatcher();
                         for (int32_t sid : ready) {
                             op.spop_obj->ref();
-                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj,
                                 std::to_string(sid));
                         }
                     }
@@ -1777,13 +1783,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 if (h3_client_op) {
                     std::vector<int64_t> ready = h3_client_op->getAndClearDataReadyStreams();
                     if (!ready.empty()) {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
+                        ensureCallDispatcher();
                         for (int64_t sid : ready) {
                             op.spop_obj->ref();
-                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj,
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj,
                                 std::to_string(sid));
                         }
                     }
@@ -1794,13 +1797,10 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 if (h3_server_op) {
                     std::vector<std::string> ready = h3_server_op->getAndClearDataReadyStreams();
                     if (!ready.empty()) {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
+                        ensureCallDispatcher();
                         for (auto& skey : ready) {
                             op.spop_obj->ref();
-                            call_dispatcher->dispatchStreamDataAsync(op.spop_obj, skey);
+                            call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(op.spop_obj, skey);
                         }
                     }
                 }
@@ -1810,12 +1810,9 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 {
                     int pushed = op.spop_base->getAndClearItemsPushed();
                     if (pushed > 0) {
-                        AutoLocker al(m);
-                        if (!call_dispatcher) {
-                            call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                        }
+                        ensureCallDispatcher();
                         op.spop_obj->ref();
-                        call_dispatcher->dispatchPollCompleteAsync(op.spop_obj);
+                        call_dispatcher.load(std::memory_order_acquire)->dispatchPollCompleteAsync(op.spop_obj);
                     }
                 }
             } else {
@@ -1830,9 +1827,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 // via enqueueStreamDataDispatch() without returning to the I/O thread.
                 {
                     AutoLocker al(m);
-                    if (!call_dispatcher) {
-                        call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                    }
+                    ensureCallDispatcher();
                     auto it = cache.find(op.key);
                     if (it != cache.end()) {
                         it->second.continue_poll_in_flight = true;
@@ -1840,7 +1835,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 }
                 this->ref();  // keep controller alive until worker delivers result
                 op.spop_obj->ref();
-                call_dispatcher->dispatchContinuePollAsync(op.spop_obj, this, op.key);
+                call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
                 continue;  // do NOT add to poll_results
             }
 
@@ -2244,10 +2239,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         {
             // Ensure call_dispatcher exists for async dispatch
             if (!timer_events.empty()) {
-                AutoLocker al(m);
-                if (!call_dispatcher) {
-                    call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-                }
+                ensureCallDispatcher();
             }
         }
         for (auto& te : timer_events) {
@@ -2255,7 +2247,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 // udata is a code reference — dispatch it asynchronously
                 ResolvedCallReferenceNode* code_ref = te.udata.get<ResolvedCallReferenceNode>();
                 code_ref->ref();
-                call_dispatcher->dispatchAsync(code_ref, nullptr);
+                call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(code_ref, nullptr);
             } else if (cb_snapshot) {
                 // Fall back to the registered timer callback for non-code udata
                 ReferenceHolder<QoreHashNode> timer_hash(
@@ -2268,7 +2260,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     QoreListNode* args = new QoreListNode(autoTypeInfo);
                     args->push(timer_hash.release(), xsink);
                     cb_snapshot->ref();
-                    call_dispatcher->dispatchAsync(cb_snapshot, args);
+                    call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args);
                 }
             }
             te.udata.discard(xsink);
@@ -2748,14 +2740,9 @@ void AsyncIoControllerPriv::doCancelIntern(PollInfo& pinfo, ExceptionSink* xsink
     if (pinfo.has_qore_abort && on_async_io_thread) {
         // Always dispatch Qore abort() to worker pool — it may acquire
         // application-level locks that would block the I/O thread
-        {
-            AutoLocker al(m);
-            if (!call_dispatcher) {
-                call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-            }
-        }
+        ensureCallDispatcher();
         pinfo.spop_obj->ref();
-        call_dispatcher->dispatchAbortAsync(pinfo.spop_obj);
+        call_dispatcher.load(std::memory_order_acquire)->dispatchAbortAsync(pinfo.spop_obj);
     } else {
         // C++ built-in or not on I/O thread — safe to call directly
         callAbort(pinfo.spop_obj, xsink);
@@ -3226,12 +3213,9 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
 
 void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,
         const std::string& stream_key) {
-    AutoLocker al(m);
-    if (!call_dispatcher) {
-        call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-    }
+    ensureCallDispatcher();
     spop_obj->ref();
-    call_dispatcher->dispatchStreamDataAsync(spop_obj, stream_key);
+    call_dispatcher.load(std::memory_order_acquire)->dispatchStreamDataAsync(spop_obj, stream_key);
 }
 
 void AsyncIoControllerPriv::callAbort(QoreObject* spop_obj, ExceptionSink* xsink) {
@@ -3249,13 +3233,8 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
     if (has_on_complete && spop_obj) {
         // Dispatch onComplete() to worker pool — no Qore code on the I/O thread.
         // The closure's captured program context ensures proper execution.
-        {
-            AutoLocker al(m);
-            if (!call_dispatcher) {
-                call_dispatcher = new QoreCallDispatcher(max_callback_workers, this);
-            }
-        }
-        call_dispatcher->dispatchOnCompleteAsync(spop_obj, result);
+        ensureCallDispatcher();
+        call_dispatcher.load(std::memory_order_acquire)->dispatchOnCompleteAsync(spop_obj, result);
     } else if (queue) {
         if (spop_obj) {
             spop_obj->deref(xsink);

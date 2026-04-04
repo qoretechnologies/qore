@@ -510,6 +510,9 @@ private:
 
     // --- Internal methods ---
 
+    //! Ensure call_dispatcher exists (lock-free fast path)
+    DLLLOCAL void ensureCallDispatcher();
+
     //! Start the I/O thread (caller must hold lock)
     DLLLOCAL void startIntern(ExceptionSink* xsink);
 
@@ -603,8 +606,8 @@ private:
     DLLLOCAL void deliverResult(Queue* queue, QoreObject* spop_obj, bool has_on_complete,
         QoreHashNode* result, ExceptionSink* xsink);
 
-    //! Shared call dispatcher for async callback/abort delivery (lazily created)
-    QoreCallDispatcher* call_dispatcher = nullptr;
+    //! Shared call dispatcher for async callback/abort delivery (lazily created, atomic for lock-free check)
+    std::atomic<QoreCallDispatcher*> call_dispatcher{nullptr};
 
     //! Configured max callback workers; 0 = auto
     int max_callback_workers = 0;
