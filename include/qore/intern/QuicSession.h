@@ -195,7 +195,10 @@ public:
         QUIC_MAX_PRE_H3_BUFFER.
     */
     static constexpr size_t QUIC_MAX_PRE_H3_ENTRIES = 1024;
-    //! Maximum stream body size (1 MB)
+    //! Maximum streaming buffer threshold for backpressure (1 MB)
+    /** Used by sendStreamData() / waitForQuicStreamDrain() to signal "buffer full".
+        This is NOT a request body size limit — see setMaxRequestBodySize().
+    */
     static constexpr size_t QUIC_MAX_STREAM_BODY = 1048576;
 
     //! Maximum DATAGRAM frame size (RFC 9221) advertised in transport parameters
@@ -403,6 +406,12 @@ public:
         takeHeadersReadyStreamCopy() to find and dispatch them.
     */
     DLLLOCAL void setHeadersOnlyMode(bool v);
+
+    //! Sets the maximum request body size in bytes (0 = unlimited)
+    /** Consistent with Http2Session::setMaxRequestBodySize().
+        Bodies exceeding this limit are rejected with a stream reset.
+    */
+    DLLLOCAL void setMaxRequestBodySize(int64_t size) { max_request_body_size_ = size; }
 
     //! Atomically find first headers-ready stream, copy it, and mark as dispatched
     /** Finds the first stream with headers_complete && !dispatched, creates a copy
@@ -1112,6 +1121,7 @@ private:
     ngtcp2_crypto_conn_ref conn_ref_{};              //!< TLS<->ngtcp2 connection reference
     qore_socket_private* sock_ = nullptr;           //!< associated socket
     bool is_server_ = false;                        //!< true if server-side session
+    int64_t max_request_body_size_ = 0;             //!< maximum request body size (0 = unlimited); consistent with Http2Session
 
     //! Server CID for this session (used for CID-based routing)
     ngtcp2_cid scid_{};
