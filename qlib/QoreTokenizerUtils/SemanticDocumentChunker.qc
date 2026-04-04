@@ -142,8 +142,8 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
 
     #! Splits text into sentences
     private list<string> splitSentences(string text) {
-        string delimited = regex_subst(text, SentenceRegex, "$1\x00", RE_Global);
-        list<string> raw = delimited.split("\x00");
+        string delimited = regex_subst(text, SentenceRegex, "$1\x01", RE_Global);
+        list<string> raw = delimited.split("\x01");
         list<string> result = ();
         foreach string s in (raw) {
             string trimmed = trim(s);

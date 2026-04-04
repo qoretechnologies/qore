@@ -1,0 +1,78 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file TerminalFormat.qm module for rendering markdown and rich text to ANSI terminals
+
+/*  TerminalFormat.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+
+%modern
+
+%requires Util
+
+module TerminalFormat {
+    version = "1.0";
+    desc = "user module for rendering markdown and rich text to ANSI terminals";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage TerminalFormat Module
+
+    @tableofcontents
+
+    @section terminalformatintro Introduction to the TerminalFormat Module
+
+    The %TerminalFormat module provides APIs for rendering markdown and rich text
+    to ANSI-compatible terminals. It converts standard markdown syntax into
+    ANSI escape sequences for bold, italic, color, and structural formatting.
+
+    The main classes provided by this module:
+    - @ref TerminalFormat::TerminalMarkdownRenderer "TerminalMarkdownRenderer": converts
+      markdown text to ANSI-formatted terminal output
+    - @ref TerminalFormat::TerminalTableRenderer "TerminalTableRenderer": formats tabular
+      data with Unicode box-drawing characters and column alignment
+
+    @section terminalformatusage Usage
+
+    @code{.py}
+    %requires TerminalFormat
+
+    TerminalMarkdownRenderer md();
+    string formatted = md.render("# Hello\n\nThis is **bold** and `code`.");
+    printf("%s\n", formatted);
+
+    TerminalTableRenderer tbl();
+    printf("%s\n", tbl.render(
+        ("Name", "Status", "ID"),
+        (("svc-1", "loaded", "42"), ("svc-2", "unloaded", "43")),
+    ));
+    @endcode
+
+    @section terminalformat_relnotes Release Notes
+
+    @subsection terminalformat_v1_0 TerminalFormat v1.0
+    - initial release with markdown and table rendering
+*/
+
+public namespace TerminalFormat {
+}

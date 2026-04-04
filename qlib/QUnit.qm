@@ -1099,13 +1099,13 @@ addTestCase(obj);
         # 3. Convert placeholders to regex equivalents
         string rx = pattern;
         # Replace glob wildcards with unique placeholders
-        rx = replace(rx, "*", "\x00STAR\x00");
-        rx = replace(rx, "?", "\x00QMARK\x00");
+        rx = replace(rx, "*", "\x01STAR\x01");
+        rx = replace(rx, "?", "\x01QMARK\x01");
         # Escape regex special chars
         rx = regex_subst(rx, "([.+^${}()|\\[\\]\\\\])", "\\\\$1", RE_Global);
         # Convert placeholders to regex wildcards
-        rx = replace(rx, "\x00STAR\x00", ".*");
-        rx = replace(rx, "\x00QMARK\x00", ".");
+        rx = replace(rx, "\x01STAR\x01", ".*");
+        rx = replace(rx, "\x01QMARK\x01", ".");
         # Anchor the pattern
         rx = "^" + rx + "$";
         return regex(name, rx, RE_Caseless);

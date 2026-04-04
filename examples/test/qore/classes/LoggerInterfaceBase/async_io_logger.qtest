@@ -39,11 +39,6 @@ class TestLogger inherits LoggerInterfaceBase {
     }
 }
 
-#! Class with only one of the required methods
-class PartialLogger {
-    bool isEnabledFor(int level) { return True; }
-}
-
 class AsyncIoLoggerTest inherits QUnit::Test {
     constructor() : Test("AsyncIoLoggerTest", "1.0") {
         addTestCase("LoggerInterfaceBase is abstract", \testAbstractClass());
@@ -110,15 +105,13 @@ class AsyncIoLoggerTest inherits QUnit::Test {
         assertEq(True, get_async_io_logger() === lgr2);
     }
 
-    #! set_async_io_logger validates logger object has required methods
+    #! set_async_io_logger rejects objects that don't inherit LoggerInterfaceBase at parse time
     testSetAsyncIoLoggerValidation() {
-        # Object without logArgs() should fail
-        assertThrows("ASYNC-IO-LOGGER-ERROR", "logArgs", sub() {
-            set_async_io_logger(new PartialLogger());
-        });
-
-        # Ensure logger not set after validation failure
-        assertNothing(get_async_io_logger());
+        # Passing a non-LoggerInterfaceBase object must fail at parse time
+        Program p(PO_NEW_STYLE);
+        assertThrows("PARSE-TYPE-ERROR", "LoggerInterfaceBase", \p.parse(),
+            ("class Foo { bool isEnabledFor(int level) { return True; } } "
+                "sub test() { set_async_io_logger(new Foo()); }", "test"));
     }
 
     #! AsyncIoController::setLogger() sets/clears the per-controller logger on the singleton
