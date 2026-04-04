@@ -745,20 +745,23 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         res.result_queue->ref();  // extra ref for PollInfo storage
     }
 
-    bool do_signal = false;
-    bool need_cancel = false;
-    PollInfo direct_pinfo;
-    bool direct_cancel = false;
-
-    {
+    // Ensure I/O thread is running (rare path: first submit or restart)
+    if (!io_running.load(std::memory_order_acquire)) {
         AutoLocker al(m);
-
         if (shutting_down) {
             xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
             return nullptr;
         }
+        if (io_exiting || !tid) {
+            startIntern(xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+    }
 
-        // Check for existing operation with same key
+    // For I/O thread callers (e.g., onComplete re-submissions), access cache directly
+    if (on_async_io_thread) {
         auto it = cache.find(uh);
         if (it != cache.end()) {
             if (!replace) {
@@ -766,93 +769,66 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
                     "operation with key '%s' already exists; use replace=True to replace", uh.c_str());
                 return nullptr;
             }
-            // When re-submitting the SAME poll operation object (e.g.,
-            // WebSocket connection re-submission after request dispatch),
-            // skip abort — aborting a live op destroys connection state.
             if (it->second.spop_obj == spop_obj) {
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_SAME key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());
-                direct_pinfo = it->second;
+                PollInfo old_pinfo = it->second;
                 it->second = PollInfo();
                 cache.erase(it);
-                // Clean up without abort — just release references
-                direct_pinfo.cleanup(xsink);
-            } else if (on_async_io_thread) {
-                // On an async I/O thread — cancel directly to avoid deadlock
+                old_pinfo.cleanup(xsink);
+            } else {
                 ASYNC_IO_TRACE("cache.erase SUBMIT_REPLACE_DIRECT key='%s' owner='%s'\n",
                     uh.c_str(), it->second.owner.c_str());
-                direct_pinfo = it->second;
+                PollInfo old_pinfo = it->second;
                 it->second = PollInfo();
                 cache.erase(it);
-                direct_cancel = true;
-            } else {
-                // Queue cancel for existing operation
-                if (!cancel_cond_map.count(uh)) {
-                    cancel_cond_map[uh] = new QoreCondition();
-                }
-                do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
-                need_cancel = true;
-            }
-        }
-    }
-
-    // Signal notifier outside lock
-    if (do_signal) {
-        notifier->notify();
-    }
-
-    // Handle direct cancel (on I/O thread) or wait for enqueued cancel
-    if (direct_cancel) {
-        doCancelIntern(direct_pinfo, xsink);
-        direct_pinfo.cleanup(xsink);
-    } else if (need_cancel) {
-        waitCancel(uh);
-    }
-
-    // Now add the new operation
-    {
-        AutoLocker al(m);
-
-        if (shutting_down) {
-            xsink->raiseException("ASYNC-IO-ERROR", "controller is shutting down");
-            return nullptr;
-        }
-
-        // Start I/O thread if needed — must happen BEFORE inserting into cache,
-        // because startIntern() releases the lock while waiting for an exiting
-        // I/O thread, and the exit cleanup iterates cache and discards entries
-        if (io_exiting || !tid) {
-            startIntern(xsink);
-            if (*xsink) {
-                return nullptr;
+                doCancelIntern(old_pinfo, xsink);
+                old_pinfo.cleanup(xsink);
             }
         }
 
+        // Direct cache insertion (I/O thread owns the cache)
         PollInfo& pinfo = cache[uh];
         pinfo.sock_obj = sock_obj;
         sock_obj->ref();
         pinfo.sock = sock;
-        sock_holder.release();  // Transfer ownership to pinfo
+        sock_holder.release();
         pinfo.spop_obj = spop_obj;
         spop_obj->ref();
-        // Transfer refcounted resources from RAII struct to pinfo
         pinfo.poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
         pinfo.timeout_us = timeout_us;
         pinfo.owner = owner;
         pinfo.other = res.other_hash; res.other_hash = nullptr;
         pinfo.queue = res.result_queue; res.result_queue = nullptr;
-        pinfo.timeout_date_us = 0;  // Will be set in I/O thread
+        pinfo.timeout_date_us = 0;
         pinfo.has_qore_abort = has_qore_abort;
         pinfo.has_qore_on_complete = has_qore_on_complete;
         pinfo.spop_base = spop_base;
-        spop_base_holder.release();  // Transfer ownership to pinfo
+        spop_base_holder.release();
 
         ++submit_seq;
-        do_signal = enqueueCmdLocked(IoCommand::Add, uh);
-    }
+    } else {
+        // Worker thread: package data into SubmitOp command (lock-free)
+        Command cmd;
+        cmd.cmd = IoCommand::SubmitOp;
+        cmd.key = uh;
+        cmd.owner = owner;
+        cmd.submit_replace = replace;
+        cmd.submit_sock_obj = sock_obj; sock_obj->ref();
+        cmd.submit_sock = sock; sock_holder.release();
+        cmd.submit_spop_obj = spop_obj; spop_obj->ref();
+        cmd.submit_spop_base = spop_base; spop_base_holder.release();
+        cmd.submit_poll_info = res.poll_info_hash; res.poll_info_hash = nullptr;
+        cmd.submit_other = res.other_hash; res.other_hash = nullptr;
+        cmd.submit_queue = res.result_queue; res.result_queue = nullptr;
+        cmd.submit_timeout_us = timeout_us;
+        cmd.submit_has_qore_abort = has_qore_abort;
+        cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
-    if (do_signal) {
+        cmdq.push(std::move(cmd));
         notifier->notify();
+
+        ++submit_seq;
     }
 
     log(QORE_LOG_LEVEL_DEBUG, "submit: operation '%s' submitted (owner: '%s')", uh.c_str(), owner.c_str());
@@ -1593,8 +1569,7 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
         }
 
         {
-            AutoLocker al(m);
-
+            // Cache is I/O-thread-only — no lock needed for iteration
             int64 now_us = get_epoch_us();
 
             for (auto& [key, pinfo] : cache) {
@@ -1664,9 +1639,12 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                 ops_to_poll.push_back({key, pinfo.spop_obj, pinfo.spop_base, false});
             }
 
-            // Update processed sequence counter
-            processed_seq = submit_seq;
-            processed_cond.broadcast();
+            // Update processed sequence counter (lock for condition broadcast)
+            {
+                AutoLocker al(m);
+                processed_seq = submit_seq;
+                processed_cond.broadcast();
+            }
         }
 
         // --- PHASE 2: continuePoll outside lock ---
@@ -1842,13 +1820,11 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             poll_results.push_back(std::move(result));
         }
 
-        // --- PHASE 3: Update under lock + deferred delivery ---
+        // --- PHASE 3: Update cache (I/O-thread-only) + deferred delivery ---
         std::vector<DeferredDelivery> deferred_deliveries;
         bool do_autostop = false;
 
         {
-            AutoLocker al(m);
-
             for (auto& result : poll_results) {
                 auto it = cache.find(result.key);
                 if (it == cache.end()) {
@@ -1896,12 +1872,15 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
                     dd.result = result_hash;
                     deferred_deliveries.push_back(std::move(dd));
 
-                    // Signal cancel waiters
-                    auto cit = cancel_cond_map.find(result.key);
-                    if (cit != cancel_cond_map.end()) {
-                        cit->second->broadcast();
-                        delete cit->second;
-                        cancel_cond_map.erase(cit);
+                    // Signal cancel waiters (cancel_cond_map is shared — brief lock)
+                    {
+                        AutoLocker al(m);
+                        auto cit = cancel_cond_map.find(result.key);
+                        if (cit != cancel_cond_map.end()) {
+                            cit->second->broadcast();
+                            delete cit->second;
+                            cancel_cond_map.erase(cit);
+                        }
                     }
 
                     // On error or timeout, close the socket to release the fd and
@@ -2021,39 +2000,46 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
             }
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
-            if (cache.empty() && timer_info_map.empty()
-                    && autostop_flag && cmdq.empty() && deferred_deliveries.empty()) {
-                // Skip grace period during shutdown — exit immediately
-                if (shutting_down) {
-                    io_exiting = true;
-                    if (io_waiting) {
-                        io_cond.broadcast();
-                    }
-                    do_autostop = true;
-                } else {
-                    int64 now_us = get_epoch_us();
-                    if (!autostop_idle_since) {
-                        // First time idle — start the grace period
-                        autostop_idle_since = now_us;
-                    } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
-                        // Grace period expired — exit
+            // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock
+            if (cache.empty() && cmdq.empty() && deferred_deliveries.empty()) {
+                bool timer_empty;
+                bool do_autostop_check;
+                bool is_shutting_down;
+                {
+                    AutoLocker al(m);
+                    timer_empty = timer_info_map.empty();
+                    do_autostop_check = autostop_flag;
+                    is_shutting_down = shutting_down;
+                }
+                if (timer_empty && do_autostop_check) {
+                    if (is_shutting_down) {
+                        AutoLocker al(m);
                         io_exiting = true;
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
                         do_autostop = true;
-                    }
-                    // Else: still within grace period — keep polling
-                    if (!do_autostop) {
-                        // Ensure we wake up to re-check when the grace period expires
-                        int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
-                        if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
-                            poll_deadline_us = grace_deadline_us;
+                    } else {
+                        int64 now_us = get_epoch_us();
+                        if (!autostop_idle_since) {
+                            autostop_idle_since = now_us;
+                        } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                            AutoLocker al(m);
+                            io_exiting = true;
+                            if (io_waiting) {
+                                io_cond.broadcast();
+                            }
+                            do_autostop = true;
+                        }
+                        if (!do_autostop) {
+                            int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                            if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
+                                poll_deadline_us = grace_deadline_us;
+                            }
                         }
                     }
                 }
             } else {
-                // Cache is non-empty — reset idle timer
                 autostop_idle_since = 0;
             }
         }
@@ -2073,32 +2059,41 @@ void AsyncIoControllerPriv::ioThread(ExceptionSink* xsink) {
 
         // Re-check autostop after deliveries (callbacks may have submitted new ops)
         if (!do_autostop && !deferred_deliveries.empty()) {
-            AutoLocker al(m);
-            if (cache.empty() && timer_info_map.empty()
-                    && autostop_flag && cmdq.empty()) {
-                if (shutting_down) {
-                    io_exiting = true;
-                    if (io_waiting) {
-                        io_cond.broadcast();
-                    }
-                    do_autostop = true;
-                } else {
-                    int64 now_us = get_epoch_us();
-                    if (!autostop_idle_since) {
-                        autostop_idle_since = now_us;
-                    } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+            if (cache.empty() && cmdq.empty()) {
+                bool timer_empty;
+                bool do_check;
+                bool is_shutting_down;
+                {
+                    AutoLocker al(m);
+                    timer_empty = timer_info_map.empty();
+                    do_check = autostop_flag;
+                    is_shutting_down = shutting_down;
+                }
+                if (timer_empty && do_check) {
+                    if (is_shutting_down) {
+                        AutoLocker al(m);
                         io_exiting = true;
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
                         do_autostop = true;
-                    }
-                    // Ensure we wake up to re-check when the grace period expires;
-                    // without this, epoll_wait(-1) would sleep indefinitely
-                    if (!do_autostop) {
-                        int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
-                        if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
-                            poll_deadline_us = grace_deadline_us;
+                    } else {
+                        int64 now_us = get_epoch_us();
+                        if (!autostop_idle_since) {
+                            autostop_idle_since = now_us;
+                        } else if (now_us - autostop_idle_since >= AUTOSTOP_GRACE_US) {
+                            AutoLocker al(m);
+                            io_exiting = true;
+                            if (io_waiting) {
+                                io_cond.broadcast();
+                            }
+                            do_autostop = true;
+                        }
+                        if (!do_autostop) {
+                            int64 grace_deadline_us = autostop_idle_since + AUTOSTOP_GRACE_US;
+                            if (poll_deadline_us == 0 || grace_deadline_us < poll_deadline_us) {
+                                poll_deadline_us = grace_deadline_us;
+                            }
                         }
                     }
                 }
@@ -2470,28 +2465,29 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     QoreCondition* cond = nullptr;
                     bool found = false;
 
+                    // Cache access is I/O-thread-only (no lock)
+                    auto it = cache.find(cmd.key);
+                    if (it != cache.end()) {
+                        found = true;
+                        ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
+                            cmd.key.c_str(), it->second.owner.c_str());
+                        unregisterExtraFds(cmd.key, xsink);
+                        unregisterFromEventLoop(cmd.key, xsink);
+                        pinfo_copy = it->second;
+                        it->second = PollInfo();
+                        cache.erase(it);
+                    }
+
+                    // cancel_cond_map is shared — brief lock
                     {
                         AutoLocker al(m);
-                        auto it = cache.find(cmd.key);
-                        if (it != cache.end()) {
-                            found = true;
-                            ASYNC_IO_TRACE("cache.erase IO_CMD_CANCEL key='%s' owner='%s'\n",
-                                cmd.key.c_str(), it->second.owner.c_str());
-                            unregisterFromEventLoop(cmd.key, xsink);
-                            pinfo_copy = it->second;
-                            // Clear the cache entry without cleanup (we'll do it after delivery)
-                            it->second = PollInfo();
-                            cache.erase(it);
-
-                            auto cit = cancel_cond_map.find(cmd.key);
-                            if (cit != cancel_cond_map.end()) {
-                                cond = cit->second;
-                                cancel_cond_map.erase(cit);
-                            }
+                        auto cit = cancel_cond_map.find(cmd.key);
+                        if (cit != cancel_cond_map.end()) {
+                            cond = cit->second;
+                            cancel_cond_map.erase(cit);
                         }
                     }
 
-                    // Deliver canceled result BEFORE broadcasting (ensures socket released first)
                     if (found) {
                         doCancelIntern(pinfo_copy, xsink);
                         pinfo_copy.cleanup(xsink);
@@ -2584,17 +2580,61 @@ bool AsyncIoControllerPriv::processCommands(ExceptionSink* xsink) {
                     break;
                 }
 
-                case IoCommand::Add:
-                    // No-op - operation was already added to cache in submit()
+                case IoCommand::SubmitOp: {
+                    // Worker thread submitted an operation — insert into cache
+                    // (cache is I/O-thread-only, no lock needed)
+                    if (cmd.submit_replace) {
+                        auto it = cache.find(cmd.key);
+                        if (it != cache.end()) {
+                            if (it->second.spop_obj == cmd.submit_spop_obj) {
+                                // Same spop — cleanup without abort
+                                PollInfo old_pinfo = it->second;
+                                it->second = PollInfo();
+                                cache.erase(it);
+                                old_pinfo.cleanup(xsink);
+                            } else {
+                                // Different spop — cancel old entry
+                                unregisterExtraFds(cmd.key, xsink);
+                                unregisterFromEventLoop(cmd.key, xsink);
+                                PollInfo old_pinfo = it->second;
+                                it->second = PollInfo();
+                                cache.erase(it);
+                                doCancelIntern(old_pinfo, xsink);
+                                old_pinfo.cleanup(xsink);
+                            }
+                        }
+                    }
+                    PollInfo& pinfo = cache[cmd.key];
+                    pinfo.sock_obj = cmd.submit_sock_obj;       // ownership transferred
+                    pinfo.sock = cmd.submit_sock;               // ownership transferred
+                    pinfo.spop_obj = cmd.submit_spop_obj;       // ownership transferred
+                    pinfo.spop_base = cmd.submit_spop_base;     // ownership transferred
+                    pinfo.poll_info = cmd.submit_poll_info;     // ownership transferred
+                    pinfo.other = cmd.submit_other;             // ownership transferred
+                    pinfo.queue = cmd.submit_queue;             // ownership transferred
+                    pinfo.timeout_us = cmd.submit_timeout_us;
+                    pinfo.owner = cmd.owner;
+                    pinfo.timeout_date_us = 0;
+                    pinfo.has_qore_abort = cmd.submit_has_qore_abort;
+                    pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+                    // Null out command fields to prevent double-free
+                    cmd.submit_sock_obj = nullptr;
+                    cmd.submit_sock = nullptr;
+                    cmd.submit_spop_obj = nullptr;
+                    cmd.submit_spop_base = nullptr;
+                    cmd.submit_poll_info = nullptr;
+                    cmd.submit_other = nullptr;
+                    cmd.submit_queue = nullptr;
                     break;
+                }
 
                 case IoCommand::ContinuePollResult: {
                     // Result from async continuePoll() dispatch from worker thread
+                    // Cache is I/O-thread-only — no lock needed
                     bool finished = false;
                     DeferredDelivery dd;
 
                     {
-                        AutoLocker al(m);
                         auto it = cache.find(cmd.key);
                         if (it == cache.end()) {
                             // Operation was canceled while continuePoll was in flight

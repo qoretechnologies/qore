@@ -388,7 +388,7 @@ public:
 private:
     //! I/O thread commands
     enum class IoCommand {
-        Add,
+        SubmitOp,            //!< Submit a new operation (carries PollInfo data)
         Cancel,
         CancelOwner,
         Quit,
@@ -401,8 +401,8 @@ private:
     //! Command queue entry
     struct Command {
         IoCommand cmd = IoCommand::WakeSocket;
-        std::string key;                //!< For Cancel / ContinuePollResult: the cache key
-        std::string owner;              //!< For CancelOwner: the owner string
+        std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
+        std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
         QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
         bool* cancel_done_flag = nullptr; //!< For CancelOwner: set to true under lock before broadcast
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
@@ -411,6 +411,19 @@ private:
         QoreHashNode* continue_poll_ex = nullptr;      //!< For ContinuePollResult: exception (or nullptr)
         bool continue_poll_completed = false;           //!< For ContinuePollResult: true if completed
         std::string sock_hash;          //!< For WakeSocket: socket hash to re-poll
+        bool submit_replace = false;    //!< For SubmitOp: replace existing operation with same key
+
+        // --- SubmitOp data (ownership transferred to I/O thread) ---
+        QoreObject* submit_sock_obj = nullptr;           //!< Referenced socket object
+        AbstractPollableIoObjectBase* submit_sock = nullptr; //!< Referenced socket private data
+        QoreObject* submit_spop_obj = nullptr;           //!< Referenced poll operation object
+        SocketPollOperationBase* submit_spop_base = nullptr; //!< Referenced C++ poll operation base
+        QoreHashNode* submit_poll_info = nullptr;        //!< Referenced initial poll info (or nullptr)
+        QoreHashNode* submit_other = nullptr;            //!< Referenced other data (or nullptr)
+        Queue* submit_queue = nullptr;                   //!< Referenced result queue (or nullptr)
+        int64 submit_timeout_us = 0;                     //!< Timeout in microseconds
+        bool submit_has_qore_abort = false;              //!< True if abort() is overridden in Qore
+        bool submit_has_qore_on_complete = false;        //!< True if onComplete() is overridden in Qore
     };
 
     //! Internal poll info (mirrors Qore Priv::PollInfo)
@@ -464,13 +477,11 @@ private:
     MpscQueue<Command> cmdq;              //!< Lock-free command queue (replaces mutex-protected deque)
     std::atomic<bool> io_running{false};  //!< True when I/O thread accepts commands (no lock needed to check)
 
-    // --- Mutex-protected state ---
+    // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;
-    std::unordered_map<std::string, PollInfo> cache;
     int tid;                              //!< I/O thread ID (0 if not running)
     bool autostop_flag;
     bool shutting_down;
-    std::unordered_map<std::string, int> socket_refcounts;
     std::unordered_map<std::string, QoreCondition*> cancel_cond_map;
     QoreCondition io_cond;
     bool io_waiting;
@@ -487,15 +498,18 @@ private:
     //! Atomic counter for pre-allocating timer IDs across threads
     std::atomic<int64_t> next_ctrl_timer_id{1};
 
-    // --- I/O thread only state ---
+    // --- I/O thread only state (never accessed from other threads during normal operation) ---
     QoreEventLoop* loop;
     QoreEventNotifier* notifier;
 
+    //! Operation cache — fully owned by I/O thread (submit/cancel via MPSC commands)
+    std::unordered_map<std::string, PollInfo> cache;
+    std::unordered_map<std::string, int> socket_refcounts;
+
     //! Socket hashes that need re-polling (set by WakeSocket cmd, consumed by Phase 1)
-    //! I/O thread only — both producer (processCommands) and consumer (Phase 1) are on I/O thread
     std::unordered_set<std::string> wake_socket_hashes;
 
-    // Registered socket tracking (I/O thread only, but updated under lock in phase 3)
+    // Registered socket tracking (I/O thread only)
     std::unordered_map<std::string, QoreObject*> registered_sockets; //!< key -> Socket obj
     std::unordered_map<std::string, int> registered_events;          //!< sock hash -> current events
     std::unordered_map<std::string, int> registered_fds;             //!< sock hash -> registered fd
