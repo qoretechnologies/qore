@@ -95,8 +95,9 @@ public:
 
     //! Creates the dispatcher
     /** @param max_workers maximum number of Qore worker threads; 0 = auto (min(hardware_concurrency, 32))
+        @param controller the owning AsyncIoControllerPriv for logging (may be nullptr)
     */
-    DLLLOCAL QoreCallDispatcher(int max_workers = 0);
+    DLLLOCAL QoreCallDispatcher(int max_workers = 0, AsyncIoControllerPriv* controller = nullptr);
 
     //! Destructor — does NOT stop workers; call stop() first
     DLLLOCAL ~QoreCallDispatcher();
@@ -169,6 +170,7 @@ private:
     int active_processing = 0;             //!< Number of workers currently processing items
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
+    AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
@@ -426,6 +428,7 @@ private:
         bool has_qore_on_complete;      //!< True if onComplete() is overridden in Qore
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
+        std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
@@ -492,6 +495,7 @@ private:
     std::unordered_map<std::string, int> registered_fds;             //!< sock hash -> registered fd
     std::unordered_map<std::string, int> key_events;                 //!< key -> events for this key
     std::unordered_map<std::string, std::unordered_set<std::string>> sock_hash_to_keys; //!< reverse index
+    std::unordered_map<int, std::string> fd_to_sock_hash;             //!< fd -> sock_hash (O(1) epoll dispatch)
 
     //! Extra fd tracking: operation key -> set of registered extra fds
     /** @since %Qore 2.3
