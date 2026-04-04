@@ -4296,6 +4296,20 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             return QoreIRValue();
         }
     } else if (assign->getLeft().hasNode()) {
+        // Fast path: const-key hash subscript → LoadLocal + HashKeyStore (no EXPR_TREE)
+        const VarRefNode* container_var = nullptr;
+        std::string key_name;
+        QoreValue key_expr;
+        if (!is_weak && isConstKeyHashSubscript(assign->getLeft(), container_var, key_name, key_expr)) {
+            return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
+                assign->loc, error);
+        }
+        // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
+        QoreValue index_expr;
+        if (!is_weak && isConstIndexListSubscript(assign->getLeft(), container_var, index_expr)) {
+            return emitListIndexDirectStore(container_var, index_expr, right, expr,
+                assign->loc, error);
+        }
         if (!guardLValueBase(assign->getLeft(), error)) {
             return QoreIRValue();
         }
@@ -5223,6 +5237,17 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
     }
+    // Fast path: ++h.key for const-key hash subscript → LoadLocal + HashKeyAccess + Add + HashKeyStore
+    {
+        const VarRefNode* container_var = nullptr;
+        std::string key_name;
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)) {
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
+                QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
+        }
+    }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
@@ -5289,6 +5314,8 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, base_op->loc, error);
     }
+    // Post-inc/dec on hash keys deferred — needs old value which emitHashKeyCompoundOp
+    // doesn't currently expose. The pre-inc/dec case is handled in lowerPreIncrement/Decrement.
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
@@ -5360,6 +5387,17 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
     if (isRangeLValue(lvexp)) {
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
+    }
+    // Fast path: --h.key for const-key hash subscript → LoadLocal + HashKeyAccess + Sub + HashKeyStore
+    {
+        const VarRefNode* container_var = nullptr;
+        std::string key_name;
+        QoreValue key_expr;
+        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)) {
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            return emitHashKeyCompoundOp(container_var, key_name, key_expr,
+                QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
+        }
     }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
@@ -7352,6 +7390,67 @@ QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
     store_inst->operands.push_back(index_val);
 
     return new_val;
+}
+
+// Emit LoadLocal(hash, auto_ref=false) → HashKeyStore(hash, value, key) for h.key = val.
+// Simplified version of emitHashKeyCompoundOp without the load-compute cycle.
+QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
+        const VarRefNode* container_var, const std::string& key_name, const QoreValue& key_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error) {
+    // Load the hash container without refcount inflation (auto_ref=false)
+    QoreIRValue hash_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        hash_val = loadVarRef(container_var, error, "hash-direct-store", full_expr);
+    }
+    if (!hash_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Store value to hash element (COW-safe via QoreIRHashKeyStoreInstruction)
+    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreInstruction>(
+        container_var, key_name.c_str());
+    store_inst->loc = loc;
+    store_inst->operands.push_back(hash_val);
+    store_inst->operands.push_back(value);
+
+    return value;
+}
+
+// Emit LoadLocal(list, auto_ref=false) → ListIndexStore(list, value, index) for l[i] = val.
+QoreIRValue QoreIRLowering::emitListIndexDirectStore(
+        const VarRefNode* container_var, const QoreValue& index_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error) {
+    // Load the list container without refcount inflation (auto_ref=false)
+    QoreIRValue list_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        list_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        list_val = loadVarRef(container_var, error, "list-direct-store", full_expr);
+    }
+    if (!list_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Lower the index expression
+    QoreIRValue index_val = lowerExpression(index_expr, error);
+    if (!index_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Store value to list element (COW-safe via QoreIRListIndexStoreInstruction)
+    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRListIndexStoreInstruction>(container_var);
+    store_inst->loc = loc;
+    store_inst->operands.push_back(list_val);
+    store_inst->operands.push_back(value);
+    store_inst->operands.push_back(index_val);
+
+    return value;
 }
 
 QoreIRValue QoreIRLowering::lowerBinaryOpOrInvoke(QoreIROpcode op, const QoreValue& expr, QoreIRValue left,
