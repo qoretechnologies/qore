@@ -497,7 +497,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         TmpFile script();
         script.file.write("%modern\n");
         script.file.write("list nums = (1, 2, 3);\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.acc = foldl((sub (int acc, int v) { return acc + v; }, nums));\n");
         script.file.write("printf(\"foldl:%d\\n\", data.acc);\n");
         script.file.close();
@@ -600,7 +600,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         script.file.write("list nums = (10, 20, 30);\n");
         script.file.write("nums[0] += 5;\n");
         script.file.write("nums[1] *= 2;\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.foo = 1;\n");
         script.file.write("data.foo += 4;\n");
         script.file.write("data.bar = nums[0];\n");
@@ -803,7 +803,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.alpha = 2;\n");
         script.file.write("data.beta = data.alpha + 3;\n");
         script.file.write("data.gamma = data.beta;\n");
@@ -1277,7 +1277,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         TmpFile script();
         script.file.write("%modern\n");
         script.file.write("int x = 5;\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.alpha = 1;\n");
         script.file.write("remove data.alpha;\n");
         script.file.write("try {\n");
@@ -1315,7 +1315,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.value = 10;\n");
         script.file.write("delete data.value;\n");
         script.file.write("data.value = 20;\n");
@@ -1351,7 +1351,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         TmpFile script();
         script.file.write("%modern\n");
         script.file.write("list l;\n");
-        script.file.write("hash h;\n");
+        script.file.write("hash h = {};\n");
         script.file.write("class C { public { int v; } }\n");
         script.file.write("C c;\n");
         script.file.write("try {\n");
@@ -1439,7 +1439,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         script.file.write("int key = 1;\n");
         script.file.write("delete key;\n");
         script.file.write("key = 2;\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.k1 = 1;\n");
         script.file.write("data.k2 = 2;\n");
         script.file.write("hash selected = map ({sprintf(\"k%d\", $1) : $1}, data.iterator(), key == $1);\n");
@@ -1802,7 +1802,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.value = 10;\n");
         script.file.write("data.value += 3;\n");
         script.file.write("data.value -= 5;\n");
@@ -2512,7 +2512,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         TmpFile script();
         script.file.write("%modern\n");
         script.file.write("class BitwiseContainer { public { int v; } }\n");
-        script.file.write("hash h;\n");
+        script.file.write("hash h = {};\n");
         script.file.write("h.v = 13;\n");
         script.file.write("h.v %= 5;\n");
         script.file.write("h.v &= 6;\n");
@@ -2967,7 +2967,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.foo = 1;\n");
         script.file.write("if (exists data.foo) {\n");
         script.file.write("    data.bar = data.foo + 1;\n");
@@ -3044,7 +3044,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash h;\n");
+        script.file.write("hash h = {};\n");
         script.file.write("h.f = int sub () { return 7; };\n");
         script.file.write("int result = h.f();\n");
         script.file.write("printf(\"doteval:%d\\n\", result);\n");
@@ -3222,7 +3222,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash data;\n");
+        script.file.write("hash data = {};\n");
         script.file.write("data.rng = 1..5;\n");
         script.file.write("printf(\"hashrange-size:%d\\n\", data.rng.size());\n");
         script.file.write("printf(\"hashrange-first:%d\\n\", data.rng[0]);\n");
@@ -4193,7 +4193,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash h;\n");
+        script.file.write("hash h = {};\n");
         script.file.write("h += (\"a\": 1);\n");
         script.file.write("printf(\"hashappendmaybe:%d\\n\", h.size());\n");
         script.file.close();
@@ -4768,7 +4768,7 @@ class IRExecModeSmokeTest inherits QUnit::Test {
 
         TmpFile script();
         script.file.write("%modern\n");
-        script.file.write("hash h;\n");
+        script.file.write("hash h = {};\n");
         script.file.write("h += (\"a\": 1);\n");
         script.file.write("h += (\"b\": 2);\n");
         script.file.write("printf(\"hashappend2:%d:%d\\n\", h.size(), h.b);\n");

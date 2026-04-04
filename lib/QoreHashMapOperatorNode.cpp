@@ -52,11 +52,7 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
     const QoreTypeInfo* typeInfo;
 
     // this operator returns no value if the iterator expression has no value
-    // when iteratorTypeInfo is null (unknown type), we cannot know if it can return NOTHING,
-    // so we default to false; only set true when we KNOW the type can be NOTHING
-    bool or_nothing = iteratorTypeInfo && QoreTypeInfo::hasType(iteratorTypeInfo)
-        ? (QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING) != QTI_NOT_EQUAL)
-        : false;
+    bool or_nothing = QoreTypeInfo::parseReturns(iteratorTypeInfo, NT_NOTHING);
     if (QoreTypeInfo::hasType(expTypeInfo2)) {
         returnTypeInfo = qore_get_complex_hash_type(expTypeInfo2);
 
@@ -65,9 +61,9 @@ const QoreTypeInfo* QoreHashMapOperatorNode::setReturnTypeInfo(const QoreTypeInf
         } else
             typeInfo = returnTypeInfo;
     } else {
-        returnTypeInfo = autoHashTypeInfo;
+        returnTypeInfo = hashTypeInfo;
         // this operator returns no value if the iterator expression has no value
-        typeInfo = or_nothing ? autoHashOrNothingTypeInfo : autoHashTypeInfo;
+        typeInfo = or_nothing ? hashOrNothingTypeInfo : hashTypeInfo;
     }
 
     //printd(5, "QoreHashMapOperatorNode::setReturnTypeInfoe: '%s' t: '%s' r: '%s'\n",
@@ -113,8 +109,7 @@ int QoreHashMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& par
 
 QoreHashNode* QoreHashMapOperatorNode::getNewHash() const {
     const QoreTypeInfo* typeInfo = QoreTypeInfo::getUniqueReturnComplexHash(returnTypeInfo);
-    QoreHashNode* h = new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
-    return h;
+    return new QoreHashNode(typeInfo ? typeInfo : autoTypeInfo);
 }
 
 QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
@@ -157,7 +152,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
             return QoreValue();
 
         if (ref_rv) {
-            const QoreTypeInfo* vtype = arg_val->getFullTypeInfo();
+            const QoreTypeInfo* vtype = arg_val->getTypeInfo();
             //printd(5, "QoreHashMapOperatorNode::evalImpl() i: %d vcommon: %d vtype: %p '%s' valueType: %p '%s'\n",
             //  li.index(), vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
             //  QoreTypeInfo::getName(valueType));
@@ -191,7 +186,10 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
                     return QoreValue();
 
                 if (ref_rv) {
-                    const QoreTypeInfo* vtype = val->getFullTypeInfo();
+                    const QoreTypeInfo* vtype = val->getTypeInfo();
+                    printd(5, "QoreHashMapOperatorNode::evalImpl() i: %d vcommon: %d vtype: %p '%s' valueType: %p '%s'\n",
+                        li.index(), vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
+                        QoreTypeInfo::getName(valueType));
                     if (!li.index()) {
                         if (vtype && vtype != anyTypeInfo) {
                             valueType = vtype;
@@ -216,12 +214,7 @@ QoreValue QoreHashMapOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xs
     //printd(5, "QoreHashMapOperatorNode::mapIterator() vcommon: %d valueType: %p '%s'\n", vcommon, valueType,
     //  QoreTypeInfo::getName(valueType));
     if (ref_rv && vcommon) {
-        qore_hash_private* hp = qore_hash_private::get(**ret_val);
-        hp->complexTypeInfo = qore_get_complex_hash_type(valueType);
-        // Clear any hashdecl binding - the outer hash should use complexTypeInfo, not hashdecl
-        if (hp->hashdecl) {
-            hp->setHashDecl(nullptr);
-        }
+        qore_hash_private::get(**ret_val)->complexTypeInfo = qore_get_complex_hash_type(valueType);
     }
 
     return ret_val.release();
@@ -267,7 +260,10 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
                 return QoreValue();
 
             if (ref_rv) {
-                const QoreTypeInfo* vtype = val->getFullTypeInfo();
+                const QoreTypeInfo* vtype = val->getTypeInfo();
+                printd(5, "QoreHashMapOperatorNode::mapIterator() i: %d vcommon: %d vtype: %p '%s' valueType: %p " \
+                    "'%s'\n", i, vcommon, vtype, QoreTypeInfo::getName(vtype), valueType,
+                    QoreTypeInfo::getName(valueType));
                 if (i == 1) {
                     if (vtype && vtype != anyTypeInfo) {
                         valueType = vtype;
@@ -288,12 +284,7 @@ QoreValue QoreHashMapOperatorNode::mapIterator(AbstractIteratorHelper& h, Except
     //printd(5, "QoreHashMapOperatorNode::mapIterator() vcommon: %d valueType: %p '%s'\n", vcommon, valueType,
     //  QoreTypeInfo::getName(valueType));
     if (ref_rv && vcommon) {
-        qore_hash_private* hp = qore_hash_private::get(**rv);
-        hp->complexTypeInfo = qore_get_complex_hash_type(valueType);
-        // Clear any hashdecl binding - the outer hash should use complexTypeInfo, not hashdecl
-        if (hp->hashdecl) {
-            hp->setHashDecl(nullptr);
-        }
+        qore_hash_private::get(**rv)->complexTypeInfo = qore_get_complex_hash_type(valueType);
     }
 
     return rv.release();
