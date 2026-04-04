@@ -2163,7 +2163,9 @@ public class HttpAsyncSocketIoController {
             remove connections{uh};
         }
 
-        # Opt 2: try to handle inline in the I/O thread (single handler lookup)
+        # Try lightweight inline path first (no body, handler opts in via canHandleInline).
+        # This runs directly on the call_dispatcher worker — no handler_pool thread hop.
+        # The inline path skips context setup, auth, and logging for maximum throughput.
         try {
             *hash<HttpRequestResultInfo> inline_result = cinfo.target.tryInlineRequest(conn_info);
             if (inline_result) {
@@ -2173,8 +2175,6 @@ public class HttpAsyncSocketIoController {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Error handling inline request: %s: %s", ex.err, ex.desc);
             cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-            # Do not close shared UDP socket for HTTP/3 connections (defensive;
-            # HTTP/3 requests don't flow through handleHeaderComplete currently)
             if (cinfo.state != HttpConnectionState::Http3
                     && cinfo.state != HttpConnectionState::Http3Sending) {
                 try { cinfo.sock.close(); } catch () {}
@@ -2182,7 +2182,8 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Dispatch to thread pool so the I/O thread returns immediately
+        # Full request path — dispatch to handler_pool to avoid tying up
+        # call_dispatcher workers with potentially blocking handler logic
         try {
             handler_pool.submit(sub () {
                 try {
@@ -3051,8 +3052,16 @@ public class HttpAsyncSocketIoController {
                 # Submit response to nghttp2 session (thread-safe)
                 cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr, body);
 
-                # Wake the I/O controller so h2op's continuePoll() runs and sends
-                # the pending response data
+                # Flush response frames to the socket inline from this worker thread.
+                # We cannot rely on wakeSocket() → continuePoll() because the H2 poll
+                # operation may have already been removed from the controller's cache
+                # (Phase3 REMOVE fires before onComplete dispatch reaches this point).
+                # This follows nginx's pattern: the filter flushes inline via
+                # ngx_http_v2_send_output_queue() rather than deferring to the event loop.
+                cinfo.sock.flushHttp2(-1);
+
+                # Wake the I/O controller so it re-registers the socket for the next
+                # request's incoming frames
                 controller.wakeSocket(cinfo.sock);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
