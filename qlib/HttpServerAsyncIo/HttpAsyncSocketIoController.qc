@@ -921,7 +921,8 @@ public class HttpAsyncSocketIoController {
 
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
-            pool_opts.quic_headers_only ?? False);
+            pool_opts.quic_headers_only ?? False,
+            pool_opts.max_request_body_size ?? 0);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 

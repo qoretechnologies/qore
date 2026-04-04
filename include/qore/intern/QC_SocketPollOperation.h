@@ -1363,6 +1363,11 @@ public:
     */
     DLLLOCAL void setHeadersOnly(bool v);
 
+    //! Sets the maximum request body size for all sessions (0 = unlimited)
+    /** Consistent with Http2Session::setMaxRequestBodySize().
+    */
+    DLLLOCAL void setMaxRequestBodySize(int64_t size);
+
 private:
     //! Cached completed stream with session ID and session pointer (for peer address extraction)
     struct CachedStream {
@@ -1382,6 +1387,9 @@ private:
 
     //! Headers-only mode flag
     bool headers_only_ = false;
+
+    //! Maximum request body size (0 = unlimited); propagated to sessions
+    int64_t max_request_body_size_ = 0;
 
     //! Cached completed stream info; mutable so getOutput() (const) can consume it.
     //! Thread safety: the poll framework serializes continuePoll() and getOutput()
