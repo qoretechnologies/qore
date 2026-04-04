@@ -50,6 +50,7 @@
 #include "qore/intern/OnBlockExitStatement.h"
 #include "qore/intern/Function.h"
 #include "qore/intern/QoreClosureParseNode.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
 #include "qore/intern/QoreParseHashNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
@@ -2640,6 +2641,19 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    // QoreDotEvalOperatorNode: obj.method(args) — serialize as DOT_EVAL_TARGET
+    if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+        MethodCallNode* mc = de->getMethodCall();
+        if (mc) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
+            const QoreClass* qc = mc->getClass();
+            writer.writeStringRef(qc ? qc->getPath() : "");
+            writer.writeStringRef(mc->getName() ? mc->getName() : "");
+            writer.writeU8(mc->isPseudo() ? 1 : 0);
+            return true;
+        }
+    }
+
     // Try reverse constant lookup for unsupported node types (e.g., QoreObject)
     if (const_reverse_map) {
         auto it = const_reverse_map->find(node);
@@ -4587,7 +4601,7 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
-    // Commit all newly deserialized classes (set initialized + commit pending method variants)
+    // First pass: commit all newly deserialized classes (moves pending variants to vlist)
     for (size_t i = 0; i < class_list.size(); ++i) {
         if (preexisting_classes.count(i)) {
             continue;  // already initialized and committed
@@ -4604,6 +4618,52 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
         printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",
             qc->getName(), (void*)priv->constructor, (int)priv->hm.size());
     }
+
+    // Second pass: import abstract methods from parent classes and resolve them.
+    // This must happen AFTER parseCommit() because concrete variants are in the
+    // pending list until committed — parseHasVariantWithSignature() only searches
+    // the committed vlist. This mirrors parseInitPartialIntern() (QoreClass.cpp:4477).
+    for (size_t i = 0; i < class_list.size(); ++i) {
+        if (preexisting_classes.count(i)) {
+            continue;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        if (!priv->scl) {
+            continue;
+        }
+        for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
+            const QoreClass* parent = (*bi)->sclass;
+            if (!parent) {
+                continue;
+            }
+            const AbstractMethodMap& parent_ahm = qore_class_private::get(*parent)->ahm;
+            for (auto ai = parent_ahm.begin(), ae = parent_ahm.end(); ai != ae; ++ai) {
+                if (priv->ahm.find(ai->first) != priv->ahm.end()) {
+                    continue;
+                }
+                // Check if we have a local concrete override (now in committed vlist)
+                auto mi = priv->hm.find(ai->first);
+                MethodFunctionBase* f = (mi != priv->hm.end())
+                    ? qore_method_private::get(*mi->second)->getFunction() : nullptr;
+                if (f && f->parseHasVariantWithSignature(
+                        ai->second->vlist.begin()->second, priv->ahm.relaxed_match)) {
+                    // Resolved — concrete override matches abstract signature
+                    continue;
+                }
+                // Unresolved — import abstract method
+                std::unique_ptr<AbstractMethod> m(new AbstractMethod(priv->ahm.relaxed_match));
+                m->parseMergeBase(*(ai->second), f);
+                if (!m->empty()) {
+                    priv->ahm.insert(amap_t::value_type(ai->first, m.release()));
+                }
+            }
+        }
+    }
+
     return true;
 }
 

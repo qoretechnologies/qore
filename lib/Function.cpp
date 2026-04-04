@@ -106,8 +106,6 @@ bool AbstractFunctionSignature::compare(const AbstractFunctionSignature& sig, bo
     }
 
     if (num_param_types != sig.num_param_types || min_param_types != sig.min_param_types) {
-        //printd(5, "AbstractFunctionSignature::compare() pt: %d != %d || mpt %d != %d\n", num_param_types,
-        //    sig.num_param_types, min_param_types, sig.min_param_types);
         return false;
     }
 
@@ -799,11 +797,14 @@ void UserSignature::setupFromAOTMetadata(
     // Setting it to true here would cause parseCheckDuplicateSignature() to fail when
     // adding multiple variants, as it expects all pending variants to be unresolved.
 
-    // Count param types
+    // Count param types — must match the same logic used by BuiltinSignature
+    // (BuiltinFunction.h:49) and the source parser (Function.cpp:709):
+    // only count params where QoreTypeInfo::hasType() returns true.
+    // auto/any types (NT_ALL) are NOT counted as "having type".
     num_param_types = 0;
     min_param_types = 0;
     for (size_t i = 0; i < typeList.size(); ++i) {
-        if (typeList[i]) {
+        if (QoreTypeInfo::hasType(typeList[i])) {
             ++num_param_types;
             if (i >= defaultArgList.size() || !defaultArgList[i]) {
                 ++min_param_types;
