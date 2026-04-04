@@ -6964,35 +6964,13 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // in values[] array might be stale if COW created a copy. For single-pass
             // operations like `h{"x"} += 3`, we must update values[] immediately.
             uint32_t hash_operand_id = inst->operands[0].id;
-            if (aot_mode) {
-                // AOT: reload from context slot
-                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(hks_inst->container->ref.id));
-                llvm::Value* updated_hash = builder->CreateCall(load_fn,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                values[hash_operand_id] = updated_hash;
-                nanboxed_values.insert(hash_operand_id);
-                trackResultForCleanup(updated_hash, hash_operand_id, llvm_func);
-            } else {
-                // JIT: reload from LocalVar pointer
-                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                auto var_int = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(hks_inst->container->ref.id));
-                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
-                llvm::Value* updated_hash = builder->CreateCall(load_fn, {var_ptr, xsink_arg});
-                values[hash_operand_id] = updated_hash;
-                nanboxed_values.insert(hash_operand_id);
-                trackResultForCleanup(updated_hash, hash_operand_id, llvm_func);
-
-                // JIT: also update the alloca cache so subsequent LoadLocal(h) reads
-                // the post-COW hash, not the stale pre-COW value cached in the alloca.
-                const void* container_key =
-                    reinterpret_cast<const void*>(hks_inst->container->ref.id);
-                reloadLocalFromRuntime(container_key, module, llvm_func);
-            }
+            // Reload the hash from the runtime after potential COW.
+            // reloadLocalFromRuntime updates the alloca cache so subsequent
+            // LoadLocal(h) reads the post-COW hash (not a stale cached value).
+            // This is critical for both JIT and AOT modes.
+            const void* container_key =
+                reinterpret_cast<const void*>(hks_inst->container->ref.id);
+            reloadLocalFromRuntime(container_key, module, llvm_func);
 
             return true;
         }
@@ -7049,37 +7027,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             emitExceptionCheck(module, llvm_func, inst);
 
             // CRITICAL: After ListIndexStore COW, reload the list from the LocalVar.
-            // Same pattern as HashKeyStore.
-            uint32_t list_operand_id = lis_inst->operands[0].id;
-            if (aot_mode) {
-                // AOT: reload from context slot
-                auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
-                        reinterpret_cast<const void*>(lis_inst->container->ref.id));
-                llvm::Value* updated_list = builder->CreateCall(load_fn,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
-                values[list_operand_id] = updated_list;
-                nanboxed_values.insert(list_operand_id);
-                trackResultForCleanup(updated_list, list_operand_id, llvm_func);
-            } else {
-                // JIT: reload from LocalVar pointer
-                auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
-                auto var_int = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(lis_inst->container->ref.id));
-                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
-                llvm::Value* updated_list = builder->CreateCall(load_fn, {var_ptr, xsink_arg});
-                values[list_operand_id] = updated_list;
-                nanboxed_values.insert(list_operand_id);
-                trackResultForCleanup(updated_list, list_operand_id, llvm_func);
-
-                // JIT: also update the alloca cache so subsequent LoadLocal(l) reads
-                // the post-COW list, not the stale pre-COW value cached in the alloca.
-                const void* container_key =
-                    reinterpret_cast<const void*>(lis_inst->container->ref.id);
-                reloadLocalFromRuntime(container_key, module, llvm_func);
-            }
+            // reloadLocalFromRuntime updates the alloca cache so subsequent
+            // LoadLocal(l) reads the post-COW list (not a stale cached value).
+            // This is critical for both JIT and AOT modes.
+            const void* container_key =
+                reinterpret_cast<const void*>(lis_inst->container->ref.id);
+            reloadLocalFromRuntime(container_key, module, llvm_func);
 
             return true;
         }
