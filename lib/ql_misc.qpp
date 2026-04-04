@@ -666,8 +666,8 @@ set_async_io_logger(logger);
 
     @since %Qore 2.3
 */
-nothing set_async_io_logger(*object logger) [dom=PROCESS] {
-    qore_set_async_io_logger(logger, xsink);
+nothing set_async_io_logger(*LoggerInterfaceBase logger) [dom=PROCESS] {
+    qore_set_async_io_logger(const_cast<QoreObject*>(logger), xsink);
 }
 
 //! Returns the current global async I/O logger, or @ref nothing "NOTHING"
