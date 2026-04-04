@@ -1115,7 +1115,7 @@ static QoreAOTContext* buildContextFromSlotMap(
         const char* ref2 = nullptr;
 
         // Validate expression kind is known (Phase 1 validation)
-        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 33) || kind_byte == 0xFE || kind_byte == 0xFF;
+        bool kind_is_valid = (kind_byte >= 1 && kind_byte <= 40) || kind_byte == 0xFE || kind_byte == 0xFF;
         if (!kind_is_valid) {
             has_unsupported = true;
             break;
