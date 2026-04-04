@@ -3929,7 +3929,9 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 case QoreIROpcode::CastList:
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum: {
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::HashDerefDynamic:
+                case QoreIROpcode::ListIndexDynamic: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4262,7 +4264,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastList:
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum: {
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::HashDerefDynamic:
+                case QoreIROpcode::ListIndexDynamic: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated
@@ -4711,7 +4715,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 case QoreIROpcode::CastList:
                 case QoreIROpcode::CastHash:
                 case QoreIROpcode::CastObject:
-                case QoreIROpcode::CastEnum: {
+                case QoreIROpcode::CastEnum:
+                case QoreIROpcode::HashDerefDynamic:
+                case QoreIROpcode::ListIndexDynamic: {
                     auto* ei = static_cast<QoreIRExprInstruction*>(inst.get());
                     if (!ei->operands.empty()) {
                         break;  // skip — operand is pre-evaluated

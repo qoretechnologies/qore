@@ -561,7 +561,13 @@ enum class QoreIROpcode : uint16_t {
     AddTimeout          = 351,
     SubTimeout          = 352,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (353, 354, ...)
+    //! Dynamic hash/object dereference with pre-evaluated key: operands[0]=base, operands[1]=key
+    //! Used when key is not a constant string (h{var}, h{list} for slicing)
+    HashDerefDynamic    = 353,
+    //! Dynamic list/container index with pre-evaluated index: operands[0]=container, operands[1]=index
+    ListIndexDynamic    = 354,
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (355, 356, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -569,8 +575,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::SubTimeout);
-static_assert(QORE_IR_MAX_OPCODE == 352, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListIndexDynamic);
+static_assert(QORE_IR_MAX_OPCODE == 354, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! PHASE 4: Opcode Coverage Documentation
@@ -735,6 +741,8 @@ inline bool isBinaryInvokeOpcode(QoreIROpcode op) {
         case QoreIROpcode::FusedMapFoldlSumSquareFloat:
         case QoreIROpcode::FusedMapFoldlProdScaleInt:
         case QoreIROpcode::FusedMapFoldlProdScaleFloat:
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexDynamic:
             return true;
         default:
             return false;

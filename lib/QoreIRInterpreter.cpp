@@ -63,7 +63,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 352,
+static_assert(QORE_IR_MAX_OPCODE == 354,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -5775,6 +5775,32 @@ load_local_done:
                 ++ip;
                 break;
             }
+            // Container access with pre-evaluated operands: use evalBinary
+            case QoreIROpcode::HashDerefDynamic:
+            case QoreIROpcode::ListIndexDynamic: {
+                if (inst->operands.size() < 2) {
+                    if (xsink) {
+                        xsink->raiseException("IR-EXEC-ERROR", "container access op missing operands");
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue left_val = getIRValue(values, inst->operands[0]);
+                QoreValue right_val = getIRValue(values, inst->operands[1]);
+                QoreValue res = QoreIRInterpreter::evalBinary(inst->opcode, left_val, right_val, xsink);
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                setValueSlot(values, inst->result.id, res, xsink);
+                if (res.hasNode()) {
+                    cleanup.push_back(inst->result.id);
+                }
+                ++ip;
+                break;
+            }
             case QoreIROpcode::RangeSliceAny:
             case QoreIROpcode::RangeSliceInt:
             case QoreIROpcode::RangeSliceFloat:
@@ -9060,6 +9086,66 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::CmpString:
         case QoreIROpcode::CmpAny:
             return evalComparison(op, left, right, xsink);
+        case QoreIROpcode::HashDerefDynamic: {
+            // Dynamic hash/object dereference — mirrors QoreHashObjectDereferenceOperatorNode::evalImpl
+            qore_type_t bt = left.getType();
+            if (bt == NT_HASH) {
+                const QoreHashNode* h = left.get<const QoreHashNode>();
+                if (right.getType() == NT_LIST) {
+                    return qore_hash_private::get(*h)->getSlice(right.get<const QoreListNode>(), xsink);
+                }
+                QoreStringValueHelper key(right);
+                QoreValue v = h->getKeyValue(key->c_str(), xsink);
+                return (xsink && *xsink) ? QoreValue() : v.refSelf();
+            }
+            if (bt == NT_OBJECT) {
+                QoreObject* o = const_cast<QoreObject*>(left.get<const QoreObject>());
+                if (right.getType() == NT_LIST) {
+                    return o->getSlice(right.get<const QoreListNode>(), xsink);
+                }
+                QoreStringValueHelper key(right);
+                ValueHolder rv(o->evalMember(key->c_str(), xsink), xsink);
+                return (xsink && *xsink) ? QoreValue() : rv.release();
+            }
+            return QoreValue();
+        }
+        case QoreIROpcode::ListIndexDynamic: {
+            // Dynamic list/container index: container[index]
+            qore_type_t bt = left.getType();
+            if (bt == NT_LIST) {
+                const QoreListNode* l = left.get<const QoreListNode>();
+                size_t idx = static_cast<size_t>(right.getAsBigInt());
+                if (idx < l->size()) {
+                    return l->retrieveEntry(idx).refSelf();
+                }
+                return QoreValue();
+            }
+            if (bt == NT_STRING) {
+                const QoreStringNode* s = left.get<const QoreStringNode>();
+                int64 idx = right.getAsBigInt();
+                if (idx >= 0 && idx < static_cast<int64>(s->length())) {
+                    return s->substr(static_cast<qore_offset_t>(idx), 1, xsink);
+                }
+                return QoreValue();
+            }
+            if (bt == NT_BINARY) {
+                const BinaryNode* b = left.get<const BinaryNode>();
+                int64 idx = right.getAsBigInt();
+                if (idx >= 0 && idx < static_cast<int64>(b->size())) {
+                    return QoreValue(static_cast<int64>(
+                        static_cast<const unsigned char*>(b->getPtr())[idx]));
+                }
+                return QoreValue();
+            }
+            if (bt == NT_HASH) {
+                // hash[key] is equivalent to hash{key}
+                const QoreHashNode* h = left.get<const QoreHashNode>();
+                QoreStringValueHelper kstr(right);
+                QoreValue result = h->getKeyValue(kstr->c_str(), xsink);
+                return xsink && *xsink ? QoreValue() : result.refSelf();
+            }
+            return QoreValue();
+        }
         default:
             break;
     }

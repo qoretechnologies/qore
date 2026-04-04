@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 352,
+static_assert(QORE_IR_MAX_OPCODE == 354,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -9780,6 +9780,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             nanboxed_values.insert(inst->result.id);
             emitExceptionCheck(module, llvm_func, inst);
             return true;
+        }
+
+        // === Container access with pre-evaluated operands ===
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexDynamic: {
+            if (inst->operands.size() >= 2) {
+                auto* lhs = getVal(inst->operands[0].id, error);
+                auto* rhs = getVal(inst->operands[1].id, error);
+                if (!lhs || !rhs) { return false; }
+                llvm::Value* lhs_boxed = boxValue(lhs, inst->operands[0].id);
+                llvm::Value* rhs_boxed = boxValue(rhs, inst->operands[1].id);
+                llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                    static_cast<int>(inst->opcode));
+                auto helper = module.getOrInsertFunction("qore_rt_binary_op",
+                    llvm::FunctionType::get(i64_type,
+                        {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, ptr_type}, false));
+                llvm::Value* result = builder->CreateCall(helper,
+                    {opcode_val, lhs_boxed, rhs_boxed, xsink_arg});
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(result, inst->result.id, llvm_func);
+                emitExceptionCheck(module, llvm_func, inst);
+                // Container access can modify locals through side effects (object member access)
+                reloadAllLocalsFromRuntime(module, llvm_func);
+                return true;
+            }
+            // No operands — fall through to error
+            error = "HashDerefDynamic/ListIndexDynamic without operands";
+            return false;
         }
 
         default:

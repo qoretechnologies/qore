@@ -6356,7 +6356,7 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{lhs, rhs};
-    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::ListIndexDynamic, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, std::string& error) {
@@ -6438,7 +6438,7 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
         return QoreIRValue();
     }
     std::vector<QoreIRValue> operands{base_val, key_val};
-    return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
+    return lowerExprOpOrInvoke(QoreIROpcode::HashDerefDynamic, expr, operands, op->loc, error);
 }
 
 QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error) {

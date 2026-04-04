@@ -362,6 +362,10 @@ static bool requiresResult(QoreIROpcode op) {
         case QoreIROpcode::RefForeachGetEntry:
         case QoreIROpcode::AddAssignLocalInt:
         case QoreIROpcode::IncrementLocalInt:
+        case QoreIROpcode::AddTimeout:
+        case QoreIROpcode::SubTimeout:
+        case QoreIROpcode::HashDerefDynamic:
+        case QoreIROpcode::ListIndexDynamic:
             return true;
         default:
             return false;
@@ -535,6 +539,10 @@ static int expectedOperands(QoreIROpcode op) {
         case QoreIROpcode::RefForeachGetEntry:  // 2 operands: state, index
         case QoreIROpcode::RefForeachRecord:    // 2 operands: state, value
         case QoreIROpcode::RefForeachFinalize:  // 2 operands: state, fill_remaining
+        case QoreIROpcode::AddTimeout:          // 2 operands: int (ms) + date
+        case QoreIROpcode::SubTimeout:          // 2 operands: int (ms) - date
+        case QoreIROpcode::HashDerefDynamic:    // 2 operands: base + key
+        case QoreIROpcode::ListIndexDynamic:    // 2 operands: container + index
             return 2;
         // These *Any opcodes are used in delegate-to-AST mode with 0 operands
         case QoreIROpcode::MapSelectAny:
