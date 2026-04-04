@@ -1603,6 +1603,12 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 
     dest.flush();
 
+    if (dest.has_error()) {
+        error = "LLVM code generation failed writing to " + path;
+        delete tm;
+        return false;
+    }
+
     if (debug_opt) {
         fprintf(stderr, "AOT: Object file emission completed successfully\n");
         fflush(stderr);

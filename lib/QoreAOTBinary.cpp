@@ -2707,6 +2707,12 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             }
             AOTExprSlotWriteCtx wctx{writer, expr, func.slot_ids.locals, func.slot_ids.globals, const_reverse_map};
             if (!kinfo->write_fn(wctx)) {
+                if (error.empty()) {
+                    error = "failed to serialize expression slot kind "
+                        + std::to_string(static_cast<uint8_t>(expr.kind))
+                        + " (" + (kinfo->name ? kinfo->name : "?")
+                        + ") in function '" + func.name + "'";
+                }
                 return false;
             }
         }
