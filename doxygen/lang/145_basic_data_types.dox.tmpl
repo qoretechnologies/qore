@@ -112,6 +112,34 @@ string 3: "olleh"
     When making a substring with a list of character offsets and referring to a character offset that does not exist,
     no characters are added to the output string; these references are ignored.
 
+    @anchor string_escape_chars
+    @par String Escape Characters
+    The following escape sequences are recognized in double-quoted strings:
+    |Escape|Description
+    |\c \\a|Alert (bell)
+    |\c \\b|Backspace
+    |\c \\e|Escape (ESC)
+    |\c \\f|Form feed
+    |\c \\n|Newline
+    |\c \\r|Carriage return
+    |\c \\t|Horizontal tab
+    |\c \\v|Vertical tab
+    |\c \\\\|Literal backslash
+    |\c \\0 to \\377|Octal byte value (1-3 digits)
+    |\c \\xHH|Hex byte value (1-2 hex digits)
+    |\c \\uHHHH|Unicode codepoint (exactly 4 hex digits), encoded as UTF-8
+    |\c \\UHHHHHHHH|Unicode codepoint (exactly 8 hex digits), encoded as UTF-8
+
+    Single-quoted strings do not interpret any escape sequences.
+
+    @par Example:
+    @code{.py}
+string box = "\u2500\u2500\u2500";    # "───" (3 box-drawing chars)
+string smiley = "\U0001F600";          # "😀"
+string tab = "\t";
+string hex_A = "\x41";                 # "A"
+    @endcode
+
     @see
     - @ref string_type, @ref softstring_type
     - @ref string_functions
