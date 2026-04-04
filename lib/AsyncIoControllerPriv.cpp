@@ -880,30 +880,28 @@ bool AsyncIoControllerPriv::cancelByKey(const QoreStringNode* key, ExceptionSink
     PollInfo direct_pinfo;
     bool direct_cancel = false;
 
-    {
-        AutoLocker al(m);
-        auto it = ctx().cache.find(uh);
-        if (it != ctx().cache.end()) {
+    if (on_async_io_thread) {
+        // I/O thread — access cache directly (we own it)
+        IoThreadContext& t = getThreadForKey(uh);
+        auto it = t.cache.find(uh);
+        if (it != t.cache.end()) {
             rv = true;
-            if (ctx().tid && !io_exiting && !on_async_io_thread) {
-                // I/O thread is running and we're NOT on any async I/O thread —
-                // enqueue the cancel command
-                if (!cancel_cond_map.count(uh)) {
-                    cancel_cond_map[uh] = new QoreCondition();
-                }
-                do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
-            } else {
-                // I/O thread not running OR we ARE the I/O thread — handle cancel directly
-                // (enqueuing+waiting from the I/O thread would deadlock since the I/O thread
-                // is the one that processes cancel commands)
-                direct_cancel = true;
-                ASYNC_IO_TRACE("cache.erase CANCEL_DIRECT key='%s' owner='%s'\n",
-                    uh.c_str(), it->second.owner.c_str());
-                direct_pinfo = it->second;
-                it->second = PollInfo();
-                ctx().cache.erase(it);
-            }
+            direct_cancel = true;
+            ASYNC_IO_TRACE("cache.erase CANCEL_DIRECT key='%s' owner='%s'\n",
+                uh.c_str(), it->second.owner.c_str());
+            direct_pinfo = it->second;
+            it->second = PollInfo();
+            t.cache.erase(it);
         }
+    } else {
+        // Worker thread — send Cancel command to I/O thread (can't access cache directly)
+        AutoLocker al(m);
+        // Always enqueue — the I/O thread will ignore if key doesn't exist
+        rv = true;
+        if (!cancel_cond_map.count(uh)) {
+            cancel_cond_map[uh] = new QoreCondition();
+        }
+        do_signal = enqueueCmdLocked(IoCommand::Cancel, uh);
     }
 
     if (do_signal) {
@@ -954,42 +952,33 @@ int AsyncIoControllerPriv::cancelByOwner(const QoreStringNode* owner, ExceptionS
     QoreCondition done_cond;
     bool cancel_done = false;
 
-    {
+    if (on_async_io_thread) {
+        // I/O thread — access cache directly across all contexts
+        for (auto& tp : io_threads) {
+            std::vector<std::string> keys;
+            for (auto& [key, pinfo] : tp->cache) {
+                if (pinfo.owner == owner_str) {
+                    keys.push_back(key);
+                }
+            }
+            for (auto& key : keys) {
+                auto it = tp->cache.find(key);
+                if (it != tp->cache.end()) {
+                    ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DIRECT key='%s' owner='%s'\n",
+                        key.c_str(), owner_str.c_str());
+                    direct_pinfos.push_back(it->second);
+                    it->second = PollInfo();
+                    tp->cache.erase(it);
+                    ++cache_count;
+                }
+            }
+        }
+    } else {
+        // Worker thread — always send CancelOwner to all I/O threads
         AutoLocker al(m);
-
-        // Count matching operations in main cache
-        for (auto& it : ctx().cache) {
-            if (it.second.owner == owner_str) {
-                ++cache_count;
-            }
-        }
-
-        if (cache_count > 0) {
-            if (ctx().tid && !io_exiting && !on_async_io_thread) {
-                // I/O thread is running and we're NOT on any async I/O thread —
-                // enqueue the cancel command
-                do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
-                    &cancel_done);
-            } else {
-                // I/O thread not running OR we ARE the I/O thread — handle cancel directly
-                std::vector<std::string> keys;
-                for (auto& [key, pinfo] : ctx().cache) {
-                    if (pinfo.owner == owner_str) {
-                        keys.push_back(key);
-                    }
-                }
-                for (auto& key : keys) {
-                    auto it = ctx().cache.find(key);
-                    if (it != ctx().cache.end()) {
-                        ASYNC_IO_TRACE("cache.erase CANCEL_BY_OWNER_DIRECT key='%s' owner='%s'\n",
-                            key.c_str(), owner_str.c_str());
-                        direct_pinfos.push_back(it->second);
-                        it->second = PollInfo();
-                        ctx().cache.erase(it);
-                    }
-                }
-            }
-        }
+        cache_count = 1;  // Assume at least one to trigger the wait
+        do_signal = enqueueCmdLocked(IoCommand::CancelOwner, std::string(), owner_str, &done_cond,
+            &cancel_done);
     }
 
     count += cache_count;
@@ -2583,10 +2572,9 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                 }
 
                 case IoCommand::CancelOwner: {
-                    // Find all operations for this owner
+                    // Find all operations for this owner (cache is I/O-thread-only)
                     std::vector<std::string> keys;
                     {
-                        AutoLocker al(m);
                         for (auto& [key, pinfo] : t.cache) {
                             if (pinfo.owner == cmd.owner) {
                                 keys.push_back(key);
