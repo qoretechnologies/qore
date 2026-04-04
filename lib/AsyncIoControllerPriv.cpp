@@ -489,11 +489,21 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
       io_waiting(false), io_exiting(false), ready_flag(false),
       submit_seq(0), processed_seq(0),
       logger(nullptr), timer_callback(nullptr) {
-    // Initialize I/O thread contexts (default: 1 thread)
+    // Check env var for I/O thread count override
+    const char* env_threads = getenv("QORE_IO_THREADS");
+    if (env_threads) {
+        int n = atoi(env_threads);
+        if (n > 0 && n <= 32) {
+            num_io_threads = n;
+        }
+    }
+
+    // Initialize I/O thread contexts
     io_threads.reserve(num_io_threads);
     for (int i = 0; i < num_io_threads; ++i) {
         io_threads.push_back(std::make_unique<IoThreadContext>());
         auto& t = *io_threads.back();
+        t.thread_idx = i;
         t.loop = new QoreEventLoop(xsink);
         if (*xsink) {
             return;
@@ -816,6 +826,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         ++submit_seq;
     } else {
         // Worker thread: package data into SubmitOp command (lock-free)
+        // Route to the correct I/O thread based on operation key
+        IoThreadContext& target = getThreadForKey(uh);
         Command cmd;
         cmd.cmd = IoCommand::SubmitOp;
         cmd.key = uh;
@@ -832,8 +844,8 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         cmd.submit_has_qore_abort = has_qore_abort;
         cmd.submit_has_qore_on_complete = has_qore_on_complete;
 
-        ctx().cmdq.push(std::move(cmd));
-        ctx().notifier->notify();
+        target.cmdq.push(std::move(cmd));
+        target.notifier->notify();
 
         ++submit_seq;
     }
@@ -1094,16 +1106,25 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
 }
 
 void AsyncIoControllerPriv::wakeSocket(const std::string& sock_hash) {
-    // Lock-free: check atomic flag instead of acquiring mutex
-    if (!ctx().running.load(std::memory_order_acquire)) {
+    // Look up which thread owns this socket
+    int thread_idx = 0;
+    {
+        AutoLocker al(sock_route_lock);
+        auto it = sock_to_thread.find(sock_hash);
+        if (it != sock_to_thread.end()) {
+            thread_idx = it->second;
+        }
+    }
+    IoThreadContext& target = *io_threads[thread_idx];
+    if (!target.running.load(std::memory_order_acquire)) {
         return;
     }
     Command cmd;
     cmd.cmd = IoCommand::WakeSocket;
     cmd.sock_hash = sock_hash;
-    ctx().cmdq.push(std::move(cmd));
-    ASYNC_IO_TRACE("wakeSocket: hash='%s'\n", sock_hash.c_str());
-    ctx().notifier->notify();
+    target.cmdq.push(std::move(cmd));
+    ASYNC_IO_TRACE("wakeSocket: hash='%s' thread=%d\n", sock_hash.c_str(), thread_idx);
+    target.notifier->notify();
 }
 
 void AsyncIoControllerPriv::wakeSocketByObject(QoreObject* sock_obj, ExceptionSink* xsink) {
@@ -1253,13 +1274,20 @@ bool AsyncIoControllerPriv::waitForProcessing(int timeout_ms, ExceptionSink* xsi
 }
 
 bool AsyncIoControllerPriv::running() const {
-    AutoLocker al(m);
-    return ctx().tid != 0 && !io_exiting;
+    for (auto& tp : io_threads) {
+        if (tp->running.load(std::memory_order_acquire)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 int AsyncIoControllerPriv::getCacheSize() const {
-    AutoLocker al(m);
-    return (int)ctx().cache.size();
+    int total = 0;
+    for (auto& tp : io_threads) {
+        total += (int)tp->cache.size();
+    }
+    return total;
 }
 
 void AsyncIoControllerPriv::setAutostop(bool autostop) {
@@ -1408,6 +1436,44 @@ void AsyncIoControllerPriv::setMaxCallbackWorkers(int max_workers) {
     max_callback_workers = max_workers;
 }
 
+void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsink) {
+    AutoLocker al(m);
+    // Cannot change while running
+    for (auto& tp : io_threads) {
+        if (tp->tid) {
+            xsink->raiseException("ASYNC-IO-ERROR",
+                "cannot change I/O thread count while controller is running");
+            return;
+        }
+    }
+    if (num_threads <= 0) {
+        num_threads = std::min((int)std::thread::hardware_concurrency(), 32);
+        if (num_threads <= 0) {
+            num_threads = 1;
+        }
+    }
+    if (num_threads == num_io_threads) {
+        return;
+    }
+    // Resize — create new contexts with fresh event loops and notifiers
+    num_io_threads = num_threads;
+    io_threads.clear();
+    sock_to_thread.clear();
+    for (int i = 0; i < num_io_threads; ++i) {
+        auto tp = std::make_unique<IoThreadContext>();
+        tp->thread_idx = i;
+        tp->loop = new QoreEventLoop(xsink);
+        if (*xsink) {
+            return;
+        }
+        tp->notifier = new QoreEventNotifier(xsink);
+        if (*xsink) {
+            return;
+        }
+        io_threads.push_back(std::move(tp));
+    }
+}
+
 // --- Internal methods ---
 
 void AsyncIoControllerPriv::ensureCallDispatcher() {
@@ -1442,72 +1508,65 @@ void AsyncIoControllerPriv::startIntern(ExceptionSink* xsink) {
         return;
     }
 
-    // Validate EventLoop and EventNotifier
-    if (!ctx().loop || !ctx().loop->isValid()) {
-        xsink->raiseException("ASYNC-IO-ERROR", "event loop is not valid");
-        return;
-    }
-
-    if (!ctx().notifier || !ctx().notifier->isValid()) {
-        xsink->raiseException("ASYNC-IO-ERROR", "event notifier is not valid");
-        return;
-    }
-
-    // Register notifier with event loop
-    int ev_flags = QORE_EV_READ;
-#ifdef DARWIN
-    // macOS: use optimized EVFILT_USER
-    int rc = ctx().notifier->bindToKqueue(ctx().loop->getKqueueFd(), xsink);
-    if (rc < 0) {
-        return;
-    }
-    rc = ctx().loop->addUserEvent(ctx().notifier->getUserIdent(), nullptr, xsink);
-    if (rc < 0) {
-        ctx().notifier->unbindFromKqueue();
-        return;
-    }
-#else
-    // Linux/other: register notifier fd
-    int rc = ctx().loop->add(ctx().notifier->fd(), ev_flags, nullptr, xsink);
-    if (rc < 0) {
-        return;
-    }
-#endif
-
     ready_flag = false;
     io_exiting = false;
 
-    // Start I/O thread; singleton uses QTF_EXTERNAL_LIFECYCLE so it doesn't
-    // block QoreProgramHelper shutdown — it's stopped by qore_async_io_controller_cleanup()
-    ref();  // Reference for the I/O thread
     int thread_flags = qore_is_async_io_controller_singleton(this) ? QTF_EXTERNAL_LIFECYCLE : 0;
-    // Pass IoThreadStartInfo so the I/O thread knows which context to use
-    IoThreadStartInfo* start_info = new IoThreadStartInfo{this, 0};
-    ctx().tid = q_start_thread(xsink, ioThreadEntry, start_info, thread_flags);
-    if (ctx().tid == -1) {
-        ctx().tid = 0;
-        delete start_info;
-        // Cannot call deref() here because the caller holds the lock;
-        // deref() -> stop() -> AutoLocker(m) -> deadlock.
-        // Since the caller always holds a reference (via QoreObject), this
-        // ROdereference() will never be the last ref, so we can safely
-        // just undo the ref() above without triggering destruction.
-        ROdereference();
-        // Remove the notifier from the event loop to undo the loop->add() above.
-        // If we don't clean up here, the next startIntern() call will attempt to
-        // re-register the same fd and fail with EEXIST.
-        ExceptionSink cleanup_xsink;
+
+    // Start all I/O threads
+    for (int i = 0; i < num_io_threads; ++i) {
+        IoThreadContext& t = *io_threads[i];
+
+        if (t.tid) {
+            continue;  // Already running
+        }
+
+        if (!t.loop || !t.loop->isValid()) {
+            xsink->raiseException("ASYNC-IO-ERROR", "event loop %d is not valid", i);
+            return;
+        }
+        if (!t.notifier || !t.notifier->isValid()) {
+            xsink->raiseException("ASYNC-IO-ERROR", "event notifier %d is not valid", i);
+            return;
+        }
+
+        // Register notifier with event loop
 #ifdef DARWIN
-        ctx().loop->removeUserEvent(ctx().notifier->getUserIdent(), &cleanup_xsink);
-        ctx().notifier->unbindFromKqueue();
+        int rc = t.notifier->bindToKqueue(t.loop->getKqueueFd(), xsink);
+        if (rc < 0) {
+            return;
+        }
+        rc = t.loop->addUserEvent(t.notifier->getUserIdent(), nullptr, xsink);
+        if (rc < 0) {
+            t.notifier->unbindFromKqueue();
+            return;
+        }
 #else
-        ctx().loop->remove(ctx().notifier->fd(), &cleanup_xsink);
+        int rc = t.loop->add(t.notifier->fd(), QORE_EV_READ, nullptr, xsink);
+        if (rc < 0) {
+            return;
+        }
 #endif
-        cleanup_xsink.clear();
-        return;
+
+        ref();  // Reference for each I/O thread
+        IoThreadStartInfo* start_info = new IoThreadStartInfo{this, i};
+        t.tid = q_start_thread(xsink, ioThreadEntry, start_info, thread_flags);
+        if (t.tid == -1) {
+            t.tid = 0;
+            delete start_info;
+            ROdereference();
+            ExceptionSink cleanup_xsink;
+#ifdef DARWIN
+            t.loop->removeUserEvent(t.notifier->getUserIdent(), &cleanup_xsink);
+            t.notifier->unbindFromKqueue();
+#else
+            t.loop->remove(t.notifier->fd(), &cleanup_xsink);
+#endif
+            cleanup_xsink.clear();
+            return;
+        }
     }
     // NOTE: do not call log() here — caller holds the lock.
-    // The I/O thread itself logs "I/O thread ready" when it starts.
 }
 
 void AsyncIoControllerPriv::ioThreadEntry(ExceptionSink* xsink, void* arg) {
@@ -2912,6 +2971,7 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 }
                 t.registered_fds.erase(prev_sock_hash);
                 t.socket_refcounts.erase(rit);
+                { AutoLocker al(sock_route_lock); sock_to_thread.erase(prev_sock_hash); }
             } else {
                 rit->second--;
                 applyEventUnion(t, prev_sock, prev_sock_hash, xsink);
@@ -2947,6 +3007,11 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
         }
         t.socket_refcounts[sock_hash] = 1;
         t.registered_events[sock_hash] = union_events;
+        // Register socket→thread mapping for wakeSocket routing
+        {
+            AutoLocker al(sock_route_lock);
+            sock_to_thread[sock_hash] = t.thread_idx;
+        }
     } else {
         t.socket_refcounts[sock_hash]++;
         applyEventUnion(t, socket, sock_hash, xsink);
@@ -3018,6 +3083,7 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, const st
                 t.registered_events.erase(prev_sock_hash);
                 t.registered_fds.erase(prev_sock_hash);
                 t.socket_refcounts.erase(rit);
+                { AutoLocker al(sock_route_lock); sock_to_thread.erase(prev_sock_hash); }
             } else {
                 rit->second--;
                 applyEventUnion(t, prev_sock, prev_sock_hash, xsink);
@@ -3248,9 +3314,9 @@ QoreObject* AsyncIoControllerPriv::getSocketFromPollInfo(QoreHashNode* poll_info
 
 void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
         QoreHashNode* new_poll_info, QoreHashNode* ex_hash, bool completed) {
-    // Lock-free: check atomic flag instead of acquiring mutex
-    if (!ctx().running.load(std::memory_order_acquire)) {
-        // I/O thread not running — discard results
+    // Route to the correct I/O thread that owns this operation
+    IoThreadContext& target = getThreadForKey(key);
+    if (!target.running.load(std::memory_order_acquire)) {
         ExceptionSink xsink;
         if (new_poll_info) {
             new_poll_info->deref(&xsink);
@@ -3266,8 +3332,8 @@ void AsyncIoControllerPriv::enqueueContinuePollResult(const std::string& key,
     c.continue_poll_result = new_poll_info;
     c.continue_poll_ex = ex_hash;
     c.continue_poll_completed = completed;
-    ctx().cmdq.push(std::move(c));
-    ctx().notifier->notify();
+    target.cmdq.push(std::move(c));
+    target.notifier->notify();
 }
 
 void AsyncIoControllerPriv::enqueueStreamDataDispatch(QoreObject* spop_obj,

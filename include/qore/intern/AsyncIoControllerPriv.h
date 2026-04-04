@@ -362,6 +362,9 @@ public:
     */
     DLLLOCAL void setMaxCallbackWorkers(int max_workers);
 
+    //! Set the number of I/O threads (must be called before first submit)
+    DLLLOCAL void setMaxIoThreads(int num_threads, ExceptionSink* xsink);
+
     //! Submit a task to the controller's thread pool
     /** The thread pool is lazily created on first use. ThreadPool threads use
         QTF_EXTERNAL_LIFECYCLE so they don't block QoreProgramHelper shutdown;
@@ -483,6 +486,7 @@ private:
         MpscQueue<Command> cmdq;          //!< Lock-free command queue for this thread
         std::atomic<bool> running{false};  //!< True when this thread accepts commands
         int tid = 0;                       //!< Thread ID (0 if not running)
+        int thread_idx = 0;                //!< Index in io_threads vector
         int64 autostop_idle_since = 0;     //!< Timestamp when cache first became empty
 
         QoreEventLoop* loop = nullptr;
@@ -522,6 +526,14 @@ private:
     // --- I/O thread contexts ---
     std::vector<std::unique_ptr<IoThreadContext>> io_threads;  //!< One per I/O thread (default: 1)
     int num_io_threads;                       //!< Configured thread count
+
+    //! Maps socket hash → thread index for wakeSocket routing
+    /** Updated by I/O threads when sockets are registered/unregistered with the event loop.
+        Protected by a lightweight spinlock (separate from main mutex m) since it's
+        only accessed briefly for insert/erase/lookup.
+    */
+    mutable QoreThreadLock sock_route_lock;
+    std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
 
     // Backward-compatible accessors for single-thread code paths
     // (used during transition; will be removed when all code uses io_threads[])

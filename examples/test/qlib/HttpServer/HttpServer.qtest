@@ -2831,7 +2831,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             printf("Cache size after bad SSL handshakes: %d\n", cache_size);
         }
         # Cache should be small (just accept operations), not grown from leaked connections
-        assertTrue(cache_size < 20, "cache should not leak from bad SSL handshakes");
+        # With multiple I/O threads (QORE_IO_THREADS), each thread has its own accept ops
+        assertTrue(cache_size < 40, "cache should not leak from bad SSL handshakes");
     }
 
     /** Test that I/O thread never blocks on getPeerInfo() calls.

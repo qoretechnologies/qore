@@ -554,3 +554,24 @@ static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0) [do
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     ctrl->setMaxCallbackWorkers((int)max_workers);
 }
+
+//! Sets the number of I/O threads for the global async I/O controller
+/** @param num_threads the number of I/O threads (0 = auto-detect from hardware_concurrency)
+
+    Multiple I/O threads enable nginx-style per-thread connection isolation,
+    scaling throughput near-linearly with core count for high connection counts.
+
+    Must be called before the first submit() or from Qore startup code.
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::setMaxIoThreads(int num_threads = 0) [dom=NETWORK,PROCESS] {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->setMaxIoThreads((int)num_threads, xsink);
+}
