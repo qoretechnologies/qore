@@ -3841,6 +3841,7 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
                             || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
                             || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
+                            || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
                             || ((ii->invoke_opcode == QoreIROpcode::RegexMatchAny
                                 || ii->invoke_opcode == QoreIROpcode::RegexMatchBool
                                 || ii->invoke_opcode == QoreIROpcode::RegexNMatchBool
