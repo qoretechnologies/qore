@@ -1990,13 +1990,17 @@ QoreIRFunction* lowerClosureForSerialization(const UserClosureVariant* variant) 
         return nullptr;
     }
 
-    // Ensure terminator
-    if (ir->blocks.back()->instructions.empty() ||
-            (ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Return &&
-             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::ReturnNothing &&
-             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Br &&
-             ir->blocks.back()->instructions.back()->opcode != QoreIROpcode::Rethrow)) {
-        builder.createReturnNothing();
+    // Ensure all blocks have terminators. Complex closures (switch statements
+    // with break/fall-through) can leave merge blocks empty or unterminated.
+    // Add ReturnNothing to any block that needs it.
+    for (auto& block : ir->blocks) {
+        if (block->instructions.empty()) {
+            builder.setBlock(block.get());
+            builder.createReturnNothing();
+        } else if (!isTerminator(block->instructions.back()->opcode)) {
+            builder.setBlock(block.get());
+            builder.createReturnNothing();
+        }
     }
 
     std::string verify_error;
