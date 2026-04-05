@@ -143,7 +143,7 @@ public class DoxygenToMarkdown {
             }
             int idx = protected_blocks.size();
             protected_blocks += m[0];
-            result = regex_subst(result, "```[^`]*```", "\x00PROTECTED_" + string(idx) + "\x00", RE_DotAll);
+            result = regex_subst(result, "```[^`]*```", "\x01PROTECTED_" + string(idx) + "\x01", RE_DotAll);
         }
 
         # protect inline backticks — collect all spans in one pass, then replace
@@ -155,7 +155,7 @@ public class DoxygenToMarkdown {
             int pos = result.find(span);
             if (pos >= 0) {
                 result = result.substr(0, pos)
-                    + "\x00PROTECTED_" + string(idx) + "\x00"
+                    + "\x01PROTECTED_" + string(idx) + "\x01"
                     + result.substr(pos + span.length());
             }
         }
@@ -166,7 +166,7 @@ public class DoxygenToMarkdown {
     #! Restore protected code blocks from placeholders
     static string restoreCodeBlocks(string result, list<string> protected_blocks) {
         for (int i = protected_blocks.size() - 1; i >= 0; --i) {
-            result = regex_subst(result, "\x00PROTECTED_" + string(i) + "\x00",
+            result = regex_subst(result, "\x01PROTECTED_" + string(i) + "\x01",
                 protected_blocks[i], RE_Global);
         }
         return result;

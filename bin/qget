@@ -356,7 +356,7 @@ sub main() {
             case "ftp": {
                 string file = basename(u.path);
                 if (!exists file) {
-                    stderr.printf("missing file name in url %n\n", url);
+                    stderr.printf("missing file name in url %y\n", url);
                     exit(1);
                 }
 

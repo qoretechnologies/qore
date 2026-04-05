@@ -2163,7 +2163,7 @@ on_error ds.rollback();
 
 hash MAPV = ("id" : "workflowid", "name" : True);
 RawSqlStatementOutboundMapper m(ds, "select * from workflows where workflowid = %v or workflowid = %v", (1,2), MAPV);
-printf("%N\n", m.getDataRows());
+printf("%Y\n", m.getDataRows());
 #list: (2 elements)
 #  [0]=hash: (2 members)
 #    id : 1

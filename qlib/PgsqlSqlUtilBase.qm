@@ -363,7 +363,7 @@ public class PgsqlType inherits Qore::Serializable {
         list tl = getTypeList();
         list oldtl = old.getTypeList();
 
-        #printf("tl: %N\noldtl: %N\n", tl, oldtl);
+        #printf("tl: %Y\noldtl: %Y\n", tl, oldtl);
 
         # process differences in old attributes
         foreach hash oldh in (oldtl.iterator()) {
@@ -610,7 +610,7 @@ list l = col.getModifySql(t, newcol);
                     ok = True;
             }
             if (!ok) {
-                #printf("L: %N\nXXXXXXXXXXXXXXX\nR: %N\n\n", self, c);
+                #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 if (exists c.def_val && c.def_val !== NULL)
                     l += sprintf("alter table %s alter %s set default %s", t.getSqlName(), ddl_name, c.def_val);
                 else
@@ -2858,7 +2858,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             return new PgsqlPrimaryKey();
         }
 
-        #printf("PgsqlTable::getPrimaryKeyImpl(): %s: %N\n", getName(), qh);
+        #printf("PgsqlTable::getPrimaryKeyImpl(): %s: %Y\n", getName(), qh);
         hash<auto> rv;
         foreach string col in (qh.column_name) {
             # issue #4348: strip quotes from columns using reserved words
@@ -3084,7 +3084,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
             triggerFunctions = new Functions(fh);
         }
 
-        #printf("gTI triggerFunctions: %N\n", triggerFunctions);
+        #printf("gTI triggerFunctions: %Y\n", triggerFunctions);
 
         return new Triggers(rv);
     }
@@ -3118,7 +3118,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "trigger function", $1.name, name), triggerFunctions.iterator();
         }
 
-        #printf("gCMSI triggerFunctions: %N\n", triggerFunctions);
+        #printf("gCMSI triggerFunctions: %Y\n", triggerFunctions);
         return l;
     }
 

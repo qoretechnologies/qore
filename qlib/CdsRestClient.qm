@@ -88,7 +88,7 @@ hash<auto> opts = {
 
 CdsRestClient rest(opts);
 hash<auto> ans = rest.get("...");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section cdsrestclientrelnotes Release Notes

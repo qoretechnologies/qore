@@ -3,7 +3,7 @@
 
 # @file sqlutil example program for the SqlUtil module
 
-/*  Copyright 2013 - 2025 Qore Technologies, s.r.o.
+/*  Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -53,9 +53,12 @@ const Opts = {
     "data_tablespace":   "d,data-tablespace=s",
     "index_tablespace":  "i,index-tablespace=s",
     "target_ds":         "T,target-ds=s",
+    "nocolor":           "C,no-color",
     "verbose":           "v,verbose:i+",
     "help":              "h,help",
 };
+
+Util::TerminalColor color;
 
 # list of options that require a target datasource
 const RequiresTarget = {
@@ -110,45 +113,64 @@ const DUMP_OBJECTS = {
 main();
 
 sub usage() {
-    printf("usage: %s [options] <connection|datasource>
-<datasource> format: driver:user/pass@db[%host[:port]]
-  -A,--align-all=ARG          ARG=table to align structure and data in a
-                              target database; requires -T
-  -D,--align-data=ARG         ARG=table to align data in a target database;
-                              requires -T
-  -s,--align-data-strict      deletes extra rows in the target table;
-                              requires -D
-  -a,--align-table=ARG        ARG=table to align structure in a target
-                              database; requires -T
-  -L,--list-tables            list tables in source
-     --list=ARG               list objects of given type. Objects available:
-                               %y
-                              or some special categories:
-                               %y
-  -O,--omit=ARG               omit options: \"triggers\", \"foreign_constraints\",
-                              \"indexes\"
-  -d,--data-tablespace=ARG    use the given data tablespace name for output
-  -i,--index-tablespace=ARG   use the given index tablespace name for output
-  -t,--dump-table=ARG         dump the DDL for the given table
-  -S,--dump-sequence=ARG      dump the DDL for the given sequence
-     --dump=ARG1:ARG2         dump the DDL for the given object type ARG1:
-                               %y
-                              or 'all' for all objects of this type.
-                              With name ARG2.
-     --select=ARG             use ARG as the select hash for exporting data
-                              to be parsed with Util::parse_to_qore_value()
-  -T,--target-ds=ARG          target datasource
-  -v,--verbose=ARG            increase verbosity level (more v's = more info)
-     --export=ARG             export table data to standard output in YAML format
-     --import=ARG:ARG         import YAML data into table (ARG 1) from file
-                              name (ARG 2). Batch commit per 5000 lines.
-", get_script_name(), LIST_OBJECTS.keys(), META_LIST_OBJECTS.keys(), DUMP_OBJECTS.keys());
+    printf("%s - Qore SQL utility and database schema tool\n\n", color.bold("sqlutil"));
+    printf("%s %s [options] <connection|datasource>\n", color.bold("Usage:"), get_script_name());
+    printf("  %s format: %s\n\n", color.dim("<datasource>"),
+        color.dim("driver:user/pass@db[%host[:port]]"));
+
+    printf("%s\n", color.bold("Schema Alignment (requires -T):"));
+    printf("  %s  table to align structure and data in target\n",
+        color.key("-A, --align-all=ARG      "));
+    printf("  %s  table to align data in target\n",
+        color.key("-D, --align-data=ARG     "));
+    printf("  %s  delete extra rows in the target table\n",
+        color.key("-s, --align-data-strict  "));
+    printf("  %s  table to align structure in target\n",
+        color.key("-a, --align-table=ARG    "));
+
+    printf("\n%s\n", color.bold("Listing:"));
+    printf("  %s  list tables in source\n",
+        color.key("-L, --list-tables        "));
+    printf("  %s  list objects of given type: %y\n",
+        color.key("    --list=ARG           "), LIST_OBJECTS.keys());
+    printf("                            or categories: %y\n", META_LIST_OBJECTS.keys());
+
+    printf("\n%s\n", color.bold("DDL Dump:"));
+    printf("  %s  dump DDL for the given table\n",
+        color.key("-t, --dump-table=ARG     "));
+    printf("  %s  dump DDL for the given sequence\n",
+        color.key("-S, --dump-sequence=ARG  "));
+    printf("  %s  dump DDL for object type:name; types: %y\n",
+        color.key("    --dump=ARG1:ARG2     "), DUMP_OBJECTS.keys());
+
+    printf("\n%s\n", color.bold("Data Export/Import:"));
+    printf("  %s  export table data to stdout in YAML\n",
+        color.key("    --export=ARG         "));
+    printf("  %s  import YAML from file into table\n",
+        color.key("    --import=ARG1:ARG2   "));
+    printf("  %s  select hash for filtering exported data\n",
+        color.key("    --select=ARG         "));
+
+    printf("\n%s\n", color.bold("General:"));
+    printf("  %s  omit: triggers, foreign_constraints, indexes\n",
+        color.key("-O, --omit=ARG           "));
+    printf("  %s  data tablespace name for output\n",
+        color.key("-d, --data-tablespace=ARG"));
+    printf("  %s  index tablespace name for output\n",
+        color.key("-i, --index-tablespace=ARG"));
+    printf("  %s  target datasource for alignment\n",
+        color.key("-T, --target-ds=ARG      "));
+    printf("  %s  disable color output\n",
+        color.key("-C, --no-color           "));
+    printf("  %s  increase verbosity (repeatable)\n",
+        color.key("-v, --verbose            "));
+    printf("  %s  this help text\n",
+        color.key("-h, --help               "));
     exit(1);
 }
-#' just fix syntax highlighting
 
 sub error(string fmt) {
-    vprintf(fmt, argv);
+    stderr.printf("%s %s\n", color.error("ERROR:"), vsprintf(fmt, argv));
     exit(1);
 }
 
@@ -182,20 +204,26 @@ sub list_objects(SqlUtil::Database db, softlist types) {
     list processed = list();
     foreach string i in (types) {
         # do not repeat output for already processed key
-        if (inlist(i, processed))
+        if (inlist(i, processed)) {
             continue;
+        }
         push processed, i;
         if (exists LIST_OBJECTS{i}) {
-            if (is_object_supported (db, i))
-                map printf("%-30s %s\n", $1, i), call_object_method(db, LIST_OBJECTS{i});
-            else
-                printf("Unsupported object type/key: %s\n", i);
+            if (is_object_supported(db, i)) {
+                map printf("%-30s %s\n", color.key($1), color.dim(i)),
+                    call_object_method(db, LIST_OBJECTS{i});
+            } else {
+                printf("%s %s\n", color.warning("Unsupported object type/key:"), i);
+            }
         } else if (exists META_LIST_OBJECTS{i}) {
-            foreach string j in (META_LIST_OBJECTS{i})
-                if (is_object_supported (db, j))
-                    map printf("%-30s %s\n", $1, j), call_object_method(db, LIST_OBJECTS{j});
+            foreach string j in (META_LIST_OBJECTS{i}) {
+                if (is_object_supported(db, j)) {
+                    map printf("%-30s %s\n", color.key($1), color.dim(j)),
+                        call_object_method(db, LIST_OBJECTS{j});
+                }
+            }
         } else {
-            printf("Unknown object type/key: %s\n", i);
+            printf("%s %s\n", color.warning("Unknown object type/key:"), i);
         }
     }
 }
@@ -232,10 +260,10 @@ class DumpObjects {
                         doObjects(sprintf("%s:all", i));
                 continue;
             } else if (!DUMP_OBJECTS{type}) {
-                printf("Unable to dump object of type: %n\n", type);
+                printf("%s %y\n", color.error("Unable to dump object of type:"), type);
                 continue;
             } else if (!is_object_supported (m_db, type)) {
-                printf("Unable to dump object of type: %n\n", type);
+                printf("%s %y\n", color.error("Unable to dump object of type:"), type);
                 continue;
             }
 
@@ -261,7 +289,7 @@ class DumpObjects {
         }
         string singular = type;
         singular =~ s/s$//;
-        printf("-- DDL of %s %s\n", singular, name);
+        printf("-- %s %s %s\n", color.dim("DDL of"), color.dim(singular), color.key(name));
         any ret = call_object_method(o, DUMP_OBJECTS{type}.sql, m_copt);
         string str;
         # unfortunately it can be list or string
@@ -282,8 +310,11 @@ sub main() {
     GetOpt g(Opts);
     hash opt = g.parse3(\ARGV);
 
-    if (opt.help || !ARGV[0])
+    color = new Util::TerminalColor(!opt.nocolor);
+
+    if (opt.help || !ARGV[0]) {
         usage();
+    }
 
     if (opt.align_all) {
         opt.align_data = opt.align_all;
@@ -312,16 +343,17 @@ sub main() {
             *string info) {
         # verbosity threshold
         int t = 0;
-        if (ac != AbstractDatabase::AC_Unchanged)
+        if (ac != AbstractDatabase::AC_Unchanged) {
             ++change_count;
-        else
+        } else {
             t = 1;
+        }
         if (opt.verbose > t) {
             if (dot_count) {
                 print("\n");
                 dot_count = 0;
             }
-            printf("%s %s\n", t ? "+++" : "***", str);
+            printf("%s %s\n", t ? color.dim("+++") : color.warning("***"), str);
         } else {
             ++dot_count;
             print(AbstractDatabase::ActionLetterMap{ac});
@@ -365,10 +397,12 @@ sub main() {
             dot_count = 0;
         }
         if (change_count) {
-            printf("%d change%s made\n", change_count, change_count == 1 ? "" : "s");
+            printf("%s change%s made\n", color.number(sprintf("%d", change_count)),
+                change_count == 1 ? "" : "s");
             change_count = 0;
-        } else
-            print("no changes made\n");
+        } else {
+            printf("%s\n", color.success("no changes made"));
+        }
     };
 
     # creation options
@@ -465,7 +499,7 @@ sub main() {
         BulkSqlUtil::BulkInsertOperation bulk(table, bulk_opts);
         on_success {
             if (opt.verbose) {
-                printf("%n: import %s: cache: %d; count: %d\n",
+                printf("%y: import %s: cache: %d; count: %d\n",
                     now(), arg[0], bulk.size(), bulk.getRowCount()
                 );
             }
@@ -481,7 +515,7 @@ sub main() {
 
             if (it.index() % bulk_opts.block_size == 0) {
                 if (opt.verbose) {
-                    printf("%n: import %s: cache: %d; count: %d\n",
+                    printf("%y: import %s: cache: %d; count: %d\n",
                         now(), arg[0], bulk.size(), bulk.getRowCount()
                     );
                 }
@@ -527,9 +561,10 @@ sub main() {
             GlobTables tables(db, source, tspec);
 
             foreach AbstractTable t in (tables.iterator()) {
-                if (dot_count)
+                if (dot_count) {
                     print("\n");
-                printf("%s table structure: ", t.getName());
+                }
+                printf("%s table structure: ", color.key(t.getName()));
                 align_table(t);
             }
         } else {
@@ -546,9 +581,10 @@ sub main() {
             GlobTables tables(db, source, tspec);
 
             foreach AbstractTable t in (tables.iterator()) {
-                if (dot_count)
+                if (dot_count) {
                     print("\n");
-                printf("%s table data: ", t.getName());
+                }
+                printf("%s table data: ", color.key(t.getName()));
                 align_data(t);
             }
         } else {
@@ -559,8 +595,8 @@ sub main() {
     }
 
     if (!done) {
-        printf("Server:\n%n\n", source.getServerVersion());
-        printf("Client:\n%n\n", source.getClientVersion());
-        printf("\nUse -h to display options\n\n");
+        printf("%s %y\n", color.bold("Server:"), source.getServerVersion());
+        printf("%s %y\n", color.bold("Client:"), source.getClientVersion());
+        printf("\nUse %s to display options\n\n", color.key("-h"));
     }
 }

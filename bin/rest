@@ -51,11 +51,13 @@
 class RestCmd {
     public {
         hash<auto> opt;
+        static Util::TerminalColor color;
 
         #! program options
         const Opts = {
             "httpver":       "A,http-version=s",
             "conn":          "c,connection=s",
+            "nocolor":       "C,no-color",
             "fullex":        "E,full-exception",
             "sendenc":       "e,send-encoding:s",
             "ping":          "g,ping=s",
@@ -112,6 +114,9 @@ class RestCmd {
     constructor() {
         GetOpt g(Opts);
         opt = g.parse3(\ARGV);
+
+        color = new Util::TerminalColor(!opt.nocolor);
+
         if (opt.help || (!ARGV[0] && !opt."list" && !opt.ping && !opt.poll_ping)) {
             usage();
         }
@@ -173,7 +178,7 @@ class RestCmd {
         }
 
         if (!url) {
-            printf("ERROR: missing URL for REST server\n");
+            printf("%s missing URL for REST server\n", color.error("ERROR:"));
             usage();
         }
 
@@ -181,7 +186,7 @@ class RestCmd {
             string orig_url = url;
             url = get_connection_url(url);
             if (url != orig_url) {
-                printf("using connection: %y url: %y\n", orig_url, url);
+                printf("%s %y url: %y\n", color.info("using connection:"), orig_url, url);
                 opt.conn = orig_url;
             }
         }
@@ -278,12 +283,12 @@ class RestCmd {
             try {
                 AbstractConnection conn = get_connection(opt.conn);
                 if (!(conn instanceof RestConnection)) {
-                    stderr.printf("connection %y is a %y object; expecting \"RestClient\"; exiting\n", opt.conn,
-                        conn.className());
+                    stderr.printf("%s connection %y is a %y object; expecting \"RestClient\"; exiting\n",
+                        color.error("ERROR:"), opt.conn, conn.className());
                     exit(1);
                 }
                 if (!exists body) {
-                    stderr.printf("ERROR: missing request path\n");
+                    stderr.printf("%s missing request path\n", color.error("ERROR:"));
                     exit(1);
                 }
                 request_path = body;
@@ -463,10 +468,10 @@ class RestCmd {
                     } else {
                         f.write(make_json(output_data));
                     }
-                    printf("Saved output to %y; %d byte%s\n", opt.output,
-                        output_data.size(), output_data.size() == 1 ? "" : "s");
+                    printf("%s %y; %d byte%s\n", color.success("Saved output to"),
+                        opt.output, output_data.size(), output_data.size() == 1 ? "" : "s");
                 } else {
-                    stderr.print("No output to save\n");
+                    stderr.printf("%s\n", color.warning("No output to save"));
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -530,10 +535,11 @@ class RestCmd {
                     f.open2(opt.output, O_CREAT | O_TRUNC | O_WRONLY);
                     f.write(output_data);
                     int len = output_data.size();
-                    printf("Saved output to %y; %y; %d byte%s\n", opt.output,
-                        info."response-headers"."content-type", len, len == 1 ? "" : "s");
+                    printf("%s %y; %y; %d byte%s\n", color.success("Saved output to"),
+                        opt.output, info."response-headers"."content-type", len,
+                        len == 1 ? "" : "s");
                 } else {
-                    stderr.print("No output to save\n");
+                    stderr.printf("%s\n", color.warning("No output to save"));
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -567,9 +573,9 @@ class RestCmd {
     }
 
     private showRestRequest(hash<auto> info, auto args, *hash<auto> opt) {
-        printf("> %s\n", info."request-uri");
+        printf("%s %s\n", color.green(">"), info."request-uri");
         if (opt.lit > 1) {
-            printf("> %Y\n", info.headers);
+            printf("%s %Y\n", color.green(">"), info.headers);
         }
         if (info."request-body") {
             *string str;
@@ -591,7 +597,7 @@ class RestCmd {
             } else {
                 str = getBody(info);
             }
-            printf("> %s\n", str);
+            printf("%s %s\n", color.green(">"), str);
         }
     }
 
@@ -599,9 +605,9 @@ class RestCmd {
         if (!info."response-uri") {
             return;
         }
-        printf("< %s\n", info."response-uri");
+        printf("%s %s\n", color.yellow("<"), info."response-uri");
         if (opt.lit > 1) {
-            printf("< %Y\n", info."response-headers" - "body");
+            printf("%s %Y\n", color.yellow("<"), info."response-headers" - "body");
         }
         if (info."response-body") {
             if (!exists rv) {
@@ -628,7 +634,7 @@ class RestCmd {
                     }
                     break;
             }
-            printf("< %s\n", str);
+            printf("%s %s\n", color.yellow("<"), str);
         }
     }
 
@@ -726,50 +732,82 @@ class RestCmd {
     }
 
     static usage() {
-        printf("usage: %s [options] get|put|post|delete URL ['qore msg body']
- -A, --http-version=ARG     set HTTP version: auto, 1.0, 1.1, 2.0, 3.0
- -c, --connection=ARG       use the given connection name
- -E, --full-exception       show full exception output
- -e, --send-encoding[=ARG]  set compression in outgoing request
-                            [ARG=gzip,deflate,bzip2,identity]
- -G, --poll-ping=ARG        ping the given connection with I/O polling and exit
- -g, --ping=ARG             ping the given connection and exit
- -H, --header=ARG           send header with request
- -i, --ignore-errors        ignore HTTP errors and show the literal response in all cases
- -L, --list                 list URI paths and methods supported by the schema
- -l, --literal              show literal API calls (more l's, more info)
- -o, --output=ARG           save output with the given file name
- -P, --proxy-url=ARG        set the proxy URL (ex: http://proxy:port)
- -p, --base-path=ARG        override the base path for Swagger schemas
- -R, --reformat             reformat data with -l+ for better readability
- -S, --serialization=ARG    set REST data serialization type:
-                            auto, json, yaml, xml, rawxml, url
- -s, --swagger=ARG          use the given Swagger 2.0 schema for validation
- -T, --timeout=ARG          set HTTP timeout in seconds
- -t, --token=ARG            an authorization token to use
- -u, --userpass=ARG         set the user and password for the connection in the format \"user:password\"
- -V, --verify-cert          require and verify X.509 certificates from the server
- -X, --lax-parsing          lax parsing of Swagger schemas
- -x, --example[=ARG]        generate an example message; ARG=
-                              q: generate Qore example (default data)
-                              r<code>: generate response (default request)
- -y, --token-type=ARG       the type of token (default: Bearer)
-     --grant-type=ARG       OAuth2 grant type (e.g., client_credentials, password)
-     --client-id=ARG        OAuth2 client ID
-     --client-secret=ARG    OAuth2 client secret
-     --token-url=ARG        OAuth2 token endpoint URL
- -v, --verbose              show verbose output (repeat for more detail)
- -h, --help                 this help text
+        printf("%s - Qore REST client\n\n", color.bold("rest"));
+        printf("%s %s [options] get|put|post|delete URL ['body']\n\n", color.bold("Usage:"),
+            get_script_name());
 
-Note: uses RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3 connections
-with automatic protocol selection. Use -l (--literal) for verbose HTTP
-request/response output (falls back to synchronous RestClient).
-", get_script_name());
+        printf("%s\n", color.bold("Options:"));
+        printf("  %s  set HTTP version: auto, 1.0, 1.1, 2.0, 3.0\n",
+            color.key("-A, --http-version=ARG    "));
+        printf("  %s  use the given connection name\n",
+            color.key("-c, --connection=ARG      "));
+        printf("  %s  disable color output\n",
+            color.key("-C, --no-color            "));
+        printf("  %s  show full exception output\n",
+            color.key("-E, --full-exception      "));
+        printf("  %s  set compression: gzip,deflate,bzip2,identity\n",
+            color.key("-e, --send-encoding[=ARG] "));
+        printf("  %s  ping the given connection with I/O polling and exit\n",
+            color.key("-G, --poll-ping=ARG       "));
+        printf("  %s  ping the given connection and exit\n",
+            color.key("-g, --ping=ARG            "));
+        printf("  %s  send header with request\n",
+            color.key("-H, --header=ARG          "));
+        printf("  %s  ignore HTTP errors and show the literal response\n",
+            color.key("-i, --ignore-errors       "));
+        printf("  %s  list URI paths and methods supported by the schema\n",
+            color.key("-L, --list                "));
+        printf("  %s  show literal API calls (more l's, more info)\n",
+            color.key("-l, --literal             "));
+        printf("  %s  save output with the given file name\n",
+            color.key("-o, --output=ARG          "));
+        printf("  %s  set the proxy URL (ex: http://proxy:port)\n",
+            color.key("-P, --proxy-url=ARG       "));
+        printf("  %s  override the base path for Swagger schemas\n",
+            color.key("-p, --base-path=ARG       "));
+        printf("  %s  reformat data with -l+ for better readability\n",
+            color.key("-R, --reformat            "));
+        printf("  %s  set REST data serialization type:\n",
+            color.key("-S, --serialization=ARG   "));
+        printf("                              auto, json, yaml, xml, rawxml, url\n");
+        printf("  %s  use the given Swagger 2.0 schema for validation\n",
+            color.key("-s, --swagger=ARG         "));
+        printf("  %s  set HTTP timeout in seconds\n",
+            color.key("-T, --timeout=ARG         "));
+        printf("  %s  an authorization token to use\n",
+            color.key("-t, --token=ARG           "));
+        printf("  %s  set user:password for the connection\n",
+            color.key("-u, --userpass=ARG        "));
+        printf("  %s  require and verify X.509 certificates\n",
+            color.key("-V, --verify-cert         "));
+        printf("  %s  lax parsing of Swagger schemas\n",
+            color.key("-X, --lax-parsing         "));
+        printf("  %s  generate an example message (q=Qore, r<code>=response)\n",
+            color.key("-x, --example[=ARG]       "));
+        printf("  %s  the type of token (default: Bearer)\n",
+            color.key("-y, --token-type=ARG      "));
+        printf("  %s  OAuth2 grant type (e.g., client_credentials)\n",
+            color.key("    --grant-type=ARG      "));
+        printf("  %s  OAuth2 client ID\n",
+            color.key("    --client-id=ARG       "));
+        printf("  %s  OAuth2 client secret\n",
+            color.key("    --client-secret=ARG   "));
+        printf("  %s  OAuth2 token endpoint URL\n",
+            color.key("    --token-url=ARG       "));
+        printf("  %s  show verbose output (repeat for more detail)\n",
+            color.key("-v, --verbose             "));
+        printf("  %s  this help text\n",
+            color.key("-h, --help                "));
+
+        printf("\n%s uses RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3\n",
+            color.dim("Note:"));
+        printf("connections with automatic protocol selection. Use -l (--literal) for\n");
+        printf("verbose HTTP request/response output (falls back to synchronous RestClient).\n");
         exit(1);
     }
 
     static error(string fmt) {
-        stderr.printf("%s: ERROR: %s\n", get_script_name(), vsprintf(fmt, argv));
+        stderr.printf("%s: %s %s\n", get_script_name(), color.error("ERROR:"), vsprintf(fmt, argv));
         exit(1);
     }
 }

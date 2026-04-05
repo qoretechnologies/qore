@@ -211,8 +211,8 @@ public class StructuredDocumentChunker inherits DocumentChunker {
     private list<hash<StructuredChunkInfo>> splitBySentences(string text, *hash<auto> metadata,
             int target_tokens, reference<int> chunk_index) {
         # split on sentence-ending punctuation followed by whitespace
-        string delimited = regex_subst(text, SentenceSplitRegex, "$1\x00", RE_Global);
-        list<string> sentences = delimited.split("\x00");
+        string delimited = regex_subst(text, SentenceSplitRegex, "$1\x01", RE_Global);
+        list<string> sentences = delimited.split("\x01");
         if (!sentences || sentences.size() < 2) {
             # single sentence or unsplittable — use parent's flat chunking as last resort
             list<hash<auto>> flat_chunks = chunkText(text);

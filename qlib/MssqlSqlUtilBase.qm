@@ -325,7 +325,7 @@ list l = col.getModifySql(t, newcol);
                 l += sprintf("alter table %s add constraint %s default %s for %s", t.getSqlName(), dv_name, c.def_val, ddl_name);
         } else {
             if (def_val !== c.def_val) {
-                #printf("L: %N\nXXXXXXXXXXXXXXX\nR: %N\n\n", self, c);
+                #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 if (exists c.def_val && c.def_val !== NULL)
                     l += sprintf("alter table %s add constraint %s default %s for %s", t.getSqlName(), dv_name, c.def_val, ddl_name);
                 else
@@ -1825,7 +1825,7 @@ and object_name(i.id) = %v", name);
         if (!qh.constraint_name)
             return new MssqlPrimaryKey();
 
-        #printf("MssqlTable::getPrimaryKeyImpl(): %s: %N\n", getName(), qh);
+        #printf("MssqlTable::getPrimaryKeyImpl(): %s: %Y\n", getName(), qh);
         hash rv = map {$1: columns.$1}, (map $1.lwr(), qh.column_name);
 
         return new MssqlPrimaryKey(pkh.constraint_name.lwr(), rv);

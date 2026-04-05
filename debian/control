@@ -94,5 +94,10 @@ Depends: qore (= ${source:Version}),
          ${misc:Depends}
 Description: Miscellaneous user tools written in Qore
  This package contains tools for working with:
-  - REST APIs
-  - SQL Databases
+  - REST APIs (rest, saprest, sfrest)
+  - SQL Databases (sqlutil, schema-reverse, qschema)
+  - Data Providers (qdp)
+  - Code Formatting (qfmt)
+  - API Schema Generation (qore-openapi3-gen, qore-asyncapi-gen)
+  - Language Server (qls)
+  - File Downloads (qget)

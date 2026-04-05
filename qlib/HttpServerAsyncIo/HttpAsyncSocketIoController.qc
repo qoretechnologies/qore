@@ -199,6 +199,19 @@ public class HttpAsyncSocketIoController {
         );
     }
 
+    #! Updates the logger used for HTTP-level async I/O diagnostics
+    /** Call this when the application reconfigures its logging (e.g. after reading
+        logger parameters from a database) so that ERROR messages from the HTTP/2
+        handler pool are not silently dropped.
+
+        @param new_logger the new logger to use (NOTHING disables logging)
+
+        @since Qore 2.3.0
+    */
+    setLogger(*LoggerInterface new_logger) {
+        logger = new_logger;
+    }
+
     #! Destructor stops the controller
     destructor() {
         stop();
@@ -912,7 +925,8 @@ public class HttpAsyncSocketIoController {
 
         Http3ServerPollOperation h3op(listener, pool_opts.quic_drain_timeout
             ?? Http3ServerPollOperation::DefaultDrainTimeout,
-            pool_opts.quic_headers_only ?? False);
+            pool_opts.quic_headers_only ?? False,
+            pool_opts.max_request_body_size ?? 0);
 
         log(LoggerLevel::DEBUG, "submitQuicAcceptOp: key=%s listener=%s", op_key, owner);
 

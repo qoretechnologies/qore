@@ -5495,9 +5495,13 @@ AbstractPollOperation Socket::startPollQuicAccept(*hash<auto> opts) {
 
     // Apply options
     if (opts) {
-        bool headers_only = opts->getKeyValue("headers_only").getAsBool();
-        if (headers_only) {
-            reinterpret_cast<SocketQuicServerPollOperation*>(*poller)->setHeadersOnly(true);
+        SocketQuicServerPollOperation* sqspo = reinterpret_cast<SocketQuicServerPollOperation*>(*poller);
+        if (opts->getKeyValue("headers_only").getAsBool()) {
+            sqspo->setHeadersOnly(true);
+        }
+        int64 max_body = opts->getKeyValue("max_request_body_size").getAsBigInt();
+        if (max_body > 0) {
+            sqspo->setMaxRequestBodySize(max_body);
         }
     }
 

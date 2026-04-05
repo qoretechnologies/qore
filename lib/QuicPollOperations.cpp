@@ -1205,6 +1205,13 @@ void SocketQuicServerPollOperation::setHeadersOnly(bool v) {
     }
 }
 
+void SocketQuicServerPollOperation::setMaxRequestBodySize(int64_t size) {
+    max_request_body_size_ = size;
+    for (auto& [id, session] : sessions_) {
+        session->setMaxRequestBodySize(size);
+    }
+}
+
 QoreHashNode* SocketQuicServerPollOperation::checkHeadersOnlyDispatch(bool& handled,
         ExceptionSink* xsink) {
     handled = false;
@@ -1528,6 +1535,10 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
         // Propagate headers-only mode to new sessions
         if (headers_only_) {
             new_session->setHeadersOnlyMode(true);
+        }
+        // Propagate max request body size to new sessions
+        if (max_request_body_size_ > 0) {
+            new_session->setMaxRequestBodySize(max_request_body_size_);
         }
 
         target_session = new_session.get();

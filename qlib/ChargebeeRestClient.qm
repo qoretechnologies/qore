@@ -72,7 +72,7 @@ module ChargebeeRestClient {
 
 ChargebeeRestClient chargebee({"api_key": ENV.CHARGEBEE_API_KEY, "site": ENV.CHARGEBEE_SITE});
 hash<auto> result = chargebee.get("subscriptions?limit=1");
-printf("Subscriptions: %N\n", result.body);
+printf("Subscriptions: %Y\n", result.body);
     @endcode
 
     @section chargebeerestclientrelnotes Release Notes

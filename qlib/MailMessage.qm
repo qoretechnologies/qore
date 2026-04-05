@@ -627,7 +627,7 @@ public class Message {
             headers += h;
         }
 
-        #printf("mime: %y ct: %y %d headers: %N\n", mime, ct, headers.size(), headers);
+        #printf("mime: %y ct: %y %d headers: %Y\n", mime, ct, headers.size(), headers);
 
         # try and parse the Content-Type header; assume any multipart type is "multipart/mixed"
         # (http://tools.ietf.org/html/rfc2046#section-5.1.3)

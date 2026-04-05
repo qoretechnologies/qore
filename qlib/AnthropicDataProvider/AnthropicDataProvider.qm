@@ -579,7 +579,7 @@ hash<auto> result = msg.doRequest({
 
 if (result.tool_calls) {
     hash<auto> call = result.tool_calls[0];
-    printf("Tool: %s, Input: %N\n", call.name, call.input);
+    printf("Tool: %s, Input: %Y\n", call.name, call.input);
 }
     @endcode
 

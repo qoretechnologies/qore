@@ -74,7 +74,7 @@ module PdfCoRestClient {
 
 PdfCoRestClient pdfco({"apikey": ENV.PDFCO_API_KEY});
 hash<auto> result = pdfco.post("pdf/info", {"url": "https://example.com/sample.pdf"});
-printf("PDF Info: %N\n", result.body);
+printf("PDF Info: %Y\n", result.body);
     @endcode
 
     @section pdfcorestclientrelnotes Release Notes

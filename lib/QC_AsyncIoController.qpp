@@ -403,7 +403,7 @@ static hash<auto> AsyncIoController::getInfo() {
     or @ref nothing "NOTHING" to disable per-controller logging
     @since %Qore 2.3
 */
-static nothing AsyncIoController::setLogger(*object logger) {
+static nothing AsyncIoController::setLogger(*LoggerInterfaceBase logger) {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -411,7 +411,7 @@ static nothing AsyncIoController::setLogger(*object logger) {
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    ctrl->setLogger(logger, xsink);
+    ctrl->setLogger(const_cast<QoreObject*>(logger), xsink);
 }
 
 //! Adds a timer on the global singleton

@@ -2959,7 +2959,7 @@ hash<auto> sh = (
 );
 string sql;
 on_exit { printf("sql: %s\n", sql); }
-printf("%N\n", t.selectRow(sh, \sql));
+printf("%Y\n", t.selectRow(sh, \sql));
 
 # results in:
 hash: (9 members)
@@ -6683,7 +6683,7 @@ tables.tableRenamed(old, newv);
 
             hash th = h;
 
-            #printf("TDH: %N\nSDH: %N\nNT: %y", tdh, sdh, nt);exit(1);
+            #printf("TDH: %Y\nSDH: %Y\nNT: %y", tdh, sdh, nt);exit(1);
 
             # make a list of tables in dependency order
             list l = ();
@@ -6730,7 +6730,7 @@ map $1.drop(), l;
             hash th = h;
             getDependencies(\tdh, \sdh, \th);
 
-            #printf("TDH: %N\nSDH: %N\nNT: %y", tdh, sdh, nt);exit(1);
+            #printf("TDH: %Y\nSDH: %Y\nNT: %y", tdh, sdh, nt);exit(1);
 
             # make a list of tables in dependency order
             list l = ();
@@ -7050,7 +7050,7 @@ string str = col.getRenameSql(t, "new_name");
         bool equal(AbstractColumn c) {
             if (self.className() != c.className() || name != c.name || native_type != c.native_type || size != c.size
                 || nullable != c.nullable || def_val != c.def_val || comment != c.comment) {
-                #printf("L: %N\nXXXXXXXXXXXXXXX\nR: %N\n\n", self, c);
+                #printf("L: %Y\nXXXXXXXXXXXXXXX\nR: %Y\n\n", self, c);
                 return False;
             }
 

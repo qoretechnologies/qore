@@ -1,0 +1,57 @@
+.\" qore-asyncapi-gen.1 - man page for qore-asyncapi-gen
+.\"
+.\" Copyright (C) 2024 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QORE-ASYNCAPI-GEN 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qore\-asyncapi\-gen \- generate AsyncAPI 3.0 specifications from Qore sources
+.SH SYNOPSIS
+.B qore\-asyncapi\-gen
+[\fIoptions\fP]
+\fIsource-file\fP...
+.SH DESCRIPTION
+\fBqore\-asyncapi\-gen\fR parses \fB@EVENT\fP, \fB@EVENTSCHEMA\fP,
+\fB@WEBSOCKET\fP, and \fB@ASYNCAPI\fP blocks in Qore source files and
+generates an AsyncAPI 3.0.0 specification.
+.SH OPTIONS
+.TP
+.BR \-o ", " \-\-output =\fIfile\fP
+Write output to \fIfile\fP (default: stdout).
+.TP
+.BR \-f ", " \-\-format =\fIformat\fP
+Output format: \fByaml\fP (default) or \fBjson\fP.
+.TP
+.BR \-t ", " \-\-title =\fItitle\fP
+API title (default: \fBEvent API\fP).
+.TP
+.BR \-V ", " \-\-api\-version =\fIversion\fP
+API version (default: \fB1.0.0\fP).
+.TP
+.BR \-d ", " \-\-description =\fItext\fP
+API description.
+.TP
+.BR \-s ", " \-\-server =\fIURL\fP
+Server URL (repeatable).
+.TP
+.BR \-c ", " \-\-channel =\fIpath\fP
+Channel path (repeatable).
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity (repeatable).
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH EXAMPLES
+Generate an AsyncAPI spec:
+.RS
+.B qore\-asyncapi\-gen \-t 'My Events' \-o events.yaml src/*.qclass
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR qore\-openapi3\-gen (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2024 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

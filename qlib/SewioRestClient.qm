@@ -81,7 +81,7 @@ hash opts = (
 
 SewioRestClient rest(opts);
 hash ans = rest.get("api/anchors");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section sewiorestclientrelnotes Release Notes

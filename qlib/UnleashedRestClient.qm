@@ -81,7 +81,7 @@ UnleashedRestClient unleashed({
     "apikey": ENV.UNLEASHED_API_KEY,
 });
 hash<auto> result = unleashed.get("/Customers?pageSize=10");
-printf("Customers: %N\n", result.body);
+printf("Customers: %Y\n", result.body);
     @endcode
 
     @section unleashedrestclientrelnotes Release Notes

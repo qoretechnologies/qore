@@ -78,7 +78,7 @@ module MailgunRestClient {
 
 MailgunRestClient mailgun({"apikey": ENV.MAILGUN_API_KEY, "api_domain": "mg.example.com"});
 hash<auto> result = mailgun.get("/domains");
-printf("Domains: %N\n", result.body);
+printf("Domains: %Y\n", result.body);
     @endcode
 
     @section mailgunrestclientrelnotes Release Notes

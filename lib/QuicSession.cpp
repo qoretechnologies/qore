@@ -2914,9 +2914,24 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
     return 0;
 }
 
-int QuicSession::handshakeCompletedCallback(ngtcp2_conn* /* conn */, void* user_data) {
+int QuicSession::handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data) {
     auto* session = static_cast<QuicSession*>(user_data);
     session->handshake_completed_.store(true, std::memory_order_release);
+
+    // Configure keepalive pings based on peer's max_idle_timeout.
+    // Without this, a dead peer (crashed without CONNECTION_CLOSE) is only
+    // detected after our own idle timeout expires.  Following curl's pattern:
+    // send pings at half the peer's idle timeout to keep the connection alive
+    // and detect dead peers quickly via timeout on the ping response.
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn);
+    if (rp && rp->max_idle_timeout > 0) {
+        ngtcp2_duration keep_ns = rp->max_idle_timeout / 2;
+        if (keep_ns < 1) {
+            keep_ns = 1;
+        }
+        ngtcp2_conn_set_keep_alive_timeout(conn, keep_ns);
+    }
+
     return 0;
 }
 
@@ -3535,15 +3550,18 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
             return 0;
         }
 
-        // Guard against unbounded body accumulation — server side only
-        // Client side: the caller controls what it requests and can impose its
-        // own limits; the body size is bounded by Content-Length
-        if (session->is_server_ && stream->body.size() + datalen > QUIC_MAX_STREAM_BODY) {
-            printd(1, "h3RecvDataCallback: body too large (%zu + %zu > %zu) stream %lld\n",
-                stream->body.size(), datalen, QUIC_MAX_STREAM_BODY, (long long)stream_id);
+        // Guard against unbounded body accumulation — server side only.
+        // Uses max_request_body_size_ (set via setMaxRequestBodySize(), propagated
+        // from HttpServer's max_request_body_size option).  0 = unlimited.
+        // Consistent with Http2Session::onDataChunkRecvCallback().
+        if (session->is_server_ && session->max_request_body_size_ > 0
+                && (int64_t)(stream->body.size() + datalen) > session->max_request_body_size_) {
+            printd(1, "h3RecvDataCallback: body too large (%zu + %zu > " QLLD ") stream %lld\n",
+                stream->body.size(), datalen, session->max_request_body_size_,
+                (long long)stream_id);
             stream->body.clear();
-            stream->error_message = "response body exceeded maximum size ("
-                + std::to_string(QUIC_MAX_STREAM_BODY) + " bytes)";
+            stream->error_message = "request body exceeded maximum size ("
+                + std::to_string(session->max_request_body_size_) + " bytes)";
             // Notify nghttp3 before ngtcp2 so both layers stay in sync
             nghttp3_conn_shutdown_stream_read(session->h3_conn_, stream_id);
             // Reset just this stream, not the whole connection

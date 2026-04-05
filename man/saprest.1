@@ -1,0 +1,98 @@
+.\" saprest.1 - man page for saprest
+.\"
+.\" Copyright (C) 2019 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH SAPREST 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+saprest \- SAP S/4HANA Cloud REST client
+.SH SYNOPSIS
+.B saprest
+[\fIoptions\fP]
+[\fImethod\fP]
+\fIpath\fP|\fIURL\fP
+[\fIbody\fP]
+.SH DESCRIPTION
+\fBsaprest\fR is a command-line REST client for SAP S/4HANA Cloud APIs.
+It supports OAuth2 authentication, compression, and multiple data
+serialization formats.
+.PP
+If no \fImethod\fP is given, GET is used by default.
+.SH OPTIONS
+.SS "Authentication (or use environment variables)"
+.TP
+.BR \-c ", " \-\-connection =\fIname\fP
+SAP connection name from the connection provider.
+.TP
+.BR \-k ", " \-\-apikey =\fIkey\fP
+SAP API key.
+Alternatively set \fB$SAP_APIKEY\fP.
+.TP
+.BR \-i ", " \-\-client\-id =\fIid\fP
+OAuth2 client ID.
+Alternatively set \fB$SAP_CLIENT_ID\fP.
+.TP
+.BR \-s ", " \-\-client\-secret =\fIsecret\fP
+OAuth2 client secret.
+Alternatively set \fB$SAP_CLIENT_SECRET\fP.
+.SS "Request Options"
+.TP
+.BR \-e ", " \-\-send\-encoding [=\fItype\fP]
+Compress request body: \fBgzip\fP, \fBdeflate\fP, \fBbzip2\fP, or
+\fBidentity\fP.
+.TP
+.BR \-H ", " \-\-header =\fIname:value\fP
+Add a custom HTTP header (repeatable).
+.TP
+.BR \-P ", " \-\-proxy\-url =\fIURL\fP
+Use the specified HTTP proxy.
+.TP
+.BR \-S ", " \-\-serialization =\fItype\fP
+Data serialization: \fBauto\fP, \fBjson\fP, \fByaml\fP, \fBxml\fP,
+\fBrawxml\fP, or \fBurl\fP.
+.TP
+.BR \-t ", " \-\-timeout =\fIseconds\fP
+HTTP timeout in seconds.
+.SS "Output"
+.TP
+.BR \-l ", " \-\-literal
+Show literal API calls (repeat for more detail).
+.TP
+.BR \-R ", " \-\-reformat
+Reformat output for readability.
+.TP
+.BR \-E ", " \-\-full\-exception
+Show full exception output on errors.
+.TP
+.BR \-W ", " \-\-show\-url
+Show the API URL and exit.
+.SS "General"
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH ENVIRONMENT
+.TP
+.B SAP_APIKEY
+SAP API key (alternative to \fB\-k\fP).
+.TP
+.B SAP_CLIENT_ID
+OAuth2 client ID (alternative to \fB\-i\fP).
+.TP
+.B SAP_CLIENT_SECRET
+OAuth2 client secret (alternative to \fB\-s\fP).
+.SH EXAMPLES
+.RS
+.B saprest get /sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR rest (1),
+.BR sfrest (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2019 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

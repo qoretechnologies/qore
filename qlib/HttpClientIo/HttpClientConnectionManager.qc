@@ -245,7 +245,8 @@ public class HttpClientConnectionManager {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
 
-        HttpClientConnection conn = getConnection(url_info);
+        bool from_pool = False;
+        HttpClientConnection conn = getConnection(url_info, \from_pool);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -265,6 +266,9 @@ public class HttpClientConnectionManager {
             rethrow;
         }
         stream.markReservationHeld();
+        if (from_pool) {
+            stream.markConnectionReused();
+        }
         return stream;
     }
 
@@ -285,10 +289,15 @@ public class HttpClientConnectionManager {
 
         @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
         @throw HTTP1-STREAMING-ERROR if body_streaming is True on HTTP/1.1
+
+        @note If the request times out on a pooled connection, the connection is
+        evicted and the request is retried once on a fresh connection, handling
+        stale connections transparently.
     */
     HttpClientStreamHandle acquireAndStartStreaming(string url, string method, string path,
             *hash<auto> headers, bool body_streaming = False, *data body) {
         int retries = 0;
+        bool timeout_retried = False;
         while (True) {
             HttpClientStreamHandle stream = acquireStream(url);
             try {
@@ -298,6 +307,18 @@ public class HttpClientConnectionManager {
                 if (isConnectionError(ex.err) && ++retries <= MaxRequestRetries) {
                     log(LoggerLevel::DEBUG, "streaming connection error %s, retrying (%d/%d)",
                         ex.err, retries, MaxRequestRetries);
+                    evictDeadConnections(url);
+                    continue;
+                }
+                # Only retry timeout on reused pooled connections (stale connection)
+                if (ex.err == "HTTPCLIENT-TIMEOUT"
+                        && stream.wasConnectionReused() && !timeout_retried) {
+                    timeout_retried = True;
+                    HttpClientConnection timed_out_conn = stream.getConnection();
+                    log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
+                        "evicting stale connection and retrying",
+                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
+                    try { timed_out_conn.close(); } catch () {}
                     evictDeadConnections(url);
                     continue;
                 }
@@ -379,15 +400,30 @@ public class HttpClientConnectionManager {
         @param timeout_ms request timeout (optional)
 
         @return the response hash
+
+        @note If the request times out on a \b reused pooled connection, the
+        connection is evicted and the request is retried once on a fresh connection
+        with \c connect_timeout as the retry deadline. This handles stale connections
+        (e.g., server restart, QUIC session death) where no transport-level error is
+        detected before the timeout. The retry uses \c connect_timeout (not
+        \c request_timeout) because if the server genuinely restarted, the fresh
+        connection establishes quickly; if it is unreachable, the retry fails within
+        \c connect_timeout rather than burning a full \c request_timeout. Timeouts on
+        freshly created connections are not retried — they indicate a genuinely slow
+        or unreachable server.
+
+        @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
         int retries = 0;
+        bool timeout_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
+                hash<auto> resp = stream.request(method, path, headers, body,
+                    timeout_retried ? opts.connect_timeout : timeout_ms);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
@@ -405,6 +441,27 @@ public class HttpClientConnectionManager {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, MaxRequestRetries);
                     }
+                    continue;
+                }
+                # A timeout on a reused pooled connection may indicate a stale
+                # connection (server restarted, QUIC session dead). Close the
+                # stale connection and retry once with connect_timeout as the
+                # deadline — if the server restarted, the fresh connection
+                # establishes quickly; if it is genuinely unreachable, we fail
+                # within connect_timeout rather than burning another full
+                # request_timeout.  Do NOT retry for fresh connections — a
+                # timeout on a new connection means the server is genuinely
+                # slow or unreachable.
+                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
+                        && stream.wasConnectionReused() && !timeout_retried) {
+                    timeout_retried = True;
+                    HttpClientConnection timed_out_conn = stream.getConnection();
+                    log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
+                        "evicting stale connection and retrying with connect_timeout=%y",
+                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                        opts.connect_timeout);
+                    try { timed_out_conn.close(); } catch () {}
+                    evictDeadConnections(url);
                     continue;
                 }
                 rethrow;
@@ -635,24 +692,47 @@ public class HttpClientConnectionManager {
     }
 
     #! Internal: gets or creates a connection for the given URL info
-    private HttpClientConnection getConnection(hash<auto> url_info) {
+    private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
         while (True) {
-            # Try to find an existing connection with capacity
+            # Try to find an existing connection with capacity.
+            # Dead connections discovered here are collected and evicted
+            # after releasing the read lock — this prevents stale entries
+            # from accumulating in the pool.
             {
-                AutoReadLock al(pool_lock);
-                if (shutdown) {
-                    throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
-                }
-                if (pool.hasKey(key)) {
-                    foreach HttpClientConnection conn in (pool{key}) {
-                        if (!conn.isClosed() && !conn.isDraining() && conn.tryReserveStream()) {
-                            log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
-                                conn.getProtocol(), conn.getConnectionId(), key);
-                            return conn;
+                list<HttpClientConnection> dead_conns = ();
+                *HttpClientConnection live_conn;
+                {
+                    AutoReadLock al(pool_lock);
+                    if (shutdown) {
+                        throw "HTTPCLIENT-SHUTDOWN", "connection manager is shutting down";
+                    }
+                    if (pool.hasKey(key)) {
+                        foreach HttpClientConnection conn in (pool{key}) {
+                            if (conn.isClosed() || conn.isDraining()) {
+                                continue;
+                            }
+                            if (!isConnectionAlive(conn)) {
+                                push dead_conns, conn;
+                                continue;
+                            }
+                            if (!live_conn && conn.tryReserveStream()) {
+                                live_conn = conn;
+                            }
                         }
                     }
+                }
+                # Evict dead connections outside the read lock (evictConnections
+                # acquires a write lock — doing it under the read lock would deadlock)
+                if (dead_conns) {
+                    evictConnections(key, dead_conns);
+                }
+                if (live_conn) {
+                    from_pool = True;
+                    log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
+                        live_conn.getProtocol(), live_conn.getConnectionId(), key);
+                    return live_conn;
                 }
             }
 
@@ -720,6 +800,7 @@ public class HttpClientConnectionManager {
                         }
                     }
                     if (reusable) {
+                        from_pool = True;
                         return reusable;
                     }
                 }
@@ -746,6 +827,7 @@ public class HttpClientConnectionManager {
                             ? candidates[0]
                             : candidates[rand() % candidates.size()];
                         if (best.tryReserveStream()) {
+                            from_pool = True;
                             log(LoggerLevel::DEBUG, "using %s connection %d with %d streams "
                                 "to %s (at connection limit)", best.getProtocol(),
                                 best.getConnectionId(), min_streams, key);
@@ -1012,10 +1094,12 @@ public class HttpClientConnectionManager {
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
+            || err == "HTTP3-EMPTY-READ"
             || err == "HTTP2-EMPTY-READ"
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
+            || err == "HTTP2-STATE-ERROR"
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
             || err == "HTTP1-CONNECTION-CLOSED"
@@ -1025,7 +1109,10 @@ public class HttpClientConnectionManager {
             || err == "HTTP1-SEND-ERROR"
             || err == "HTTP1-RECV-ERROR"
             || err == "HTTPCLIENT-STATE-ERROR"
-            || err == "HTTPCLIENT-CONNECT-ERROR";
+            || err == "HTTPCLIENT-CONNECT-ERROR"
+            || err == "SOCKET-SEND-ERROR"
+            || err == "SOCKET-RECV-ERROR"
+            || err == "SOCKET-CLOSED";
     }
 
     #! Internal: checks if an error indicates an h2c protocol incompatibility
@@ -1208,6 +1295,62 @@ public class HttpClientConnectionManager {
                 AutoWriteLock al(pool_lock);
                 cacheProtocol(key, "h2");
             }
+        }
+    }
+
+    #! Internal: checks if a connection is alive at the transport level
+    /** Verifies that the underlying socket is open and the poll operation hasn't
+        detected any errors. This catches cases where the I/O thread has already
+        detected a dead connection (FIN/RST received) but the HttpClientConnection
+        state hasn't been updated yet.
+
+        @note Called under pool_lock read lock — must not block or acquire pool_lock
+    */
+    private bool isConnectionAlive(HttpClientConnection conn) {
+        HttpClientPollOperation op = conn.getPollOperation();
+        if (op.isClosed() || op.hasError()) {
+            log(LoggerLevel::DEBUG, "connection %d poll operation is %s",
+                conn.getConnectionId(), op.isClosed() ? "closed" : "errored");
+            return False;
+        }
+        if (!conn.getSocket().isOpen()) {
+            log(LoggerLevel::DEBUG, "connection %d socket is closed",
+                conn.getConnectionId());
+            return False;
+        }
+        return True;
+    }
+
+    #! Internal: evicts specific connections from the pool and closes them
+    /** @param key the host:port pool key
+        @param conns list of connections to evict
+    */
+    private evictConnections(string key, list<HttpClientConnection> conns) {
+        {
+            AutoWriteLock al(pool_lock);
+            if (pool.hasKey(key)) {
+                # Build a set of connection IDs to evict for O(1) lookup
+                hash<string, bool> evict_ids;
+                foreach HttpClientConnection c in (conns) {
+                    evict_ids{string(c.getConnectionId())} = True;
+                }
+                list<HttpClientConnection> live = ();
+                foreach HttpClientConnection c in (pool{key}) {
+                    if (!evict_ids{string(c.getConnectionId())}) {
+                        push live, c;
+                    }
+                }
+                if (live) {
+                    pool{key} = live;
+                } else {
+                    remove pool{key};
+                }
+            }
+        }
+        foreach HttpClientConnection conn in (conns) {
+            log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
+                conn.getProtocol(), conn.getConnectionId());
+            try { conn.close(); } catch () {}
         }
     }
 

@@ -1569,7 +1569,7 @@ PGh0bWw+CiAgPGhlYWQ+CiAgPC9oZWFkPgogIDxib2R5PgogICAgPHA+VGhpcyBpcyB0aGUg\rMultiP
 Ym9keSBvZiB0aGUgbWVzc2FnZS48L3A+CiAgPC9ib2R5Pgo8L2h0bWw+Cg=\r
 --frontier--\r
 ";
-    printf("%N\n", MultiPartMessage::parseBody("frontier", body, True));
+    printf("%Y\n", MultiPartMessage::parseBody("frontier", body, True));
             @endcode \n
             The above code will output the following:
             @verbatim

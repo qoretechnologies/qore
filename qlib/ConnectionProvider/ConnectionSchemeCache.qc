@@ -265,6 +265,8 @@ public class ConnectionSchemeCache {
 
             "unleashed": "UnleashedRestClient",
 
+            "voyage": "VoyageRestClient",
+
             "wave": "WaveRestClient",
             "woocommerce": "WooCommerceRestClient",
             "woocommerces": "WooCommerceRestClient",

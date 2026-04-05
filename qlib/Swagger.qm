@@ -4331,7 +4331,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             throw "SCHEMA-VALIDATION-ERROR", sprintf("object %y: missing required properties: %y (have: %y)", name,
                 missing, keys (required - missing));
         }
-        #printf("SchemaObject::checkIntern() %y type: %y val: %y self: %N\n", name, type, value, self);
+        #printf("SchemaObject::checkIntern() %y type: %y val: %y self: %Y\n", name, type, value, self);
     }
 
     #! validates default values

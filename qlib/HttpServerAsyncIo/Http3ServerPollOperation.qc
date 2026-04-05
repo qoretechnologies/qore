@@ -103,6 +103,9 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         #! Headers-only mode: dispatch on HEADERS before full body
         bool headers_only = False;
 
+        #! Maximum request body size (0 = unlimited); propagated to QUIC sessions
+        int max_request_body_size = 0;
+
         #! Set to True by continuePoll() when a request is stored; cleared by getOutput().
         #! Prevents handler threads from calling continueReading() between continuePoll()
         #! returning STATE_REQUEST_READY and the dispatch callback calling getOutput().
@@ -122,7 +125,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         incrementally via @ref Qore::Socket::readQuicStreamDataBlock()
     */
     constructor(Socket sock, timeout drain_timeout = DefaultDrainTimeout,
-            bool headers_only = False) {
+            bool headers_only = False, int max_request_body_size = 0) {
         if (!sock) {
             throw "HTTP3-ERROR", "socket cannot be null";
         }
@@ -132,6 +135,7 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         self.sock = sock;
         self.drain_timeout = drain_timeout;
         self.headers_only = headers_only;
+        self.max_request_body_size = max_request_body_size;
         # Start accepting QUIC connection and reading HTTP/3 request
         startReadRequest();
     }
@@ -565,7 +569,14 @@ public class Http3ServerPollOperation inherits AbstractPollOperation {
         both initial accept and subsequent request reads.
     */
     private startReadRequest() {
-        current_op = sock.startPollQuicAccept(headers_only ? {"headers_only": True} : NOTHING);
+        *hash<auto> opts;
+        if (headers_only) {
+            opts.headers_only = True;
+        }
+        if (max_request_body_size > 0) {
+            opts.max_request_body_size = max_request_body_size;
+        }
+        current_op = sock.startPollQuicAccept(opts);
         state = STATE_READING;
     }
 }

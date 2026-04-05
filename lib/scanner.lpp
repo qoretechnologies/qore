@@ -1787,6 +1787,22 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
       \\r                               yylval->String->concat('\r');
       \\t                               yylval->String->concat('\t');
       \\v                               yylval->String->concat('\v');
+      \\x{HEX_DIGIT}{1,2}              {
+                                           unsigned val = (unsigned)strtol(yytext + 2, nullptr, 16);
+                                           yylval->String->concat((char)val);
+                                        }
+      \\u{HEX_DIGIT}{4}                {
+                                           unsigned codepoint = (unsigned)strtol(yytext + 2, nullptr, 16);
+                                           yylval->String->concatUnicode(codepoint);
+                                        }
+      \\U{HEX_DIGIT}{8}                {
+                                           unsigned codepoint = (unsigned)strtol(yytext + 2, nullptr, 16);
+                                           if (codepoint > 0x10FFFF) {
+                                              parse_error(*get_loc(yylloc), "Unicode codepoint U+%08X exceeds maximum U+10FFFF", codepoint);
+                                           } else {
+                                              yylval->String->concatUnicode(codepoint);
+                                           }
+                                        }
       \\.                               yylval->String->concat(yytext[1]);
       \\\n                              yylval->String->concat('\n');
       [^\\\n\"]+                        {

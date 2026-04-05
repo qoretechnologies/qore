@@ -82,7 +82,7 @@ module GrokRestClient {
 
 GrokRestClient rest({"apikey": api_key});
 hash<auto> ans = rest.get("/v1/models");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @par Streaming Example:

@@ -1773,7 +1773,8 @@ install(DIRECTORY include/qore
         PATTERN qore-version.h EXCLUDE)
 install(FILES ${CMAKE_BINARY_DIR}/include/qore/qore-version.h
         DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}/qore)
-install(FILES qore.1
+file(GLOB QORE_MAN_PAGES man/*.1)
+install(FILES ${QORE_MAN_PAGES}
         DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man1)
 install(FILES
             doxygen/Doxyfile.in
@@ -2014,6 +2015,7 @@ qore_user_module("qlib/FtpPollerUtil.qm" "DataProvider")
 qore_user_module("qlib/BulkSqlUtil" "SqlUtil")
 qore_user_module("qlib/Schema" "SqlUtil;Util;DataProvider")
 qore_user_module("qlib/TelnetClient.qm" "ConnectionProvider")
+qore_user_module("qlib/TerminalFormat" "Util")
 qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgramControl")
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
@@ -2090,6 +2092,7 @@ qore_user_module("qlib/MewsRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/NetSuiteRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AftershipRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/AnthropicRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
+qore_user_module("qlib/VoyageRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2150,6 +2153,7 @@ qore_user_module("qlib/MailgunDataProvider" "MailgunRestClient;RestClient;DataPr
 qore_user_module("qlib/MewsRestDataProvider" "MewsRestClient;RestClient;DataProvider;SwaggerDataProvider" "mews-logo-white.svg")
 qore_user_module("qlib/AftershipDataProvider" "AftershipRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "aftership-logo.svg")
 qore_user_module("qlib/AnthropicDataProvider" "AnthropicRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "anthropic-logo.svg")
+qore_user_module("qlib/VoyageDataProvider" "VoyageRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "voyage-logo.svg")
 qore_user_module("qlib/GrokDataProvider" "GrokRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "grok-logo.svg")
 qore_user_module("qlib/HuggingFaceDataProvider" "HuggingFaceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "huggingface-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")

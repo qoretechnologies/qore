@@ -1,0 +1,56 @@
+.\" qget.1 - man page for qget
+.\"
+.\" Copyright (C) 2011 - 2026 Qore Technologies, s.r.o.
+.\"
+.TH QGET 1 "2026 April 02" "Qore 2.3" "Qore Programming Language"
+.SH NAME
+qget \- download files from URLs with I/O event monitoring
+.SH SYNOPSIS
+.B qget
+[\fIoptions\fP]
+\fIURL\fP
+.SH DESCRIPTION
+\fBqget\fR downloads content from URLs, displaying socket-level I/O events
+such as DNS resolution, connection, TLS negotiation, HTTP headers, data
+transfer, and redirects.
+It serves as both a practical download tool and an example of Qore's
+event monitoring capabilities.
+.SH OPTIONS
+.TP
+.BR \-e ", " \-\-full\-exceptions
+Show full exception information on errors.
+.TP
+.BR \-H ", " \-\-header =\fIname:value\fP
+Add a custom HTTP header (repeatable).
+.TP
+.BR \-o ", " \-\-output\-file =\fIfile\fP
+Save downloaded content to \fIfile\fP instead of stdout.
+.TP
+.BR \-P ", " \-\-proxy =\fIURL\fP
+Use the specified HTTP proxy.
+.TP
+.BR \-v ", " \-\-verbose
+Show socket events during the transfer.
+Repeat for timestamps.
+.TP
+.BR \-h ", " \-\-help
+Show help text and exit.
+.SH EXAMPLES
+Download a file with event output:
+.RS
+.B qget \-v http://example.com/file.tar.gz \-o file.tar.gz
+.RE
+.PP
+Download through a proxy:
+.RS
+.B qget \-P http://proxy:8080 http://example.com/data
+.RE
+.SH SEE ALSO
+.BR qore (1),
+.BR rest (1)
+.SH AUTHORS
+Qore Technologies, s.r.o.
+.SH COPYRIGHT
+Copyright \(co 2011 \(en 2026 Qore Technologies, s.r.o.
+.br
+Licensed under MIT.

@@ -56,7 +56,7 @@ module NetSuiteRestClient {
 
     @section netsuiterestclientintro NetSuiteRestClient Introduction
 
-    The %NetSuiteRestClient module provides an API for calling Oracle NetSuite REST API services.
+    The %YetSuiteRestClient module provides an API for calling Oracle NetSuite REST API services.
 
     To use this module, use \c "%requires NetSuiteRestClient" in your code.
 
@@ -81,13 +81,13 @@ module NetSuiteRestClient {
 
 NetSuiteRestClient rest = get_connection("my-netsuite-connection");
 hash<auto> ans = rest.get("/some/uri/path");
-printf("%N\n", ans.body);
+printf("%Y\n", ans.body);
     @endcode
 
     @section NetSuiterestclientrelnotes Release Notes
 
     @subsection NetSuiterestclientv1_0 NetSuiteRestClient v1.0
-    - the initial version of the %NetSuiteRestClient module
+    - the initial version of the %YetSuiteRestClient module
 */
 
 #! the NetSuiteRestClient namespace contains all the objects in the NetSuiteRestClient module

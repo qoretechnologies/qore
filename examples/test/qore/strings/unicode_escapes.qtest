@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires QUnit
+
+%exec-class UnicodeEscapeTest
+
+class UnicodeEscapeTest inherits QUnit::Test {
+    constructor() : Test("UnicodeEscapeTest", "1.0", \ARGV) {
+        addTestCase("\\u BMP escapes", \testBmpEscapes());
+        addTestCase("\\U full-range escapes", \testFullRangeEscapes());
+        addTestCase("\\x hex byte escapes", \testHexEscapes());
+        addTestCase("mixed escapes in strings", \testMixedEscapes());
+        addTestCase("existing escapes unchanged", \testExistingEscapes());
+        set_return_value(main());
+    }
+
+    private testBmpEscapes() {
+        # Basic Latin
+        assertEq("A", "\u0041");
+        # Box-drawing horizontal
+        assertEq(3, "\u2500".size(), "UTF-8 3-byte encoding");
+        assertEq(1, "\u2500".length(), "1 character");
+        # Bullet
+        assertEq(3, "\u2022".size());
+        # CJK character
+        assertEq(3, "\u4e16".size(), "CJK UTF-8 3-byte");
+        # Null codepoint — produces a NUL byte
+        assertEq(1, "\u0000".size(), "null codepoint produces NUL byte");
+    }
+
+    private testFullRangeEscapes() {
+        # Emoji (supplementary plane)
+        string smiley = "\U0001F600";
+        assertEq(4, smiley.size(), "emoji UTF-8 4-byte encoding");
+        assertEq(1, smiley.length(), "1 character");
+        # Musical symbol (U+1D11E)
+        string clef = "\U0001D11E";
+        assertEq(4, clef.size());
+        # BMP via \U (zero-padded)
+        assertEq("\u0041", "\U00000041");
+    }
+
+    private testHexEscapes() {
+        # Single hex digit
+        assertEq("\n", "\xa");
+        # Two hex digits
+        assertEq("A", "\x41");
+        assertEq("Z", "\x5a");
+        assertEq("z", "\x7a");
+        # High byte
+        assertEq(1, "\xff".size());
+    }
+
+    private testMixedEscapes() {
+        # Mix of \u, \x, regular escapes, and literal text
+        string s = "Hello\u0020World\x21\n";
+        assertEq("Hello World!\n", s);
+        # Box-drawing table
+        string row = "\u2502 cell \u2502";
+        assertEq(True, row.length() > 6);
+    }
+
+    private testExistingEscapes() {
+        # Verify existing escapes still work
+        assertEq(7, ord("\a"));     # alert
+        assertEq(8, ord("\b"));     # backspace
+        assertEq(27, ord("\e"));    # escape
+        assertEq(12, ord("\f"));    # form feed
+        assertEq(10, ord("\n"));    # newline
+        assertEq(13, ord("\r"));    # carriage return
+        assertEq(9, ord("\t"));     # tab
+        assertEq(11, ord("\v"));    # vertical tab
+        assertEq("\\", "\\");      # literal backslash
+        # Octal
+        assertEq("A", "\101");     # octal 101 = 65 = 'A'
+    }
+}
