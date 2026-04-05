@@ -1157,7 +1157,10 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (call_args) {
                         call_args->deref(nullptr);
                     }
-                    break;
+                    // Must use continue (not break) to skip resolveExprSlot() which would
+                    // create a NewObjectCallNode with no args, triggering a constructor
+                    // resolution error for classes without a default constructor.
+                    continue;
                 }
                 if (ref1 && *ref1) {
                     const qore_ns_private* found_ns = nullptr;
@@ -1234,7 +1237,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (call_args) {
                         call_args->deref(nullptr);
                     }
-                    break;
+                    continue;
                 }
                 // Resolve type and create node with args
                 if (ref1 && *ref1) {
@@ -1291,7 +1294,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     }
                 }
                 if (has_unsupported) {
-                    break;
+                    continue;
                 }
                 // Resolve type and create node with arg
                 if (ref1 && *ref1) {
@@ -1339,7 +1342,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (call_args) {
                         call_args->deref(nullptr);
                     }
-                    break;
+                    continue;
                 }
                 // Resolve hashdecl and create node with args
                 if (ref1 && *ref1) {

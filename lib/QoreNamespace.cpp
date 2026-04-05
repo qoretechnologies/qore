@@ -3368,7 +3368,15 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
                 // Identity check: same bits means same refSelf'd node (same module re-imported
                 // via different dependency paths, e.g. QUnit -> Util and FsUtil -> Util)
                 if (!existing->val.isEqualValue(cli.getValue())) {
-                    qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                    // For AOT binary modules, constant values may differ from the source module's
+                    // values (e.g., pre-init vs post-init values) even though they originate from
+                    // the same module. If both constants share the same from_module origin, treat
+                    // as a benign duplicate from an already-merged dependency.
+                    const char* existing_mod = existing->getModuleName();
+                    const char* new_mod = cli.getEntry()->getModuleName();
+                    if (!existing_mod || !new_mod || strcmp(existing_mod, new_mod) != 0) {
+                        qmc.error("duplicate constant %s::%s", name.c_str(), cli.getName().c_str());
+                    }
                 }
             }
         }
