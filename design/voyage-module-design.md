@@ -5,7 +5,7 @@
 Two new Qore modules providing embedding and reranking support via the
 [Voyage AI API](https://docs.voyageai.com/):
 
-1. **VoyageRestClient.qm** — REST client, SSE stream support, and connection provider
+1. **VoyageRestClient.qm** — REST client and connection provider
 2. **VoyageDataProvider/** — Data provider actions for embeddings and reranking
 
 Modeled after the `AnthropicRestClient.qm` + `AnthropicDataProvider/` pattern.
@@ -111,12 +111,14 @@ Constants and option processing (following `AnthropicRestClientBase` pattern):
 ```qore
 const DefaultUrl = "https://api.voyageai.com";
 const DefaultApiVersion = "v1";
-const DefaultPingMethod = "GET";
-const DefaultPingPath = "embeddings";  # lightweight endpoint for ping
+const DefaultPingMethod = "POST";
+const DefaultPingPath = "embeddings";  # ping uses the embeddings endpoint with a minimal request body
+const DefaultPingBody = {"model": "voyage-3", "input": ("ping",)};
 
 static hash<auto> getOptions(hash<auto> opts) {
     # Map apikey → Authorization: Bearer header
     # Set default_path to /v1
+    # Set default ping options, including a minimal ping_body for POST /v1/embeddings
 }
 ```
 
