@@ -815,8 +815,10 @@ l50Xb2GWQesIt9k5jF5IOw==
                             "protocol": "h3",
                             "accept_all_certs": True,
                             "logger": mLogger,
-                            "request_timeout": 10s,
-                            "connect_timeout": 10s,
+                            # 5s so that the stale-connection retry (2 × 5s = 10s)
+                            # still fits within the 15s Counter wait below
+                            "request_timeout": 5s,
+                            "connect_timeout": 5s,
                         },
                     );
                 on_exit delete mgr;
