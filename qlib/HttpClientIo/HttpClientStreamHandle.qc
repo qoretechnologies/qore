@@ -100,6 +100,9 @@ public class HttpClientStreamHandle {
 
         #! True if a pending stream reservation is held on the connection
         bool reservation_held = False;
+
+        #! True if this stream's connection was reused from the pool (not freshly created)
+        bool connection_reused = False;
     }
 
     #! Creates a new stream handle
@@ -194,6 +197,22 @@ public class HttpClientStreamHandle {
     #! Clears the reservation-held flag (caller already released manually)
     markReservationReleased() {
         reservation_held = False;
+    }
+
+    #! Marks that this stream's connection was reused from the pool
+    /** Set by @ref HttpClientConnectionManager::acquireStream() when the
+        connection was retrieved from the pool rather than freshly created.
+        Used by the timeout retry logic to distinguish stale pooled connections
+        (worth retrying) from fresh connections to slow/unreachable servers
+        (not worth retrying).
+    */
+    markConnectionReused() {
+        connection_reused = True;
+    }
+
+    #! Returns True if this stream's connection was reused from the pool
+    bool wasConnectionReused() {
+        return connection_reused;
     }
 
     #! Releases the stream reservation if one is held

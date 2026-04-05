@@ -261,7 +261,8 @@ public class HttpClientConnectionManager {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
 
-        HttpClientConnection conn = getConnection(url_info);
+        bool from_pool = False;
+        HttpClientConnection conn = getConnection(url_info, \from_pool);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -281,6 +282,9 @@ public class HttpClientConnectionManager {
             rethrow;
         }
         stream.markReservationHeld();
+        if (from_pool) {
+            stream.markConnectionReused();
+        }
         return stream;
     }
 
@@ -346,11 +350,12 @@ public class HttpClientConnectionManager {
                     evictDeadConnections(url);
                     continue;
                 }
-                # A timeout on a pooled connection may indicate a stale connection
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && !timeout_retried) {
+                # Only retry timeout on reused pooled connections (stale connection)
+                if (ex.err == "HTTPCLIENT-TIMEOUT"
+                        && stream.wasConnectionReused() && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "streaming timed out on %s connection %d, "
+                    log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
                         "evicting stale connection and retrying",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
                     try { timed_out_conn.close(); } catch () {}
@@ -447,11 +452,16 @@ public class HttpClientConnectionManager {
 
         @return the response hash
 
-        @note If the request times out on a pooled connection, the connection is
-        evicted and the request is retried once on a fresh connection. This handles
-        stale connections (e.g., server restart) where no transport-level error is
-        detected before the timeout. The worst-case latency is therefore
-        \c 2 × timeout_ms for a stale connection with a genuinely unreachable server.
+        @note If the request times out on a \b reused pooled connection, the
+        connection is evicted and the request is retried once on a fresh connection
+        with \c connect_timeout as the retry deadline. This handles stale connections
+        (e.g., server restart, QUIC session death) where no transport-level error is
+        detected before the timeout. The retry uses \c connect_timeout (not
+        \c request_timeout) because if the server genuinely restarted, the fresh
+        connection establishes quickly; if it is unreachable, the retry fails within
+        \c connect_timeout rather than burning a full \c request_timeout. Timeouts on
+        freshly created connections are not retried — they indicate a genuinely slow
+        or unreachable server.
 
         @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
     */
@@ -540,7 +550,8 @@ public class HttpClientConnectionManager {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
+                hash<auto> resp = stream.request(method, path, headers, body,
+                    timeout_retried ? opts.connect_timeout : timeout_ms);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
@@ -557,15 +568,23 @@ public class HttpClientConnectionManager {
                     }
                     continue;
                 }
-                # A timeout on a pooled connection may indicate a stale connection
-                # (server restarted, QUIC session dead). Close the stale connection
-                # and retry once on a fresh connection.
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream && !timeout_retried) {
+                # A timeout on a reused pooled connection may indicate a stale
+                # connection (server restarted, QUIC session dead). Close the
+                # stale connection and retry once with connect_timeout as the
+                # deadline — if the server restarted, the fresh connection
+                # establishes quickly; if it is genuinely unreachable, we fail
+                # within connect_timeout rather than burning another full
+                # request_timeout.  Do NOT retry for fresh connections — a
+                # timeout on a new connection means the server is genuinely
+                # slow or unreachable.
+                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
+                        && stream.wasConnectionReused() && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "request timed out on %s connection %d, "
-                        "evicting stale connection and retrying",
-                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
+                    log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
+                        "evicting stale connection and retrying with connect_timeout=%y",
+                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                        opts.connect_timeout);
                     try { timed_out_conn.close(); } catch () {}
                     evictDeadConnections(url);
                     continue;
@@ -793,7 +812,7 @@ public class HttpClientConnectionManager {
     }
 
     #! Internal: gets or creates a connection for the given URL info
-    private HttpClientConnection getConnection(hash<auto> url_info) {
+    private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
         while (True) {
@@ -830,6 +849,7 @@ public class HttpClientConnectionManager {
                     evictConnections(key, dead_conns);
                 }
                 if (live_conn) {
+                    from_pool = True;
                     log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
                         live_conn.getProtocol(), live_conn.getConnectionId(), key);
                     return live_conn;
@@ -900,6 +920,7 @@ public class HttpClientConnectionManager {
                         }
                     }
                     if (reusable) {
+                        from_pool = True;
                         return reusable;
                     }
                 }
@@ -926,6 +947,7 @@ public class HttpClientConnectionManager {
                             ? candidates[0]
                             : candidates[rand() % candidates.size()];
                         if (best.tryReserveStream()) {
+                            from_pool = True;
                             log(LoggerLevel::DEBUG, "using %s connection %d with %d streams "
                                 "to %s (at connection limit)", best.getProtocol(),
                                 best.getConnectionId(), min_streams, key);
