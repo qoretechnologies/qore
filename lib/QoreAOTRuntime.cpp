@@ -1026,9 +1026,22 @@ static QoreAOTContext* buildContextFromSlotMap(
                 lv = sig->argvid;
             }
         } else if (lflags & 0x01) {
-            // is_param
+            // is_param — resolve by index first, fall back to name match
             if (sig && param_idx < sig->lv.size()) {
                 lv = sig->lv[param_idx];
+            }
+            if (!lv && sig && lname && *lname) {
+                // Index-based lookup failed; try name-based resolution as fallback.
+                // This handles cases where the parameter count differs between
+                // serialization and deserialization (e.g., type resolution changes).
+                for (unsigned pi = 0; pi < sig->numParams() && pi < sig->lv.size(); ++pi) {
+                    if (sig->lv[pi] && strcmp(sig->lv[pi]->getName(), lname) == 0) {
+                        lv = sig->lv[pi];
+                        printd(2, "AOT v2: '%s' local[%d] param '%s' resolved by name (idx %d != serialized %d)\n",
+                            name, i, lname, pi, param_idx);
+                        break;
+                    }
+                }
             }
         } else {
             // Body local — try to find the actual LocalVar* from the function's AST
