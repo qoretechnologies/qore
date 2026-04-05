@@ -1,0 +1,159 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore VoyageDataProvider module definition
+
+/*  VoyageDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) VoyageRestClient
+%requires RestClientIo
+
+module VoyageDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Voyage AI embedding and reranking services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new VoyageDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": VoyageDataProvider::AppName,
+            "display_name": "Voyage AI",
+            "short_desc": "Voyage AI text embedding and search reranking services",
+            "desc": "Provides access to [Voyage AI](https://voyageai.com/) for converting text into "
+                "numerical representations (embeddings) and reranking search results by relevance.\n\n"
+                "**Common use cases**:\n"
+                "- **Semantic search**: convert product descriptions, support tickets, or documents into "
+                "embeddings, then find the most similar items by comparing vectors\n"
+                "- **RAG (Retrieval-Augmented Generation)**: embed your knowledge base so an AI assistant "
+                "can find relevant context before answering questions\n"
+                "- **Search result reranking**: take initial search results and re-sort them by true "
+                "relevance to the user's query for higher-quality results",
+            "scheme": "voyage",
+            "logo": VoyageLogo,
+            "logo_file_name": "voyage-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register create-embeddings action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VoyageDataProvider::AppName,
+            "path": "/create-embeddings",
+            "action": "create-embeddings",
+            "display_name": "Create Embeddings",
+            "short_desc": "Convert text into numerical vectors for search and comparison",
+            "desc": "Converts one or more text inputs into numerical vectors (embeddings) that capture "
+                "the meaning of the text. Texts with similar meanings will have similar vectors, enabling "
+                "semantic search and comparison.\n\n"
+                "**Example use cases**:\n"
+                "- Convert product descriptions into embeddings to power a \"find similar products\" feature\n"
+                "- Embed support tickets to automatically route them to the right team\n"
+                "- Build a knowledge base index for AI-powered question answering (RAG)\n\n"
+                "Supports batch processing (up to 1,000 texts per request) and configurable output "
+                "dimensions for balancing accuracy vs. storage cost",
+            "action_code": DPAT_API,
+            "groups": ("Embeddings",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageEmbeddingsRequestDataType::Fields{"model", "input"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageEmbeddingsRequestDataType::Fields{"input_type", "output_dimension",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageEmbeddingsRequestDataType::Fields - (
+                    "model", "input", "input_type", "output_dimension",
+                )
+            ),
+            "output_type": VoyageEmbeddingsDataProvider::ResponseType,
+        });
+
+        # register rerank action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": VoyageDataProvider::AppName,
+            "path": "/rerank",
+            "action": "rerank",
+            "display_name": "Rerank Documents",
+            "short_desc": "Re-sort search results by relevance to a query",
+            "desc": "Takes a search query and a list of documents, then re-sorts the documents by how "
+                "relevant they are to the query. This improves search quality by using AI to understand "
+                "meaning rather than just keyword matching.\n\n"
+                "**Example use cases**:\n"
+                "- Improve search results from a basic keyword search by reranking with semantic understanding\n"
+                "- Filter a large set of candidate documents down to the most relevant ones for AI processing\n"
+                "- Re-sort customer support articles by relevance to a user's question\n\n"
+                "Returns results sorted by relevance score (highest first). Use `top_k` to limit the "
+                "number of results returned, and `return_documents` to include the document text "
+                "in each result",
+            "action_code": DPAT_API,
+            "groups": ("Reranking",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageRerankRequestDataType::Fields{"model", "query", "documents"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageRerankRequestDataType::Fields{"top_k", "return_documents",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                VoyageRerankRequestDataType::Fields - (
+                    "model", "query", "documents", "top_k", "return_documents",
+                )
+            ),
+            "output_type": VoyageRerankDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage VoyageDataProvider Module
+
+    @tableofcontents
+
+    @section voyagedataproviderintro VoyageDataProvider Introduction
+
+    The %VoyageDataProvider module provides a data provider API for Voyage AI
+    embedding and reranking services.
+
+    The following classes are provided by this module:
+    - @ref VoyageDataProvider::VoyageDataProvider "VoyageDataProvider" - the root data provider
+    - @ref VoyageDataProvider::VoyageEmbeddingsDataProvider "VoyageEmbeddingsDataProvider" - generate text embeddings
+    - @ref VoyageDataProvider::VoyageRerankDataProvider "VoyageRerankDataProvider" - rerank documents
+
+    @section VoyageDataProviderRelnotes Release Notes
+
+    @subsection VoyageDataProviderv1_0 VoyageDataProvider v1.0
+    - the initial version of the %VoyageDataProvider module
+*/
+
+#! App logo loaded from file
+public const VoyageLogo = File::readTextFile(get_script_dir() + "/voyage-logo.svg");
