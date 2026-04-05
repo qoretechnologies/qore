@@ -2912,9 +2912,24 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
     return 0;
 }
 
-int QuicSession::handshakeCompletedCallback(ngtcp2_conn* /* conn */, void* user_data) {
+int QuicSession::handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data) {
     auto* session = static_cast<QuicSession*>(user_data);
     session->handshake_completed_.store(true, std::memory_order_release);
+
+    // Configure keepalive pings based on peer's max_idle_timeout.
+    // Without this, a dead peer (crashed without CONNECTION_CLOSE) is only
+    // detected after our own idle timeout expires.  Following curl's pattern:
+    // send pings at half the peer's idle timeout to keep the connection alive
+    // and detect dead peers quickly via timeout on the ping response.
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn);
+    if (rp && rp->max_idle_timeout > 0) {
+        ngtcp2_duration keep_ns = rp->max_idle_timeout / 2;
+        if (keep_ns < 1) {
+            keep_ns = 1;
+        }
+        ngtcp2_conn_set_keep_alive_timeout(conn, keep_ns);
+    }
+
     return 0;
 }
 
