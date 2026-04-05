@@ -1620,7 +1620,7 @@ static QoreAOTContext* buildContextFromSlotMap(
                     if (call_args) {
                         call_args->deref(nullptr);
                     }
-                    break;
+                    continue;
                 }
                 // Resolve class and method, create node with args
                 if (ref1 && ref2) {
@@ -6687,6 +6687,38 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
 
         printd(1, "AOT module v3 '%s': registered %d/%d pre-compiled functions\n",
             mod_name, registered, num_functions);
+
+        // If some functions failed slot map registration, try fallback source if available
+        if (registered < num_functions && deserializer.hasFallbackSource()) {
+            ExceptionSink wsink;
+            QoreProgram* fallback_pgm = new QoreProgram(parse_options & ~PO_NO_TOP_LEVEL_STATEMENTS);
+            fallback_pgm->setScriptPath(label);
+            fallback_pgm->parse(deserializer.getFallbackSource(), label, &xsink, &wsink,
+                QP_WARN_DEFAULT);
+            if (wsink.isException()) {
+                wsink.handleWarnings();
+            }
+            if (xsink.isException()) {
+                printd(2, "AOT v3 '%s': fallback source parse failed (non-fatal)\n", mod_name);
+                xsink.clear();
+                fallback_pgm->waitForTerminationAndDeref(nullptr);
+            } else {
+                int fallback_registered = 0;
+                qore_ns_private* fallback_root_ns = qore_ns_private::get(
+                    *qore_program_private::get(*fallback_pgm)->RootNS);
+                registerFallbackFunctionsOnMainVariants(
+                    fallback_root_ns, root_ns, local_pgm, func_map,
+                    fallback_registered);
+                registered += fallback_registered;
+                printd(2, "AOT v3 '%s': fallback registered %d additional functions (%d/%d total)\n",
+                    mod_name, fallback_registered, registered, num_functions);
+                fallback_pgm->waitForTerminationAndDeref(nullptr);
+            }
+        } else if (registered < num_functions) {
+            printd(0, "AOT module '%s': WARNING - %d/%d functions failed registration "
+                "with no source fallback available\n",
+                mod_name, num_functions - registered, num_functions);
+        }
     }
 
     // Read init function descriptors for deferred execution in ns_init.

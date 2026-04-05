@@ -71,6 +71,7 @@
 #include <cassert>
 #include <cstring>
 #include <deque>
+#include <numeric>
 #include <unordered_set>
 #include <zlib.h>
 
@@ -3586,14 +3587,84 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::resolveClassBases(std::string& error) {
-    // Second pass: resolve base class references now that all classes exist
-    for (uint32_t i = 0; i < class_list.size() && i < pending_bases.size(); ++i) {
-        QoreClass* qc = class_list[i];
-        if (!qc) {
+    uint32_t count = std::min(static_cast<uint32_t>(class_list.size()),
+        static_cast<uint32_t>(pending_bases.size()));
+
+    // Build a map from class path to class_list index for newly deserialized classes
+    std::unordered_map<std::string, uint32_t> path_to_idx;
+    for (uint32_t i = 0; i < count; ++i) {
+        if (!class_list[i] || preexisting_classes.count(i)) {
             continue;
         }
+        path_to_idx[class_list[i]->getPath()] = i;
+    }
 
-        for (auto& pbc : pending_bases[i]) {
+    // Compute topological order (bases before derived) using Kahn's algorithm.
+    // This ensures addBaseClass() can propagate grandparent classes correctly,
+    // since the base class's hierarchy is fully resolved before the derived class.
+    {
+        // Build adjacency graph: edge from base_idx -> derived_idx
+        std::vector<std::vector<uint32_t>> dependents(count);
+        std::vector<uint32_t> in_degree(count, 0);
+
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!class_list[i] || preexisting_classes.count(i)) {
+                continue;
+            }
+            for (auto& pbc : pending_bases[i]) {
+                auto it = path_to_idx.find(pbc.base_path);
+                if (it != path_to_idx.end() && it->second != i) {
+                    // Base class is also newly deserialized — must be processed first
+                    dependents[it->second].push_back(i);
+                    ++in_degree[i];
+                }
+            }
+        }
+
+        // Kahn's algorithm: start with classes that have no in-module base dependencies
+        std::deque<uint32_t> queue;
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!class_list[i] || preexisting_classes.count(i)) {
+                continue;
+            }
+            if (in_degree[i] == 0) {
+                queue.push_back(i);
+            }
+        }
+
+        topo_order.clear();
+        topo_order.reserve(count);
+        while (!queue.empty()) {
+            uint32_t idx = queue.front();
+            queue.pop_front();
+            topo_order.push_back(idx);
+            for (uint32_t dep : dependents[idx]) {
+                if (--in_degree[dep] == 0) {
+                    queue.push_back(dep);
+                }
+            }
+        }
+
+        // Add any classes not in the topological order (preexisting or null)
+        // These are processed last but typically skipped anyway
+        for (uint32_t i = 0; i < count; ++i) {
+            if (!class_list[i] || preexisting_classes.count(i)) {
+                topo_order.push_back(i);
+            }
+        }
+
+        printd(5, "AOT deser: topological order for %d classes computed (%d in topo sort)\n",
+            (int)count, (int)topo_order.size());
+    }
+
+    // Resolve base classes in topological order (bases before derived)
+    for (uint32_t idx : topo_order) {
+        if (idx >= count || !class_list[idx] || preexisting_classes.count(idx)) {
+            continue;
+        }
+        QoreClass* qc = class_list[idx];
+
+        for (auto& pbc : pending_bases[idx]) {
             // Look up base class by path in the program
             ExceptionSink xsink;
             const QoreClass* base = pgm->findClass(pbc.base_path.c_str(), &xsink);
@@ -4605,9 +4676,20 @@ bool QoreAOTBinaryDeserializer::importInheritedMembers(std::string& error) {
 }
 
 bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
+    // Use topological order (bases before derived) computed in resolveClassBases().
+    // If topo_order is empty (no classes or resolveClassBases not called), fall back
+    // to sequential order for backward compatibility.
+    auto& order = topo_order;
+    std::vector<uint32_t> fallback_order;
+    if (order.empty() && !class_list.empty()) {
+        fallback_order.resize(class_list.size());
+        std::iota(fallback_order.begin(), fallback_order.end(), 0);
+        order = fallback_order;
+    }
+
     // First pass: commit all newly deserialized classes (moves pending variants to vlist)
-    for (size_t i = 0; i < class_list.size(); ++i) {
-        if (preexisting_classes.count(i)) {
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;  // already initialized and committed
         }
         QoreClass* qc = class_list[i];
@@ -4627,8 +4709,8 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
     // This must happen AFTER parseCommit() because concrete variants are in the
     // pending list until committed — parseHasVariantWithSignature() only searches
     // the committed vlist. This mirrors parseInitPartialIntern() (QoreClass.cpp:4477).
-    for (size_t i = 0; i < class_list.size(); ++i) {
-        if (preexisting_classes.count(i)) {
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
             continue;
         }
         QoreClass* qc = class_list[i];
@@ -4664,6 +4746,34 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
                 if (!m->empty()) {
                     priv->ahm.insert(amap_t::value_type(ai->first, m.release()));
                 }
+            }
+        }
+    }
+
+    // Validation pass: verify every base class is reachable via getClass().
+    // Catches hierarchy bugs at load time instead of deep in object construction.
+    for (uint32_t i : order) {
+        if (i >= class_list.size() || preexisting_classes.count(i)) {
+            continue;
+        }
+        QoreClass* qc = class_list[i];
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* priv = qore_class_private::get(*qc);
+        if (!priv->scl) {
+            continue;
+        }
+        for (auto bi = priv->scl->begin(), be = priv->scl->end(); bi != be; ++bi) {
+            const QoreClass* base = (*bi)->sclass;
+            if (!base) {
+                continue;
+            }
+            if (!qc->getClass(base->getID())) {
+                error = "class hierarchy broken: '" + std::string(qc->getName()) +
+                    "' cannot reach base class '" + std::string(base->getName()) +
+                    "' (id: " + std::to_string(base->getID()) + ")";
+                return false;
             }
         }
     }

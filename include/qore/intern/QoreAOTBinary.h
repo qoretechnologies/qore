@@ -1003,6 +1003,10 @@ class QoreAOTBinaryDeserializer {
     };
     std::vector<std::vector<PendingBaseClass>> pending_bases;
 
+    //! Topological order for class processing (bases before derived)
+    //! Computed in resolveClassBases(), reused in commitDeserializedClasses()
+    std::vector<uint32_t> topo_order;
+
     // Pending instance member info for two-pass class resolution
     struct PendingInstanceMember {
         std::string name;
