@@ -118,7 +118,7 @@ public class VoyageRestClientBase {
 
         #! Default ping body (minimal valid request for connectivity check)
         const DefaultPingBody = {
-            "model": "voyage-3-lite",
+            "model": "voyage-3",
             "input": ("ping",),
         };
     }

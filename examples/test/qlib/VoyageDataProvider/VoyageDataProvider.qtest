@@ -328,7 +328,7 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
 
         hash<auto> resp = emb.doRequest({
-            "model": "voyage-3-lite",
+            "model": "voyage-3",
             "input": ("Hello, world!",),
             "input_type": "document",
         });
@@ -338,7 +338,7 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq("embedding", resp.data[0].object);
         assertEq(0, resp.data[0].index);
         assertTrue(resp.data[0].embedding.lsize() > 0, "embedding vector is non-empty");
-        assertEq("voyage-3-lite", resp.model);
+        assertEq("voyage-3", resp.model);
         assertGt(0, resp.usage.total_tokens);
 %endif
     }
