@@ -844,6 +844,14 @@ cargo install tree-sitter-cli@0.26.5
       - includes SSE streaming support for both sync (RestClient) and async (RestClientIo) clients
     - @ref anthropicdataproviderintro "AnthropicDataProvider" module
       - new module providing a data provider API for <a href="https://www.anthropic.com/">Anthropic</a> Claude AI services
+    - @ref voyagerestclientintro "VoyageRestClient" module
+      - new module providing a REST client for <a href="https://voyageai.com/">Voyage AI</a>'s embedding and reranking API
+      - supports Bearer token authentication
+      - provides VoyageRestConnection for connection management with \c voyage:// URL scheme
+    - @ref voyagedataproviderintro "VoyageDataProvider" module
+      - new module providing a data provider API for <a href="https://voyageai.com/">Voyage AI</a> embedding and reranking services
+      - supports text embeddings with flexible dimensions and quantization
+      - supports document reranking with relevance scoring
     - @ref huggingfacerestclientintro "HuggingFaceRestClient" module
       - new module providing a REST client for the <a href="https://huggingface.co/">Hugging Face</a> Hub API
       - supports Bearer token authentication
