@@ -4446,8 +4446,11 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                 return false;
             }
 
-            // Note: QCF_USES_EXTRA_ARGS flag is handled by the overridden hasVarargs()
-            // method which checks signature.hasVarargs() directly
+            // Sync QCF_USES_EXTRA_ARGS flag with signature varargs state; the constructor
+            // couldn't set this because the signature was populated after construction
+            if (has_varargs) {
+                ufv->setFlag(QCF_USES_EXTRA_ARGS);
+            }
 
             if (flags & 0x0001) {
                 ufv->setModulePublic();
@@ -4539,6 +4542,11 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                     umv, has_varargs, error, qc)) {
                 delete mvb;
                 return false;
+            }
+
+            // Sync QCF_USES_EXTRA_ARGS flag with signature varargs state
+            if (has_varargs) {
+                mvb->setFlag(QCF_USES_EXTRA_ARGS);
             }
 
             // Deserialize BCA (Base Class Constructor Arguments) for constructors

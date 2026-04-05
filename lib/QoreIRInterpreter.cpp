@@ -838,7 +838,7 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     // it may only exist in the ThreadSafeLocalVarRuntimeEnvironment.
     ClosureVarValue* cv = thread_try_find_closure_var(var->getName());
     if (!cv) {
-        cv = thread_get_runtime_closure_var(var);
+        cv = thread_try_get_runtime_closure_var(var);
     }
     if (!cv) {
         return;
@@ -3373,7 +3373,7 @@ load_local_done:
                                 fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-FAILED] thread_try_find_closure_var returned NULL for '%s', trying thread_get_runtime_closure_var\n", var_name);
                                 fflush(stderr);
                             }
-                            cv = thread_get_runtime_closure_var(local_inst->local);
+                            cv = thread_try_get_runtime_closure_var(local_inst->local);
                         } else {
                             if (debug_closure) {
                                 fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-SUCCESS] Found '%s' in cvstack\n", var_name);

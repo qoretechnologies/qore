@@ -605,6 +605,11 @@ public:
         return flags & QCF_USES_EXTRA_ARGS;
     }
 
+    //! Set a code flag on this variant (used during AOT deserialization)
+    DLLLOCAL void setFlag(int64 flag) {
+        flags |= flag;
+    }
+
 protected:
     // code flags
     int64 flags;
