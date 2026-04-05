@@ -296,6 +296,7 @@ public class HttpClientConnectionManager {
         bool timeout_retried = False;
         while (True) {
             HttpClientStreamHandle stream = acquireStream(url);
+            bool connection_was_pooled = stream.getConnection().isReady();
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
@@ -306,11 +307,12 @@ public class HttpClientConnectionManager {
                     evictDeadConnections(url);
                     continue;
                 }
-                # A timeout on a pooled connection may indicate a stale connection
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && !timeout_retried) {
+                # Only retry timeout on reused pooled connections (stale connection)
+                if (ex.err == "HTTPCLIENT-TIMEOUT"
+                        && connection_was_pooled && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "streaming timed out on %s connection %d, "
+                    log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
                         "evicting stale connection and retrying",
                         timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
                     try { timed_out_conn.close(); } catch () {}
@@ -396,11 +398,16 @@ public class HttpClientConnectionManager {
 
         @return the response hash
 
-        @note If the request times out on a pooled connection, the connection is
-        evicted and the request is retried once on a fresh connection. This handles
-        stale connections (e.g., server restart) where no transport-level error is
-        detected before the timeout. The worst-case latency is therefore
-        \c 2 × timeout_ms for a stale connection with a genuinely unreachable server.
+        @note If the request times out on a \b reused pooled connection, the
+        connection is evicted and the request is retried once on a fresh connection
+        with \c connect_timeout as the retry deadline. This handles stale connections
+        (e.g., server restart, QUIC session death) where no transport-level error is
+        detected before the timeout. The retry uses \c connect_timeout (not
+        \c request_timeout) because if the server genuinely restarted, the fresh
+        connection establishes quickly; if it is unreachable, the retry fails within
+        \c connect_timeout rather than burning a full \c request_timeout. Timeouts on
+        freshly created connections are not retried — they indicate a genuinely slow
+        or unreachable server.
 
         @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
     */
@@ -410,9 +417,16 @@ public class HttpClientConnectionManager {
         bool timeout_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
+            bool connection_was_pooled = False;
             try {
                 stream = acquireStream(url);
-                hash<auto> resp = stream.request(method, path, headers, body, timeout_ms);
+                # A pooled connection is already Ready; a freshly created one
+                # is still Connecting.  Track this so the timeout retry only
+                # fires for reused (possibly stale) connections, not for fresh
+                # connections to genuinely slow or unreachable servers.
+                connection_was_pooled = stream.getConnection().isReady();
+                hash<auto> resp = stream.request(method, path, headers, body,
+                    timeout_retried ? opts.connect_timeout : timeout_ms);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
@@ -432,15 +446,23 @@ public class HttpClientConnectionManager {
                     }
                     continue;
                 }
-                # A timeout on a pooled connection may indicate a stale connection
-                # (server restarted, QUIC session dead). Close the stale connection
-                # and retry once on a fresh connection.
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream && !timeout_retried) {
+                # A timeout on a reused pooled connection may indicate a stale
+                # connection (server restarted, QUIC session dead). Close the
+                # stale connection and retry once with connect_timeout as the
+                # deadline — if the server restarted, the fresh connection
+                # establishes quickly; if it is genuinely unreachable, we fail
+                # within connect_timeout rather than burning another full
+                # request_timeout.  Do NOT retry for fresh connections — a
+                # timeout on a new connection means the server is genuinely
+                # slow or unreachable.
+                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
+                        && connection_was_pooled && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "request timed out on %s connection %d, "
-                        "evicting stale connection and retrying",
-                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId());
+                    log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
+                        "evicting stale connection and retrying with connect_timeout=%y",
+                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                        opts.connect_timeout);
                     try { timed_out_conn.close(); } catch () {}
                     evictDeadConnections(url);
                     continue;
