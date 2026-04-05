@@ -199,11 +199,12 @@ if [ $MEASURE_TIME -eq 1 ]; then
     fi
 fi
 
-if [ -n "$LD_PRELOAD" ]; then
-    LD_PRELOAD=$LIBQORE:$LD_PRELOAD
-else
-    LD_PRELOAD=$LIBQORE
-fi
+# Put the libqore directory at the front of LD_LIBRARY_PATH so the build's
+# qore binary picks up the build's libqore.so before any installed copy.
+# This replaces the old LD_PRELOAD approach which caused "multiple libqore
+# images loaded" when an installed copy also existed on the RPATH.
+LIBQORE_DIR=$(dirname "$LIBQORE")
+export LD_LIBRARY_PATH=${LIBQORE_DIR}:${LD_LIBRARY_PATH}
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null
@@ -239,7 +240,6 @@ echo "Using libqore: $LIBQORE"
 echo "QORE_INCLUDE_DIR=$QORE_INCLUDE_DIR"
 echo "QORE_MODULE_DIR=$QORE_MODULE_DIR"
 echo "LD_PRELOAD=$LD_PRELOAD"
-export LD_LIBRARY_PATH=$LD_PRELOAD:$LD_LIBRARY_PATH
 echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 echo "QORE_DB_CONNSTR: ${QORE_DB_CONNSTR}"
 echo "QORE_DB_CONNSTR_FREETDS: ${QORE_DB_CONNSTR_FREETDS}"
@@ -377,7 +377,6 @@ for test in $TESTS; do
     if [ $PRINT_TEXT -eq 1 ]; then echo "-------------------------------------"; echo; fi
 done
 
-unset LD_PRELOAD
 
 # Print test summary.
 if [ $PRINT_TEXT -eq 1 ]; then
