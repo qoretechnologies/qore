@@ -6361,17 +6361,12 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // QoreDotEvalOperatorNode: dot-eval method call (obj.method())
     // Classified as DOT_EVAL_TARGET with class_path + method_name instead of EXPR_TREE,
     // so deserialization can resolve the method directly without reconstructing the AST.
-    if (auto* dot_eval = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        auto* mc = dot_eval->getMethodCall();
-        if (mc) {
-            id.kind = AOTExprKind::DOT_EVAL_TARGET;
-            const QoreClass* qc = mc->getClass();
-            id.ref1 = qc ? qc->getPath() : "";
-            id.ref2 = mc->getName() ? mc->getName() : "";
-            id.flags = mc->isPseudo() ? 1 : 0;
-            return id;
-        }
-    }
+    // NOTE: QoreDotEvalOperatorNode is NOT classified as DOT_EVAL_TARGET here.
+    // DOT_EVAL_TARGET stores only method name + class in the slot and sets exprs[] = NOTHING,
+    // but ExprOp-based DotEval opcodes (DotEvalAny/Date/etc.) dispatch via
+    // qore_rt_dot_eval_with_base_aot() which reads from exprs[]. Storing NOTHING breaks
+    // those dispatches. Instead, DotEval expressions fall through to EXPR_TREE which
+    // serializes the full expression (via EN_DOT_EVAL) preserving method name, args, etc.
 
     // Cast operator nodes: classified with type path + or_nothing instead of EXPR_TREE.
     if (auto* chc = dynamic_cast<const QoreComplexHashCastOperatorNode*>(node)) {
