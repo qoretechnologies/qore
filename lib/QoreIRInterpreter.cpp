@@ -3358,6 +3358,19 @@ load_local_done:
                         QoreValue val = it->second;
                         out = val.hasNode() ? val.refSelf() : val;
                     } else if (local_inst->local) {
+                        // Ensure the variable is instantiated before lookup.
+                        // When a function with closureUse() vars executes in its own
+                        // body (not as a closure), evalTiered skips instantiating these
+                        // vars. ensureLocalInstantiated puts them on the cvstack.
+                        if (local_inst->slot_id >= locals_instantiated.size()
+                                || !locals_instantiated[local_inst->slot_id]) {
+                            ensureLocalInstantiated(local_inst->local, instantiated_locals,
+                                instantiated_locals_ordered, pre_instantiated,
+                                function_own_locals, &locally_uninstantiated);
+                            if (local_inst->slot_id < locals_instantiated.size()) {
+                                locals_instantiated[local_inst->slot_id] = true;
+                            }
+                        }
                         // Read closure variable: prefer cvstack (topmost = current
                         // function's own variable) over runtime closure env (which
                         // may point to the calling closure's variable in recursive
@@ -4903,6 +4916,16 @@ load_local_done:
                     }
                 }
 
+                // Ensure variable is instantiated before store (same as LoadClosure)
+                if (local_inst->slot_id >= locals_instantiated.size()
+                        || !locals_instantiated[local_inst->slot_id]) {
+                    ensureLocalInstantiated(local_inst->local, instantiated_locals,
+                        instantiated_locals_ordered, pre_instantiated,
+                        function_own_locals, &locally_uninstantiated);
+                    if (local_inst->slot_id < locals_instantiated.size()) {
+                        locals_instantiated[local_inst->slot_id] = true;
+                    }
+                }
                 storeValue(closures, local_inst->local, val, xsink);
                 // Write-through: update the actual closure variable so changes
                 // are visible outside the IR interpreter's local cache.
