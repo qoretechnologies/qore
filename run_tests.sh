@@ -204,7 +204,7 @@ fi
 # This replaces the old LD_PRELOAD approach which caused "multiple libqore
 # images loaded" when an installed copy also existed on the RPATH.
 LIBQORE_DIR=$(dirname "$LIBQORE")
-export LD_LIBRARY_PATH=${LIBQORE_DIR}:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH="${LIBQORE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 # Enable core dumps for crash diagnostics
 ulimit -c unlimited 2>/dev/null

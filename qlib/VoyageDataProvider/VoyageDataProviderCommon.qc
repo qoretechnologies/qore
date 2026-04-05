@@ -43,6 +43,7 @@ public class VoyageDataProviderCommon inherits DataProvider::AbstractDataProvide
                 "type": AbstractDataProviderTypeMap."string",
                 "desc": "The Voyage AI API key used for authentication; sent as the "
                     "`Authorization: Bearer` header",
+                "sensitive": True,
             },
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
