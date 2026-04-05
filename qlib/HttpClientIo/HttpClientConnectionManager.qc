@@ -1099,6 +1099,7 @@ public class HttpClientConnectionManager {
             || err == "HTTP2-CONNECT-ERROR"
             || err == "HTTP2-ALPN-ERROR"
             || err == "HTTP2-ABORT"
+            || err == "HTTP2-STATE-ERROR"
             || err == "HTTP2-ERROR"
             || err == "HTTP1-CONNECT-ERROR"
             || err == "HTTP1-CONNECTION-CLOSED"
