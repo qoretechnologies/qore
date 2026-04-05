@@ -245,7 +245,8 @@ public class HttpClientConnectionManager {
             url_info.port = url_info.protocol == "https" ? 443 : 80;
         }
 
-        HttpClientConnection conn = getConnection(url_info);
+        bool from_pool = False;
+        HttpClientConnection conn = getConnection(url_info, \from_pool);
 
         # Create protocol-appropriate stream handle; release the reservation
         # if the constructor throws to avoid leaking a pending slot
@@ -265,6 +266,9 @@ public class HttpClientConnectionManager {
             rethrow;
         }
         stream.markReservationHeld();
+        if (from_pool) {
+            stream.markConnectionReused();
+        }
         return stream;
     }
 
@@ -296,7 +300,6 @@ public class HttpClientConnectionManager {
         bool timeout_retried = False;
         while (True) {
             HttpClientStreamHandle stream = acquireStream(url);
-            bool connection_was_pooled = stream.getConnection().isReady();
             try {
                 stream.startStreaming(method, path, headers, body_streaming, body);
                 return stream;
@@ -309,7 +312,7 @@ public class HttpClientConnectionManager {
                 }
                 # Only retry timeout on reused pooled connections (stale connection)
                 if (ex.err == "HTTPCLIENT-TIMEOUT"
-                        && connection_was_pooled && !timeout_retried) {
+                        && stream.wasConnectionReused() && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
                     log(LoggerLevel::DEBUG, "streaming timed out on pooled %s connection %d, "
@@ -417,14 +420,8 @@ public class HttpClientConnectionManager {
         bool timeout_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
-            bool connection_was_pooled = False;
             try {
                 stream = acquireStream(url);
-                # A pooled connection is already Ready; a freshly created one
-                # is still Connecting.  Track this so the timeout retry only
-                # fires for reused (possibly stale) connections, not for fresh
-                # connections to genuinely slow or unreachable servers.
-                connection_was_pooled = stream.getConnection().isReady();
                 hash<auto> resp = stream.request(method, path, headers, body,
                     timeout_retried ? opts.connect_timeout : timeout_ms);
                 checkAltSvc(url, resp);
@@ -456,7 +453,7 @@ public class HttpClientConnectionManager {
                 # timeout on a new connection means the server is genuinely
                 # slow or unreachable.
                 if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
-                        && connection_was_pooled && !timeout_retried) {
+                        && stream.wasConnectionReused() && !timeout_retried) {
                     timeout_retried = True;
                     HttpClientConnection timed_out_conn = stream.getConnection();
                     log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
@@ -695,7 +692,7 @@ public class HttpClientConnectionManager {
     }
 
     #! Internal: gets or creates a connection for the given URL info
-    private HttpClientConnection getConnection(hash<auto> url_info) {
+    private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool) {
         string key = sprintf("%s:%d", url_info.host, url_info.port);
 
         while (True) {
@@ -732,6 +729,7 @@ public class HttpClientConnectionManager {
                     evictConnections(key, dead_conns);
                 }
                 if (live_conn) {
+                    from_pool = True;
                     log(LoggerLevel::DEBUG, "reusing %s connection %d to %s",
                         live_conn.getProtocol(), live_conn.getConnectionId(), key);
                     return live_conn;
@@ -802,6 +800,7 @@ public class HttpClientConnectionManager {
                         }
                     }
                     if (reusable) {
+                        from_pool = True;
                         return reusable;
                     }
                 }
@@ -828,6 +827,7 @@ public class HttpClientConnectionManager {
                             ? candidates[0]
                             : candidates[rand() % candidates.size()];
                         if (best.tryReserveStream()) {
+                            from_pool = True;
                             log(LoggerLevel::DEBUG, "using %s connection %d with %d streams "
                                 "to %s (at connection limit)", best.getProtocol(),
                                 best.getConnectionId(), min_streams, key);
