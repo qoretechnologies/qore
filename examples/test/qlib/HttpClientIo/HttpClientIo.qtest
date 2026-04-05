@@ -332,6 +332,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Non-blocking deferred submit test
         addTestCase("submitAsyncNonBlocking deferred path", \testSubmitAsyncNonBlockingDeferred());
 
+        # Stale connection recovery tests
+        addTestCase("H2 stale connection recovery", \testH2StaleConnectionRecovery());
+        addTestCase("H1 stale connection recovery", \testH1StaleConnectionRecovery());
+        addTestCase("H3 stale connection recovery", \testH3StaleConnectionRecovery());
+
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
                 printf("%Y\n", get_all_thread_call_stacks());
@@ -2156,5 +2161,219 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<auto> resp = f.get(15s);
         assertTrue(exists resp, "should have response");
         assertEq(200, resp.status_code, "async Future request should return 200");
+    }
+
+    #! Helper: creates a dedicated test server with handlers and an SSL listener
+    /** Returns the server object and the HTTPS URL.
+        The server has \c protect_last_listener disabled so we can stop the listener.
+    */
+    private hash<auto> createDedicatedServer() {
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        server.waitForAsyncIo();
+        return {
+            "server": server,
+            "port": port,
+            "url": "https://127.0.0.1:" + port,
+        };
+    }
+
+    #! Tests that the connection manager recovers from a stale HTTP/2 connection
+    /** Scenario:
+        1. Make a request (establishes a pooled H2 connection)
+        2. Kill the server (closes all server-side sockets → client gets FIN/RST)
+        3. Make another request → should succeed via retry (not time out)
+    */
+    testH2StaleConnectionRecovery() {
+        # Create a dedicated server for this test
+        hash<auto> srv = createDedicatedServer();
+        HttpServer server = srv.server;
+        string url = srv.url;
+        int port = srv.port;
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "request_timeout": 5s,
+            "connect_timeout": 5s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # Step 1: Make a successful request to establish pooled connection
+        hash<auto> resp = mgr.request(url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H2 stale: initial request succeeds");
+
+        # Verify connection is pooled
+        hash<auto> stats = mgr.getStats();
+        assertGt(0, stats.total_connections, "H2 stale: connection pooled");
+
+        # Step 2: Kill the server — closes all connections, sends FIN/RST
+        delete server;
+
+        # Step 3: Create a new server on the same port
+        hash<HttpServerOptionInfo> new_opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer new_server(new_opts);
+        on_exit delete new_server;
+        new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        new_server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        int new_port = new_server.addListener(<HttpListenerOptionInfo>{
+            "service": port,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        }).port;
+        assertEq(port, new_port, "H2 stale: new server bound to same port");
+        new_server.waitForAsyncIo();
+
+        # Step 4: Request via same manager — should detect stale connection and retry
+        resp = mgr.request(url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H2 stale: recovery request succeeds");
+    }
+
+    #! Tests stale connection recovery for HTTP/1.1
+    testH1StaleConnectionRecovery() {
+        # Create a dedicated server for this test (plain HTTP for H1)
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+        }).port;
+        string url = "http://127.0.0.1:" + port;
+        server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "request_timeout": 5s,
+            "connect_timeout": 5s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # Step 1: Make a successful request to establish pooled connection
+        hash<auto> resp = mgr.request(url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H1 stale: initial request succeeds");
+
+        # Verify connection is pooled
+        hash<auto> stats = mgr.getStats();
+        assertGt(0, stats.total_connections, "H1 stale: connection pooled");
+
+        # Step 2: Kill the server
+        delete server;
+        usleep(100ms);
+
+        # Step 3: Create a new server on the same port
+        HttpServer new_server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete new_server;
+        new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        int new_port = new_server.addListener(<HttpListenerOptionInfo>{
+            "service": port,
+        }).port;
+        assertEq(port, new_port, "H1 stale: new server bound to same port");
+        new_server.waitForAsyncIo();
+
+        # Step 4: Request via same manager — should detect stale and retry
+        resp = mgr.request(url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H1 stale: recovery request succeeds");
+    }
+
+    #! Tests stale connection recovery for HTTP/3
+    testH3StaleConnectionRecovery() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        # Create a dedicated server with QUIC
+        hash<HttpServerOptionInfo> opts = <HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        };
+        HttpServer server(opts);
+        server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        # Need an HTTPS listener too (for the server to function)
+        server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        *int quic_port;
+        *string quic_url;
+        try {
+            quic_port = server.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }).port;
+            quic_url = "https://127.0.0.1:" + quic_port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("QUIC listener not available: " + ex.desc);
+        }
+        server.waitForAsyncIo();
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "request_timeout": 5s,
+            "connect_timeout": 5s,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # Step 1: Make a successful request
+        hash<auto> resp = mgr.request(quic_url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H3 stale: initial request succeeds");
+
+        # Step 2: Kill the server
+        delete server;
+        usleep(200ms);
+
+        # Step 3: Create a new server with QUIC on same port
+        HttpServer new_server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+        });
+        on_exit delete new_server;
+        new_server.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
+        new_server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+        });
+        *int new_quic_port;
+        try {
+            new_quic_port = new_server.addQuicListener(<HttpListenerOptionInfo>{
+                "cert": new SSLCertificate(CertPem),
+                "key": new SSLPrivateKey(KeyPem),
+            }, quic_port).port;
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("QUIC listener not available for restart: " + ex.desc);
+        }
+        assertEq(quic_port, new_quic_port, "H3 stale: new QUIC on same port");
+        new_server.waitForAsyncIo();
+
+        # Step 4: Request via same manager
+        resp = mgr.request(quic_url, "GET", "/simple");
+        assertEq(200, resp.status_code, "H3 stale: recovery request succeeds");
     }
 }

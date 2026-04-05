@@ -60,7 +60,7 @@ public class TerminalTableRenderer {
     /** @param no_color if True, disables ANSI color output
     */
     constructor(bool no_color = False) {
-        color = new Util::TerminalColor(no_color);
+        color = new Util::TerminalColor(!no_color);
     }
 
     #! Renders a table from headers and row data
