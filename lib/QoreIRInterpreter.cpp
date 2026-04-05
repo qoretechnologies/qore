@@ -841,6 +841,15 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
         cv = thread_try_get_runtime_closure_var(var);
     }
     if (!cv) {
+        // Closure variable not found — fall back to local stack assignment.
+        // This happens when a function has closureUse() variables but executes
+        // in its own body context (not as a closure).
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, false)) {
+            return;
+        }
+        QoreValue stored = value.hasNode() ? value.refSelf() : value;
+        helper.assign(stored);
         return;
     }
     LValueHelper helper(xsink);
@@ -3397,11 +3406,25 @@ load_local_done:
                             storeValue(closures, local_inst->local, val, nullptr);
                             out = val;
                         } else {
-                            // Closure variable NOT FOUND - will result in nothing being stored
-                            fprintf(stderr, "[CLOSURE-LOAD-FAILED] Variable '%s' not found in closure context, returning nothing\n", var_name);
-                            fprintf(stderr, "  - thread_try_find_closure_var() returned NULL\n");
-                            fprintf(stderr, "  - thread_get_runtime_closure_var() returned NULL\n");
-                            fflush(stderr);
+                            // Closure variable not found in closure context — fall back to
+                            // local stack lookup. This happens when a function has variables
+                            // with closureUse() set (captured by inner closures) but the
+                            // current execution context is the function's own body, not a
+                            // closure. In that case, the variable lives on the local stack.
+                            LocalVarValue* lvv = thread_find_lvar(local_inst->local->getName());
+                            if (lvv) {
+                                bool needs_deref = false;
+                                out = lvv->eval(needs_deref, xsink);
+                                if (xsink && *xsink) {
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                                // If needs_deref is false, we need to refSelf for the value slot
+                                if (!needs_deref && out.hasNode()) {
+                                    out = out.refSelf();
+                                }
+                            }
                         }
                     }
                 }
@@ -9111,26 +9134,22 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         }
         case QoreIROpcode::ListIndexDynamic: {
             // Dynamic list/container index: container[index]
+            // Must match doSquareBrackets() semantics: negative indices count from end
             qore_type_t bt = left.getType();
             if (bt == NT_LIST) {
                 const QoreListNode* l = left.get<const QoreListNode>();
-                size_t idx = static_cast<size_t>(right.getAsBigInt());
-                if (idx < l->size()) {
-                    return l->retrieveEntry(idx).refSelf();
-                }
-                return QoreValue();
+                return l->getReferencedEntry(right.getAsBigInt());
             }
             if (bt == NT_STRING) {
                 const QoreStringNode* s = left.get<const QoreStringNode>();
-                int64 idx = right.getAsBigInt();
-                if (idx >= 0 && idx < static_cast<int64>(s->length())) {
-                    return s->substr(static_cast<qore_offset_t>(idx), 1, xsink);
-                }
-                return QoreValue();
+                return s->substr(static_cast<qore_offset_t>(right.getAsBigInt()), 1, xsink);
             }
             if (bt == NT_BINARY) {
                 const BinaryNode* b = left.get<const BinaryNode>();
                 int64 idx = right.getAsBigInt();
+                if (idx < 0) {
+                    idx += static_cast<int64>(b->size());
+                }
                 if (idx >= 0 && idx < static_cast<int64>(b->size())) {
                     return QoreValue(static_cast<int64>(
                         static_cast<const unsigned char*>(b->getPtr())[idx]));
