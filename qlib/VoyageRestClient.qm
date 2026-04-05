@@ -1,0 +1,287 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file VoyageRestClient.qm Qore user module for calling Voyage AI REST services
+
+/*  VoyageRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+
+module VoyageRestClient {
+    version = "1.0";
+    desc = "user module for calling Voyage AI REST API services";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("voyage", VoyageRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage VoyageRestClient Module
+
+    @tableofcontents
+
+    @section voyagerestclientintro VoyageRestClient Introduction
+
+    The %VoyageRestClient module provides an API for calling Voyage AI REST API services.
+
+    To use this module, use \c "%requires VoyageRestClient" in your code.
+
+    All the public symbols in the module are defined in the VoyageRestClient namespace.
+
+    The main classes are:
+    - @ref VoyageRestClient::VoyageRestClient "VoyageRestClient":
+      this class provides the REST client API for communication with the Voyage AI REST
+      API; it also automates authentication and authorization to the target
+    - @ref VoyageRestClient::VoyageRestConnection "VoyageRestConnection":
+      provides a REST connection object to Voyage AI services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires VoyageRestClient
+%requires ConnectionProvider
+
+VoyageRestClient rest({"apikey": api_key});
+hash<auto> ans = rest.post("/embeddings", {
+    "model": "voyage-4-large",
+    "input": ("Hello, world!",),
+});
+printf("%Y\n", ans.body);
+    @endcode
+
+    @section VoyageRestClientRelnotes Release Notes
+
+    @subsection VoyageRestClientv1_0 VoyageRestClient v1.0
+    - the initial version of the %VoyageRestClient module
+*/
+
+#! the VoyageRestClient namespace contains all the objects in the VoyageRestClient module
+public namespace VoyageRestClient {
+#! Common base class for VoyageRestClient functionality
+public class VoyageRestClientBase {
+    public {
+        #! Default Voyage AI REST API URL
+        const DefaultUrl = "https://api.voyageai.com";
+
+        #! Default Voyage AI API version
+        const DefaultApiVersion = "v1";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+            "data": "json",
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "POST";
+
+        #! Default ping path
+        const DefaultPingPath = "embeddings";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+
+        #! Default ping body (minimal valid request for connectivity check)
+        const DefaultPingBody = {
+            "model": "voyage-3-lite",
+            "input": ("ping",),
+        };
+    }
+
+    #! returns options for the constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto> rv = DefaultOptions + opts;
+        # set default_path for RestClientIo (uses this instead of setConnectionPath)
+        if (!rv.default_path) {
+            rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
+        }
+        # ensure Accept header is JSON (RestClientIo ignores the "data" option)
+        if (!rv.headers."Accept") {
+            rv.headers."Accept" = MimeTypeJson;
+        }
+        # map apikey to Authorization: Bearer header
+        if (rv.apikey) {
+            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            remove rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! this class provides the REST client API for communication with Voyage AI servers
+/** You must use an API key in the 'apikey' option to call Voyage AI APIs.
+    The API key is sent as the \c Authorization: \c Bearer header.
+*/
+public class VoyageRestClient inherits RestClient::RestClient, VoyageRestClientBase {
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+VoyageRestClient rest(opts);
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
+        that the URL is set by default if not provided (see @ref DefaultUrl)
+        @param do_not_connect if \c False (the default), then a connection is returned already connected to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(VoyageRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(opts.api.val() ? string(opts.api) : DefaultApiVersion);
+        }
+    }
+}
+
+#! Class for Voyage AI REST connections; returns @ref VoyageRestClient objects
+public class VoyageRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default Voyage AI REST API URL
+        const DefaultUrl = "voyage://api.voyageai.com";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "Voyage AI REST Connection",
+            "short_desc": "A connection to the Voyage AI REST API",
+            "desc": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\n"
+                "Requires an API key (set as `apikey`) from the "
+                "[Voyage AI Dashboard](https://dash.voyageai.com/). "
+                "The connection uses the `voyage://` URL scheme",
+            "cls": Class::forName("VoyageRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "voyage": True,
+            },
+            "base_scheme_map": {
+                "https": "voyage",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Voyage AI API key for authentication",
+                    "type": "string",
+                    "desc": "The Voyage AI API key used for authentication; sent as the `Authorization: Bearer` "
+                        "header.\n\n"
+                        "Get your API key from the [Voyage AI Dashboard](https://dash.voyageai.com/)",
+                    "sensitive": True,
+                    "preselected": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The API version to use",
+                    "desc": "The API version to use",
+                    "type": "string",
+                    "default_value": VoyageRestClientBase::DefaultApiVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": VoyageRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": VoyageRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": VoyageRestClientBase::DefaultPingPath,
+                },
+                "ping_body": RestConnection::ConnectionScheme.options.ping_body + <ConnectionOptionInfo>{
+                    "default_value": VoyageRestClientBase::DefaultPingBody,
+                },
+            },
+            "required_options": "apikey",
+        };
+    }
+
+    #! creates the VoyageRestConnection object
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the VoyageRestConnection object
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    #! returns \c "voyage"
+    string getType() {
+        return "voyage";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a data provider object for this connection
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the VoyageDataProvider and creates the data provider
+        # object dynamically
+        load_module("VoyageDataProvider");
+        return create_object("VoyageDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref VoyageRestClient object
+    private VoyageRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new VoyageRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new VoyageRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for Voyage AI REST API using multiplexed HTTP connections
+public class VoyageRestClientIo inherits RestClientIo::RestClientIo, VoyageRestClientBase {
+    #! Creates the object with the given options
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(VoyageRestClientBase::getOptions(opts), shared_mgr) {
+    }
+}
+}

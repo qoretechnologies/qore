@@ -1,0 +1,376 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/VoyageDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class VoyageDataProviderTest
+
+class FakeVoyageRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        hash<auto> last_request;
+        string last_method;
+        string last_path;
+        *hash<auto> last_headers;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.voyageai.com", "token": "x", "data": "json"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        last_method = "POST";
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        if (!response_body) {
+            response_body = {
+                "object": "list",
+                "data": (
+                    {
+                        "object": "embedding",
+                        "embedding": (0.1, 0.2, 0.3),
+                        "index": 0,
+                    },
+                ),
+                "model": "voyage-4-large",
+                "usage": {
+                    "total_tokens": 5,
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+}
+
+public class VoyageDataProviderTest inherits QUnit::Test {
+    public {
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("VoyageDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("create embeddings", \createEmbeddingsTest());
+        addTestCase("create embeddings batch", \createEmbeddingsBatchTest());
+        addTestCase("rerank", \rerankTest());
+        addTestCase("rerank with return_documents", \rerankWithDocumentsTest());
+        addTestCase("embeddings request type", \embeddingsRequestTypeTest());
+        addTestCase("rerank request type", \rerankRequestTypeTest());
+        addTestCase("live create embeddings", \liveCreateEmbeddingsTest());
+        addTestCase("live rerank", \liveRerankTest());
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeVoyageRestClientIo rest();
+        VoyageDataProvider::VoyageDataProvider prov(rest);
+        assertEq("voyage", prov.getName());
+        assertEq(("create-embeddings", "rerank"), sort(prov.getChildProviderNames()));
+%endif
+    }
+
+    actionCatalogTest() {
+        # test create-embeddings action
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            VoyageDataProvider::VoyageDataProvider::AppName, "create-embeddings"
+        );
+        assertEq("/create-embeddings", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Embeddings",), action.groups);
+        # verify required options
+        assertEq(True, action.options.model.required);
+        assertEq(True, action.options.input.required);
+        # verify preselected options
+        assertEq(True, action.options.input_type.preselected);
+        assertEq(True, action.options.output_dimension.preselected);
+        # verify output type
+        assertTrue(action.output_type instanceof VoyageDataProvider::VoyageEmbeddingsResponseDataType);
+
+        # test rerank action
+        action = DataProviderActionCatalog::getAppAction(
+            VoyageDataProvider::VoyageDataProvider::AppName, "rerank"
+        );
+        assertEq("/rerank", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Reranking",), action.groups);
+        # verify required options
+        assertEq(True, action.options.model.required);
+        assertEq(True, action.options.query.required);
+        assertEq(True, action.options.documents.required);
+        # verify preselected options
+        assertEq(True, action.options.top_k.preselected);
+        assertEq(True, action.options.return_documents.preselected);
+        # verify output type
+        assertTrue(action.output_type instanceof VoyageDataProvider::VoyageRerankResponseDataType);
+    }
+
+    createEmbeddingsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeVoyageRestClientIo rest();
+        VoyageDataProvider::VoyageDataProvider prov(rest);
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+        assertEq("create-embeddings", emb.getName());
+
+        hash<auto> resp = emb.doRequest({
+            "model": "voyage-4-large",
+            "input": ("Hello, world!",),
+        });
+
+        # verify request was sent correctly
+        assertEq("POST", rest.last_method);
+        assertEq("embeddings", rest.last_path);
+        assertEq("voyage-4-large", rest.last_request.model);
+        assertEq(("Hello, world!",), rest.last_request.input);
+
+        # verify response structure
+        assertEq("list", resp.object);
+        assertEq(1, resp.data.lsize());
+        assertEq("embedding", resp.data[0].object);
+        assertEq((0.1, 0.2, 0.3), resp.data[0].embedding);
+        assertEq(0, resp.data[0].index);
+        assertEq("voyage-4-large", resp.model);
+        assertEq(5, resp.usage.total_tokens);
+%endif
+    }
+
+    createEmbeddingsBatchTest() {
+        checkModule();
+%ifndef NoJson
+        FakeVoyageRestClientIo rest();
+        rest.response_body = {
+            "object": "list",
+            "data": (
+                {"object": "embedding", "embedding": (0.1, 0.2), "index": 0},
+                {"object": "embedding", "embedding": (0.3, 0.4), "index": 1},
+                {"object": "embedding", "embedding": (0.5, 0.6), "index": 2},
+            ),
+            "model": "voyage-4",
+            "usage": {"total_tokens": 15},
+        };
+        VoyageDataProvider::VoyageDataProvider prov(rest);
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+
+        hash<auto> resp = emb.doRequest({
+            "model": "voyage-4",
+            "input": ("text one", "text two", "text three"),
+            "input_type": "document",
+            "output_dimension": 512,
+        });
+
+        # verify request fields
+        assertEq("voyage-4", rest.last_request.model);
+        assertEq(("text one", "text two", "text three"), rest.last_request.input);
+        assertEq("document", rest.last_request.input_type);
+        assertEq(512, rest.last_request.output_dimension);
+
+        # verify response
+        assertEq(3, resp.data.lsize());
+        assertEq(0, resp.data[0].index);
+        assertEq(1, resp.data[1].index);
+        assertEq(2, resp.data[2].index);
+        assertEq(15, resp.usage.total_tokens);
+%endif
+    }
+
+    rerankTest() {
+        checkModule();
+%ifndef NoJson
+        FakeVoyageRestClientIo rest();
+        rest.response_body = {
+            "object": "list",
+            "data": (
+                {"index": 0, "relevance_score": 0.92},
+                {"index": 2, "relevance_score": 0.45},
+            ),
+            "model": "rerank-2.5",
+            "usage": {"total_tokens": 30},
+        };
+        VoyageDataProvider::VoyageDataProvider prov(rest);
+        AbstractDataProvider rrk = prov.getChildProvider("rerank");
+        assertEq("rerank", rrk.getName());
+
+        hash<auto> resp = rrk.doRequest({
+            "model": "rerank-2.5",
+            "query": "What is machine learning?",
+            "documents": (
+                "Machine learning is a subset of AI.",
+                "The weather is sunny.",
+                "Deep learning uses neural networks.",
+            ),
+            "top_k": 2,
+        });
+
+        # verify request
+        assertEq("POST", rest.last_method);
+        assertEq("rerank", rest.last_path);
+        assertEq("rerank-2.5", rest.last_request.model);
+        assertEq("What is machine learning?", rest.last_request.query);
+        assertEq(3, rest.last_request.documents.lsize());
+        assertEq(2, rest.last_request.top_k);
+
+        # verify response
+        assertEq(2, resp.data.lsize());
+        assertEq(0, resp.data[0].index);
+        assertEq(0.92, resp.data[0].relevance_score);
+        assertEq(2, resp.data[1].index);
+        assertEq(30, resp.usage.total_tokens);
+%endif
+    }
+
+    rerankWithDocumentsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeVoyageRestClientIo rest();
+        rest.response_body = {
+            "object": "list",
+            "data": (
+                {"index": 0, "relevance_score": 0.85, "document": "ML is great."},
+            ),
+            "model": "rerank-2.5",
+            "usage": {"total_tokens": 10},
+        };
+        VoyageDataProvider::VoyageDataProvider prov(rest);
+        AbstractDataProvider rrk = prov.getChildProvider("rerank");
+
+        hash<auto> resp = rrk.doRequest({
+            "model": "rerank-2.5",
+            "query": "ML",
+            "documents": ("ML is great.",),
+            "return_documents": True,
+        });
+
+        # verify return_documents was sent
+        assertEq(True, rest.last_request.return_documents);
+
+        # verify document text in response
+        assertEq("ML is great.", resp.data[0].document);
+        assertEq(0.85, resp.data[0].relevance_score);
+%endif
+    }
+
+    embeddingsRequestTypeTest() {
+        auto req_type = new VoyageDataProvider::VoyageEmbeddingsRequestDataType();
+        hash<string, AbstractDataField> fields = req_type.getFields();
+
+        # verify field names
+        assertEq(True, fields.hasKey("model"));
+        assertEq(True, fields.hasKey("input"));
+        assertEq(True, fields.hasKey("input_type"));
+        assertEq(True, fields.hasKey("truncation"));
+        assertEq(True, fields.hasKey("output_dimension"));
+        assertEq(True, fields.hasKey("output_dtype"));
+        assertEq(True, fields.hasKey("encoding_format"));
+
+        # verify model has allowed_values
+        *list<auto> model_av = fields.model.getAllowedValues();
+        assertTrue(model_av.lsize() > 0, "model has allowed_values");
+        # verify first allowed value has display_name
+        assertEq("Voyage 4 Large - Best Quality (general-purpose, multilingual)", model_av[0].display_name);
+        assertEq("voyage-4-large", model_av[0].value);
+
+        # verify output_dimension allowed values
+        *list<auto> dim_av = fields.output_dimension.getAllowedValues();
+        assertEq(4, dim_av.lsize());
+    }
+
+    rerankRequestTypeTest() {
+        auto req_type = new VoyageDataProvider::VoyageRerankRequestDataType();
+        hash<string, AbstractDataField> fields = req_type.getFields();
+
+        # verify field names
+        assertEq(True, fields.hasKey("model"));
+        assertEq(True, fields.hasKey("query"));
+        assertEq(True, fields.hasKey("documents"));
+        assertEq(True, fields.hasKey("top_k"));
+        assertEq(True, fields.hasKey("return_documents"));
+        assertEq(True, fields.hasKey("truncation"));
+
+        # verify model has allowed_values
+        *list<auto> model_av = fields.model.getAllowedValues();
+        assertEq(3, model_av.lsize());
+        assertEq("rerank-2.5", model_av[0].value);
+    }
+
+    liveCreateEmbeddingsTest() {
+        *string api_key = ENV.VOYAGE_API_KEY;
+        if (!api_key) {
+            testSkip("VOYAGE_API_KEY not set");
+        }
+%ifndef NoJson
+        VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+
+        hash<auto> resp = emb.doRequest({
+            "model": "voyage-3-lite",
+            "input": ("Hello, world!",),
+            "input_type": "document",
+        });
+
+        assertEq("list", resp.object);
+        assertEq(1, resp.data.lsize());
+        assertEq("embedding", resp.data[0].object);
+        assertEq(0, resp.data[0].index);
+        assertTrue(resp.data[0].embedding.lsize() > 0, "embedding vector is non-empty");
+        assertEq("voyage-3-lite", resp.model);
+        assertGt(0, resp.usage.total_tokens);
+%endif
+    }
+
+    liveRerankTest() {
+        *string api_key = ENV.VOYAGE_API_KEY;
+        if (!api_key) {
+            testSkip("VOYAGE_API_KEY not set");
+        }
+%ifndef NoJson
+        VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
+        AbstractDataProvider rrk = prov.getChildProvider("rerank");
+
+        hash<auto> resp = rrk.doRequest({
+            "model": "rerank-2.5-lite",
+            "query": "What is artificial intelligence?",
+            "documents": (
+                "AI is the simulation of human intelligence by machines.",
+                "The stock market closed higher today.",
+                "Machine learning is a branch of AI focused on data-driven learning.",
+            ),
+            "top_k": 2,
+            "return_documents": True,
+        });
+
+        assertEq("list", resp.object);
+        assertEq(2, resp.data.lsize());
+        # first result should be the most relevant
+        assertTrue(resp.data[0].relevance_score >= resp.data[1].relevance_score,
+            "results sorted by relevance descending");
+        assertTrue(resp.data[0].document.val(), "document text returned");
+        assertGt(0, resp.usage.total_tokens);
+%endif
+    }
+}
