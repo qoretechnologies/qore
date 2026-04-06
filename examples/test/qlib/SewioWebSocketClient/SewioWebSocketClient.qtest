@@ -104,7 +104,7 @@ class SewioWebSocketClientTest inherits QUnit::Test {
         wsc.disconnect();
         delete wsc;
 
-        assertEq(Data, sort(l));
+        assertEq(Data, l);
     }
 
     sewioWebSocketConnectionTests() {
