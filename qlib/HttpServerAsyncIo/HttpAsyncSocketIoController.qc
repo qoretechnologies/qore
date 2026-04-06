@@ -652,6 +652,9 @@ public class HttpAsyncSocketIoController {
         {
             AutoWriteLock al(m);
             if (stopping) {
+                # Signal the poll op as completed so the handler thread
+                # doesn't block forever in done.waitForZero()
+                poll_op.onComplete(<SocketPollResultInfo>{});
                 return;
             }
             cinfo = connections{uh} = <HttpActiveConnectionInfo>{

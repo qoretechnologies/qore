@@ -83,7 +83,11 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("repl", "/ws/repl", NOTHING, wsHandler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        on_exit server.stop();
+        on_exit {
+            server.stop();
+            delete server;
+            delete wsHandler;
+        }
 
         set_return_value(main());
     }

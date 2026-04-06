@@ -1442,6 +1442,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             }
             callback_appender = NOTHING;
         }
+        # Cancel operations owned by this server on the global controller FIRST
+        # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
+        # This must happen before asyncIo.stop() because that method calls
+        # handler_pool.stopWait() which blocks until all handler tasks complete.
+        # Handler tasks waiting in execAsyncPollOperation() (done.waitForZero())
+        # will only unblock once their operations are cancelled and the onComplete
+        # callback decrements the counter.
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        string ownerId = self.uniqueHash();
+        @debug(log("stop: calling cancelByOwner(%s)", ownerId));
+        int canceled = ctrl.cancelByOwner(ownerId);
+        @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
+
+        # Flush callbacks from the cancelByOwner above so that handler tasks
+        # blocked in execAsyncPollOperation() are unblocked before we stop
+        # the handler pool
+        ctrl.flushCallbacks();
+
         # Stop the callback-based async I/O controller
         # The new HttpAsyncSocketIoController.stop() cancels all HTTP operations it manages
         # (accept, header reads, idle connections) on the global async I/O controller
@@ -1452,14 +1470,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             signalStreamingHandlersToStop();
             asyncIo.stop();
         }
-
-        # Cancel any remaining operations owned by this server on the global controller
-        # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        string ownerId = self.uniqueHash();
-        @debug(log("stop: calling cancelByOwner(%s)", ownerId));
-        int canceled = ctrl.cancelByOwner(ownerId);
-        @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
 
         # Shutdown all listeners - stop accepting new connections
         {
@@ -1476,7 +1486,7 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # listenerStopped() -> c.done()
         c.wait();
 
-        # Flush any remaining async callbacks (from the cancelByOwner above)
+        # Flush any remaining async callbacks (from listener stops)
         ctrl.flushCallbacks();
 
         threadPool.stop();
