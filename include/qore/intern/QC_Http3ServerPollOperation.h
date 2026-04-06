@@ -193,6 +193,9 @@ public:
     */
     DLLLOCAL void startReadRequest(ExceptionSink* xsink);
 
+    //! Sets the maximum request body size on the underlying QUIC server operation
+    DLLLOCAL void setMaxRequestBodySize(int64_t size);
+
 protected:
     DLLLOCAL const char* getStateImpl() const override;
 

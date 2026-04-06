@@ -474,9 +474,12 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                     reinterpret_cast<const char*>(msg_data), msg_len, QCS_UTF8));
                 response = io_frame_handler->handleTextFrame(*text, xsink);
             } else if (msg_opcode == WSOP_BINARY) {
-                SimpleRefHolder<BinaryNode> bin(msg_data && msg_len
-                    ? new BinaryNode(const_cast<void*>(msg_data), msg_len)
-                    : new BinaryNode());
+                // Must copy the data — frame.payload still owns the pointer and will
+                // be deref'd after handleFrame() returns (line 370).
+                SimpleRefHolder<BinaryNode> bin(new BinaryNode());
+                if (msg_data && msg_len) {
+                    bin->append(msg_data, msg_len);
+                }
                 response = io_frame_handler->handleBinaryFrame(*bin, xsink);
             }
             if (response && !*xsink) {
@@ -501,9 +504,12 @@ void HttpWebSocketPollOperationPriv::handleFrame(const WsFrame& frame, Exception
                 : new QoreStringNode(QCS_UTF8);
             pushRecvFrame("text", text, msg_rsv, xsink);
         } else if (msg_opcode == WSOP_BINARY) {
-            pushRecvFrame("binary",
-                msg_data ? new BinaryNode(const_cast<void*>(msg_data), msg_len) : new BinaryNode(),
-                msg_rsv, xsink);
+            // Must copy the data — frame.payload still owns the pointer
+            BinaryNode* bin = new BinaryNode();
+            if (msg_data) {
+                bin->append(msg_data, msg_len);
+            }
+            pushRecvFrame("binary", bin, msg_rsv, xsink);
         }
     }
     // If not complete, more fragments expected — nothing to push yet

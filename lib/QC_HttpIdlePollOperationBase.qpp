@@ -77,14 +77,31 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
-    // Check for data immediately available (non-blocking)
-    if (sock_obj->isDataAvailable(xsink, 0)) {
-        idle_state = IdleState::DATA_AVAILABLE;
-        return nullptr;
-    }
-    if (*xsink) {
-        idle_state = IdleState::CLOSED;
-        return nullptr;
+    // Check for data or EOF via non-blocking recv peek.
+    // Do NOT use isDataAvailable() — this is an async I/O path; the event loop
+    // already told us the socket is ready.  A raw recv(MSG_PEEK) distinguishes:
+    //   > 0: data available (new request from client)
+    //     0: EOF (client closed the connection)
+    //    -1 + EAGAIN: no data yet, connection alive
+    {
+        int fd = sock_obj->getSocket();
+        if (fd >= 0) {
+            char peek_buf;
+            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (peek_rc > 0) {
+                idle_state = IdleState::DATA_AVAILABLE;
+                return nullptr;
+            }
+            if (peek_rc == 0) {
+                idle_state = IdleState::CLOSED;
+                return nullptr;
+            }
+            // peek_rc < 0: check for real errors vs EAGAIN
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                idle_state = IdleState::CLOSED;
+                return nullptr;
+            }
+        }
     }
 
     // Need to wait for data — return poll info

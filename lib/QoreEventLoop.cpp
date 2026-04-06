@@ -147,6 +147,18 @@ int QoreEventLoop::add(int fd, int events, void* udata, ExceptionSink* xsink) {
     ev.data.fd = fd;
 
     if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &ev) < 0) {
+        if (errno == EEXIST) {
+            // fd is already registered (e.g., a predecessor operation's
+            // unregister skipped the epoll_ctl(DEL) because the socket
+            // appeared closed at that moment).  Fall back to MOD.
+            if (epoll_ctl(event_fd, EPOLL_CTL_MOD, fd, &ev) < 0) {
+                fd_map.erase(fd);
+                xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno,
+                    "epoll_ctl(MOD after ADD EEXIST) failed for fd %d", fd);
+                return -1;
+            }
+            return 0;
+        }
         fd_map.erase(fd);
         xsink->raiseErrnoException("EVENT-LOOP-ERROR", errno, "epoll_ctl(ADD) failed for fd %d", fd);
         return -1;

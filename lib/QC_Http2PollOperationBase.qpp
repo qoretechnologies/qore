@@ -239,6 +239,9 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
             error_info->setKeyValue("desc",
                 desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
         }
+        // Push NOTHING sentinels to all registered stream Queues on error
+        ExceptionSink clear_xsink;
+        clearStreamQueues(&clear_xsink);
         h2_state = H2ServerState::CLOSED;
         return nullptr;
     }
@@ -294,7 +297,12 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
-    // Operation failed (goal not reached and returned nullptr)
+    // Operation failed (goal not reached and returned nullptr — peer closed TCP)
+    // Push NOTHING sentinels to all registered stream Queues so handler threads
+    // (e.g., WebSocketStreamProcessor) wake up and detect the closure.
+    // Without this, handler threads block on Counter::waitForZero() forever because
+    // nghttp2 doesn't know about TCP closure (it only sees HTTP/2 frames).
+    clearStreamQueues(xsink);
     h2_state = H2ServerState::CLOSED;
     return nullptr;
 }
@@ -432,8 +440,13 @@ void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
         }
 
         // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
+        // Also check socket-level closure: for CONNECT streams (WebSocket tunnels),
+        // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.
+        // When the peer drops the TCP connection, the socket becomes closed but
+        // the HTTP/2 stream state in nghttp2 remains unchanged.
         if (sock->isHttp2StreamRemoteClosed(stream_id)
-                || sock->isHttp2StreamClosed(stream_id)) {
+                || sock->isHttp2StreamClosed(stream_id)
+                || !sock->isOpen()) {
             // Push NOTHING sentinel so the handler thread knows the stream is done
             info.queue->push(xsink, QoreValue());
             if (*xsink) {

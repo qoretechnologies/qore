@@ -550,8 +550,24 @@ public class HttpClientConnectionManager {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
+                # Use connect_timeout for reused pooled connections — if the
+                # server doesn't respond within connect_timeout, the connection
+                # is likely stale.  This enables fast stale detection + retry
+                # instead of waiting the full request_timeout before retrying.
+                *timeout effective_timeout;
+                if (timeout_retried) {
+                    effective_timeout = opts.connect_timeout;
+                } else if (stream.wasConnectionReused()) {
+                    effective_timeout = opts.connect_timeout ?? timeout_ms;
+                } else {
+                    effective_timeout = timeout_ms;
+                }
+                log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
+                    "effective_timeout=%y",
+                    method, path, stream.wasConnectionReused(), timeout_retried,
+                    effective_timeout);
                 hash<auto> resp = stream.request(method, path, headers, body,
-                    timeout_retried ? opts.connect_timeout : timeout_ms);
+                    effective_timeout);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
@@ -1085,11 +1101,19 @@ public class HttpClientConnectionManager {
             conn.setManagerContext(self, key);
         }
 
+        # Use no timeout (-1) for the controller operation.  The H1/H2/H3
+        # poll operations are long-lived (they handle multiple request/response
+        # cycles on a single connection).  The connect timeout is handled
+        # internally by the poll operation's connect state, and request timeouts
+        # are handled by FutureImpl::get() in HttpClientStreamHandle::request().
+        # Using connect_timeout here caused the controller to kill the operation
+        # after connect_timeout seconds, even though it was in the middle of a
+        # request/response cycle with a longer timeout.
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": owner,
-            "to": -1s,
+            "to": -1,
         });
     }
 
@@ -1219,7 +1243,11 @@ public class HttpClientConnectionManager {
             || err == "HTTPCLIENT-CONNECT-ERROR"
             || err == "SOCKET-SEND-ERROR"
             || err == "SOCKET-RECV-ERROR"
-            || err == "SOCKET-CLOSED";
+            || err == "SOCKET-CLOSED"
+            # Timeout on a reused keep-alive connection: the server may have
+            # closed the connection between requests (TCP FIN race).  Retry on
+            # a fresh connection — same as curl's Curl_retry_request() logic.
+            || err == "HTTPCLIENT-TIMEOUT";
     }
 
     #! Internal: checks if an error indicates an h2c protocol incompatibility

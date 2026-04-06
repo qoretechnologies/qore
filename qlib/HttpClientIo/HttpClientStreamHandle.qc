@@ -257,6 +257,15 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
             if (!conn.waitForReady(remaining)) {
+                # Cancel the stale connect poll operation in the I/O controller
+                # so it doesn't leak cache entries and socket fds
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {
+                    # ignore — controller may have already removed the operation
+                }
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
@@ -287,6 +296,11 @@ public class HttpClientStreamHandle {
                 cancel();
                 throw "HTTPCLIENT-TIMEOUT",
                     sprintf("request timed out after %d ms", wait_timeout);
+            }
+            # Ensure at least 1ms to prevent QPP timeout type from truncating
+            # sub-millisecond dates to 0 (which means infinite wait)
+            if (remaining < 1ms) {
+                remaining = 1ms;
             }
             auto rv = f.get(remaining);
             {
@@ -352,6 +366,12 @@ public class HttpClientStreamHandle {
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
             if (!conn.waitForReady(request_timeout)) {
+                # Cancel stale connect poll operation to prevent I/O controller leaks
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
@@ -553,6 +573,12 @@ public class HttpClientStreamHandle {
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
             if (!conn.waitForReady(request_timeout)) {
+                # Cancel stale connect poll operation to prevent I/O controller leaks
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {

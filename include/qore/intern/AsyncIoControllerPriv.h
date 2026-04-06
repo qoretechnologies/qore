@@ -48,6 +48,7 @@
 #include <atomic>
 #include <deque>
 #include <memory>
+#include <queue>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -159,6 +160,17 @@ public:
     */
     DLLLOCAL void waitForIdle();
 
+    //! Mark a program as shutting down so workers skip callbacks for it
+    /** Called at the start of cancelByProgram(), before any I/O thread commands.
+        Workers that pick up items for this program will silently discard them
+        instead of calling evalMethod (which would hit PROGRAM-ERROR after ptid
+        is set).
+    */
+    DLLLOCAL void markProgramShuttingDown(QoreProgram* pgm);
+
+    //! Remove a program from the shutting-down set
+    DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
+
     //! Maximum cap for auto-scaled workers
     static constexpr int MAX_WORKER_CAP = 32;
 
@@ -173,6 +185,7 @@ private:
     int max_workers;                        //!< Maximum workers
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
+    std::unordered_set<QoreProgram*> shutting_down_programs;  //!< Programs being destroyed — skip callbacks
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);
@@ -326,7 +339,7 @@ public:
     DLLLOCAL bool getAutostop() const;
 
     //! Returns info about the controller state
-    DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink) const;
+    DLLLOCAL QoreHashNode* getInfo(ExceptionSink* xsink);
 
     //! Sets the logger
     /** @param logger_obj the LoggerInterface Qore object (or nullptr to clear)
@@ -395,11 +408,13 @@ private:
         SubmitOp,            //!< Submit a new operation (carries PollInfo data)
         Cancel,
         CancelOwner,
+        CancelByProgram,     //!< Cancel all operations belonging to a QoreProgram
         Quit,
         WakeSocket,          //!< Targeted wake: re-poll a specific socket's operation
         AddTimer,
         CancelTimer,
         ContinuePollResult,  //!< Result from async continuePoll() dispatch
+        GetInfo,             //!< Snapshot cache info on the I/O thread
     };
 
     //! Command queue entry
@@ -407,8 +422,14 @@ private:
         IoCommand cmd = IoCommand::WakeSocket;
         std::string key;                //!< For Cancel / ContinuePollResult / SubmitOp: the cache key
         std::string owner;              //!< For CancelOwner / SubmitOp: the owner string
-        QoreCondition* done_cond = nullptr; //!< For CancelOwner: signaled when all canceled
-        bool* cancel_done_flag = nullptr; //!< For CancelOwner: set to true under lock before broadcast
+        QoreCondition* done_cond = nullptr; //!< For CancelOwner/CancelByProgram/GetInfo: signaled when done
+        bool* cancel_done_flag = nullptr; //!< For CancelOwner/CancelByProgram: set to true under lock before broadcast
+        QoreProgram* pgm = nullptr;       //!< For CancelByProgram: the program being destroyed
+        void* cancel_pinfos = nullptr; //!< For CancelByProgram: std::vector<PollInfo>* (forward decl workaround)
+        QoreThreadLock* cancel_pinfos_lock = nullptr; //!< For CancelByProgram: protects cancel_pinfos vector
+        std::atomic<int>* pending_threads = nullptr; //!< For CancelByProgram/GetInfo: count of threads remaining
+        std::atomic<int>* cancel_count = nullptr; //!< For CancelOwner: actual count of canceled operations
+        QoreHashNode** info_result = nullptr; //!< For GetInfo: pointer to result hash
         int64_t timer_deadline_us = 0;  //!< For AddTimer: absolute deadline in microseconds
         int64_t timer_id = 0;           //!< For AddTimer/CancelTimer: timer ID
         QoreHashNode* continue_poll_result = nullptr;  //!< For ContinuePollResult: new poll info (or nullptr)
@@ -447,6 +468,8 @@ private:
         bool continue_poll_in_flight;   //!< True when continuePoll() dispatched to worker
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
+        int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
+        uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
             spop_obj(nullptr), poll_info(nullptr), timeout_us(DEFAULT_IO_TIMEOUT_US),
@@ -495,10 +518,27 @@ private:
 
         //! Operation cache — fully owned by this I/O thread
         std::unordered_map<std::string, PollInfo> cache;
+        std::atomic<int> cache_size{0};   //!< Atomic cache size for lock-free getCacheSize()
         std::unordered_map<std::string, int> socket_refcounts;
 
         //! Socket hashes that need re-polling
         std::unordered_set<std::string> wake_socket_hashes;
+
+        //! Keys needing first continuePoll (empty cached_sock_hash)
+        std::vector<std::string> new_entry_keys;
+
+        //! Timeout min-heap entry
+        struct TimeoutEntry {
+            int64 deadline_us;
+            std::string key;
+            bool operator>(const TimeoutEntry& o) const { return deadline_us > o.deadline_us; }
+        };
+        //! Min-heap for operation/protocol timeouts (lazy deletion)
+        std::priority_queue<TimeoutEntry, std::vector<TimeoutEntry>,
+            std::greater<TimeoutEntry>> timeout_heap;
+
+        //! Generation counter for Phase 1 duplicate prevention
+        uint64_t phase1_gen = 0;
 
         // Registered socket tracking
         std::unordered_map<std::string, QoreObject*> registered_sockets;
@@ -534,11 +574,23 @@ private:
     */
     mutable QoreThreadLock sock_route_lock;
     std::unordered_map<std::string, int> sock_to_thread;  //!< sock_hash → thread index
+    std::unordered_map<QoreObject*, std::string> obj_to_sock_hash;  //!< QoreObject* → sock_hash for wakeSocketByObject
 
-    // Backward-compatible accessors for single-thread code paths
-    // (used during transition; will be removed when all code uses io_threads[])
+    // Backward-compatible accessors — returns thread 0 context.
+    // Safe for startup/shutdown checks; callers doing cache access must use
+    // getThreadForKey() instead when N>1 I/O threads are active.
     DLLLOCAL IoThreadContext& ctx() { return *io_threads[0]; }
     DLLLOCAL const IoThreadContext& ctx() const { return *io_threads[0]; }
+
+    //! Returns true if any I/O thread is running (caller must hold lock)
+    DLLLOCAL bool anyThreadRunning() const {
+        for (auto& tp : io_threads) {
+            if (tp->tid) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     // --- Mutex-protected state (rare paths: startup, shutdown, cancel wait) ---
     mutable QoreThreadLock m;

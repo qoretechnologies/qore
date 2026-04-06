@@ -1810,6 +1810,18 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # worker thread. This handler thread holds the connection in ch{}
             # and blocks until the connection closes.
 
+            # Register with async I/O AFTER setConnection + registered() —
+            # this ensures echo mode (and any other connection state) is set
+            # before the I/O thread can process frames, eliminating the race
+            # between handler initialization and frame dispatch
+            *auto ws_async_io = cx."header-info".async_io_controller;
+            *auto ws_async_target = cx."header-info".async_target;
+            if (ws_async_io) {
+                *HttpServer::HttpListenerInterface ws_listener = cx.listener;
+                ws_async_io.registerH1WebSocketConnection(sock, ws_poll_op,
+                    ws_async_target, ws_listener, cx);
+            }
+
             # Drain any data queued during getConnectionImpl (e.g., sendData)
             while (*binary d = wsc.pollDataImmediate()) {
                 ws_poll_op.sendRawFrame(d);

@@ -160,14 +160,29 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
         return nullptr;
     }
 
-    // Check for data immediately available (non-blocking)
-    if (sock_obj->isDataAvailable(xsink, 0)) {
-        // Transition to header reading phase inline
-        return transitionToHeaderPhase(xsink);
-    }
-    if (*xsink) {
-        op_state = State::CLOSED;
-        return nullptr;
+    // Check for data or EOF via non-blocking recv peek.
+    // Do NOT use isDataAvailable() — this is an async I/O path; the event loop
+    // already told us the socket is ready.
+    {
+        int fd = sock_obj->getSocket();
+        if (fd >= 0) {
+            char peek_buf;
+            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (peek_rc > 0) {
+                // Data available — transition to header reading
+                return transitionToHeaderPhase(xsink);
+            }
+            if (peek_rc == 0) {
+                // EOF — client closed the connection
+                op_state = State::CLOSED;
+                return nullptr;
+            }
+            // peek_rc < 0: check for real errors vs EAGAIN
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                op_state = State::CLOSED;
+                return nullptr;
+            }
+        }
     }
 
     // Need to wait for data; include poll_timeout_ms so the EventLoop wakes up

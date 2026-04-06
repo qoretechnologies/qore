@@ -662,6 +662,7 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
     // we only clear the internal data structures once
     bool clr = false;
+    bool need_cleanup = false;
     {
         ReferenceHolder<QoreListNode> l(xsink);
         {
@@ -672,15 +673,28 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
                 if (!ns_const) {
                     l = new QoreListNode(autoTypeInfo);
                     qore_root_ns_private::clearConstants(*RootNS, **l);
-                    //printd(5, "qore_program_private::waitForTerminationAndClear() this: %p cleared constants\n",
-                    //    this);
                     ns_const = true;
                 }
-                // mark the program so that only code from this thread can run during data destruction
-                ptid = q_gettid();
-                clr = true;
+                need_cleanup = true;
             }
         }
+    }
+
+    // Call the cleanup callback OUTSIDE plock and BEFORE ptid is set.
+    // The callback (e.g., async I/O cancelByProgram) cancels pending
+    // operations and delivers results via call_dispatcher workers that
+    // call evalMethod → incThreadCount.  incThreadCount takes plock, so
+    // the callback must not hold plock.  ptid must not be set yet,
+    // otherwise workers on other threads fail with PROGRAM-ERROR.
+    if (need_cleanup && program_cleanup_callback) {
+        program_cleanup_callback(pgm);
+    }
+
+    if (need_cleanup) {
+        AutoLocker al(plock);
+        // mark the program so that only code from this thread can run during data destruction
+        ptid = q_gettid();
+        clr = true;
     }
 
     if (clr) {
@@ -697,11 +711,6 @@ void qore_program_private::waitForTerminationAndClear(ExceptionSink* xsink) {
 
         // issue #3521: clear local variables first
         clearLocalVars(xsink);
-
-        // call optional cleanup callback before clearing namespace data
-        if (program_cleanup_callback) {
-            program_cleanup_callback(pgm);
-        }
 
         // delete all global variables, etc
         clearNamespaceData(xsink);

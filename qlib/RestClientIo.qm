@@ -2579,8 +2579,24 @@ public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation 
     private doStartConnecting() {
         connection_ready_notifier = rcio.startConnectionAsync();
         if (!connection_ready_notifier) {
-            # Connection is already ready — submit the ping immediately
-            doSubmitPing();
+            # startConnectionAsync() returns NOTHING for both "already READY" and
+            # "already CLOSED/terminal" states.  Attempt to submit the ping; if the
+            # connection was actually closed (stale pool connection), catch the error
+            # and retry with a self-signaling notifier so continuePoll() re-enters.
+            try {
+                doSubmitPing();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTPCLIENT-NOT-READY") {
+                    # Connection was closed — create a self-signaling notifier so the
+                    # poll loop calls continuePoll() again for retry
+                    connection_ready_notifier = new EventNotifier();
+                    connection_ready_notifier.notify();
+                    state = SPS_CONNECTING;
+                    waiting_for_connection = False;
+                    return;
+                }
+                rethrow;
+            }
             return;
         }
         # Connection still establishing — enter connecting state

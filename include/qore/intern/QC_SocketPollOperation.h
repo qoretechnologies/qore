@@ -922,7 +922,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -966,11 +965,7 @@ public:
             sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
             quic_session.reset();
         }
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1054,7 +1049,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -1087,11 +1081,7 @@ public:
         }
         sessions_.clear();
         cached_stream_.reset();
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1199,7 +1189,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -1220,11 +1209,7 @@ public:
         AutoLocker al(sock->priv->m);
         // Release session reference to allow cleanup if the socket is closed
         quic_session.reset();
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1320,7 +1305,7 @@ public:
                 input_stream_obj = nullptr;
             }
             // If destroyed without abort() (e.g. owner cancellation), clean up
-            // the stream and restore socket state
+            // the stream and clear non-block tracking
             if (quic_session || set_non_block) {
                 AutoLocker al(sock->priv->m);
                 // Cancel stream to prevent leaked streaming_body_data_ entries
@@ -1330,9 +1315,7 @@ public:
                         &cancel_xsink);
                 }
                 quic_session.reset();
-                // Restore OS-level blocking mode
                 if (set_non_block) {
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                 }
             }
@@ -1368,7 +1351,6 @@ public:
             }
             quic_session.reset();
             if (set_non_block) {
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
                 set_non_block = false;
             }

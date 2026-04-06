@@ -2183,23 +2183,27 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Full request path — dispatch to handler_pool to avoid tying up
-        # call_dispatcher workers with potentially blocking handler logic
-        try {
-            handler_pool.submit(sub () {
-                try {
-                    hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
-                    handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "Error handling keep-alive request: %s: %s",
-                        ex.err, ex.desc);
-                    cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
-                    if (cinfo.state != HttpConnectionState::Http3
-                            && cinfo.state != HttpConnectionState::Http3Sending) {
-                        try { cinfo.sock.close(); } catch () {}
-                    }
+        # tryInlineRequest returned NOTHING — dispatch to the handler_pool.
+        # onHttpRequest / processNativeRequest may read the request body or
+        # perform blocking I/O, so it must run on a handler thread, not the
+        # call_dispatcher worker.
+        code request_handler = sub () {
+            try {
+                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error handling keep-alive request: %s: %s",
+                    ex.err, ex.desc);
+                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                if (cinfo.state != HttpConnectionState::Http3
+                        && cinfo.state != HttpConnectionState::Http3Sending) {
+                    try { cinfo.sock.close(); } catch () {}
                 }
-            });
+            }
+        };
+
+        try {
+            handler_pool.submit(request_handler);
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::ERROR, "Failed to submit handler for %y: %s: %s", uh, ex.err, ex.desc);
             if (cinfo.state != HttpConnectionState::Http3

@@ -632,8 +632,9 @@ int SSLSocketHelper::accept(const char* mname, int timeout_ms, ExceptionSink* xs
 
     if (rc <= 0) {
         //printd(5, "SSLSocketHelper::accept() rc: %d\n", rc);
-        if (!*xsink)
+        if (!*xsink) {
             sslError(xsink, mname, "SSL_accept", true);
+        }
         assert(*xsink);
         return -1;
     }
@@ -1144,6 +1145,34 @@ int SocketConnectInetPollState::next(ExceptionSink* xsink) {
     return nextIntern(xsink);
 }
 
+//! Creates a socket and immediately sets it to non-blocking mode.
+/** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set).
+    This ensures sockets are born non-blocking for async I/O; synchronous code
+    paths use SyncBlockingHelper to temporarily restore blocking mode.
+*/
+static int create_nonblocking_socket(int family, int type, int protocol) {
+    int fd = socket(family, type, protocol);
+    if (fd == QORE_INVALID_SOCKET) {
+        return QORE_INVALID_SOCKET;
+    }
+#ifdef _Q_WINDOWS
+    u_long mode = 1;
+    if (ioctlsocket(fd, FIONBIO, &mode) != 0) {
+        closesocket(fd);
+        return QORE_INVALID_SOCKET;
+    }
+#else
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        int saved_errno = errno;
+        ::close(fd);
+        errno = saved_errno;
+        return QORE_INVALID_SOCKET;
+    }
+#endif
+    return fd;
+}
+
 //! Setup socket with next address
 int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     assert(p);
@@ -1162,7 +1191,7 @@ int SocketConnectInetPollState::nextIntern(ExceptionSink* xsink) {
     // make sure and close the socket if it is already open
     sock->close_internal();
     assert(sock->sock == QORE_INVALID_SOCKET);
-    if ((sock->sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == QORE_INVALID_SOCKET) {
+    if ((sock->sock = create_nonblocking_socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == QORE_INVALID_SOCKET) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "cannot establish a connection to %s:%s",
             host.c_str(), service.c_str());
         return -1;
@@ -1194,7 +1223,7 @@ SocketConnectUnixPollState::SocketConnectUnixPollState(ExceptionSink* xsink, qor
         }
     }
 
-    if ((sock->sock = socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
+    if ((sock->sock = create_nonblocking_socket(AF_UNIX, sock_type, protocol)) == QORE_SOCKET_ERROR) {
         xsink->raiseErrnoException("SOCKET-CONNECT-ERROR", errno, "error connecting to UNIX socket: '%s'", name);
         return;
     }
@@ -1772,16 +1801,17 @@ int SocketRecvUntilBytesPollState::continuePoll(ExceptionSink* xsink) {
         char c;
         if (sock->readByteFromBuffer(c)) {
             int rc = doRecv(xsink);
+            ASYNC_IO_TRACE("RecvUntilBytes: doRecv rc=%d buflen=%zd bufoffset=%zd matched=%zu/%zu ssl=%d\n",
+                rc, sock->buflen, sock->bufoffset, matched, size, sock->ssl ? 1 : 0);
             if (!rc) {
                 if (!sock->buflen) {
                     xsink->raiseException("SOCKET-HTTP-ERROR", "remote end closed connection while reading "
-                        "chunk");
+                        "HTTP data");
                     return -1;
                 }
                 continue;
             }
             if (*xsink) {
-                //printd(5, "HttpClientRecvChunkedPollState::readSizeIntern() doRecv() return -1\n");
                 return -1;
             }
             return rc;
@@ -3192,18 +3222,41 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
     return !*xsink ? 0 : QSE_SSL_ERR;
 }
 
-DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_private& s, bool set, ExceptionSink* xs)
-        : sock(s), xsink(xs), set(set) {
-    if (set) {
-        //printd(5, "OptionalNonBlockingHelper::OptionalNonBlockingHelper() this: %p\n", this);
-        sock.set_non_blocking(true, xsink);
+DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_private& s, bool n_set, ExceptionSink* xs)
+        : sock(s), xsink(xs), set(false) {
+    if (n_set) {
+        if (qore_on_async_io_thread()) {
+            // On the I/O thread: ensure the socket is non-blocking but do NOT
+            // restore blocking in the destructor — the socket must stay
+            // non-blocking for the duration of its time on the I/O thread.
+            sock.set_non_blocking(true, xs);
+            // 'set' stays false — destructor will not restore blocking
+        } else {
+            if (!sock.set_non_blocking(true, xs)) {
+                set = true;
+            }
+        }
     }
 }
 
 DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
-    if (set && sock.isOpen()) {
-        //printd(5, "OptionalNonBlockingHelper::~OptionalNonBlockingHelper() this: %p\n", this);
+    if (set) {
         sock.set_non_blocking(false, xsink);
+    }
+}
+
+DLLLOCAL SyncBlockingHelper::SyncBlockingHelper(qore_socket_private& s, ExceptionSink* xs)
+        : sock(s), xsink(xs), set(false) {
+    if (sock.isOpen()) {
+        if (!sock.set_non_blocking(false, xs)) {
+            set = true;
+        }
+    }
+}
+
+DLLLOCAL SyncBlockingHelper::~SyncBlockingHelper() {
+    if (set && sock.isOpen()) {
+        sock.set_non_blocking(true, xsink);
     }
 }
 
@@ -5524,11 +5577,15 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
     }
     if (!sock->priv->setNonBlock(xsink)) {
         set_non_block = true;
+        ASYNC_IO_TRACE("SocketConnectPoll: startConnect target='%s' ssl=%d\n",
+            target, (int)ssl);
         poll_state.reset(sock->priv->socket->startConnect(xsink, target));
         if (!*xsink) {
             if (poll_state) {
+                ASYNC_IO_TRACE("SocketConnectPoll: connect EINPROGRESS target='%s'\n", target);
                 state = SPS_CONNECTING;
             } else {
+                ASYNC_IO_TRACE("SocketConnectPoll: connect IMMEDIATE target='%s'\n", target);
                 if (sgoal == SPG_CONNECT) {
                     sock->priv->clearNonBlock();
                     set_non_block = false;
@@ -5538,6 +5595,8 @@ SocketConnectPollOperation::SocketConnectPollOperation(ExceptionSink* xsink, boo
                     startSslConnect(xsink);
                 }
             }
+        } else {
+            ASYNC_IO_TRACE("SocketConnectPoll: startConnect FAILED target='%s'\n", target);
         }
         if (*xsink) {
             sock->priv->clearNonBlock();
@@ -7190,6 +7249,17 @@ QoreHashNode* SocketHttp2ServerPollOperation::continuePoll(ExceptionSink* xsink)
     if (!sock->priv->socket->priv->isOpen()) {
         xsink->raiseException("HTTP2-ERROR", "socket closed during poll operation");
         return nullptr;
+    }
+
+    // Always flush pending data first (e.g., response frames queued by handler
+    // thread via submitHttp2Response + wakeSocket, or SETTINGS_ACK / WINDOW_UPDATE
+    // generated during prior frame processing).  Without this, responses sit in
+    // nghttp2's send buffer until the next incoming data triggers a read.
+    if (h2_session && (h2_session->hasPendingData() || h2_session->wantWrite())) {
+        h2_session->sendPendingData(0, xsink);
+        if (*xsink) {
+            return nullptr;
+        }
     }
 
     while (true) {

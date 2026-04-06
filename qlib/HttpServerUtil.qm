@@ -629,13 +629,6 @@ public hashdecl HttpListenerOptionInfo {
     #! Free-form information to be used by custom listener startup code
     hash<auto> additional_info;
 
-    #! If True, the listener's main thread will not be started
-    /** @deprecated Async mode is now always active; this field is ignored.
-
-        @since HttpServer 1.5
-    */
-    bool no_start_main_thread = False;
-
     #! If True (the default), addListener() will block until async I/O is ready to accept connections
     /** Set to @ref False to add multiple listeners without blocking, then call
         \c HttpServer::waitForAsyncIo() "HttpServer::waitForAsyncIo()" manually once

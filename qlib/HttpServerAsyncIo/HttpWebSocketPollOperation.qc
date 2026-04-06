@@ -92,6 +92,35 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
     public setConnection(auto wsc, auto handler) {
         self.wsc = wsc;
         self.handler = handler;
+
+        # Process any frames that arrived before the connection was set.
+        # The I/O thread may dispatch onPollComplete before setConnection
+        # is called; those dispatches return immediately (!wsc check).
+        # Drain the queue here to handle any frames that were dropped.
+        {
+            AutoLock al(dispatch_mutex);
+            while (hasReceivedFrames()) {
+                *hash<auto> frame = getReceivedFrame();
+                if (!frame) {
+                    break;
+                }
+                try {
+                    processServerFrame(frame);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        return;
+                    }
+                    if (handler) {
+                        try {
+                            handler.logError("frame processing error: %s: %s", ex.err, ex.desc);
+                        } catch () {}
+                    }
+                }
+            }
+        }
+        if (wsc) {
+            wsc.notifyIo();
+        }
     }
 
     #! Sets the done counter for lifecycle signaling

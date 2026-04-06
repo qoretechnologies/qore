@@ -50,6 +50,12 @@ Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
     // sock is already ref'd by the caller; ownership transferred
 }
 
+void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
+    if (read_op) {
+        read_op->setMaxRequestBodySize(size);
+    }
+}
+
 Http3ServerPollOperationPriv::~Http3ServerPollOperationPriv() {
     // cleanup() should have been called before destructor via QPP destructor.
     // Defensive cleanup to avoid leaks in program shutdown paths.
@@ -591,9 +597,11 @@ qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore
     during GOAWAY graceful shutdown; defaults to 5s
     @param headers_only if @ref True, dispatches requests as soon as headers are
     received (before the full body arrives)
+    @param max_request_body_size maximum request body size in bytes; 0 = unlimited
 */
 Http3ServerPollOperation::constructor(Socket[QoreSocketObject] sock,
-        timeout drain_timeout = 5s, bool headers_only = False) {
+        timeout drain_timeout = 5s, bool headers_only = False,
+        int max_request_body_size = 0) {
     if (!*sock) {
         xsink->raiseException("HTTP3-ERROR", "socket cannot be null");
         return;
@@ -620,6 +628,11 @@ Http3ServerPollOperation::constructor(Socket[QoreSocketObject] sock,
 
     // Start accepting QUIC connection and reading HTTP/3 request
     p->startReadRequest(xsink);
+
+    // Apply max request body size to the underlying QUIC server operation
+    if (!*xsink && max_request_body_size > 0) {
+        p->setMaxRequestBodySize(max_request_body_size);
+    }
 }
 
 //! Destroys the object
