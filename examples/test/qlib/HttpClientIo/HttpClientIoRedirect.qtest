@@ -132,11 +132,11 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         mServer.setHandler("redirect-handler", "", NOTHING, handler);
         mServer.setDefaultHandler("redirect-handler", handler);
 
+        on_exit {
+            mServer.stop();
+            delete mServer;
+        }
         set_return_value(main());
-
-        mServer.stop();
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        ctrl.stopClear();
     }
 
     testBasicRedirect() {
@@ -173,7 +173,7 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         });
 
         try {
-            hash<auto> resp = mgr.request(url, "GET", "/redirect/5");
+            mgr.request(url, "GET", "/redirect/5");
             assertTrue(False, "should have thrown HTTP-REDIRECT-ERROR");
         } catch (hash<ExceptionInfo> ex) {
             assertEq("HTTP-REDIRECT-ERROR", ex.err, "should throw HTTP-REDIRECT-ERROR");

@@ -2683,11 +2683,22 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             map $1.disconnect(), clients;
             delete clients;
 
-            # Give the async I/O system time to process disconnects
-            usleep(500ms);
-
-            # CRITICAL TEST: Verify cache is back to baseline (all connection entries cleaned up)
-            int final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+            # Wait for the async I/O system to process disconnects and clean
+            # up cache entries; under CI load this can take longer than 500ms
+            int final_cache_size;
+            int cleanup_retries = 0;
+            while (True) {
+                final_cache_size = server.getHttpAsyncIo().getTotalCacheSize();
+                if (final_cache_size <= baseline_cache_size || cleanup_retries >= 100) {
+                    break;
+                }
+                usleep(50ms);
+                ++cleanup_retries;
+            }
+            if (m_options.verbose > 1) {
+                printf("Cache cleanup took %d retries (%d ms)\n",
+                    cleanup_retries, cleanup_retries * 50);
+            }
             if (m_options.verbose > 1) {
                 printf("Final cache size after disconnect: %d\n", final_cache_size);
             }
@@ -2752,11 +2763,22 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             map $1.disconnect(), clients;
             delete clients;
 
-            # Give the async I/O system time to process disconnects
-            usleep(500ms);
-
-            # CRITICAL TEST: Verify cache is back to baseline (all HTTP/2 connection entries cleaned up)
-            int h2_final = server.getHttpAsyncIo().getTotalCacheSize();
+            # Wait for the async I/O system to process disconnects and clean
+            # up cache entries; under CI load this can take longer than 500ms
+            int h2_final;
+            int h2_cleanup_retries = 0;
+            while (True) {
+                h2_final = server.getHttpAsyncIo().getTotalCacheSize();
+                if (h2_final <= h2_baseline || h2_cleanup_retries >= 100) {
+                    break;
+                }
+                usleep(50ms);
+                ++h2_cleanup_retries;
+            }
+            if (m_options.verbose > 1) {
+                printf("HTTP/2 cache cleanup took %d retries (%d ms)\n",
+                    h2_cleanup_retries, h2_cleanup_retries * 50);
+            }
             if (m_options.verbose > 1) {
                 printf("HTTP/2 final cache size after disconnect: %d\n", h2_final);
             }
