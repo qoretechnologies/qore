@@ -204,7 +204,9 @@ const char* Http2PollOperationPriv::getStateImpl() const {
 
 void Http2PollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
     if (current_op) {
-        // current_op is owned by current_op_obj — deref the object releases both
+        // current_op was obtained via getReferencedPrivateData() which adds
+        // an independent ref — must deref it separately from the QoreObject
+        current_op->deref(xsink);
         current_op = nullptr;
     }
     if (current_op_obj) {
