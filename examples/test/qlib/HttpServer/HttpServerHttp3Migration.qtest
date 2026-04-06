@@ -274,8 +274,11 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Migrate mid-stream — the request is in-flight via the controller
         assertTrue(conn.migrate(), "migration during streaming succeeds");
 
-        # Wait for the Future to resolve
-        hash<auto> result = f.get(15s);
+        # Wait for the Future to resolve; use 60s timeout because RFC 9000 §9.4
+        # resets the congestion window after migration, and QUIC retransmission
+        # of lost packets at slow-start rates can take significant time under
+        # CI load
+        hash<auto> result = f.get(60s);
 
         assertEq(200, result.status_code, "streaming response status after migration");
         # HTTP/3 response body comes as binary from the C++ layer
