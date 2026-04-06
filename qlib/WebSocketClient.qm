@@ -4880,6 +4880,17 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
             @since WebSocketClient 2.4
         */
         *code on_poll_complete;
+
+        #! Mutex to serialize onPollComplete dispatches
+        /** The I/O controller may dispatch multiple onPollComplete calls
+            concurrently (from consecutive continuePoll cycles before the
+            first dispatch completes). Without serialization, two workers
+            can drain the C++ recv_queue and push to recv_channel out of
+            order, causing message reordering.
+
+            @since WebSocketClient 2.4
+        */
+        Mutex drain_mutex();
     }
 
     #! Creates the poll operation for an established WebSocket connection
@@ -4936,7 +4947,12 @@ public class WebSocketClientPollOperation inherits WebSocketClientPollOperationB
     #! @endcond
 
     #! Drains the C++ recv_queue, applies extension transforms, pushes to recv_channel
+    /** Serialized by drain_mutex to prevent concurrent onPollComplete dispatches
+        from reordering messages when two workers dequeue frames and push to
+        recv_channel in non-deterministic order.
+    */
     private drainRecvQueue() {
+        AutoLock al(drain_mutex);
         bool have_frames = False;
         while (hasReceivedFrames()) {
             *hash<auto> frame = getReceivedFrame();
