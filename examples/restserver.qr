@@ -353,7 +353,7 @@ class restServer {
             # start a listener on each bind address
             foreach *string listener in (opt.bind) {
                 foreach hash h in (hs.addListeners(listener)) {
-                    log("TID %d: HTTP listener %s started on %s", hs.getListenerTID(h.id), listener, h.address_desc);
+                    log("HTTP listener %s started on %s", listener, h.address_desc);
                 }
             }
 

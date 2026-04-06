@@ -126,13 +126,14 @@ public class HttpClientConnectionManager {
         */
         Queue pending_alt_svc();
 
-        #! Counter tracking in-flight I/O callbacks
-        /** Incremented before submitting a poll operation, decremented when
-            the callback completes (or on submission failure).  closeAll()
-            waits for this counter to reach zero so that the destructor does
-            not destroy pool_lock while a callback still holds it.
+        #! Cookie jar for automatic Set-Cookie / Cookie header handling
+        /** Created when enable_cookies is True (default).  Shared across all
+            pooled connections — cookies set by one request are sent with
+            subsequent matching requests regardless of which connection is used.
+
+            @since HttpClientIo 1.0
         */
-        Counter callback_counter();
+        *CookieJar cookie_jar;
     }
 
     #! Creates a new connection manager with the given options
@@ -182,11 +183,17 @@ public class HttpClientConnectionManager {
         # a single I/O thread for efficient async operation
         controller = AsyncSocketIo::getGlobalAsyncIoController();
 
-        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d",
+        # Create cookie jar if enabled (default: True)
+        if (self.opts.enable_cookies) {
+            cookie_jar = new CookieJar();
+        }
+
+        log(LoggerLevel::DEBUG, "connection manager created: protocol=%s max_conn=%d max_streams=%d idle=%d cookies=%y",
             self.opts.protocol,
             self.opts.max_connections_per_host,
             self.opts.max_streams_per_connection,
-            self.opts.idle_timeout / 1s);
+            self.opts.idle_timeout / 1s,
+            self.opts.enable_cookies);
     }
 
     #! Copying is not supported
@@ -206,6 +213,15 @@ public class HttpClientConnectionManager {
     #! Returns the AsyncSocketIoController
     AsyncSocketIo::AsyncSocketIoController getController() {
         return controller;
+    }
+
+    #! Returns the cookie jar (NOTHING if cookies are disabled)
+    /** @return the CookieJar instance, or NOTHING if \c enable_cookies is False
+
+        @since HttpClientIo 1.0
+    */
+    *CookieJar getCookieJar() {
+        return cookie_jar;
     }
 
     #! Acquires a stream handle for the given URL
@@ -272,6 +288,30 @@ public class HttpClientConnectionManager {
         return stream;
     }
 
+    #! Ensures a connection to the given URL is being established, returning an EventNotifier
+    /** Acquires a stream handle (initiating TCP/TLS connection if needed) and returns an
+        EventNotifier that fires when the connection becomes ready or closes.  The stream
+        handle is immediately released after getting the notifier, so it does not hold a
+        concurrent stream slot.
+
+        Use this to pre-warm a connection asynchronously while performing other work (e.g.,
+        an OAuth2 token refresh).  The returned notifier can be polled in a state-machine
+        continuePoll() to detect connection readiness without blocking.
+
+        @param url the target URL (only scheme, host, and port are used)
+
+        @return an EventNotifier to poll for readiness, or NOTHING if the connection is
+        already ready
+
+        @since %HttpClientIo 1.2
+    */
+    *EventNotifier ensureConnectionAsync(string url) {
+        HttpClientStreamHandle stream = acquireStream(url);
+        *EventNotifier notifier = stream.getConnectionReadyNotifier();
+        # stream destructs here, releasing its reservation if not yet submitted
+        return notifier;
+    }
+
     #! Acquires a stream and starts streaming with automatic retry on stale connections
     /** If the server closed the connection between acquisition and streaming start
         (a race inherent in pooled HTTP/1.1 connections), this method retries with a
@@ -282,7 +322,8 @@ public class HttpClientConnectionManager {
         @param method HTTP method (e.g., "POST")
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
-        @param body_streaming if True, enables bidirectional streaming (HTTP/2+ only)
+        @param body_streaming if True, enables bidirectional streaming (HTTP/2 and HTTP/3 only;
+        HTTP/1.1 supports response-only streaming)
         @param body request body (optional)
 
         @return the stream handle ready for reading
@@ -327,46 +368,63 @@ public class HttpClientConnectionManager {
         }
     }
 
-    #! Submits an async request and returns immediately
+    #! Submits an async request and returns a Future for the response
     /** @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
         @param method HTTP method
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback callback invoked with response or error
 
-        @return the stream handle (can be used to cancel)
+        @return a hash with "stream" (HttpClientStreamHandle, for cancellation) and
+        "future" (Future, resolves to the response hash)
+
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+
+        @since %HttpClientIo 1.2
     */
-    HttpClientStreamHandle submitRequestAsync(string url, string method, string path,
-            *hash<auto> headers, *data body, HttpResponseCallback callback) {
+    hash<auto> submitRequestAsync(string url, string method, string path,
+            *hash<auto> headers, *data body) {
+        # Inject cookies from jar into request headers
+        hash<UrlInfo> url_info;
+        if (cookie_jar) {
+            url_info = parse_url(url);
+            *string cookie_hdr = cookie_jar.getCookieHeader(
+                url_info.host, path, url_info.protocol == "https");
+            if (cookie_hdr) {
+                headers = headers ?? {};
+                if (headers.Cookie) {
+                    headers.Cookie += "; " + cookie_hdr;
+                } else {
+                    headers.Cookie = cookie_hdr;
+                }
+            }
+        }
+
         int retries = 0;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                # Wrap callback to capture Alt-Svc for deferred processing.
-                # The callback runs on the I/O thread, so we must NOT acquire
-                # pool_lock or do any blocking work.  Instead, push the
-                # alt-svc value to a lock-free queue; drainPendingAltSvc()
-                # processes it on the next user-thread call.
-                HttpResponseCallback wrapped_cb = sub (hash<auto> resp, *hash<auto> err) {
-                    if (!err && resp.headers) {
-                        # NOTE: multiple Alt-Svc headers are collected into a list
-                        # by Qore's HTTP parser — join them per RFC 7838 §3
-                        auto alt_svc_raw = resp.headers."alt-svc"
-                            ?? resp.headers."Alt-Svc";
-                        *string alt_svc = alt_svc_raw.typeCode() == NT_LIST
-                            ? (foldl $1 + ", " + $2, alt_svc_raw)
-                            : alt_svc_raw;
-                        if (alt_svc) {
-                            pending_alt_svc.push({"url": url, "alt_svc": alt_svc});
-                        }
+                hash<auto> result = stream.submitAsync(method, path, headers, body);
+                # Wrap the Future so Set-Cookie extraction happens when
+                # the caller resolves it — no extra threads
+                if (cookie_jar) {
+                    if (!url_info) {
+                        url_info = parse_url(url);
                     }
-                    callback(resp, err);
+                    result.future = new CookieExtractingFuture(result.future,
+                        cookie_jar, url_info.host, path,
+                        url_info.protocol == "https");
+                }
+                return {
+                    "stream": stream,
+                    "future": result.future,
                 };
-                stream.submitAsync(method, path, headers, body, wrapped_cb);
-                return stream;
             } catch (hash<ExceptionInfo> ex) {
                 # NOTE: no manual reservation release needed here — submitAsync()
                 # calls releaseReservationIfHeld() on all pre-submit failure paths
@@ -401,67 +459,168 @@ public class HttpClientConnectionManager {
 
         @return the response hash
 
-        @note If the request times out on a \b reused pooled connection, the
-        connection is evicted and the request is retried once on a fresh connection
-        with \c connect_timeout as the retry deadline. This handles stale connections
-        (e.g., server restart, QUIC session death) where no transport-level error is
-        detected before the timeout. The retry uses \c connect_timeout (not
-        \c request_timeout) because if the server genuinely restarted, the fresh
-        connection establishes quickly; if it is unreachable, the retry fails within
-        \c connect_timeout rather than burning a full \c request_timeout. Timeouts on
-        freshly created connections are not retried — they indicate a genuinely slow
-        or unreachable server.
+        @note Stale connection detection uses two levels:
+        - \b Instant: dead connections (FIN/RST from server) are detected by the async
+          I/O thread via epoll/kqueue + \c recv(MSG_PEEK) and marked as closed before
+          the pool scan returns them.  No timeout needed — detection is immediate.
+        - \b Timeout: for "half-open" connections (server went silent — no FIN/RST),
+          reused pooled connections use \c connect_timeout as the request deadline instead
+          of the full \c request_timeout.  If the server doesn't respond within
+          \c connect_timeout, the connection is evicted and the request is retried once
+          on a fresh connection, also with \c connect_timeout as the deadline.  This
+          provides fast stale detection (typically 2-5s) instead of waiting the full
+          \c request_timeout (30-60s).  Timeouts on freshly created connections are not
+          retried — they indicate a genuinely slow or unreachable server.
 
-        @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
+        @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections)
+        @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTP-REDIRECT-ERROR if the maximum number of redirects is exceeded
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
+        int redirect_count = 0;
+
+        while (True) {
+            # Inject cookies from jar into request headers
+            hash<auto> req_headers = headers ?? {};
+            if (cookie_jar) {
+                hash<UrlInfo> url_info = parse_url(url);
+                bool is_secure = url_info.protocol == "https";
+                *string cookie_hdr = cookie_jar.getCookieHeader(
+                    url_info.host, path, is_secure);
+                if (cookie_hdr) {
+                    if (req_headers.Cookie) {
+                        req_headers.Cookie += "; " + cookie_hdr;
+                    } else {
+                        req_headers.Cookie = cookie_hdr;
+                    }
+                }
+            }
+
+            hash<auto> resp = requestIntern(url, method, path, req_headers, body, timeout_ms);
+
+            # Process Set-Cookie before checking redirect
+            if (cookie_jar && resp.headers) {
+                hash<UrlInfo> url_info = parse_url(url);
+                bool is_secure = url_info.protocol == "https";
+                cookie_jar.processResponseHeaders(
+                    url_info.host, path, is_secure, resp.headers);
+            }
+
+            # Follow redirects (301, 302, 303, 307, 308)
+            if (!opts.redirect_passthru
+                    && resp.status_code >= 301 && resp.status_code <= 308
+                    && resp.status_code != 304 && resp.status_code != 305
+                    && resp.headers.location) {
+                if (++redirect_count > opts.max_redirects) {
+                    throw "HTTP-REDIRECT-ERROR",
+                        sprintf("maximum redirects (%d) exceeded", opts.max_redirects);
+                }
+                string location = resp.headers.location;
+                log(LoggerLevel::DEBUG, "redirect %d/%d: %d -> %s",
+                    redirect_count, opts.max_redirects, resp.status_code, location);
+
+                # Parse redirect URL
+                if (location =~ /^https?:\/\//) {
+                    # Absolute URL — update base URL and path
+                    hash<UrlInfo> loc_info = parse_url(location);
+                    url = sprintf("%s://%s", loc_info.protocol, loc_info.host);
+                    if (loc_info.port) {
+                        url += sprintf(":%d", loc_info.port);
+                    }
+                    path = loc_info.path ?? "/";
+                } else {
+                    # Relative path
+                    path = location;
+                }
+
+                # 303: change method to GET and drop body (RFC 7231 Section 6.4.4)
+                if (resp.status_code == 303) {
+                    method = "GET";
+                    body = NOTHING;
+                }
+                # 301/302: historically change POST to GET (RFC 7231 Section 6.4.2/6.4.3)
+                if ((resp.status_code == 301 || resp.status_code == 302)
+                        && method == "POST") {
+                    method = "GET";
+                    body = NOTHING;
+                }
+                continue;
+            }
+
+            return resp;
+        }
+    }
+
+    #! Performs a single HTTP request with connection retry (no redirect following)
+    private hash<auto> requestIntern(string url, string method, string path,
+            *hash<auto> headers, *data body, *timeout timeout_ms) {
         int retries = 0;
         bool timeout_retried = False;
         while (True) {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
+                # Use connect_timeout for reused pooled connections — if the
+                # server doesn't respond within connect_timeout, the connection
+                # is likely stale.  This enables fast stale detection + retry
+                # instead of waiting the full request_timeout before retrying.
+                *timeout effective_timeout;
+                if (timeout_retried) {
+                    effective_timeout = opts.connect_timeout;
+                } else if (stream.wasConnectionReused()) {
+                    effective_timeout = opts.connect_timeout ?? timeout_ms;
+                } else {
+                    effective_timeout = timeout_ms;
+                }
+                log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
+                    "effective_timeout=%y",
+                    method, path, stream.wasConnectionReused(), timeout_retried,
+                    effective_timeout);
                 hash<auto> resp = stream.request(method, path, headers, body,
-                    timeout_retried ? opts.connect_timeout : timeout_ms);
+                    effective_timeout);
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
-                # NOTE: no manual reservation release needed — request() calls
-                # submitAsync() internally which releases on all failure paths
+                # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
+                # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
+                # benefit of acquireAndStartStreaming / submitRequestAsync where
+                # timeouts are connection-establishment errors that legitimately
+                # warrant full retry.  But in requestIntern(), the timeout may
+                # come from Future.get() (a *request* timeout on an established
+                # connection).  Letting isConnectionError catch it here causes
+                # up to MaxRequestRetries full-timeout retries against a dead
+                # server (e.g. 3 × 10s = 30s+), when the correct behavior is:
+                # only retry once on a reused pooled connection (stale detection),
+                # never on a fresh connection (genuinely unreachable).
+                if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                    if (stream && stream.wasConnectionReused() && !timeout_retried) {
+                        timeout_retried = True;
+                        HttpClientConnection timed_out_conn = stream.getConnection();
+                        log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
+                            "evicting stale connection and retrying with connect_timeout=%y",
+                            timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                            opts.connect_timeout);
+                        try { timed_out_conn.close(); } catch () {}
+                        evictDeadConnections(url);
+                        continue;
+                    }
+                    rethrow;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
                         log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
                             ex.err, retries, MaxRequestRetries);
                         evictDeadConnections(url);
-                        # h2c failure on plain HTTP → fall back to h1 for this host
                         handleProtocolFallback(url, ex.err);
                     } else {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, MaxRequestRetries);
                     }
-                    continue;
-                }
-                # A timeout on a reused pooled connection may indicate a stale
-                # connection (server restarted, QUIC session dead). Close the
-                # stale connection and retry once with connect_timeout as the
-                # deadline — if the server restarted, the fresh connection
-                # establishes quickly; if it is genuinely unreachable, we fail
-                # within connect_timeout rather than burning another full
-                # request_timeout.  Do NOT retry for fresh connections — a
-                # timeout on a new connection means the server is genuinely
-                # slow or unreachable.
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
-                        && stream.wasConnectionReused() && !timeout_retried) {
-                    timeout_retried = True;
-                    HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
-                        "evicting stale connection and retrying with connect_timeout=%y",
-                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
-                        opts.connect_timeout);
-                    try { timed_out_conn.close(); } catch () {}
-                    evictDeadConnections(url);
                     continue;
                 }
                 rethrow;
@@ -470,6 +629,17 @@ public class HttpClientConnectionManager {
     }
 
     #! Returns connection pool statistics
+    /** @return a hash with the following keys:
+        - \c total_connections (int): total number of pooled connections across all hosts
+        - \c total_active_streams (int): total number of active streams across all connections
+        - \c hosts (int): number of distinct host:port entries in the pool
+        - \c per_host (hash<string, hash<auto>>): per-host breakdown keyed by "host:port", where
+          each value is a hash with:
+          - \c connections (int): number of connections to that host
+          - \c active_streams (int): total active streams on those connections
+          - \c draining (int): number of connections in GOAWAY/draining state
+        - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
+    */
     hash<auto> getStats() {
         AutoReadLock al(pool_lock);
 
@@ -518,11 +688,6 @@ public class HttpClientConnectionManager {
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::DEBUG, "closeAll: cancelByOwner error: %s: %s", ex.err, ex.desc);
         }
-
-        # Wait for any in-flight I/O callbacks to complete before
-        # destroying pool_lock; without this, a callback on the I/O
-        # thread can still hold pool_lock when the destructor runs
-        callback_counter.waitForZero();
 
         # Copy the pool and release the lock before closing connections
         hash<string, list<HttpClientConnection>> pool_copy;
@@ -960,32 +1125,32 @@ public class HttpClientConnectionManager {
         if (initial) {
             log(LoggerLevel::DEBUG, "submitting %s connection %d to controller for %s",
                 conn.getProtocol(), conn.getConnectionId(), key);
+            # Set manager context once — connection_ref is already set in the
+            # connection impl constructor via poll_op.setConnection(self)
+            conn.setManagerContext(self, key);
         }
 
-        callback_counter.inc();
-        try {
-            controller.submit(<SocketPollOperationInfo>{
-                "sock": sock,
-                "spop": op,
-                "owner": owner,
-                "to": -1s,
-                "callback": sub (hash<SocketPollResultInfo> result) {
-                    on_exit callback_counter.dec();
-                    handleConnectionResult(key, conn, result);
-                },
-            });
-        } catch () {
-            callback_counter.dec();
-            rethrow;
-        }
+        # Use no timeout (-1) for the controller operation.  The H1/H2/H3
+        # poll operations are long-lived (they handle multiple request/response
+        # cycles on a single connection).  The connect timeout is handled
+        # internally by the poll operation's connect state, and request timeouts
+        # are handled by FutureImpl::get() in HttpClientStreamHandle::request().
+        # Using connect_timeout here caused the controller to kill the operation
+        # after connect_timeout seconds, even though it was in the middle of a
+        # request/response cycle with a longer timeout.
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": sock,
+            "spop": op,
+            "owner": owner,
+            "to": -1,
+        });
     }
 
-    #! Internal: handles connection result from controller callback
-    private handleConnectionResult(string key, HttpClientConnection conn,
+    #! Internal: handles connection result from poll operation completion
+    handleConnectionResult(string key, HttpClientConnection conn,
             hash<SocketPollResultInfo> result) {
-        if (result.canceled || shutdown) {
-            log(LoggerLevel::DEBUG, "connection %d %s", conn.getConnectionId(),
-                result.canceled ? "canceled" : "shutdown");
+        if (result.canceled) {
+            log(LoggerLevel::DEBUG, "connection %d canceled", conn.getConnectionId());
             return;
         }
 
@@ -1023,7 +1188,7 @@ public class HttpClientConnectionManager {
             }
             log(LoggerLevel::DEBUG, "connection %d closed", conn.getConnectionId());
             # Close the connection to notify pending streams — their
-            # callbacks fire with an error so threads in f.get() wake up
+            # Promises are rejected so threads in f.get() wake up
             # instead of waiting until request_timeout
             try { conn.close(); } catch () {}
             removeConnectionFromPool(key, conn);
@@ -1032,12 +1197,6 @@ public class HttpClientConnectionManager {
 
         if (conn.isDraining()) {
             log(LoggerLevel::DEBUG, "connection %d is draining (GOAWAY received)", conn.getConnectionId());
-        }
-
-        if (shutdown) {
-            try { conn.close(); } catch () {}
-            removeConnectionFromPool(key, conn);
-            return;
         }
 
         try {
@@ -1091,6 +1250,7 @@ public class HttpClientConnectionManager {
         return err == "QUIC-HTTP3-ERROR"
             || err == "QUIC-READ-ERROR"
             || err == "QUIC-RECV-ERROR"
+            || err == "QUIC-SEND-ERROR"
             || err == "HTTP3-CONNECT-ERROR"
             || err == "HTTP3-STATE-ERROR"
             || err == "HTTP3-ABORT"
@@ -1112,7 +1272,11 @@ public class HttpClientConnectionManager {
             || err == "HTTPCLIENT-CONNECT-ERROR"
             || err == "SOCKET-SEND-ERROR"
             || err == "SOCKET-RECV-ERROR"
-            || err == "SOCKET-CLOSED";
+            || err == "SOCKET-CLOSED"
+            # Timeout on a reused keep-alive connection: the server may have
+            # closed the connection between requests (TCP FIN race).  Retry on
+            # a fresh connection — same as curl's Curl_retry_request() logic.
+            || err == "HTTPCLIENT-TIMEOUT";
     }
 
     #! Internal: checks if an error indicates an h2c protocol incompatibility
@@ -1278,7 +1442,9 @@ public class HttpClientConnectionManager {
             cacheProtocol(key, "h1");
         } else if (url_info.protocol == "https") {
             bool is_h3_err = err == "HTTP3-CONNECT-ERROR" || err == "HTTP3-STATE-ERROR"
-                || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR";
+                || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR"
+                || err == "QUIC-SEND-ERROR" || err == "QUIC-READ-ERROR"
+                || err == "QUIC-RECV-ERROR";
             # HTTPCLIENT-CONNECT-ERROR is raised when the connection closes with an error
             # while waiting for readiness (waitForReady()).  When H3 is currently cached
             # (from a prior Alt-Svc response), this means the QUIC connection failed —
@@ -1300,9 +1466,11 @@ public class HttpClientConnectionManager {
 
     #! Internal: checks if a connection is alive at the transport level
     /** Verifies that the underlying socket is open and the poll operation hasn't
-        detected any errors. This catches cases where the I/O thread has already
-        detected a dead connection (FIN/RST received) but the HttpClientConnection
-        state hasn't been updated yet.
+        detected any errors.  The async I/O thread continuously monitors idle
+        connections via epoll/kqueue; when a server sends FIN/RST, the I/O thread
+        detects it via \c recv(MSG_PEEK) in \c handleIdle() and marks the poll
+        operation as closed/errored.  This check reads that state, providing
+        instant dead-connection detection for the pool scan.
 
         @note Called under pool_lock read lock — must not block or acquire pool_lock
     */
@@ -1420,6 +1588,49 @@ public class HttpClientConnectionManager {
         if (logger) {
             call_function_args(\logger.log(), (level, "HttpClientConnectionManager: " + fmt) + argv);
         }
+    }
+}
+
+#! Future subclass that extracts Set-Cookie headers when the caller resolves it
+/** Overrides \c get() to process cookies from the response headers before
+    returning.  No extra threads — cookie extraction happens synchronously
+    on the caller's thread when they call \c get().
+
+    @since HttpClientIo 1.0
+*/
+class CookieExtractingFuture inherits Future {
+    private {
+        Future real_future;
+        CookieJar jar;
+        string host;
+        string path;
+        bool is_secure;
+    }
+
+    constructor(Future real_future, CookieJar jar, string host, string path,
+            bool is_secure) {
+        self.real_future = real_future;
+        self.jar = jar;
+        self.host = host;
+        self.path = path;
+        self.is_secure = is_secure;
+    }
+
+    #! Blocks until the response is available, then extracts cookies and returns it
+    auto get(timeout timeout_ms = 0) {
+        auto rv = real_future.get(timeout_ms);
+        if (rv.typeCode() == NT_HASH && rv.headers) {
+            jar.processResponseHeaders(host, path, is_secure, rv.headers);
+        }
+        return rv;
+    }
+
+    bool isDone() {
+        return real_future.isDone();
+    }
+
+    bool isError() {
+        return real_future.isError();
     }
 }
 

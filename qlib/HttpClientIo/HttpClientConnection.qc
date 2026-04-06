@@ -37,19 +37,16 @@ public namespace HttpClientIo {
     acquired before \c HttpClientPollOperation.stream_lock.  Never acquire
     in reverse order or a deadlock will result.
 */
-public class HttpClientConnection {
+public class HttpClientConnection inherits AbstractHttpPollConnection {
     private {
         #! URL info (host, port, scheme)
         hash<auto> url_info;
 
-        #! Connection state
-        HttpClientConnectionState state = HttpClientConnectionState::Connecting;
-
-        #! Connection lock for thread safety
+        #! Lock for Qore-level shared members (last_activity, controller_ref, pending_stream_count)
+        /** @note Connection state (state, ready_cond) is in the C++ base class
+            AbstractHttpPollConnection. This lock only protects Qore members.
+        */
         Mutex lock();
-
-        #! Condition for waiting on connection ready
-        Condition ready_cond();
 
         #! Maximum concurrent streams
         int max_concurrent_streams = DefaultMaxStreamsPerConnection;
@@ -80,6 +77,12 @@ public class HttpClientConnection {
 
         #! Proxy connection info (if using a proxy)
         *hash<auto> proxy_info;
+
+        #! Reference to the connection manager (for completion dispatch)
+        *HttpClientConnectionManager manager_ref;
+
+        #! Pool key in the connection manager
+        *string pool_key;
     }
 
     #! Returns the protocol identifier: "h1", "h2", or "h3"
@@ -92,8 +95,17 @@ public class HttpClientConnection {
     abstract Socket getSocket();
 
     #! Submits a request on this connection (protocol-specific)
+    /** @param promise Promise to resolve with the response (pure C++ dispatch)
+    */
     abstract int submitRequestImpl(string method, string path, *hash<auto> headers,
-        *data body, HttpResponseCallback callback, *hash<auto> ctx);
+        *data body, Promise promise);
+
+    #! Submits a request using CompositeAction (Promise + EventNotifier) — protocol-specific
+    /** @param promise Promise to resolve with the response
+        @param notifier EventNotifier to signal after the Promise is resolved
+    */
+    abstract int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
+        *data body, Promise promise, EventNotifier notifier);
 
     #! Cancels a request (protocol-specific)
     abstract cancelRequestImpl(int stream_id);
@@ -101,37 +113,25 @@ public class HttpClientConnection {
     #! Closes the connection (protocol-specific)
     abstract closeImpl(*timeout close_timeout);
 
-    #! Internal: called by poll operation when connection becomes ready
-    private onConnectionReady() {
-        AutoLock al(lock);
-        if (state == HttpClientConnectionState::Connecting) {
-            state = HttpClientConnectionState::Ready;
-            log(LoggerLevel::DEBUG, "connection ready (notified via callback)");
-            ready_cond.broadcast();
+    #! Sets the connection manager context for completion dispatch
+    /** @param mgr the connection manager that owns this connection
+        @param key the pool key for this connection
+        @note Called once during connection setup, before submission to the controller.
+    */
+    setManagerContext(HttpClientConnectionManager mgr, string key) {
+        manager_ref = mgr;
+        pool_key = key;
+    }
+
+    #! Called by the poll operation when onComplete fires
+    /** Forwards to the connection manager's handleConnectionResult().
+        @param result the poll result hash
+        @note Called from a worker thread (dispatched by AsyncIoControllerPriv).
+    */
+    handleCompletion(hash<SocketPollResultInfo> result) {
+        if (manager_ref) {
+            manager_ref.handleConnectionResult(pool_key, self, result);
         }
-    }
-
-    #! Returns True if the connection is ready for new requests
-    bool isReady() {
-        AutoLock al(lock);
-        return isReadyLocked();
-    }
-
-    #! Internal: check ready state when lock is already held
-    private bool isReadyLocked() {
-        return state == HttpClientConnectionState::Ready && getPollOperation().isReady();
-    }
-
-    #! Returns True if the connection is closed
-    bool isClosed() {
-        AutoLock al(lock);
-        return state == HttpClientConnectionState::Closed;
-    }
-
-    #! Returns True if the connection is draining (GOAWAY received)
-    bool isDraining() {
-        AutoLock al(lock);
-        return state == HttpClientConnectionState::Draining;
     }
 
     #! Returns True if the connection can accept a new stream (advisory, no side effects)
@@ -145,8 +145,9 @@ public class HttpClientConnection {
     */
     bool canAcceptStream() {
         AutoLock al(lock);
-        return (state == HttpClientConnectionState::Ready
-                || state == HttpClientConnectionState::Connecting)
+        int cs = self.getConnectionState();
+        return (cs == HttpClientConnectionState::Ready
+                || cs == HttpClientConnectionState::Connecting)
             && (!max_concurrent_streams
                 || (getPollOperation().getActiveStreamCount() + pending_stream_count)
                     < max_concurrent_streams);
@@ -166,8 +167,9 @@ public class HttpClientConnection {
     */
     bool tryReserveStream() {
         AutoLock al(lock);
-        if (state != HttpClientConnectionState::Ready
-                && state != HttpClientConnectionState::Connecting) {
+        int cs = self.getConnectionState();
+        if (cs != HttpClientConnectionState::Ready
+                && cs != HttpClientConnectionState::Connecting) {
             return False;
         }
         int total = getPollOperation().getActiveStreamCount() + pending_stream_count;
@@ -221,7 +223,7 @@ public class HttpClientConnection {
         return <HttpClientConnectionInfo>{
             "host": url_info.host,
             "port": url_info.port,
-            "state": state,
+            "state": cast<HttpClientConnectionState>(self.getConnectionState()),
             "active_streams": getPollOperation().getActiveStreamCount(),
             "max_concurrent_streams": max_concurrent_streams,
             "connection_id": connection_id,
@@ -232,51 +234,44 @@ public class HttpClientConnection {
 
     #! Submits a new request on this connection
     /** Validates state and delegates to the protocol-specific submitRequestImpl().
+        The result is delivered via the returned Future (pure C++ Promise resolution
+        on the I/O thread — no user code executes on the I/O thread).
 
         @param method HTTP method (e.g., \c "GET", \c "POST")
         @param path request path (e.g., \c "/api/users")
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback invoked when the response is complete
-        @param ctx optional context hash passed through to submitRequestImpl()
         @param suppress_wake if True, suppresses the I/O controller wake after
-        submitting the request.  This allows the caller to queue additional data
-        (e.g., a QUIC datagram) before waking the controller, ensuring both are
-        sent in the same write cycle.  The caller MUST call notifyPendingData()
-        after queuing the additional data to trigger the write.
+        submitting the request.
 
-        @return the stream ID assigned to this request
+        @return a hash with "stream_id" (int) and "future" (Future) keys
 
         @throw HTTPCLIENT-STATE-ERROR if the connection is not ready
-
-        @note The capacity check is performed atomically inside the poll operation's
-        submitRequest() under stream_lock, so there is no TOCTOU gap between the
-        check and the actual stream creation.
     */
-    int submitRequest(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool suppress_wake = False) {
+    hash<auto> submitRequest(string method, string path, *hash<auto> headers, *data body,
+            bool suppress_wake = False) {
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
+            if (!self.isReady()) {
                 throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
+                    sprintf("connection not ready: state=%y", self.getConnectionState());
             }
             last_activity = now_us();
             ctl = controller_ref;
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s", method, path);
+        Promise p();
+        Future f = p.getFuture();
         int stream_id;
         try {
-            stream_id = submitRequestImpl(method, path, headers, body, callback, ctx);
+            stream_id = submitRequestImpl(method, path, headers, body, p);
         } catch (hash<ExceptionInfo> ex) {
             # Mark connection Closed only for connection-fatal errors so the
             # pool evicts it immediately; transient errors leave it Ready
             if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
-                AutoLock al(lock);
-                state = HttpClientConnectionState::Closed;
-                ready_cond.broadcast();
+                self.setClosed();
             }
             rethrow;
         }
@@ -293,10 +288,75 @@ public class HttpClientConnection {
         }
 
         if (!suppress_wake && ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
-        return stream_id;
+        # Return the Promise alongside the Future so the caller keeps it alive
+        # until the Future is consumed. The Promise must not be destroyed before
+        # the I/O thread resolves it.
+        return {
+            "stream_id": stream_id,
+            "future": f,
+            "promise": p,
+        };
+    }
+
+    #! Submits an async request using CompositeAction (Promise + EventNotifier)
+    /** Like submitRequest() but additionally signals @a notifier when the
+        response arrives, allowing a continuePoll() state machine to call
+        Future::get() non-blockingly — no background thread needed.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param notifier EventNotifier to signal on response completion
+
+        @return a hash with "stream_id" (int), "future" (Future), and "promise" (Promise)
+    */
+    hash<auto> submitRequestWithNotifier(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        *object ctl;
+        {
+            AutoLock al(lock);
+            if (!self.isReady()) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("connection not ready: state=%y", self.getConnectionState());
+            }
+            last_activity = now_us();
+            ctl = controller_ref;
+        }
+
+        log(LoggerLevel::DEBUG, "submitting request with notifier: %s %s", method, path);
+        Promise p();
+        Future f = p.getFuture();
+        int stream_id;
+        try {
+            stream_id = submitRequestWithNotifierImpl(method, path, headers, body, p, notifier);
+        } catch (hash<ExceptionInfo> ex) {
+            if (HttpClientIo::HttpClientConnectionManager::isConnectionErrorStatic(ex.err)) {
+                self.setClosed();
+            }
+            rethrow;
+        }
+        @assert(stream_id >= 0);
+
+        {
+            AutoLock al(lock);
+            if (pending_stream_count > 0) {
+                --pending_stream_count;
+            }
+        }
+
+        if (ctl) {
+            ctl.wakeSocket(getSocket());
+        }
+
+        return {
+            "stream_id": stream_id,
+            "future": f,
+            "promise": p,
+        };
     }
 
     #! Cancels a pending request
@@ -317,72 +377,57 @@ public class HttpClientConnection {
             ctl = controller_ref;
         }
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
     }
 
     #! Handles poll result from AsyncSocketIoController
     /** Updates state under lock, then calls handlePollResultImpl() for
-        protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
+        protocol-specific handling (e.g. GOAWAY check) after releasing the lock.
     */
     handlePollResult() {
-        AutoLock al(lock);
-        last_activity = now_us();
-
-        if (getPollOperation().isClosed()) {
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
-        } else if (getPollOperation().isReady() && state == HttpClientConnectionState::Connecting) {
-            state = HttpClientConnectionState::Ready;
-            ready_cond.broadcast();
+        {
+            AutoLock al(lock);
+            last_activity = now_us();
         }
 
-        # Protocol-specific hook called under lock — no gap for concurrent state changes
+        if (getPollOperation().isClosed()) {
+            self.setClosed();
+        }
+
+        # Protocol-specific hook (not called under Qore lock — C++ base handles state)
         handlePollResultImpl();
     }
 
-    #! Protocol-specific poll result hook, called under lock
+    #! Protocol-specific poll result hook, called after the base state update
     /** Default no-op; override for protocol-specific handling (e.g. GOAWAY check).
-        @note Called while \c lock is held — do not attempt to re-acquire it.
+        @note Called without \c lock held — implementations may acquire it if needed.
     */
     private handlePollResultImpl() {
     }
 
     #! Waits for the connection to become ready
+    /** Delegates to the C++ base class waitForReady() for the condition wait,
+        then checks for errors (the C++ base returns False for both timeout
+        and closed-with-error).
+    */
     bool waitForReady(timeout timeout_ms = 30s) {
         log(LoggerLevel::DEBUG, "waitForReady() timeout=%y", timeout_ms);
-        date end_time = now_us() + timeout_ms;
+        bool ready = AbstractHttpPollConnection::waitForReady(timeout_ms);
 
-        AutoLock al(lock);
-        while (state == HttpClientConnectionState::Connecting) {
-            date remaining = end_time - now_us();
-            if (remaining <= 0us) {
-                return False;
-            }
-            ready_cond.wait(lock, remaining);
-
-            if (getPollOperation().isClosed() || getPollOperation().hasError()) {
-                state = HttpClientConnectionState::Closed;
-                break;
-            }
-        }
-
-        if (state == HttpClientConnectionState::Closed) {
+        if (self.isClosed()) {
             *hash<auto> err = getPollOperation().getError();
             throw "HTTPCLIENT-CONNECT-ERROR",
                 sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown");
         }
 
-        return state == HttpClientConnectionState::Ready;
+        return ready;
     }
 
     #! Sets the connection to draining state (GOAWAY received)
     setDraining() {
-        AutoLock al(lock);
-        if (state == HttpClientConnectionState::Ready) {
-            log(LoggerLevel::DEBUG, "connection draining");
-            state = HttpClientConnectionState::Draining;
-        }
+        log(LoggerLevel::DEBUG, "connection draining");
+        AbstractHttpPollConnection::setDraining();
     }
 
     #! Closes the connection

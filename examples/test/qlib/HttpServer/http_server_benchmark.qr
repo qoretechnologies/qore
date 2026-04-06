@@ -20,40 +20,26 @@ class HttpServerBenchmark {
     }
 
     private {
-        HttpServer syncServer;
-        HttpServer asyncServer;
-        int syncPort;
-        int asyncPort;
+        HttpServer server;
+        int port;
     }
 
     constructor() {
         SimpleHandler handler();
 
-        # Create sync mode server
-        syncServer = new HttpServer();
-        syncServer.setHandler("test", "", MimeTypeHtml, handler);
-        syncServer.setDefaultHandler("test", handler);
-        syncPort = syncServer.addListener(<HttpListenerOptionInfo>{
+        # Create server (always async mode)
+        server = new HttpServer(<HttpServerOptionInfo>{});
+        server.setHandler("test", "", MimeTypeHtml, handler);
+        server.setDefaultHandler("test", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
-            "name": "sync-test",
-        }).port;
-
-        # Create async mode server
-        asyncServer = new HttpServer(<HttpServerOptionInfo>{
-        });
-        asyncServer.setHandler("test", "", MimeTypeHtml, handler);
-        asyncServer.setDefaultHandler("test", handler);
-        asyncPort = asyncServer.addListener(<HttpListenerOptionInfo>{
-            "service": 0,
-            "name": "async-test",
+            "name": "bench-test",
         }).port;
 
         # Wait for I/O thread to start
         usleep(100ms);
 
-        printf("Sync server on port %d\n", syncPort);
-        printf("Async server on port %d\n", asyncPort);
-        printf("\n");
+        printf("Server on port %d (async mode)\n\n", port);
         flush();
 
         try {
@@ -62,42 +48,33 @@ class HttpServerBenchmark {
             printf("ERROR: %s: %s\n", ex.err, ex.desc);
         }
 
-        syncServer.stop();
-        asyncServer.stop();
+        server.stop();
     }
 
     private runBenchmarks() {
         # Benchmark 1: Sequential requests on single connection
         printf("=== Sequential Requests (single connection, %d iterations) ===\n", Iterations);
 
-        float syncTime = benchmarkSequential(syncPort);
-        printf("Sync mode:  %7.2f ms total, %.3f ms/request\n", syncTime, syncTime / Iterations);
-
-        float asyncTime = benchmarkSequential(asyncPort);
-        printf("Async mode: %7.2f ms total, %.3f ms/request\n", asyncTime, asyncTime / Iterations);
+        float t = benchmarkSequential(port);
+        printf("  %7.2f ms total, %.3f ms/request, %.0f req/s\n",
+            t, t / Iterations, Iterations / (t / 1000.0));
         printf("\n");
 
         # Benchmark 2: Concurrent connections
         printf("=== Concurrent Connections (%d connections, %d requests each) ===\n",
                Connections, Iterations);
 
-        syncTime = benchmarkConcurrent(syncPort);
-        printf("Sync mode:  %7.2f ms total, %.3f ms/request\n", syncTime,
-               syncTime / (Connections * Iterations));
-
-        asyncTime = benchmarkConcurrent(asyncPort);
-        printf("Async mode: %7.2f ms total, %.3f ms/request\n", asyncTime,
-               asyncTime / (Connections * Iterations));
+        t = benchmarkConcurrent(port);
+        int total_reqs = Connections * Iterations;
+        printf("  %7.2f ms total, %.3f ms/request, %.0f req/s\n",
+            t, t / total_reqs, total_reqs / (t / 1000.0));
         printf("\n");
 
         # Benchmark 3: Connection establishment overhead
         printf("=== Connection Establishment (%d new connections) ===\n", Iterations);
 
-        syncTime = benchmarkConnectionEstablishment(syncPort);
-        printf("Sync mode:  %7.2f ms total, %.3f ms/connection\n", syncTime, syncTime / Iterations);
-
-        asyncTime = benchmarkConnectionEstablishment(asyncPort);
-        printf("Async mode: %7.2f ms total, %.3f ms/connection\n", asyncTime, asyncTime / Iterations);
+        t = benchmarkConnectionEstablishment(port);
+        printf("  %7.2f ms total, %.3f ms/connection\n", t, t / Iterations);
     }
 
     private float benchmarkSequential(int port) {

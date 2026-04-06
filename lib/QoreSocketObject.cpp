@@ -78,6 +78,57 @@ void QoreSocketObject::deref() {
     }
 }
 
+void QoreSocketObject::closeIo(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (priv->socket->isOpen()) {
+        priv->socket->shutdown();
+        priv->socket->close();
+    }
+}
+
+bool QoreSocketObject::hasPendingData() const {
+    // Check the socket's internal read buffer for unread data left over from
+    // a previous read operation.  This handles protocol upgrades (HTTP→WS)
+    // where SSL_read() reads a full TLS record containing both HTTP headers
+    // and the first WebSocket frame; the header reader consumes only headers,
+    // leaving frame data in rbuf that the next poll op must process.
+    if (priv->socket->priv->buflen > priv->socket->priv->bufoffset) {
+        return true;
+    }
+    // Check SSL buffer without syscalls or locking — safe from any thread
+    // SSL_pending() is documented as thread-safe for read-only queries
+    if (priv->socket->priv->ssl && priv->socket->priv->ssl->pending() > 0) {
+        return true;
+    }
+    // Check H2/H3 session for pending data at the protocol level:
+    // - hasStreamData(): CONNECT stream DATA received in a previous read cycle
+    //   but not yet drained by the poll operation
+    // - wantWrite(): nghttp2 has outgoing frames (SETTINGS_ACK, WINDOW_UPDATE)
+    //   that must be flushed before the peer will send more data
+    // - wantRead(): nghttp2 has buffered frames to process
+    // Without these checks, the SSL/TCP buffers appear empty so epoll never
+    // triggers a re-poll, but the H2 session has actionable work.
+    if (priv->socket->priv->h2_session) {
+        Http2Session* h2 = priv->socket->priv->h2_session.get();
+        if (h2->hasStreamData() || h2->wantWrite() || h2->wantRead()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+BinaryNode* QoreSocketObject::drainPendingBuffer() {
+    qore_socket_private* sp = priv->socket->priv;
+    if (sp->buflen <= sp->bufoffset) {
+        return nullptr;
+    }
+    size_t avail = sp->buflen - sp->bufoffset;
+    BinaryNode* result = new BinaryNode(sp->rbuf + sp->bufoffset, avail);
+    sp->bufoffset = 0;
+    sp->buflen = 0;
+    return result;
+}
+
 void QoreSocketObject::invalidate(ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     priv->invalidate();
@@ -1577,46 +1628,6 @@ void QoreSocketObject::deregisterQuicConnectStreamQueue(int64_t session_id, int6
     session->deregisterConnectStreamQueue(stream_id);
 }
 
-int QoreSocketObject::registerQuicConnectStreamNotifier(int64_t session_id, int64_t stream_id,
-        ExceptionSink* xsink) {
-    AutoLocker al(priv->m);
-    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-    std::shared_ptr<QuicSession> session = sp->getQuicSession(session_id);
-    if (!session) {
-        xsink->raiseException("QUIC-ERROR", "no QUIC session with id %lld on this socket",
-            (long long)session_id);
-        return -1;
-    }
-    session->registerConnectStreamNotifier(stream_id);
-    return 0;
-}
-
-int QoreSocketObject::waitForQuicConnectStreamNotify(int64_t session_id, int64_t stream_id,
-        int timeout_ms, ExceptionSink* xsink) {
-    // Get session and notifier WITHOUT holding the socket lock — we'll block on the CV
-    std::shared_ptr<QuicSession> session;
-    {
-        AutoLocker al(priv->m);
-        qore_socket_private* sp = qore_socket_private::get(*priv->socket);
-        session = sp->getQuicSession(session_id);
-    }
-    if (!session) {
-        return -1;  // session gone — treat as closed
-    }
-    auto notifier = session->getConnectStreamNotifier(stream_id);
-    if (!notifier) {
-        return -1;  // no notifier — treat as closed
-    }
-    if (notifier->closed.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    notifier->wait(timeout_ms);
-    if (notifier->closed.load(std::memory_order_acquire)) {
-        return -1;
-    }
-    return 0;
-}
-
 BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_t stream_id,
         int timeout_ms, ExceptionSink* xsink) {
     // Get the session WITHOUT holding the socket lock — the session is reference-counted
@@ -1636,9 +1647,6 @@ BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_
     int64 deadline_ms = timeout_ms >= 0
         ? q_clock_getmillis() + timeout_ms
         : -1;
-
-    // Get per-stream notifier for targeted wakeup (avoids thundering herd)
-    std::shared_ptr<StreamNotifier> notifier = session->getStreamNotifier(stream_id);
 
     while (true) {
         // Check if session has been torn down (abort)
@@ -1676,12 +1684,8 @@ BinaryNode* QoreSocketObject::readQuicStreamDataBlock(int64_t session_id, int64_
             remaining_ms = -1;
         }
 
-        // 4. Wait for stream data or completion — per-stream notifier avoids thundering herd
-        if (notifier) {
-            notifier->wait(remaining_ms);
-        } else {
-            session->waitForStreamData(remaining_ms);
-        }
+        // 4. Wait for stream data or completion
+        session->waitForStreamData(remaining_ms);
     }
 }
 

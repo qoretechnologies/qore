@@ -666,6 +666,11 @@ public:
         return QoreFile::getPollableDescriptor();
     }
 
+    //! Closes the file
+    DLLLOCAL void closeIo(ExceptionSink* xsink) override {
+        QoreFile::close(xsink);
+    }
+
     //! Returns a socket polling object to poll for reading file data
     /** @since %Qore 1.19
     */

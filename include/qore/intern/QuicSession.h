@@ -62,6 +62,7 @@
 #include <vector>
 
 class QoreDatagramDispatcher;
+class QoreEventNotifier;
 class QoreSSLCertificate;
 class QoreSSLPrivateKey;
 
@@ -131,54 +132,6 @@ struct QuicStreamingBodyData {
 };
 
 class qore_socket_private;
-
-//! Per-stream notification object for targeted wakeup (avoids thundering herd)
-/** Heap-allocated and shared via shared_ptr between the I/O thread (signal side)
-    and the handler thread (wait side). Non-copyable (contains mutex/CV), but
-    QuicStreamInfo remains copyable because streams reference this indirectly.
-*/
-struct StreamNotifier {
-    std::mutex mtx;
-    std::condition_variable cv;
-    std::atomic<unsigned> gen{0};
-    std::atomic<bool> closed{false};
-
-    //! Signal that data is available (increments gen, notify_one)
-    void signal() {
-        gen.fetch_add(1, std::memory_order_release);
-        {
-            std::lock_guard<std::mutex> lg(mtx);
-        }
-        cv.notify_one();
-    }
-
-    //! Mark as closed and wake the waiter
-    void markClosed() {
-        closed.store(true, std::memory_order_release);
-        gen.fetch_add(1, std::memory_order_release);
-        {
-            std::lock_guard<std::mutex> lg(mtx);
-        }
-        cv.notify_one();
-    }
-
-    //! Wait for signal or timeout (uses generation-based wakeup)
-    /** @param timeout_ms max wait in ms; capped at 100ms per iteration
-    */
-    void wait(int timeout_ms) {
-        if (closed.load(std::memory_order_acquire)) {
-            return;
-        }
-        unsigned cur_gen = gen.load(std::memory_order_acquire);
-        std::unique_lock<std::mutex> lk(mtx);
-        int wait_ms = timeout_ms >= 0 ? std::min(timeout_ms, 100) : 100;
-        cv.wait_for(lk, std::chrono::milliseconds(wait_ms),
-            [this, cur_gen]() {
-                return closed.load(std::memory_order_acquire)
-                    || gen.load(std::memory_order_acquire) != cur_gen;
-            });
-    }
-};
 
 //! Result from processTimerAndWrite() — coalesces timer check + packet generation
 struct QuicTimerWriteResult {
@@ -465,8 +418,7 @@ public:
         (clears body on copy), marks original as dispatched = true.
         @return copy of the stream info, or nullptr if none found
     */
-    DLLLOCAL std::unique_ptr<QuicStreamInfo> takeHeadersReadyStreamCopy(
-        std::shared_ptr<StreamNotifier>* notifier_out = nullptr);
+    DLLLOCAL std::unique_ptr<QuicStreamInfo> takeHeadersReadyStreamCopy();
 
     //! Check if a dispatched stream has received all body data (END_STREAM)
     /** @param stream_id the HTTP/3 stream ID
@@ -511,12 +463,6 @@ public:
         @return 0 for OK, -1 for error
     */
     DLLLOCAL int resetStream(int64_t stream_id);
-
-    //! Get the per-stream notifier for a dispatched stream (if any)
-    /** @param stream_id the HTTP/3 stream ID
-        @return shared_ptr to the notifier, or nullptr if not found
-    */
-    DLLLOCAL std::shared_ptr<StreamNotifier> getStreamNotifier(int64_t stream_id) const;
 
     //! Take accumulated body data from a dispatched stream (atomic with completion check)
     /** Swaps out the body data from stream->body and returns it as BinaryNode*.
@@ -745,28 +691,6 @@ public:
         @param stream_id the HTTP/3 stream ID
     */
     DLLLOCAL void deregisterConnectStreamQueue(int64_t stream_id);
-
-    //! Create and register a StreamNotifier for a CONNECT stream
-    /** Creates a StreamNotifier that is signaled from h3RecvDataCallback()
-        (pure C++, safe from ngtcp2 callbacks) when data arrives on the stream.
-        A handler thread can block on the notifier via getConnectStreamNotifier().
-
-        @param stream_id the HTTP/3 stream ID
-        @return shared_ptr to the created notifier
-    */
-    DLLLOCAL std::shared_ptr<StreamNotifier> registerConnectStreamNotifier(int64_t stream_id);
-
-    //! Get the StreamNotifier for a CONNECT stream
-    /** @param stream_id the HTTP/3 stream ID
-        @return shared_ptr to the notifier, or nullptr if not registered
-    */
-    DLLLOCAL std::shared_ptr<StreamNotifier> getConnectStreamNotifier(int64_t stream_id);
-
-    //! Deregister the StreamNotifier for a CONNECT stream
-    /** Marks the notifier as closed and removes it from the map.
-        @param stream_id the HTTP/3 stream ID
-    */
-    DLLLOCAL void deregisterConnectStreamNotifier(int64_t stream_id);
 
     //! Returns true if extended CONNECT protocol is enabled locally (server)
     DLLLOCAL bool isExtendedConnectSupported() const {
@@ -1231,9 +1155,6 @@ private:
     //! Active streams (unordered_map for O(1) lookup vs O(log n) with std::map)
     std::unordered_map<int64_t, std::unique_ptr<QuicStreamInfo>> streams_;
 
-    //! Per-stream notifiers for targeted wakeup of handler threads (protected by mtx_)
-    std::unordered_map<int64_t, std::shared_ptr<StreamNotifier>> stream_notifiers_;
-
     //! Streams fully closed by ngtcp2 (all data ACKed by peer)
     /** Populated by streamCloseCallback(); checked by isStreamFullyAcked();
         cleaned up by removeClosedStream() after the poll operation transitions
@@ -1275,16 +1196,7 @@ private:
     */
     std::unordered_map<int64_t, Queue*> connect_stream_queues_;
 
-    //! Per-stream notifiers for CONNECT tunnel data arrival
-    /** Signaled from h3RecvDataCallback() (pure C++, safe from ngtcp2 callbacks)
-        when data is pushed to the Queue.  A handler-side watcher thread blocks
-        on StreamNotifier::wait() and calls the Qore notification callback (e.g.,
-        wsc.notifyIo()) when signaled.
-        Protected by connect_data_mutex_.
-    */
-    std::unordered_map<int64_t, std::shared_ptr<StreamNotifier>> connect_stream_notifiers_;
-
-    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_, connect_stream_queues_, and connect_stream_notifiers_
+    std::mutex connect_data_mutex_;  //!< protects connect_stream_data_ and connect_stream_queues_
 
     //! Per-stream incoming datagram queue (RFC 9221/9297)
     /** Keyed by stream_id.  recvDatagramCallback routes datagrams here based on

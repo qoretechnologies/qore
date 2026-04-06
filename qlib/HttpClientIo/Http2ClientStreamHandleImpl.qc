@@ -72,24 +72,21 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         throw "COPY-ERROR", "Http2ClientStreamHandle objects cannot be copied";
     }
 
-    #! Protocol-specific async request submission
-    /** @note The implementation MUST call handleResponse() to resolve the
-        Promise used by the synchronous request() API.
-    */
-    int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback) {
-        return conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            });
+    #! Protocol-specific async request submission — returns {stream_id, future}
+    hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+            *data body) {
+        return conn.submitRequest(method, path, headers, body);
+    }
+
+    #! Protocol-specific async submission with EventNotifier signaling
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
+    }
+
+    #! Returns True; HTTP/2 supports streaming (WebSocket, SSE)
+    bool supportsStreaming() {
+        return True;
     }
 
     #! Starts a streaming request (for WebSocket or SSE over HTTP/2)
@@ -101,15 +98,14 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         send data via sendData() and close the stream explicitly.  If False (default),
         the request is submitted with END_STREAM on the HEADERS frame, which is
         appropriate for response-only streaming (e.g., SSE).
+        @param body one-shot request body (optional); sent with the request before
+        streaming begins
 
         @return the stream ID
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if connection establishment times out
     */
-    bool supportsStreaming() {
-        return True;
-    }
-
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body) {
         {
@@ -140,7 +136,7 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
 
         try {
             stream_id = h2conn.submitRequestStreaming(method, path, headers, body,
-                \handleStreamingResponse(), NOTHING, body_streaming);
+                data_channel, body_streaming);
             @assert(stream_id >= 0);
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -189,7 +185,46 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         }
 
         try {
-            return data_channel.recv(wait_timeout);
+            auto rv = data_channel.recv(wait_timeout);
+            # The poll operation pushes raw output hashes to the channel.
+            # Extract body data and detect end_stream/error for the caller.
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.error) {
+                    {
+                        AutoLock al(lock);
+                        error_info = rv.error;
+                        state = HttpClientStreamState::Error;
+                    }
+                    return {"error": rv.error};
+                }
+                # State transitions (monotonically forward)
+                {
+                    AutoLock al(lock);
+                    if (rv.headers && state == HttpClientStreamState::Open) {
+                        state = HttpClientStreamState::HeadersReceived;
+                        response = rv;
+                    }
+                    if (rv.body && state < HttpClientStreamState::Complete) {
+                        state = HttpClientStreamState::ReceivingBody;
+                    }
+                    if (rv.end_stream && state < HttpClientStreamState::Complete) {
+                        state = HttpClientStreamState::Complete;
+                        response = rv;
+                    }
+                }
+                # Return body data extracted from the hash
+                if (rv.body) {
+                    return rv.body;
+                }
+                # Return end_stream sentinel
+                if (rv.end_stream) {
+                    return {"end_stream": True};
+                }
+                # Headers-only or other metadata — return the hash as-is
+                # (callers handle unknown hashes by skipping them)
+                return rv;
+            }
+            return rv;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;
@@ -244,74 +279,6 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return response.trailers;
     }
 
-    #! Internal: handles streaming response
-    private handleStreamingResponse(hash<auto> resp, *hash<auto> err) {
-        if (err) {
-            {
-                AutoLock al(lock);
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            }
-            try {
-                data_channel.send({"error": err});
-            } catch (hash<ExceptionInfo> ex2) {
-                # Ignore CHANNEL-CLOSED and any other send errors in error path;
-                # propagating here would crash the poll operation callback thread
-                log(LoggerLevel::DEBUG, "error channel send failed: %s: %s", ex2.err, ex2.desc);
-            }
-            data_channel.close();
-            return;
-        }
-
-        bool is_end = resp.end_stream.toBool() || exists resp.trailers;
-
-        # Update non-terminal states immediately (reader doesn't react to these)
-        {
-            AutoLock al(lock);
-            # Guard state transitions to be monotonically forward only
-            if (resp.headers && state == HttpClientStreamState::Open) {
-                state = HttpClientStreamState::HeadersReceived;
-                response = resp;
-            }
-            if (resp.body && state < HttpClientStreamState::Complete) {
-                state = HttpClientStreamState::ReceivingBody;
-            }
-        }
-
-        # Send data to channel BEFORE setting Complete state, so readers
-        # cannot see Complete + empty channel and throw HTTPCLIENT-STREAM-CLOSED
-        if (resp.body) {
-            try {
-                data_channel.send(resp.body);
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-        }
-
-        if (is_end) {
-            # Set Complete state BEFORE enqueuing end_stream so that isDone()
-            # returns True as soon as the reader consumes end_stream from the
-            # channel (avoiding a race on slow/ARM machines where the reader
-            # sees end_stream before the state transition completes)
-            {
-                AutoLock al(lock);
-                if (state < HttpClientStreamState::Complete) {
-                    state = HttpClientStreamState::Complete;
-                    response = resp;
-                }
-            }
-            try {
-                data_channel.send({"end_stream": True});
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-            data_channel.close();
-        }
-    }
 }
 
 } # namespace HttpClientIo

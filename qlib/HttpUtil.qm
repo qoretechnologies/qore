@@ -1,0 +1,319 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file HttpUtil.qm Shared HTTP utilities for client and server
+
+/*  HttpUtil.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%requires qore >= 2.0
+%requires Util
+
+%modern
+
+module HttpUtil {
+    version = "1.0";
+    desc = "Shared HTTP utility functions for cookie handling (RFC 6265)";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage HttpUtil Module
+
+    @tableofcontents
+
+    @section httputilintro HttpUtil Module Introduction
+
+    The %HttpUtil module provides shared HTTP utility functions used by both
+    the HTTP server (@ref HttpServerUtil) and HTTP client (@ref HttpClientIo)
+    modules.
+
+    Currently provides RFC 6265 cookie handling:
+    - @ref HttpUtil::CookieInfo "CookieInfo" hashdecl for cookie representation
+    - @ref HttpUtil::parse_cookie() "parse_cookie()" for parsing Set-Cookie headers
+    - @ref HttpUtil::format_set_cookie() "format_set_cookie()" for formatting Set-Cookie headers
+    - @ref HttpUtil::set_cookie_header() "set_cookie_header()" for setting cookies on response headers
+    - @ref HttpUtil::domain_matches() "domain_matches()" for RFC 6265 domain matching
+    - @ref HttpUtil::path_matches() "path_matches()" for RFC 6265 path matching
+    - @ref HttpUtil::compute_default_path() "compute_default_path()" for computing default cookie paths
+
+    @section httputilrelnotes Release Notes
+
+    @subsection httputil_1_0 HttpUtil 1.0
+    - initial release
+*/
+
+#! Main namespace for shared HTTP utilities
+public namespace HttpUtil {
+
+#! Cookie representation (RFC 6265)
+/** Used for both parsing Set-Cookie headers (client side) and formatting
+    Set-Cookie headers (server side).
+*/
+public hashdecl CookieInfo {
+    #! Cookie name (required)
+    string name;
+
+    #! Cookie value (NOTHING when deleting a cookie via Max-Age=0)
+    *string value;
+
+    #! Domain for matching (lowercase; NOTHING = origin-only)
+    *string domain;
+
+    #! Path for matching
+    string path = "/";
+
+    #! Maximum age in seconds (NOTHING = session cookie; 0 = delete)
+    *int max_age;
+
+    #! Absolute expiry time (NOTHING = session cookie)
+    /** Computed from max_age during parsing, or parsed from Expires attribute.
+    */
+    *date expires;
+
+    #! Only send over HTTPS
+    bool secure = False;
+
+    #! HTTP-only (not accessible to JavaScript)
+    bool http_only = False;
+
+    #! SameSite attribute (Lax, Strict, None, or NOTHING if not set)
+    *string same_site;
+
+    #! Creation timestamp (set during parsing)
+    *date created;
+}
+
+#! Parses a Set-Cookie header value into a CookieInfo hash
+/** @param cookie_str the Set-Cookie header value (e.g., "name=value; Path=/; Max-Age=3600")
+    @param default_domain the request host (used if no Domain attribute)
+    @param default_path the request path (used to compute default path per RFC 6265 Section 5.1.4)
+
+    @return the parsed cookie info, or NOTHING if the header is invalid
+
+    @since HttpUtil 1.0
+*/
+public *hash<CookieInfo> sub parse_cookie(string cookie_str, string default_domain,
+        string default_path) {
+    list<string> parts = cookie_str.split(";");
+    if (!parts) {
+        return NOTHING;
+    }
+
+    # First part is name=value
+    string nv = trim(parts[0]);
+    int eq_pos = nv.find("=");
+    if (eq_pos < 0) {
+        return NOTHING;
+    }
+    string name = trim(nv.substr(0, eq_pos));
+    string value = trim(nv.substr(eq_pos + 1));
+    if (!name) {
+        return NOTHING;
+    }
+
+    hash<CookieInfo> entry = <CookieInfo>{
+        "name": name,
+        "value": value,
+        "domain": default_domain.lwr(),
+        "path": compute_default_path(default_path),
+        "created": now_us(),
+    };
+
+    # Parse attributes
+    for (int i = 1; i < parts.size(); ++i) {
+        string attr = trim(parts[i]);
+        int attr_eq = attr.find("=");
+        string attr_name;
+        *string attr_value;
+        if (attr_eq >= 0) {
+            attr_name = trim(attr.substr(0, attr_eq)).lwr();
+            attr_value = trim(attr.substr(attr_eq + 1));
+        } else {
+            attr_name = attr.lwr();
+        }
+
+        if (attr_name == "domain") {
+            if (exists attr_value) {
+                # Remove leading dot (RFC 6265 Section 5.2.3)
+                string dom = attr_value.lwr();
+                if (dom[0] == ".") {
+                    dom = dom.substr(1);
+                }
+                entry.domain = dom;
+            }
+        } else if (attr_name == "path") {
+            if (exists attr_value && attr_value[0] == "/") {
+                entry.path = attr_value;
+            }
+        } else if (attr_name == "max-age") {
+            if (exists attr_value) {
+                int max_age_val = attr_value.toInt();
+                entry.max_age = max_age_val;
+                if (max_age_val <= 0) {
+                    entry.expires = 1970-01-01T00:00:00Z;
+                } else {
+                    entry.expires = now_us() + seconds(max_age_val);
+                }
+            }
+        } else if (attr_name == "expires") {
+            # Only use Expires if Max-Age wasn't set
+            if (entry.expires.typeCode() != NT_DATE && exists attr_value) {
+                try {
+                    entry.expires = date(attr_value);
+                } catch () {
+                    # Ignore unparseable dates
+                }
+            }
+        } else if (attr_name == "secure") {
+            entry.secure = True;
+        } else if (attr_name == "httponly") {
+            entry.http_only = True;
+        } else if (attr_name == "samesite") {
+            if (exists attr_value) {
+                entry.same_site = attr_value;
+            }
+        }
+    }
+
+    return entry;
+}
+
+#! Formats a CookieInfo into a Set-Cookie header string
+/** @param cookie the cookie to format
+    @return the Set-Cookie header value string
+
+    @throw COOKIE-ERROR if the cookie name is empty
+
+    @since HttpUtil 1.0
+*/
+public string sub format_set_cookie(hash<CookieInfo> cookie) {
+    if (!cookie.name) {
+        throw "COOKIE-ERROR", "cookie name cannot be empty";
+    }
+
+    string hdr = sprintf("%s=%s", cookie.name, cookie.value ?? "");
+
+    if (exists cookie.same_site) {
+        hdr += sprintf("; SameSite=%s", cookie.same_site);
+    }
+    hdr += sprintf("; Path=%s", cookie.path);
+    if (cookie.secure) {
+        hdr += "; Secure";
+    }
+    if (exists cookie.domain) {
+        hdr += sprintf("; Domain=%s", cookie.domain);
+    }
+    if (cookie.http_only) {
+        hdr += "; HttpOnly";
+    }
+    if (exists cookie.max_age) {
+        hdr += sprintf("; Max-Age=%d", cookie.max_age);
+    } else if (cookie.expires.typeCode() == NT_DATE) {
+        hdr += sprintf("; Expires=%s", cookie.expires.format("Dy, DD Mon YYYY HH:mm:SS GMT"));
+    }
+
+    return hdr;
+}
+
+#! Sets a cookie on a response header hash
+/** @param hdr reference to the response headers hash; the Set-Cookie header is
+    appended (multiple cookies are stored as a list)
+    @param cookie the cookie to set
+    @param set_cache_control if True (default), sets Cache-Control to prevent caching
+    of responses that set cookies
+
+    @since HttpUtil 1.0
+*/
+public sub set_cookie_header(reference<hash<auto>> hdr, hash<CookieInfo> cookie,
+        bool set_cache_control = True) {
+    string cookie_str = format_set_cookie(cookie);
+
+    # Append to existing Set-Cookie (as list for multiple cookies)
+    if (exists hdr."Set-Cookie") {
+        if (hdr."Set-Cookie".typeCode() == NT_LIST) {
+            hdr."Set-Cookie" += cookie_str;
+        } else {
+            hdr."Set-Cookie" = (hdr."Set-Cookie", cookie_str);
+        }
+    } else {
+        hdr."Set-Cookie" = cookie_str;
+    }
+
+    if (set_cache_control) {
+        hdr."Cache-Control" = "no-cache=\"Set-Cookie\"";
+    }
+}
+
+#! Domain matching per RFC 6265 Section 5.1.3
+/** @param host the request host (should be lowercase)
+    @param cookie_domain the cookie's domain attribute (lowercase)
+    @return True if the host matches the cookie domain
+*/
+public bool sub domain_matches(string host, string cookie_domain) {
+    if (host == cookie_domain) {
+        return True;
+    }
+    # Suffix matching: host ends with ".domain"
+    if (host.size() > cookie_domain.size()
+            && host.substr(host.size() - cookie_domain.size()) == cookie_domain
+            && host[host.size() - cookie_domain.size() - 1] == ".") {
+        return True;
+    }
+    return False;
+}
+
+#! Path matching per RFC 6265 Section 5.1.4
+/** @param request_path the request path
+    @param cookie_path the cookie's path attribute
+    @return True if the request path matches the cookie path
+*/
+public bool sub path_matches(string request_path, string cookie_path) {
+    if (request_path == cookie_path) {
+        return True;
+    }
+    if (request_path.size() > cookie_path.size()
+            && request_path.substr(0, cookie_path.size()) == cookie_path) {
+        if (cookie_path[cookie_path.size() - 1] == "/") {
+            return True;
+        }
+        if (request_path[cookie_path.size()] == "/") {
+            return True;
+        }
+    }
+    return False;
+}
+
+#! Computes the default cookie path from a request path (RFC 6265 Section 5.1.4)
+/** @param request_path the request-URI path
+    @return the default cookie path (parent directory of the request path)
+*/
+public string sub compute_default_path(string request_path) {
+    if (!request_path || request_path[0] != "/") {
+        return "/";
+    }
+    int last_slash = request_path.rfind("/");
+    if (last_slash <= 0) {
+        return "/";
+    }
+    return request_path.substr(0, last_slash);
+}
+
+} # namespace HttpUtil

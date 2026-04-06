@@ -89,21 +89,19 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         throw "COPY-ERROR", "Http3ClientStreamHandle objects cannot be copied";
     }
 
-    #! Protocol-specific async request submission
-    int submitAsyncImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback) {
-        return conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            });
+    #! Protocol-specific async request submission — returns {stream_id, future}
+    /** The Future is resolved by a C++ PromiseAction on the I/O thread.
+        No user code runs on the I/O thread.
+    */
+    hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+            *data body) {
+        return conn.submitRequest(method, path, headers, body);
+    }
+
+    #! Protocol-specific async submission with EventNotifier signaling
+    hash<auto> submitAsyncWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
     }
 
     #! Protocol-specific async request + datagram submission for HTTP/3
@@ -115,7 +113,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -123,21 +120,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         @see HttpClientStreamHandle::submitAsyncWithDatagram() for the public
         wrapper with state management
     */
-    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, binary datagram) {
+    private hash<auto> submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, binary datagram) {
         # Submit the HTTP/3 request without waking the I/O controller
-        int sid = conn.submitRequest(method, path, headers, body,
-            sub (hash<auto> resp, *hash<auto> err) {
-                try {
-                    handleResponse(resp, err);
-                } catch (hash<ExceptionInfo> ex) {
-                    log(LoggerLevel::ERROR, "handleResponse error: %s: %s", ex.err, ex.desc);
-                    if (!err) {
-                        err = {"err": ex.err, "desc": ex.desc};
-                    }
-                }
-                callback(resp, err);
-            }, NOTHING, True);
+        hash<auto> result = conn.submitRequest(method, path, headers, body, True);
+        int sid = result.stream_id;
 
         # Queue the datagram (both request and datagram are now pending)
         int qsid = h3conn.getSessionId();
@@ -157,7 +144,7 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         # Single wake for both request and datagram
         conn.notifyPendingData();
 
-        return sid;
+        return result;
     }
 
     #! Starts a streaming request (for bidirectional streaming over HTTP/3)
@@ -221,8 +208,11 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
         log(LoggerLevel::DEBUG, "starting streaming request: %s %s", method, path);
 
         try {
-            stream_id = h3conn.submitRequestStreaming(method, path, headers, body,
-                \handleStreamingResponse(), NOTHING, body_streaming);
+            # Submit the streaming request — register the data_channel as the
+            # completion action so each response chunk is pushed to it via
+            # ChannelAction::trySend (pure C++ on I/O thread)
+            stream_id = h3conn.submitRequestStreamingWithChannel(method, path, headers,
+                body, data_channel, body_streaming);
             @assert(stream_id >= 0);
             # Reservation converted to active stream; release connection reservation
             releaseReservationIfHeld();
@@ -321,15 +311,42 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
                     && data_channel.empty()) {
                 throw "HTTPCLIENT-STREAM-CLOSED", "stream is closed";
             }
-            # NOTE: do NOT check Complete state here — handleStreamingResponse()
-            # sets state to Complete BEFORE sending body data to the channel.
+            # NOTE: do NOT check Complete state here — the C++ ChannelAction
+            # may have set Complete before all data is delivered to the channel.
             # Completion is detected via CHANNEL-CLOSED from the recv() below.
         }
 
-        # Read from the channel — same pattern as H2.
-        # The callback puts body data and {"end_stream": True} into the channel.
+        # Read from the channel — the ChannelAction pushes response chunks
+        # directly from the I/O thread via trySend (pure C++).
         try {
-            return data_channel.recv(wait_timeout);
+            auto rv = data_channel.recv(wait_timeout);
+            # ChannelAction pushes the full response hash from the I/O thread.
+            # Extract body data for the streaming API, and detect end_stream.
+            if (rv.typeCode() == NT_HASH) {
+                if (rv.err) {
+                    # Error response from ChannelAction::executeError
+                    {
+                        AutoLock al(lock);
+                        state = HttpClientStreamState::Error;
+                    }
+                    return {"error": rv};
+                }
+                if (rv.end_stream) {
+                    AutoLock al(lock);
+                    state = HttpClientStreamState::Complete;
+                }
+                # For initial response headers (no body) — return the full hash
+                # so callers can inspect the response (CONNECT 200, etc.)
+                if ((rv.status_code || rv.headers) && !rv.body) {
+                    return rv;
+                }
+                # Return body data if present, otherwise the end_stream sentinel
+                if (rv.body) {
+                    return rv.body;
+                }
+                return {"end_stream": True};
+            }
+            return rv;
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CHANNEL-TIMEOUT") {
                 return NOTHING;
@@ -345,83 +362,6 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
     *hash<string, string> getTrailers() {
         AutoLock al(lock);
         return response.trailers;
-    }
-
-    #! Internal: handles streaming response from the poll operation
-    /** This callback is invoked by the poll operation when a response is
-        available for a streaming request.  Body data and the end_stream
-        sentinel are forwarded through the data channel so that readData()
-        can consume them (same pattern as HTTP/2 streaming).
-
-        @param resp the response hash from getOutput() (includes headers, status_code, body, end_stream)
-        @param err error info if an error occurred
-    */
-    private handleStreamingResponse(hash<auto> resp, *hash<auto> err) {
-        if (err) {
-            {
-                AutoLock al(lock);
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            }
-            try {
-                data_channel.send({"error": err});
-            } catch (hash<ExceptionInfo> ex2) {
-                # Ignore CHANNEL-CLOSED and any other send errors in error path;
-                # propagating here would crash the poll operation callback thread
-                log(LoggerLevel::DEBUG, "error channel send failed: %s: %s", ex2.err, ex2.desc);
-            }
-            data_channel.close();
-            return;
-        }
-
-        bool is_end = resp.end_stream.toBool();
-
-        # Update non-terminal states immediately (reader doesn't react to these)
-        {
-            AutoLock al(lock);
-            # Guard state transitions to be monotonically forward only
-            if (resp.headers && state == HttpClientStreamState::Open) {
-                state = HttpClientStreamState::HeadersReceived;
-                response = resp;
-            }
-            if (resp.body && state < HttpClientStreamState::Complete) {
-                state = HttpClientStreamState::ReceivingBody;
-            }
-        }
-
-        # Send data to channel BEFORE setting Complete state, so readers
-        # cannot see Complete + empty channel and throw HTTPCLIENT-STREAM-CLOSED
-        if (resp.body) {
-            try {
-                data_channel.send(resp.body);
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-        }
-
-        if (is_end) {
-            # Set Complete state BEFORE enqueuing end_stream so that isDone()
-            # returns True as soon as the reader consumes end_stream from the
-            # channel (avoiding a race where the reader sees end_stream before
-            # the state transition completes)
-            {
-                AutoLock al(lock);
-                if (state < HttpClientStreamState::Complete) {
-                    state = HttpClientStreamState::Complete;
-                    response = resp;
-                }
-            }
-            try {
-                data_channel.send({"end_stream": True});
-            } catch (hash<ExceptionInfo> ex2) {
-                if (ex2.err != "CHANNEL-CLOSED") {
-                    rethrow;
-                }
-            }
-            data_channel.close();
-        }
     }
 
     #! Send a QUIC DATAGRAM frame on this stream's datagram channel (RFC 9221/9297)

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ServerSentEventHandler.qm Qore handler definition for the HttpServer module for providing SSE connections
 
-/*  ServerSentEventHandler.qm Copyright 2025 Qore Technologies, s.r.o.
+/*  ServerSentEventHandler.qm Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -69,8 +69,15 @@ module ServerSentEventHandler {
 
     @section serversenteventhandler_relnotes ServerSentEventHandler Release History
 
+    @subsection serversenteventhandler_v1_1 Version 1.1
+    - added @ref ServerSentEventHandler::ServerSentEventHandler::setupAsyncSseConnection()
+      "ServerSentEventHandler::setupAsyncSseConnection()" for async SSE connection setup via the
+      I/O controller, replacing the legacy synchronous \c startImpl() entry point
+    - \c startImpl() now throws \c SSE-SYNC-NOT-SUPPORTED; all SSE connections are managed by
+      the async I/O controller
+
     @subsection serversenteventhandler_v1_0_2 Version 1.0.2
-    - added supoprt for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP
+    - added support for customizable heartbeat messages to support JSON-RPC requests as heartbeat message in MCP
       server handlers
      (<a href="https://github.com/qoretechnologies/qore/issues/4958">issue 4958</a>)
 

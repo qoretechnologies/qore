@@ -108,9 +108,14 @@ QoreEventNotifier::QoreEventNotifier(ExceptionSink* xsink) {
 }
 
 QoreEventNotifier::~QoreEventNotifier() {
+    closeFd();
+}
+
+void QoreEventNotifier::closeFd() {
 #ifdef __linux__
     if (notify_fd >= 0) {
         ::close(notify_fd);
+        notify_fd = -1;
     }
 #elif defined(DARWIN)
     // Note: we don't need to explicitly remove the EVFILT_USER from kqueue
@@ -118,16 +123,20 @@ QoreEventNotifier::~QoreEventNotifier() {
     // kqueue is closed. We just close the fallback pipe if still open.
     if (pipe_fd[0] >= 0) {
         ::close(pipe_fd[0]);
+        pipe_fd[0] = -1;
     }
     if (pipe_fd[1] >= 0) {
         ::close(pipe_fd[1]);
+        pipe_fd[1] = -1;
     }
 #else
     if (pipe_fd[0] >= 0) {
         ::close(pipe_fd[0]);
+        pipe_fd[0] = -1;
     }
     if (pipe_fd[1] >= 0) {
         ::close(pipe_fd[1]);
+        pipe_fd[1] = -1;
     }
 #endif
 }
@@ -144,39 +153,28 @@ void QoreEventNotifier::notify() {
         rc = ::write(notify_fd, &val, sizeof(val));
     } while (rc < 0 && errno == EINTR);
 #elif defined(DARWIN)
-    // Use acquire semantics to ensure we see consistent state
-    // Read kq_fd first, then check optimized - this order ensures that if
-    // optimized is true, kq_fd was set before optimized was set to true
-    int kq = kq_fd.load(std::memory_order_acquire);
-    if (optimized.load(std::memory_order_acquire) && kq >= 0) {
-        // Optimized path: trigger EVFILT_USER directly
-        // This is very efficient - no data copy, just a flag set in the kernel
-        // Multiple triggers before the event is processed will coalesce
-        struct kevent ev;
-        EV_SET(&ev, user_ident, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
-        // Use zero timeout - this is a non-blocking trigger
-        struct timespec ts = {0, 0};
-        // Retry on EINTR — a lost notification can cause the I/O thread to
-        // block indefinitely in poll(), since the fallback pipe is closed
-        // after bindToKqueue()
-        int rv;
-        do {
-            rv = kevent(kq, &ev, 1, nullptr, 0, &ts);
-        } while (rv < 0 && errno == EINTR);
-        if (rv < 0) {
-            // If kevent fails (e.g., kqueue was closed), fall through to pipe
-            // This handles race conditions during unbind gracefully
-            if (errno != EBADF && pipe_fd[1] >= 0) {
-                // Fall back to pipe if available
-                char c = '.';
-                ssize_t rc;
-                do {
-                    rc = ::write(pipe_fd[1], &c, 1);
-                } while (rc < 0 && errno == EINTR);
+    // Load optimized first — the acquire pairs with the release store in
+    // bindToKqueue(), guaranteeing that kq_fd is visible when optimized is
+    // true.  Loading kq_fd before the synchronization point would allow ARM64
+    // to return a stale value (-1), silently dropping the notification.
+    if (optimized.load(std::memory_order_acquire)) {
+        int kq = kq_fd.load(std::memory_order_relaxed);
+        if (kq >= 0) {
+            // Optimized path: trigger EVFILT_USER directly
+            struct kevent ev;
+            EV_SET(&ev, user_ident, EVFILT_USER, 0, NOTE_TRIGGER, 0, nullptr);
+            int rv;
+            do {
+                rv = kevent(kq, &ev, 1, nullptr, 0, nullptr);
+            } while (rv < 0 && errno == EINTR);
+            if (rv >= 0) {
+                return;
             }
+            // kevent failed — fall through to pipe below
         }
-    } else {
-        // Fallback path: write to pipe
+    }
+    // Fallback path (not optimized, kq_fd not valid, or kevent failed): write to pipe
+    if (pipe_fd[1] >= 0) {
         char c = '.';
         ssize_t rc;
         do {
@@ -278,12 +276,8 @@ int QoreEventNotifier::bindToKqueue(int kqueue_fd, ExceptionSink* xsink) {
     kq_fd.store(kqueue_fd, std::memory_order_relaxed);
     optimized.store(true, std::memory_order_release);
 
-    // Close the fallback pipe - no longer needed
-    if (pipe_fd[0] >= 0) {
-        ::close(pipe_fd[0]);
-        ::close(pipe_fd[1]);
-        pipe_fd[0] = pipe_fd[1] = -1;
-    }
+    // Keep the fallback pipe open — notify() falls back to it if kevent() fails
+    // (e.g. during unbindFromKqueue race) or if kq_fd is momentarily stale.
 
     return 0;
 }
@@ -310,26 +304,7 @@ void QoreEventNotifier::unbindFromKqueue() {
         kevent(old_kq, &ev, 1, nullptr, 0, &ts);
     }
 
-    // Recreate the fallback pipe so the notifier remains usable
-    if (pipe_fd[0] < 0) {
-        if (pipe(pipe_fd) == 0) {
-            // Set both ends to non-blocking
-            int flags = fcntl(pipe_fd[0], F_GETFL);
-            if (flags >= 0) {
-                fcntl(pipe_fd[0], F_SETFL, flags | O_NONBLOCK);
-            }
-            flags = fcntl(pipe_fd[1], F_GETFL);
-            if (flags >= 0) {
-                fcntl(pipe_fd[1], F_SETFL, flags | O_NONBLOCK);
-            }
-
-            // Set close-on-exec
-            fcntl(pipe_fd[0], F_SETFD, FD_CLOEXEC);
-            fcntl(pipe_fd[1], F_SETFD, FD_CLOEXEC);
-
-            // Prevent SIGPIPE on write to closed pipe (macOS-specific)
-            fcntl(pipe_fd[1], F_SETNOSIGPIPE, 1);
-        }
-    }
+    // The fallback pipe is kept open for the lifetime of the notifier,
+    // so no recreation is needed here.
 }
 #endif

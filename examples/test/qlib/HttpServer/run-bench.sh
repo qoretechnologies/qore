@@ -95,9 +95,5 @@ for conns in $CONNECTIONS_LIST; do
     run_one "async" "" "$conns"
 done
 
-for conns in $CONNECTIONS_LIST; do
-    run_one "sync" "--sync" "$conns"
-done
-
 echo ""
 echo "Done."

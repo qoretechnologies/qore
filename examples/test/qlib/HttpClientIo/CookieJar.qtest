@@ -1,0 +1,337 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    CookieJar unit tests — RFC 6265 cookie parsing, matching, and integration.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpUtil.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class CookieJarTest
+
+#! Handler that sets a cookie and echoes back request cookies
+class CookieHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        hash<auto> resp_headers;
+
+        # Set cookies based on path
+        if (hdr.path == "login") {
+            resp_headers."Set-Cookie" = "session=abc123; Path=/; Max-Age=3600; HttpOnly";
+            resp_headers."Content-Type" = "text/plain";
+            return makeResponse(resp_headers, 200, "logged in");
+        }
+        if (hdr.path == "multi") {
+            # Multiple Set-Cookie headers
+            resp_headers."Set-Cookie" = (
+                "session=xyz; Path=/",
+                "prefs=dark; Path=/; Max-Age=86400",
+                "tracking=t1; Path=/api; Secure",
+            );
+            resp_headers."Content-Type" = "text/plain";
+            return makeResponse(resp_headers, 200, "multi");
+        }
+        if (hdr.path == "expire") {
+            resp_headers."Set-Cookie" = "session=; Path=/; Max-Age=0";
+            resp_headers."Content-Type" = "text/plain";
+            return makeResponse(resp_headers, 200, "expired");
+        }
+
+        # Echo back the Cookie header the client sent, plus the path for debugging
+        string cookie_echo = hdr.Cookie ?? hdr.cookie ?? "(none)";
+        return makeResponse({"Content-Type": "text/plain"}, 200, "path=%s cookies=%s", hdr.path, cookie_echo);
+    }
+}
+
+public class CookieJarTest inherits QUnit::Test {
+    private {
+        HttpServer mServer;
+        int port;
+        Logger logger;
+    }
+
+    constructor() : Test("CookieJarTest", "1.0") {
+        addTestCase("CookieJar unit tests", \testCookieJarUnit());
+        addTestCase("CookieJar domain matching", \testDomainMatching());
+        addTestCase("CookieJar path matching", \testPathMatching());
+        addTestCase("CookieJar expiry", \testExpiry());
+        addTestCase("CookieJar integration with HttpClientConnectionManager", \testIntegration());
+
+        logger = new Logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+        };
+        mServer = new HttpServer(http_opts);
+        CookieHandler handler();
+        mServer.setHandler("cookie-handler", "", NOTHING, handler);
+        mServer.setDefaultHandler("cookie-handler", handler);
+        hash<auto> linfo = mServer.addListener(<HttpListenerOptionInfo>{"service": 0});
+        port = linfo.port;
+
+        set_return_value(main());
+
+        mServer.stop();
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.stopClear();
+    }
+
+    testCookieJarUnit() {
+        HttpClientIo::CookieJar jar();
+
+        # Test: parse basic Set-Cookie
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "session=abc123; Path=/; HttpOnly",
+        });
+        assertEq(1, jar.size(), "should store one cookie");
+
+        *string hdr = jar.getCookieHeader("example.com", "/", True);
+        assertEq("session=abc123", hdr, "should return cookie for matching request");
+
+        # Test: no match for different domain
+        *string no_match = jar.getCookieHeader("other.com", "/", True);
+        assertNothing(no_match, "should not return cookie for different domain");
+
+        # Test: parse multiple cookies from list
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/api", True, {
+            "set-cookie": (
+                "a=1; Path=/",
+                "b=2; Path=/api",
+            ),
+        });
+        assertEq(2, jar.size(), "should store two cookies");
+
+        hdr = jar.getCookieHeader("example.com", "/api/users", True);
+        assertTrue(hdr.find("a=1") >= 0, "should include cookie 'a'");
+        assertTrue(hdr.find("b=2") >= 0, "should include cookie 'b'");
+
+        # Test: cookie update (same name + domain + path replaces)
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "a=updated; Path=/",
+        });
+        hdr = jar.getCookieHeader("example.com", "/", True);
+        assertTrue(hdr.find("a=updated") >= 0, "should have updated value");
+        assertEq(-1, hdr.find("a=1"), "should not have old value");
+
+        # Test: Secure cookie not sent over HTTP
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "secure_token=s1; Path=/; Secure",
+        });
+        *string secure_hdr = jar.getCookieHeader("example.com", "/", False);
+        assertNothing(secure_hdr, "should not send Secure cookie over HTTP");
+        secure_hdr = jar.getCookieHeader("example.com", "/", True);
+        assertEq("secure_token=s1", secure_hdr, "should send Secure cookie over HTTPS");
+
+        # Test: Secure cookie rejected from non-secure origin
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/", False, {
+            "set-cookie": "bad=value; Path=/; Secure",
+        });
+        assertEq(0, jar.size(), "should reject Secure cookie from HTTP origin");
+
+        # Test: clear
+        jar.clear();
+        assertEq(0, jar.size(), "should be empty after clear");
+    }
+
+    testDomainMatching() {
+        HttpClientIo::CookieJar jar();
+
+        # Exact domain match
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "a=1; Path=/",
+        });
+        assertRegex("a=1", jar.getCookieHeader("example.com", "/", True),
+            "exact domain match");
+        assertNothing(jar.getCookieHeader("other.com", "/", True),
+            "different domain should not match");
+
+        # Subdomain match with Domain attribute
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "a=1; Domain=example.com; Path=/",
+        });
+        assertRegex("a=1", jar.getCookieHeader("sub.example.com", "/", True),
+            "subdomain should match Domain=example.com");
+        assertRegex("a=1", jar.getCookieHeader("example.com", "/", True),
+            "exact domain should still match");
+        assertNothing(jar.getCookieHeader("notexample.com", "/", True),
+            "suffix-only match should not work without dot boundary");
+
+        # Leading dot stripped (RFC 6265 Section 5.2.3)
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "a=1; Domain=.example.com; Path=/",
+        });
+        assertRegex("a=1", jar.getCookieHeader("sub.example.com", "/", True),
+            "leading dot should be stripped and subdomain should match");
+    }
+
+    testPathMatching() {
+        HttpClientIo::CookieJar jar();
+
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": (
+                "root=1; Path=/",
+                "api=2; Path=/api",
+                "users=3; Path=/api/users",
+            ),
+        });
+
+        # Root path matches all
+        *string hdr = jar.getCookieHeader("example.com", "/", True);
+        assertTrue(hdr.find("root=1") >= 0, "root cookie matches /");
+        assertEq(-1, hdr.find("api=2"), "/api cookie should not match /");
+
+        # /api matches root and /api
+        hdr = jar.getCookieHeader("example.com", "/api", True);
+        assertTrue(hdr.find("root=1") >= 0, "root cookie matches /api");
+        assertTrue(hdr.find("api=2") >= 0, "/api cookie matches /api");
+        assertEq(-1, hdr.find("users=3"), "/api/users cookie should not match /api");
+
+        # /api/users matches all three
+        hdr = jar.getCookieHeader("example.com", "/api/users", True);
+        assertTrue(hdr.find("root=1") >= 0, "root cookie matches /api/users");
+        assertTrue(hdr.find("api=2") >= 0, "/api cookie matches /api/users");
+        assertTrue(hdr.find("users=3") >= 0, "/api/users cookie matches /api/users");
+
+        # Default path from request path
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/app/page", True, {
+            "set-cookie": "s=1",
+        });
+        # Default path should be /app (parent of /app/page)
+        assertRegex("s=1", jar.getCookieHeader("example.com", "/app/other", True),
+            "default path /app should match /app/other");
+        assertNothing(jar.getCookieHeader("example.com", "/other", True),
+            "default path /app should not match /other");
+    }
+
+    testExpiry() {
+        HttpClientIo::CookieJar jar();
+
+        # Max-Age=0 should delete/expire immediately
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "session=abc; Path=/; Max-Age=3600",
+        });
+        assertEq(1, jar.size(), "should store cookie with Max-Age");
+
+        # Delete via Max-Age=0
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "session=; Path=/; Max-Age=0",
+        });
+        # The cookie exists but with an expired timestamp
+        *string hdr = jar.getCookieHeader("example.com", "/", True);
+        assertNothing(hdr, "Max-Age=0 cookie should be expired");
+
+        # Session cookies (no Max-Age/Expires) should persist during the jar lifetime
+        jar.clear();
+        jar.processResponseHeaders("example.com", "/", True, {
+            "set-cookie": "temp=val; Path=/",
+        });
+        assertRegex("temp=val", jar.getCookieHeader("example.com", "/", True),
+            "session cookie should persist");
+    }
+
+    testIntegration() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": logger,
+        });
+
+        # Step 1: Login — server sets session cookie
+        hash<auto> resp = mgr.request(url, "GET", "/login");
+        assertEq(200, resp.status_code, "login should succeed");
+        if (m_options.verbose > 1) {
+            printf("login response headers: %y\n", resp.headers);
+            printf("jar size after login: %d\n", mgr.getCookieJar().size());
+        }
+
+        # Step 2: Subsequent request — cookie should be sent automatically
+        resp = mgr.request(url, "GET", "/check");
+        assertEq(200, resp.status_code, "check should succeed");
+        assertRegex("session=abc123", resp.body, "cookie should be sent in subsequent request");
+
+        # Step 3: Multiple cookies
+        resp = mgr.request(url, "GET", "/multi");
+        assertEq(200, resp.status_code, "multi should succeed");
+
+        # Step 4: Check all cookies are sent
+        resp = mgr.request(url, "GET", "/check");
+        string cookies = resp.body;
+        assertTrue(cookies.find("session=xyz") >= 0, "session cookie from /multi should be sent");
+        assertTrue(cookies.find("prefs=dark") >= 0, "prefs cookie should be sent");
+        # tracking cookie has Path=/api so should NOT be sent to /check
+        assertEq(-1, cookies.find("tracking=t1"), "tracking cookie should not be sent to /check (Path=/api)");
+
+        # Step 5: Check tracking cookie IS sent to /api path
+        resp = mgr.request(url, "GET", "/api/test");
+        cookies = resp.body;
+        # tracking has Secure flag — won't be sent over HTTP
+        assertEq(-1, cookies.find("tracking=t1"), "Secure tracking cookie should not be sent over HTTP");
+
+        # Step 6: Expire session via Max-Age=0
+        resp = mgr.request(url, "GET", "/expire");
+        assertEq(200, resp.status_code, "expire should succeed");
+
+        resp = mgr.request(url, "GET", "/check");
+        cookies = resp.body;
+        # session should be expired, but prefs should still be there
+        assertEq(-1, cookies.find("session="), "expired session cookie should not be sent");
+        assertTrue(cookies.find("prefs=dark") >= 0, "prefs cookie should still be sent");
+
+        # Step 7: Cookie jar accessor
+        *HttpClientIo::CookieJar jar = mgr.getCookieJar();
+        assertTrue(exists jar, "getCookieJar should return the jar");
+        assertTrue(jar.size() > 0, "jar should have cookies");
+
+        # Step 8: Cookies disabled
+        HttpClientIo::HttpClientConnectionManager mgr_no_cookies(
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "protocol": "h1",
+                "enable_cookies": False,
+            });
+        mgr_no_cookies.request(url, "GET", "/login");
+        resp = mgr_no_cookies.request(url, "GET", "/check");
+        assertRegex("cookies=\\(none\\)", resp.body, "cookies should not be sent when disabled");
+        assertNothing(mgr_no_cookies.getCookieJar(), "getCookieJar should return NOTHING when disabled");
+
+        mgr.closeAll();
+        mgr_no_cookies.closeAll();
+    }
+}

@@ -98,8 +98,8 @@ public class SseAsyncConnectTest inherits QUnit::Test {
     }
 
     sseConnectPollTest() {
-        # test SseConnectPollOperation directly
-        SseConnectPollOperation poller("http://127.0.0.1:" + port);
+        # test SseConnectPollOperation directly via factory method
+        SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:" + port);
         assertEq("sse-connect", poller.getGoal());
         assertFalse(poller.goalReached());
 
@@ -109,11 +109,11 @@ public class SseAsyncConnectTest inherits QUnit::Test {
     }
 
     sseConnectPollStateTest() {
-        SseConnectPollOperation poller("http://127.0.0.1:" + port);
+        SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:" + port);
 
         # check initial state
         string initial_state = poller.getState();
-        assertTrue(initial_state.find("sse-connect") >= 0, "initial state contains 'sse-connect'");
+        assertRegex("connect", initial_state, "initial state contains 'connect'");
 
         drivePoll(poller);
         assertEq("complete", poller.getState());
@@ -135,19 +135,21 @@ public class SseAsyncConnectTest inherits QUnit::Test {
 
     sseConnectErrorTest() {
         # test connection to a port that will reject
-        SseConnectPollOperation poller("http://127.0.0.1:1");
+        SseConnectPollOperation poller = SseConnectPollOperation::create("http://127.0.0.1:1");
         assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
     }
 
     sseConnectNon200Test() {
         # test SSE connection to a server that returns 404
-        SseConnectPollOperation poller("http://127.0.0.1:" + error_port + "/not-found");
-        assertThrows("SSE-CONNECT-ERROR", "expected 200 OK, got 404", \drivePoll(), poller);
+        SseConnectPollOperation poller =
+            SseConnectPollOperation::create("http://127.0.0.1:" + error_port + "/not-found");
+        assertThrows("SSE-CONNECT-ERROR", "expected status 200, got 404", \drivePoll(), poller);
     }
 
     sseConnectWrongContentTypeTest() {
         # test SSE connection to a server that returns wrong Content-Type
-        SseConnectPollOperation poller("http://127.0.0.1:" + error_port + "/wrong-ct");
+        SseConnectPollOperation poller =
+            SseConnectPollOperation::create("http://127.0.0.1:" + error_port + "/wrong-ct");
         assertThrows("SSE-CONNECT-ERROR", "text/event-stream", \drivePoll(), poller);
     }
 }

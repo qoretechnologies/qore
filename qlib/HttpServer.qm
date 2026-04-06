@@ -984,7 +984,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a list of listener info hashes; see the return value of HttpServer::getListenerInfo() for the
         description of each hash element in the list returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1027,7 +1029,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a list of listener info hashes; see the return value of HttpServer::getListenerInfo() for the
         description of each hash element in the list returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1058,7 +1062,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a listener info hash; see the return value of HttpServer::HttpServer::getListenerInfo() for the
         description of the hash returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note This method blocks until async I/O is ready to accept connections.
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
@@ -1078,7 +1084,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a listener info hash; see the return value of HttpServer::HttpServer::getListenerInfo() for the
         description of the hash returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
@@ -1152,7 +1160,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             "key": opts.key,
             "ssl_verify_flags": opts.ssl_verify_flags,
             "get_remote_certs": opts.get_remote_certs,
-            "no_start_main_thread": True,
             "no_bind": True,
             "ext_info": sock_info{"address", "address_desc", "family", "familystr", "port",
                 "hostname", "hostname_desc"},
@@ -1360,9 +1367,15 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
     # only called from the listeners - do not call externally
     listenerStopped(HttpListener l) {
-        # decrement listener count
+        # decrement listener count (guard against double-call from async cleanup + stop)
         on_exit {
-            c.done();
+            try {
+                c.done();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "WAITGROUP-ERROR") {
+                    rethrow;
+                }
+            }
         }
 
         lm.enter();
@@ -1409,7 +1422,20 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #printf("stopped %s c=%y\n", l.getAddress(), c.getCount());
     }
 
-    #! stops all listeners; only returns when all connections are closed on all listeners
+    #! Stops the HTTP server and releases all resources
+    /** Performs a synchronous, ordered shutdown:
+        -# Signals streaming handlers (SSE, WebSocket) to stop
+        -# Stops the async I/O controller (cancels all accept, connection, and streaming
+           operations and waits for in-flight handler tasks to complete)
+        -# Cancels remaining ops by owner on the global async I/O controller
+        -# Stops listeners and waits for all listener-stopped callbacks
+        -# Flushes any remaining async callbacks and stops the internal thread pool
+
+        This method blocks until all connections are closed and handler tasks complete.
+
+        @note HttpServer instances are not restartable after \c stop(). Create a new
+        HttpServer if a restart is needed.
+    */
     stop() {
         {
             AutoLock al(stop_m);
@@ -1425,6 +1451,24 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             }
             callback_appender = NOTHING;
         }
+        # Cancel operations owned by this server on the global controller FIRST
+        # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation).
+        # This must happen before asyncIo.stop() because that method calls
+        # handler_pool.stopWait() which blocks until all handler tasks complete.
+        # Handler tasks waiting in execAsyncPollOperation() (done.waitForZero())
+        # will only unblock once their operations are cancelled and the onComplete
+        # callback decrements the counter.
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        string ownerId = self.uniqueHash();
+        @debug(log("stop: calling cancelByOwner(%s)", ownerId));
+        int canceled = ctrl.cancelByOwner(ownerId);
+        @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
+
+        # Flush callbacks from the cancelByOwner above so that handler tasks
+        # blocked in execAsyncPollOperation() are unblocked before we stop
+        # the handler pool
+        ctrl.flushCallbacks();
+
         # Stop the callback-based async I/O controller
         # The new HttpAsyncSocketIoController.stop() cancels all HTTP operations it manages
         # (accept, header reads, idle connections) on the global async I/O controller
@@ -1435,14 +1479,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
             signalStreamingHandlersToStop();
             asyncIo.stop();
         }
-
-        # Cancel any remaining operations owned by this server on the global controller
-        # (e.g. HTTP/2 and HTTP/3 poll operations from execAsyncPollOperation)
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        string ownerId = self.uniqueHash();
-        @debug(log("stop: calling cancelByOwner(%s)", ownerId));
-        int canceled = ctrl.cancelByOwner(ownerId);
-        @debug(log("stop: cancelByOwner() canceled %d operations", canceled));
 
         # Shutdown all listeners - stop accepting new connections
         {
@@ -1458,6 +1494,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         # with background listener stop threads from stopNoWait() that need lm to call
         # listenerStopped() -> c.done()
         c.wait();
+
+        # Flush any remaining async callbacks (from listener stops)
+        ctrl.flushCallbacks();
 
         threadPool.stop();
 
@@ -1534,14 +1573,6 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         }
 
         background listeners{id}.stop();
-    }
-
-    #! gets the TID of a listener based on its listener ID
-    /** @deprecated Always returns 0; async I/O uses shared I/O threads rather than dedicated
-        listener threads.
-    */
-    deprecated int getListenerTID(softint id) {
-        return 0;
     }
 
     #! sets the default request handler when no other handler can be matched
@@ -2065,17 +2096,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         return debug;
     }
 
-    #! Returns True; async I/O is always enabled
-    /** @return always returns True
-
-        @deprecated Async I/O is now the only mode; this method always returns True.
-
-        @since HttpServer 1.5
-    */
-    deprecated bool getAsyncMode() {
-        return True;
-    }
-
     #! Returns a connection to the async I/O controller for keep-alive handling
     /** @param sock the socket to return
         @param cx the connection context
@@ -2089,25 +2109,26 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
     }
 
-    #! Returns True; async I/O is always enabled
-    /** @deprecated Async I/O is now the only mode; this method always returns True.
-    */
-    deprecated bool isAsyncMode() {
-        return True;
-    }
-
     #! Waits for async I/O to be ready to accept connections
     /** This method blocks until the async I/O controller and its coordinator thread are ready
-        to process connections. Use this after calling @ref addListener() and before making
-        client connections in tests to ensure the server is ready.
+        to process connections. Call this after @ref addListener() (with \c sync: \c False) to
+        ensure the server is fully ready before clients connect.
+
+        When \c sync is \c True (the default), @ref addListener() calls this method automatically,
+        so an explicit call is only needed when adding multiple listeners with \c sync: \c False
+        for batch setup efficiency.
+
+        Common use cases:
+        - Test setup: call after \c addListener() to guarantee the server is accepting before
+          clients connect
+        - Batch listener setup: add several listeners with \c sync: \c False, then call this
+          once to wait for all of them
+        - Orchestration: ensure the server is fully operational before advertising its address
+          to service registries, load balancers, or health checks
 
         @param timeout maximum time to wait; use @ref NOTHING for no timeout (default: 5 seconds)
 
         @return @ref True if async I/O is ready, @ref False if the timeout expired
-
-        @note This method is primarily useful for testing scenarios where clients connect
-        immediately after server setup. In production, the async I/O typically starts fast enough
-        that this wait is unnecessary.
 
         @since HttpServer 1.1.4
     */
@@ -2299,9 +2320,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         if (nmap{info.name}) {
             throw "HTTPSERVER-ADDLISTENER-ERROR", sprintf("there is already an active listener with name %y", info.name);
         }
-
-        # Don't start the listener's main thread (async I/O handles connections)
-        info.no_start_main_thread = True;
 
         c.add();
         #printf("HttpServer::addListenerIntern() %y c=%y\n", sock, c.getCount());
@@ -3187,7 +3205,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                                 rv."code" ?? 200, resp_hdr);
                             *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
                             if (ctrl) {
-                                ctrl.wake();
+                                ctrl.wakeSocket(s);
                             }
                         } else {
                             # HTTP/2 multiplexed mode: submit CONNECT response directly
@@ -3197,7 +3215,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # the pending CONNECT response
                             *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
                             if (ctrl) {
-                                ctrl.wake();
+                                ctrl.wakeSocket(s);
                             }
                         }
 
@@ -3260,7 +3278,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 }
             }
         } else if (rv."code" == 101) {
-            # WebSocket upgrade — use dedicated socket handler
+            # WebSocket upgrade — use async I/O controller
             if (rv.close) {
                 listener.logError("cid %d: 101 Switching Protocols returned from handler %y, but the connection "
                     "close flag is set", cx.id, cx.handler_name);
@@ -3270,7 +3288,11 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     handler.className());
             } else {
                 if (listener.registerDedicatedSocket(request_helper, cx.id, handler)) {
-                    on_exit cx.close = True;
+                    on_exit {
+                        cx.close = True;
+                        listener.removeDedicatedSocket(cx.id);
+                        listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
+                    }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
                     if (async_response_out) {
@@ -3279,10 +3301,30 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             async_response_out.hdr ?? {}, async_response_out.body);
                         delete async_response_out;
                     }
-                    try {
-                        if (sockhandler.start(listener.getID(), cx + {"listener": listener}, hdr, s)) {
-                            request_helper.setDedicatedExternal();
+
+                    # Create WebSocket poll operation (submitted by startImpl after
+                    # setConnection/registered, ensuring echo mode is set before any
+                    # frames arrive on the I/O thread)
+                    *HttpServerAsyncIo::HttpWebSocketPollOperation ws_poll_op;
+                    if (asyncIo) {
+                        ws_poll_op = new HttpServerAsyncIo::HttpWebSocketPollOperation(s);
+                    }
+                    on_exit {
+                        if (ws_poll_op) {
+                            asyncIo.deregisterH1WebSocketConnection(s);
                         }
+                    }
+
+                    # Pass poll_op and async I/O context to handler via header-info
+                    hash<auto> ws_cx = cx + {"listener": listener};
+                    if (ws_poll_op) {
+                        ws_cx."header-info".ws_poll_op = ws_poll_op;
+                        ws_cx."header-info".async_io_controller = asyncIo;
+                        ws_cx."header-info".async_target = asyncTarget;
+                    }
+
+                    try {
+                        sockhandler.start(listener.getID(), ws_cx, hdr, s);
                     } catch (hash<ExceptionInfo> ex) {
                         if (ex.err == "SOCKET-NOT-OPEN") {
                             listener.logError("cid %d: dedicated socket handler %y: socket closed by remote", cx.id,
@@ -3294,12 +3336,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             listener.logError("cid %d: error in dedicated socket handler %y: %s", cx.id,
                                 cx.handler_name, desc);
                         }
-                    }
-                    if (request_helper.isDedicatedExternal()) {
-                        listener.log("cid %d: dedicated socket handler %y managed externally", cx.id, cx.handler_name);
-                    } else {
-                        listener.removeDedicatedSocket(cx.id);
-                        listener.log("cid %d: stopped dedicated socket handler: %y", cx.id, cx.handler_name);
                     }
                 } else {
                     listener.logError("cid %d: cannot start dedicated socket handler %y because the listener is "
@@ -3325,28 +3361,26 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         @throw any exception raised during the I/O operation
     */
     execAsyncPollOperation(Socket s, AbstractPollOperation op) {
-        # Use submit() with a callback instead of exec() to avoid blocking on
-        # the I/O controller's internal Queue.  The handler thread waits on a
-        # Counter that the callback signals — this has no dependency on the I/O
-        # thread's ability to process commands (only on it completing the poll
-        # operation), eliminating deadlock risk from thread pool exhaustion.
+        # Wrap the operation with a DelegatingPollOperation that signals a Counter
+        # when complete.  The handler thread waits on the Counter — this has no
+        # dependency on the I/O thread's ability to process commands (only on it
+        # completing the poll operation), eliminating deadlock risk.
         Counter done(1);
         *hash<auto> op_ex;
-        code cb = sub (hash<SocketPollResultInfo> result) {
-            if (result.ex) {
-                op_ex = result.ex;
-            }
-            done.dec();
-        };
-        hash<SocketPollOperationInfo> info(<SocketPollOperationInfo>{
+        auto wrapped_op = new DelegatingPollOperation(op,
+            sub (hash<SocketPollResultInfo> result) {
+                if (result.ex) {
+                    op_ex = result.ex;
+                }
+                done.dec();
+            });
+        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
+        ctrl.submit(<SocketPollOperationInfo>{
             "sock": s,
-            "spop": op,
+            "spop": wrapped_op,
             "to": 30s,
             "owner": self.uniqueHash(),
-            "callback": cb,
         });
-        AsyncSocketIo::AsyncSocketIoController ctrl = AsyncSocketIo::getGlobalAsyncIoController();
-        ctrl.submit(info);
         done.waitForZero();
         if (op_ex) {
             throw op_ex.err, op_ex.desc, op_ex.arg;
@@ -5816,9 +5850,14 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 }
 
 #! Native async target implementing HttpAsyncTarget for the callback-based HttpAsyncSocketIoController
-/** This class dispatches HTTP requests directly to HttpListener.processNativeRequest(),
-    which handles context setup, request processing, and returns response data for the
-    controller to send.
+/** Request dispatch uses a two-path model:
+    -# @ref tryInlineRequest() runs on the I/O callback thread for lightweight requests
+       (HTTP/1.x only, no body, handler opts in via @ref AbstractHttpRequestHandler::canHandleInline()
+       "canHandleInline()"); returns the response immediately without a thread hop
+    -# If @ref tryInlineRequest() returns @ref nothing, the request is dispatched to the
+       handler thread pool via @ref onHttpRequest() which calls
+       HttpListener::processNativeRequest() for full context setup, body reading, and handler
+       dispatch
 
     @since HttpServer 1.6
     @private
@@ -5840,7 +5879,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     /** Looks up the handler and, if it supports inline processing and the request
         has no body, processes it directly without thread pool dispatch.
 
-        Only for HTTP/1.x — HTTP/2 always returns @ref nothing. Requests with a
+        Only for HTTP/1.x — HTTP/2 and HTTP/3 always return @ref nothing. Requests with a
         body (Content-Length or Transfer-Encoding) are rejected because the inline
         path does not read the body; unread bytes would corrupt the next header
         parse on keep-alive connections.

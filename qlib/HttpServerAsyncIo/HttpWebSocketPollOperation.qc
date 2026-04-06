@@ -31,13 +31,26 @@ public namespace HttpServerAsyncIo {
     - Frame writing via queue
     - Automatic ping/pong handling
     - Close handshake
+    - Heartbeat via poll_timeout_ms
+
+    The C++ base class (HttpWebSocketPollOperationBase) handles the hot path:
+    - Frame decoding/encoding via WebSocketFrameCodec
+    - Non-blocking socket I/O via inner poll operations
+    - Auto pong, close handshake, fragment reassembly
+    - Heartbeat ping when no recv activity
+
+    This Qore wrapper adds:
+    - Completion context for the HttpAsyncSocketIoController
+    - Frame dispatch to WebSocketConnection via onPollComplete (worker thread)
+    - Extension transform support
+    - Connection lifecycle signaling via Counter
 
     WebSocket frames are handled according to RFC 6455.
-
 */
-public class HttpWebSocketPollOperation inherits AbstractPollOperation {
+public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
+        HttpConnectionPollOperationBase {
     public {
-        #! State constants
+        #! State constants (for backward compatibility)
         const STATE_CONNECTED = "connected";
         const STATE_CLOSING = "closing";
         const STATE_CLOSED = "closed";
@@ -45,414 +58,240 @@ public class HttpWebSocketPollOperation inherits AbstractPollOperation {
     }
 
     private {
-        #! The WebSocket socket
-        Socket sock;
+        #! The WebSocketConnection for frame dispatch (untyped to avoid circular dependency)
+        auto wsc;
 
-        #! Current state
-        string state = STATE_CONNECTED;
+        #! The WebSocketHandler for logging (untyped to avoid circular dependency)
+        auto handler;
 
-        #! Channel of frames to send
-        Channel send_channel(-1);
+        #! Counter to signal when the connection closes
+        *Counter done;
 
-        #! Channel of received frames for the application
-        Channel recv_channel(-1);
+        #! Mutex to serialize onPollComplete and onComplete
+        Mutex dispatch_mutex();
 
-        #! Pending outgoing data
-        *binary pending_send;
-        int pending_send_offset = 0;
+        #! Counter tracking active onPollComplete dispatches
+        Counter active_dispatches();
 
-        #! Buffer for incoming data
-        binary recv_buffer = binary();
-
-        #! Close code from close frame
-        int close_code = 1000;
-
-        #! Close reason from close frame
-        string close_reason = "";
-
-        #! True if we initiated close
-        bool close_initiated = False;
-
-        #! Maximum frame size (16MB default)
-        int max_frame_size = 16 * 1024 * 1024;
-
-        #! Error info
-        *hash<ExceptionInfo> error_info;
+        #! True when onComplete has run — prevents new onPollComplete dispatches
+        bool completed = False;
     }
 
     #! Creates the poll operation
     /** @param sock the WebSocket socket (after upgrade handshake complete)
     */
-    constructor(Socket sock) {
-        self.sock = sock;
+    constructor(Socket sock) : HttpWebSocketPollOperationBase(sock) {
     }
 
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "websocket";
-    }
+    #! Sets the connection and handler references for frame dispatch
+    /** Called from startImpl() after the WebSocketConnection is created.
 
-    #! Returns the current state
-    string getState() {
-        return state;
-    }
-
-    #! Returns True when the operation is complete (closed or error)
-    bool goalReached() {
-        return state == STATE_CLOSED || state == STATE_ERROR;
-    }
-
-    #! Continues the poll operation
-    /** @return poll info for the next poll() call, or NOTHING if complete
+        @param wsc the WebSocket connection object
+        @param handler the WebSocket handler for logging and extension access
     */
-    *hash<SocketPollInfo> continuePoll() {
-        if (state == STATE_CLOSED || state == STATE_ERROR) {
-            return NOTHING;
-        }
+    public setConnection(auto wsc, auto handler) {
+        self.wsc = wsc;
+        self.handler = handler;
 
-        # Check if socket is still open
-        if (!sock.isOpen()) {
-            state = STATE_CLOSED;
-            close_code = 1006;  # Abnormal closure
-            close_reason = "Connection lost";
-            return NOTHING;
-        }
-
-        int poll_events = 0;
-
-        # Try to read available data
-        try {
-            if (sock.isDataAvailable(0ms)) {
-                binary data = sock.recvBinary(-1, 0ms);
-                if (!data || data.size() == 0) {
-                    # Connection closed
-                    state = STATE_CLOSED;
-                    close_code = 1006;
-                    close_reason = "Connection closed";
-                    return NOTHING;
+        # Process any frames that arrived before the connection was set.
+        # The I/O thread may dispatch onPollComplete before setConnection
+        # is called; those dispatches return immediately (!wsc check).
+        # Drain the queue here to handle any frames that were dropped.
+        {
+            AutoLock al(dispatch_mutex);
+            while (hasReceivedFrames()) {
+                *hash<auto> frame = getReceivedFrame();
+                if (!frame) {
+                    break;
                 }
-                recv_buffer += data;
-
-                # Process any complete frames in the buffer
-                processReceivedData();
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            if (ex.err !~ /TIMEOUT/) {
-                state = STATE_ERROR;
-                error_info = ex;
-                return NOTHING;
-            }
-        }
-
-        # Handle pending sends
-        if (pending_send) {
-            try {
-                int sent = sock.send(pending_send.substr(pending_send_offset), 0ms);
-                if (sent > 0) {
-                    pending_send_offset += sent;
-                    if (pending_send_offset >= pending_send.size()) {
-                        remove pending_send;
-                        pending_send_offset = 0;
+                try {
+                    processServerFrame(frame);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        return;
+                    }
+                    if (handler) {
+                        try {
+                            handler.logError("frame processing error: %s: %s", ex.err, ex.desc);
+                        } catch () {}
                     }
                 }
-            } catch (hash<ExceptionInfo> ex) {
-                if (ex.err !~ /TIMEOUT/) {
-                    state = STATE_ERROR;
-                    error_info = ex;
-                    return NOTHING;
-                }
-            }
-
-            if (pending_send) {
-                poll_events |= SOCK_POLLOUT;
             }
         }
-
-        # Check for queued frames to send
-        if (!pending_send) {
-            auto result = send_channel.tryRecv();
-            if (exists result) {
-                pending_send = encodeFrame(result.value);
-                pending_send_offset = 0;
-                poll_events |= SOCK_POLLOUT;
-            }
+        if (wsc) {
+            wsc.notifyIo();
         }
-
-        # Always poll for incoming data
-        poll_events |= SOCK_POLLIN;
-
-        return <SocketPollInfo>{
-            "events": poll_events,
-            "socket": sock,
-        };
     }
 
-    #! Processes received data buffer for complete frames
-    private processReceivedData() {
-        while (recv_buffer.size() >= 2) {
-            # Parse frame header
-            int b0 = recv_buffer[0];
-            int b1 = recv_buffer[1];
+    #! Sets the done counter for lifecycle signaling
+    /** @param done counter to decrement when the connection closes.
+        If onComplete() has already run (race between I/O completion and
+        handler setup), signals immediately.
+    */
+    public setDone(Counter done) {
+        AutoLock al(dispatch_mutex);
+        self.done = done;
+        if (completed) {
+            # onComplete() already ran before we set the counter — signal now
+            done.dec();
+        }
+    }
 
-            bool fin = (b0 & 0x80) != 0;
-            int opcode = b0 & 0x0F;
-            bool masked = (b1 & 0x80) != 0;
-            int payload_len = b1 & 0x7F;
+    #! Called by the I/O controller on a worker thread when frames have been pushed
+    /** Drains the C++ recv_queue, applies extension transforms, and dispatches
+        to the WebSocketConnection's gotMessage() callback.
 
-            int header_size = 2;
-            if (payload_len == 126) {
-                if (recv_buffer.size() < 4) {
-                    return;  # Need more data
-                }
-                payload_len = (recv_buffer[2] << 8) | recv_buffer[3];
-                header_size = 4;
-            } else if (payload_len == 127) {
-                if (recv_buffer.size() < 10) {
-                    return;  # Need more data
-                }
-                payload_len = 0;
-                for (int i = 0; i < 8; ++i) {
-                    payload_len = (payload_len << 8) | recv_buffer[2 + i];
-                }
-                header_size = 10;
+        Runs on a WORKER thread (never on the I/O thread).
+    */
+    public onPollComplete() {
+        {
+            AutoLock al(dispatch_mutex);
+            if (completed || !wsc) {
+                return;
             }
-
-            if (masked) {
-                header_size += 4;  # Masking key
+            active_dispatches.inc();
+        }
+        on_exit active_dispatches.dec();
+        {
+            AutoLock al(dispatch_mutex);
+            if (!wsc) {
+                return;
             }
+            while (hasReceivedFrames()) {
+                *hash<auto> frame = getReceivedFrame();
+                if (!frame) {
+                    break;
+                }
+                try {
+                    processServerFrame(frame);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.err == "OBJECT-ALREADY-DELETED") {
+                        return;
+                    }
+                    if (handler) {
+                        try {
+                            handler.logError("frame processing error: %s: %s", ex.err, ex.desc);
+                        } catch () {}
+                    }
+                }
+            }
+        }
+        # Wake the controller to send any queued data (echo responses,
+        # close echoes) that processServerFrame pushed to send_queue
+        if (wsc) {
+            wsc.notifyIo();
+        }
+    }
 
-            # Check frame size limit
-            if (payload_len > max_frame_size) {
-                sendClose(1009, "Message too big");
+    #! Called when the poll operation completes (goal reached, error, or timeout)
+    /** Signals the handler thread's done counter so it can run cleanup.
+        Sets the completed flag to prevent new onPollComplete dispatches,
+        then waits for any running ones to finish.
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        # Set completed flag under the mutex to prevent new dispatches
+        {
+            AutoLock al(dispatch_mutex);
+            completed = True;
+        }
+        # Now wait for any in-progress dispatches to finish
+        active_dispatches.waitForZero();
+        {
+            AutoLock al(dispatch_mutex);
+            # Drain any remaining frames
+            if (wsc) {
+                while (hasReceivedFrames()) {
+                    *hash<auto> frame = getReceivedFrame();
+                    if (!frame) {
+                        break;
+                    }
+                    try {
+                        processServerFrame(frame);
+                    } catch () {}
+                }
+            }
+            # Clear references to prevent further dispatch
+            wsc = NOTHING;
+            handler = NOTHING;
+        }
+        # Signal the handler thread to wake up and run cleanup
+        if (done) {
+            done.dec();
+        }
+    }
+
+    #! gotRawMessage return values (from WebSocketHandler, duplicated to avoid circular dep)
+    private {
+        const WSC_Process = 0;
+        const WSC_Continue = 1;
+        const WSC_Break = 2;
+    }
+
+    #! Processes a single frame from the C++ recv_queue
+    private processServerFrame(hash<auto> frame) {
+        string frame_type = frame.type;
+
+        # Close — queue the close echo from the Qore side (after all data
+        # frames have been processed) so echo responses are delivered to the
+        # peer before the close frame.  The C++ side does NOT echo
+        # peer-initiated close frames — that's deferred to here.
+        if (frame_type == "close") {
+            sendClose(frame.code ?? WSCC_NormalClosure);
+            return;
+        }
+
+        # Ping/pong — C++ auto-pongs; just log
+        if (frame_type == "ping" || frame_type == "pong") {
+            return;
+        }
+
+        # Data frames (text/binary) — apply extensions and dispatch
+        if (frame_type == "text" || frame_type == "binary") {
+            int op = frame_type == "text" ? WSOP_Text : WSOP_Binary;
+
+            # Build WsMsgInfo for gotRawMessage / extension processing
+            hash<WsMsgInfo> h = cast<hash<WsMsgInfo>>({
+                "op": op,
+                "msg": frame.data,
+                "masked": True,
+                "fin": True,
+                "rsv1": frame.rsv1 ? True : False,
+                "rsv2": frame.rsv2 ? True : False,
+                "rsv3": frame.rsv3 ? True : False,
+            });
+
+            # Validate RSV bits against active extensions
+            if (!wsc.validateRsvBits(h.rsv1, h.rsv2, h.rsv3)) {
+                if (handler) {
+                    handler.logError("invalid RSV bits: rsv1=%y rsv2=%y rsv3=%y",
+                        h.rsv1, h.rsv2, h.rsv3);
+                }
+                sendClose(WSCC_ProtocolError);
                 return;
             }
 
-            int total_frame_size = header_size + payload_len;
-            if (recv_buffer.size() < total_frame_size) {
-                return;  # Need more data
+            # gotRawMessage callback — allows subclasses to inspect/filter raw frames
+            int state = wsc.gotRawMessage(h);
+            if (state == WSC_Continue) {
+                return;
+            }
+            if (state == WSC_Break) {
+                sendClose(WSCC_NormalClosure);
+                return;
             }
 
-            # Extract payload
-            binary payload;
-            if (payload_len > 0) {
-                payload = recv_buffer.substr(header_size, payload_len);
-
-                # Unmask if needed (client frames are always masked)
-                if (masked) {
-                    binary mask = recv_buffer.substr(header_size - 4, 4);
-                    payload = unmaskData(payload, mask);
-                }
-            }
-
-            # Remove processed frame from buffer
-            recv_buffer = recv_buffer.substr(total_frame_size);
-
-            # Handle frame based on opcode
-            handleFrame(opcode, payload, fin);
-        }
-    }
-
-    #! Unmasks WebSocket data
-    private binary unmaskData(binary data, binary mask) {
-        binary result = binary();
-        for (int i = 0; i < data.size(); ++i) {
-            result += binary(chr(data[i] ^ mask[i % 4]));
-        }
-        return result;
-    }
-
-    #! Handles a received frame
-    private handleFrame(int opcode, binary payload, bool fin) {
-        switch (opcode) {
-            case WS_OP_TEXT: {
-                string text = payload.toString("UTF-8");
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "text",
-                    "data": text,
-                });
-                break;
-            }
-
-            case WS_OP_BINARY: {
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "binary",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_PING: {
-                # Send pong with same payload
-                queueFrame(WS_OP_PONG, payload);
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "ping",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_PONG: {
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "pong",
-                    "data": payload,
-                });
-                break;
-            }
-
-            case WS_OP_CLOSE: {
-                if (payload.size() >= 2) {
-                    close_code = (payload[0] << 8) | payload[1];
-                    if (payload.size() > 2) {
-                        close_reason = payload.substr(2).toString("UTF-8");
-                    }
-                }
-
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "close",
-                    "code": close_code,
-                    "reason": close_reason,
-                });
-
-                if (!close_initiated) {
-                    # Echo the close frame
-                    queueFrame(WS_OP_CLOSE, payload);
-                }
-                state = STATE_CLOSING;
-                break;
-            }
-
-            case WS_OP_CONTINUATION: {
-                # Continuation frames - simplified handling
-                recv_channel.send(<WebSocketFrameInfo>{
-                    "type": "binary",
-                    "data": payload,
-                });
-                break;
-            }
-        }
-    }
-
-    #! Encodes a frame for sending
-    private binary encodeFrame(hash<auto> frame) {
-        int opcode = frame.opcode;
-        binary payload = frame.data ?? binary();
-
-        binary header = binary();
-        # FIN bit + opcode
-        header += binary(chr(0x80 | opcode));
-
-        # Payload length (server frames are not masked)
-        if (payload.size() < 126) {
-            header += binary(chr(payload.size()));
-        } else if (payload.size() < 65536) {
-            header += binary(chr(126));
-            header += binary(chr((payload.size() >> 8) & 0xFF));
-            header += binary(chr(payload.size() & 0xFF));
-        } else {
-            header += binary(chr(127));
-            for (int i = 7; i >= 0; --i) {
-                header += binary(chr((payload.size() >> (i * 8)) & 0xFF));
-            }
-        }
-
-        return header + payload;
-    }
-
-    #! Queues a frame for sending
-    private queueFrame(int opcode, auto data) {
-        binary payload;
-        if (data.typeCode() == NT_STRING) {
-            payload = binary(data);
-        } else if (data.typeCode() == NT_BINARY) {
-            payload = data;
-        } else if (data) {
-            payload = binary(string(data));
-        }
-
-        send_channel.send({
-            "opcode": opcode,
-            "data": payload,
-        });
-    }
-
-    #! Sends a text message
-    sendText(string text) {
-        queueFrame(WS_OP_TEXT, text);
-    }
-
-    #! Sends a binary message
-    sendBinary(binary data) {
-        queueFrame(WS_OP_BINARY, data);
-    }
-
-    #! Sends a ping frame
-    sendPing(*binary data) {
-        queueFrame(WS_OP_PING, data ?? binary());
-    }
-
-    #! Initiates close handshake
-    sendClose(int code = 1000, string reason = "") {
-        close_initiated = True;
-        close_code = code;
-        close_reason = reason;
-
-        binary payload = binary();
-        payload += binary(chr((code >> 8) & 0xFF));
-        payload += binary(code & 0xFF);
-        if (reason) {
-            payload += binary(reason);
-        }
-
-        queueFrame(WS_OP_CLOSE, payload);
-        state = STATE_CLOSING;
-    }
-
-    #! Gets the next received frame (non-blocking)
-    /** @return frame info hash or NOTHING if no frames available
-    */
-    *hash<WebSocketFrameInfo> getReceivedFrame() {
-        auto result = recv_channel.tryRecv();
-        return exists result ? result.value : NOTHING;
-    }
-
-    #! Returns True if there are received frames waiting
-    bool hasReceivedFrames() {
-        return !recv_channel.empty();
-    }
-
-    #! Returns the socket
-    Socket getSocket() {
-        return sock;
-    }
-
-    #! Returns the output of the operation
-    auto getOutput() {
-        return {
-            "sock": sock,
-            "state": state,
-            "close_code": close_code,
-            "close_reason": close_reason,
-            "error_info": error_info,
-        };
-    }
-
-    #! Returns the close code
-    int getCloseCode() {
-        return close_code;
-    }
-
-    #! Returns the close reason
-    string getCloseReason() {
-        return close_reason;
-    }
-
-    #! Aborts the operation
-    abort() {
-        state = STATE_CLOSED;
-        try {
-            sock.close();
-        } catch () {
-            # Ignore close errors
+            # Apply incoming extension transforms
+            auto msg = h.msg;
+            hash<auto> ext_ctx = {
+                "op": h.op,
+                "rsv1": h.rsv1,
+                "rsv2": h.rsv2,
+                "rsv3": h.rsv3,
+                "fin": True,
+            };
+            call_object_method(wsc, "applyIncomingExtensions", \msg, ext_ctx);
+            call_object_method(wsc, "validateIncomingMessage", \msg);
+            wsc.gotMessage(msg);
         }
     }
 }

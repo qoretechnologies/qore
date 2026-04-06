@@ -480,6 +480,23 @@ public:
     */
     DLLLOCAL void cleanupStream(int32_t stream_id);
 
+    //! Marks a stream as streaming for subsequent data delivery
+    /** Used by client multiplex to mark a CONNECT stream as streaming after
+        the response headers are received, so that subsequent DATA frames are
+        delivered as intermediate body data via hasStreamingData()/takeStreamData().
+
+        @param stream_id the HTTP/2 stream ID
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setStreamStreaming(int32_t stream_id);
+
+    //! Returns true if there's a CONNECT stream with headers ready and not yet dispatched
+    /** Lightweight check to avoid calling takeHeadersReadyStreamCopy() unconditionally,
+        which marks the stream as dispatched and would break non-CONNECT response processing.
+        @since %Qore 2.3
+    */
+    DLLLOCAL bool hasHeadersReadyConnectStream();
+
     //! Check if any streaming client streams have body data available
     /** Used by client multiplex to deliver intermediate body data for streaming streams.
         @param stream_id [out] set to the stream ID with data, if found
@@ -557,6 +574,21 @@ public:
         only accounts for data inside nghttp2's internal buffers, not our send_buffer.
     */
     DLLLOCAL bool hasPendingData() const { return send_offset < send_buffer.size(); }
+
+    //! Returns true if any stream has buffered body data waiting to be drained
+    /** Used by QoreSocketObject::hasPendingData() to trigger re-polling of H2
+        operations when stream data was received in a previous TCP read but not
+        yet drained by the poll operation (analogous to the SSL pending check).
+    */
+    DLLLOCAL bool hasStreamData() const {
+        std::lock_guard<std::recursive_mutex> lg(m);
+        for (auto& [sid, info] : streams) {
+            if (!info->body.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     //! Returns the remote flow control window size for a given stream
     /** Returns the number of bytes the server can send on this stream before
@@ -832,6 +864,9 @@ public:
                                             size_t length, int error,
                                             std::unique_ptr<char[]> buffer,
                                             ExceptionSink* xsink);
+
+    //! Returns the underlying socket fd for io_uring socket lookup
+    DLLLOCAL int getSocketFd() const;
 #endif
 };
 

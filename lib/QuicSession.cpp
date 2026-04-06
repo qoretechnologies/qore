@@ -232,11 +232,6 @@ QuicSession::~QuicSession() {
         }
         connect_stream_queues_.clear();
     }
-    // Close any remaining CONNECT stream notifiers
-    for (auto& [id, notifier] : connect_stream_notifiers_) {
-        notifier->markClosed();
-    }
-    connect_stream_notifiers_.clear();
 }
 
 // ===== Factory Methods =====
@@ -1546,6 +1541,13 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
         add_nv(":authority", 10, authority.c_str(), authority.size());
     }
 
+    // RFC 9220: if :protocol is in headers, include it as a pseudo-header
+    // (extended CONNECT for WebSocket, A2A, etc.)
+    auto proto_it = headers.find(":protocol");
+    if (proto_it != headers.end() && !proto_it->second.empty()) {
+        add_nv(":protocol", 9, proto_it->second.c_str(), proto_it->second.size());
+    }
+
     // Regular headers (same filtering as submitRequest)
     std::vector<std::string> lower_keys;
     lower_keys.reserve(headers.size());
@@ -1605,6 +1607,14 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     stream->method = method;
     stream->path = path;
     stream->state = QuicStreamState::Open;
+
+    // RFC 9220: mark extended CONNECT streams as connect tunnels
+    if (proto_it != headers.end() && !proto_it->second.empty()
+            && strcmp(method, "CONNECT") == 0) {
+        stream->is_connect = true;
+        stream->connect_protocol = proto_it->second;
+        stream->connect_tunnel_active = true;
+    }
 
     // Signal that there's data to write (headers)
     pending_write_.store(true, std::memory_order_release);
@@ -2225,31 +2235,6 @@ void QuicSession::deregisterConnectStreamQueue(int64_t stream_id) {
     }
 }
 
-std::shared_ptr<StreamNotifier> QuicSession::registerConnectStreamNotifier(int64_t stream_id) {
-    std::lock_guard<std::mutex> lg(connect_data_mutex_);
-    auto notifier = std::make_shared<StreamNotifier>();
-    connect_stream_notifiers_[stream_id] = notifier;
-    return notifier;
-}
-
-std::shared_ptr<StreamNotifier> QuicSession::getConnectStreamNotifier(int64_t stream_id) {
-    std::lock_guard<std::mutex> lg(connect_data_mutex_);
-    auto it = connect_stream_notifiers_.find(stream_id);
-    if (it != connect_stream_notifiers_.end()) {
-        return it->second;
-    }
-    return nullptr;
-}
-
-void QuicSession::deregisterConnectStreamNotifier(int64_t stream_id) {
-    std::lock_guard<std::mutex> lg(connect_data_mutex_);
-    auto it = connect_stream_notifiers_.find(stream_id);
-    if (it != connect_stream_notifiers_.end()) {
-        it->second->markClosed();
-        connect_stream_notifiers_.erase(it);
-    }
-}
-
 // ===== Stream Management =====
 // THREADING INVARIANT: getOrCreateStream() and markStreamComplete() must only be
 // called while holding mtx_. All current call paths satisfy this:
@@ -2286,17 +2271,12 @@ void QuicSession::markStreamComplete(int64_t stream_id) {
         if (it->second->dispatched) {
             printd(5, "QuicSession::markStreamComplete() stream_id=" QLLD " dispatched, keeping in map\n",
                 stream_id);
-            // Signal per-stream notifier first (targeted wakeup), fallback to session-wide CV
-            auto nit = stream_notifiers_.find(stream_id);
-            if (nit != stream_notifiers_.end()) {
-                nit->second->signal();
-            } else {
-                {
-                    std::lock_guard<std::mutex> lg(stream_data_mtx_);
-                    stream_data_gen_.fetch_add(1, std::memory_order_release);
-                }
-                stream_data_cv_.notify_all();
+            // Wake handler threads waiting on body data
+            {
+                std::lock_guard<std::mutex> lg(stream_data_mtx_);
+                stream_data_gen_.fetch_add(1, std::memory_order_release);
             }
+            stream_data_cv_.notify_all();
             return;
         }
 
@@ -2342,6 +2322,9 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                 result->connect_protocol = it->second->connect_protocol;
                 result->is_connect = it->second->is_connect;
                 result->connect_tunnel_active = true;
+                // Move body for incremental tunnel data delivery (client side)
+                result->body = std::move(it->second->body);
+                it->second->body.clear();
                 return result;
             }
             auto result = std::move(it->second);
@@ -2362,8 +2345,7 @@ void QuicSession::setHeadersOnlyMode(bool v) {
     headers_only_mode_ = v;
 }
 
-std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy(
-        std::shared_ptr<StreamNotifier>* notifier_out) {
+std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     for (auto& [id, info] : streams_) {
         if (info->headers_complete && !info->dispatched) {
@@ -2373,13 +2355,6 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy(
             // in the original for takeStreamData()/readQuicStreamDataBlock() to return.
             copy->body.clear();
             info->dispatched = true;
-
-            // Create per-stream notifier for targeted wakeup
-            auto notifier = std::make_shared<StreamNotifier>();
-            stream_notifiers_[id] = notifier;
-            if (notifier_out) {
-                *notifier_out = notifier;
-            }
 
             printd(5, "QuicSession::takeHeadersReadyStreamCopy() stream_id=" QLLD "\n", id);
             return copy;
@@ -2425,8 +2400,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
             stream_id);
         streams_.erase(it);
     }
-    stream_notifiers_.erase(stream_id);
-    // Deregister Queue, notifier, and release references — handler has exited
+    // Deregister Queue and release references — handler has exited
     {
         ExceptionSink xsink;
         std::lock_guard<std::mutex> lg(connect_data_mutex_);
@@ -2434,11 +2408,6 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         if (qit != connect_stream_queues_.end()) {
             qit->second->deref(&xsink);
             connect_stream_queues_.erase(qit);
-        }
-        auto nit = connect_stream_notifiers_.find(stream_id);
-        if (nit != connect_stream_notifiers_.end()) {
-            nit->second->markClosed();
-            connect_stream_notifiers_.erase(nit);
         }
         connect_stream_data_.erase(stream_id);
     }
@@ -2468,7 +2437,6 @@ int QuicSession::resetStream(int64_t stream_id) {
     if (it != streams_.end()) {
         streams_.erase(it);
     }
-    stream_notifiers_.erase(stream_id);
     // Clean up any buffered extended-CONNECT tunnel data for this stream
     {
         std::lock_guard<std::mutex> cg(connect_data_mutex_);
@@ -2477,14 +2445,7 @@ int QuicSession::resetStream(int64_t stream_id) {
     return result;
 }
 
-std::shared_ptr<StreamNotifier> QuicSession::getStreamNotifier(int64_t stream_id) const {
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
-    auto it = stream_notifiers_.find(stream_id);
-    if (it != stream_notifiers_.end()) {
-        return it->second;
-    }
-    return nullptr;
-}
+
 
 QoreValue QuicSession::takeStreamData(int64_t stream_id, bool& complete) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
@@ -2555,15 +2516,7 @@ bool QuicSession::isClosed() const {
 void QuicSession::markClosed() {
     closed_.store(true, std::memory_order_release);
 
-    // Wake all per-stream notifiers (targeted wakeup for dispatched stream handlers)
-    {
-        std::lock_guard<std::recursive_mutex> lock(mtx_);
-        for (auto& [id, notifier] : stream_notifiers_) {
-            notifier->markClosed();
-        }
-    }
-
-    // Wake all handler threads blocked in waitForStreamData() (session-wide fallback)
+    // Wake all handler threads blocked in waitForStreamData()
     stream_data_gen_.fetch_add(1, std::memory_order_release);
     {
         std::lock_guard<std::mutex> lg(stream_data_mtx_);
@@ -2862,11 +2815,6 @@ int QuicSession::streamCloseCallback(ngtcp2_conn* /* conn */, uint32_t flags,
                     " pushed sentinel to Queue on stream close\n", stream_id);
             }
             // Close and clean up the notifier so the watcher thread exits
-            auto nit = session->connect_stream_notifiers_.find(stream_id);
-            if (nit != session->connect_stream_notifiers_.end()) {
-                nit->second->markClosed();
-                session->connect_stream_notifiers_.erase(nit);
-            }
             // Clean up fallback buffer — only erase if empty (data may still
             // be needed by readConnectStreamData callers)
             auto cit = session->connect_stream_data_.find(stream_id);
@@ -3489,8 +3437,8 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         printd(5, "h3RecvDataCallback() stream_id=" QLLD " datalen=%d body_total=%d\n",
             stream_id, (int)datalen, (int)(stream->body.size() + datalen));
 
-        // RFC 9220: Extended CONNECT tunnel — deliver data to handler
-        if (stream->is_connect) {
+        // RFC 9220: Extended CONNECT tunnel — deliver data to handler (server side)
+        if (stream->is_connect && session->is_server_) {
             {
                 std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
                 auto qit = session->connect_stream_queues_.find(stream_id);
@@ -3511,14 +3459,34 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                         " datalen=%d buffered (no Queue registered)\n",
                         stream_id, (int)datalen);
                 }
-                // Signal the per-stream notifier (pure C++, safe from ngtcp2 callbacks).
-                // A background watcher thread in the WebSocket handler blocks on
-                // StreamNotifier::wait() and calls wsc.notifyIo() when signaled.
-                auto nit = session->connect_stream_notifiers_.find(stream_id);
-                if (nit != session->connect_stream_notifiers_.end()) {
-                    nit->second->signal();
-                }
+                // Stream data is dispatched by the I/O controller after this
+                // continuePoll cycle completes (via on_exit stream queue check
+                // in Http3ServerPollOperation). No explicit wake needed — epoll
+                // POLLIN on the UDP socket handles inter-cycle data.
             }
+            // Extend flow control
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
+            return 0;
+        }
+
+        // Client-side CONNECT tunnel: deliver each DATA chunk to the
+        // connect_stream_data_ buffer so readConnectStreamData() (used by
+        // the low-level readHttp3StreamData API) can retrieve it.
+        // Also push to completed_streams_ for the async I/O pipeline
+        // (ChannelAction → Channel → readData()).
+        if (stream->is_connect && !session->is_server_) {
+            {
+                std::lock_guard<std::mutex> lg(session->connect_data_mutex_);
+                auto& buf = session->connect_stream_data_[stream_id];
+                buf.insert(buf.end(), data, data + datalen);
+            }
+            stream->body.insert(stream->body.end(), data, data + datalen);
+            // Mark as "completed" for incremental delivery — getOutput() builds
+            // the response hash with the accumulated body and resets it.
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
             // Extend flow control
             ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
                                                   static_cast<uint64_t>(datalen));
@@ -3534,17 +3502,12 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
         // when the handler is slow.
         if (stream->dispatched) {
             stream->body.insert(stream->body.end(), data, data + datalen);
-            // Signal per-stream notifier first (targeted wakeup), fallback to session-wide CV
-            auto nit = session->stream_notifiers_.find(stream_id);
-            if (nit != session->stream_notifiers_.end()) {
-                nit->second->signal();
-            } else {
-                {
-                    std::lock_guard<std::mutex> lg(session->stream_data_mtx_);
-                    session->stream_data_gen_.fetch_add(1, std::memory_order_release);
-                }
-                session->stream_data_cv_.notify_all();
+            // Wake session-wide CV for handler threads waiting on body data
+            {
+                std::lock_guard<std::mutex> lg(session->stream_data_mtx_);
+                session->stream_data_gen_.fetch_add(1, std::memory_order_release);
             }
+            session->stream_data_cv_.notify_all();
             return 0;
         }
 
@@ -3621,12 +3584,6 @@ int QuicSession::h3EndStreamCallback(nghttp3_conn* /* conn */, int64_t stream_id
                 } else {
                     printd(5, "QuicSession::h3EndStreamCallback() stream_id=" QLLD
                         " CONNECT tunnel END_STREAM — no Queue registered\n", stream_id);
-                }
-                // Signal + close the notifier so the watcher thread exits
-                auto nit = session->connect_stream_notifiers_.find(stream_id);
-                if (nit != session->connect_stream_notifiers_.end()) {
-                    nit->second->markClosed();
-                    session->connect_stream_notifiers_.erase(nit);
                 }
             }
             return 0;

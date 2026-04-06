@@ -206,6 +206,12 @@ struct qore_socketsource_private {
     }
 };
 
+//! Returns true if the calling thread is an async I/O controller thread
+/** Used by OptionalNonBlockingHelper to skip unnecessary fd flag toggling
+    on the I/O thread where sockets are already non-blocking.
+*/
+DLLLOCAL bool qore_on_async_io_thread();
+
 class OptionalNonBlockingHelper {
 public:
     qore_socket_private& sock;
@@ -214,6 +220,21 @@ public:
 
     DLLLOCAL OptionalNonBlockingHelper(qore_socket_private& s, bool n_set, ExceptionSink* xs);
     DLLLOCAL ~OptionalNonBlockingHelper();
+};
+
+//! RAII helper that temporarily restores blocking mode on a non-blocking socket
+/** Sockets are born non-blocking; this helper sets blocking mode in the constructor
+    and restores non-blocking mode in the destructor.  Use for synchronous code paths
+    that need blocking I/O (e.g. legacy APIs, simple blocking reads).
+*/
+class SyncBlockingHelper {
+public:
+    qore_socket_private& sock;
+    ExceptionSink* xsink;
+    bool set;
+
+    DLLLOCAL SyncBlockingHelper(qore_socket_private& s, ExceptionSink* xs);
+    DLLLOCAL ~SyncBlockingHelper();
 };
 
 class PrivateQoreSocketTimeoutBase {
@@ -2084,9 +2105,8 @@ struct qore_socket_private {
 
     DLLLOCAL int set_non_blocking(bool non_blocking, ExceptionSink* xsink) {
         assert(xsink);
-        // ignore call when socket already closed
+        // ignore call when socket already closed (e.g. during shutdown cleanup)
         if (sock == QORE_INVALID_SOCKET) {
-            assert(*xsink);
             return -1;
         }
 

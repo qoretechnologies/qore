@@ -28,13 +28,6 @@
 
 %modern
 
-# Set up SIGUSR1 handler to dump thread stacks for debugging
-@debug {
-    set_signal_handler(SIGUSR1, sub (int sig) {
-        printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
-            get_all_thread_call_stacks());
-    });
-}
 
 %requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
@@ -336,10 +329,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # HTTP/3 callback ordering (stream removal after callback)
         addTestCase("H3 callback ordering", \testH3CallbackOrdering());
 
+        # Non-blocking deferred submit test
+        addTestCase("submitAsyncNonBlocking deferred path", \testSubmitAsyncNonBlockingDeferred());
+
         # Stale connection recovery tests
         addTestCase("H2 stale connection recovery", \testH2StaleConnectionRecovery());
         addTestCase("H1 stale connection recovery", \testH1StaleConnectionRecovery());
         addTestCase("H3 stale connection recovery", \testH3StaleConnectionRecovery());
+
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("%Y\n", get_all_thread_call_stacks());
+            });
+        }
 
         set_return_value(main());
     }
@@ -954,22 +956,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         assertTrue(conn.waitForReady(30s), "connection should become ready");
 
-        Counter counter(1);
-        *hash<auto> callback_response;
-        *hash<auto> callback_error;
+        hash<auto> result = stream.submitAsync("GET", "/simple");
+        Future f = result.future;
+        hash<auto> resp = f.get(30s);
 
-        stream.submitAsync("GET", "/simple", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                callback_response = resp;
-                callback_error = err;
-                counter.dec();
-            });
-
-        counter.waitForZero(30s);
-
-        assertEq(0, counter.getCount(), "async callback should complete");
-        assertNothing(callback_error, "async callback should not have error");
-        assertEq(200, callback_response.status_code, "async callback status code");
+        assertEq(200, resp.status_code, "async Future status code");
+        assertTrue(resp.body.val(), "async Future should have body");
     }
 
     # ---- Controller Mode Tests ----
@@ -1073,22 +1065,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             mgr.closeAll();
         }
 
-        Counter counter(1);
-        *hash<auto> callback_response;
-        *hash<auto> callback_error;
+        # Use Future-based API instead of callback
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> result = stream.submitAsync("GET", "/simple");
+        hash<auto> resp = result.future.get(30s);
 
-        HttpClientIo::HttpClientStreamHandle stream = mgr.submitRequestAsync(
-            mSslUrl, "GET", "/simple", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                callback_response = resp;
-                callback_error = err;
-                counter.dec();
-            });
-
-        counter.waitForZero(30s);
-
-        assertNothing(callback_error, "controller callback should not have error");
-        assertEq(200, callback_response.status_code, "controller callback status code");
+        assertEq(200, resp.status_code, "controller Future status code");
     }
 
     testControllerModeTimeout() {
@@ -1216,6 +1198,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         stream = mgr.acquireStream(mQuicUrl);
         response = stream.request("GET", "/error/404");
         assertEq(404, response.status_code, "H3 error status code");
+
+        mgr.closeAll();
     }
 
     testH3EndToEndConcurrent() {
@@ -1393,20 +1377,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         # Submit async request to slow handler (takes 2s)
-        Counter counter(1);
-        *hash<auto> callback_response;
-        *hash<auto> callback_error;
+        stream.submitAsync("GET", "/slow/2000");
 
-        stream.submitAsync("GET", "/slow/2000", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                callback_response = resp;
-                callback_error = err;
-                counter.dec();
-            });
-
-        # Cancel immediately before response arrives — this synchronously fires
-        # the cancellation callback via cancelRequest(), which calls handleResponse()
-        # with an error, transitioning state from Cancelled to Error
+        # Cancel immediately before response arrives — the Future will be
+        # rejected with HTTP3-CANCELLED via the PromiseAction
         stream.cancel();
 
         # Verify state — stream is done (either Cancelled or Error depending on
@@ -1453,11 +1427,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         HttpClientIo::HttpClientConnection conn = stream1.getConnection();
         assertTrue(conn.waitForReady(30s), "connection should become ready");
 
-        Counter counter(1);
-        stream1.submitAsync("GET", "/slow/3000", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                counter.dec();
-            });
+        hash<auto> result = stream1.submitAsync("GET", "/slow/3000");
 
         # Now the single connection has 1 active stream (at its max of 1),
         # and we're at the connection limit (1). Acquiring another stream should fail.
@@ -1465,7 +1435,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             "should throw capacity error when all connections at stream limit");
 
         # Wait for the slow request to complete (controller drives I/O)
-        counter.waitForZero(10s);
+        result.future.get(10s);
     }
 
     testCleanupIdleWithConnections() {
@@ -1841,25 +1811,23 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         assertTrue(conn.waitForReady(30s), "connection should become ready");
 
         # Submit async request to slow handler
-        *hash<auto> callback_error;
-        bool callback_fired = False;
+        hash<auto> result = stream.submitAsync("GET", "/slow/5000");
 
-        stream.submitAsync("GET", "/slow/5000", NOTHING, NOTHING,
-            sub (hash<auto> resp, *hash<auto> err) {
-                callback_error = err;
-                callback_fired = True;
-            });
-
-        # Cancel — this synchronously invokes cancelRequest() on the poll operation,
-        # which fires the callback with a cancellation error
+        # Cancel — the PromiseAction's executeError fires with cancellation error
         stream.cancel();
 
-        # Verify the callback was invoked synchronously with a cancellation error
-        assertTrue(callback_fired, "cancellation callback should have been invoked");
-        assertTrue(exists callback_error, "callback should have received an error");
-        assertTrue(callback_error.err == "HTTP2-CANCELLED"
-            || callback_error.err == "HTTPCLIENT-CANCELLED",
-            sprintf("expected cancellation error, got: %y", callback_error.err));
+        # Verify the Future was rejected with a cancellation error
+        assertTrue(result.future.isDone(), "cancelled Future should be done");
+        assertTrue(result.future.isError(), "cancelled Future should be error");
+        try {
+            result.future.get(0);
+            assertTrue(False, "should have thrown");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "HTTP2-CANCELLED"
+                || ex.err == "HTTP3-CANCELLED"
+                || ex.err == "HTTPCLIENT-CANCELLED",
+                sprintf("expected cancellation error, got: %y", ex.err));
+        }
     }
 
     # ---- Connection Draining Test ----
@@ -2174,6 +2142,25 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             assertEq(200, resp.status_code,
                 sprintf("iteration %d: H3 response should be 200", i));
         }
+    }
+
+    testSubmitAsyncNonBlockingDeferred() {
+        # Test that submitAsyncNonBlocking works when the connection isn't ready yet
+        # (the deferred callWhenReady path)
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> result = stream.submitAsync("GET", "/simple");
+        Future f = result.future;
+
+        hash<auto> resp = f.get(15s);
+        assertTrue(exists resp, "should have response");
+        assertEq(200, resp.status_code, "async Future request should return 200");
     }
 
     #! Helper: creates a dedicated test server with handlers and an SSL listener

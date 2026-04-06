@@ -216,6 +216,9 @@ public class MyTestClass inherits QUnit::DependencyInjectedTest {
 #! the main namespace for all public definitions in the %QUnit module
 public namespace QUnit {
 
+#! Whether assertion timestamps are enabled (-T flag or QUNIT_TIMESTAMPS env var)
+our bool timestamps_enabled;
+
 #! An abstract class representing test result interface
 public class AbstractTestResult {
     public {
@@ -687,6 +690,7 @@ public class TestReporter {
             "list"    : "l,list",
             "include" : "include=s@",
             "exclude" : "exclude=s@",
+            "timestamps" : "T,timestamps",
         };
 
         #! Environment variable for whitelist patterns (comma-separated)
@@ -722,9 +726,11 @@ public class TestReporter {
         printOption("-l,--list", "list all test cases and exit", offset);
         printOption("   --include=PAT", "only run tests matching PAT (can repeat)", offset);
         printOption("   --exclude=PAT", "skip tests matching PAT (can repeat)", offset);
+        printOption("-T,--timestamps", "prefix assertions with timestamps (with -vv)", offset);
         print("\n    Environment variables:\n");
         printOption("QUNIT_INCLUDE", "comma-separated whitelist patterns", offset);
         printOption("QUNIT_EXCLUDE", "comma-separated blacklist patterns", offset);
+        printOption("QUNIT_TIMESTAMPS", "enable timestamps (same as -T)", offset);
         print("\n    Patterns support glob-style wildcards: * (any chars), ? (single char)\n");
     }
 
@@ -734,8 +740,14 @@ public class TestReporter {
     }
 
     private processOptions(reference<list<string>> p_argv) {
-        if (m_options.help)
+        if (m_options.help) {
             usage();
+        }
+
+        # Enable timestamps from -T flag or QUNIT_TIMESTAMPS env var
+        if (m_options.timestamps || getenv("QUNIT_TIMESTAMPS")) {
+            QUnit::timestamps_enabled = True;
+        }
 
         if (m_options.verbose && m_options.quiet && m_options.format) {
             printf("Please only select one format type\n");
@@ -1833,8 +1845,10 @@ assertLe(5, function_that_should_rturn_a_value_less_than_or_equal_to_five());
     private assertionOk(*string name) {
         get_thread_data("tc").incAssertionsOk();
         ++num_asserts_ok;
-        if (m_options.verbose > 1)
-            printf("+ OK: %y assertion %s\n", m_name, Test::getAssertionName(name));
+        if (m_options.verbose > 1) {
+            printf("%s+ OK: %y assertion %s\n", Test::getTimestampPrefix(),
+                m_name, Test::getAssertionName(name));
+        }
     }
 
     #! Tests a boolean value
@@ -2280,6 +2294,16 @@ fail("Unexpected code executed");
 
         printSummary();
         return errors();
+    }
+
+    #! returns a timestamp prefix for assertion output if enabled
+    /** Enabled by setting the \c QUNIT_TIMESTAMPS environment variable or
+        passing the \c -T / \c --timestamps command-line option.
+    */
+    static string getTimestampPrefix() {
+        return QUnit::timestamps_enabled
+            ? format_date("YYYY-MM-DD HH:mm:SS.xx", now_us()) + " "
+            : "";
     }
 
     #! returns the assertion name for display purposes

@@ -119,12 +119,12 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
     asyncPollStateTest() {
         HttpRequestPollOperation poller("http://127.0.0.1:" + port, "GET", "/api/state");
 
-        # check initial state
+        # check initial state — PollPipeline reports step type ("delegate")
         string initial_state = poller.getState();
-        assertTrue(initial_state.find("send-request") >= 0, "initial state contains 'send-request'");
+        assertTrue(initial_state.find("delegate") >= 0, "initial state contains 'delegate'");
 
         drivePoll(poller);
-        assertEq("complete", poller.getState());
+        assertEq("completed", poller.getState());
     }
 
     abstractConnectionApiTest() {

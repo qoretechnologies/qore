@@ -111,6 +111,21 @@ public:
         return fd();
     }
 
+    //! No-op for event notifiers (they don't represent closeable connections)
+    DLLLOCAL void closeIo(ExceptionSink* /* xsink */) override {}
+
+    //! Deterministically closes the underlying fd/pipe
+    /** Called from the Qore-level destructor to release the OS resource
+        immediately, even if C++ code (e.g., EventNotifierAction) still holds
+        a reference to this object.  Subsequent notify()/acknowledge()/fd()
+        calls become no-ops or return -1.
+
+        This is safe because the only consumer of the fd is the event loop,
+        and by the time the Qore object is destroyed the fd has already been
+        removed from the event loop.
+    */
+    DLLLOCAL void closeFd();
+
     //! Signals the notifier (thread-safe)
     /** This method can be called from any thread to wake up the event loop.
         Multiple calls to notify() before acknowledge() may be coalesced

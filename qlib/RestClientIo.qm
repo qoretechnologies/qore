@@ -24,10 +24,14 @@
 
 %modern
 
+%allow-weak-references
+
 %requires Logger
-%requires RestClient >= 2.4
+%requires(reexport) RestClient >= 2.4
 %requires(reexport) HttpClientIo
 %requires(reexport) RestSchemaValidator >= 1.0
+%requires Swagger >= 2.0
+%requires OpenApi3 >= 1.0
 %requires Mime >= 1.7
 
 %try-module yaml >= 0.5
@@ -156,6 +160,9 @@ resp = rc.restGet("/api/data");
       HttpClientConnectionManager)
     - Constructor now accepts \c validator option for custom REST schema validators
     - Constructor now accepts \c allow_any_response, \c content_encoding, \c default_path options
+
+    @subsection restclientio_v1_2 Version 1.2
+    - added \c RestClientIoPingPollOperation class for async REST connection pings via startPollConnect()
 
     @subsection restclientio_v1_1 Version 1.1
     - OAuth2 support: \c client_credentials and \c password grant types
@@ -611,8 +618,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 mgr = buildConnectionManager(opts);
             }
 
-            # Acquire initial OAuth2 token if configured
-            checkLogin();
+            # Acquire initial OAuth2 token if configured; skip_login defers to the first
+            # request (for non-blocking ping operations that use the existing token as-is)
+            if (!opts.skip_login) {
+                checkLogin();
+            }
         }
 
         #! Copying is not supported
@@ -827,6 +837,210 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 };
 
             return new RestFuture(raw_future, stream, builder);
+        }
+
+        #! Submits a non-blocking REST request and returns a Future
+        /** Prepares the request (OAuth2 token, serialization, auth headers) and submits it
+            via the multiplexed connection manager. The result is delivered via the returned
+            Future — resolved by a C++ PromiseAction on the I/O thread (no user code on I/O
+            thread).
+
+            @note This method may block for OAuth2 token refresh unless
+            \a skip_ensure_token is \c True.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr request headers (optional)
+            @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
+
+            @return a Future that resolves to the response hash
+
+            @since %RestClientIo 1.1
+        */
+        Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
+                *bool skip_ensure_token) {
+            if (!skip_ensure_token) {
+                ensureToken();
+            }
+
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+            log(LoggerLevel::DEBUG, "restDoRequestAsync() %s %s%s", method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            hash<auto> result = stream.submitAsync(method, path, hdr,
+                prepared.serialized_body);
+            return result.future;
+        }
+
+        #! Submits an async REST request and signals an EventNotifier on completion
+        /** Like restDoRequestAsync() but uses CompositeAction (Promise + EventNotifier) so
+            the I/O thread signals @a notifier when the response arrives.  The caller's
+            continuePoll() can then call Future::get() non-blockingly — no background thread.
+
+            The caller is responsible for ensuring the token is fresh before calling
+            (check requiresRefresh(), call startOAuth2PollRefreshToken() if needed).
+
+            @param method HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param hdr request headers (optional)
+            @param notifier EventNotifier to signal on response completion
+
+            @return hash with "future" (Future) and "stream_id" (int)
+
+            @since %RestClientIo 1.2
+        */
+        hash<auto> restDoRequestAsyncWithNotifier(string method, string path, auto body,
+                *hash<auto> hdr, EventNotifier notifier) {
+            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+
+            log(LoggerLevel::DEBUG, "restDoRequestAsyncWithNotifier() %s %s%s", method, url, path);
+
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            return stream.submitAsyncWithNotifier(method, path, hdr,
+                prepared.serialized_body, notifier);
+        }
+
+        #! Submits a raw async request with a pre-serialized body and signals an EventNotifier
+        /** Like restDoRequestAsyncWithNotifier() but skips prepareRequest() — the body
+            and headers are sent as-is.  Used for OAuth2 token requests where the body
+            is already form-urlencoded.
+
+            @param method HTTP method
+            @param path request path
+            @param hdr request headers
+            @param body pre-serialized request body
+            @param notifier EventNotifier to signal on response completion
+
+            @return hash with "future" (Future) and "stream_id" (int)
+
+            @since %RestClientIo 1.2
+        */
+        hash<auto> doRequestRawAsyncWithNotifier(string method, string path, *hash<auto> hdr,
+                *data body, EventNotifier notifier) {
+            HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+            return stream.submitAsyncWithNotifier(method, path, hdr, body, notifier);
+        }
+
+        #! Returns True if the current OAuth2 token needs to be refreshed
+        /** @return True if the token exists, has a refresh token, and is within the expiry window
+
+            @since %RestClientIo 1.2
+        */
+        bool tokenRequiresRefresh() {
+            return requiresRefresh();
+        }
+
+        #! Starts an async OAuth2 token refresh poll operation
+        /** Returns an AbstractPollOperation that drives an HTTP POST to the token endpoint
+            using socket-level polling (no background threads, no blocking I/O on the I/O thread).
+            When the poll operation completes, call updateOAuth2Token() with the parsed response.
+
+            @return an AbstractPollOperation for the token refresh HTTP request
+
+            @since %RestClientIo 1.2
+        */
+        hash<auto> startOAuth2PollRefreshToken() {
+            # Read OAuth2 config under lock — mirrors doOAuth2TokenRequest() setup
+            string token_url_str;
+            hash<auto> login;
+            bool use_basic_auth;
+            bool auth_secret_only;
+            bool has_alt_token_url;
+            {
+                AutoReadLock al(config_lock);
+                token_url_str = oauth2_alt_token_url ?? oauth2_token_url;
+                has_alt_token_url = oauth2_alt_token_url.val();
+                use_basic_auth = oauth2_token_use_basic_auth;
+                auth_secret_only = oauth2_token_auth_secret_only;
+                login = refresh_token.val()
+                    ? getOAuth2RefreshInfo()
+                    : getOAuth2LoginInfo(oauth2_grant_type);
+            }
+
+            # Determine base URL and request path (same logic as doOAuth2TokenRequest)
+            string base_url_str;
+            string req_path;
+            if (token_url_str =~ /^https?:\/\//) {
+                hash<UrlInfo> ui = parse_url(token_url_str);
+                base_url_str = sprintf("%s://%s", ui.protocol, ui.host);
+                if (ui.port) {
+                    base_url_str += sprintf(":%d", ui.port);
+                }
+                req_path = ui.path ?? "/";
+            } else {
+                base_url_str = url;
+                req_path = token_url_str;
+            }
+
+            # Build request headers — same logic as doOAuth2TokenRequest()
+            hash<auto> auth_hdr = {
+                "accept": MimeTypeFormUrlEncoded + "," + MimeTypeJson,
+                "content-type": MimeTypeFormUrlEncoded,
+            };
+            if (!has_alt_token_url) {
+                if (use_basic_auth && login.client_id.val() && login.client_secret.val()) {
+                    auth_hdr."authorization" = "Basic "
+                        + make_base64_string(login.client_id + ":" + login.client_secret);
+                    login -= ("client_id", "client_secret");
+                } else if (auth_secret_only && login.client_secret.val()) {
+                    auth_hdr."authorization" = "Basic "
+                        + make_base64_string(":" + login.client_secret);
+                    login -= ("client_id", "client_secret");
+                }
+            }
+            if (has_alt_token_url && alt_token_signer && alt_token_signer_header) {
+                string body_str = mime_get_form_urlencoded_string(login);
+                auth_hdr{alt_token_signer_header} = alt_token_signer({
+                    "method": "POST", "path": req_path,
+                    "body": body_str, "hdr": auth_hdr,
+                });
+            }
+
+            # Serialize body as form-urlencoded
+            string body_str = mime_get_form_urlencoded_string(login);
+
+            # Return a RestClientIo pointing at the token endpoint plus the request
+            # parameters. The caller starts the connection async and submits the
+            # request once the connection is ready — fully event-driven.
+            return {
+                "rcio": new RestClientIo({"url": base_url_str}),
+                "path": req_path,
+                "headers": auth_hdr,
+                "body": body_str,
+            };
+        }
+
+        #! Updates the stored OAuth2 token from a parsed token response
+        /** Called after startOAuth2PollRefreshToken() completes to store the new token.
+
+            @param h the parsed OAuth2 token response hash
+
+            @since %RestClientIo 1.2
+        */
+        updateOAuth2Token(hash<auto> h) {
+            gotOAuth2LoginInfo(h);
+        }
+
+        #! Initiates the underlying HTTP connection asynchronously
+        /** Ensures a connection to the configured URL is being established without
+            blocking.  Returns an EventNotifier that fires when the connection becomes
+            ready (or closes due to an error).  Returns NOTHING if the connection is
+            already ready.
+
+            Use this to pre-warm the connection concurrently with other async work
+            (e.g., an OAuth2 token refresh) so that \c restDoRequestAsyncWithNotifier()
+            can submit the request immediately after both complete.
+
+            @return an EventNotifier to poll for connection readiness, or NOTHING if
+            the connection is already ready
+
+            @since %RestClientIo 1.2
+        */
+        *EventNotifier startConnectionAsync() {
+            return mgr.ensureConnectionAsync(url);
         }
 
         #! Sends a signed REST request
@@ -1870,6 +2084,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.proxy) {
                 mgr_opts.proxy_url = opts.proxy;
             }
+            if (exists opts.max_redirects) {
+                mgr_opts.max_redirects = opts.max_redirects;
+            }
+            if (opts.redirect_passthru) {
+                mgr_opts.redirect_passthru = opts.redirect_passthru.toBool();
+            }
+            if (exists opts.enable_cookies && !opts.enable_cookies) {
+                mgr_opts.enable_cookies = False;
+            }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
         }
     }
@@ -1982,3 +2205,417 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         }
     }
 }
+
+#! REST ping poll operation using RestClientIo for native HTTP/2 and HTTP/3 support
+/** Pure async state machine — no background threads.  Uses CompositeAction
+    (PromiseAction + EventNotifierAction) so the C++ I/O thread signals the
+    EventNotifier when the HTTP response arrives, making Future::get() non-blocking
+    in continuePoll().
+
+    State machine:
+    - \c oauth2-refresh: refreshing the OAuth2 token via startOAuth2PollRefreshToken()
+    - \c io-waiting: HTTP ping submitted; polling EventNotifier for completion
+    - \c complete: ping finished
+
+    OAuth2 token refresh is attempted once before the first request (if the token is
+    in the expiry window) and once after a 401 response (if not already retried).
+
+    @since %RestClientIo 1.2
+*/
+public namespace RestClientIo {
+
+public class RestClientIoPingPollOperation inherits Qore::AbstractPollOperation {
+    public {
+        #! Waiting for the OAuth2 token endpoint connection to become ready
+        const SPS_OAUTH2_CONNECTING = "oauth2-connecting";
+        #! Waiting for the OAuth2 token refresh response via EventNotifier
+        const SPS_OAUTH2_REFRESH = "oauth2-refresh";
+        #! Waiting for the underlying TCP/TLS connection to become ready
+        const SPS_CONNECTING = "connecting";
+        #! Waiting for HTTP ping response via EventNotifier
+        const SPS_IO_WAITING = "io-waiting";
+        #! Complete
+        const SPS_COMPLETE = "complete";
+    }
+
+    private {
+        #! REST connection (weak reference)
+        RestClient::RestConnection conn;
+
+        #! Ping options
+        hash<auto> ping_opts;
+
+        #! Logger
+        *Logger::LoggerInterface logger;
+
+        #! EventNotifier — signaled by C++ CompositeAction (PromiseAction + EventNotifierAction)
+        /** The I/O thread resolves the Future AND signals this notifier atomically.
+            continuePoll() polls this FD and calls Future::get() non-blockingly when it fires.
+        */
+        EventNotifier notifier();
+
+        #! Loaded schema validator
+        *RestSchemaValidator::AbstractRestSchemaValidator schema_validator;
+
+        #! RestClientIo instance (kept alive for the connection manager + stream)
+        RestClientIo rcio;
+
+        #! Current state
+        string state;
+
+        #! Goal reached
+        bool goal_reached = False;
+
+        #! Raw HTTP response Future (resolved by C++ PromiseAction on I/O thread)
+        *Future pending_future;
+
+        #! EventNotifier for OAuth2 token refresh (signaled when response arrives)
+        *EventNotifier oauth2_notifier;
+
+        #! EventNotifier for OAuth2 endpoint connection readiness
+        *EventNotifier oauth2_conn_notifier;
+
+        #! True after the first continuePoll() in SPS_OAUTH2_CONNECTING
+        bool waiting_for_oauth2_conn = False;
+
+        #! Future for OAuth2 token refresh response
+        *Future oauth2_future;
+
+        #! RestClientIo for OAuth2 token endpoint (kept alive for connection lifetime)
+        *RestClientIo oauth2_rcio;
+
+        #! Pending OAuth2 request parameters (set in doStartOAuth2Refresh, used after connection ready)
+        *hash<auto> oauth2_req;
+
+        #! Whether we have already attempted an OAuth2 refresh + retry after a 401
+        bool auth_retried = False;
+
+        #! EventNotifier for connection-readiness polling in SPS_CONNECTING state
+        *EventNotifier connection_ready_notifier;
+
+        #! True after the first continuePoll() call in SPS_CONNECTING (poll info returned)
+        bool waiting_for_connection = False;
+
+        #! HTTP method for the ping request
+        string ping_method;
+
+        #! HTTP path for the ping request
+        string ping_path;
+
+        #! HTTP body for the ping request
+        auto ping_body;
+
+        #! HTTP headers for the ping request
+        *hash<auto> ping_headers;
+    }
+
+    #! Creates the poll operation and submits the first ping (or queues a token refresh)
+    /** @param conn the REST connection to ping
+        @param ping_opts ping options (ping_method, ping_path, ping_body, ping_headers,
+            openapi3, swagger, oauth2_auto_refresh, etc.)
+        @param logger optional logger
+    */
+    constructor(RestClient::RestConnection conn, hash<auto> ping_opts, *Logger::LoggerInterface logger) {
+        self.conn := conn;
+        self.ping_opts = ping_opts;
+        self.logger = logger;
+
+        ping_method = ping_opts.ping_method ?? "GET";
+        ping_path = ping_opts.ping_path ?? "/";
+        ping_body = ping_method != "GET" ? ping_opts.ping_body : NOTHING;
+        ping_headers = ping_opts.ping_headers;
+
+        # Load schema synchronously in the constructor (safe: constructor runs on a user
+        # thread, not the I/O event thread).
+        if (ping_opts.openapi3) {
+            schema_validator = OpenApi3Loader::fromUrl(ping_opts.openapi3);
+        } else if (ping_opts.swagger) {
+            schema_validator = SwaggerLoader::fromUrl(ping_opts.swagger);
+        }
+
+        # Create RestClientIo with skip_login to avoid blocking OAuth2 I/O in the
+        # constructor — token refresh is handled by the state machine if needed.
+        rcio = cast<RestClientIo>(conn.getAsync(False, {"skip_login": True}));
+
+        if (schema_validator) {
+            rcio.setValidator(schema_validator);
+        }
+
+        # Update real_url from the RestClientIo's actual URL (fixes auto_url placeholders)
+        conn.real_url = rcio.getUrl().toString();
+
+        # If the token is in the expiry window, refresh it before the first request
+        if (rcio.tokenRequiresRefresh()) {
+            doStartOAuth2Refresh();
+            # Pre-warm the connection concurrently with the OAuth2 refresh — discard the
+            # notifier here; doStartConnecting() will get a fresh one after the refresh
+            rcio.startConnectionAsync();
+        } else {
+            # Start connecting asynchronously — never block in the constructor.
+            # doSubmitPing() is called by continuePoll() once the connection is ready.
+            doStartConnecting();
+        }
+    }
+
+    string getGoal() {
+        return "ping";
+    }
+
+    string getState() {
+        return state;
+    }
+
+    bool goalReached() {
+        return goal_reached;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        while (True) {
+            if (state == SPS_OAUTH2_CONNECTING) {
+                if (!waiting_for_oauth2_conn) {
+                    # First call — return poll info for the connection notifier
+                    waiting_for_oauth2_conn = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": oauth2_conn_notifier,
+                    };
+                }
+                # Notifier fired — connection ready or closed
+                oauth2_conn_notifier.acknowledge();
+                delete oauth2_conn_notifier;
+                waiting_for_oauth2_conn = False;
+                # Re-check: start a new connection if closed/failed
+                oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+                if (oauth2_conn_notifier) {
+                    # Still not ready — retry with new notifier
+                    continue;
+                }
+                # Connection ready — submit the OAuth2 token request
+                doSubmitOAuth2Request();
+                # Fall through to SPS_OAUTH2_REFRESH below
+            }
+
+            if (state == SPS_OAUTH2_REFRESH) {
+                if (!oauth2_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": oauth2_notifier,
+                    };
+                }
+                # Notifier fired — acknowledge and retrieve the OAuth2 response
+                oauth2_notifier.acknowledge();
+                processOAuth2RefreshResult();
+                # Start connecting (or submit ping immediately if already connected)
+                doStartConnecting();
+                # Fall through to SPS_CONNECTING or SPS_IO_WAITING handling below
+            }
+
+            if (state == SPS_CONNECTING) {
+                if (!waiting_for_connection) {
+                    # First call in SPS_CONNECTING — return poll info to the PollingConnectionMonitor
+                    waiting_for_connection = True;
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": connection_ready_notifier,
+                    };
+                }
+                # Notifier fired — connection became READY or CLOSED/DRAINING.
+                # Call doStartConnecting() to re-evaluate: if the connection is now
+                # READY, it submits the ping immediately (transitions to SPS_IO_WAITING).
+                # If it is CLOSED or DRAINING (e.g., connection failed or received
+                # GOAWAY), doStartConnecting() acquires a replacement connection and
+                # registers a new notifier, keeping state at SPS_CONNECTING for retry.
+                connection_ready_notifier.acknowledge();
+                delete connection_ready_notifier;
+                waiting_for_connection = False;
+                on_error conn.authFailure();
+                doStartConnecting();
+                # Re-evaluate from the top of the loop: if doStartConnecting() transitioned
+                # to SPS_IO_WAITING (connection was ready), the SPS_IO_WAITING handler below
+                # processes it.  If still SPS_CONNECTING (replacement connection), the
+                # SPS_CONNECTING handler returns the new poll info for the next notifier.
+                continue;
+            }
+
+            if (state == SPS_IO_WAITING) {
+                # Non-blocking check: has the C++ I/O thread resolved the Future?
+                if (!pending_future.isDone()) {
+                    return <SocketPollInfo>{
+                        "events": SOCK_POLLIN,
+                        "socket": notifier,
+                    };
+                }
+
+                # Notifier has fired — acknowledge it and retrieve the response
+                notifier.acknowledge();
+                # Future::get() is non-blocking here: isDone() confirmed it is resolved
+                hash<auto> resp = pending_future.get();
+                delete pending_future;
+
+                int status_code = resp.status_code.toInt();
+                if ((status_code / 100) == 2) {
+                    # Run schema validation if configured (mirrors buildResponse() logic)
+                    if (schema_validator) {
+                        auto resp_body = resp.body;
+                        *string content_type = resp.headers."content-type";
+                        # Convert binary body to string for text-based content types
+                        if (resp_body && resp_body.typeCode() == NT_BINARY && content_type) {
+                            if (content_type =~ /^text\// || content_type =~ /\/(json|xml|yaml|html)/
+                                    || content_type =~ /\+(json|xml)/ || content_type =~ /charset=/) {
+                                resp_body = resp_body.toString();
+                            }
+                        }
+                        on_error {
+                            conn.authFailure();
+                            rethrow $1.err, sprintf("%s: url: %y %s %y", $1.desc, conn.real_url,
+                                ping_method, ping_path);
+                        }
+                        schema_validator.parseResponse(ping_method, ping_path, status_code,
+                            resp_body, resp.headers);
+                    }
+                    goal_reached = True;
+                    state = SPS_COMPLETE;
+                    conn.authSuccess();
+                    return;
+                }
+
+                # 401: attempt OAuth2 token refresh + retry once
+                if (status_code == 401 && !auth_retried
+                        && (ping_opts.oauth2_auto_refresh ?? True)) {
+                    auth_retried = True;
+                    doStartOAuth2Refresh();
+                    continue;
+                }
+
+                conn.authFailure();
+                throw "REST-PING-ERROR", sprintf("HTTP %d from RestClientIo ping %s %y",
+                    status_code, ping_method, ping_path);
+            }
+
+            break;
+        }
+        return;
+    }
+
+    #! Starts an OAuth2 token refresh using a fully async RestClientIo request
+    /** Creates the RestClientIo for the token endpoint and starts the connection
+        async. If the connection is immediately ready, submits the request and
+        enters SPS_OAUTH2_REFRESH. Otherwise enters SPS_OAUTH2_CONNECTING to
+        wait for the connection notifier.
+    */
+    private doStartOAuth2Refresh() {
+        hash<auto> refresh_info = rcio.startOAuth2PollRefreshToken();
+        oauth2_rcio = refresh_info.rcio;
+        oauth2_req = refresh_info{"path", "headers", "body"};
+
+        # Start connection to the token endpoint asynchronously
+        oauth2_conn_notifier = oauth2_rcio.startConnectionAsync();
+        if (!oauth2_conn_notifier) {
+            # Connection already ready — submit request immediately
+            doSubmitOAuth2Request();
+        } else {
+            state = SPS_OAUTH2_CONNECTING;
+        }
+    }
+
+    #! Submits the OAuth2 token request after the connection is ready
+    private doSubmitOAuth2Request() {
+        state = SPS_OAUTH2_REFRESH;
+        oauth2_notifier = new EventNotifier();
+        hash<auto> result = oauth2_rcio.doRequestRawAsyncWithNotifier("POST", oauth2_req.path,
+            oauth2_req.headers, oauth2_req.body, oauth2_notifier);
+        oauth2_future = result.future;
+        delete oauth2_req;
+    }
+
+    #! Parses the OAuth2 token refresh response and stores the new token
+    private processOAuth2RefreshResult() {
+        hash<auto> resp = oauth2_future.get();
+        delete oauth2_future;
+        delete oauth2_notifier;
+        delete oauth2_rcio;
+
+%ifndef NoJson
+        int status_code = resp.status_code.toInt();
+        if ((status_code / 100) == 2) {
+            *string content_type = resp.headers."content-type";
+            if (content_type) {
+                content_type =~ s/;.*//;
+            }
+            string body = resp.body ? resp.body.toString() : "";
+            auto parsed_body;
+            switch (content_type) {
+                case MimeTypeJson:
+                    parsed_body = parse_json(body);
+                    break;
+                case MimeTypeFormUrlEncoded:
+                    parsed_body = mime_parse_form_urlencoded_string(body);
+                    break;
+                default:
+                    throw "REST-PING-ERROR",
+                        sprintf("cannot parse OAuth2 token response with Content-Type: %y",
+                            content_type);
+            }
+            rcio.updateOAuth2Token(parsed_body);
+        } else {
+            conn.authFailure();
+            throw "REST-PING-ERROR", sprintf("OAuth2 token refresh failed: HTTP %d",
+                status_code);
+        }
+%else
+        throw "REST-PING-ERROR", "cannot process OAuth2 token response without the json module";
+%endif
+    }
+
+    #! Checks connection readiness and either submits the ping or enters SPS_CONNECTING
+    /** Called from the constructor (always) and after OAuth2 refresh completes.
+        If the connection is already ready, delegates to doSubmitPing() directly.
+        If not, registers a connection-readiness EventNotifier and sets state to
+        SPS_CONNECTING so continuePoll() can poll without blocking.
+
+        @note Never blocks — this is safe to call from any context including a task
+        thread spawned by the PollingConnectionMonitor.
+    */
+    private doStartConnecting() {
+        connection_ready_notifier = rcio.startConnectionAsync();
+        if (!connection_ready_notifier) {
+            # startConnectionAsync() returns NOTHING for both "already READY" and
+            # "already CLOSED/terminal" states.  Attempt to submit the ping; if the
+            # connection was actually closed (stale pool connection), catch the error
+            # and retry with a self-signaling notifier so continuePoll() re-enters.
+            try {
+                doSubmitPing();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTPCLIENT-NOT-READY") {
+                    # Connection was closed — create a self-signaling notifier so the
+                    # poll loop calls continuePoll() again for retry
+                    connection_ready_notifier = new EventNotifier();
+                    connection_ready_notifier.notify();
+                    state = SPS_CONNECTING;
+                    waiting_for_connection = False;
+                    return;
+                }
+                rethrow;
+            }
+            return;
+        }
+        # Connection still establishing — enter connecting state
+        state = SPS_CONNECTING;
+    }
+
+    #! Submits the ping request with EventNotifier signaling — no background thread
+    /** Uses restDoRequestAsyncWithNotifier() so the C++ I/O thread signals @c notifier
+        when the response arrives.  continuePoll() then calls Future::get() non-blockingly.
+
+        @note Safe to call from continuePoll(): connection is always established before
+        this method is called (via SPS_CONNECTING wait in doStartConnecting()).
+    */
+    private doSubmitPing() {
+        state = SPS_IO_WAITING;
+        hash<auto> result = rcio.restDoRequestAsyncWithNotifier(
+            ping_method, ping_path, ping_body, ping_headers, notifier);
+        pending_future = result.future;
+    }
+}
+
+} # namespace RestClientIo

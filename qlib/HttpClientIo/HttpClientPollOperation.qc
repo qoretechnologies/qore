@@ -27,11 +27,11 @@ public namespace HttpClientIo {
 
 #! Abstract base class for HTTP client poll operations
 /** This class provides the common interface and shared concrete methods for
-    HTTP/2 and HTTP/3 client poll operations.
+    HTTP/1.1, HTTP/2, and HTTP/3 client poll operations.
 
-    The poll operation manages the lifecycle of a multiplexed client connection:
-    connecting, reading frames/packets, and dispatching responses to stream
-    callbacks.
+    The poll operation manages the lifecycle of a client connection:
+    connecting, reading frames/packets, and dispatching responses via
+    Promises (request/response) or Channels (streaming).
 
     @note The inherited AbstractPollOperation methods (continuePoll, abort, getGoal,
     goalReached, getState) are implemented by concrete subclasses directly.
@@ -61,16 +61,10 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         #! Current poll operation (connect, ssl, or multiplex)
         AbstractPollOperation current_op;
 
-        #! Pending stream callbacks: stream_id -> callback
-        hash<string, HttpResponseCallback> stream_callbacks;
-
-        #! Pending stream contexts: stream_id -> context hash
-        hash<string, hash<auto>> stream_ctxs;
-
         #! Number of active streams
         int active_stream_count = 0;
 
-        #! Lock for stream callback access
+        #! Lock for stream state access
         Mutex stream_lock();
 
         #! Error info if an error occurred
@@ -79,8 +73,8 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         #! Counter for consecutive empty reads
         int empty_read_count = 0;
 
-        #! Flag set when a stream callback is dispatched during continuePoll()
-        bool callback_dispatched = False;
+        #! Flag set when a response is dispatched during continuePoll()
+        bool response_dispatched = False;
 
         #! Target URL info
         hash<auto> url_info;
@@ -91,8 +85,26 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         #! Logger
         *LoggerInterface logger;
 
-        #! Callback invoked when connection becomes ready
-        *code<nothing()> ready_callback;
+        #! Reference to the owning connection (for ready/completion dispatch)
+        *HttpClientConnection connection_ref;
+    }
+
+    #! Sets the owning connection reference
+    /** @param conn the connection that owns this poll operation
+        @note Must be called during construction, before any continuePoll().
+    */
+    setConnection(HttpClientConnection conn) {
+        connection_ref = conn;
+    }
+
+    #! Called when the poll operation completes
+    /** Dispatches to the connection's handleCompletion() for deterministic
+        result delivery (no closures on the worker thread).
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
     }
 
     #! Returns True if the connection is closed
@@ -121,23 +133,6 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
         return True;
     }
 
-    #! Returns True if a callback was dispatched during the last continuePoll() call, then clears the flag
-    bool checkAndClearCallbackDispatched() {
-        AutoLock al(stream_lock);
-        if (callback_dispatched) {
-            callback_dispatched = False;
-            return True;
-        }
-        return False;
-    }
-
-    #! Sets a callback to be invoked when the connection becomes ready
-    /** @note Must be called during construction, before any continuePoll()
-        invocation.  Not safe to call concurrently with continuePoll().
-    */
-    setReadyCallback(code<nothing()> callback) {
-        ready_callback = callback;
-    }
 
     #! Returns True if an error occurred
     bool hasError() {
@@ -184,36 +179,22 @@ public class HttpClientPollOperation inherits AbstractPollOperation {
     }
 
     #! Internal: notifies all pending streams of an error
+    /** Subclasses override to reject Promises and close Channels.
+        Default is a no-op (for H3 which uses C++ actions).
+    */
     private notifyPendingStreams(hash<auto> err) {
-        *hash<string, HttpResponseCallback> callbacks_copy;
-        *hash<string, hash<auto>> ctxs_copy;
-        {
-            AutoLock al(stream_lock);
-            callbacks_copy = stream_callbacks;
-            ctxs_copy = stream_ctxs;
-            remove stream_callbacks;
-            remove stream_ctxs;
-            active_stream_count = 0;
-        }
-        foreach string sid in (keys callbacks_copy) {
-            HttpResponseCallback cb = callbacks_copy{sid};
-            *hash<auto> stream_ctx = ctxs_copy{sid};
-            try {
-                cb({}, err + {"stream_id": sid.toInt(), "ctx": stream_ctx});
-            } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "stream error callback exception: %s: %s",
-                    ex.err, ex.desc);
-            }
-        }
     }
 
-    #! Internal: fires the ready callback if set
+    #! Internal: notifies the connection that the poll operation is ready
+    /** Calls connection_ref.onConnectionReady() directly — deterministic
+        virtual dispatch, no closures.
+    */
     private fireReadyCallback() {
-        if (ready_callback) {
+        if (connection_ref) {
             try {
-                ready_callback();
+                connection_ref.onConnectionReady();
             } catch (hash<ExceptionInfo> ex) {
-                log(LoggerLevel::ERROR, "ready callback exception: %s: %s", ex.err, ex.desc);
+                log(LoggerLevel::ERROR, "onConnectionReady exception: %s: %s", ex.err, ex.desc);
             }
         }
     }

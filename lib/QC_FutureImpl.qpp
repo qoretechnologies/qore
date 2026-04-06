@@ -1,0 +1,89 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_FutureImpl.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
+
+//! Concrete Future implementation backed by a QoreFuture (Promise/Future pair)
+/** This is the standard Future implementation created by
+    @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()" and
+    @ref call_async().  It is not intended to be created directly by user code.
+
+    @since %Qore 2.3
+ */
+qclass FutureImpl [dom=THREAD_CLASS; arg=QoreFuture* f; ns=Qore::Thread; vparent=Future];
+
+//! Throws an exception; FutureImpl objects can only be created internally
+/** @throw FUTURE-ERROR FutureImpl objects cannot be created directly
+ */
+FutureImpl::constructor() {
+    xsink->raiseException("FUTURE-ERROR",
+        "FutureImpl objects can only be created by calling Promise::getFuture()");
+}
+
+//! Destroys the FutureImpl object
+/** @throw FUTURE-ERROR Object deleted while other threads blocked on it
+ */
+FutureImpl::destructor() {
+    f->destructor(xsink);
+    f->deref(xsink);
+}
+
+//! Throws an exception; FutureImpl objects cannot be copied
+/** @throw FUTURE-COPY-ERROR Objects of this class cannot be copied
+ */
+FutureImpl::copy() {
+    xsink->raiseException("FUTURE-COPY-ERROR", "objects of this class cannot be copied");
+}
+
+//! Blocks the calling thread until the result is available or an error occurs
+/** @param timeout_ms timeout; 0 means wait indefinitely
+    @return the value set by the associated Promise
+ */
+auto FutureImpl::get(timeout timeout_ms = 0) {
+    return f->get(timeout_ms, xsink);
+}
+
+//! Returns True if the Future has been resolved or rejected
+/** @return True if the result is available or an error has been set
+ */
+bool FutureImpl::isDone() [flags=CONSTANT] {
+    return f->isDone();
+}
+
+//! Returns True if the Future has been rejected with an error
+/** @return True if an error has been set
+ */
+bool FutureImpl::isError() [flags=CONSTANT] {
+    return f->isError();
+}

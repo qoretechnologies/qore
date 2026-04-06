@@ -72,8 +72,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
             proxy_info ? sprintf("%s:%d", proxy_info.host, proxy_info.port) : NOTHING);
 
         poll_op = new Http2ClientPollOperation(url_info, connect_timeout, logger,
-            ssl_verify_mode, accept_all_certs, proxy_info);
-        poll_op.setReadyCallback(\onConnectionReady());
+            ssl_verify_mode, accept_all_certs, proxy_info, self);
     }
 
     #! Returns the protocol identifier
@@ -96,9 +95,16 @@ public class Http2ClientConnection inherits HttpClientConnection {
         under the stream_lock.
     */
     int submitRequestImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, *hash<auto> ctx) {
-        return poll_op.submitRequest(method, path, headers, body, callback, ctx,
+            *data body, Promise promise) {
+        return poll_op.submitRequest(method, path, headers, body, promise,
             max_concurrent_streams);
+    }
+
+    #! Submits a request using CompositeAction (Promise + EventNotifier) — HTTP/2
+    int submitRequestWithNotifierImpl(string method, string path, *hash<auto> headers,
+            *data body, Promise promise, EventNotifier notifier) {
+        return poll_op.submitRequestWithNotifier(method, path, headers, body, promise,
+            notifier, max_concurrent_streams);
     }
 
     #! Cancels a request (protocol-specific)
@@ -108,11 +114,7 @@ public class Http2ClientConnection inherits HttpClientConnection {
 
     #! Closes the connection (protocol-specific)
     closeImpl(*timeout close_timeout) {
-        {
-            AutoLock al(lock);
-            state = HttpClientConnectionState::Closed;
-            ready_cond.broadcast();
-        }
+        self.setClosed();
         try {
             poll_op.abort();
         } catch () {
@@ -129,13 +131,13 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @throw HTTP2-STATE-ERROR if not in ready state
     */
     sendStreamData(int stream_id, data data, bool end_stream = False) {
+        if (!self.isReady()) {
+            throw "HTTP2-STATE-ERROR",
+                sprintf("cannot send data in state: %y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTP2-STATE-ERROR",
-                    sprintf("cannot send data in state: %y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
@@ -144,8 +146,24 @@ public class Http2ClientConnection inherits HttpClientConnection {
         poll_op.sendStreamData(stream_id, data, end_stream);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
+    }
+
+    #! Registers a Queue for async stream data delivery
+    /** @param stream_id the HTTP/2 stream ID
+        @param queue the unlimited Queue for data delivery
+    */
+    registerStreamQueue(int stream_id, Queue queue) {
+        poll_op.registerStreamQueue(stream_id, queue);
+    }
+
+    #! Registers a listener to be notified when stream data arrives
+    /** @param stream_id the HTTP/2 stream ID
+        @param listener an object with a notifyIo() method
+    */
+    registerStreamListener(int stream_id, object listener) {
+        poll_op.registerStreamListener(stream_id, listener);
     }
 
     #! Submits a request with streaming support (HTTP/2-specific)
@@ -153,34 +171,33 @@ public class Http2ClientConnection inherits HttpClientConnection {
         @param path request path
         @param headers request headers
         @param body request body (optional)
-        @param callback response callback
-        @param ctx optional context
+        @param channel Channel for incremental response delivery
         @param streaming if True, enable streaming mode
 
         @return the stream ID
 
         @note The capacity check is performed atomically inside
-        poll_op.submitRequest() under stream_lock, so there is no TOCTOU gap.
+        poll_op.submitRequestStreaming() under stream_lock, so there is no TOCTOU gap.
     */
     int submitRequestStreaming(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, *hash<auto> ctx, bool streaming = False) {
+            Channel channel, bool streaming = False) {
+        if (!self.isReady()) {
+            throw "HTTPCLIENT-STATE-ERROR",
+                sprintf("connection not ready: state=%y", self.getConnectionState());
+        }
         *object ctl;
         {
             AutoLock al(lock);
-            if (state != HttpClientConnectionState::Ready) {
-                throw "HTTPCLIENT-STATE-ERROR",
-                    sprintf("connection not ready: state=%y", state);
-            }
             last_activity = now_us();
             ctl = controller_ref;
         }
 
         log(LoggerLevel::DEBUG, "submitting request: %s %s (streaming=%y)", method, path, streaming);
-        int stream_id = poll_op.submitRequest(method, path, headers, body, callback, ctx,
+        int stream_id = poll_op.submitRequestStreaming(method, path, headers, body, channel,
             max_concurrent_streams, streaming);
 
         if (ctl) {
-            ctl.wake();
+            ctl.wakeSocket(getSocket());
         }
 
         return stream_id;

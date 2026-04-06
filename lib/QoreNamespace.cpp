@@ -165,7 +165,23 @@ DLLLOCAL QoreClass* initTransformInputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initTransformOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStdoutOutputStreamClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initStderrOutputStreamClass(QoreNamespace& ns);
+DLLLOCAL void preinitAbstractPollOperationClass();
 DLLLOCAL QoreClass* initAbstractPollOperationClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initDelegatingPollOperationClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initAbstractHttpPollConnectionClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpIdlePollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpKeepAlivePollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpAcceptPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp2PollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpWebSocketPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initWebSocketClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initPollPipelineClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp1ClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp3ClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp3ServerPollOperationClass(QoreNamespace& ns);
+extern QoreClass* QC_HTTP3SERVERPOLLOPERATION;
+DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpClientPingPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
 
 DLLLOCAL void init_type_constants(QoreNamespace& ns);
@@ -1253,7 +1269,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     preinitInputStreamClass();
     preinitOutputStreamClass();
 
-    qns.addSystemClass(initAbstractPollOperationClass(qns));
+    preinitAbstractPollOperationClass();  // shell only; full init after SocketPollResultInfo
     qns.addSystemClass(initSocketPollOperationBaseClass(qns));
     preinitSocketClass();
     qns.addSystemClass(initSocketPollOperationClass(qns));
@@ -1302,6 +1318,38 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     // Must be before initAsyncIoControllerClass which references these hashdecls
     hashdeclSocketPollOperationInfo = init_hashdecl_SocketPollOperationInfo(qns);
     hashdeclSocketPollResultInfo = init_hashdecl_SocketPollResultInfo(qns);
+    // Now that SocketPollResultInfo is available, finish AbstractPollOperation init
+    // (adds onComplete(hash<SocketPollResultInfo>) which references the hashdecl)
+    qns.addSystemClass(initAbstractPollOperationClass(qns));
+    // DelegatingPollOperation must be after SocketPollResultInfo and SocketPollOperationBase
+    qns.addSystemClass(initDelegatingPollOperationClass(qns));
+    // AbstractHttpPollConnection must be before Http{1,2,3}ClientPollOperationBase
+    qns.addSystemClass(initAbstractHttpPollConnectionClass(qns));
+    // HttpIdlePollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpIdlePollOperationBaseClass(qns));
+    // HttpKeepAlivePollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpKeepAlivePollOperationBaseClass(qns));
+    // HttpAcceptPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpAcceptPollOperationBaseClass(qns));
+    // Http2PollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttp2PollOperationBaseClass(qns));
+    // HttpWebSocketPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpWebSocketPollOperationBaseClass(qns));
+    // WebSocketClientPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initWebSocketClientPollOperationBaseClass(qns));
+    // PollPipeline must be after SocketPollOperationBase
+    qns.addSystemClass(initPollPipelineClass(qns));
+    // Http{1,2,3}ClientPollOperationBase must be after SocketPollOperationBase and AbstractHttpPollConnection
+    qns.addSystemClass(initHttp1ClientPollOperationBaseClass(qns));
+    qns.addSystemClass(initHttp3ClientPollOperationBaseClass(qns));
+    qns.addSystemClass(initHttp3ServerPollOperationClass(qns));
+    // Add class-level constant DefaultDrainTimeout (5 seconds as relative date)
+    // QPP does not support class constants; add manually
+    QC_HTTP3SERVERPOLLOPERATION->addBuiltinConstant("DefaultDrainTimeout",
+        DateTimeNode::makeRelative(0, 0, 0, 0, 0, 5));
+    qns.addSystemClass(initHttp2ClientPollOperationBaseClass(qns));
+    // HttpClientPingPollOperationBase must be after SocketPollOperationBase
+    qns.addSystemClass(initHttpClientPingPollOperationBaseClass(qns));
 
     qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));

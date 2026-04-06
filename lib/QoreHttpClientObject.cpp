@@ -2304,6 +2304,15 @@ struct qore_httpclient_priv {
     // Look up Alt-Svc entry for a given origin; returns nullptr if not found or expired
     DLLLOCAL std::optional<AltSvcEntry> lookupAltSvc(const char* host, int port);
 
+    //! Remove Alt-Svc entry after a failed QUIC connect attempt
+    /** Prevents repeated QUIC upgrade attempts to a broken endpoint.
+        A fresh Alt-Svc header from the server will re-add the entry.
+    */
+    DLLLOCAL void removeAltSvc(const char* host, int port) {
+        std::string origin = std::string(host) + ":" + std::to_string(port);
+        alt_svc_cache.erase(origin);
+    }
+
     // Establish a QUIC/HTTP3 connection to the given server
     DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection);
 
@@ -3530,6 +3539,10 @@ int HttpClientConnectSendRecvPollOperation::processH2Response(ExceptionSink* xsi
         return -1;
     }
 
+    if (!response_headers->is_unique()) {
+        response_headers = response_headers->copy();
+    }
+
     // Get response body
     recv_data_holder = h2_poll->getResponseBody(xsink);
     if (*xsink) {
@@ -3649,6 +3662,10 @@ int HttpClientConnectSendRecvPollOperation::processH3Response(ExceptionSink* xsi
     info->setKeyValue("response-headers", response_headers->refSelf(), xsink);
     if (*xsink) {
         return -1;
+    }
+
+    if (!response_headers->is_unique()) {
+        response_headers = response_headers->copy();
     }
 
     // Get response body
@@ -5578,17 +5595,12 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             info, timeout_ms, code, xsink);
     }
 
-    // Use HTTP/2 if active (check before HTTP/3 upgrade attempt below)
-    if (http2_active && getH2Session()) {
-        return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
-            send_callback, is, max_chunk_size, trailer_callback,
-            info, timeout_ms, code, aborted, xsink);
-    }
-
-    // Try HTTP/3 upgrade if Alt-Svc is cached and no active multiplexed connection.
-    // Skip QUIC if a prior exception is already set — xsink->clear() below must
-    // only clear exceptions from the QUIC attempt itself, not unrelated errors.
-    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
+    // Try HTTP/3 upgrade if Alt-Svc is cached — but NOT when HTTP/2 is already
+    // active and healthy.  Attempting QUIC on every request when H2 works adds
+    // a multi-second penalty per failed QUIC handshake (connect timeout).
+    // Only attempt QUIC upgrade when no H2 session exists or when H3 is required.
+    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl
+            && !(http2_active && getH2Session())) {
         auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
         if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
             if (!connectQuic(xsink, connection)) {
@@ -5599,6 +5611,11 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             if (http3_mode == HTTP3_MODE_REQUIRED) {
                 return nullptr;
             }
+            // QUIC connect failed — remove the Alt-Svc entry so we don't retry
+            // on every subsequent request (RFC 9369 §3.2: clients SHOULD cache
+            // failures and avoid repeated connection attempts).  A fresh Alt-Svc
+            // header from the server will re-enable the upgrade path.
+            removeAltSvc(connection.host.c_str(), connection.port);
             // Log QUIC error details before clearing for HTTP/1.x fallback.
             // xsink->clear() is intentional: the QUIC failure is non-fatal when
             // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
@@ -5610,6 +5627,13 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             }
             xsink->clear();
         }
+    }
+
+    // Use HTTP/2 if active (after HTTP/3 upgrade attempt above)
+    if (http2_active && getH2Session()) {
+        return sendHttp2MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
+            send_callback, is, max_chunk_size, trailer_callback,
+            info, timeout_ms, code, aborted, xsink);
     }
 
     // send the message (HTTP/1.x path)
@@ -5780,10 +5804,14 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
         return nullptr;
     }
 
+    ASYNC_IO_TRACE("H2 CLIENT submitRequest stream=%d\n", stream_id);
+
     // Send pending data (the request headers) - use blocking version for client-side operations
     if (h2_session->sendPendingDataBlocking(timeout_ms, xsink)) {
         return nullptr;
     }
+
+    ASYNC_IO_TRACE("H2 CLIENT sendPendingDataBlocking done stream=%d\n", stream_id);
 
     // Streaming body: feed chunks from send_callback or InputStream
     int64 deadline_ms = timeout_ms < 0 ? -1 : q_clock_getmillis() + timeout_ms;
@@ -6067,7 +6095,10 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
                 }
                 remaining_ms = static_cast<int>(deadline_ms - now_ms);
             }
-            int rv = h2_session->receiveData(remaining_ms, xsink);
+            // Non-blocking drain: only read incoming flow-control frames (WINDOW_UPDATE)
+            // that might unblock the send.  Using remaining_ms here would block the
+            // client for the full timeout before sending any request data.
+            int rv = h2_session->receiveData(0, xsink);
             if (rv < 0 || *xsink) {
                 return nullptr;
             }
@@ -6079,6 +6110,19 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
             if (h2_session->sendPendingDataBlocking(remaining_ms, xsink)) {
                 return nullptr;
             }
+        }
+    }
+
+    // Flush any pending SETTINGS_ACK / WINDOW_UPDATE before entering the blocking
+    // receive loop.
+    ASYNC_IO_TRACE("H2 CLIENT pre-loop flush stream=%d\n", stream_id);
+    {
+        int rv = h2_session->receiveData(0, xsink);
+        if (rv < 0 || *xsink) {
+            return nullptr;
+        }
+        if (h2_session->sendPendingDataBlocking(0, xsink)) {
+            return nullptr;
         }
     }
 
@@ -6094,10 +6138,21 @@ QoreHashNode* qore_httpclient_priv::sendHttp2MessageAndGetResponse(const char* m
             remaining_ms = static_cast<int>(deadline_ms - now_ms);
         }
         int rv = h2_session->receiveData(remaining_ms, xsink);
-        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) after every receive
-        // This is critical for HTTP/2 flow control - without WINDOW_UPDATE frames,
-        // the server will stop sending data when the receive window is exhausted
-        h2_session->sendPendingDataBlocking(timeout_ms, xsink);
+        // Send any pending data (e.g., WINDOW_UPDATE, ACKs) after every receive.
+        // This is critical for HTTP/2 flow control — without WINDOW_UPDATE frames,
+        // the server will stop sending data when the receive window is exhausted.
+        // Recalculate remaining time: receiveData() may have consumed most of the
+        // timeout, leaving sendPendingDataBlocking() with a stale value.
+        {
+            int send_remaining_ms = -1;
+            if (deadline_ms >= 0) {
+                send_remaining_ms = static_cast<int>(deadline_ms - q_clock_getmillis());
+                if (send_remaining_ms < 0) {
+                    send_remaining_ms = 0;
+                }
+            }
+            h2_session->sendPendingDataBlocking(send_remaining_ms, xsink);
+        }
         if (*xsink) {
             return nullptr;
         }

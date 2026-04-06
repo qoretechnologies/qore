@@ -382,6 +382,8 @@
 #include "QC_SocketPollOperationBase.cpp"
 #include "QC_SocketPollOperation.cpp"
 #include "QC_FilePollOperation.cpp"
+#include "QC_DelegatingPollOperation.cpp"
+#include "QC_HttpIdlePollOperationBase.cpp"
 
 #include "QorePseudoMethods.cpp"
 
@@ -407,3 +409,5 @@
 #include "QoreLoggerBridge.cpp"
 #include "QoreAsyncIoLogger.cpp"
 #include "AsyncIoControllerPriv.cpp"
+// WebSocket frame codec (RFC 6455)
+#include "WebSocketFrameCodec.cpp"

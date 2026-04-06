@@ -440,7 +440,14 @@ public class DpqlWebSocketTest inherits QUnit::Test {
         assertFalse(connected, "Second connection should fail with error when max reached");
 
         client1.disconnect();
-        usleep(500ms);
+        # Wait for the server to detect the disconnect via async I/O
+        int wait_ms = 0;
+        while (limit_handler.getConnectionCount() > 0 && wait_ms < 5000) {
+            usleep(50ms);
+            wait_ms += 50;
+        }
+        assertEq(0, limit_handler.getConnectionCount(),
+            "connection count should be 0 after disconnect");
 
         Queue msgs3();
         WebSocketClient client3(sub (*data msg) { msgs3.push(msg); }, {
