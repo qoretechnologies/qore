@@ -53,7 +53,8 @@ hist.save(history_path);
 
     @since QoreHistory 1.0
 */
-public class QoreHistory::QoreHistoryProvider inherits Linenoise::AbstractHistoryProvider {
+public namespace QoreHistory {
+public class QoreHistoryProvider inherits Linenoise::AbstractHistoryProvider {
     private {
         #! The QoreHistory instance to delegate to
         QoreHistory::History history;
@@ -86,3 +87,4 @@ public class QoreHistory::QoreHistoryProvider inherits Linenoise::AbstractHistor
         return history.searchNavigate(pattern, direction);
     }
 }
+} # namespace QoreHistory
