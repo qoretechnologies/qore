@@ -50,7 +50,7 @@ module HttpClientIo {
     request/response exchanges (HTTP/1.1) regardless of the underlying transport protocol.
 
     Features:
-    - **Protocol auto-selection**: Try HTTP/3 (QUIC) first, fall back to HTTP/2 (TCP+TLS)
+    - **Protocol auto-selection**: Start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery
     - **HTTP/1.1 support**: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
     - **True multiplexing**: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
@@ -142,7 +142,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       and @ref Http1ClientStreamHandle
     - HTTP/1.1 serial request/response with keep-alive and connection pooling
     - Supports Content-Length, chunked transfer encoding, and connection-close body types
-    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" still prefers H3 then H2
+    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" starts with H2 and upgrades to H3 via Alt-Svc
     - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
 
     @subsection httpclientio_v1_0 Version 1.0
@@ -151,7 +151,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       AsyncSocketIoController singleton with \c autostop=True; sync \c request()
       blocks via Future while the controller event loop drives actual I/O
     - Single-controller architecture eliminates cross-controller deadlocks
-    - Protocol auto-selection with HTTP/3 to HTTP/2 fallback
+    - Protocol auto-selection starting with HTTP/2, upgrading to HTTP/3 via Alt-Svc discovery
     - Abstract base classes for protocol-agnostic code
     - Connection pooling with configurable limits
     - Sync and async request APIs
@@ -188,7 +188,7 @@ public namespace HttpClientIo {
     /** @since HttpClientIo 1.0
     */
     public enum HttpClientProtocol {
-        #! Auto-detect protocol (prefer HTTP/3 for HTTPS, fall back to HTTP/2)
+        #! Auto-detect protocol (start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery)
         Auto = 0,
         #! Force HTTP/2
         H2 = 1,

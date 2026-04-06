@@ -1414,7 +1414,19 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         #printf("stopped %s c=%y\n", l.getAddress(), c.getCount());
     }
 
-    #! stops all listeners; only returns when all connections are closed on all listeners
+    #! Stops the HTTP server and releases all resources
+    /** Performs a synchronous, ordered shutdown:
+        -# Signals streaming handlers (SSE, WebSocket) to stop
+        -# Stops the async I/O controller (cancels all accept, connection, and streaming ops)
+        -# Cancels remaining ops by owner on the global async I/O controller
+        -# Waits for all in-flight handler tasks to complete (\c handler_pool.stopWait())
+        -# Stops listeners and the internal thread pool
+
+        This method blocks until all connections are closed and handler tasks complete.
+
+        @note HttpServer instances are not restartable after \c stop(). Create a new
+        HttpServer if a restart is needed.
+    */
     stop() {
         {
             AutoLock al(stop_m);
@@ -5811,9 +5823,14 @@ class HttpServerCallbackAppender inherits LoggerAppenderWithLayout {
 }
 
 #! Native async target implementing HttpAsyncTarget for the callback-based HttpAsyncSocketIoController
-/** This class dispatches HTTP requests directly to HttpListener.processNativeRequest(),
-    which handles context setup, request processing, and returns response data for the
-    controller to send.
+/** Request dispatch uses a two-path model:
+    -# @ref tryInlineRequest() runs on the I/O callback thread for lightweight requests
+       (HTTP/1.x only, no body, handler opts in via @ref AbstractHttpRequestHandler::canHandleInline()
+       "canHandleInline()"); returns the response immediately without a thread hop
+    -# If @ref tryInlineRequest() returns @ref nothing, the request is dispatched to the
+       handler thread pool via @ref onHttpRequest() which calls
+       HttpListener::processNativeRequest() for full context setup, body reading, and handler
+       dispatch
 
     @since HttpServer 1.6
     @private
@@ -5835,7 +5852,7 @@ class HttpServerNativeAsyncTarget inherits HttpServerAsyncIo::HttpAsyncTarget {
     /** Looks up the handler and, if it supports inline processing and the request
         has no body, processes it directly without thread pool dispatch.
 
-        Only for HTTP/1.x — HTTP/2 always returns @ref nothing. Requests with a
+        Only for HTTP/1.x — HTTP/2 and HTTP/3 always return @ref nothing. Requests with a
         body (Content-Length or Transfer-Encoding) are rejected because the inline
         path does not read the body; unread bytes would corrupt the next header
         parse on keep-alive connections.

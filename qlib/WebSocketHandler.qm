@@ -39,7 +39,7 @@
 %modern
 
 module WebSocketHandler {
-    version = "2.5";
+    version = "2.8";
     desc = "User module for providing WebSocket server services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -115,6 +115,26 @@ printf("HTTP/3 WebSocket server listening on port 8443\n");
     @ref WebSocketHandler::WebSocketHandler::sendAll() "sendAll()" APIs work across all transports.
 
     @section websockethandler_relnotes WebSocketHandler Release History
+
+    @subsection websockethandler_v2_8 Version 2.8
+    - added @ref WebSocketHandler::WebSocketConnection::setEchoMode()
+      "WebSocketConnection::setEchoMode()" for automatic echo of received frames
+
+    @subsection websockethandler_v2_7 Version 2.7
+    - added @ref WebSocketHandler::WebSocketConnection::setWsPollOp()
+      "WebSocketConnection::setWsPollOp()" and
+      @ref WebSocketHandler::WebSocketConnection::setStreamProcessor()
+      "WebSocketConnection::setStreamProcessor()" for async I/O integration
+    - added @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor" class
+      for HTTP/2 and HTTP/3 WebSocket stream processing on worker threads
+
+    @subsection websockethandler_v2_6 Version 2.6
+    - added async I/O event-driven model: @ref WebSocketHandler::WebSocketConnection::notifyIo()
+      "WebSocketConnection::notifyIo()" and
+      @ref WebSocketHandler::WebSocketConnection::waitForIoEvent()
+      "WebSocketConnection::waitForIoEvent()" for non-polling WebSocket I/O
+    - deprecated @ref WebSocketHandler::WebSocketConnection::pollData()
+      "WebSocketConnection::pollData()" in favor of the event-driven model
 
     @subsection websockethandler_v2_5 Version 2.5
     - replaced frame-dropping behavior on transport backpressure with a per-connection pending

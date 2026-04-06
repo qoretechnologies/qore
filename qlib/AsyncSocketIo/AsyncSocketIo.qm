@@ -57,8 +57,8 @@ module AsyncSocketIo {
     - the initial version of the AsyncSocketIo module
     - thin wrapper around the native C++ @ref Qore::AsyncIoController class for high-performance
       async socket I/O using epoll (Linux) / kqueue (macOS/BSD)
-    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(), exec(),
-      cancel(), cancelByKey(), cancelByOwner(), wake() operations
+    - @ref AsyncSocketIo::AsyncSocketIoController "AsyncSocketIoController" with submit(),
+      cancel(), cancelByKey(), cancelByOwner() operations
     - custom key support in \c SocketPollOperationInfo
     - @ref AsyncSocketIo::Http2StreamContext "Http2StreamContext" stream-scoped send/receive helper
       for HTTP/2 sockets with direct I/O mode for handler-thread-driven frame reading
@@ -66,9 +66,6 @@ module AsyncSocketIo {
       for HTTP/3 QUIC streams with backpressure handling and I/O controller wake integration
     - @ref AsyncSocketIo::AbstractStreamContext "AbstractStreamContext" abstract base class providing a
       protocol-agnostic stream I/O interface for WebSocket over HTTP/2 (RFC 8441) and HTTP/3 (RFC 9220)
-    - \c getThreadPool() for lazy
-      access to a shared @ref Qore::Thread::ThreadPool "ThreadPool" for dispatching callbacks off
-      the I/O thread
     - @ref AsyncSocketIo::AsyncSocketIoController::submitTask() "submitTask()" convenience
       method for submitting work to the thread pool
     - @ref AsyncSocketIo::AsyncSocketIoController::addTimer() "addTimer()" and

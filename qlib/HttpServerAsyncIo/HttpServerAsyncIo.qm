@@ -139,9 +139,7 @@ public namespace HttpServerAsyncIo {
 
         #! HTTP status message text (e.g., "OK", "Not Found")
         /** Used by the controller for HTTP/1.x response sending.
-            If not set, the controller looks up the status text from
-            the HttpServer::HttpCodes constant using the \c code field.
-
+            If not set, the fallback is \c "Unknown".
         */
         *string status_message;
 

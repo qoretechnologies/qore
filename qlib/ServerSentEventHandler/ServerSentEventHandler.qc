@@ -331,7 +331,7 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
             throw "SERVERSENTEVENT-CONNECTION-ERROR", sprintf("connection %y does not exist (valid connections: %y)",
                 id, keys ch);
         #logDebug("sending data to connection: %y", id);
-        ch{id}.sendEncoded(msg);
+        ch{id}.sendEncoded(str);
     }
 
     #! stop given connection ID

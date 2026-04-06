@@ -95,7 +95,7 @@ module ServerSentEventClient {
 
     The %ServerSentEventClient module provides a client to be used with the
     <a href="../../HttpServer/html/index.html">HttpServer module</a> to provide
-    <a href="ç">Server-Sent Event</a> connections.
+    <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Event</a> connections.
 
     To use this module, use \c "%requires ServerSentEventClient" in your code.
 
