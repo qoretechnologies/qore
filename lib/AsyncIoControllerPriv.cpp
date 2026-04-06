@@ -887,6 +887,21 @@ QoreObject* AsyncIoControllerPriv::submit(QoreObject* self, QoreHashNode* info, 
         target.cmdq.push(std::move(cmd));
         target.notifier->notify();
 
+        // Post-push verification: if the I/O thread exited while we were
+        // building/pushing the command (TOCTOU between the running check
+        // at line 802 and this point), restart it.  The exit cleanup
+        // re-queues SubmitOp commands, so the new I/O thread will find
+        // both the re-queued op and any others in the cmdq.
+        if (!target.running.load(std::memory_order_acquire)) {
+            AutoLocker al(m);
+            if (io_exiting || !ctx().tid) {
+                startIntern(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+
         ++submit_seq;
     }
 
@@ -2268,6 +2283,11 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (is_shutting_down) {
                         AutoLocker al(m);
                         io_exiting = true;
+                        // Set running=false atomically with io_exiting so that
+                        // concurrent submit() calls see the exit and take the
+                        // lock path → startIntern() instead of pushing to the
+                        // dying thread's cmdq where the op would be dropped.
+                        t.running.store(false, std::memory_order_release);
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
@@ -2279,6 +2299,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
                             io_exiting = true;
+                            t.running.store(false, std::memory_order_release);
                             if (io_waiting) {
                                 io_cond.broadcast();
                             }
@@ -2326,6 +2347,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (is_shutting_down) {
                         AutoLocker al(m);
                         io_exiting = true;
+                        t.running.store(false, std::memory_order_release);
                         if (io_waiting) {
                             io_cond.broadcast();
                         }
@@ -2337,6 +2359,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         } else if (now_us - t.autostop_idle_since >= AUTOSTOP_GRACE_US) {
                             AutoLocker al(m);
                             io_exiting = true;
+                            t.running.store(false, std::memory_order_release);
                             if (io_waiting) {
                                 io_cond.broadcast();
                             }
@@ -2604,10 +2627,18 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // Drain the MPSC command queue and clean up pending commands.
         // Signal any pending CancelOwner/CancelByProgram done_cond waiters
         // so they don't hang when the I/O thread exits.
+        // SubmitOp commands are re-queued so the next I/O thread processes
+        // them — dropping them would lose operations submitted during the
+        // race window between the autostop decision and exit cleanup.
         {
             std::vector<Command> pending_cmds;
             t.cmdq.drain(pending_cmds);
             for (auto& pending_cmd : pending_cmds) {
+                if (pending_cmd.cmd == IoCommand::SubmitOp) {
+                    // Re-queue for the next I/O thread to process
+                    t.cmdq.push(std::move(pending_cmd));
+                    continue;
+                }
                 if (pending_cmd.cmd == IoCommand::CancelByProgram && pending_cmd.pending_threads) {
                     // Multi-thread command: decrement counter; only last thread signals
                     if (pending_cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
