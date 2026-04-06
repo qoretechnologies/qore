@@ -573,6 +573,31 @@ public class HttpClientConnectionManager {
                 checkAltSvc(url, resp);
                 return resp;
             } catch (hash<ExceptionInfo> ex) {
+                # Handle HTTPCLIENT-TIMEOUT before the generic isConnectionError
+                # retry.  HTTPCLIENT-TIMEOUT is in isConnectionError() for the
+                # benefit of acquireAndStartStreaming / submitRequestAsync where
+                # timeouts are connection-establishment errors that legitimately
+                # warrant full retry.  But in requestIntern(), the timeout may
+                # come from Future.get() (a *request* timeout on an established
+                # connection).  Letting isConnectionError catch it here causes
+                # up to MaxRequestRetries full-timeout retries against a dead
+                # server (e.g. 3 × 10s = 30s+), when the correct behavior is:
+                # only retry once on a reused pooled connection (stale detection),
+                # never on a fresh connection (genuinely unreachable).
+                if (ex.err == "HTTPCLIENT-TIMEOUT") {
+                    if (stream && stream.wasConnectionReused() && !timeout_retried) {
+                        timeout_retried = True;
+                        HttpClientConnection timed_out_conn = stream.getConnection();
+                        log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
+                            "evicting stale connection and retrying with connect_timeout=%y",
+                            timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
+                            opts.connect_timeout);
+                        try { timed_out_conn.close(); } catch () {}
+                        evictDeadConnections(url);
+                        continue;
+                    }
+                    rethrow;
+                }
                 if ((isCapacityError(ex.err) || isConnectionError(ex.err))
                         && ++retries <= MaxRequestRetries) {
                     if (isConnectionError(ex.err)) {
@@ -584,27 +609,6 @@ public class HttpClientConnectionManager {
                         log(LoggerLevel::DEBUG, "capacity error %s (retry %d/%d)",
                             ex.err, retries, MaxRequestRetries);
                     }
-                    continue;
-                }
-                # A timeout on a reused pooled connection may indicate a stale
-                # connection (server restarted, QUIC session dead). Close the
-                # stale connection and retry once with connect_timeout as the
-                # deadline — if the server restarted, the fresh connection
-                # establishes quickly; if it is genuinely unreachable, we fail
-                # within connect_timeout rather than burning another full
-                # request_timeout.  Do NOT retry for fresh connections — a
-                # timeout on a new connection means the server is genuinely
-                # slow or unreachable.
-                if (ex.err == "HTTPCLIENT-TIMEOUT" && stream
-                        && stream.wasConnectionReused() && !timeout_retried) {
-                    timeout_retried = True;
-                    HttpClientConnection timed_out_conn = stream.getConnection();
-                    log(LoggerLevel::DEBUG, "request timed out on pooled %s connection %d, "
-                        "evicting stale connection and retrying with connect_timeout=%y",
-                        timed_out_conn.getProtocol(), timed_out_conn.getConnectionId(),
-                        opts.connect_timeout);
-                    try { timed_out_conn.close(); } catch () {}
-                    evictDeadConnections(url);
                     continue;
                 }
                 rethrow;

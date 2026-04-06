@@ -1784,6 +1784,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             QoreObject* spop_obj;  // Not refed - just pointer for Phase 2
             SocketPollOperationBase* spop_base; // Not refed - direct C++ poll op (or nullptr)
             bool timed_out;
+            bool was_ready;  // true if this op was triggered by a ready event (kqueue/epoll)
         };
         std::vector<OpToPoll> ops_to_poll;
         int64 poll_deadline_us = 0;
@@ -1815,7 +1816,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             ++t.phase1_gen;
 
             // Helper lambda: queue an entry if not already queued this generation
-            auto try_queue = [&](const std::string& key, bool timed_out) -> bool {
+            auto try_queue = [&](const std::string& key, bool timed_out,
+                    bool ready = false) -> bool {
                 auto it = t.cache.find(key);
                 if (it == t.cache.end()) {
                     return false;
@@ -1828,7 +1830,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     return false;  // dispatched to worker
                 }
                 pinfo.last_queued_gen = t.phase1_gen;
-                ops_to_poll.push_back({key, pinfo.spop_obj, pinfo.spop_base, timed_out});
+                ops_to_poll.push_back({key, pinfo.spop_obj, pinfo.spop_base, timed_out, ready});
                 return true;
             };
 
@@ -1849,19 +1851,20 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             t.new_entry_keys.clear();
 
             // --- Step B: Ready sockets (epoll) and woken sockets (WakeSocket) ---
-            auto expand_hashes = [&](const std::unordered_set<std::string>& hashes) {
+            auto expand_hashes = [&](const std::unordered_set<std::string>& hashes,
+                    bool ready = false) {
                 for (auto& sock_hash : hashes) {
                     auto sit = t.sock_hash_to_keys.find(sock_hash);
                     if (sit == t.sock_hash_to_keys.end()) {
                         continue;
                     }
                     for (auto& key : sit->second) {
-                        try_queue(key, false);
+                        try_queue(key, false, ready);
                     }
                 }
             };
-            expand_hashes(ready_socket_hashes);
-            expand_hashes(woken_hashes);
+            expand_hashes(ready_socket_hashes, true);
+            expand_hashes(woken_hashes, true);
 
             // --- Step C: Expired timeouts ---
             while (!t.timeout_heap.empty()) {
@@ -1921,6 +1924,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             QoreHashNode* ex_hash;        // Refed or nullptr
             bool timed_out;
             bool completed;
+            bool was_ready;  // true if triggered by a ready event (kqueue/epoll)
         };
         std::vector<PollResult> poll_results;
 
@@ -1931,6 +1935,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             result.ex_hash = nullptr;
             result.timed_out = op.timed_out;
             result.completed = false;
+            result.was_ready = op.was_ready;
 
             if (op.timed_out) {
                 // Create timeout exception hash
@@ -2286,6 +2291,36 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 }
             }
 
+            // Re-queue ready sockets that returned poll_info (try again).
+            // On macOS, kqueue's EVFILT_WRITE for non-blocking connect is
+            // effectively edge-triggered: the event fires once when the
+            // connect completes, then won't re-fire.  The poll operation's
+            // internal check (asyncIoWait with a separate kqueue instance +
+            // zero-byte send) may not confirm the connection due to the
+            // macOS ENOTCONN race (send() returns ENOTCONN even when kqueue
+            // reported the socket as writable).  Without re-queuing, the
+            // next kqueue poll blocks indefinitely.  Use wake_socket_hashes
+            // (not ssl_deferred_hashes) to bypass the already_deferred
+            // guard — the connect will succeed within a few iterations,
+            // making this self-terminating.
+            for (auto& result : poll_results) {
+                if (result.was_ready && result.new_poll_info && !result.completed
+                        && !result.ex_hash) {
+                    // Only re-queue for POLLOUT (non-blocking connect completion).
+                    // POLLIN operations (reading on established connections) work
+                    // correctly with level-triggered kqueue and must NOT be
+                    // re-queued — doing so creates a busy loop that starves other
+                    // operations (e.g., WebSocket message delivery).
+                    int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
+                    if (events & SOCK_POLLOUT) {
+                        auto it = t.cache.find(result.key);
+                        if (it != t.cache.end() && !it->second.cached_sock_hash.empty()) {
+                            t.wake_socket_hashes.insert(it->second.cached_sock_hash);
+                        }
+                    }
+                }
+            }
+
             // Check autostop (only if no deliveries pending — recheck after delivery)
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock.
             // With multiple I/O threads, only autostop when ALL threads are idle —
@@ -2407,10 +2442,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Calculate poll timeout
         int timeout_ms = -1;  // Wait indefinitely by default
-        if (!ssl_deferred_hashes.empty()) {
-            // SSL-buffered data discovered in Phase 3 — don't block in epoll,
-            // just check for new kernel events and return immediately so the
-            // next iteration processes the deferred hashes
+        if (!ssl_deferred_hashes.empty() || !t.wake_socket_hashes.empty()) {
+            // Deferred data discovered in Phase 3 — don't block in
+            // kqueue/epoll, just check for new kernel events and return
+            // immediately so the next iteration processes the deferred
+            // hashes.  wake_socket_hashes is set by the connect-retry
+            // re-queue (macOS kqueue edge-triggered EVFILT_WRITE).
             timeout_ms = 0;
         } else if (poll_deadline_us > 0) {
             int64 now_us = get_epoch_us();
