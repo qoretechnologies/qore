@@ -179,7 +179,7 @@ QoreCallDispatcher::QoreCallDispatcher(int max_workers, AsyncIoControllerPriv* c
     : ctrl(controller) {
     if (max_workers <= 0) {
         int hw = std::thread::hardware_concurrency();
-        this->max_workers = hw > 0 ? std::min(hw, (int)MAX_WORKER_CAP) : 4;
+        this->max_workers = hw > 0 ? hw : DEFAULT_WORKER_CAP;
     } else {
         this->max_workers = max_workers;
     }
@@ -529,7 +529,7 @@ AsyncIoControllerPriv::AsyncIoControllerPriv(bool autostop, ExceptionSink* xsink
     const char* env_threads = getenv("QORE_IO_THREADS");
     if (env_threads) {
         int n = atoi(env_threads);
-        if (n > 0 && n <= 32) {
+        if (n > 0) {
             num_io_threads = n;
         }
     }
@@ -1608,7 +1608,8 @@ void AsyncIoControllerPriv::setMaxIoThreads(int num_threads, ExceptionSink* xsin
         }
     }
     if (num_threads <= 0) {
-        num_threads = std::min((int)std::thread::hardware_concurrency(), 32);
+        int hw = std::thread::hardware_concurrency();
+        num_threads = hw > 0 ? hw : 1;
         if (num_threads <= 0) {
             num_threads = 1;
         }

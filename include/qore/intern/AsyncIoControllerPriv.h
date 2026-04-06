@@ -171,8 +171,8 @@ public:
     //! Remove a program from the shutting-down set
     DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
 
-    //! Maximum cap for auto-scaled workers
-    static constexpr int MAX_WORKER_CAP = 32;
+    //! Fallback cap for auto-scaled workers when hardware_concurrency() is unavailable
+    static constexpr int DEFAULT_WORKER_CAP = 4;
 
 private:
     QoreThreadLock m;
