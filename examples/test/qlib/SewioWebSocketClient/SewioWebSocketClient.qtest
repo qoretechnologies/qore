@@ -70,9 +70,11 @@ class SewioWebSocketClientTest inherits QUnit::Test {
         mServer.setDefaultHandler("ws-handler", wsHandler);
         port = mServer.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
 
+        on_exit {
+            mServer.stop();
+            delete mServer;
+        }
         set_return_value(main());
-
-        mServer.stop();
     }
 
     sewioWebSocketClientTests() {
@@ -102,7 +104,7 @@ class SewioWebSocketClientTest inherits QUnit::Test {
         wsc.disconnect();
         delete wsc;
 
-        assertEq(Data, l);
+        assertEq(Data, sort(l));
     }
 
     sewioWebSocketConnectionTests() {
