@@ -478,6 +478,35 @@ Known failure modes include:
   `SocketHttp2ClientMultiplexPollOperation` prevents this — the destructor sets `destroyed = true` and
   callbacks check the flag before accessing the object.
 
+- **I/O thread autostop race**: When the cache is empty for 2s, the I/O thread sets `io_exiting=true`
+  and breaks out of the main loop.  A concurrent `submit()` could pass the lock-free `running` check
+  (still true), push a `SubmitOp` to the cmdq, and the exiting thread would silently drop it during
+  cleanup.  Fixed by: (1) setting `running=false` atomically with `io_exiting=true`, (2) re-queuing
+  `SubmitOp` commands during exit cleanup instead of dropping them, (3) post-push verification in
+  `submit()` — if the I/O thread exited during the push, `startIntern()` restarts it.
+- **PROGRAM-ERROR shutdown race**: During program shutdown, `cancelByProgram` cancels all ops and
+  flushes workers.  But the I/O thread could dispatch new callbacks between the flush and `ptid`
+  being set, causing workers to hit `PROGRAM-ERROR`.  Fixed by `markProgramShuttingDown()` /
+  `clearProgramShuttingDown()` on `QoreCallDispatcher` — workers check the set before calling
+  `evalMethod` and silently discard callbacks for dying programs.
+- **`releaseCurrentOp` leak**: `HttpAcceptPollOperationPriv` and `Http2PollOperationPriv` obtained
+  their inner poll operation's private data via `getReferencedPrivateData()`, which adds an
+  independent ref.  `releaseCurrentOp()` set `current_op = nullptr` without deref, leaking the
+  private data (and all its indirect data: sockets, SSL sessions, H2 streams).  Fixed by adding
+  `current_op->deref(xsink)` before nulling.  Any new wrapper that uses `getReferencedPrivateData()`
+  must follow this pattern.
+- **Inline handler dispatch**: `onHttpRequest()` must never run inline on a `call_dispatcher` worker.
+  Body-reading requests call `processNativeRequest()` which does synchronous socket I/O — this
+  interferes with the async I/O model when run on the wrong thread.  All requests without an inline
+  result from `tryInlineRequest()` must be dispatched via `handler_pool`.
+
+### Thread Scaling
+
+I/O thread and callback worker thread counts are capped at `hardware_concurrency()` (the number of
+logical CPUs), not a fixed constant.  I/O threads are CPU-bound (epoll/kqueue + continuePoll), so
+more threads than CPUs adds context switching overhead without benefit.  The `QORE_IO_THREADS` env
+var accepts any positive integer; `setMaxIoThreads(0)` auto-detects from `hardware_concurrency()`.
+
 Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck protocol described
 above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
 CONNECT rejection layers.

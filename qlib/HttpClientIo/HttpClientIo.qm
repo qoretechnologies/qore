@@ -333,7 +333,16 @@ public namespace HttpClientIo {
         #! Connection idle timeout
         timeout idle_timeout = DefaultConnectionIdleTimeout;
 
-        #! Connect timeout
+        #! Connect timeout (also used as stale detection timeout for reused pooled connections)
+        /** For fresh connections, this is the TCP/TLS establishment timeout.  For reused
+            pooled connections, this is also used as the request timeout — if a reused
+            connection doesn't respond within \c connect_timeout, the connection is assumed
+            stale, evicted, and the request is retried on a fresh connection.
+
+            Dead connections where the server sent FIN/RST are detected instantly by the
+            async I/O thread (epoll/kqueue + recv(MSG_PEEK)) and evicted before reuse.
+            This timeout only applies to the "half-open" case where the server goes silent.
+        */
         timeout connect_timeout = DefaultConnectTimeout;
 
         #! Default request timeout

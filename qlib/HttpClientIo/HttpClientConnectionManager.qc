@@ -452,16 +452,18 @@ public class HttpClientConnectionManager {
 
         @return the response hash
 
-        @note If the request times out on a \b reused pooled connection, the
-        connection is evicted and the request is retried once on a fresh connection
-        with \c connect_timeout as the retry deadline. This handles stale connections
-        (e.g., server restart, QUIC session death) where no transport-level error is
-        detected before the timeout. The retry uses \c connect_timeout (not
-        \c request_timeout) because if the server genuinely restarted, the fresh
-        connection establishes quickly; if it is unreachable, the retry fails within
-        \c connect_timeout rather than burning a full \c request_timeout. Timeouts on
-        freshly created connections are not retried — they indicate a genuinely slow
-        or unreachable server.
+        @note Stale connection detection uses two levels:
+        - \b Instant: dead connections (FIN/RST from server) are detected by the async
+          I/O thread via epoll/kqueue + \c recv(MSG_PEEK) and marked as closed before
+          the pool scan returns them.  No timeout needed — detection is immediate.
+        - \b Timeout: for "half-open" connections (server went silent — no FIN/RST),
+          reused pooled connections use \c connect_timeout as the request deadline instead
+          of the full \c request_timeout.  If the server doesn't respond within
+          \c connect_timeout, the connection is evicted and the request is retried once
+          on a fresh connection, also with \c connect_timeout as the deadline.  This
+          provides fast stale detection (typically 2-5s) instead of waiting the full
+          \c request_timeout (30-60s).  Timeouts on freshly created connections are not
+          retried — they indicate a genuinely slow or unreachable server.
 
         @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
     */
@@ -1437,9 +1439,11 @@ public class HttpClientConnectionManager {
 
     #! Internal: checks if a connection is alive at the transport level
     /** Verifies that the underlying socket is open and the poll operation hasn't
-        detected any errors. This catches cases where the I/O thread has already
-        detected a dead connection (FIN/RST received) but the HttpClientConnection
-        state hasn't been updated yet.
+        detected any errors.  The async I/O thread continuously monitors idle
+        connections via epoll/kqueue; when a server sends FIN/RST, the I/O thread
+        detects it via \c recv(MSG_PEEK) in \c handleIdle() and marks the poll
+        operation as closed/errored.  This check reads that state, providing
+        instant dead-connection detection for the pool scan.
 
         @note Called under pool_lock read lock — must not block or acquire pool_lock
     */
