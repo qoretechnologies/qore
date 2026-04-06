@@ -295,9 +295,9 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return stream_id;
     }
 
-    #! Protocol-specific poll result hook, called under lock
-    /** Checks for GOAWAY received from server atomically with the base state update.
-        @note Called while \c lock is held — do not re-acquire.
+    #! Protocol-specific poll result hook, called after the base state update
+    /** Checks for GOAWAY received from server after the base state update completes.
+        @note Called without \c lock held.
     */
     private handlePollResultImpl() {
         if (poll_op.isGoawayReceived() && self.isReady()) {

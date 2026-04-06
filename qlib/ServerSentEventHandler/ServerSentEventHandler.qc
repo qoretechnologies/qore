@@ -162,7 +162,9 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
         will be present:
         - \c method: the HTTP method received (ie \c "GET", \c "POST", etc)
         - \c path: the HTTP path given in the request, after processing by decode_url() (Qore function)
-        - \c http_version: the HTTP version number in the request (either \c "1.0" or \c "1.1")
+        - \c http_version: the HTTP version number in the request (e.g. \c "1.1"; note that SSE
+          requires HTTP/1.1 or later — HTTP/1.0 does not support the persistent connections needed
+          for SSE streaming)
         @param b message body, if any
 
         @return a hash representing the response to the client as follows; to accept a dedicated connection; make sure
@@ -196,6 +198,8 @@ public class ServerSentEventHandler inherits HttpServer::AbstractHttpSocketHandl
     #! Legacy synchronous SSE handler entry point (no longer used)
     /** The HttpServer no longer uses synchronous dedicated handlers. SSE connections
         are managed by the async I/O controller via @ref setupAsyncSseConnection().
+
+        @since ServerSentEventHandler 1.1 (throws; was synchronous in earlier versions)
     */
     bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Qore::Socket sock) {
         throw "SSE-SYNC-NOT-SUPPORTED", "synchronous SSE handling is no longer supported; "

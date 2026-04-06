@@ -58,7 +58,7 @@ module HttpClientIo {
     - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
       blocks the caller via Future while the controller event loop handles actual I/O
     - **Sync and async APIs**: Blocking and Future-based interfaces
-    - **Streaming support**: WebSocket and SSE over HTTP/2
+    - **Streaming support**: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
     - **Connection migration**: QUIC connection migration for HTTP/3
 
     @section httpclientio_components Components
@@ -136,6 +136,12 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       negotiation
     - HTTP/3: auto-downgrades to HTTP/2 when a proxy is configured; throws if
       HTTP/3 is explicitly forced with a proxy
+    - Added @ref HttpClientStreamHandle::submitAsyncWithNotifier() "submitAsyncWithNotifier()"
+      for async request submission with EventNotifier signaling on completion
+    - Added @ref HttpClientConnectionManager::submitRequestAsync() "submitRequestAsync()"
+      for connection-manager-level async request submission with automatic retry
+    - Added @ref HttpClientConnectionManager::ensureConnectionAsync() "ensureConnectionAsync()"
+      for non-blocking connection pre-warming
 
     @subsection httpclientio_v1_1 Version 1.1
     - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
@@ -144,6 +150,8 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     - Supports Content-Length, chunked transfer encoding, and connection-close body types
     - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" starts with H2 and upgrades to H3 via Alt-Svc
     - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
+    - Added @ref HttpClientStreamHandle::submitAsyncNonBlocking() "submitAsyncNonBlocking()"
+      for non-blocking async request submission (throws if the connection is not ready)
 
     @subsection httpclientio_v1_0 Version 1.0
     - Initial release of unified HttpClientIo module
@@ -155,7 +163,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     - Abstract base classes for protocol-agnostic code
     - Connection pooling with configurable limits
     - Sync and async request APIs
-    - HTTP/2 streaming support (WebSocket, SSE)
+    - Streaming support (WebSocket, SSE) over HTTP/1.1, HTTP/2, and HTTP/3
     - HTTP/3 connection migration support
 */
 

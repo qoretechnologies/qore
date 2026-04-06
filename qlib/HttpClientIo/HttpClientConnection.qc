@@ -383,7 +383,7 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
 
     #! Handles poll result from AsyncSocketIoController
     /** Updates state under lock, then calls handlePollResultImpl() for
-        protocol-specific handling (e.g. GOAWAY check) while still holding the lock.
+        protocol-specific handling (e.g. GOAWAY check) after releasing the lock.
     */
     handlePollResult() {
         {
@@ -399,9 +399,9 @@ public class HttpClientConnection inherits AbstractHttpPollConnection {
         handlePollResultImpl();
     }
 
-    #! Protocol-specific poll result hook, called under lock
+    #! Protocol-specific poll result hook, called after the base state update
     /** Default no-op; override for protocol-specific handling (e.g. GOAWAY check).
-        @note Called while \c lock is held — do not attempt to re-acquire it.
+        @note Called without \c lock held — implementations may acquire it if needed.
     */
     private handlePollResultImpl() {
     }

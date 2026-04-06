@@ -539,10 +539,10 @@ public class WebSocketConnection {
         }
     }
 
-    #! This method is called to poll for messages from the client to send from the server
-    /** Called by the @ref WebSocketHandler::WebSocketHandler "WebSocketHandler"
-
-        @deprecated Use @ref waitForIoEvent() + @ref pollDataImmediate() for event-driven I/O
+    #! Polls the outgoing channel for messages to send to the client (blocking with timeout)
+    /** @deprecated No longer used by the WebSocketHandler; async H1 connections use a C++ poll
+        operation, and H2/H3 connections use a WebSocketStreamProcessor. Use
+        @ref waitForIoEvent() + @ref pollDataImmediate() for event-driven I/O if needed.
     */
     *binary pollData() {
         try {
@@ -1689,7 +1689,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
     }
 
     #! called from the HTTP server after the handleRequest() method indicates that a dedicated connection should be established
-    /** This method should not return until the connection is closed or the stop() method is called
+    /** This method should not return until the connection is closed or the stop() method is called.
+
+        Depending on the transport, the method delegates I/O to different async mechanisms:
+        - <b>HTTP/1.1 async</b>: an @ref HttpWebSocketPollOperationBase "HttpWebSocketPollOperationBase" C++ poll
+          operation drives frame decode/encode, heartbeat, and close handshake on the I/O thread; this handler
+          thread blocks on a @ref Counter until the connection closes
+        - <b>HTTP/2 and HTTP/3</b>: a @ref WebSocketHandler::WebSocketStreamProcessor "WebSocketStreamProcessor"
+          handles WebSocket frame decode/dispatch on worker threads while the I/O controller manages transport-level
+          I/O; this handler thread blocks on a @ref Counter until the stream closes
 
         @param lid the unique HTTP listener ID
         @param cx call context hash; see @ref httpserverutil_request_context for details; note that \c id is the
@@ -2001,15 +2009,15 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
 
         ## Deadlock Prevention
 
-        WebSocket connections run in their own threads (startImpl loop) and may be blocked on:
-        - waitForIoEvent() for extended CONNECT connections (HTTP/2, HTTP/3)
-        - pollData() waiting for messages to send (250ms timeout) for HTTP/1.1
-        - Socket I/O operations
+        WebSocket connections run in their own threads (startImpl blocks on a Counter) and may
+        be waiting on:
+        - A Counter for async H1 WebSocket connections (C++ poll operation drives I/O)
+        - A Counter for HTTP/2 and HTTP/3 stream connections (WebSocketStreamProcessor drives I/O)
 
         Without this method, the server shutdown sequence would hang waiting for these threads
         to notice the shutdown flag. By calling stop() on each connection, we:
         1. Set the connection's stop_flag to True
-        2. Close the channel to wake up pollData()/waitForIoEvent() immediately
+        2. Abort the poll operation or stream processor (decrements the done Counter)
 
         @param lid the listener ID being stopped
 
@@ -2063,10 +2071,12 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         ## WebSocketConnection::stop() Behavior
 
         For each connection, stop() does:
-        1. Sets stop_flag = True (checked in startImpl's while loop)
-        2. Closes the channel (wakes up pollData()/waitForIoEvent() immediately)
+        1. Sets stop_flag = True
+        2. Closes the channel (wakes up waitForIoEvent() immediately)
+        3. For async H1 connections, aborts the poll operation (decrements the done Counter)
+        4. For H2/H3 stream connections, the stream processor detects the stop flag
 
-        This ensures the startImpl loop will exit on its next iteration, allowing the
+        This ensures the startImpl method unblocks (it waits on a Counter), allowing the
         connection thread to complete and decrement the dThreads counter.
     */
     private stopAllConnections() {

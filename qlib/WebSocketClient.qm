@@ -509,6 +509,15 @@ public const MESSAGE_WS_PONG = "pong";
     To stop listening for web socket events, call
     @ref WebSocketClient::WebSocketClient::disconnect() "WebSocketClient::disconnect()".
 
+    @par Async I/O Mode
+    By default, HTTP/1.1 WebSocket connections use async I/O via the global
+    @ref AsyncSocketIo::AsyncSocketIoController, providing scalable non-blocking I/O without a polling loop.
+    Use @ref WebSocketClient::WebSocketClient::connectAsync() "connectAsync()" for fully non-blocking connect
+    and event loop startup. HTTP/2 and HTTP/3 connections use their multiplexed transports for async I/O
+    automatically. Set the \c async_io constructor option to @ref False to use the legacy 50ms poll loop for
+    HTTP/1.1 connections. Use @ref WebSocketClient::WebSocketClient::isAsyncIo() "isAsyncIo()" to check if
+    async I/O mode is active.
+
     The @ref WebSocketClient::WebSocketClient "WebSocketClient" class includes support for running in sandboxed
     Program objects with the following parse options set:
     - \c PO_NO_PROCESS_CONTROL: in this case the \c "yield" option is required in

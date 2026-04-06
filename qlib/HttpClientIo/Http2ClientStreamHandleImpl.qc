@@ -84,6 +84,11 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         return conn.submitRequestWithNotifier(method, path, headers, body, notifier);
     }
 
+    #! Returns True; HTTP/2 supports streaming (WebSocket, SSE)
+    bool supportsStreaming() {
+        return True;
+    }
+
     #! Starts a streaming request (for WebSocket or SSE over HTTP/2)
     /** @param method HTTP method (typically GET for SSE, or CONNECT for WebSocket)
         @param path request path
@@ -93,15 +98,14 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
         send data via sendData() and close the stream explicitly.  If False (default),
         the request is submitted with END_STREAM on the HEADERS frame, which is
         appropriate for response-only streaming (e.g., SSE).
+        @param body one-shot request body (optional); sent with the request before
+        streaming begins
 
         @return the stream ID
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
+        @throw HTTPCLIENT-TIMEOUT if connection establishment times out
     */
-    bool supportsStreaming() {
-        return True;
-    }
-
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body) {
         {

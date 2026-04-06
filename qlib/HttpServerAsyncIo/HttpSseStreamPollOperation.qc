@@ -63,6 +63,9 @@ public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase
         *string pending_data;
 
         #! Bytes already written from pending_data
+        /** @note Currently unused because \c send2() guarantees full delivery; retained for
+            future partial-write support if non-blocking sends are introduced.
+        */
         int pending_offset = 0;
 
     }

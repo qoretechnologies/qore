@@ -984,7 +984,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a list of listener info hashes; see the return value of HttpServer::getListenerInfo() for the
         description of each hash element in the list returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1027,7 +1029,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a list of listener info hashes; see the return value of HttpServer::getListenerInfo() for the
         description of each hash element in the list returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \c bind begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key of the \a info hash is ignored
@@ -1058,7 +1062,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a listener info hash; see the return value of HttpServer::HttpServer::getListenerInfo() for the
         description of the hash returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note This method blocks until async I/O is ready to accept connections.
         Use @ref HttpServer::HttpServer::addListener "addListener(hash<HttpListenerOptionInfo>)" with \c sync: \c False to add listeners without blocking.
@@ -1078,7 +1084,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
         @return a listener info hash; see the return value of HttpServer::HttpServer::getListenerInfo() for the
         description of the hash returned by this method
 
-        @throw HTTPSERVER-ADDLISTENER-ERROR invalid options; duplicate bind address
+        @throw HTTPSERVER-ADDLISTENER-ERROR missing bind info, duplicate bind address, or duplicate listener name
+        @throw SOCKET-BIND-ERROR the socket could not be bound to the given address
+        @throw HTTPLISTENER-BIND-ERROR the listener could not bind on the given address
 
         @note if \a sock begins with a "/" character then it is assumed to be a UNIX socket path and the \a family
         key is ignored
@@ -1417,10 +1425,11 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     #! Stops the HTTP server and releases all resources
     /** Performs a synchronous, ordered shutdown:
         -# Signals streaming handlers (SSE, WebSocket) to stop
-        -# Stops the async I/O controller (cancels all accept, connection, and streaming ops)
+        -# Stops the async I/O controller (cancels all accept, connection, and streaming
+           operations and waits for in-flight handler tasks to complete)
         -# Cancels remaining ops by owner on the global async I/O controller
-        -# Waits for all in-flight handler tasks to complete (\c handler_pool.stopWait())
-        -# Stops listeners and the internal thread pool
+        -# Stops listeners and waits for all listener-stopped callbacks
+        -# Flushes any remaining async callbacks and stops the internal thread pool
 
         This method blocks until all connections are closed and handler tasks complete.
 
@@ -2102,16 +2111,24 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
 
     #! Waits for async I/O to be ready to accept connections
     /** This method blocks until the async I/O controller and its coordinator thread are ready
-        to process connections. Use this after calling @ref addListener() and before making
-        client connections in tests to ensure the server is ready.
+        to process connections. Call this after @ref addListener() (with \c sync: \c False) to
+        ensure the server is fully ready before clients connect.
+
+        When \c sync is \c True (the default), @ref addListener() calls this method automatically,
+        so an explicit call is only needed when adding multiple listeners with \c sync: \c False
+        for batch setup efficiency.
+
+        Common use cases:
+        - Test setup: call after \c addListener() to guarantee the server is accepting before
+          clients connect
+        - Batch listener setup: add several listeners with \c sync: \c False, then call this
+          once to wait for all of them
+        - Orchestration: ensure the server is fully operational before advertising its address
+          to service registries, load balancers, or health checks
 
         @param timeout maximum time to wait; use @ref NOTHING for no timeout (default: 5 seconds)
 
         @return @ref True if async I/O is ready, @ref False if the timeout expired
-
-        @note This method is primarily useful for testing scenarios where clients connect
-        immediately after server setup. In production, the async I/O typically starts fast enough
-        that this wait is unnecessary.
 
         @since HttpServer 1.1.4
     */

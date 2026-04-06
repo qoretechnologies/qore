@@ -757,7 +757,27 @@ public class HttpAsyncSocketIoController {
         });
     }
 
-    #! Handles accept operation result from the controller
+    #! Handles the result of a completed accept poll operation
+    /** Called by the onComplete callback of @ref HttpAcceptPollOperation when a new client
+        connection has been accepted (or the accept failed). This method:
+        -# Decrements the outstanding accept count for the listener
+        -# If the operation was canceled (shutdown in progress), returns immediately
+        -# Replenishes the accept operation pool so the listener stays ready for new connections
+        -# On accept error, logs the error and returns
+        -# On success, retrieves the accepted socket and delegates to @ref handleAcceptComplete()
+           for SSL handshake, HTTP/2 negotiation, and connection tracking
+
+        @param result the poll result containing the accepted socket or error information
+        @param listener the listener socket that accepted the connection
+        @param target the async target for dispatching HTTP events
+        @param ssl whether the listener requires SSL/TLS
+        @param cert the SSL certificate for the listener (if SSL)
+        @param key the SSL private key for the listener (if SSL)
+        @param http_version the HTTP version for the listener (e.g. \c "1.1", \c "2")
+        @param owner the listener owner key used for tracking accept counts
+
+        @note This method runs on the I/O callback thread and must not block.
+    */
     handleAcceptResult(hash<SocketPollResultInfo> result, Socket listener,
             HttpAsyncTarget target, bool ssl, auto cert, auto key,
             string http_version, string owner) {
@@ -1860,7 +1880,29 @@ public class HttpAsyncSocketIoController {
         }
     }
 
-    #! Handles connection operation result from the controller
+    #! Handles the result of a completed connection poll operation
+    /** Called by the onComplete callback of connection-phase poll operations (SSL handshake,
+        header read, idle wait, keep-alive, WebSocket, SSE, HTTP/2, etc.) when the operation
+        completes, times out, or encounters an error. This method:
+        -# If the operation was canceled, closes the socket and removes the connection
+        -# If the connection has been removed (e.g. during shutdown), returns immediately
+        -# On error, handles state-specific error recovery (e.g. SSE timeout resubmission)
+           and delegates to @ref handleConnectionError() for fatal errors
+        -# On success, dispatches to the appropriate state handler based on \a orig_state:
+           - \c Idle: checks for timeout, data, or close via @ref handleIdleTimeout(),
+             @ref handleIdleDataReady(), @ref handleConnectionClosed()
+           - \c KeepAlive: checks for timeout, headers ready, or close
+           - \c ReadHeader / \c SendAndReadHeader: processes completed headers
+           - \c SslHandshake: starts header reading after successful handshake
+           - \c Sse / \c WebSocket / \c Http2 / \c Http3: delegates to streaming handlers
+
+        @param result the poll result containing completion status or error information
+        @param uh the unique hash identifying the connection socket
+        @param orig_state the @ref HttpConnectionState that was active when the operation
+            was submitted; used to dispatch to the correct handler
+
+        @note This method runs on the I/O callback thread and must not block.
+    */
     handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {
         if (result.canceled) {

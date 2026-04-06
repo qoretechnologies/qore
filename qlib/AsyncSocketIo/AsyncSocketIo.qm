@@ -32,7 +32,7 @@
 %requires(reexport) HttpServerUtil
 
 module AsyncSocketIo {
-    version = "1.0";
+    version = "1.2";
     desc    = "API for async socket I/O";
     author  = "David Nichols <david@qore.org>";
     url     = "http://qore.org";
@@ -51,7 +51,37 @@ module AsyncSocketIo {
 
     All the public symbols in the module are defined in the AsyncSocketIo namespace.
 
+    @section asyncsocketioconfig AsyncSocketIo Configuration
+
+    @par QORE_IO_THREADS Environment Variable
+    The \c QORE_IO_THREADS environment variable controls the number of I/O threads used by the
+    async I/O controller. I/O threads are CPU-bound (epoll/kqueue + continuePoll), so more threads
+    than CPUs adds context-switch overhead without benefit. The default is auto-detected from
+    \c hardware_concurrency() (the number of logical CPUs). Set this environment variable to any
+    positive integer to override the default; for example:
+    @code{.py}
+    export QORE_IO_THREADS=4
+    @endcode
+
     @section asyncsocketiorelnotes Release Notes
+
+    @subsection asyncsocketio_1_2 AsyncSocketIo 1.2
+    - thread scaling: I/O thread and callback worker thread counts are now capped at
+      \c hardware_concurrency() instead of a hardcoded constant, adapting automatically to the
+      host CPU count
+    - autostop race fix: eliminated a race condition where the I/O thread could exit during the
+      autostop grace period while new operations were being submitted
+    - documented the \c QORE_IO_THREADS environment variable for overriding the I/O thread count
+
+    @subsection asyncsocketio_1_1 AsyncSocketIo 1.1
+    - \c onComplete/abort refactor: poll operations now implement
+      @ref Qore::AbstractPollOperation::onComplete() "onComplete()" and
+      @ref Qore::AbstractPollOperation::abort() "abort()" methods instead of using the
+      \c SocketPollOperationInfo.callback field; callbacks are dispatched to the thread pool
+      to avoid blocking the I/O thread
+    - @ref Qore::DelegatingPollOperation "DelegatingPollOperation": new C++ wrapper for poll
+      operations that cannot be subclassed directly (SSL handshake, ping, synchronous wait),
+      delegating \c onComplete()/\c abort() to user-provided closures
 
     @subsection asyncsocketio_1_0 AsyncSocketIo 1.0
     - the initial version of the AsyncSocketIo module

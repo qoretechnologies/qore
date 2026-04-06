@@ -322,7 +322,8 @@ public class HttpClientConnectionManager {
         @param method HTTP method (e.g., "POST")
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
-        @param body_streaming if True, enables bidirectional streaming (HTTP/2+ only)
+        @param body_streaming if True, enables bidirectional streaming (HTTP/2 and HTTP/3 only;
+        HTTP/1.1 supports response-only streaming)
         @param body request body (optional)
 
         @return the stream handle ready for reading
@@ -377,6 +378,12 @@ public class HttpClientConnectionManager {
 
         @return a hash with "stream" (HttpClientStreamHandle, for cancellation) and
         "future" (Future, resolves to the response hash)
+
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+        @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
 
         @since %HttpClientIo 1.2
     */
@@ -465,7 +472,12 @@ public class HttpClientConnectionManager {
           \c request_timeout (30-60s).  Timeouts on freshly created connections are not
           retried — they indicate a genuinely slow or unreachable server.
 
-        @throw HTTPCLIENT-TIMEOUT if the request times out on the retry as well
+        @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections)
+        @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTP-REDIRECT-ERROR if the maximum number of redirects is exceeded
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
@@ -617,6 +629,17 @@ public class HttpClientConnectionManager {
     }
 
     #! Returns connection pool statistics
+    /** @return a hash with the following keys:
+        - \c total_connections (int): total number of pooled connections across all hosts
+        - \c total_active_streams (int): total number of active streams across all connections
+        - \c hosts (int): number of distinct host:port entries in the pool
+        - \c per_host (hash<string, hash<auto>>): per-host breakdown keyed by "host:port", where
+          each value is a hash with:
+          - \c connections (int): number of connections to that host
+          - \c active_streams (int): total active streams on those connections
+          - \c draining (int): number of connections in GOAWAY/draining state
+        - \c protocol (string): configured protocol selection ("auto", "h1", "h2", or "h3")
+    */
     hash<auto> getStats() {
         AutoReadLock al(pool_lock);
 
