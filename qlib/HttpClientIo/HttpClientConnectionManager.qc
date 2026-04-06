@@ -564,17 +564,28 @@ public class HttpClientConnectionManager {
             *HttpClientStreamHandle stream;
             try {
                 stream = acquireStream(url);
-                # Use connect_timeout for reused pooled connections — if the
-                # server doesn't respond within connect_timeout, the connection
-                # is likely stale.  This enables fast stale detection + retry
-                # instead of waiting the full request_timeout before retrying.
+                # Per-request timeout resolution:
+                # 1. Caller-provided timeout always wins (the caller knows best,
+                #    e.g. LLM queries with 60s timeout).
+                # 2. After a stale-connection retry: use connect_timeout for fast
+                #    fail — if the fresh connection also times out, the server is
+                #    genuinely unreachable.
+                # 3. Otherwise: NOTHING — falls through to the default
+                #    request_timeout configured on the connection manager.
+                #
+                # NOTE: reused pooled connections intentionally use the default
+                # request_timeout rather than connect_timeout.  Using
+                # connect_timeout for "stale detection" caused false timeouts
+                # on slow-response endpoints (AI/LLM, long-running APIs) where
+                # the connection is alive but the response takes longer than
+                # connect_timeout.  True stale connections are detected at the
+                # TCP/protocol layer (RST, GOAWAY, connection-reset errors) and
+                # retried via the isConnectionError path below.
                 *timeout effective_timeout;
-                if (timeout_retried) {
-                    effective_timeout = opts.connect_timeout;
-                } else if (stream.wasConnectionReused()) {
-                    effective_timeout = opts.connect_timeout ?? timeout_ms;
-                } else {
+                if (exists timeout_ms) {
                     effective_timeout = timeout_ms;
+                } else if (timeout_retried) {
+                    effective_timeout = opts.connect_timeout;
                 }
                 log(LoggerLevel::DEBUG, "requestIntern %s %s: reused=%y timeout_retried=%y "
                     "effective_timeout=%y",
