@@ -281,6 +281,16 @@ QoreHashNode* HttpWebSocketPollOperationPriv::continuePoll(ExceptionSink* xsink)
         return nullptr;
     }
 
+    // Re-check CLOSING→CLOSED after Phase 4 drains the send queue.
+    // The first CLOSING check (above Phase 4) may have failed because the
+    // close echo was still in the send_queue; now that Phase 4 has sent it,
+    // the transition can complete.
+    if (ws_state == WsState::CLOSING && !send_op && send_queue->empty()
+            && (close_initiated || !sock->isOpen())) {
+        setClosed(close_code, close_reason.c_str());
+        return nullptr;
+    }
+
     // Poll for incoming data. Skip in CLOSING state to prevent busy-loop
     // from the TCP FIN. The wakeSocket mechanism handles the closing
     // handshake, and the CLOSED transition cleans up the cache entry.

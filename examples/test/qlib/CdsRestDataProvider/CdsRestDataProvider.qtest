@@ -54,7 +54,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
             "bc_client_id":       "i,bc-client-id=s",
             "bc_client_secret":   "s,bc-client-secret=s",
             "bc_url":             "u,bc-url=s",
-            "bc_tenant":          "T,bc-tenant=s",
+            "bc_tenant":          "n,bc-tenant=s",
             "bc_instance_type":   "e,bc-instance-type=s",
             # Common options
             "timeout":            "t,timeout=i",
@@ -115,7 +115,7 @@ class CdsRestDataProviderTest inherits QUnit::Test {
         printOption("-i,--bc-client-id=ARG", "set Business Central OAuth2 client ID", OptionColumn);
         printOption("-s,--bc-client-secret=ARG", "set Business Central OAuth2 client secret", OptionColumn);
         printOption("-u,--bc-url=ARG", "URL for the Business Central instance", OptionColumn);
-        printOption("-T,--bc-tenant=ARG", "set Business Central Azure AD tenant", OptionColumn);
+        printOption("-n,--bc-tenant=ARG", "set Business Central Azure AD tenant", OptionColumn);
         printOption("-e,--bc-instance-type=ARG", "set Business Central instance type", OptionColumn);
         printOption("-t,--timeout=ARG", "set connection timeout in seconds", OptionColumn);
     }

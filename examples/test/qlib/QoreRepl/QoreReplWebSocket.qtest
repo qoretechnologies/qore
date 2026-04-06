@@ -420,8 +420,15 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
 
         # Close first, then third should succeed
         client1.disconnect();
-        # Wait longer for server to process disconnect and decrement connection count
-        usleep(500ms);
+        # Wait for the server to detect the disconnect and decrement
+        # the connection count via async I/O close handling
+        int wait_ms = 0;
+        while (limitHandler.getConnectionCount() > 0 && wait_ms < 5000) {
+            usleep(50ms);
+            wait_ms += 50;
+        }
+        assertEq(0, limitHandler.getConnectionCount(),
+            "connection count should be 0 after disconnect");
 
         Queue msgs3();
         WebSocketClient client3(sub (*data msg) { msgs3.push(msg); }, {
