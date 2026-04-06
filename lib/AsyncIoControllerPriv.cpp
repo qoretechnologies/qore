@@ -2187,12 +2187,33 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         // Extract events from poll_info (single hash lookup)
                         int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
 
-                        // Fast path: if socket hash and events unchanged, skip
-                        // updateEventLoopRegistration entirely — no getReferencedPrivateData,
-                        // no epoll_ctl, no hash lookups.  This is the steady-state path
-                        // for echo/streaming where the socket and events don't change.
+                        // Fast path: if socket hash, events, AND fd generation are
+                        // unchanged, skip updateEventLoopRegistration entirely — no
+                        // getReferencedPrivateData, no epoll_ctl/kqueue, no hash lookups.
+                        // This is the steady-state path for echo/streaming.
+                        //
+                        // The fd generation check is essential for QUIC connection
+                        // migration: the socket object and events stay the same, but
+                        // migrateConnection() swaps the fd and bumps the generation.
+                        // On macOS, closing a kqueue-monitored fd silently removes
+                        // the filter without delivering an event.  Without this check,
+                        // the new fd is never registered and the connection hangs.
                         bool needs_full_update = pinfo.cached_sock_hash.empty()
                             || events != pinfo.cached_events;
+                        if (!needs_full_update && pinfo.spop_obj) {
+                            SocketPollOperationBase* spop =
+                                static_cast<SocketPollOperationBase*>(
+                                    pinfo.spop_obj->getReferencedPrivateData(
+                                        CID_SOCKETPOLLOPERATIONBASE, xsink));
+                            if (spop) {
+                                uint32_t gen = spop->getFdGeneration();
+                                if (gen != pinfo.cached_fd_gen) {
+                                    pinfo.cached_fd_gen = gen;
+                                    needs_full_update = true;
+                                }
+                                spop->deref(xsink);
+                            }
+                        }
 
                         std::string sock_hash;
                         if (needs_full_update) {

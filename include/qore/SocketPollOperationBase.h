@@ -154,7 +154,35 @@ public:
         return 0;
     }
 
+    //! Returns the fd generation counter
+    /** The controller caches this value; when it changes, a full event loop
+        registration update is performed (detecting fd changes from e.g. QUIC
+        connection migration).  Subclasses increment this via bumpFdGeneration()
+        after swapping the underlying socket fd.
+
+        @return monotonically increasing generation counter
+        @since %Qore 2.3
+    */
+    DLLEXPORT uint32_t getFdGeneration() const {
+        return fd_generation.load(std::memory_order_acquire);
+    }
+
 protected:
+    //! Increments the fd generation counter
+    /** Call this after operations that change the underlying fd (e.g. QUIC
+        connection migration) so the controller re-registers the new fd in
+        kqueue/epoll.
+        @since %Qore 2.3
+    */
+    DLLEXPORT void bumpFdGeneration() {
+        fd_generation.fetch_add(1, std::memory_order_release);
+    }
+
+private:
+    //! fd generation counter — bumped when the underlying fd changes
+    std::atomic<uint32_t> fd_generation{0};
+
+public:
     //! Weak reference to the QoreObject wrapping this private data
     QoreObjectWeakRefHolder self;
 

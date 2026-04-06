@@ -219,7 +219,12 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         if (*xsink) {
             xsink->clear();  // log but continue
         }
-        (void)rv;
+        if (!rv) {
+            // Migration swapped the socket fd; bump generation so the
+            // controller's fast-path cache invalidation detects the change
+            // and re-registers the new fd in kqueue/epoll.
+            bumpFdGeneration();
+        }
     }
 
     int total_drain_count = 0;

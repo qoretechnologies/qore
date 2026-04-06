@@ -469,6 +469,7 @@ private:
         int64 poll_timeout_deadline_us; //!< Absolute deadline for protocol-level poll timeout (QUIC)
         std::string cached_sock_hash;   //!< Cached socket hash for O(1) Phase 1 readiness check
         int cached_events = 0;          //!< Cached poll events for Phase 3 fast path
+        uint32_t cached_fd_gen = 0;     //!< Cached fd generation for QUIC migration detection
         uint64_t last_queued_gen = 0;   //!< Phase 1 generation when last queued (duplicate prevention)
 
         DLLLOCAL PollInfo() : timeout_date_us(0), sock_obj(nullptr), sock(nullptr),
