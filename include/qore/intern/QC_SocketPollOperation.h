@@ -554,7 +554,11 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const override {
-        return phase == Phase::Complete || phase == Phase::Timeout;
+        return phase == Phase::Complete || phase == Phase::Timeout || phase == Phase::Closed;
+    }
+
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return phase == Phase::Closed;
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override;
@@ -569,7 +573,7 @@ public:
     }
 
 private:
-    enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Error };
+    enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::Sending;
 
     // Sending phase: holds the pre-serialized HTTP response
@@ -619,7 +623,11 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const override {
-        return phase == Phase::Complete || phase == Phase::Timeout;
+        return phase == Phase::Complete || phase == Phase::Timeout || phase == Phase::Closed;
+    }
+
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return phase == Phase::Closed;
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override;
@@ -642,7 +650,7 @@ public:
     }
 
 private:
-    enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Error };
+    enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::SendHeaders;
 
     // SendHeaders phase: pre-serialized HTTP response headers

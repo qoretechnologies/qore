@@ -6629,6 +6629,7 @@ const char* SocketSendAndReadHeaderPollOperation::getStateImpl() const {
         case Phase::ReadingHeader: return "reading-header";
         case Phase::Complete: return "header-complete";
         case Phase::Timeout: return "timeout";
+        case Phase::Closed: return "closed";
         case Phase::Error: return "error";
         default: return "unknown";
     }
@@ -6677,7 +6678,32 @@ QoreHashNode* SocketSendAndReadHeaderPollOperation::continuePoll(ExceptionSink* 
                 set_non_block = false;
                 return nullptr;
             }
-            // Data is available (we were woken by POLLIN) — transition to header reading
+            // Peek for EOF before starting header reading — matches the
+            // pattern in HttpKeepAlivePollOperationBase::continueIdlePoll()
+            {
+                int fd = sock->priv->socket->getSocket();
+                if (fd >= 0) {
+                    char peek_buf;
+                    ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+                    if (peek_rc == 0) {
+                        // EOF — remote closed; close socket to prevent CLOSE_WAIT
+                        phase = Phase::Closed;
+                        sock->priv->socket->close();
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+                    if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
+                            && errno != EINTR) {
+                        phase = Phase::Closed;
+                        sock->priv->socket->close();
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+                }
+            }
+            // Data is available — transition to header reading
             poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
             if (*xsink || !poll_state) {
                 phase = Phase::Error;
@@ -6803,6 +6829,7 @@ const char* SocketSendStreamAndReadHeaderPollOperation::getStateImpl() const {
         case Phase::ReadingHeader: return "reading-header";
         case Phase::Complete: return "stream-complete";
         case Phase::Timeout: return "timeout";
+        case Phase::Closed: return "closed";
         case Phase::Error: return "error";
         default: return "unknown";
     }
@@ -7063,7 +7090,30 @@ QoreHashNode* SocketSendStreamAndReadHeaderPollOperation::continuePoll(Exception
                     set_non_block = false;
                     return nullptr;
                 }
-                // Data is available (we were woken by POLLIN) — transition to header reading
+                // Peek for EOF before starting header reading
+                {
+                    int fd = sock->priv->socket->getSocket();
+                    if (fd >= 0) {
+                        char peek_buf;
+                        ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+                        if (peek_rc == 0) {
+                            phase = Phase::Closed;
+                            sock->priv->socket->close();
+                            sock->priv->clearNonBlock();
+                            set_non_block = false;
+                            return nullptr;
+                        }
+                        if (peek_rc < 0 && errno != EAGAIN && errno != EWOULDBLOCK
+                                && errno != EINTR) {
+                            phase = Phase::Closed;
+                            sock->priv->socket->close();
+                            sock->priv->clearNonBlock();
+                            set_non_block = false;
+                            return nullptr;
+                        }
+                    }
+                }
+                // Data is available — transition to header reading
                 poll_state.reset(sock->priv->socket->startRecvUntilBytes(xsink, "\r\n\r\n", 4));
                 if (*xsink || !poll_state) {
                     phase = Phase::Error;

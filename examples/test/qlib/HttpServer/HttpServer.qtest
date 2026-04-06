@@ -2684,7 +2684,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             delete clients;
 
             # Wait for the async I/O system to process disconnects and clean
-            # up cache entries; under CI load this can take longer than 500ms
+            # up cache entries
             int final_cache_size;
             int cleanup_retries = 0;
             while (True) {
@@ -2764,7 +2764,7 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             delete clients;
 
             # Wait for the async I/O system to process disconnects and clean
-            # up cache entries; under CI load this can take longer than 500ms
+            # up cache entries
             int h2_final;
             int h2_cleanup_retries = 0;
             while (True) {
@@ -2969,27 +2969,32 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                     if (!client) {
                         continue;
                     }
-                    for (int req = 0; req < max_requests_per_conn; ++req) {
-                        *hash<auto> hdr;
-                        try {
-                            hdr = client.readHTTPHeader(2s);
-                        } catch () {
-                            break;
+                    # Handle each accepted connection in a background thread so
+                    # an abandoned keep-alive connection (scenario 1 leftover)
+                    # doesn't block acceptance of new connections (scenario 2)
+                    background sub (Socket client) {
+                        for (int req = 0; req < max_requests_per_conn; ++req) {
+                            *hash<auto> hdr;
+                            try {
+                                hdr = client.readHTTPHeader(2s);
+                            } catch () {
+                                break;
+                            }
+                            if (!hdr) {
+                                break;
+                            }
+                            string body = sprintf("{\"n\": %d}", req);
+                            string resp = sprintf(
+                                "HTTP/1.1 200 OK\r\n"
+                                "Content-Type: application/json\r\n"
+                                "Content-Length: %d\r\n"
+                                "Connection: keep-alive\r\n"
+                                "\r\n"
+                                "%s", body.size(), body);
+                            client.send(resp);
                         }
-                        if (!hdr) {
-                            break;
-                        }
-                        string body = sprintf("{\"n\": %d}", req);
-                        string resp = sprintf(
-                            "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: application/json\r\n"
-                            "Content-Length: %d\r\n"
-                            "Connection: keep-alive\r\n"
-                            "\r\n"
-                            "%s", body.size(), body);
-                        client.send(resp);
-                    }
-                    client.close();
+                        client.close();
+                    }(client);
                 }
             } catch () {
                 # ignore errors on shutdown

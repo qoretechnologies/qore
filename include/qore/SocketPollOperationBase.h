@@ -139,6 +139,24 @@ public:
         return QoreValue();
     }
 
+    //! Returns true if the socket should be auto-closed when the operation completes
+    /** The async I/O controller calls this when removing a completed operation from
+        its cache. If it returns true, the controller closes the socket fd to prevent
+        CLOSE_WAIT accumulation.
+
+        Override and return true for terminal states where the connection is dead
+        (remote close, timeout, error). Return false for transition states where
+        the socket will be reused (e.g., keep-alive header complete, H2 request ready).
+
+        The default returns false (socket is not auto-closed).
+
+        @return true if the socket should be closed on completion
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual bool needsCloseOnComplete() const {
+        return false;
+    }
+
     //! Returns the number of items pushed to output queues in the last continuePoll() cycle
     /** Override this in subclasses that push data to queues during continuePoll()
         (e.g., WebSocket frame I/O, pipeline PUSH_QUEUE steps). The controller calls this

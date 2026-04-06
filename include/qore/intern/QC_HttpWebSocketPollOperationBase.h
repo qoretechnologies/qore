@@ -139,6 +139,11 @@ public:
     //! Returns true when the connection is closed or in error
     DLLLOCAL bool goalReached() const override;
 
+    //! WebSocket completion always means the connection is dead
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return goalReached();
+    }
+
     //! Drives the WebSocket I/O state machine
     /** 1. Check state (CLOSED/ERROR -> return nullptr)
         2. If send_op active: drive it; when done, release it

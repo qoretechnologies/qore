@@ -93,12 +93,16 @@ QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return nullptr;
             }
             if (peek_rc == 0) {
+                // EOF — client closed the connection; close the socket
+                // immediately to prevent CLOSE_WAIT fd accumulation
                 idle_state = IdleState::CLOSED;
+                sock_obj->closeIo(xsink);
                 return nullptr;
             }
             // peek_rc < 0: check for real errors vs EAGAIN
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                 idle_state = IdleState::CLOSED;
+                sock_obj->closeIo(xsink);
                 return nullptr;
             }
         }

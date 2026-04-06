@@ -148,6 +148,14 @@ public:
         return error_info != nullptr;
     }
 
+    //! Returns true if the socket should be auto-closed on completion
+    /** CLOSED and ERROR states mean the H2 connection is dead.
+        REQUEST_READY and SENT states mean the socket will be reused.
+    */
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return h2_state == H2ServerState::CLOSED || error_info != nullptr;
+    }
+
     //! Returns error information if an error occurred (ref'd)
     DLLLOCAL QoreHashNode* getErrorInfo() const {
         if (error_info) {

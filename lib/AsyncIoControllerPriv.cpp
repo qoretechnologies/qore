@@ -2149,16 +2149,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         }
                     }
 
-                    // On error or timeout, close the socket to release the fd and
-                    // prevent CLOSE-WAIT accumulation.  Without this, dead sockets
-                    // leak when the remote closes the connection and degrade epoll
-                    // performance over time.
+                    // Close the socket when the operation indicates the connection
+                    // is dead (error, or C++ operation declares needsCloseOnComplete).
+                    // This prevents CLOSE-WAIT fd accumulation when the remote closes
+                    // and the Qore-level cleanup forgets to call close().
                     //
-                    // Skip for:
-                    // - successful completions (socket may be reused by the pool)
-                    // - SOCK_DGRAM sockets (HTTP/3 QUIC uses a shared UDP socket
-                    //   across sessions; closing it would break other sessions)
-                    if (result.ex_hash && pinfo.sock) {
+                    // Skip for SOCK_DGRAM (HTTP/3 QUIC shared UDP socket).
+                    bool should_close = false;
+                    if (result.ex_hash) {
+                        // Error path: always close
+                        should_close = true;
+                    } else if (pinfo.spop_base && pinfo.spop_base->needsCloseOnComplete()) {
+                        // C++ operation declares the connection is terminal
+                        should_close = true;
+                    }
+                    if (should_close && pinfo.sock) {
                         int fd = pinfo.sock->getPollableDescriptor();
                         if (fd >= 0) {
                             int sock_type = 0;

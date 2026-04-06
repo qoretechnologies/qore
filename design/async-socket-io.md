@@ -499,6 +499,25 @@ Known failure modes include:
   Body-reading requests call `processNativeRequest()` which does synchronous socket I/O — this
   interferes with the async I/O model when run on the wrong thread.  All requests without an inline
   result from `tryInlineRequest()` must be dispatched via `handler_pool`.
+### Socket Lifecycle Guarantee
+
+The C++ layer guarantees correct socket fd cleanup — Qore-level code must not be required to call
+`close()` for correctness.  Two mechanisms enforce this:
+
+1. **Poll operations close on EOF:** When `recv(MSG_PEEK)` returns 0 (EOF) or a fatal error in
+   `continuePoll()`, the operation calls `closeIo()` / `close()` immediately before returning the
+   terminal state.  This prevents CLOSE_WAIT fd accumulation — the kernel holds fds in CLOSE_WAIT
+   indefinitely until the application explicitly closes them.
+
+2. **Controller auto-close via `needsCloseOnComplete()`:** `SocketPollOperationBase` provides a
+   virtual `needsCloseOnComplete()` (default: false).  Poll operations override it to return true
+   for terminal states (CLOSED, TIMEOUT, ERROR) where the connection is dead.  In Phase 3, after
+   removing a completed operation from the cache, the controller checks this method and auto-closes
+   the socket if true.  This is defense-in-depth: even if a poll operation's `continuePoll()` forgets
+   to close, the controller catches it.
+
+SOCK_DGRAM sockets (HTTP/3 QUIC shared UDP) are exempt — closing them would break other sessions
+sharing the fd.
 
 ### Thread Scaling
 

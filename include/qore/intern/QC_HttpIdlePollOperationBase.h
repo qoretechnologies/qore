@@ -93,6 +93,14 @@ public:
         return idle_state == IdleState::CLOSED;
     }
 
+    //! Returns true if the socket should be auto-closed on completion
+    /** Terminal states (CLOSED, TIMEOUT) mean the connection is dead.
+        DATA_AVAILABLE means the socket will be reused for request handling.
+    */
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return idle_state == IdleState::CLOSED || idle_state == IdleState::TIMEOUT;
+    }
+
     //! Resets the timeout deadline from now
     DLLLOCAL void resetTimeout();
 

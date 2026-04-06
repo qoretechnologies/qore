@@ -108,6 +108,14 @@ public:
         return op_state == State::CLOSED;
     }
 
+    //! Returns true if the socket should be auto-closed on completion
+    /** Terminal states (CLOSED, TIMEOUT) mean the connection is dead.
+        HEADER_COMPLETE means the socket will be reused for request handling.
+    */
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return op_state == State::CLOSED || op_state == State::TIMEOUT;
+    }
+
     //! Returns the current phase as a string
     DLLLOCAL const char* getPhase() const {
         switch (phase) {

@@ -173,13 +173,16 @@ QoreHashNode* HttpKeepAlivePollOperationPriv::continueIdlePoll(ExceptionSink* xs
                 return transitionToHeaderPhase(xsink);
             }
             if (peek_rc == 0) {
-                // EOF — client closed the connection
+                // EOF — client closed the connection; close the socket
+                // immediately to prevent CLOSE_WAIT fd accumulation
                 op_state = State::CLOSED;
+                sock_obj->closeIo(xsink);
                 return nullptr;
             }
             // peek_rc < 0: check for real errors vs EAGAIN
             if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
                 op_state = State::CLOSED;
+                sock_obj->closeIo(xsink);
                 return nullptr;
             }
         }
