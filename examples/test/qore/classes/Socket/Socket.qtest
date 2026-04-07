@@ -155,6 +155,10 @@ class SocketTest inherits QUnit::Test {
         addTestCase("SSL poll send partial test", \sslPollSendPartialTest());
         addTestCase("SSL write disconnect test", \sslWriteDisconnectTest());
         addTestCase("ALPN test", \alpnTest());
+        addTestCase("Happy Eyeballs sync connect", \happyEyeballsSyncTest());
+        addTestCase("Happy Eyeballs async connect", \happyEyeballsAsyncTest());
+        addTestCase("Happy Eyeballs single family", \happyEyeballsSingleFamilyTest());
+        addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
         set_return_value(main());
     }
 
@@ -1610,5 +1614,167 @@ class SocketTest inherits QUnit::Test {
 
         map (str += sprintf("%s: %y ", $1.key, $1.value)), h.pairIterator();
         return str;
+    }
+
+    #! Test Happy Eyeballs sync connect to localhost (dual-stack)
+    happyEyeballsSyncTest() {
+        # Start a listener on a random port
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        # Sync connect to localhost — should trigger Happy Eyeballs if dual-stack
+        Socket client();
+        client.connect("localhost:" + port, 10s);
+        assertTrue(client.isOpen());
+
+        # Accept the connection on the server side
+        Socket accepted = server.accept();
+        assertTrue(accepted.isOpen());
+
+        # Send and receive data to verify the connection works
+        string test_data = "Happy Eyeballs sync test";
+        client.send(test_data);
+        string received = accepted.recv(test_data.size());
+        assertEq(test_data, received);
+
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    #! Test Happy Eyeballs async connect via poll operations
+    happyEyeballsAsyncTest() {
+        # Start a listener
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        # Async connect using poll operation
+        Socket client();
+        SocketPollOperation spop = client.startPollConnect("localhost:" + port);
+        assertEq("connect", spop.getGoal());
+        assertEq("connecting", spop.getState());
+
+        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+            Socket::poll((info,), 5s);
+        }
+        assertTrue(spop.goalReached());
+        assertEq("connected", spop.getState());
+        assertTrue(client.isOpen());
+
+        # Accept and verify data transfer
+        Socket accepted = server.accept();
+        string test_data = "Happy Eyeballs async test";
+        client.send(test_data);
+        string received = accepted.recv(test_data.size());
+        assertEq(test_data, received);
+
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    #! Test that explicit IPv4 address bypasses Happy Eyeballs racing
+    happyEyeballsSingleFamilyTest() {
+        # Start a listener on 127.0.0.1 (IPv4 only)
+        Socket server();
+        server.bind("127.0.0.1:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        # Connect explicitly to IPv4 — no racing should occur
+        Socket client();
+        client.connect("127.0.0.1:" + port, 10s);
+        assertTrue(client.isOpen());
+
+        Socket accepted = server.accept();
+        assertTrue(accepted.isOpen());
+
+        string test_data = "single family test";
+        client.send(test_data);
+        string received = accepted.recv(test_data.size());
+        assertEq(test_data, received);
+
+        client.close();
+        accepted.close();
+        server.close();
+
+        # Also test explicit IPv6 bracket notation
+        Socket server6();
+        try {
+            server6.bind("[::1]:0");
+            server6.listen();
+            port = server6.getSocketInfo().port;
+
+            Socket client6();
+            client6.connect("[::1]:" + port, 10s);
+            assertTrue(client6.isOpen());
+
+            Socket accepted6 = server6.accept();
+            assertTrue(accepted6.isOpen());
+
+            test_data = "IPv6 single family test";
+            client6.send(test_data);
+            received = accepted6.recv(test_data.size());
+            assertEq(test_data, received);
+
+            client6.close();
+            accepted6.close();
+            server6.close();
+        } catch (hash<ExceptionInfo> ex) {
+            # IPv6 may not be available — skip gracefully
+            if (ex.err == "SOCKET-BIND-ERROR" || ex.err == "SOCKET-NOT-OPEN"
+                    || ex.err == "SOCKET-CONNECT-ERROR") {
+                testSkip("IPv6 not available");
+            } else {
+                rethrow;
+            }
+        }
+    }
+
+    #! Test Happy Eyeballs with SSL connect
+    happyEyeballsSslTest() {
+        # Start an SSL listener
+        Socket server();
+        server.setCertificate(TestCert);
+        server.setPrivateKey(TestCert);
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        # Async SSL connect using poll operation
+        Socket client();
+        SocketPollOperation spop = client.startPollConnectSsl("localhost:" + port);
+        assertEq("connect-ssl", spop.getGoal());
+
+        # Accept SSL in background
+        Counter cnt(1);
+        Socket accepted;
+        background sub () {
+            accepted = server.acceptSSL();
+            cnt.dec();
+        }();
+
+        while (*hash<SocketPollInfo> info = spop.continuePoll()) {
+            Socket::poll((info,), 5s);
+        }
+        assertTrue(spop.goalReached());
+        assertTrue(client.isOpen());
+
+        cnt.waitForZero(10s);
+        assertTrue(accepted.isOpen());
+
+        # Verify data transfer over SSL
+        string test_data = "Happy Eyeballs SSL test";
+        client.send(test_data);
+        string received = accepted.recv(test_data.size());
+        assertEq(test_data, received);
+
+        client.close();
+        accepted.close();
+        server.close();
     }
 }

@@ -3612,7 +3612,8 @@ void AsyncIoControllerPriv::applyEventUnion(IoThreadContext& t, QoreObject* sock
 
 void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string& key,
         QoreObject* socket, QoreHashNode* poll_info, ExceptionSink* xsink) {
-    std::unordered_set<int> new_fds;
+    // Map fd -> events (from ExtraPollFdInfo)
+    std::unordered_map<int, int> new_fd_events;
 
     // Parse extra_fds from poll_info
     QoreValue v = poll_info->getKeyValue("extra_fds");
@@ -3622,7 +3623,11 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
         while (li.next()) {
             QoreHashNode* h = li.getValue().get<QoreHashNode>();
             int fd = (int)h->getKeyValue("fd").getAsBigInt();
-            new_fds.insert(fd);
+            int ev = (int)h->getKeyValue("events").getAsBigInt();
+            if (!ev) {
+                ev = QORE_EV_READ;  // Default for backward compatibility
+            }
+            new_fd_events[fd] = ev;
         }
     }
 
@@ -3641,10 +3646,16 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
 
     // Remove stale fds (were registered before, not in new set)
     for (int fd : prev_fds) {
-        if (!new_fds.count(fd)) {
+        if (!new_fd_events.count(fd)) {
             t.loop->remove(fd, xsink);
             t.fd_to_sock_hash.erase(fd);
         }
+    }
+
+    // Build new fd set for key_extra_fds
+    std::unordered_set<int> new_fds;
+    for (auto& [fd, ev] : new_fd_events) {
+        new_fds.insert(fd);
     }
 
     // Add new fds (not previously registered)
@@ -3653,9 +3664,8 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
     // Collect fds that fail to add in a separate set to avoid erasing
     // from new_fds during iteration (undefined behavior with unordered_set)
     std::vector<int> failed_fds;
-    for (int fd : new_fds) {
+    for (auto& [fd, ev_flags] : new_fd_events) {
         if (!prev_fds.count(fd)) {
-            int ev_flags = QORE_EV_READ;  // InputStreams only need read
             t.loop->add(fd, ev_flags, socket, xsink);
             if (*xsink) {
                 // Non-fatal: the fd might not be epoll-compatible (e.g. regular file on Linux)

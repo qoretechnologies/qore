@@ -141,6 +141,32 @@ DLLLOCAL int windows_set_errno();
 #define QORE_SOCKET_ERROR -1
 #endif
 
+//! Creates a socket and immediately sets it to non-blocking mode.
+/** Returns the socket descriptor, or QORE_INVALID_SOCKET on error (errno set).
+*/
+DLLLOCAL inline int create_nonblocking_socket(int family, int type, int protocol) {
+    int fd = socket(family, type, protocol);
+    if (fd == QORE_INVALID_SOCKET) {
+        return QORE_INVALID_SOCKET;
+    }
+#ifdef _Q_WINDOWS
+    u_long mode = 1;
+    if (ioctlsocket(fd, FIONBIO, &mode) != 0) {
+        closesocket(fd);
+        return QORE_INVALID_SOCKET;
+    }
+#else
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags < 0 || fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) {
+        int saved_errno = errno;
+        ::close(fd);
+        errno = saved_errno;
+        return QORE_INVALID_SOCKET;
+    }
+#endif
+    return fd;
+}
+
 template <typename T>
 class PrivateDataListHolder {
 public:
@@ -295,6 +321,14 @@ public:
 constexpr int SCIPS_CONNECT = 0;
 constexpr int SCIPS_CHECK_CONNECT = 1;
 
+//! Happy Eyeballs (RFC 8305) Connection Attempt Delay in milliseconds
+constexpr int HAPPY_EYEBALLS_DELAY_MS = 250;
+
+//! Happy Eyeballs states
+constexpr int HEBS_FIRST_CONNECT = 0;
+constexpr int HEBS_RACING = 1;
+constexpr int HEBS_CONNECTED = 2;
+
 class SocketConnectInetPollState : public AbstractPollState {
 public:
     DLLLOCAL SocketConnectInetPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* host,
@@ -326,6 +360,71 @@ private:
 
     //! Setup socket with next address
     DLLLOCAL int nextIntern(ExceptionSink* xsink);
+};
+
+//! Happy Eyeballs (RFC 8305) connection racing poll state for async I/O
+/** Races IPv6 and IPv4 connections with a 250ms stagger.  Manages multiple
+    raw file descriptors independently of qore_socket_private; assigns the
+    winning fd only after the race concludes.
+*/
+class SocketConnectInetHappyEyeballsPollState : public AbstractPollState {
+public:
+    DLLLOCAL SocketConnectInetHappyEyeballsPollState(ExceptionSink* xsink, qore_socket_private* sock, const char* host,
+            const char* service, int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0);
+
+    DLLLOCAL ~SocketConnectInetHappyEyeballsPollState();
+
+    /** returns:
+        - SOCK_POLLIN = wait for read and call this again
+        - SOCK_POLLOUT = wait for write and call this again
+        - 0 = done
+        - < 0 = error (exception raised)
+    */
+    DLLLOCAL virtual int continuePoll(ExceptionSink* xsink);
+
+    //! Returns extra fds that need to be polled for write readiness (connect completion)
+    DLLLOCAL void getExtraFds(std::vector<std::pair<int, int>>& fds) const;
+
+    //! Returns true if there are multiple address families to race
+    DLLLOCAL bool isRacing() const {
+        return multi_family;
+    }
+
+    //! Returns the Happy Eyeballs state
+    DLLLOCAL int getState() const {
+        return he_state;
+    }
+
+private:
+    struct ConnAttempt {
+        int fd = QORE_INVALID_SOCKET;
+        size_t addr_idx = 0;
+    };
+
+    QoreAddrInfo ai;
+    qore_socket_private* sock;
+    std::string host, service;
+    std::vector<struct addrinfo*> sorted_addrs;
+    std::vector<ConnAttempt> active_attempts;
+    size_t next_addr_idx = 0;
+    int prt = -1;
+    int he_state = HEBS_FIRST_CONNECT;
+    int winning_idx = -1;
+    bool multi_family = false;
+
+    //! Start a non-blocking connect to the next address in sorted_addrs
+    /** Returns 0 on immediate connect, 1 on EINPROGRESS, -1 on error */
+    DLLLOCAL int startNextConnect(ExceptionSink* xsink);
+
+    //! Check if a specific attempt has completed
+    /** Returns 0 = connected, 1 = still in progress, -1 = failed */
+    DLLLOCAL int checkAttempt(size_t idx);
+
+    //! Close all fds except the winner and assign winner to sock
+    DLLLOCAL void assignWinner(ExceptionSink* xsink);
+
+    //! Close all active fds (cleanup)
+    DLLLOCAL void closeAllFds();
 };
 
 #ifndef _Q_WINDOWS
@@ -2141,6 +2240,37 @@ struct qore_socket_private {
         return 0;
     }
 
+    //! Sort addresses into interleaved IPv6/IPv4 order per RFC 8305
+    DLLLOCAL static void sortAddressesHappyEyeballs(struct addrinfo* aip, std::vector<struct addrinfo*>& sorted,
+            bool& multi_family) {
+        std::vector<struct addrinfo*> v6, v4, other;
+        for (struct addrinfo* p = aip; p; p = p->ai_next) {
+            if (p->ai_family == AF_INET6) {
+                v6.push_back(p);
+            } else if (p->ai_family == AF_INET) {
+                v4.push_back(p);
+            } else {
+                other.push_back(p);
+            }
+        }
+
+        multi_family = !v6.empty() && !v4.empty();
+
+        // Interleave: v6 first, then v4, then any others
+        size_t i6 = 0, i4 = 0;
+        while (i6 < v6.size() || i4 < v4.size()) {
+            if (i6 < v6.size()) {
+                sorted.push_back(v6[i6++]);
+            }
+            if (i4 < v4.size()) {
+                sorted.push_back(v4[i4++]);
+            }
+        }
+        for (auto* p : other) {
+            sorted.push_back(p);
+        }
+    }
+
     DLLLOCAL int connectINET(const char* host, const char* service, int timeout_ms, ExceptionSink* xsink,
             int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0) {
         assert(xsink);
@@ -2157,19 +2287,32 @@ struct qore_socket_private {
         do_resolve_event(host, service);
 
         QoreAddrInfo ai;
-        if (ai.getInfo(xsink, host, service, family, 0, type, protocol))
+        if (ai.getInfo(xsink, host, service, family, 0, type, protocol)) {
             return -1;
+        }
 
         struct addrinfo* aip = ai.getAddrInfo();
 
         // emit all "resolved" events
-        if (event_queue)
-            for (struct addrinfo* p = aip; p; p = p->ai_next)
+        if (event_queue) {
+            for (struct addrinfo* p = aip; p; p = p->ai_next) {
                 do_resolved_event(p->ai_addr);
+            }
+        }
 
         int prt = q_get_port_from_addr(aip->ai_addr);
 
-        for (struct addrinfo* p = aip; p; p = p->ai_next) {
+        // Sort addresses for Happy Eyeballs (RFC 8305)
+        std::vector<struct addrinfo*> sorted;
+        bool multi_family = false;
+        sortAddressesHappyEyeballs(aip, sorted, multi_family);
+
+        if (multi_family) {
+            return connectINETHappyEyeballs(host, service, timeout_ms, xsink, prt, sorted);
+        }
+
+        // Single family — use sequential fallback
+        for (auto* p : sorted) {
             // Check sandbox network security restrictions
             QoreSandboxManagerHelper smh;
             if (smh) {
@@ -2192,6 +2335,313 @@ struct qore_socket_private {
         if (!*xsink) {
             qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, host, service);
         }
+        return -1;
+    }
+
+    //! Happy Eyeballs (RFC 8305) synchronous connect with connection racing
+    DLLLOCAL int connectINETHappyEyeballs(const char* host, const char* service, int timeout_ms,
+            ExceptionSink* xsink, int prt, const std::vector<struct addrinfo*>& sorted) {
+        assert(xsink);
+        assert(sorted.size() >= 2);
+
+        printd(5, "qore_socket_private::connectINETHappyEyeballs() host: %s service: %s timeout_ms: %d addrs: %zu\n",
+            host, service, timeout_ms, sorted.size());
+
+        struct HEAttempt {
+            int fd = QORE_INVALID_SOCKET;
+            size_t addr_idx = 0;
+        };
+
+        std::vector<HEAttempt> attempts;
+        size_t next_idx = 0;
+        int64 start_us = q_clock_getmicros();
+
+        // Lambda to close all fds in attempts
+        auto closeAll = [&attempts]() {
+            for (auto& a : attempts) {
+                if (a.fd != QORE_INVALID_SOCKET) {
+#ifdef _Q_WINDOWS
+                    closesocket(a.fd);
+#else
+                    ::close(a.fd);
+#endif
+                    a.fd = QORE_INVALID_SOCKET;
+                }
+            }
+        };
+
+        // Lambda to start a new connection attempt
+        auto startNext = [&](ExceptionSink* xsink) -> int {
+            if (next_idx >= sorted.size()) {
+                return 1; // no more addresses
+            }
+
+            struct addrinfo* p = sorted[next_idx];
+
+            // Check sandbox network security restrictions
+            QoreSandboxManagerHelper smh;
+            if (smh) {
+                int proto = (p->ai_socktype == SOCK_STREAM) ? QSEC_NET_TCP :
+                            (p->ai_socktype == SOCK_DGRAM) ? QSEC_NET_UDP : QSEC_NET_ALL;
+                if (!smh->checkNetworkAccess(p->ai_addr, p->ai_addrlen, proto, xsink)) {
+                    return -1;
+                }
+            }
+
+            do_connect_event(p->ai_family, p->ai_addr, host, service, prt);
+
+            int fd = create_nonblocking_socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+            if (fd == QORE_INVALID_SOCKET) {
+                ++next_idx;
+                return 1; // try next
+            }
+
+            int rc;
+            while (true) {
+                rc = ::connect(fd, p->ai_addr, p->ai_addrlen);
+                if (!rc || sock_get_error() != EINTR) {
+                    break;
+                }
+            }
+            if (rc == 0) {
+                // Immediate connection
+                HEAttempt a;
+                a.fd = fd;
+                a.addr_idx = next_idx;
+                attempts.push_back(a);
+                ++next_idx;
+                return 0; // connected
+            }
+
+#ifdef _Q_WINDOWS
+            if (sock_get_error() != EAGAIN) {
+                closesocket(fd);
+                ++next_idx;
+                return 1; // try next
+            }
+#else
+            if (errno != EINPROGRESS && errno != EAGAIN) {
+                ::close(fd);
+                ++next_idx;
+                return 1; // try next
+            }
+#endif
+
+            HEAttempt a;
+            a.fd = fd;
+            a.addr_idx = next_idx;
+            attempts.push_back(a);
+            ++next_idx;
+            return 2; // in progress
+        };
+
+        // Helper lambda: assign winner fd to socket and clean up
+        auto assignWinner = [&](HEAttempt& winner) -> int {
+            struct addrinfo* wp = sorted[winner.addr_idx];
+            sock = winner.fd;
+            winner.fd = QORE_INVALID_SOCKET;
+            sfamily = wp->ai_family;
+            stype = wp->ai_socktype;
+            sprot = wp->ai_protocol;
+            port = prt;
+            // Set blocking mode
+            set_non_blocking(false, xsink);
+            if (*xsink) {
+                close_and_exit();
+                closeAll();
+                return -1;
+            }
+            closeAll();
+            confirmConnected(host);
+            return 0;
+        };
+
+        // Start the first connection
+        while (next_idx < sorted.size()) {
+            int rc = startNext(xsink);
+            if (*xsink) {
+                closeAll();
+                return -1;
+            }
+            if (rc == 0) {
+                return assignWinner(attempts.back());
+            }
+            if (rc == 2) {
+                break; // in progress, proceed to poll loop
+            }
+            // rc == 1: try next
+        }
+
+        if (attempts.empty()) {
+            qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, host, service);
+            return -1;
+        }
+
+        // Poll loop: race connections with 250ms stagger
+        while (true) {
+            // Calculate poll timeout
+            int poll_ms = HAPPY_EYEBALLS_DELAY_MS;
+            if (timeout_ms >= 0) {
+                int64 elapsed_ms = (q_clock_getmicros() - start_us) / 1000;
+                int remaining_ms = timeout_ms - (int)elapsed_ms;
+                if (remaining_ms <= 0) {
+                    closeAll();
+                    SimpleRefHolder<QoreStringNode> desc(new QoreStringNodeMaker(
+                        "timeout in connection after %dms to %s:%s", timeout_ms, host, service));
+                    xsink->raiseException("SOCKET-CONNECT-ERROR", desc.release());
+                    return -1;
+                }
+                if (next_idx < sorted.size()) {
+                    poll_ms = std::min(poll_ms, remaining_ms);
+                } else {
+                    poll_ms = remaining_ms;
+                }
+            } else if (next_idx >= sorted.size()) {
+                // No timeout, no more addresses to try — wait indefinitely
+                poll_ms = -1;
+            }
+
+#ifdef _Q_WINDOWS
+            // Windows: use select() instead of poll()
+            fd_set writefds, errfds;
+            FD_ZERO(&writefds);
+            FD_ZERO(&errfds);
+            int max_fd = 0;
+            int fd_count = 0;
+            for (auto& a : attempts) {
+                if (a.fd != QORE_INVALID_SOCKET) {
+                    FD_SET(a.fd, &writefds);
+                    FD_SET(a.fd, &errfds);
+                    if (a.fd > max_fd) {
+                        max_fd = a.fd;
+                    }
+                    ++fd_count;
+                }
+            }
+
+            if (!fd_count) {
+                break;
+            }
+
+            struct timeval tv;
+            struct timeval* ptv = nullptr;
+            if (poll_ms >= 0) {
+                tv.tv_sec = poll_ms / 1000;
+                tv.tv_usec = (poll_ms % 1000) * 1000;
+                ptv = &tv;
+            }
+
+            int pr = ::select(max_fd + 1, nullptr, &writefds, &errfds, ptv);
+#else
+            // UNIX: use poll()
+            std::vector<struct pollfd> pfds;
+            pfds.reserve(attempts.size());
+            for (auto& a : attempts) {
+                if (a.fd != QORE_INVALID_SOCKET) {
+                    struct pollfd pfd;
+                    pfd.fd = a.fd;
+                    pfd.events = POLLOUT;
+                    pfd.revents = 0;
+                    pfds.push_back(pfd);
+                }
+            }
+
+            if (pfds.empty()) {
+                break;
+            }
+
+            int pr = ::poll(pfds.data(), pfds.size(), poll_ms);
+#endif
+
+            if (pr < 0) {
+                if (sock_get_error() == EINTR) {
+                    continue;
+                }
+                closeAll();
+                qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in poll()", 0, host, service);
+                return -1;
+            }
+
+            if (pr > 0) {
+                // Check which fds are ready
+#ifdef _Q_WINDOWS
+                for (auto& a : attempts) {
+                    if (a.fd == QORE_INVALID_SOCKET) {
+                        continue;
+                    }
+                    if (FD_ISSET(a.fd, &errfds)) {
+                        closesocket(a.fd);
+                        a.fd = QORE_INVALID_SOCKET;
+                        continue;
+                    }
+                    if (FD_ISSET(a.fd, &writefds)) {
+                        // Check SO_ERROR
+                        int val = 0;
+                        socklen_t lon = sizeof(val);
+                        if (getsockopt(a.fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)(&val), &lon) == 0
+                                && val == 0) {
+                            return assignWinner(a);
+                        }
+                        closesocket(a.fd);
+                        a.fd = QORE_INVALID_SOCKET;
+                    }
+                }
+#else
+                size_t pfd_idx = 0;
+                for (auto& a : attempts) {
+                    if (a.fd == QORE_INVALID_SOCKET) {
+                        continue;
+                    }
+                    assert(pfd_idx < pfds.size());
+                    if (pfds[pfd_idx].revents & (POLLOUT | POLLERR | POLLHUP)) {
+                        // Check SO_ERROR
+                        int val = 0;
+                        socklen_t lon = sizeof(val);
+                        if (getsockopt(a.fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)(&val), &lon) == 0
+                                && val == 0) {
+                            return assignWinner(a);
+                        }
+                        // Connection failed — close this fd
+                        ::close(a.fd);
+                        a.fd = QORE_INVALID_SOCKET;
+                    }
+                    ++pfd_idx;
+                }
+#endif
+            }
+
+            // Timeout or all checked fds failed — start next attempt if available
+            if (next_idx < sorted.size()) {
+                while (next_idx < sorted.size()) {
+                    int rc = startNext(xsink);
+                    if (*xsink) {
+                        closeAll();
+                        return -1;
+                    }
+                    if (rc == 0) {
+                        return assignWinner(attempts.back());
+                    }
+                    if (rc == 2) {
+                        break; // in progress
+                    }
+                    // rc == 1: try next
+                }
+            }
+
+            // Check if any attempts are still active
+            bool any_active = false;
+            for (auto& a : attempts) {
+                if (a.fd != QORE_INVALID_SOCKET) {
+                    any_active = true;
+                    break;
+                }
+            }
+            if (!any_active && next_idx >= sorted.size()) {
+                break;
+            }
+        }
+
+        qore_socket_error(xsink, "SOCKET-CONNECT-ERROR", "error in connect()", 0, host, service);
         return -1;
     }
 

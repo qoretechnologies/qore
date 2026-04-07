@@ -2697,7 +2697,7 @@ int val = sock.recvi1();
     @see Socket::recvu1()
 */
 int Socket::recvi1(timeout timeout_ms = -1) {
-    char b;
+    char b = 0;
     s->recvi1(timeout_ms, &b, xsink);
     return b;
 }
@@ -2726,7 +2726,7 @@ int val = sock.recvi2();
     @see Socket::recvu2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
 int Socket::recvi2(timeout timeout_ms = -1) {
-    short b;
+    short b = 0;
     s->recvi2(timeout_ms, &b, xsink);
     return b;
 }
@@ -2760,7 +2760,7 @@ int val = sock.recvi4();
     @see Socket::recvu4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
 int Socket::recvi4(timeout timeout_ms = -1) {
-    int b;
+    int b = 0;
     s->recvi4(timeout_ms, &b, xsink);
     return b;
 }
@@ -2789,7 +2789,7 @@ int val = sock.recvi8();
     @see Socket::recvi8LSB()
 */
 int Socket::recvi8(timeout timeout_ms = -1) {
-    int64 b;
+    int64 b = 0;
     s->recvi8(timeout_ms, &b, xsink);
     return b;
 }
@@ -2818,7 +2818,7 @@ int val = sock.recvi2LSB();
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvu2LSB()
 */
 int Socket::recvi2LSB(timeout timeout_ms = -1) {
-    short b;
+    short b = 0;
     s->recvi2LSB(timeout_ms, &b, xsink);
     return b;
 }
@@ -2847,7 +2847,7 @@ int val = sock.recvi4LSB();
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvu4LSB()
 */
 int Socket::recvi4LSB(timeout timeout_ms = -1) {
-    int b;
+    int b = 0;
     s->recvi4LSB(timeout_ms, &b, xsink);
     return b;
 }
@@ -2876,7 +2876,7 @@ int val = sock.recvi8LSB();
     @see Socket::recvi8()
 */
 int Socket::recvi8LSB(timeout timeout_ms = -1) {
-    int64 b;
+    int64 b = 0;
     s->recvi8LSB(timeout_ms, &b, xsink);
     return b;
 }
@@ -2905,7 +2905,7 @@ int val = sock.recvu1();
     @see Socket::recvi1()
 */
 int Socket::recvu1(timeout timeout_ms = -1) {
-    unsigned char b;
+    unsigned char b = 0;
     s->recvu1(timeout_ms, &b, xsink);
     return b;
 }
@@ -2934,7 +2934,7 @@ int val = sock.recvu2();
     @see Socket::recvi2(), Socket::recvi2LSB(), Socket::recvu2LSB()
 */
 int Socket::recvu2(timeout timeout_ms = -1) {
-    unsigned short b;
+    unsigned short b = 0;
     s->recvu2(timeout_ms, &b, xsink);
     return b;
 }
@@ -2963,7 +2963,7 @@ int val = sock.recvu4();
     @see Socket::recvi4(), Socket::recvi4LSB(), Socket::recvu4LSB()
 */
 int Socket::recvu4(timeout timeout_ms = -1) {
-    unsigned int b;
+    unsigned int b = 0;
     s->recvu4(timeout_ms, &b, xsink);
     return b;
 }
@@ -2992,7 +2992,7 @@ int val = sock.recvi2LSB();
     @see Socket::recvi2(), Socket::recvu2(), Socket::recvi2LSB()
 */
 int Socket::recvu2LSB(timeout timeout_ms = -1) {
-    unsigned short b;
+    unsigned short b = 0;
     s->recvu2LSB(timeout_ms, &b, xsink);
     return b;
 }
@@ -3021,7 +3021,7 @@ int val = sock.recvu4LSB();
     @see Socket::recvi4(), Socket::recvu4(), Socket::recvi4LSB()
 */
 int Socket::recvu4LSB(timeout timeout_ms = -1) {
-    unsigned b;
+    unsigned b = 0;
     s->recvu4LSB(timeout_ms, &b, xsink);
     return b;
 }
