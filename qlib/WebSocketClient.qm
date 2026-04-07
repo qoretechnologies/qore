@@ -768,6 +768,8 @@ WebSocketClient ws(\event(), {
           \a validator is not provided (see the @ref asyncapiintro "AsyncApi" module)
         - \c asyncapi_channel: the channel name to use for AsyncAPI validation; required if \a asyncapi or
           \a validator is provided
+        - \c cookie: an optional cookie value (e.g., \c "name=value" or \c "n1=v1; n2=v2") sent as a
+          \c Cookie header with the initial HTTP WebSocket upgrade request
         - \c extensions: a list of @ref WebSocketUtil::AbstractWebSocketExtension "AbstractWebSocketExtension" instances
           to offer to the server (e.g., @ref WebSocketUtil::PerMessageDeflateExtension for compression)
         - \c logger: an optional @ref Logger::LoggerInterface "LoggerInterface" object for internal logging
@@ -1770,6 +1772,10 @@ ws.setEventQueue();
         }
         # unconditionally remove any "token_type" option
         remove http_opts.token_type;
+        # remove the "cookie" option and set it as a Cookie header
+        if (*string cookie = remove http_opts.cookie) {
+            http_opts.headers.Cookie = cookie;
+        }
         http_opts.encoding = "UTF-8";
 
 %ifndef NoAsyncApi
@@ -3647,6 +3653,13 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
                     "desc": "Raise events for WebSocket pings?",
                     "default_value": False,
                 },
+                "cookie": <ConnectionOptionInfo>{
+                    "display_name": "Cookie",
+                    "short_desc": "Set a cookie value to send with the WebSocket handshake",
+                    "type": "string",
+                    "desc": "An optional cookie value (e.g., `name=value` or `n1=v1; n2=v2`) sent as a "
+                        "`Cookie` header with the initial HTTP WebSocket upgrade request",
+                },
                 "token": <ConnectionOptionInfo>{
                     "display_name": "Authorization Token",
                     "short_desc": "Set an authorization token",
@@ -3774,6 +3787,10 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         # add token-based auth if present (mirrors WebSocketClient constructor logic)
         if (opts.token && !headers.Authorization) {
             headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        }
+        # add cookie header if present
+        if (opts.cookie && !headers.Cookie) {
+            headers.Cookie = opts.cookie;
         }
         return WebSocketPingPollOperation::create(url, http_opts, headers, logger ?? self.logger);
     }

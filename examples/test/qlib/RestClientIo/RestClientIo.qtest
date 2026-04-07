@@ -432,6 +432,12 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
 
+        # Cookie option tests
+        addTestCase("cookie option", \testCookieOption());
+        addTestCase("cookie option multiple", \testCookieOptionMultiple());
+        addTestCase("cookie option with jar", \testCookieOptionWithJar());
+        addTestCase("cookie option absent", \testCookieOptionAbsent());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -2727,6 +2733,49 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         }
         # Goal must not be reached — the port has nothing listening
         assertFalse(op.goalReached());
+    }
+
+    # ---- Cookie option tests ----
+
+    testCookieOption() {
+        RestClientIo::RestClientIo client = createClient({"cookie": "session=abc123"});
+        hash<auto> resp = client.restGet("/echo");
+        assertEq(200, resp.status_code);
+        # The echo handler returns request headers; check the cookie header was sent
+        *string cookie_val = resp.body.request_headers.cookie;
+        assertTrue(cookie_val.val(), "cookie header should be present");
+        assertRegex("session=abc123", cookie_val);
+    }
+
+    testCookieOptionMultiple() {
+        RestClientIo::RestClientIo client = createClient({"cookie": "a=1; b=2"});
+        hash<auto> resp = client.restGet("/echo");
+        assertEq(200, resp.status_code);
+        *string cookie_val = resp.body.request_headers.cookie;
+        assertTrue(cookie_val.val(), "cookie header should be present");
+        assertRegex("a=1", cookie_val);
+        assertRegex("b=2", cookie_val);
+    }
+
+    testCookieOptionWithJar() {
+        # Create a client with a static cookie and cookies enabled (default)
+        RestClientIo::RestClientIo client = createClient({"cookie": "static=val"});
+        # Verify the static cookie is sent
+        hash<auto> resp = client.restGet("/echo");
+        assertEq(200, resp.status_code);
+        *string cookie_val = resp.body.request_headers.cookie;
+        assertTrue(cookie_val.val(), "cookie header should be present");
+        assertRegex("static=val", cookie_val);
+    }
+
+    testCookieOptionAbsent() {
+        # Without the cookie option, no Cookie header should be added from defaults
+        RestClientIo::RestClientIo client = createClient();
+        hash<auto> resp = client.restGet("/echo");
+        assertEq(200, resp.status_code);
+        # No cookie header should be present (cookie jar is empty, no static cookie)
+        assertFalse(resp.body.request_headers.cookie.val(),
+            "no cookie header should be present without cookie option");
     }
 }
 

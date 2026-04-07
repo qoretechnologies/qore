@@ -397,10 +397,10 @@ public class HttpClientConnectionManager {
                 url_info.host, path, url_info.protocol == "https");
             if (cookie_hdr) {
                 headers = headers ?? {};
-                if (headers.Cookie) {
-                    headers.Cookie += "; " + cookie_hdr;
+                if (headers.cookie) {
+                    headers.cookie += "; " + cookie_hdr;
                 } else {
-                    headers.Cookie = cookie_hdr;
+                    headers.cookie = cookie_hdr;
                 }
             }
         }
@@ -567,10 +567,10 @@ public class HttpClientConnectionManager {
                 *string cookie_hdr = cookie_jar.getCookieHeader(
                     url_info.host, path, is_secure);
                 if (cookie_hdr) {
-                    if (req_headers.Cookie) {
-                        req_headers.Cookie += "; " + cookie_hdr;
+                    if (req_headers.cookie) {
+                        req_headers.cookie += "; " + cookie_hdr;
                     } else {
-                        req_headers.Cookie = cookie_hdr;
+                        req_headers.cookie = cookie_hdr;
                     }
                 }
             }

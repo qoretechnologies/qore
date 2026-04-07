@@ -285,6 +285,8 @@ hash<RestResponseInfo> resp = f.get(30s);
           built-in defaults (\c Accept and \c User-Agent)
         - \c token: authentication token
         - \c token_type: authentication token type (default: \c "Bearer")
+        - \c cookie: an optional cookie value (e.g., \c "name=value" or \c "n1=v1; n2=v2") sent
+          as a \c Cookie header with every request; works alongside the automatic cookie jar
         - \c error_passthru: if \c True, HTTP error responses are returned rather than throwing
           exceptions (default: \c False)
         - \c connect_timeout: connection timeout
@@ -560,6 +562,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     AutoWriteLock al(config_lock);
                     token_timestamp = 1970-01-01Z;
                 }
+            }
+
+            if (opts.cookie) {
+                headers.cookie = opts.cookie;
             }
 
             error_passthru = opts.error_passthru.toBool();
