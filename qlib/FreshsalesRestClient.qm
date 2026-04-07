@@ -87,7 +87,7 @@ public class FreshsalesRestClientBase {
         const DefaultPingMethod = "GET";
 
         #! Default ping path (relative - no leading slash since default_path provides the API path)
-        const DefaultPingPath = "contacts?page=1&per_page=1";
+        const DefaultPingPath = "selector/owners";
 
         #! Default ping headers
         const DefaultPingHeaders = {
@@ -113,19 +113,30 @@ public class FreshsalesRestClientBase {
         const DefaultConnectionUrl = "freshsalesrest://app.myfreshworks.com";
     }
 
+    #! Extracts the host from a domain option value
+    /** Handles bare subdomains (\c "mycompany"), full domains
+        (\c "mycompany-org.myfreshworks.com"), and full URLs
+        (\c "https://mycompany-org.myfreshworks.com/crm/sales")
+    */
+    static string getDomainHost(string domain) {
+        # Strip protocol and path
+        domain =~ s/^https?:\/\///;
+        domain =~ s/\/.*$//;
+        # If just a subdomain (no dots), append .myfreshworks.com
+        if (domain !~ /\./) {
+            return domain + ".myfreshworks.com";
+        }
+        return domain;
+    }
+
     #! returns options for the FreshsalesRestClient constructor
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
 
-        # Build URL from domain if not explicitly set
+        # Always build URL from domain when provided (auto_url may set url to anything)
         if (opts.domain) {
-            if (!rv.url || rv.url == DefaultConnectionUrl) {
-                rv.url = sprintf("https://%s.myfreshworks.com", opts.domain);
-            }
-        }
-
-        # Ensure URL is always set (auto_url connections may pass NOTHING)
-        if (!rv.url) {
+            rv.url = "https://" + getDomainHost(opts.domain);
+        } else if (!rv.url) {
             rv.url = "https://app.myfreshworks.com";
         }
 
@@ -233,12 +244,15 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
                     "default_value": FreshsalesRestClientBase::DefaultData,
                 },
                 "domain": <ConnectionOptionInfo>{
-                    "display_name": "Freshsales Subdomain",
-                    "short_desc": "Your Freshsales account subdomain",
+                    "display_name": "Freshsales Domain",
+                    "short_desc": "Your Freshsales subdomain or full domain",
                     "type": "string",
-                    "desc": "The subdomain of your Freshsales account.\n\n"
-                        "This is the part before `.myfreshworks.com` in your Freshsales URL "
-                        "(e.g., `mycompany` from `https://mycompany.myfreshworks.com`)",
+                    "desc": "The domain of your Freshsales account.\n\n"
+                        "You can provide either:\n"
+                        "- Just the subdomain (e.g., `mycompany`)\n"
+                        "- The full domain (e.g., `mycompany-org.myfreshworks.com`)\n"
+                        "- A full URL (e.g., `https://mycompany-org.myfreshworks.com/crm/sales`)\n\n"
+                        "The subdomain or domain is extracted automatically",
                     "preselected": True,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
@@ -300,8 +314,8 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
     #! returns config for @ref FreshsalesRestConnection::constructor()
     private static hash<auto> getConfig(hash<auto> config) {
         if (!config.url || config.url == FreshsalesRestClientBase::DefaultConnectionUrl) {
-            string domain = config.opts.domain ?? "app";
-            config.url = sprintf("freshsalesrest://%s.myfreshworks.com", domain);
+            string host = FreshsalesRestClientBase::getDomainHost(config.opts.domain ?? "app");
+            config.url = "freshsalesrest://" + host;
         }
         return config;
     }
@@ -347,8 +361,8 @@ public class FreshsalesRestConnection inherits RestClient::RestConnection {
         if (update_options) {
             hash<auto> update;
             # Fix URL if it was mangled by auto_url
-            string expected_url = sprintf("freshsalesrest://%s.myfreshworks.com",
-                opts.domain ?? "app");
+            string host = FreshsalesRestClientBase::getDomainHost(opts.domain ?? "app");
+            string expected_url = "freshsalesrest://" + host;
             if (url != expected_url) {
                 update.url = expected_url;
             }

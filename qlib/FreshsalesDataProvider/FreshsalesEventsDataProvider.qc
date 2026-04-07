@@ -41,13 +41,13 @@ public class FreshsalesEventsDataProvider inherits FreshsalesDataProviderBase {
         #! Constructor options
         const ConstructorOptions = BaseConstructorOptions;
 
-        #! Child provider map
+        #! Child provider map — keys must match EVENT_* constants for action path resolution
         const ChildMap = {
-            "watch-new-contacts": Class::forName("FreshsalesWatchNewContactsDataProvider"),
-            "watch-new-deals": Class::forName("FreshsalesWatchNewDealsDataProvider"),
-            "watch-new-accounts": Class::forName("FreshsalesWatchNewAccountsDataProvider"),
-            "watch-new-tasks": Class::forName("FreshsalesWatchNewTasksDataProvider"),
-            "watch-new-appointments":
+            EVENT_NEW_CONTACT: Class::forName("FreshsalesWatchNewContactsDataProvider"),
+            EVENT_NEW_DEAL: Class::forName("FreshsalesWatchNewDealsDataProvider"),
+            EVENT_NEW_ACCOUNT: Class::forName("FreshsalesWatchNewAccountsDataProvider"),
+            EVENT_NEW_TASK: Class::forName("FreshsalesWatchNewTasksDataProvider"),
+            EVENT_NEW_APPOINTMENT:
                 Class::forName("FreshsalesWatchNewAppointmentsDataProvider"),
         };
     }
