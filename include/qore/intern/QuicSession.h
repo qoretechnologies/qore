@@ -104,6 +104,9 @@ struct QuicStreamInfo {
     bool dispatched = false;
     //! True if FIN was set on the HEADERS frame (no body expected)
     bool headers_end_stream = false;
+    //! True for client-side streaming responses (SSE, etc.) — enables incremental
+    //! body delivery via completed_streams_ (same pattern as CONNECT tunnels)
+    bool streaming = false;
 };
 
 //! Per-stream body data for sending via nghttp3 data reader callback
@@ -406,6 +409,15 @@ public:
         takeHeadersReadyStreamCopy() to find and dispatch them.
     */
     DLLLOCAL void setHeadersOnlyMode(bool v);
+
+    //! Mark a stream for incremental response body delivery
+    /** When set, h3RecvDataCallback pushes each DATA chunk to completed_streams_
+        (same pattern as CONNECT tunnels) so the ChannelAction receives data
+        incrementally instead of waiting for END_STREAM.
+        @param stream_id the stream to mark
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setStreamStreaming(int64_t stream_id);
 
     //! Sets the maximum request body size in bytes (0 = unlimited)
     /** Consistent with Http2Session::setMaxRequestBodySize().

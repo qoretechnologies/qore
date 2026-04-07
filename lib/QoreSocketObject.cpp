@@ -806,6 +806,14 @@ void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink
     priv->socket->cancelHttp2Stream(stream_id, xsink);
 }
 
+void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
+    AutoLocker al(priv->m);
+    auto h2s = priv->socket->priv->h2_session;
+    if (h2s) {
+        h2s->setStreamStreaming(stream_id);
+    }
+}
+
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     AutoLocker al(priv->m);
     priv->socket->setHttp2ConnectProtocolEnabled(enable);

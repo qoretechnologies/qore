@@ -417,6 +417,14 @@ public:
     */
     DLLEXPORT void cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink);
 
+    //! Mark an HTTP/2 stream for incremental response body delivery
+    /** When set, the stream's body data is delivered incrementally via
+        hasStreamingData()/takeStreamData() instead of waiting for END_STREAM.
+        @param stream_id the stream to mark
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setHttp2StreamStreaming(int32_t stream_id);
+
     //! Sets whether to advertise ENABLE_CONNECT_PROTOCOL in HTTP/2 server SETTINGS
     /** @since %Qore 2.3
     */

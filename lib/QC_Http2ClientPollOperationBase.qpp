@@ -843,6 +843,15 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         return -1;
     }
 
+    // If the action is a streaming consumer (ChannelAction), mark the stream
+    // for incremental response body delivery.  This enables the existing
+    // hasStreamingData()/takeStreamData() mechanism in continuePoll() to
+    // deliver DATA chunks to the Channel as they arrive, instead of waiting
+    // for END_STREAM (which never comes for SSE streams).
+    if (action->isStreaming()) {
+        sock_obj->setHttp2StreamStreaming(stream_id);
+    }
+
     // Register action (take ownership — action was created with refcount 1 by caller)
     std::string sid = std::to_string(stream_id);
     stream_actions[sid] = action;
