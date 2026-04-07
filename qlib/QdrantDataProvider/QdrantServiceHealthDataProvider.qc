@@ -60,7 +60,7 @@ public class QdrantServiceHealthDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : QdrantDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -70,7 +70,7 @@ public class QdrantServiceHealthDataProvider inherits QdrantDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant service health check provider for `%s`", rest.getSafeURL());
+        return sprintf("Qdrant service health check provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -82,7 +82,7 @@ public class QdrantServiceHealthDataProvider inherits QdrantDataProviderBase {
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         # Use root endpoint which returns server info (title, version, commit)
         # The /healthz endpoint returns plain text
-        return rest.get("/").body;
+        return rest.restGet("/").body;
     }
 
     #! Returns the description of a successful request message, if any

@@ -43,7 +43,7 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
         (with \c exp key) and plain hash equality conditions
         @param search_options search options; assumed to have already been processed for validity
     */
-    constructor(RestClient::RestClient rest, string collection_name, *hash<auto> where_cond,
+    constructor(RestClientIo::RestClientIo rest, string collection_name, *hash<auto> where_cond,
             *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result) {
         # build request body from search options
@@ -100,7 +100,7 @@ public class QdrantSearchRecordIterator inherits DataProvider::AbstractDataProvi
         }
 
         string uri = sprintf("/collections/%s/points/query", encode_url(collection_name, True));
-        *list<auto> points = rest.post(uri, body).body.result.points;
+        *list<auto> points = rest.restPost(uri, body).body.result.points;
         i = new ListHashIterator(points);
     }
 

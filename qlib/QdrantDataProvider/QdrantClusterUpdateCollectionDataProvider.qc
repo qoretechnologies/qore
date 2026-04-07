@@ -63,7 +63,7 @@ public class QdrantClusterUpdateCollectionDataProvider inherits QdrantDataProvid
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : QdrantDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -73,7 +73,7 @@ public class QdrantClusterUpdateCollectionDataProvider inherits QdrantDataProvid
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant cluster update collection provider for `%s`", rest.getSafeURL());
+        return sprintf("Qdrant cluster update collection provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response

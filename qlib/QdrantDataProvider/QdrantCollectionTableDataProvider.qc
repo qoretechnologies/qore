@@ -169,7 +169,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Creates the object from a REST connection and collection name
-    constructor(RestClient::RestClient rest, string collection_name) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest, string collection_name) : QdrantDataProviderBase(rest) {
         self.collection_name = collection_name;
     }
 
@@ -180,7 +180,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant collection %y table data provider for `%s`", collection_name, rest.getSafeURL());
+        return sprintf("Qdrant collection %y table data provider for `%s`", collection_name, rest.getSafeUrl());
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -204,7 +204,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
             point.payload = rec.payload;
         }
         string uri = buildWriteUri("/points", create_options);
-        rest.put(uri, {"points": (point,)});
+        rest.restPut(uri, {"points": (point,)});
         return rec;
     }
 
@@ -249,17 +249,17 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
                 {"set_payload": {"payload": payload_data, "points": id_list}},
             );
             string uri = buildWriteUri("/points/batch", search_options);
-            rest.post(uri, {"operations": operations});
+            rest.restPost(uri, {"operations": operations});
         } else if (exists vector_data) {
             list<hash<auto>> vector_points;
             foreach auto id in (id_list) {
                 push vector_points, {"id": id, "vector": vector_data};
             }
             string uri = buildWriteUri("/points/vectors", search_options);
-            rest.put(uri, {"points": vector_points});
+            rest.restPut(uri, {"points": vector_points});
         } else {
             string uri = buildWriteUri("/points/payload", search_options);
-            rest.post(uri, {"payload": payload_data, "points": id_list});
+            rest.restPost(uri, {"payload": payload_data, "points": id_list});
         }
 
         return id_list.size();
@@ -274,7 +274,7 @@ public class QdrantCollectionTableDataProvider inherits QdrantDataProviderBase {
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         list<auto> id_list = getPointIds(where_cond, "delete");
         string uri = buildWriteUri("/points/delete", search_options);
-        rest.post(uri, {"points": id_list});
+        rest.restPost(uri, {"points": id_list});
         return id_list.size();
     }
 

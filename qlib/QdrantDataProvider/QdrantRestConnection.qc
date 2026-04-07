@@ -109,14 +109,16 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
         @return a data provider object for this connection; the data provider is @ref QdrantDataProvider
     */
     DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new QdrantDataProvider({"restclient": get()});
+        return new QdrantDataProvider({"restclient": getAsync()});
     }
 
-    #! Returns a @ref RestClient::RestClient "RestClient" object
+    #! Returns a sync @ref RestClient::RestClient "RestClient" object
     /** @param connect if @ref True "True", then the connection is returned already connected
         @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
 
-        @return a @ref RestClient::RestClient "RestClient" object
+        @return a sync @ref RestClient::RestClient "RestClient" object
+
+        @note use \c getAsync() for a @ref RestClientIo::RestClientIo "RestClientIo" client with async I/O support
     */
     private RestClient getImpl(bool connect = True, *hash<auto> rtopts) {
         return new RestClient(getConnectionOptions(), !connect);

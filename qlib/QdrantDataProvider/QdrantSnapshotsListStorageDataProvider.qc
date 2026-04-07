@@ -60,7 +60,7 @@ public class QdrantSnapshotsListStorageDataProvider inherits QdrantDataProviderB
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : QdrantDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -70,7 +70,7 @@ public class QdrantSnapshotsListStorageDataProvider inherits QdrantDataProviderB
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant snapshots %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("Qdrant snapshots %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
