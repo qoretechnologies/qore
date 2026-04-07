@@ -61,15 +61,11 @@ public class FreshsalesWatchNewContactsDataProvider inherits FreshsalesWatchData
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        # Get contacts from the first available view, filter by created_at
-        try {
-            hash<auto> filters = doGet("contacts/filters");
-            *list<hash<auto>> filter_list = filters.filters;
-            if (filter_list) {
-                return fetchAllPages(
-                    "contacts/view/" + string(filter_list[0].id), "contacts");
-            }
-        } catch () {
+        hash<auto> filters = doGet("contacts/filters");
+        *list<hash<auto>> filter_list = filters.filters;
+        if (filter_list) {
+            return fetchAllPages(
+                "contacts/view/" + string(filter_list[0].id), "contacts");
         }
         return ();
     }

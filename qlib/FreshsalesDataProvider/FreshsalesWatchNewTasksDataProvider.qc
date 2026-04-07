@@ -61,11 +61,7 @@ public class FreshsalesWatchNewTasksDataProvider inherits FreshsalesWatchDataPro
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        try {
-            return fetchAllPages("tasks", "tasks", {"filter": "open"});
-        } catch () {
-        }
-        return ();
+        return fetchAllPages("tasks", "tasks", {"filter": "open"});
     }
 
     hash<auto> getFakeExampleData() {

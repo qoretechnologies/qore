@@ -61,14 +61,11 @@ public class FreshsalesWatchNewDealsDataProvider inherits FreshsalesWatchDataPro
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        try {
-            hash<auto> filters = doGet("deals/filters");
-            *list<hash<auto>> filter_list = filters.filters;
-            if (filter_list) {
-                return fetchAllPages(
-                    "deals/view/" + string(filter_list[0].id), "deals");
-            }
-        } catch () {
+        hash<auto> filters = doGet("deals/filters");
+        *list<hash<auto>> filter_list = filters.filters;
+        if (filter_list) {
+            return fetchAllPages(
+                "deals/view/" + string(filter_list[0].id), "deals");
         }
         return ();
     }

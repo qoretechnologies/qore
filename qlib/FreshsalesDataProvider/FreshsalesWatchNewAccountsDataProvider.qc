@@ -61,14 +61,11 @@ public class FreshsalesWatchNewAccountsDataProvider inherits FreshsalesWatchData
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        try {
-            hash<auto> filters = doGet("sales_accounts/filters");
-            *list<hash<auto>> filter_list = filters.filters;
-            if (filter_list) {
-                return fetchAllPages(
-                    "sales_accounts/view/" + string(filter_list[0].id), "sales_accounts");
-            }
-        } catch () {
+        hash<auto> filters = doGet("sales_accounts/filters");
+        *list<hash<auto>> filter_list = filters.filters;
+        if (filter_list) {
+            return fetchAllPages(
+                "sales_accounts/view/" + string(filter_list[0].id), "sales_accounts");
         }
         return ();
     }

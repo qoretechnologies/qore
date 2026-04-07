@@ -61,11 +61,7 @@ public class FreshsalesWatchNewAppointmentsDataProvider inherits FreshsalesWatch
     }
 
     list<hash<auto>> fetchRecords(date since) {
-        try {
-            return fetchAllPages("appointments", "appointments", {"filter": "upcoming"});
-        } catch () {
-        }
-        return ();
+        return fetchAllPages("appointments", "appointments", {"filter": "upcoming"});
     }
 
     hash<auto> getFakeExampleData() {

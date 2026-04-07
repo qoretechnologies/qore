@@ -370,14 +370,8 @@ public class FreshsalesDataProviderBase inherits DataProvider::AbstractDataProvi
         foreach string key in (keys params) {
             auto val = params{key};
             if (exists val) {
-                string sval = string(val);
-                sval = replace(sval, "%", "%25");
-                sval = replace(sval, "&", "%26");
-                sval = replace(sval, "=", "%3D");
-                sval = replace(sval, "#", "%23");
-                sval = replace(sval, "+", "%2B");
-                sval = replace(sval, " ", "%20");
-                parts += sprintf("%s=%s", key, sval);
+                parts += sprintf("%s=%s", encode_url(key, True),
+                    encode_url(string(val), True));
             }
         }
         return parts.join("&");
