@@ -944,7 +944,9 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         });
         assertEq(0, h.count);
 
-        # Clean up the recover snapshot
+        # Clean up the recover snapshot and delete the test collection before the
+        # full storage snapshot test — snapshot recovery consumes the .snapshot file,
+        # leaving metadata refs that cause full storage snapshots to fail
         del_snap = new QdrantSnapshotsDeleteCollectionDataProvider(rest);
         try {
             del_snap.doRequest({
@@ -953,6 +955,14 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             });
         } catch () {
             # ignore
+        }
+        {
+            QdrantCollectionsDeleteDataProvider del_col(rest);
+            try {
+                del_col.doRequest({"collection": collection});
+            } catch () {
+                # ignore
+            }
         }
 
         # Test full storage snapshot operations — may fail on some Qdrant deployments
@@ -973,7 +983,8 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             h = del_storage.doRequest({"snapshot_name": storage_snap});
             assertTrue(h.result);
         } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("storage snapshots not supported: %s", ex.desc));
+            testSkip(sprintf("storage snapshots not supported: %s: %s", ex.desc,
+                ex.arg.body.status.error ?? "unknown"));
         }
     }
 
