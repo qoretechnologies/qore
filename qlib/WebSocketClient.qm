@@ -4075,13 +4075,10 @@ public class WebSocketClientDataProviderBase inherits DataProvider::AbstractData
                 "display_name": "HTTP Version",
                 "short_desc": "HTTP version to use",
                 "type": AbstractDataProviderTypeMap."string",
-                # NOTE: Default changed from "auto" to "1.1" due to unresolved issues with
-                # HTTP/2 WebSocket (RFC 8441) session management. HTTP/2 WebSocket is also
-                # temporarily disabled on the server side (HttpServer.qm).
-                "desc": "The HTTP version to use: `1.1` (default), `auto` (HTTP/2 if available), `1.0`, "
-                    "`2.0`, or `3.0`. HTTP/2 (RFC 8441) requires TLS and is negotiated via ALPN. "
-                    "HTTP/3 (RFC 9220) requires TLS and uses QUIC",
-                "default_value": "1.1",
+                "desc": "The HTTP version to use: `auto` (default — prefers H2/H3 for TLS), "
+                    "`1.1`, `1.0`, `2.0`, or `3.0`. HTTP/2 (RFC 8441) requires TLS and is "
+                    "negotiated via ALPN. HTTP/3 (RFC 9220) requires TLS and uses QUIC",
+                "default_value": "auto",
                 "allowed_values": (
                     <AllowedValueInfo>{
                         "value": "auto",
