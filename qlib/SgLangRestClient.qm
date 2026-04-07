@@ -1,0 +1,689 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file SgLangRestClient.qm Qore user module for calling SGLang REST services
+
+/*  SgLangRestClient.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum qore version
+%requires qore >= 2.0
+
+# don't use "$" for vars, members, and methods, assume local variable scope
+%modern
+
+%requires(reexport) Mime >= 1.3
+%requires(reexport) RestClient >= 1.3.1
+%requires(reexport) RestClientIo
+%requires(reexport) ConnectionProvider >= 1.4
+%requires HttpClientStreamingIo
+
+module SgLangRestClient {
+    version = "1.0";
+    desc = "user module for calling SGLang REST API services";
+    author = "David Nichols <david@qore.org>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        ConnectionSchemeCache::registerScheme("sglang", SgLangRestConnection::ConnectionScheme);
+    };
+}
+
+/** @mainpage SgLangRestClient Module
+
+    @tableofcontents
+
+    @section sglangrestclientintro SgLangRestClient Introduction
+
+    The %SgLangRestClient module provides an API for calling SGLang REST API services.
+
+    SGLang is a self-hosted OpenAI-compatible LLM inference server. This module provides
+    REST client and connection classes for communicating with SGLang instances.
+
+    To use this module, use \c "%requires SgLangRestClient" in your code.
+
+    All the public symbols in the module are defined in the SgLangRestClient namespace.
+
+    The main classes are:
+    - @ref SgLangRestClient::SgLangRestClient "SgLangRestClient":
+      this class provides the REST client API for communication with the SGLang REST
+      API; it also automates authentication and authorization to the target
+    - @ref SgLangRestClient::SgLangRestConnection "SgLangRestConnection":
+      provides a REST connection object to SGLang services (based on the
+      @ref connectionproviderintro "ConnectionProvider" module)
+
+    @par Example:
+    @code{.py}
+#!/usr/bin/env qore
+
+%modern
+
+%requires SgLangRestClient
+%requires ConnectionProvider
+
+SgLangRestClient rest({"url": "http://localhost:30000", "model": "meta-llama/Meta-Llama-3.1-8B-Instruct"});
+hash<auto> ans = rest.get("/models");
+printf("%Y\n", ans.body);
+    @endcode
+
+    @par Streaming Example:
+    @code{.py}
+SgLangRestClient rest({"url": "http://localhost:30000", "model": "meta-llama/Meta-Llama-3.1-8B-Instruct"});
+SgLangSseStream stream = rest.openChatCompletionStream({
+    "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "stream": True,
+    "messages": (
+        {
+            "role": "user",
+            "content": "Hello!",
+        },
+    ),
+});
+while (hash<SseMessageInfo> evt = stream.readEvent(5s)) {
+    if (evt.data == "[DONE]") {
+        break;
+    }
+    printf("%s\n", evt.data);
+}
+stream.close();
+    @endcode
+
+    @section sglangrestclientrelnotes Release Notes
+
+    @subsection sglangrestclientv1_0 SgLangRestClient v1.0
+    - the initial version of the %SgLangRestClient module
+*/
+
+%try-module json
+%define NoJson
+%endtry
+
+#! the SgLangRestClient namespace contains all the objects in the SgLangRestClient module
+public namespace SgLangRestClient {
+#! Common base class for SgLangRestClient functionality (statics and constants only)
+public class SgLangRestClientBase {
+    public {
+        #! Default SGLang REST API URL
+        const DefaultUrl = "http://localhost:30000";
+
+        #! Default SGLang API version
+        const DefaultApiVersion = "v1";
+
+        #! Default constructor options
+        const DefaultOptions = {
+            "url": DefaultUrl,
+            "api": DefaultApiVersion,
+            "data": "json",
+        };
+
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path (no leading slash - relative to base path)
+        const DefaultPingPath = "models";
+
+        #! Default ping headers
+        const DefaultPingHeaders = {
+            "Accept": MimeTypeJson,
+        };
+    }
+
+    #! returns options for the constructor
+    static hash<auto> getOptions(hash<auto> opts) {
+        hash<auto!> rv = {} + DefaultOptions + opts;
+        # set default_path for RestClientIo (uses this instead of setConnectionPath)
+        if (!rv.default_path) {
+            rv.default_path = "/" + (opts.api ?? DefaultApiVersion);
+        }
+        # ensure Accept header is JSON
+        if (!rv.headers."Accept") {
+            rv.headers."Accept" = MimeTypeJson;
+        }
+        # map apikey to Authorization Bearer header (optional for SGLang)
+        if (rv.apikey) {
+            rv.headers."Authorization" = "Bearer " + rv.apikey;
+            remove rv.apikey;
+        }
+        return rv;
+    }
+}
+
+#! this class provides the REST client API for communication with SGLang servers
+/** The \c model option specifies the model served by the SGLang instance.
+    Authentication is optional; if an API key is provided via the \c apikey option,
+    it is sent as the \c Authorization: \c Bearer header.
+*/
+public class SgLangRestClient inherits RestClient::RestClient, SgLangRestClientBase {
+    private {
+        #! The model configured for this connection
+        *string model;
+    }
+
+    #! creates the object with the given options
+    /**
+        @par Example:
+        @code{.py}
+SgLangRestClient rest(opts);
+        @endcode
+
+        @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient" class; note
+        that the URL is set by default if not provided (see @ref DefaultUrl).
+        The \c model option specifies the model served by the SGLang instance.
+        The \c apikey option provides optional authentication.
+        @param do_not_connect if \c False (the default), then a connection is returned already connected to the
+        remote server
+
+        @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
+    */
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(SgLangRestClientBase::getOptions(opts), True) {
+        if (validator instanceof NullRestSchemaValidator) {
+            setConnectionPath(opts.api.val() ? string(opts.api) : DefaultApiVersion);
+        }
+        model = opts.model;
+    }
+
+    #! Returns the model configured for this connection
+    *string getModel() {
+        return model;
+    }
+
+    #! Opens a Server-Sent Events stream for chat completions
+    SgLangSseStream openChatCompletionStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new SgLangSseStream(self, "chat/completions", req, hdr, to);
+    }
+}
+
+#! SSE connection for SGLang chat completion streams
+public class SgLangSseStream {
+    private {
+        SgLangRestClient rest;
+        bool chunked;
+        string content_encoding;
+        StringOutputStream ostream;
+        TransformOutputStream dstream;
+        bool use_decompressor;
+        timeout timeout_ms = 15s;
+        bool closed;
+
+        const SseMimeType = "text/event-stream";
+    }
+
+    #! Creates the stream connection
+    constructor(SgLangRestClient rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        self.rest = rest;
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = SseMimeType;
+        data payload;
+        if (exists body) {
+            payload = getSerializedBody(body, \headers);
+        }
+        string full_path = buildPath(path);
+        hash<auto> info;
+        hash<auto> resp = rest.send(payload, "POST", full_path, headers, False, \info);
+        if (resp.status_code != 200) {
+            throw "SSE-ERROR", sprintf("unexpected status code %d %s", resp.status_code, resp.status_message);
+        }
+        string content_type = normalizeContentType(resp."content-type");
+        if (content_type != SseMimeType) {
+            throw "SSE-ERROR", sprintf("expected Content-Type %y but got %y", SseMimeType, resp."content-type");
+        }
+        if (resp."content-encoding".val()) {
+            content_encoding = tolower(resp."content-encoding");
+        }
+        if (resp."transfer-encoding".val()) {
+            string transfer_encoding = tolower(resp."transfer-encoding");
+            if (transfer_encoding == "chunked") {
+                chunked = True;
+            } else {
+                throw "SSE-ERROR", sprintf("unsupported Transfer-Encoding: %y", resp."transfer-encoding");
+            }
+        }
+        setupDecompression();
+    }
+
+    #! Reads the next SSE message
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return;
+        }
+        timeout use_to = to ?? timeout_ms;
+        if (chunked) {
+            hash<auto> hh = rest.readHTTPChunk(use_to);
+            if (!hh.body) {
+                return;
+            }
+            if (use_decompressor) {
+                dstream.write(hh.body);
+            } else {
+                ostream.write(hh.body);
+            }
+            return rest.parseServerSentEvent(ostream.getData());
+        }
+        return rest.readServerSentEvent(content_encoding, use_to);
+    }
+
+    #! Closes the stream connection
+    close() {
+        if (!closed) {
+            closed = True;
+            rest.disconnect();
+        }
+    }
+
+    private string buildPath(string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        *string defp = rest.getDefaultPath();
+        if (defp.val() && defp != "/") {
+            defp =~ s/\/+$//;
+            if (defp !~ /^\//) {
+                defp = "/" + defp;
+            }
+            rv = defp + rv;
+        }
+        return rv;
+    }
+
+    private data getSerializedBody(data body, reference<hash<auto>> headers) {
+        if (body.typeCode() == NT_STRING) {
+            if (!headers."Content-Type") {
+                headers."Content-Type" = "application/json";
+            }
+            return body;
+        }
+%ifdef NoJson
+        throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+        if (!headers."Content-Type") {
+            headers."Content-Type" = "application/json";
+        }
+        return call_function_args("to_json", (body,));
+%endif
+    }
+
+    private setupDecompression() {
+        if (!chunked) {
+            return;
+        }
+        ostream = new StringOutputStream();
+        Transform decompressor;
+        switch (content_encoding) {
+            case "deflate":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_ZLIB);
+                break;
+            case "gzip":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_GZIP);
+                break;
+            case "bzip2":
+                use_decompressor = True;
+                decompressor = get_decompressor(Qore::COMPRESSION_ALG_BZIP2);
+                break;
+            case NOTHING:
+            case "identity":
+                use_decompressor = False;
+                break;
+
+            default:
+                throw "ENCODING-ERROR", sprintf("Don't know how to handle Content-Encoding %y", content_encoding);
+        }
+        if (use_decompressor) {
+            dstream = new TransformOutputStream(ostream, decompressor);
+        }
+    }
+
+    private static string normalizeContentType(*string content_type) {
+        if (!content_type.val()) {
+            return "";
+        }
+        string rv = content_type;
+        rv =~ s/\s*;.*$//;
+        rv =~ s/^\s+//;
+        rv =~ s/\s+$//;
+        return tolower(rv);
+    }
+}
+
+#! Class for SGLang REST connections; returns @ref SgLangRestClient objects
+/** This class implements all options of @ref RestClient::RestConnection "RestClientConnection"
+
+    @see @ref SgLangRestClient::SgLangRestClient::constructor() for more information on the above options
+*/
+public class SgLangRestConnection inherits RestClient::RestConnection {
+    public {
+        #! Default SGLang REST API URL
+        const DefaultUrl = "sglang://localhost:30000";
+
+        #! Connection entry info
+        const ConnectionScheme = <ConnectionSchemeInfo>{
+            "display_name": "SGLang REST Connection",
+            "short_desc": "A connection to an SGLang LLM inference server",
+            "desc": "A connection to an [SGLang](https://github.com/sgl-project/sglang) LLM inference "
+                "server.\n\n"
+                "SGLang is a self-hosted OpenAI-compatible inference server. The `model` option "
+                "specifies the model served by the SGLang instance and is auto-injected into API "
+                "requests. The connection uses the `sglang://` URL scheme which maps to `http://` "
+                "for local servers",
+            "cls": Class::forName("SgLangRestConnection"),
+            "auto_url": True,
+            "schemes": {
+                "sglang": True,
+            },
+            "base_scheme_map": {
+                "http": "sglang",
+            },
+            "options": RestConnection::ConnectionScheme.options + {
+                "model": <ConnectionOptionInfo>{
+                    "display_name": "Model",
+                    "short_desc": "The model served by the SGLang instance",
+                    "type": "string",
+                    "desc": "The model served by the SGLang instance "
+                        "(e.g., `meta-llama/Meta-Llama-3.1-8B-Instruct`). This value is auto-injected "
+                        "into API requests when not explicitly specified in the request body",
+                    "preselected": True,
+                },
+                "apikey": <ConnectionOptionInfo>{
+                    "display_name": "API Key",
+                    "short_desc": "Optional API key for authentication",
+                    "type": "string",
+                    "desc": "An optional API key for authentication with the SGLang server; sent as the "
+                        "`Authorization: Bearer` header.\n\n"
+                        "Most SGLang deployments do not require authentication",
+                    "sensitive": True,
+                },
+                "api": <ConnectionOptionInfo>{
+                    "display_name": "API Version",
+                    "short_desc": "The API version to use",
+                    "desc": "The API version to use",
+                    "type": "string",
+                    "default_value": SgLangRestClientBase::DefaultApiVersion,
+                },
+                "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
+                    "default_value": SgLangRestClientBase::DefaultPingHeaders,
+                },
+                "ping_method": RestConnection::ConnectionScheme.options.ping_method + <ConnectionOptionInfo>{
+                    "default_value": SgLangRestClientBase::DefaultPingMethod,
+                },
+                "ping_path": RestConnection::ConnectionScheme.options.ping_path + <ConnectionOptionInfo>{
+                    "default_value": SgLangRestClientBase::DefaultPingPath,
+                },
+            },
+            "required_options": "model",
+        };
+    }
+
+    #! creates the SgLangRestConnection object
+    /** @param name the name of the connection
+        @param description connection description
+        @param url connection URL (potentially with password info)
+        @param attributes various attributes. See below
+        @param options connection options
+
+        See @ref ConnectionProvider::AbstractConnection::constructor() for \c attributes and \c options reference.
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
+            hash<auto> attributes = {}, hash<auto> options = {})
+            : RestConnection(name, description, url, attributes, options) {
+    }
+
+    #! creates the SgLangRestConnection object
+    /** @param config with the following keys:
+        - name (required string): the connection name
+        - display_name (optional string): the display name
+        - short_desc (optional string): a short description in plain text
+        - desc (optional string): a long description with markdown formatting
+        - url (required string): the connection URL
+        - opts (optional hash): connection options
+        - logger (optional LoggerInterface object): logger for the connection
+        @param attr optional connection attributes
+        - monitor (optional bool): should the connection be monitored? Default: True
+        - enabled (optional bool): is the connection enabled? Default: True
+        - locked (optional bool): is the connection locked? Default: False
+        - debug_data (optional bool): debug data? Default: False
+        - tags (optional hash): tags for the connection; no default value
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
+    constructor(hash<auto> config, *hash<auto> attr)
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+    }
+
+    #! returns \c "sglang"
+    string getType() {
+        return "sglang";
+    }
+
+    #! returns @ref True as this connection returns a data provider with the \c getDataProvider() method
+    /** @return @ref True as this connection returns a data provider with the \c getDataProvider() method
+
+        @see @ref getDataProvider()
+    */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! returns a data provider object for this connection
+    /** @param constructor_options any additional constructor options for the data provider
+
+        @return a data provider object for this connection
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # to avoid circular dependencies, this object loads the SgLangDataProvider and creates the data provider
+        # object dynamically
+        load_module("SgLangDataProvider");
+        return create_object("SgLangDataProvider", getAsync());
+    }
+
+    #! Sets child data provider capabilities
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! returns a @ref SgLangRestClient object
+    /** @param connect if @ref True "True", then the connection is returned already connected
+        @param rtopts this connection type does not accept any runtime options, so this parameter is ignored
+
+        @return a @ref SgLangRestClient object
+    */
+    private SgLangRestClient getImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SgLangRestClient(getConnectionOptions(rtopts), !connect);
+    }
+
+    #! Returns an async-I/O-capable connection object
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new SgLangRestClientIo(getConnectionOptions(rtopts));
+    }
+
+    #! Returns the ConnectionSchemeInfo hash for this object
+    private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
+        return ConnectionScheme;
+    }
+}
+
+#! REST client for SGLang REST API using multiplexed HTTP connections
+/** @see SgLangRestClient for more information
+*/
+public class SgLangRestClientIo inherits RestClientIo::RestClientIo, SgLangRestClientBase {
+    private {
+        #! The model configured for this connection
+        *string model;
+    }
+
+    #! Creates the object with the given options
+    /** @param opts constructor options
+        @param shared_mgr optional shared connection manager
+    */
+    constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
+            : RestClientIo(SgLangRestClientBase::getOptions(opts), shared_mgr) {
+        model = opts.model;
+    }
+
+    #! Returns the model configured for this connection
+    *string getModel() {
+        return model;
+    }
+
+    #! Opens a Server-Sent Events stream for chat completions using async I/O
+    /** Uses HttpClientIo and SseStreamReader for incremental SSE event delivery
+        across HTTP/1.x, HTTP/2, and HTTP/3.
+
+        @param req the request body (will be serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+
+        @return an SSE stream object for reading events incrementally
+
+        @par Example:
+        @code{.py}
+SgLangRestClientIo rest({"url": "http://localhost:30000", "model": "meta-llama/Meta-Llama-3.1-8B-Instruct"});
+SgLangSseStreamIo stream = rest.openChatCompletionStream({
+    "model": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    "stream": True,
+    "messages": ({"role": "user", "content": "Hello!"},),
+});
+while (*hash<SseMessageInfo> evt = stream.readEvent()) {
+    printf("Event: %y\n", evt.data);
+}
+        @endcode
+    */
+    SgLangSseStreamIo openChatCompletionStream(hash<auto> req, *hash<auto> hdr, *timeout to) {
+        return new SgLangSseStreamIo(self, "chat/completions", req, hdr, to);
+    }
+}
+
+#! SSE stream for SGLang chat completions using async I/O (HttpClientIo + SseStreamReader)
+/** Works across HTTP/1.x, HTTP/2, and HTTP/3 via HttpClientIo's multiplexed
+    connection manager.
+
+    @note This class is \b not thread-safe.  Use from a single reader thread.
+*/
+public class SgLangSseStreamIo {
+    private {
+        #! SSE stream reader
+        HttpClientStreamingIo::SseStreamReader reader;
+
+        #! Timeout for SSE event reading
+        timeout timeout_ms = 15s;
+
+        #! True when the stream has been closed
+        bool closed = False;
+    }
+
+    #! Creates the SSE stream connection
+    /** @param rest the SgLangRestClientIo instance
+        @param path the API endpoint path (e.g., "chat/completions")
+        @param body the request body (serialized to JSON)
+        @param hdr optional additional request headers
+        @param to optional timeout for SSE event reading
+    */
+    constructor(SgLangRestClientIo rest, string path, *auto body, *hash<auto> hdr, *timeout to) {
+        if (to) {
+            timeout_ms = to;
+        }
+        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
+        headers.Accept = "text/event-stream";
+
+        # Serialize body to JSON
+        *data payload;
+        if (exists body) {
+%ifdef NoJson
+            throw "SSE-ERROR", "json module is required to serialize SSE request body";
+%else
+            if (body.typeCode() != NT_STRING) {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = call_function_args("to_json", (body,));
+            } else {
+                if (!headers."Content-Type") {
+                    headers."Content-Type" = "application/json";
+                }
+                payload = body;
+            }
+%endif
+        }
+
+        # Build full path
+        string full_path = buildPath(rest, path);
+
+        # Acquire stream and start SSE streaming
+        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(rest.getUrl());
+        stream.startStreaming("POST", full_path, headers, False, payload);
+
+        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+    }
+
+    #! Reads the next SSE event
+    /** @param to optional timeout override
+        @return the parsed SSE event, or NOTHING on timeout or stream end
+    */
+    *hash<SseMessageInfo> readEvent(*timeout to) {
+        if (closed) {
+            return NOTHING;
+        }
+        return reader.readEvent(to ?? timeout_ms);
+    }
+
+    #! Returns True if the stream has ended
+    bool isDone() {
+        return closed || reader.isDone();
+    }
+
+    #! Closes the stream
+    close() {
+        if (!closed) {
+            closed = True;
+            reader.cancel();
+        }
+    }
+
+    #! Builds the full API path from connection path + relative path
+    private static string buildPath(RestClientIo::RestClientIo rest, string path) {
+        string rv = path;
+        rv =~ s/^\/+//;
+        rv = "/" + rv;
+        *string base = rest.getConnectionPath();
+        if (base.val() && base != "/") {
+            base =~ s/\/+$//;
+            if (base !~ /^\//) {
+                base = "/" + base;
+            }
+            rv = base + rv;
+        }
+        return rv;
+    }
+}
+}

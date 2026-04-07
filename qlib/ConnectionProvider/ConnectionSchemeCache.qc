@@ -195,6 +195,8 @@ public class ConnectionSchemeCache {
 
             "sfrests": "SalesforceRestClient",
 
+            "sglang": "SgLangRestClient",
+
             # provided by the xml module
             "sfsoap": "SalesforceSoapClient",
             "sfsoaps": "SalesforceSoapClient",

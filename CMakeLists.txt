@@ -2032,6 +2032,7 @@ qore_user_module("qlib/VoyageRestClient.qm" "ConnectionProvider;Mime;RestClient;
 qore_user_module("qlib/GrokRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/HuggingFaceRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo")
 qore_user_module("qlib/OpenAiRestClient.qm" "ConnectionProvider;Mime;RestClient")
+qore_user_module("qlib/SgLangRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/PerplexityRestClient.qm" "ConnectionProvider;Mime;RestClient;RestClientIo;HttpClientStreamingIo")
 qore_user_module("qlib/ServiceNowRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/LemlistRestClient.qm" "ConnectionProvider;Mime;RestClient")
@@ -2093,6 +2094,7 @@ qore_user_module("qlib/VoyageDataProvider" "VoyageRestClient;ConnectionProvider;
 qore_user_module("qlib/GrokDataProvider" "GrokRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "grok-logo.svg")
 qore_user_module("qlib/HuggingFaceDataProvider" "HuggingFaceRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "huggingface-logo.svg")
 qore_user_module("qlib/OpenAiDataProvider" "OpenAiRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "openai-logo.svg")
+qore_user_module("qlib/SgLangDataProvider" "SgLangRestClient;ConnectionProvider;Mime;RestClient;RestClientIo;DataProvider" "sglang-logo.svg")
 qore_user_module("qlib/PerplexityDataProvider" "PerplexityRestClient;ConnectionProvider;Mime;RestClient;DataProvider" "perplexity-logo.svg")
 
 # base 9 modules

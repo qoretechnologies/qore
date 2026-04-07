@@ -1,0 +1,275 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/SgLangRestClient.qm
+
+%try-module json >= 1.5
+%define NoJson
+%endtry
+
+%exec-class Main
+
+class FakeSgLangStreamRest inherits SgLangRestClient::SgLangRestClient {
+    public {
+        string content_type;
+        *string content_encoding;
+        *string transfer_encoding;
+        list<binary> chunks;
+        int chunk_idx;
+        string last_parse_data;
+    }
+
+    constructor(string content_type, *string content_encoding, *string transfer_encoding, *list<binary> chunks)
+            : SgLangRestClient::SgLangRestClient({"model": "test-model"}, True) {
+        self.content_type = content_type;
+        self.content_encoding = content_encoding;
+        self.transfer_encoding = transfer_encoding;
+        self.chunks = chunks ?? ();
+    }
+
+    hash<auto> send(data payload, string method, string path, hash<auto> headers, bool decode_errors,
+            *reference<hash<auto>> info) {
+        if (info) {
+            info = {};
+        }
+        return {
+            "status_code": 200,
+            "status_message": "OK",
+            "content-type": content_type,
+            "content-encoding": content_encoding,
+            "transfer-encoding": transfer_encoding,
+        };
+    }
+
+    hash<auto> readHTTPChunk(timeout to) {
+        if (chunk_idx >= chunks.lsize()) {
+            return {
+                "body": NOTHING,
+            };
+        }
+        return {
+            "body": chunks[chunk_idx++],
+        };
+    }
+
+    hash<SseMessageInfo> parseServerSentEvent(string str) {
+        last_parse_data = str;
+        return <SseMessageInfo>{
+            "data": "ok",
+        };
+    }
+
+    hash<SseMessageInfo> readServerSentEvent(*string encoding, timeout to) {
+        last_parse_data = "direct";
+        return <SseMessageInfo>{
+            "data": "ok",
+        };
+    }
+
+    disconnect() {
+    }
+}
+
+public class Main inherits QUnit::Test {
+    private {
+        *SgLangRestClient::SgLangRestConnection rc;
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("SgLangRestClientTest", "1.0", \ARGV, MyOpts) {
+        addTestCase("connection tests", \connectionTest());
+        addTestCase("model tests", \modelTest());
+        addTestCase("sse stream tests", \sseStreamTest());
+        addTestCase("poll tests", \pollTest());
+
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose > 2) {
+                printf("%s\n", get_exception_string(ex));
+            } else if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    setUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+    }
+
+    tearDown() {
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    connectionTest() {
+        checkModule();
+        hash<auto> fake_opts = {
+            "model": "test-model",
+        };
+        {
+            SgLangRestConnection rc("test", "test", NOTHING, NOTHING, fake_opts);
+            assertTrue(rc instanceof SgLangRestConnection);
+            assertEq("sglang", rc.getType());
+
+            SgLangRestClient client = rc.get(False);
+            # issue #3321: check default timeouts
+            assertEq(45000, client.getTimeout());
+            assertEq(45000, client.getConnectTimeout());
+
+            # verify async client can be created
+            SgLangRestClientIo async_client = rc.getAsync(False);
+            assertTrue(async_client instanceof SgLangRestClientIo);
+        }
+    }
+
+    modelTest() {
+        checkModule();
+        {
+            # test model stored on sync client
+            SgLangRestClient client({"model": "my-llama-model"}, True);
+            assertEq("my-llama-model", client.getModel());
+        }
+        {
+            # test model stored on async client
+            SgLangRestClientIo client({"model": "my-mistral-model"});
+            assertEq("my-mistral-model", client.getModel());
+        }
+        {
+            # test no model
+            SgLangRestClient client({}, True);
+            assertNothing(client.getModel());
+        }
+        {
+            # test model from connection
+            SgLangRestConnection rc("test", "test", NOTHING, NOTHING, {"model": "conn-model"});
+            SgLangRestClient client = rc.get(False);
+            assertEq("conn-model", client.getModel());
+
+            SgLangRestClientIo async_client = rc.getAsync(False);
+            assertEq("conn-model", async_client.getModel());
+        }
+    }
+
+    sseStreamTest() {
+        FakeSgLangStreamRest rest("text/event-stream; charset=utf-8", NOTHING, "chunked",
+            (binary("data: hi\n\n"),));
+        SgLangRestClient::SgLangSseStream stream(rest, "chat/completions", "{}", NOTHING, 1s);
+        hash<SseMessageInfo> event = stream.readEvent();
+        assertEq("ok", event.data);
+        assertTrue(rest.last_parse_data =~ /data: hi/);
+
+        FakeSgLangStreamRest bad_rest("application/json", NOTHING, "chunked",
+            (binary("data: hi\n\n"),));
+        assertThrows("SSE-ERROR", sub () {
+            new SgLangRestClient::SgLangSseStream(bad_rest, "chat/completions", "{}", NOTHING, 1s);
+        });
+    }
+
+    pollTest() {
+        if (!rc) {
+            testSkip("no connection");
+        }
+
+        {
+            # first test a standard ping
+            hash<PingInfo> ping = rc.ping(True);
+            assertTrue(ping.ok);
+            assertEq("OK", ping.info);
+
+            TestPollingConnectionMonitor monitor(logger);
+            on_exit delete monitor;
+
+            monitor.add(rc);
+            hash<auto> info = monitor.waitForResult();
+            on_error if (info.ex) {
+                printf("%s\n", get_exception_string(info.ex));
+            }
+            assertEq("OK", info.result);
+        }
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name", OptionColumn);
+    }
+
+    private error(string fmt) {
+        throw "OPTION-ERROR", sprintf("%s: ERROR: %s", get_script_name(), vsprintf(fmt, argv));
+    }
+
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.SGLANG_CONNECTION;
+        if (!conn_name.val()) {
+            error("missing -c,--connection option or SGLANG_CONNECTION environment variable");
+        }
+
+        AbstractConnection conn = get_connection(conn_name);
+        if (!(conn instanceof SgLangRestConnection)) {
+            error("connection %y is type %y; expecting \"SgLangRestConnection\"", conn_name, conn.className());
+        }
+        rc = conn;
+    }
+}
+
+class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue msgq();
+    }
+
+    constructor(*Logger logger) : PollingConnectionMonitor(logger) {
+        ping_timeout = 5s;
+    }
+
+    hash<auto> waitForResult() {
+        return msgq.get();
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        msgq.push({"name": name, "result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        msgq.push({"name": name, "result": "timeout"});
+    }
+}

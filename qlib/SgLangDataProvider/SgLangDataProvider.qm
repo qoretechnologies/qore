@@ -1,0 +1,228 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SgLangDataProvider module definition
+
+/*  SgLangDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SgLangRestClient
+%requires RestClientIo
+
+module SgLangDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for SGLang LLM services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new SgLangDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SgLangDataProvider::AppName,
+            "display_name": "SGLang",
+            "short_desc": "SGLang LLM inference server",
+            "desc": "Integration with [SGLang](https://github.com/sgl-project/sglang), a self-hosted "
+                "OpenAI-compatible LLM inference server.\n\n"
+                "Supported operations:\n"
+                "- **Chat completions**: multi-message and single-message chat\n"
+                "- **Text completions**: text completion generation\n"
+                "- **Native generate**: SGLang-native generation endpoint\n"
+                "- **Models**: list available models",
+            "scheme": "sglang",
+            "logo": SgLangLogo,
+            "logo_file_name": "sglang-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::AiLlm,),
+        });
+
+        # register all supported actions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SgLangDataProvider::AppName,
+            "path": "/multi-chat",
+            "action": "multi-chat",
+            "display_name": "Multi Chat",
+            "short_desc": "Chat with a model by sending multiple messages",
+            "desc": "Chat with an LLM model by sending multiple messages at once and potentially "
+                "getting multiple replies",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangChatCompletionRequestType::Fields{"messages",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangChatCompletionRequestType::Fields{"model",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangChatCompletionRequestType::Fields - ("model", "messages")
+            ),
+            "output_type": SgLangChatCompletionDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SgLangDataProvider::AppName,
+            "path": "/simple-chat",
+            "action": "simple-chat",
+            "display_name": "Simple Chat",
+            "short_desc": "Chat with a model by sending a single message",
+            "desc": "Chat with an LLM model by sending a single message and receiving a single reply",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangSimpleChatCompletionRequestType::Fields{"role", "content"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangSimpleChatCompletionRequestType::Fields{"model",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangSimpleChatCompletionRequestType::Fields - ("model", "role", "content")
+            ),
+            "output_type": SgLangSimpleChatCompletionDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SgLangDataProvider::AppName,
+            "path": "/completions",
+            "action": "completions",
+            "display_name": "Text Completion",
+            "short_desc": "Generate text completions from a prompt",
+            "desc": "Generate text completions from a prompt using the OpenAI-compatible "
+                "completions endpoint",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangCompletionsRequestType::Fields{"prompt",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangCompletionsRequestType::Fields{"model",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangCompletionsRequestType::Fields - ("model", "prompt")
+            ),
+            "output_type": SgLangCompletionsDataProvider::ResponseType,
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SgLangDataProvider::AppName,
+            "path": "/generate",
+            "action": "generate",
+            "display_name": "Native Generate",
+            "short_desc": "Generate text using the native SGLang endpoint",
+            "desc": "Generate text using the native SGLang `/generate` endpoint with full control "
+                "over sampling parameters.\n\n"
+                "**Note**: this endpoint is SGLang-specific and not part of the OpenAI-compatible API",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangGenerateRequestType::Fields{"text",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                SgLangGenerateRequestType::Fields - "text"
+            ),
+            "output_type": SgLangGenerateDataProvider::ResponseType,
+        });
+    };
+}
+
+/** @mainpage SgLangDataProvider Module
+
+    @tableofcontents
+
+    @section sglangdataproviderintro Introduction to the SgLangDataProvider Module
+
+    The %SgLangDataProvider module provides a @ref dataproviderintro "data provider" API for
+    SGLang LLM inference services.
+
+    SGLang is a self-hosted OpenAI-compatible LLM inference server that supports both OpenAI-compatible
+    endpoints (\c /v1/chat/completions, \c /v1/completions, \c /v1/models) and native SGLang endpoints
+    (\c /generate).
+
+    @section sglangdataprovider_examples Examples
+
+    @subsection sglangdataprovider_chat Chat Completion
+
+    @code{.py}
+%requires SgLangDataProvider
+
+SgLangRestConnection rc = get_connection("my-sglang-connection");
+SgLangDataProvider::SgLangDataProvider prov(rc.getAsync());
+
+AbstractDataProvider chat = prov.getChildProvider("multi-chat");
+hash<auto> result = chat.doRequest({
+    "messages": (
+        {
+            "role": "user",
+            "content": "What is the capital of France?",
+        },
+    ),
+});
+printf("Response: %s\n", result.choices[0].message.content);
+    @endcode
+
+    @subsection sglangdataprovider_simple_chat Simple Chat
+
+    @code{.py}
+AbstractDataProvider simple = prov.getChildProvider("simple-chat");
+hash<auto> result = simple.doRequest({
+    "role": "user",
+    "content": "Hello!",
+});
+printf("Response: %s\n", result.choice.message.content);
+    @endcode
+
+    @subsection sglangdataprovider_generate Native Generate
+
+    @code{.py}
+AbstractDataProvider gen = prov.getChildProvider("generate");
+hash<auto> result = gen.doRequest({
+    "text": "The meaning of life is",
+    "sampling_params": {
+        "max_new_tokens": 64,
+        "temperature": 0.7,
+    },
+});
+printf("Generated: %s\n", result.text);
+    @endcode
+
+    @section sglangdataprovider_relnotes Release Notes
+
+    @subsection sglangdataprovider_v1_0 SgLangDataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the SgLangDataProvider module
+public namespace SgLangDataProvider {
+#! SGLang app name
+public const AppName = "SGLang";
+
+#! Logo file
+public const SgLangLogo = File::readTextFile(get_script_dir() + "/sglang-logo.svg");
+}

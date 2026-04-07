@@ -1,0 +1,369 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/SgLangDataProvider
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class SgLangDataProviderTest
+
+class FakeSgLangRestClientIo inherits SgLangRestClient::SgLangRestClientIo {
+    public {
+        hash<auto> last_request;
+        string last_method;
+        string last_path;
+        hash<auto> response_body;
+    }
+
+    constructor() : SgLangRestClientIo({"model": "test-model"}) {
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        if (!response_body) {
+            response_body = {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 1234567890,
+                "model": "test-model",
+                "choices": (
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "Hello!",
+                        },
+                        "finish_reason": "stop",
+                    },
+                ),
+                "usage": {
+                    "prompt_tokens": 5,
+                    "completion_tokens": 3,
+                    "total_tokens": 8,
+                },
+            };
+        }
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return restDoRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return restDoRequest("POST", path, body, hdr);
+    }
+
+    *string getModel() {
+        return "test-model";
+    }
+}
+
+public class SgLangDataProviderTest inherits QUnit::Test {
+    public {
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("SgLangDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("child providers", \childProvidersTest());
+        addTestCase("model injection", \modelInjectionTest());
+        addTestCase("model override", \modelOverrideTest());
+        addTestCase("chat completion", \chatCompletionTest());
+        addTestCase("simple chat", \simpleChatTest());
+        addTestCase("completions", \completionsTest());
+        addTestCase("generate", \generateTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("negative tests", \negativeTest());
+
+        # Return for compatibility with test harness that checks return value.
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangDataProvider prov(rest);
+        assertEq("sglang", prov.getName());
+        assertEq("test-model", prov.getModel());
+%endif
+    }
+
+    childProvidersTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangDataProvider prov(rest);
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.contains("multi-chat"));
+        assertTrue(children.contains("simple-chat"));
+        assertTrue(children.contains("completions"));
+        assertTrue(children.contains("generate"));
+        assertTrue(children.contains("models"));
+        assertEq(5, children.size());
+
+        # verify each child can be instantiated
+        foreach string name in (children) {
+            AbstractDataProvider child = prov.getChildProviderEx(name);
+            assertEq(name, child.getName());
+        }
+%endif
+    }
+
+    modelInjectionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangChatCompletionDataProvider prov(rest);
+
+        # request without model should get connection model injected
+        hash<auto> req = {
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "hello",
+                },
+            ),
+        };
+        prov.doRequest(req);
+        assertEq("test-model", rest.last_request.model);
+%endif
+    }
+
+    modelOverrideTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangChatCompletionDataProvider prov(rest);
+
+        # request with explicit model should NOT be overridden
+        hash<auto> req = {
+            "model": "custom-model",
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "hello",
+                },
+            ),
+        };
+        prov.doRequest(req);
+        assertEq("custom-model", rest.last_request.model);
+%endif
+    }
+
+    chatCompletionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangChatCompletionDataProvider prov(rest);
+
+        hash<auto> req = {
+            "messages": (
+                {
+                    "role": "user",
+                    "content": "What is 2+2?",
+                },
+            ),
+            "temperature": 0.5,
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        assertEq("user", rest.last_request.messages[0].role);
+        assertEq("What is 2+2?", rest.last_request.messages[0].content);
+        assertEq(0.5, rest.last_request.temperature);
+        assertEq("chatcmpl-test", resp.id);
+        assertEq("Hello!", resp.choices[0].message.content);
+        assertEq(8, resp.usage.total_tokens);
+%endif
+    }
+
+    simpleChatTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        SgLangSimpleChatCompletionDataProvider prov(rest);
+
+        hash<auto> req = {
+            "role": "user",
+            "content": "Hi there!",
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("chat/completions", rest.last_path);
+        # verify messages array was created from role/content
+        assertEq("user", rest.last_request.messages[0].role);
+        assertEq("Hi there!", rest.last_request.messages[0].content);
+        # verify single choice extracted from choices list
+        assertEq("Hello!", resp.choice.message.content);
+%endif
+    }
+
+    completionsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        rest.response_body = {
+            "id": "cmpl-test",
+            "object": "text_completion",
+            "created": 1234567890,
+            "model": "test-model",
+            "choices": (
+                {
+                    "text": "is 42.",
+                    "index": 0,
+                    "finish_reason": "stop",
+                },
+            ),
+            "usage": {
+                "prompt_tokens": 5,
+                "completion_tokens": 3,
+                "total_tokens": 8,
+            },
+        };
+        SgLangCompletionsDataProvider prov(rest);
+
+        hash<auto> req = {
+            "prompt": "The meaning of life",
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        assertEq("completions", rest.last_path);
+        assertEq("The meaning of life", rest.last_request.prompt);
+        assertEq("test-model", rest.last_request.model);
+        assertEq("cmpl-test", resp.id);
+        assertEq("is 42.", resp.choices[0].text);
+%endif
+    }
+
+    generateTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+        rest.response_body = {
+            "text": "Paris is the capital of France.",
+            "meta_info": {
+                "id": "gen-test",
+                "finish_reason": "stop",
+                "prompt_tokens": 8,
+                "completion_tokens": 7,
+            },
+        };
+        SgLangGenerateDataProvider prov(rest);
+
+        hash<auto> req = {
+            "text": "What is the capital of France?",
+            "sampling_params": {
+                "max_new_tokens": 64,
+                "temperature": 0.7,
+            },
+        };
+        hash<auto> resp = prov.doRequest(req);
+        assertEq("POST", rest.last_method);
+        # native endpoint should bypass /v1/ prefix
+        assertEq("../generate", rest.last_path);
+        assertEq("What is the capital of France?", rest.last_request.text);
+        assertEq("Paris is the capital of France.", resp.text);
+        assertEq("stop", resp.meta_info.finish_reason);
+%endif
+    }
+
+    actionCatalogTest() {
+        {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                SgLangDataProvider::AppName, "multi-chat"
+            );
+            assertEq("/multi-chat", action.path);
+            assertEq(DPAT_API, action.action_code);
+        }
+        {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                SgLangDataProvider::AppName, "simple-chat"
+            );
+            assertEq("/simple-chat", action.path);
+            assertEq(DPAT_API, action.action_code);
+        }
+        {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                SgLangDataProvider::AppName, "completions"
+            );
+            assertEq("/completions", action.path);
+            assertEq(DPAT_API, action.action_code);
+        }
+        {
+            hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+                SgLangDataProvider::AppName, "generate"
+            );
+            assertEq("/generate", action.path);
+            assertEq(DPAT_API, action.action_code);
+        }
+    }
+
+    negativeTest() {
+        checkModule();
+%ifndef NoJson
+        FakeSgLangRestClientIo rest();
+
+        # chat completion: messages with wrong type should throw
+        {
+            SgLangChatCompletionDataProvider prov(rest);
+            assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), ({"messages": "not a list"},));
+        }
+
+        # simple chat: missing content should throw
+        {
+            SgLangSimpleChatCompletionDataProvider prov(rest);
+            assertThrows("RUNTIME-TYPE-ERROR", \prov.doRequest(), ({"role": 123},));
+        }
+
+        # unknown child provider returns NOTHING
+        {
+            SgLangDataProvider prov(rest);
+            assertNothing(prov.getChildProvider("nonexistent"));
+        }
+
+        # factory creates correct provider
+        {
+            SgLangDataProviderFactory factory();
+            assertEq("sglang", factory.getInfo().name);
+        }
+%endif
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG", "set connection name", OptionColumn);
+    }
+
+    private error(string fmt) {
+        throw "OPTION-ERROR", sprintf("%s: ERROR: %s", get_script_name(), vsprintf(fmt, argv));
+    }
+}
