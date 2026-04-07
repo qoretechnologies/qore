@@ -500,6 +500,13 @@ void Http3ClientPollOperationPriv::endSubmitFail() {
     --submits_in_progress;
 }
 
+int Http3ClientPollOperationPriv::flushPendingWrites(ExceptionSink* xsink) {
+    if (!inner_op) {
+        return 0;
+    }
+    return inner_op->flushPendingWrites(xsink);
+}
+
 QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
         AbstractAsyncAction* action, bool& need_cancel, ExceptionSink* xsink) {
     std::string sid = std::to_string(stream_id);
@@ -785,6 +792,21 @@ bool Http3ClientPollOperationBase::isQuicSessionOpen() [flags=RET_VALUE_ONLY] {
 */
 bool Http3ClientPollOperationBase::isGoawayReceived() [flags=RET_VALUE_ONLY] {
     return priv->isGoawayReceived();
+}
+
+//! Synchronously flushes pending QUIC writes to the network
+/** Produces any queued QUIC packets (HTTP/3 request frames, ACKs, etc.)
+    and sends them via UDP. Safe to call from any thread.
+
+    Use this after submitting async requests to guarantee the request frames
+    are on the wire before closing the connection.
+
+    @throw QUIC-SEND-ERROR if the UDP send fails
+
+    @since %Qore 2.3
+*/
+nothing Http3ClientPollOperationBase::flushPendingWrites() {
+    priv->flushPendingWrites(xsink);
 }
 
 //! Requests connection migration (consumed by I/O thread on next continuePoll)

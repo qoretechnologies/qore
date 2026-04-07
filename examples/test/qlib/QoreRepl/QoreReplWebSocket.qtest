@@ -54,6 +54,14 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
     }
 
     constructor() : Test("QoreReplWebSocketTest", "1.0") {
+        # Set up SIGUSR1 handler to dump thread stacks for debugging hangs
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
         addTestCase("Handler options", \testHandlerOptions());
         addTestCase("Session connection", \testSessionConnection());
         addTestCase("Eval simple expression", \testEvalSimple());

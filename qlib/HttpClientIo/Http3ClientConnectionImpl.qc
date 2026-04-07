@@ -153,6 +153,16 @@ public class Http3ClientConnection inherits HttpClientConnection {
         return True;
     }
 
+    #! Synchronously flushes pending QUIC writes to the network
+    /** Produces any queued QUIC packets and sends them via UDP.
+        Safe to call from any thread.
+
+        @since %HttpClientIo 1.3
+    */
+    flushPendingWrites() {
+        poll_op.flushPendingWrites();
+    }
+
     #! Submits a request on this connection (protocol-specific)
     /** The capacity check is performed atomically inside poll_op.submitRequest()
         under the stream_lock.

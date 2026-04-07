@@ -129,6 +129,15 @@ public:
     //! Set error and close state (for connection death during submit)
     DLLLOCAL void setSubmitError(const char* err, const char* desc);
 
+    //! Synchronously flush pending QUIC writes to the network
+    /** Delegates to the inner SocketQuicClientPollOperation::flushPendingWrites().
+        Safe to call from any thread.
+
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int flushPendingWrites(ExceptionSink* xsink);
+
     // --- Accessors ---
 
     DLLLOCAL bool isClosed() const {

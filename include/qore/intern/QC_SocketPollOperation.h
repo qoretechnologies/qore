@@ -996,6 +996,19 @@ public:
     //! Check if connection is still open
     DLLLOCAL bool isOpen() const { return qcs_state != QCS::CLOSED && quic_session && !quic_session->isClosed(); }
 
+    //! Synchronously flush pending QUIC writes to the UDP socket
+    /** Produces any queued QUIC packets (HTTP/3 requests, ACKs, etc.) via
+        ngtcp2 and sends them via sendto()/sendmmsg().  Safe to call from
+        any thread — acquires the QuicSession mutex internally.
+
+        Use this after submitRequest() to guarantee that request frames
+        are on the wire before the connection is closed.
+
+        @param xsink exception sink
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int flushPendingWrites(ExceptionSink* xsink);
+
     //! Migrate the QUIC connection to a new socket (client-side active migration)
     /** Creates a new connected UDP socket, calls QuicSession::initiateMigration(),
         and swaps the fd on the underlying socket object.

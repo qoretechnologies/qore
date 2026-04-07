@@ -2287,6 +2287,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     int64 deadline = get_epoch_us() + pt_ms * 1000;
                                     pinfo.poll_timeout_deadline_us = deadline;
                                     t.timeout_heap.push({deadline, result.key});
+                                    // Ensure the event loop wakes in time for this
+                                    // deadline — poll_deadline_us was computed in
+                                    // Phase 1 before this entry existed.
+                                    if (poll_deadline_us == 0
+                                            || deadline < poll_deadline_us) {
+                                        poll_deadline_us = deadline;
+                                    }
                                 }
                             } else {
                                 pinfo.poll_timeout_deadline_us = 0;

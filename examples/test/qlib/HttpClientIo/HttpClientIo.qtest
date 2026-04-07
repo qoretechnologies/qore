@@ -162,6 +162,22 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that tracks received notifications via a Counter (decrements toward zero)
+class NotificationTrackingHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter cnt;
+    }
+
+    constructor(Counter cnt) {
+        self.cnt = cnt;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        cnt.dec();
+        return makeResponse(202, "", {"Content-Type": "text/plain"});
+    }
+}
+
 class HttpClientIoTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -336,6 +352,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("H2 stale connection recovery", \testH2StaleConnectionRecovery());
         addTestCase("H1 stale connection recovery", \testH1StaleConnectionRecovery());
         addTestCase("H3 stale connection recovery", \testH3StaleConnectionRecovery());
+        addTestCase("H3 async notification flush before close", \testH3AsyncFlushBeforeClose());
 
         @debug {
             set_signal_handler(SIGUSR1, sub (int sig) {
@@ -2375,5 +2392,66 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Step 4: Request via same manager
         resp = mgr.request(quic_url, "GET", "/simple");
         assertEq(200, resp.status_code, "H3 stale: recovery request succeeds");
+    }
+
+    #! Tests the "notification on close" pattern: submit async notifications while
+    #! a long-running request is in-flight, flush to wire, then close immediately.
+    #! Verifies that the server receives all notifications.
+    testH3AsyncFlushBeforeClose() {
+        if (!mQuicUrl) {
+            testSkip("QUIC not available");
+        }
+
+        # Track requests received by the server (starts at 3, dec'd toward zero)
+        Counter notification_count(3);
+
+        mServer.setHandler("notif", "/notif", NOTHING,
+            new NotificationTrackingHandler(notification_count));
+
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h3",
+            "connect_timeout": 10s,
+            "request_timeout": 30s,
+            "logger": mLogger,
+        });
+
+        # Step 1: Start a long-running request in background
+        Counter bg_done(1);
+        background sub() {
+            on_exit bg_done.dec();
+            try {
+                mgr.request(mQuicUrl, "GET", "/slow/3000");
+            } catch () {
+                # Connection closed during request — expected
+            }
+        }();
+
+        # Give the background request time to establish the connection
+        usleep(500ms);
+
+        # Step 2: Submit 3 async notifications on the same connection
+        for (int i = 0; i < 3; ++i) {
+            string body = sprintf("{\"id\":%d,\"msg\":\"cancel\"}", i);
+            hash<auto> result = mgr.submitRequestAsync(mQuicUrl, "POST", "/notif",
+                {"Content-Type": "application/json"}, body);
+
+            # Flush to wire deterministically
+            result.stream.getConnection().flushPendingWrites();
+        }
+
+        # Step 3: Close immediately — no response wait
+        mgr.closeAll();
+
+        # Step 4: Verify all 3 notifications were received by the server
+        # Counter started at 3, each notification decrements — wait for zero
+        notification_count.waitForZero(5s);
+
+        assertEq(0, notification_count.getCount(),
+            "server should receive all 3 notifications");
+
+        # Cleanup background thread
+        bg_done.waitForZero(10s);
     }
 }
