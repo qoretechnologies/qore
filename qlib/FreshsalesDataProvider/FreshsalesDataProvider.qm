@@ -1,0 +1,736 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore FreshsalesDataProvider module definition
+
+/*  FreshsalesDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) FreshsalesRestClient
+%requires RestClientIo
+
+module FreshsalesDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Freshsales CRM";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new FreshsalesDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": FreshsalesDataProvider::AppName,
+            "display_name": "Freshsales",
+            "short_desc": "Freshsales CRM integration",
+            "desc": "Freshsales is a CRM platform by Freshworks for managing contacts, "
+                "accounts, deals, tasks, appointments, and notes.\n\n"
+                "This integration supports full CRUD operations on core CRM objects "
+                "and polling-based triggers for new records.",
+            "scheme": "freshsalesrest",
+            "logo": FreshsalesLogo,
+            "logo_file_name": "freshsales-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::CrmSales,),
+        });
+
+        # ========== CONTACT ACTIONS ==========
+
+        # Create Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/contacts/create",
+            "action": "create-contact",
+            "groups": "Contacts",
+            "display_name": "Create Contact",
+            "short_desc": "Create a new contact",
+            "desc": "Create a new contact in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateContactRequestDataType::Fields),
+        });
+
+        # Update Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/contacts/update",
+            "action": "update-contact",
+            "groups": "Contacts",
+            "display_name": "Update Contact",
+            "short_desc": "Update an existing contact",
+            "desc": "Update an existing contact in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateContactDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesContactDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateContactRequestDataType::Fields),
+        });
+
+        # Delete Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/contacts/delete",
+            "action": "delete-contact",
+            "groups": "Contacts",
+            "display_name": "Delete Contact",
+            "short_desc": "Delete a contact",
+            "desc": "Delete a contact from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteContactDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteContactRequestDataType::Fields),
+        });
+
+        # List Contacts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/contacts",
+            "action": "list-contacts",
+            "groups": "Contacts",
+            "display_name": "List Contacts",
+            "short_desc": "List contacts from a view",
+            "desc": "List contacts from Freshsales CRM with optional filtering by view or email",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "Get a specific contact",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "view_id": <ActionOptionInfo>{
+                    "display_name": "View ID",
+                    "short_desc": "Filter by view",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Search by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Contact
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/contacts",
+            "action": "get-contact",
+            "groups": "Contacts",
+            "display_name": "Get Contact",
+            "short_desc": "Get a single contact by ID",
+            "desc": "Retrieve a single contact by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Contact ID",
+                    "short_desc": "The contact ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== ACCOUNT ACTIONS ==========
+
+        # Create Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/accounts/create",
+            "action": "create-account",
+            "groups": "Accounts",
+            "display_name": "Create Account",
+            "short_desc": "Create a new account",
+            "desc": "Create a new account in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateAccountDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesAccountDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateAccountRequestDataType::Fields),
+        });
+
+        # Update Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/accounts/update",
+            "action": "update-account",
+            "groups": "Accounts",
+            "display_name": "Update Account",
+            "short_desc": "Update an existing account",
+            "desc": "Update an existing account in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateAccountDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesAccountDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateAccountRequestDataType::Fields),
+        });
+
+        # Delete Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/accounts/delete",
+            "action": "delete-account",
+            "groups": "Accounts",
+            "display_name": "Delete Account",
+            "short_desc": "Delete an account",
+            "desc": "Delete an account from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteAccountDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteAccountRequestDataType::Fields),
+        });
+
+        # List Accounts
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/accounts",
+            "action": "list-accounts",
+            "groups": "Accounts",
+            "display_name": "List Accounts",
+            "short_desc": "List accounts from a view",
+            "desc": "List accounts from Freshsales CRM with optional filtering by view",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "Get a specific account",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "view_id": <ActionOptionInfo>{
+                    "display_name": "View ID",
+                    "short_desc": "Filter by view",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Account
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/accounts",
+            "action": "get-account",
+            "groups": "Accounts",
+            "display_name": "Get Account",
+            "short_desc": "Get a single account by ID",
+            "desc": "Retrieve a single account by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Account ID",
+                    "short_desc": "The account ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== DEAL ACTIONS ==========
+
+        # Create Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/deals/create",
+            "action": "create-deal",
+            "groups": "Deals",
+            "display_name": "Create Deal",
+            "short_desc": "Create a new deal",
+            "desc": "Create a new deal in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateDealDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesDealDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateDealRequestDataType::Fields),
+        });
+
+        # Update Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/deals/update",
+            "action": "update-deal",
+            "groups": "Deals",
+            "display_name": "Update Deal",
+            "short_desc": "Update an existing deal",
+            "desc": "Update an existing deal in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateDealDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesDealDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateDealRequestDataType::Fields),
+        });
+
+        # Delete Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/deals/delete",
+            "action": "delete-deal",
+            "groups": "Deals",
+            "display_name": "Delete Deal",
+            "short_desc": "Delete a deal",
+            "desc": "Delete a deal from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteDealDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteDealRequestDataType::Fields),
+        });
+
+        # List Deals
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/deals",
+            "action": "list-deals",
+            "groups": "Deals",
+            "display_name": "List Deals",
+            "short_desc": "List deals from a view",
+            "desc": "List deals from Freshsales CRM with optional filtering by view",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Deal ID",
+                    "short_desc": "Get a specific deal",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "view_id": <ActionOptionInfo>{
+                    "display_name": "View ID",
+                    "short_desc": "Filter by view",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Deal
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/deals",
+            "action": "get-deal",
+            "groups": "Deals",
+            "display_name": "Get Deal",
+            "short_desc": "Get a single deal by ID",
+            "desc": "Retrieve a single deal by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Deal ID",
+                    "short_desc": "The deal ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== TASK ACTIONS ==========
+
+        # Create Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/tasks/create",
+            "action": "create-task",
+            "groups": "Tasks",
+            "display_name": "Create Task",
+            "short_desc": "Create a new task",
+            "desc": "Create a new task in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesTaskDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateTaskRequestDataType::Fields),
+        });
+
+        # Update Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/tasks/update",
+            "action": "update-task",
+            "groups": "Tasks",
+            "display_name": "Update Task",
+            "short_desc": "Update an existing task",
+            "desc": "Update an existing task in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateTaskDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesTaskDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateTaskRequestDataType::Fields),
+        });
+
+        # Delete Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/tasks/delete",
+            "action": "delete-task",
+            "groups": "Tasks",
+            "display_name": "Delete Task",
+            "short_desc": "Delete a task",
+            "desc": "Delete a task from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteTaskDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteTaskRequestDataType::Fields),
+        });
+
+        # List Tasks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/tasks",
+            "action": "list-tasks",
+            "groups": "Tasks",
+            "display_name": "List Tasks",
+            "short_desc": "List tasks with optional filter",
+            "desc": "List tasks from Freshsales CRM with optional status filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "Get a specific task",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Filter by status",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "open", "display_name": "Open"},
+                        <AllowedValueInfo>{"value": "due today", "display_name": "Due Today"},
+                        <AllowedValueInfo>{"value": "due tomorrow",
+                            "display_name": "Due Tomorrow"},
+                        <AllowedValueInfo>{"value": "overdue", "display_name": "Overdue"},
+                        <AllowedValueInfo>{"value": "completed", "display_name": "Completed"},
+                    ),
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Task
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/tasks",
+            "action": "get-task",
+            "groups": "Tasks",
+            "display_name": "Get Task",
+            "short_desc": "Get a single task by ID",
+            "desc": "Retrieve a single task by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Task ID",
+                    "short_desc": "The task ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== APPOINTMENT ACTIONS ==========
+
+        # Create Appointment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/appointments/create",
+            "action": "create-appointment",
+            "groups": "Appointments",
+            "display_name": "Create Appointment",
+            "short_desc": "Create a new appointment",
+            "desc": "Create a new appointment in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateAppointmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesAppointmentDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateAppointmentRequestDataType::Fields),
+        });
+
+        # Update Appointment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/appointments/update",
+            "action": "update-appointment",
+            "groups": "Appointments",
+            "display_name": "Update Appointment",
+            "short_desc": "Update an existing appointment",
+            "desc": "Update an existing appointment in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateAppointmentDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesAppointmentDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateAppointmentRequestDataType::Fields),
+        });
+
+        # Delete Appointment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/appointments/delete",
+            "action": "delete-appointment",
+            "groups": "Appointments",
+            "display_name": "Delete Appointment",
+            "short_desc": "Delete an appointment",
+            "desc": "Delete an appointment from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteAppointmentDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteAppointmentRequestDataType::Fields),
+        });
+
+        # List Appointments
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/appointments",
+            "action": "list-appointments",
+            "groups": "Appointments",
+            "display_name": "List Appointments",
+            "short_desc": "List appointments with optional filter",
+            "desc": "List appointments from Freshsales CRM with optional time period filtering",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Appointment ID",
+                    "short_desc": "Get a specific appointment",
+                    "type": AbstractDataProviderTypeMap."*int",
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Filter by time period",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "past", "display_name": "Past"},
+                        <AllowedValueInfo>{"value": "upcoming", "display_name": "Upcoming"},
+                    ),
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get Appointment
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/appointments",
+            "action": "get-appointment",
+            "groups": "Appointments",
+            "display_name": "Get Appointment",
+            "short_desc": "Get a single appointment by ID",
+            "desc": "Retrieve a single appointment by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Appointment ID",
+                    "short_desc": "The appointment ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                },
+            },
+        });
+
+        # ========== NOTE ACTIONS ==========
+
+        # Create Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/notes/create",
+            "action": "create-note",
+            "groups": "Notes",
+            "display_name": "Create Note",
+            "short_desc": "Create a new note",
+            "desc": "Create a new note attached to a contact, account, or deal",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesCreateNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesNoteDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesCreateNoteRequestDataType::Fields),
+        });
+
+        # Update Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/notes/update",
+            "action": "update-note",
+            "groups": "Notes",
+            "display_name": "Update Note",
+            "short_desc": "Update an existing note",
+            "desc": "Update an existing note in Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesUpdateNoteDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new FreshsalesNoteDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesUpdateNoteRequestDataType::Fields),
+        });
+
+        # Delete Note
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/notes/delete",
+            "action": "delete-note",
+            "groups": "Notes",
+            "display_name": "Delete Note",
+            "short_desc": "Delete a note",
+            "desc": "Delete a note from Freshsales CRM",
+            "action_code": DPAT_API,
+            "data_provider_info": FreshsalesDeleteNoteDataProvider::ProviderInfo,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                FreshsalesDeleteNoteRequestDataType::Fields),
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # New Contact Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_CONTACT,
+            "action": EVENT_NEW_CONTACT,
+            "groups": "Events",
+            "display_name": "New Contact Event",
+            "short_desc": "Watch for new contacts",
+            "desc": "Poll for new contacts created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_CONTACT,
+        });
+
+        # New Deal Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_DEAL,
+            "action": EVENT_NEW_DEAL,
+            "groups": "Events",
+            "display_name": "New Deal Event",
+            "short_desc": "Watch for new deals",
+            "desc": "Poll for new deals created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_DEAL,
+        });
+
+        # New Account Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_ACCOUNT,
+            "action": EVENT_NEW_ACCOUNT,
+            "groups": "Events",
+            "display_name": "New Account Event",
+            "short_desc": "Watch for new accounts",
+            "desc": "Poll for new accounts created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_ACCOUNT,
+        });
+
+        # New Task Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_TASK,
+            "action": EVENT_NEW_TASK,
+            "groups": "Events",
+            "display_name": "New Task Event",
+            "short_desc": "Watch for new tasks",
+            "desc": "Poll for new tasks created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_TASK,
+        });
+
+        # New Appointment Event
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": FreshsalesDataProvider::AppName,
+            "path": "/events/" + EVENT_NEW_APPOINTMENT,
+            "action": EVENT_NEW_APPOINTMENT,
+            "groups": "Events",
+            "display_name": "New Appointment Event",
+            "short_desc": "Watch for new appointments",
+            "desc": "Poll for new appointments created in Freshsales",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_NEW_APPOINTMENT,
+        });
+    };
+}
+
+/** @mainpage FreshsalesDataProvider Module
+
+    @tableofcontents
+
+    @section freshsalesdataproviderintro FreshsalesDataProvider Introduction
+
+    The %FreshsalesDataProvider module provides a data provider API for Freshsales CRM.
+
+    To use this module, use \c "%requires FreshsalesDataProvider" in your code.
+
+    All the public symbols in the module are defined in the FreshsalesDataProvider namespace.
+
+    @section freshsalesdataproviderrelnotes Release Notes
+
+    @subsection freshsalesdataproviderv1_0 FreshsalesDataProvider v1.0
+    - the initial version of the %FreshsalesDataProvider module
+*/

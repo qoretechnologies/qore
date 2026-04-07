@@ -127,6 +127,8 @@ public class ConnectionSchemeCache {
 
             "freshbooks": "FreshBooksRestClient",
 
+            "freshsalesrest": "FreshsalesRestClient",
+
             "gemini": "GeminiRestClient",
 
             "gohighlevelres": "GoHighLevelRestClient",
