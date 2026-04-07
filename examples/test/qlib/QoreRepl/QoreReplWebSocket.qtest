@@ -64,6 +64,14 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         addTestCase("Authentication callback", \testAuthCallback());
         addTestCase("Max connections", \testMaxConnections());
 
+        # SIGUSR1 handler for debugging hangs (prints all thread stacks)
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n=== End Thread Stacks ===\n",
+                    get_all_thread_call_stacks());
+            });
+        }
+
         # Setup logger
         logger = new Logger("test", m_options.verbose > 3 ? LoggerLevel::LevelDebug : LoggerLevel::LevelInfo);
         if (m_options.verbose > 2) {
