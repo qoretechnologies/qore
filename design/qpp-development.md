@@ -166,6 +166,14 @@ The naming pattern is `obj_<parameter_name>`:
 
 **Use case example**: When maintaining a map of registered objects (e.g., an event loop), you may need to look up by `QoreObject*` to handle cases where the underlying resource (socket fd, file handle) has been closed but the object is still registered.
 
+### Setting Member Values in QPP Constructors
+
+Use `self->setValue("member", val, xsink)` — not `self->setMemberValue("member", cls, val, xsink)` —
+when initializing Qore members from a QPP constructor body.  `setMemberValue` goes through
+class-context member access with DGC object-counting that can interact poorly with the
+constructor's `CodeContextHelper` ref, producing a leaked ref.  `setValue` performs a simple
+member assignment and is the pattern used by `SocketPollOperation` and other working QPP classes.
+
 ### Documentation Format
 
 Use Doxygen-style comments:
