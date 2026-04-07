@@ -676,6 +676,10 @@ Socket::destructor() {
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to poll the socket for a standard
     connection
 
+    For INET connections where the hostname resolves to both IPv6 and IPv4 addresses, this method uses
+    Happy Eyeballs (RFC 8305) to race connections with a 250ms stagger, so a broken or slow address family
+    does not add latency.
+
     @since %Qore 1.12
 */
 AbstractPollOperation Socket::startPollConnect(string target) {
@@ -699,7 +703,11 @@ AbstractPollOperation Socket::startPollConnect(string target) {
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to poll the socket for an SSL
     connection
 
-    The poll operation returned will perform the connection and an immediate upgrade to an SSL/TLS connection
+    The poll operation returned will perform the connection and an immediate upgrade to an SSL/TLS connection.
+
+    For INET connections where the hostname resolves to both IPv6 and IPv4 addresses, this method uses
+    Happy Eyeballs (RFC 8305) to race connections with a 250ms stagger, so a broken or slow address family
+    does not add latency.
 
     @since %Qore 1.12
 */
@@ -1707,6 +1715,10 @@ sock.connect("/tmp/socket");@endcode
     values, a @ref relative_dates "relative date/time value" can be used to make the units clear (i.e. \c 2m = two
     minutes, etc.)
 
+    For INET connections where the hostname resolves to both IPv6 and IPv4 addresses, this method uses
+    Happy Eyeballs (RFC 8305) to race connections with a 250ms stagger, so a broken or slow address family
+    does not add latency.
+
     @throw SOCKET-CONNECT-ERROR An error occured connecting to the remote socket (cannot resolve hostname, no
     listener, timeout exceeded, etc).
 
@@ -1721,6 +1733,10 @@ nothing Socket::connect(string target, timeout timeout_ms = -1) {
 /** Connects the socket to a remote (or local) port; accepts an optional timeout value in milliseconds (@ref relative_dates "relative date/time values" can be given instead of an integer in milliseconds to make the source more readable; ex: \c 20s). If any errors occur, an exception is thrown.
 
     Do not use square brackets to designate ipv6 addresses with this method; just give the address in its normal form (ex: \c "2001:0db8:85a3:0000:0000:8a2e:0370:7334").
+
+    When the \a family parameter is \c AF_UNSPEC (the default) and the hostname resolves to both IPv6 and IPv4
+    addresses, this method uses Happy Eyeballs (RFC 8305) to race connections with a 250ms stagger, so a broken
+    or slow address family does not add latency.
 
     @par Examples:
     @code{.py}# connect to ipv4 address 192.168.1.45 port 8080 with a 30 second timeout
@@ -1807,6 +1823,10 @@ nothing Socket::connectSSL(string target, timeout timeout_ms = -1) {
 /** Connects the socket to a remote (or local) port and attempts to establish a TLS/SSL connection; accepts an optional timeout value in milliseconds (@ref relative_dates "relative date/time values" can be given instead of an integer in milliseconds to make the source more readable; ex: \c 20s). If any errors occur, an exception is thrown.
 
     Do not use square brackets to designate ipv6 addresses with this method; just give the address in its normal form (ex: \c "2001:0db8:85a3:0000:0000:8a2e:0370:7334").
+
+    When the \a family parameter is \c AF_UNSPEC (the default) and the hostname resolves to both IPv6 and IPv4
+    addresses, this method uses Happy Eyeballs (RFC 8305) to race connections with a 250ms stagger, so a broken
+    or slow address family does not add latency.
 
     @par Examples:
     @code{.py} # connect to 192.168.1.45 port 8080 with a 30 second timeout

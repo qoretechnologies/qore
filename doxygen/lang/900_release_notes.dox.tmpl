@@ -277,10 +277,10 @@ cargo install tree-sitter-cli@0.26.5
       - @ref date_or_nothing_type "*date<absolute>" and @ref date_or_nothing_type "*date<relative>" allow @ref nothing
     - new @ref string_formatting "printf format specifier":
       - \c %%Y: formats any value as multi-line pseudo-YAML with proper indentation for nested structures
-    - <b>NaN-boxing optimization for internal value representation</b>
+    - <b><a href="https://en.wikipedia.org/wiki/NaN-boxing">NaN-boxing</a> optimization for internal value representation</b>
       (<a href="https://github.com/qoretechnologies/qore/issues/5084">issue 5084</a>)
       - reduces memory usage per value from 16 bytes to 8 bytes (50% reduction in value storage overhead)
-      - uses IEEE 754 NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
+      - uses <a href="https://en.wikipedia.org/wiki/IEEE_754">IEEE 754</a> NaN bit patterns to encode multiple value types (int, float, bool, nothing, null,
         and pointers to complex types) in a single 64-bit word
       - includes small string optimization (SSO): strings up to 6 bytes are stored inline without heap
         allocation, eliminating memory allocation overhead for common short strings (e.g., hash keys
@@ -290,9 +290,11 @@ cargo install tree-sitter-cli@0.26.5
       - faster value passing and copying since values fit in a single register
       - particularly beneficial for code with many small values (loops, function calls, hash/list operations)
       - no API changes required - existing code benefits automatically from the optimization
-    - <b>HTTP/2 support (h2 over TLS via ALPN negotiation)</b>
-      - new builtin \c nghttp2 library support for HTTP/2 binary framing and HPACK header compression
-      - ALPN (Application-Layer Protocol Negotiation) support in Socket class for TLS protocol selection
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc9113">HTTP/2</a> support (h2 over TLS via ALPN negotiation)</b>
+      - new builtin \c nghttp2 library support for HTTP/2 binary framing and
+        <a href="https://datatracker.ietf.org/doc/html/rfc7541">HPACK</a> header compression
+      - <a href="https://datatracker.ietf.org/doc/html/rfc7301">ALPN</a> (Application-Layer Protocol Negotiation)
+        support in Socket class for TLS protocol selection
       - @ref Qore::HTTPClient "HTTPClient" support for HTTP/2 with automatic fallback to HTTP/1.1
       - transparent to existing HTTP code - default mode is "auto" (use HTTP/2 if available)
       - new @ref Qore::HTTPClient::setHttp2Mode() "HTTPClient::setHttp2Mode()" method to control HTTP/2 mode ("auto", "disabled", "required")
@@ -302,17 +304,22 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref Qore::Socket::startPollReadHttp2Request() "Socket::startPollReadHttp2Request()" for non-blocking HTTP/2 request reading
       - new @ref Qore::Socket::startPollSendHttp2Response() "Socket::startPollSendHttp2Response()" for non-blocking HTTP/2 response sending
       - new \c http_version option in \c ConnectionProvider for client-side HTTP version control
-      - WebSocket over HTTP/2 support (RFC 8441 extended CONNECT method)
-      - Server-Sent Events (SSE) over HTTP/2 support
+      - <a href="https://datatracker.ietf.org/doc/html/rfc8441">WebSocket over HTTP/2</a> support (RFC 8441 extended CONNECT method)
+      - <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Events</a> (SSE) over HTTP/2 support
       - new @ref Qore::set_global_http2_mode() "set_global_http2_mode()" function to globally control HTTP/2 mode
         at runtime (\c "auto", \c "disabled", or \c "required") - affects all new HTTP connections
         (requires @ref Qore::DOM_PROCESS_CONTROL "DOM_PROCESS_CONTROL" rights)
       - new @ref Qore::get_global_http2_mode() "get_global_http2_mode()" function to query the current global HTTP/2 mode
       - new @ref Qore::Option::HAVE_HTTP2 "Option::HAVE_HTTP2" constant (always \c True as nghttp2 is now required)
-    - <b>QUIC/HTTP/3 support (h3 over QUIC via ngtcp2 + nghttp3)</b>
-      - new builtin ngtcp2 + nghttp3 library support for QUIC transport and HTTP/3 binary framing
-      - QUIC handshake with TLS 1.3 over UDP for 0-RTT and 1-RTT connection establishment
-      - @ref Qore::HTTPClient "HTTPClient" support for HTTP/3 with automatic discovery via Alt-Svc headers and fallback to HTTP/1.x or HTTP/2
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc9000">QUIC</a>/<a href="https://datatracker.ietf.org/doc/html/rfc9114">HTTP/3</a> support (h3 over QUIC via ngtcp2 + nghttp3)</b>
+      - new builtin <a href="https://github.com/ngtcp2/ngtcp2">ngtcp2</a> +
+        <a href="https://github.com/ngtcp2/nghttp3">nghttp3</a> library support for QUIC transport and HTTP/3 binary framing
+      - QUIC handshake with <a href="https://datatracker.ietf.org/doc/html/rfc8446">TLS 1.3</a> over UDP
+        for 0-RTT and 1-RTT connection establishment
+      - @ref Qore::HTTPClient "HTTPClient" support for HTTP/3 with automatic discovery via
+        <a href="https://datatracker.ietf.org/doc/html/rfc7838">Alt-Svc</a> headers and fallback to HTTP/1.x or HTTP/2
+      - Alt-Svc upgrade to HTTP/3 is supported even when HTTP/2 is already active via ALPN; failed QUIC
+        handshakes use a 5-minute backoff to avoid repeated connection penalties
       - new @ref Qore::HTTPClient::setHttp3Mode() "HTTPClient::setHttp3Mode()" method to control HTTP/3 mode ("auto", "disabled", "required")
       - new @ref Qore::HTTP3Mode "HTTP3Mode" enum for type-safe HTTP/3 mode selection
       - HttpServer support for HTTP/3 with async I/O integration
@@ -320,14 +327,30 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref Qore::Socket::startPollQuicAccept() "Socket::startPollQuicAccept()" for non-blocking QUIC server connection acceptance
       - new @ref Qore::Socket::startPollQuicSendResponse() "Socket::startPollQuicSendResponse()" for non-blocking HTTP/3 response sending
       - new @ref Qore::Option::HAVE_HTTP3 "Option::HAVE_HTTP3" constant (always \c True as ngtcp2/nghttp3 are now required)
-      - new @ref httputilintro "HttpUtil" user module providing shared RFC 6265 cookie handling for both HttpServerUtil and HttpClientIo
+      - new @ref httputilintro "HttpUtil" user module providing shared
+        <a href="https://datatracker.ietf.org/doc/html/rfc6265">RFC 6265</a> cookie handling for both HttpServerUtil and HttpClientIo
       - new @ref httpclientiointro "HttpClientIo" user module providing unified HTTP/2 and HTTP/3 client I/O
-      - WebSocket over HTTP/3 support (RFC 9220 extended CONNECT over QUIC)
+      - <a href="https://datatracker.ietf.org/doc/html/rfc9220">WebSocket over HTTP/3</a> support (RFC 9220 extended CONNECT over QUIC)
       - Server-Sent Events (SSE) over HTTP/3 support
-      - QUIC connection migration support (RFC 9000 §9)
-      - QUIC mutual TLS (mTLS) for client certificate verification
+      - <a href="https://datatracker.ietf.org/doc/html/rfc9000#section-9">QUIC connection migration</a> support (RFC 9000 §9)
+      - QUIC <a href="https://en.wikipedia.org/wiki/Mutual_authentication#mTLS">mutual TLS</a> (mTLS) for client certificate verification
       - unified \c http_version option: \c "3.0" can now be used to require HTTP/3 via the same \c http_version
         interface used for HTTP/1.x and HTTP/2
+      - <a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> (RFC 8305) dual-stack connection
+        racing for QUIC connections — ensures that a broken or slow IPv6/IPv4 path does not add latency to
+        QUIC connection establishment
+    - <b><a href="https://datatracker.ietf.org/doc/html/rfc8305">Happy Eyeballs</a> (RFC 8305) dual-stack connection racing</b>
+      - automatically races IPv6 and IPv4 connections with a 250ms stagger so a broken or slow address
+        family does not add latency
+      - applies to all TCP socket connections: @ref Qore::Socket::connect() "Socket::connect()",
+        @ref Qore::Socket::connectINET() "Socket::connectINET()",
+        @ref Qore::Socket::connectINETSSL() "Socket::connectINETSSL()", and their async equivalents
+        (@ref Qore::Socket::startPollConnect() "Socket::startPollConnect()",
+        @ref Qore::Socket::startPollConnectSsl() "Socket::startPollConnectSsl()")
+      - addresses are interleaved by family (IPv6 first, then IPv4) per RFC 8305 §4
+      - single-family connections fall back to sequential behavior with no overhead
+      - benefits all higher-level networking automatically (@ref Qore::HTTPClient "HTTPClient",
+        @ref httpclientiointro "HttpClientIo", @ref restclientio_intro "RestClientIo", etc.)
     - new @ref Qore::SandboxManager "SandboxManager" class for comprehensive code sandboxing
       - @ref sandbox_filesystem "filesystem access control" with sandbox roots, allow/deny lists, and access modes
       - @ref sandbox_network "network access control" with CIDR-based IP ranges, hostname patterns, and port restrictions
