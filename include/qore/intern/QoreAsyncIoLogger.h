@@ -54,4 +54,38 @@ DLLLOCAL void qore_async_io_log_v(int level, const char* fmt, va_list args);
 //! Cleanup (called from qore_cleanup())
 DLLLOCAL void qore_async_io_logger_cleanup();
 
+// --- Low-level C trace for async I/O debugging ---
+//
+// Usage:  ASYNC_IO_TRACE("Phase2 SKIP key='%s' ready=%d\n", key.c_str(), ready);
+//
+// Compiled in when DEBUG or DEBUG_ASYNC_IO is defined.
+// DEBUG_ASYNC_IO can be enabled independently in optimized builds via:
+//   cmake -DCMAKE_CXX_FLAGS="-DDEBUG_ASYNC_IO" ...
+//
+// Enabled at runtime by setting QORE_ASYNC_IO_TRACE=1 env var.
+// Output goes to stderr with a "[ASYNC-IO]" prefix and microsecond timestamp.
+// When compiled out (default optimized builds), zero cost.
+
+#if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
+
+//! Returns true if async I/O tracing is enabled (cached env var check)
+DLLLOCAL bool qore_async_io_trace_enabled();
+
+//! Writes a trace line to stderr (only if tracing is enabled)
+DLLLOCAL void qore_async_io_trace(const char* fmt, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 1, 2)))
+#endif
+    ;
+
+#define ASYNC_IO_TRACE(...) do { \
+    if (qore_async_io_trace_enabled()) { \
+        qore_async_io_trace(__VA_ARGS__); \
+    } \
+} while (0)
+
+#else
+#define ASYNC_IO_TRACE(...) ((void)0)
+#endif
+
 #endif // _QORE_QOREASYNCIOLOGGER_H

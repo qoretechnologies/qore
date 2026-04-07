@@ -248,7 +248,7 @@ class QuicE2ETest inherits QUnit::Test {
 
                 # Wake up the controller so it re-polls the client operation,
                 # which will flush the queued HTTP/3 request frames over UDP
-                ctrl.wake();
+                ctrl.wakeSocket(client_sock);
             } catch (hash<ExceptionInfo> ex) {
                 submit_error = True;
                 submit_error_msg = sprintf("%s: %s", ex.err, ex.desc);

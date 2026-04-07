@@ -108,3 +108,31 @@ void qore_async_io_logger_cleanup() {
         old_logger->deref(&xsink);
     }
 }
+
+// --- Low-level C trace for async I/O debugging ---
+#if defined(DEBUG) || defined(DEBUG_ASYNC_IO)
+
+bool qore_async_io_trace_enabled() {
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char* val = getenv("QORE_ASYNC_IO_TRACE");
+        enabled = (val && val[0] == '1') ? 1 : 0;
+    }
+    return enabled != 0;
+}
+
+void qore_async_io_trace(const char* fmt, ...) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm tm;
+    localtime_r(&ts.tv_sec, &tm);
+    fprintf(stderr, "[ASYNC-IO %04d-%02d-%02d %02d:%02d:%02d.%06ld] ",
+        tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+        tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec / 1000);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+}
+
+#endif // DEBUG || DEBUG_ASYNC_IO

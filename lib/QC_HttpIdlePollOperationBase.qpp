@@ -1,0 +1,294 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpIdlePollOperationBase.qpp
+
+    HttpIdlePollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_HttpIdlePollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/qore_socket_private.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// HttpIdlePollOperationPriv implementation
+// ============================================================
+
+HttpIdlePollOperationPriv::HttpIdlePollOperationPriv(QoreObject* self, QoreSocketObject* sock, int64_t ttl_us)
+    : SocketPollOperationBase(self), sock_obj(sock), ttl_us(ttl_us) {
+    // sock is already ref'd by the QPP caller
+    deadline_us = nowUs() + ttl_us;
+}
+
+HttpIdlePollOperationPriv::~HttpIdlePollOperationPriv() {
+    if (sock_obj) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+bool HttpIdlePollOperationPriv::goalReached() const {
+    return idle_state != IdleState::IDLE;
+}
+
+QoreHashNode* HttpIdlePollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    // Already done
+    if (idle_state != IdleState::IDLE) {
+        return nullptr;
+    }
+
+    // Check for timeout
+    if (nowUs() > deadline_us) {
+        idle_state = IdleState::TIMEOUT;
+        return nullptr;
+    }
+
+    // Check if socket is still connected
+    if (!sock_obj->isOpen()) {
+        idle_state = IdleState::CLOSED;
+        return nullptr;
+    }
+
+    // Check for data or EOF via non-blocking recv peek.
+    // Do NOT use isDataAvailable() — this is an async I/O path; the event loop
+    // already told us the socket is ready.  A raw recv(MSG_PEEK) distinguishes:
+    //   > 0: data available (new request from client)
+    //     0: EOF (client closed the connection)
+    //    -1 + EAGAIN: no data yet, connection alive
+    {
+        int fd = sock_obj->getSocket();
+        if (fd >= 0) {
+            char peek_buf;
+            ssize_t peek_rc = ::recv(fd, &peek_buf, 1, MSG_PEEK | MSG_DONTWAIT);
+            if (peek_rc > 0) {
+                idle_state = IdleState::DATA_AVAILABLE;
+                return nullptr;
+            }
+            if (peek_rc == 0) {
+                // EOF — client closed the connection; close the socket
+                // immediately to prevent CLOSE_WAIT fd accumulation
+                idle_state = IdleState::CLOSED;
+                sock_obj->closeIo(xsink);
+                return nullptr;
+            }
+            // peek_rc < 0: check for real errors vs EAGAIN
+            if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                idle_state = IdleState::CLOSED;
+                sock_obj->closeIo(xsink);
+                return nullptr;
+            }
+        }
+    }
+
+    // Need to wait for data — return poll info
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+}
+
+void HttpIdlePollOperationPriv::abort(ExceptionSink* xsink) {
+    idle_state = IdleState::CLOSED;
+}
+
+QoreValue HttpIdlePollOperationPriv::getOutput() const {
+    ExceptionSink xsink;
+    ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+    h->setKeyValue("sock", getReferencedSocketObject(&xsink), &xsink);
+
+    const char* state_str;
+    switch (idle_state) {
+        case IdleState::IDLE:           state_str = "idle"; break;
+        case IdleState::DATA_AVAILABLE: state_str = "data_available"; break;
+        case IdleState::CLOSED:         state_str = "closed"; break;
+        case IdleState::TIMEOUT:        state_str = "timeout"; break;
+        default:                        state_str = "unknown"; break;
+    }
+    h->setKeyValue("state", new QoreStringNode(state_str), &xsink);
+    h->setKeyValue("timed_out", idle_state == IdleState::TIMEOUT, &xsink);
+    h->setKeyValue("closed", idle_state == IdleState::CLOSED, &xsink);
+    h->setKeyValue("data_available", idle_state == IdleState::DATA_AVAILABLE, &xsink);
+    return h.release();
+}
+
+void HttpIdlePollOperationPriv::resetTimeout() {
+    deadline_us = nowUs() + ttl_us;
+}
+
+void HttpIdlePollOperationPriv::cleanup(ExceptionSink* xsink) {
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+}
+
+const char* HttpIdlePollOperationPriv::getStateImpl() const {
+    switch (idle_state) {
+        case IdleState::IDLE:           return "idle";
+        case IdleState::DATA_AVAILABLE: return "data_available";
+        case IdleState::CLOSED:         return "closed";
+        case IdleState::TIMEOUT:        return "timeout";
+        default:                        return "unknown";
+    }
+}
+
+/** @endcond */
+
+//! C++ base class for idle HTTP keep-alive connection monitoring
+/** This class implements the core poll logic for monitoring an idle HTTP
+    connection in pure C++, enabling the AsyncIoController I/O thread to
+    drive the poll without Qore interpreter overhead.
+
+    The poll operation monitors for:
+    - New data arriving (indicating a new request)
+    - Connection close by peer
+    - Timeout expiration
+
+    @since %Qore 2.3
+*/
+qclass HttpIdlePollOperationBase [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=HttpIdlePollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the idle poll operation
+/** @param sock the Socket to monitor for new data
+    @param ttl_ms keep-alive timeout in milliseconds (converted to microseconds internally)
+*/
+HttpIdlePollOperationBase::constructor(Socket[QoreSocketObject] sock, timeout ttl_ms) {
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Store socket as Qore member for DGC visibility
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_qobj) {
+        self->setMemberValue("sock", QC_HTTPIDLEPOLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTPIDLEPOLLOPERATIONBASE,
+        new QoreStringNode("idle_monitor"), xsink);
+
+    sock_ptr->ref();
+    self->setPrivate(CID_HTTPIDLEPOLLOPERATIONBASE,
+        new HttpIdlePollOperationPriv(self, sock_ptr, (int64_t)ttl_ms * 1000));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+HttpIdlePollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPIDLEPOLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+HttpIdlePollOperationBase::copy() {
+    xsink->raiseException("HTTPIDLEPOLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return "idle_monitor"
+*/
+string HttpIdlePollOperationBase::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return one of "idle", "data_available", "closed", or "timeout"
+*/
+string HttpIdlePollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the operation is complete (no longer idle)
+/** @return True when the operation has completed
+*/
+bool HttpIdlePollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> HttpIdlePollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Sets the state to "closed".
+*/
+nothing HttpIdlePollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output of the operation
+/** @return a hash with keys: sock, state, timed_out, closed, data_available
+*/
+auto HttpIdlePollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if the connection timed out
+/** @return True if the keep-alive timeout expired
+*/
+bool HttpIdlePollOperationBase::timedOut() [flags=RET_VALUE_ONLY] {
+    return priv->timedOut();
+}
+
+//! Returns True if data is available for reading
+/** @return True if data arrived on the socket
+*/
+bool HttpIdlePollOperationBase::hasData() [flags=RET_VALUE_ONLY] {
+    return priv->hasData();
+}
+
+//! Returns True if the connection was closed
+/** @return True if the socket was closed by peer
+*/
+bool HttpIdlePollOperationBase::wasClosed() [flags=RET_VALUE_ONLY] {
+    return priv->wasClosed();
+}
+
+//! Resets the timeout deadline from the current time
+/**
+*/
+nothing HttpIdlePollOperationBase::resetTimeout() {
+    priv->resetTimeout();
+}
+
+//! Returns the socket being monitored
+/** @return the Socket object
+*/
+Socket HttpIdlePollOperationBase::getSocket() {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}

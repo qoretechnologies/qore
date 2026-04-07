@@ -1603,249 +1603,141 @@ public enum Pop3PingState : string {
 
     @since %Pop3Client 2.1
 */
-public class Pop3PingPollOperation inherits Qore::AbstractPollOperation {
-    private {
-        #! Info about the POP3 client
-        hash<auto> info;
-
-        #! The Socket for communication with the server
-        Socket sock();
-
-        #! The current internal poll operation
-        AbstractPollOperation poller;
-
-        #! Lock for atomicity
-        Mutex m();
-
-        #! Current state
-        Pop3PingState state;
-
-        #! Goal reached flag
-        bool goal_reached = False;
-
-        #! Server greeting (may contain APOP msg-id)
-        string greeting;
-
-        #! APOP msg-id extracted from greeting
-        *string apop_msgid;
-    }
-
+public class Pop3PingPollOperation inherits Qore::PollPipeline {
     #! Creates the object based on the Pop3Client
-    constructor(Pop3Client pop3) {
-        info = pop3.getInfo();
+    /** Builds the complete POP3 ping pipeline from connection configuration.
 
-        state = Pop3PingState::Connect;
-        poller = info.ssl
-            ? sock.startPollConnectSsl(info.target)
-            : sock.startPollConnect(info.target);
+        The pipeline supports XOAUTH2 and USER/PASS authentication methods.
+        APOP authentication is not supported in the pipeline implementation
+        because it requires runtime greeting analysis (regex extraction of
+        the APOP msg-id) and MD5 computation, which cannot be pre-computed
+        at pipeline construction time.
+
+        @param pop3 the Pop3Client whose connection info drives the pipeline
+
+        @throw POP3-POLL-ERROR if the POP3 server returns an error response
+
+        @since %Pop3Client 2.2
+    */
+    constructor(Pop3Client pop3) : PollPipeline(new Socket()) {
+        hash<auto> info = pop3.getInfo();
+        self.goal = "ping";
+
+        bool has_token = info.token.val();
+        bool need_stls = !info.ssl && info.tls ? True : False;
+
+        # Pre-compute auth commands
+        string xoauth2_cmd = "";
+        if (has_token) {
+            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
+                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
+            xoauth2_cmd = sprintf("AUTH XOAUTH2 %s\r\n", login);
+        }
+        string user_cmd = sprintf("USER %s\r\n", info.user);
+        string pass_cmd = sprintf("PASS %s\r\n", info.pass);
+
+        # Pipeline step layout (step indices in comments):
+        #   0: setContextBool("need_stls")
+        #   1: setContextBool("has_token")
+        #   2: setContextBinary("xoauth2_cmd")
+        #   3: setContextBinary("user_cmd")
+        #   4: setContextBinary("pass_cmd")
+        #   5: connect or connectSsl
+        #   6: recvUntilBytes("\n")            — read greeting
+        #   7: validateResponsePrefix("+OK")   — validate greeting
+        #   8: branch(need_stls, 9, 13)        — STLS decision
+        #   9: send("STLS\r\n")
+        #  10: recvUntilBytes("\n")            — read STLS reply
+        #  11: validateResponsePrefix("+OK")   — validate STLS reply
+        #  12: sslUpgrade()
+        #  13: branch(has_token, 14, 18)       — auth method decision
+        #  14: sendFromContext("xoauth2_cmd")
+        #  15: recvUntilBytes("\n")            — read XOAUTH2 reply
+        #  16: validateResponsePrefix("+OK")   — validate XOAUTH2 reply
+        #  17: branch(has_token, 24, 24)       — unconditional jump to NOOP
+        #  18: sendFromContext("user_cmd")
+        #  19: recvUntilBytes("\n")            — read USER reply
+        #  20: validateResponsePrefix("+OK")   — validate USER reply
+        #  21: sendFromContext("pass_cmd")
+        #  22: recvUntilBytes("\n")            — read PASS reply
+        #  23: validateResponsePrefix("+OK")   — validate PASS reply
+        #  24: send("NOOP\r\n")
+        #  25: recvUntilBytes("\n")            — read NOOP reply
+        #  26: validateResponsePrefix("+OK")   — validate NOOP reply
+        #  27: (past end → pipeline complete)
+
+        # --- Steps 0-4: configuration transforms ---
+        self.addSetContextBool("need_stls", need_stls);                  # 0
+        self.addSetContextBool("has_token", has_token);                  # 1
+        self.addSetContextBinary("xoauth2_cmd", xoauth2_cmd);           # 2
+        self.addSetContextBinary("user_cmd", user_cmd);                  # 3
+        self.addSetContextBinary("pass_cmd", pass_cmd);                  # 4
+
+        # --- Step 5: connect ---
+        if (info.ssl) {
+            self.addConnectSsl(info.target);                             # 5
+        } else {
+            self.addConnect(info.target);                                # 5
+        }
+
+        # --- Steps 6-7: read and validate server greeting ---
+        self.addRecvUntilBytes("\n");                                    # 6
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 7
+
+        # --- Step 8: branch on STLS decision ---
+        self.addBranchOnContextKey("need_stls", 9, 13);                 # 8
+
+        # --- Steps 9-12: STARTTLS handshake ---
+        self.addSend("STLS\r\n");                                       # 9
+        self.addRecvUntilBytes("\n");                                    # 10
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 11
+        self.addSslUpgrade();                                           # 12
+
+        # --- Step 13: branch on auth method ---
+        self.addBranchOnContextKey("has_token", 14, 18);                # 13
+
+        # --- Steps 14-17: XOAUTH2 auth path ---
+        self.addSendFromContext("xoauth2_cmd");                         # 14
+        self.addRecvUntilBytes("\n");                                    # 15
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 16
+        # Unconditional jump to NOOP (has_token is always true here)
+        self.addBranchOnContextKey("has_token", 24, 24);                # 17
+
+        # --- Steps 18-23: USER/PASS auth path ---
+        self.addSendFromContext("user_cmd");                             # 18
+        self.addRecvUntilBytes("\n");                                    # 19
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 20
+        self.addSendFromContext("pass_cmd");                             # 21
+        self.addRecvUntilBytes("\n");                                    # 22
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 23
+
+        # --- Steps 24-26: NOOP ping ---
+        self.addSend("NOOP\r\n");                                       # 24
+        self.addRecvUntilBytes("\n");                                    # 25
+        self.addValidateResponsePrefix("+OK", "POP3-POLL-ERROR");       # 26
+
+        # --- Step 27 (past end): pipeline completes automatically ---
     }
 
     #! Returns the goal
-    /** @return the goal set in the constructor
+    /** @return "ping"
     */
     string getGoal() {
         return "ping";
     }
 
-    #! Returns the current state
-    /** @return the current state
+    #! Returns the current state mapped to Pop3PingState values for backward compatibility
+    /** @return the current state string
     */
     string getState() {
-        AutoLock al(m);
-        if (!poller) {
-            return goal_reached ? "complete" : "error";
+        if (self.goalReached()) {
+            return Pop3PingState::Complete;
         }
-        return state;
-    }
-
-    #! Returns @ref True when the goal has been reached
-    /** @return @ref True when the goal has been reached
-    */
-    bool goalReached() {
-        return state == Pop3PingState::Complete;
-    }
-
-    #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
-    *hash<SocketPollInfo> continuePoll() {
-        AutoLock al(m);
-        if (!poller) {
-            return;
+        if (self.isClosed()) {
+            return "error";
         }
-        while (True) {
-            *hash<SocketPollInfo> pinfo = poller.continuePoll();
-            if (pinfo) {
-                return pinfo;
-            }
-
-            if (state == Pop3PingState::Connect) {
-                state = Pop3PingState::ReadGreeting;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadGreeting) {
-                greeting = trim(poller.getOutput());
-                if (greeting !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("server greeting error: %s", greeting);
-                }
-                # Check for APOP msg-id (RFC822-compliant <...>)
-                apop_msgid = (greeting =~ x/(<[^>]+>)$/)[0];
-
-                # Handle STLS if needed (not SSL but starttls requested)
-                if (!info.ssl && info.tls) {
-                    state = Pop3PingState::SendStls;
-                    poller = sock.startPollSend("STLS\r\n");
-                    continue;
-                }
-
-                # Start authentication
-                startAuth();
-                continue;
-            }
-
-            if (state == Pop3PingState::SendStls) {
-                state = Pop3PingState::ReadStlsReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadStlsReply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("STLS command failed: %s", reply);
-                }
-
-                state = Pop3PingState::UpgradeToTls;
-                poller = sock.startPollUpgradeClientToSSL();
-                continue;
-            }
-
-            if (state == Pop3PingState::UpgradeToTls) {
-                # Start authentication after TLS upgrade
-                startAuth();
-                continue;
-            }
-
-            if (state == Pop3PingState::SendUser) {
-                state = Pop3PingState::ReadUserReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadUserReply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("USER command failed: %s", reply);
-                }
-
-                state = Pop3PingState::SendPass;
-                poller = sock.startPollSend(sprintf("PASS %s\r\n", info.pass));
-                continue;
-            }
-
-            if (state == Pop3PingState::SendPass) {
-                state = Pop3PingState::ReadPassReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadPassReply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("PASS command failed: %s", reply);
-                }
-
-                # Send NOOP to complete the ping
-                state = Pop3PingState::SendNoop;
-                poller = sock.startPollSend("NOOP\r\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::SendApop) {
-                state = Pop3PingState::ReadApopReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadApopReply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("APOP command failed: %s", reply);
-                }
-
-                # Send NOOP to complete the ping
-                state = Pop3PingState::SendNoop;
-                poller = sock.startPollSend("NOOP\r\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::SendXoauth2) {
-                state = Pop3PingState::ReadXoauth2Reply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadXoauth2Reply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("AUTH XOAUTH2 command failed: %s", reply);
-                }
-
-                # Send NOOP to complete the ping
-                state = Pop3PingState::SendNoop;
-                poller = sock.startPollSend("NOOP\r\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::SendNoop) {
-                state = Pop3PingState::ReadNoopReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == Pop3PingState::ReadNoopReply) {
-                string reply = trim(poller.getOutput());
-                if (reply !~ /^\+OK/) {
-                    throw "POP3-POLL-ERROR", sprintf("NOOP command failed: %s", reply);
-                }
-
-                delete poller;
-                state = Pop3PingState::Complete;
-                goal_reached = True;
-                break;
-            }
-        }
-    }
-
-    #! Aborts the polling operation
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    #! Starts the authentication process based on available credentials
-    private startAuth() {
-        # SASL XOAUTH2 takes precedence if token is available
-        if (info.token) {
-            state = Pop3PingState::SendXoauth2;
-            string login = sprintf("user=%s%sauth=Bearer %s%s%s", info.user, Pop3Client::CtrlA, info.token,
-                Pop3Client::CtrlA, Pop3Client::CtrlA).toBase64();
-            poller = sock.startPollSend(sprintf("AUTH XOAUTH2 %s\r\n", login));
-            return;
-        }
-
-        # Try APOP if msg-id is present in greeting
-        if (apop_msgid) {
-            state = Pop3PingState::SendApop;
-            string secret = (apop_msgid + info.pass).toMD5();
-            poller = sock.startPollSend(sprintf("APOP %s %s\r\n", info.user, secret));
-            return;
-        }
-
-        # Fall back to USER/PASS
-        state = Pop3PingState::SendUser;
-        poller = sock.startPollSend(sprintf("USER %s\r\n", info.user));
+        # Delegate to the pipeline for internal state
+        return PollPipeline::getState();
     }
 }
 

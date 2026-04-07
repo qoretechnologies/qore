@@ -3890,16 +3890,29 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         }
         auto ping_body = getPingBody();
 
+        hash<auto> ping_opts = real_opts + {
+            "ping_path": ping_path,
+            "ping_body": ping_body,
+        };
+
+        try {
+            load_module("RestClientIo");
+            return create_object("RestClientIo::RestClientIoPingPollOperation", self, ping_opts, logger);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err != "LOAD-MODULE-ERROR") {
+                rethrow;
+            }
+        }
+
+        # RestClient poll-based ping (sync fallback)
         RestClient client = getPollImpl();
+        # update real_url from the module's actual URL; for auto_url connections the stored
+        # URL is a placeholder (e.g. "https://x") overridden by the module's getImpl()
+        real_url = client.getURL();
         if (logger) {
             client.setLogger(logger);
         }
-
-        # returns a RestClient option without connecting and without retrieving any external schemas with I/O
-        return new RestPingPollOperation(self, client, real_opts + {
-            "ping_path": ping_path,
-            "ping_body": ping_body,
-        });
+        return new RestPingPollOperation(self, client, ping_opts);
     }
 
     #! Called after a new connection object is created from an existing connection
@@ -4098,9 +4111,13 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     #! Returns options for creating a new connection
     *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
         return real_opts + {
+            # Always use the current real_url — real_opts.url is set at construction time
+            # and becomes stale for auto_url connections when the URL is updated later
+            "url": real_url,
             "logger": logger,
             "update_options": update_options,
-        } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING);
+        } + (rtopts.validator ? {"validator": rtopts.validator} : NOTHING)
+          + (rtopts.skip_login ? {"skip_login": True} : NOTHING);
     }
 
     #! Sets alt token signer code and the header for it

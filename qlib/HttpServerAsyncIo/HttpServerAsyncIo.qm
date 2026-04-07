@@ -27,6 +27,7 @@
 %requires Logger
 %requires HttpServerUtil
 %requires AsyncSocketIo
+%requires WebSocketUtil
 
 module HttpServerAsyncIo {
     # NOTE: this module has never been released; version starts at 1.0
@@ -60,7 +61,7 @@ module HttpServerAsyncIo {
     - @ref HttpServerAsyncIo::HttpKeepAlivePollOperation "HttpKeepAlivePollOperation" - Combined idle + header read for HTTP/1.x keep-alive
     - @ref HttpServerAsyncIo::HttpSseStreamPollOperation "HttpSseStreamPollOperation" - SSE streaming support (HTTP/1.x)
     - @ref HttpServerAsyncIo::HttpWebSocketPollOperation "HttpWebSocketPollOperation" - WebSocket bidirectional I/O (HTTP/1.x)
-    - @ref HttpServerAsyncIo::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC
+    - @ref Qore::Http3ServerPollOperation "Http3ServerPollOperation" - HTTP/3 server connection handling over QUIC (built-in C++ class)
     - @ref HttpServerAsyncIo::Http3SseStream "Http3SseStream" - SSE streaming support (HTTP/3)
     - @ref HttpServerAsyncIo::HttpAsyncTarget "HttpAsyncTarget" - Callback interface for HTTP events
     - @ref HttpServerAsyncIo::HttpAsyncSocketIoController "HttpAsyncSocketIoController" - HTTP-aware I/O controller
@@ -138,9 +139,7 @@ public namespace HttpServerAsyncIo {
 
         #! HTTP status message text (e.g., "OK", "Not Found")
         /** Used by the controller for HTTP/1.x response sending.
-            If not set, the controller looks up the status text from
-            the HttpServer::HttpCodes constant using the \c code field.
-
+            If not set, the fallback is \c "Unknown".
         */
         *string status_message;
 

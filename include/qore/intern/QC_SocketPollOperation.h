@@ -33,296 +33,23 @@
 
 #define _QORE_CLASS_SOCKETPOLLOPERATION_H
 
-#include "qore/intern/QC_SocketPollOperationBase.h"
+// Public API — exported poll operation classes
+#include "qore/SocketPollOperation.h"
+
+// Internal-only includes
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/QC_Socket.h"
-#include "qore/QoreSocketObject.h"
 #include "qore/InputStream.h"
 #include "qore/intern/QuicSession.h"
 
-#include <memory>
+class QoreEventNotifier;
+
 #include <deque>
-
-// goals: connect, connect-ssl
-constexpr int SPG_CONNECT = 1;
-constexpr int SPG_CONNECT_SSL = 2;
-
-// states: none -> connecting -> [connecting-ssl ->] connected
-constexpr int SPS_NONE = 0;
-constexpr int SPS_CONNECTING = 1;
-constexpr int SPS_CONNECTING_SSL = 2;
-constexpr int SPS_CONNECTED = 3;
 
 //! Max single QUIC UDP datagram receive buffer (1500 typical MTU + headroom for jumbo frames)
 //! @note Assumes GSO/GRO is not used; if Generic Segmentation Offload is enabled in the future,
 //! this must be increased to handle coalesced datagrams (e.g., 64KB for GRO).
 constexpr size_t QUIC_RECV_BUF_SIZE = 2048;
-
-class SocketPollSocketOperationBase : public SocketPollOperationBase {
-public:
-    DLLLOCAL SocketPollSocketOperationBase(QoreObject* self) : SocketPollOperationBase(self) {
-    }
-
-    DLLLOCAL SocketPollSocketOperationBase(QoreSocketObject* sock) : sock(sock) {
-    }
-
-    DLLLOCAL SocketPollSocketOperationBase(QoreSocketObject* sock, unsigned direction)
-            : sock(sock), non_block_direction(direction) {
-    }
-
-    DLLLOCAL ~SocketPollSocketOperationBase() {
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) {
-        // Clear poll_state to release any buffers held by the poll state
-        // This prevents memory accumulation if the operation object remains referenced after timeout
-        poll_state.reset();
-        if (set_non_block) {
-            AutoLocker al(sock->priv->m);
-            sock->priv->clearNonBlock(non_block_direction);
-            if (abortNeedsClose()) {
-                // avoid re-locking priv->m via QoreSocketObject::close()
-                // QoreSocketObject cleanup is handled by the owning code path.
-                sock->priv->socket->close();
-            }
-            // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-            // if clearNonBlock() or close() threw
-            set_non_block = false;
-            state = SPS_NONE;
-        }
-    }
-
-protected:
-    std::unique_ptr<AbstractPollState> poll_state;
-    QoreSocketObject* sock = nullptr;
-    int state = SPS_NONE;
-    bool set_non_block = false;
-    //! Direction flags for this operation (NB_SEND, NB_RECV, or NB_ALL)
-    unsigned non_block_direction = NB_ALL;
-
-    DLLLOCAL virtual bool abortNeedsClose() const {
-        return true;
-    }
-};
-
-class SocketConnectPollOperation : public SocketPollSocketOperationBase {
-public:
-    DLLLOCAL SocketConnectPollOperation(ExceptionSink* xsink, bool ssl, const char* target, QoreSocketObject* sock);
-
-    DLLLOCAL void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock();
-            }
-            sock->deref(xsink);
-            delete this;
-        }
-    }
-
-    DLLLOCAL virtual bool goalReached() const {
-        return state == SPS_CONNECTED;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-
-protected:
-    //! Called in the constructor
-    DLLLOCAL virtual int preVerify(ExceptionSink* xsink) {
-        return 0;
-    }
-
-    //! Called when the connection is established
-    DLLLOCAL virtual void connected();
-
-    //! Called to switch to the connect-ssl state
-    DLLLOCAL int startSslConnect(ExceptionSink* xsink);
-
-private:
-    std::string target;
-
-    int sgoal = 0;
-
-    DLLLOCAL virtual const char* getStateImpl() const {
-        switch (state) {
-            case SPS_NONE:
-                return "none";
-            case SPS_CONNECTING:
-                return "connecting";
-            case SPS_CONNECTING_SSL:
-                return "connecting-ssl";
-            case SPS_CONNECTED:
-                return "connected";
-            default:
-                assert(false);
-        }
-        return "";
-    }
-
-    DLLLOCAL int checkContinuePoll(ExceptionSink* xsink);
-};
-
-class SocketSendPollOperation : public SocketPollSocketOperationBase {
-public:
-    // "data" must be passed already referenced
-    DLLLOCAL SocketSendPollOperation(ExceptionSink* xsink, QoreStringNode* data, QoreSocketObject* sock);
-
-    // "data" must be passed already referenced
-    DLLLOCAL SocketSendPollOperation(ExceptionSink* xsink, BinaryNode* data, QoreSocketObject* sock);
-
-    DLLLOCAL void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock(NB_SEND);
-            }
-            sock->deref(xsink);
-            delete this;
-        }
-    }
-
-    DLLLOCAL virtual bool goalReached() const {
-        return sent;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const {
-        return sent ? "sent" : "sending";
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-
-private:
-    SimpleRefHolder<SimpleValueQoreNode> data;
-    const char* buf;
-    size_t size;
-    bool sent = false;
-
-    DLLLOCAL virtual bool abortNeedsClose() const;
-};
-
-class SocketRecvPollOperationBase : public SocketPollSocketOperationBase {
-public:
-    DLLLOCAL SocketRecvPollOperationBase(QoreSocketObject* sock, bool to_string)
-            : SocketPollSocketOperationBase(sock, NB_RECV), to_string(to_string) {
-    }
-
-    DLLLOCAL virtual void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock(NB_RECV);
-            }
-            sock->deref(xsink);
-            delete this;
-        }
-    }
-
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Clear data buffer to prevent memory accumulation on timeout
-        data.discard();
-        SocketPollSocketOperationBase::abort(xsink);
-    }
-
-    DLLLOCAL virtual bool goalReached() const {
-        return received;
-    }
-
-    DLLLOCAL virtual const char* getStateImpl() const {
-        return received ? "received" : "receiving";
-    }
-
-    DLLLOCAL virtual QoreValue getOutput() const {
-        return data ? data->refSelf() : QoreValue();
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-
-protected:
-    SimpleRefHolder<SimpleValueQoreNode> data;
-    bool to_string;
-    bool received = false;
-
-    DLLLOCAL int initIntern(ExceptionSink* xsink);
-
-    DLLLOCAL virtual bool abortNeedsClose() const = 0;
-};
-
-class SocketRecvPollOperation : public SocketRecvPollOperationBase {
-public:
-    // "data" must be passed already referenced
-    DLLLOCAL SocketRecvPollOperation(ExceptionSink* xsink, ssize_t size, QoreSocketObject* sock, bool to_string);
-
-private:
-    size_t size;
-
-    DLLLOCAL virtual bool abortNeedsClose() const;
-};
-
-class SocketRecvDataPollOperation : public SocketRecvPollOperationBase {
-public:
-    // "data" must be passed already referenced
-    DLLLOCAL SocketRecvDataPollOperation(ExceptionSink* xsink, QoreSocketObject* sock, bool to_string);
-
-    DLLLOCAL virtual bool abortNeedsClose() const;
-};
-
-class SocketRecvUntilBytesPollOperation : public SocketRecvPollOperationBase {
-public:
-    // "data" must be passed already referenced
-    DLLLOCAL SocketRecvUntilBytesPollOperation(ExceptionSink* xsink, const QoreStringNode* pattern,
-            QoreSocketObject* sock, bool to_string);
-
-private:
-    SimpleRefHolder<QoreStringNode> pattern;
-
-    DLLLOCAL virtual bool abortNeedsClose() const;
-};
-
-class SocketReadHttpHeaderPollOperation : public SocketRecvPollOperationBase {
-public:
-    // "data" must be passed already referenced
-    DLLLOCAL SocketReadHttpHeaderPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-
-    DLLLOCAL virtual QoreValue getOutput() const;
-
-    DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Clear output buffer to prevent memory accumulation on timeout
-        out = nullptr;
-        SocketRecvPollOperationBase::abort(xsink);
-    }
-
-private:
-    mutable ReferenceHolder<QoreHashNode> out;
-
-    DLLLOCAL virtual bool abortNeedsClose() const;
-};
-
-class SocketUpgradeClientSslPollOperation : public SocketPollSocketOperationBase {
-public:
-    DLLLOCAL SocketUpgradeClientSslPollOperation(ExceptionSink* xsink, QoreSocketObject* sock);
-
-    DLLLOCAL void deref(ExceptionSink* xsink) {
-        if (ROdereference()) {
-            if (set_non_block) {
-                sock->clearNonBlock();
-            }
-            sock->deref(xsink);
-            delete this;
-        }
-    }
-
-    DLLLOCAL virtual bool goalReached() const {
-        return done;
-    }
-
-    DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink);
-
-    DLLLOCAL virtual const char* getStateImpl() const {
-        return "connecting-ssl";
-    }
-
-private:
-    bool done = false;
-};
 
 class SocketUpgradeServerSslPollOperation : public SocketPollSocketOperationBase {
 public:
@@ -671,7 +398,7 @@ class SocketHttp2SendStreamingResponsePollOperation : public SocketPollSocketOpe
 public:
     DLLLOCAL SocketHttp2SendStreamingResponsePollOperation(ExceptionSink* xsink, QoreSocketObject* sock,
         int32_t stream_id, int status_code, const QoreHashNode* headers,
-        InputStream* input_stream, int64 chunk_size = 16384);
+        InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size = 16384);
 
     DLLLOCAL ~SocketHttp2SendStreamingResponsePollOperation();
 
@@ -682,6 +409,10 @@ public:
             }
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
+            }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
             }
             sock->deref(xsink);
             delete this;
@@ -710,6 +441,10 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         // Send RST_STREAM to notify client that the stream is being cancelled
         {
@@ -735,6 +470,7 @@ private:
     StreamingState ss_state = SS_READ_CHUNK;
     int32_t stream_id = 0;
     SimpleRefHolder<InputStream> input_stream;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
     int64 chunk_size;
     bool eof = false;
     bool is_pollable;
@@ -818,7 +554,11 @@ public:
     }
 
     DLLLOCAL virtual bool goalReached() const override {
-        return phase == Phase::Complete || phase == Phase::Timeout;
+        return phase == Phase::Complete || phase == Phase::Timeout || phase == Phase::Closed;
+    }
+
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return phase == Phase::Closed;
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override;
@@ -833,7 +573,7 @@ public:
     }
 
 private:
-    enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Error };
+    enum class Phase { Sending, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::Sending;
 
     // Sending phase: holds the pre-serialized HTTP response
@@ -862,8 +602,8 @@ private:
 class SocketSendStreamAndReadHeaderPollOperation : public SocketPollSocketOperationBase {
 public:
     DLLLOCAL SocketSendStreamAndReadHeaderPollOperation(ExceptionSink* xsink, BinaryNode* header_data,
-        QoreSocketObject* sock, InputStream* input_stream, int64 content_length,
-        int64 idle_timeout_ms, bool fused);
+        QoreSocketObject* sock, InputStream* input_stream, QoreObject* input_stream_obj,
+        int64 content_length, int64 idle_timeout_ms, bool fused, bool chunked = false);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
         if (ROdereference()) {
@@ -873,13 +613,21 @@ public:
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
+            }
             sock->deref(xsink);
             delete this;
         }
     }
 
     DLLLOCAL virtual bool goalReached() const override {
-        return phase == Phase::Complete || phase == Phase::Timeout;
+        return phase == Phase::Complete || phase == Phase::Timeout || phase == Phase::Closed;
+    }
+
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return phase == Phase::Closed;
     }
 
     DLLLOCAL virtual const char* getStateImpl() const override;
@@ -892,13 +640,17 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         header_output = nullptr;
         SocketPollSocketOperationBase::abort(xsink);
     }
 
 private:
-    enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Error };
+    enum class Phase { SendHeaders, StreamBody, Idle, ReadingHeader, Complete, Timeout, Closed, Error };
     Phase phase = Phase::SendHeaders;
 
     // SendHeaders phase: pre-serialized HTTP response headers
@@ -908,11 +660,14 @@ private:
 
     // StreamBody phase: InputStream body source
     SimpleRefHolder<InputStream> input_stream;
-    int64 content_length;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
+    int64 content_length;       //!< -1 for chunked encoding (stream until EOF)
     int64 bytes_sent = 0;
     int stream_fd = -1;
     bool is_pollable = true;
     bool need_reassign = true;
+    bool chunked_encoding = false; //!< True when using HTTP chunked Transfer-Encoding
+    bool sent_terminal_chunk = false; //!< True after sending "0\r\n\r\n"
     SimpleRefHolder<BinaryNode> current_chunk;
 
     // Idle + ReadHeader phases
@@ -1175,7 +930,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -1219,11 +973,7 @@ public:
             sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
             quic_session.reset();
         }
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1307,7 +1057,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -1340,11 +1089,7 @@ public:
         }
         sessions_.clear();
         cached_stream_.reset();
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1374,7 +1119,6 @@ private:
         int64_t session_id;
         std::unique_ptr<QuicStreamInfo> stream;
         std::shared_ptr<QuicSession> session;
-        std::shared_ptr<StreamNotifier> notifier;  //!< per-stream notifier for targeted wakeup
     };
 
     //! Local session map — single-threaded working copy used only from the I/O
@@ -1453,7 +1197,6 @@ public:
         if (ROdereference()) {
             if (set_non_block) {
                 AutoLocker al(sock->priv->m);
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
             }
             sock->deref(xsink);
@@ -1474,11 +1217,7 @@ public:
         AutoLocker al(sock->priv->m);
         // Release session reference to allow cleanup if the socket is closed
         quic_session.reset();
-        // Restore OS-level blocking mode
-        // Clear flag AFTER syscalls so a subsequent abort() retries cleanup
-        // if set_non_blocking() threw
         if (set_non_block) {
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
         }
@@ -1561,6 +1300,7 @@ public:
                                                            int status_code,
                                                            const QoreHashNode* headers,
                                                            InputStream* input_stream,
+                                                           QoreObject* input_stream_obj,
                                                            int64 chunk_size = 16384);
 
     DLLLOCAL void deref(ExceptionSink* xsink) {
@@ -1568,8 +1308,12 @@ public:
             if (input_stream && !need_reassign) {
                 input_stream->unassignThread(xsink);
             }
+            if (input_stream_obj) {
+                input_stream_obj->deref(xsink);
+                input_stream_obj = nullptr;
+            }
             // If destroyed without abort() (e.g. owner cancellation), clean up
-            // the stream and restore socket state
+            // the stream and clear non-block tracking
             if (quic_session || set_non_block) {
                 AutoLocker al(sock->priv->m);
                 // Cancel stream to prevent leaked streaming_body_data_ entries
@@ -1579,9 +1323,7 @@ public:
                         &cancel_xsink);
                 }
                 quic_session.reset();
-                // Restore OS-level blocking mode
                 if (set_non_block) {
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                 }
             }
@@ -1603,6 +1345,10 @@ public:
             input_stream->unassignThread(xsink);
         }
         input_stream = nullptr;
+        if (input_stream_obj) {
+            input_stream_obj->deref(xsink);
+            input_stream_obj = nullptr;
+        }
         current_chunk = nullptr;
         // Cancel stream via QuicSession
         {
@@ -1613,7 +1359,6 @@ public:
             }
             quic_session.reset();
             if (set_non_block) {
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
                 set_non_block = false;
             }
@@ -1627,6 +1372,7 @@ private:
 
     //! InputStream fields
     SimpleRefHolder<InputStream> input_stream;
+    QoreObject* input_stream_obj = nullptr;  //!< Strong ref to InputStream QoreObject (prevents GC)
     int64 chunk_size;
     bool eof = false;
     bool is_pollable;

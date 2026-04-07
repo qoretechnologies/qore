@@ -274,7 +274,7 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         }
         remove http_opts.token_type;
 
-        return new SseConnectPollOperation(http_opts.url, http_opts, NOTHING, logger);
+        return SseConnectPollOperation::create(http_opts.url, http_opts, NOTHING, logger);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -286,32 +286,47 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
 #! Poll operation for non-blocking SSE connection verification
 /** Connects to an SSE server and validates the response (200 OK, Content-Type: text/event-stream).
 
+    Uses the C++ HttpClientPingPollOperationBase for I/O thread fast path.
+    The static @ref create() method creates the HTTPClient, builds SSE headers,
+    starts the inner poll operation, and passes it to the C++ base which handles
+    delegation and response validation (status 200, Content-Type: text/event-stream).
+
     @since ServerSentEventClient 1.1
 */
-public class SseConnectPollOperation inherits Qore::AbstractPollOperation {
+public class SseConnectPollOperation inherits Qore::HttpClientPingPollOperationBase {
     private {
-        #! The underlying poll operation for the HTTP GET
-        *AbstractPollOperation poller;
         #! Optional logger
         *Logger::LoggerInterface logger;
-        #! Goal reached flag
-        bool goal_reached = False;
-        #! Output from the operation
-        auto output;
-        #! Current state
-        string state = "sse-connect";
     }
 
-    #! Creates the poll operation
+    #! Creates the poll operation from a pre-computed inner poll op
+    /** @param inner_op the inner poll operation from HTTPClient.startPollSendRecv()
+        @param logger optional logger
+
+        @note Use the static @ref create() method to construct this object.
+
+        @since ServerSentEventClient 1.1
+    */
+    constructor(AbstractPollOperation inner_op, *Logger::LoggerInterface logger) :
+            HttpClientPingPollOperationBase(inner_op, 200, 200, "SSE-CONNECT-ERROR",
+                "content-type", "text/event-stream") {
+        self.logger = logger;
+        # Override the default goal from the base class
+        goal = "sse-connect";
+    }
+
+    #! Creates an SSE connect poll operation
     /** @param base_url the SSE URL
         @param http_opts HTTP client options
         @param headers additional headers for the request
         @param logger optional logger
-    */
-    constructor(string base_url, *hash<auto> http_opts, *hash<auto> headers,
-            *Logger::LoggerInterface logger) {
-        self.logger = logger;
 
+        @return a new SseConnectPollOperation
+
+        @since ServerSentEventClient 1.1
+    */
+    static SseConnectPollOperation create(string base_url, *hash<auto> http_opts,
+            *hash<auto> headers, *Logger::LoggerInterface logger) {
         # Build SSE request headers
         hash<auto> sse_headers = {
             "Accept": MimeTypeSse,
@@ -320,74 +335,11 @@ public class SseConnectPollOperation inherits Qore::AbstractPollOperation {
         sse_headers += headers;
 
         HTTPClient hc((http_opts ?? {}) + {"url": base_url});
-        log("INFO", "SSE async connect start: url=%y", base_url);
-        poller = hc.startPollSendRecv("GET", "", NOTHING, sse_headers);
-    }
-
-    string getGoal() {
-        return "sse-connect";
-    }
-
-    string getState() {
-        if (goal_reached) {
-            return "complete";
-        }
-        return state + (poller ? ("-" + poller.getState()) : "");
-    }
-
-    bool goalReached() {
-        return goal_reached;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (!poller) {
-            return;
-        }
-        *hash<SocketPollInfo> info = poller.continuePoll();
-        if (info) {
-            return info;
-        }
-
-        # HTTP send/receive complete - validate the SSE response
-        hash<auto> resp = poller.getOutput();
-
-        # Expect 200 OK
-        if (resp.code != 200) {
-            *string status_message = resp.info."response-headers".status_message;
-            log("ERROR", "SSE async connect failed: expected 200, got code=%y", resp.code);
-            throw "SSE-CONNECT-ERROR", sprintf("SSE connection failed: expected 200 OK, got %d %s",
-                resp.code, status_message ?? "");
-        }
-
-        # Validate Content-Type is text/event-stream
-        *hash<auto> response_headers = resp.info."response-headers";
-        *string content_type = response_headers."content-type";
-        if (!content_type || content_type !~ /^text\/event-stream/) {
-            log("ERROR", "SSE async connect failed: invalid Content-Type: %y", content_type);
-            throw "SSE-CONNECT-ERROR", sprintf("SSE connection failed: expected Content-Type "
-                "text/event-stream, got %y", content_type);
-        }
-
-        output = resp;
-        log("INFO", "SSE async connect complete: code=%d", resp.code);
-        goal_reached = True;
-    }
-
-    auto getOutput() {
-        return output;
-    }
-
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    #! Internal logging helper
-    private log(string level, string msg, ...) {
         if (logger) {
-            logger.logArgs(level, msg, argv);
+            logger.logArgs("INFO", "SSE async connect start: url=%y", base_url);
         }
+        auto inner_op = hc.startPollSendRecv("GET", "", NOTHING, sse_headers);
+        return new SseConnectPollOperation(inner_op, logger);
     }
 }
 }

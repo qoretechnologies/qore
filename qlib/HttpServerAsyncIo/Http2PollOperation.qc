@@ -33,13 +33,22 @@ public namespace HttpServerAsyncIo {
     3. Provide the request data to the handler
     4. Support sending responses via startSendResponse()
 
-    This class wraps the low-level Socket HTTP/2 poll operations to provide
-    a higher-level interface for the HttpServer async I/O controller.
+    The core state machine (continuePoll) runs in pure C++ via the
+    Http2PollOperationBase parent class for I/O thread efficiency.
+
+    This Qore wrapper adds:
+    - Stream queue registration for CONNECT handlers (registerStreamQueue delegates to C++ base)
+    - Push promise support (pushResource, getPushResourceCallback)
+    - Completion context (setCompletionContext, onComplete via HttpConnectionPollOperationBase)
+
+    @note Stream queue drain logic runs in pure C++ on the I/O thread — no Qore interpreter
+    calls.  The C++ base class (Http2PollOperationBase) handles drainStreamQueues() and
+    clearStreamQueues() automatically.
 
 */
-public class Http2PollOperation inherits AbstractPollOperation {
+public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionPollOperationBase {
     public {
-        #! State constants
+        #! State constants (match C++ Http2PollOperationPriv::H2ServerState)
         const STATE_INIT = "init";
         const STATE_READING = "reading";
         const STATE_WAIT_READ = "wait_read";
@@ -52,54 +61,57 @@ public class Http2PollOperation inherits AbstractPollOperation {
         const MAX_EMPTY_READS = 100;
     }
 
+    # Stream queue management is now handled entirely in C++ by the
+    # Http2PollOperationBase parent class (registerStreamQueue, drainStreamQueues,
+    # clearStreamQueues).
+
     private {
-        #! The client socket
-        Socket sock;
-
-        #! Current state
-        string state = STATE_INIT;
-
-        #! Current poll operation (read or send)
-        AbstractPollOperation current_op;
-
-        #! The HTTP/2 request when ready
-        *hash<auto> request;
-
-        #! Keep-alive flag (HTTP/2 connections are persistent by default)
-        bool keep_alive = True;
-
-        #! Error info if an error occurred
-        *hash<auto> error_info;
-
-        #! Counter for consecutive empty reads to prevent infinite poll loops
-        int empty_read_count = 0;
-
-        #! Whether to use headers-only mode for request reading
-        bool headers_only = False;
-
-        #! Set to True by continuePoll() when a request is stored; cleared by getOutput().
-        #! Prevents handler threads from calling continueReading() between continuePoll()
-        #! returning STATE_REQUEST_READY and the dispatch callback calling getOutput().
-        bool request_pending = False;
-
-        #! Mutex for thread safety between I/O thread (continuePoll) and handler
-        #! thread (continueReading, startSendResponse, etc.)
-        Mutex op_lock();
-
-        #! Queues for delivering data to CONNECT stream handlers (stream_id string → Queue)
-        /** Registered by the I/O controller when dispatching extended CONNECT handlers.
-            Data is drained from the per-stream buffer to these Queues after each poll cycle.
-            NOTHING is pushed as a sentinel when the stream closes.
+        #! Stream data listeners: stream_id string → listener object
+        /** The listener's notifyIo() method is called from the controller's
+            worker pool when the I/O thread drains data to the stream's Queue.
         */
-        hash<string, Queue> stream_queues;
+        hash<string, object> stream_listeners;
 
-        #! Optional notification callbacks per stream, called when data is drained to the Queue
-        /** Keyed by stream_id string. Called on the I/O thread after data is pushed
-            to the corresponding Queue, enabling event-driven wakeup of handler threads.
+        #! Pending data flags for streams where onStreamData fired before
+        #! the listener was registered (race between I/O dispatch and handler setup)
+        hash<string, bool> pending_stream_data;
 
-            @since HttpServerAsyncIo 1.1
-        */
-        hash<string, code<nothing()>> stream_notify_callbacks;
+        #! Lock protecting stream listener registration and dispatch
+        Mutex stream_listener_mutex();
+    }
+
+    #! Registers a listener to be notified when stream data arrives
+    /** @param stream_id the HTTP/2 stream ID
+        @param listener an object with a notifyIo() method (e.g., WebSocketConnection)
+    */
+    registerStreamListener(int stream_id, object listener) {
+        *bool has_pending;
+        {
+            AutoLock al(stream_listener_mutex);
+            stream_listeners{stream_id} = listener;
+            has_pending = remove pending_stream_data{stream_id};
+        }
+        # Replay missed notification if data arrived before registration
+        if (has_pending) {
+            listener.notifyIo();
+        }
+    }
+
+    #! Called on a worker thread when stream data has been drained to a Queue
+    /** Dispatched by the async I/O controller after the C++ drain pushes data.
+        Wakes the handler thread for the given stream.
+        @param stream_key stream identifier (string representation of stream_id)
+    */
+    nothing onStreamData(string stream_key) {
+        int stream_id = stream_key.toInt();
+        AutoLock al(stream_listener_mutex);
+        *object listener = stream_listeners{stream_id};
+        if (listener) {
+            listener.notifyIo();
+        } else {
+            # Buffer the notification — the handler hasn't registered yet
+            pending_stream_data{stream_id} = True;
+        }
     }
 
     #! Creates the poll operation
@@ -108,215 +120,21 @@ public class Http2PollOperation inherits AbstractPollOperation {
         (before END_STREAM), enabling bidirectional streaming; the handler must read
         the body via Socket::readHttp2StreamDataBlock()
     */
-    constructor(Socket sock, bool headers_only = False) {
+    constructor(Socket sock, bool headers_only = False) :
+            Http2PollOperationBase(sock,
+                sock.startPollReadHttp2Request(headers_only ? {"headers_only": True} : NOTHING),
+                headers_only) {
         @assert(sock, "socket cannot be null");
         @assert(sock.isOpen(), "socket must be open");
-        self.sock = sock;
-        self.headers_only = headers_only;
-        # Start reading HTTP/2 request
-        startReadRequest(headers_only);
     }
 
-    #! Returns the goal of the operation
-    string getGoal() {
-        return "http2_connection";
-    }
-
-    #! Returns the current state
-    string getState() {
-        return state;
-    }
-
-    #! Returns True when a request is ready to be processed or a send is complete
-    /** The connection state (Http2 vs Http2Sending) distinguishes which completion occurred.
+    #! Explicit onComplete override for correct multiple inheritance resolution
+    /** Without this, Qore resolves onComplete() to AbstractPollOperation::onComplete()
+        along the Http2PollOperationBase -> SocketPollOperationBase -> AbstractPollOperation
+        path, bypassing the HttpConnectionPollOperationBase override.
     */
-    bool goalReached() {
-        return state == STATE_REQUEST_READY || state == STATE_SENT;
-    }
-
-    #! Returns True if the connection is closed
-    bool isClosed() {
-        return state == STATE_CLOSED;
-    }
-
-    #! Returns True if an error occurred
-    bool hasError() {
-        return exists error_info;
-    }
-
-    #! Returns error information if an error occurred
-    *hash<auto> getError() {
-        return error_info;
-    }
-
-    #! Continues the poll operation
-    /** @return poll info for the next poll() call, or NOTHING if complete
-    */
-    *hash<SocketPollInfo> continuePoll() {
-        AutoLock al(op_lock);
-        while (True) {
-            @debug {
-                if (getenv("QORE_H2OP_TRACE")) {
-                    printf("Http2PollOperation::continuePoll() state=%s sock=%s\n",
-                        state, sock.uniqueHash()[0..8]);
-                }
-            }
-
-            switch (state) {
-                case STATE_INIT:
-                case STATE_READING: {
-                    if (!current_op) {
-                        @debug {
-                            if (getenv("QORE_H2OP_TRACE")) {
-                                printf("Http2PollOperation: no current_op, closing\n");
-                            }
-                        }
-                        state = STATE_CLOSED;
-                        return NOTHING;
-                    }
-                    try {
-                        auto poll_info = current_op.continuePoll();
-                        # Drain data for registered CONNECT streams after each poll cycle
-                        if (stream_queues) {
-                            drainStreamQueues();
-                        }
-                        @debug {
-                            if (getenv("QORE_H2OP_TRACE")) {
-                                printf("Http2PollOperation: current_op.continuePoll() returned poll_info=%y goal=%y\n",
-                                    poll_info != NOTHING, current_op.goalReached());
-                            }
-                        }
-                        if (poll_info) {
-                            return poll_info;
-                        }
-                        # Read complete
-                        if (current_op.goalReached()) {
-                            request = current_op.getOutput();
-                            if (request) {
-                                empty_read_count = 0;
-                                request_pending = True;
-                                state = STATE_REQUEST_READY;
-
-                                return NOTHING;
-                            }
-                            # goalReached but no request: HTTP/2 control frames were processed
-                            # (WINDOW_UPDATE, PING, SETTINGS ACK, etc.) without a new request.
-                            # Wait for new socket data before retrying.
-                            ++empty_read_count;
-                            if (empty_read_count > MAX_EMPTY_READS) {
-                                error_info = {
-                                    "err": "HTTP2-EMPTY-READ",
-                                    "desc": sprintf("max consecutive empty reads (%d) exceeded",
-                                        MAX_EMPTY_READS),
-                                };
-                                state = STATE_CLOSED;
-                                return NOTHING;
-                            }
-                            state = STATE_WAIT_READ;
-
-                            return <SocketPollInfo>{
-                                "events": SOCK_POLLIN,
-                                "socket": sock,
-                            };
-                        } else {
-                            # Operation failed
-                            state = STATE_CLOSED;
-                            return NOTHING;
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        error_info = {
-                            "err": ex.err,
-                            "desc": ex.desc,
-                        };
-                        state = STATE_CLOSED;
-                        return NOTHING;
-                    }
-                }
-
-                case STATE_WAIT_READ: {
-                    # Socket has new data available; start a fresh read operation
-
-                    startReadRequest();
-                    # Use continue to restart the while loop (avoids potential
-                    # fall-through to STATE_SENDING in Qore's switch statement)
-                    continue;
-                }
-
-                case STATE_SENDING: {
-                    if (!current_op) {
-                        state = STATE_CLOSED;
-                        return NOTHING;
-                    }
-                    try {
-                        auto poll_info = current_op.continuePoll();
-                        if (poll_info) {
-                            return poll_info;
-                        }
-                        # Send complete
-                        if (current_op.goalReached()) {
-                            state = STATE_SENT;
-                            return NOTHING;
-                        } else {
-                            # Operation failed
-                            state = STATE_CLOSED;
-                            return NOTHING;
-                        }
-                    } catch (hash<ExceptionInfo> ex) {
-                        error_info = {
-                            "err": ex.err,
-                            "desc": ex.desc,
-                        };
-                        state = STATE_CLOSED;
-                        return NOTHING;
-                    }
-                }
-
-                case STATE_REQUEST_READY:
-                case STATE_SENT:
-                case STATE_CLOSED:
-                    return NOTHING;
-            }
-        }
-        return NOTHING;
-    }
-
-    #! Returns the HTTP/2 request when ready
-    /** The returned hash contains:
-        - \c method: the HTTP method (GET, POST, etc.)
-        - \c path: the request path
-        - \c stream_id: the HTTP/2 stream ID (needed for sending response)
-        - \c headers: hash of request headers
-        - \c body: binary request body (if present)
-        - \c authority: the :authority pseudo-header value (if present)
-        - \c scheme: the :scheme pseudo-header value (if present)
-    */
-    #! Returns the completed request (if any)
-    /** @note Acquires op_lock to synchronize with continueReading() called from
-        handler threads.  Clears request_pending so that concurrent
-        continueReading() calls correctly throw instead of clearing a request
-        that is being dispatched.
-
-        Unlike Http3ServerPollOperation::getOutput(), this does NOT atomically
-        transition to STATE_READING because HTTP/2 body_streaming defers the
-        resume: the h2op is NOT submitted during dispatch — the handler's
-        resume_body_streaming callback submits it later via continueReading().
-    */
-    auto getOutput() {
-        AutoLock al(op_lock);
-        # Clear the pending flag — getOutput() is the dispatch callback's
-        # entry point, so the request is now being processed (or was never set).
-        request_pending = False;
-        return request;
-    }
-
-    #! Returns the socket
-    Socket getSocket() {
-        return sock;
-    }
-
-    #! Returns True if the connection should be kept alive
-    bool shouldKeepAlive() {
-        return keep_alive && state != STATE_CLOSED && !error_info;
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        HttpConnectionPollOperationBase::onComplete(result);
     }
 
     #! Pushes a resource to the client using HTTP/2 Server Push (PUSH_PROMISE)
@@ -341,17 +159,17 @@ h2op.startSendResponse(200, {"content-type": "text/html"}, html_body);
 
     */
     int pushResource(string path, *hash<auto> headers) {
-        AutoLock al(op_lock);
+        string state = getH2State();
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             throw "HTTP2-STATE-ERROR", sprintf("cannot push resource in state: %y", state);
         }
+        auto request = getOutput();
         if (!request || !request.stream_id) {
             throw "HTTP2-ERROR", "no stream_id available for push promise";
         }
 
         # Submit PUSH_PROMISE - returns the promised stream ID
-        # The caller should then use startPollSendHttp2Response() to send the pushed content
-        return sock.submitHttp2PushPromise(request.stream_id, path, headers ?? {});
+        return getSocket().submitHttp2PushPromise(request.stream_id, path, headers ?? {});
     }
 
     #! Creates a poll operation to send a pushed response
@@ -376,7 +194,7 @@ if (css_stream > 0) {
     */
     AbstractPollOperation startSendPushedResponse(int promised_stream_id, int status_code,
             *hash<auto> headers, *data body) {
-        return sock.startPollSendHttp2Response(promised_stream_id, status_code, headers, body);
+        return getSocket().startPollSendHttp2Response(promised_stream_id, status_code, headers, body);
     }
 
     #! Returns a callback for pushing resources (for use in handler context)
@@ -400,7 +218,7 @@ if (push) {
 
     */
     *code getPushResourceCallback() {
-        AutoLock al(op_lock);
+        string state = getH2State();
         if (state != STATE_REQUEST_READY && state != STATE_SENDING) {
             return NOTHING;
         }
@@ -417,17 +235,14 @@ if (push) {
         @note This must be called after the request is ready (goalReached() returns True)
     */
     startSendResponse(int status_code, *hash<auto> headers, *data body) {
-        AutoLock al(op_lock);
-        if (state != STATE_REQUEST_READY && state != STATE_SENT) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot send response in state: %y", state);
-        }
+        auto request = getOutput();
         if (!request || !request.stream_id) {
             throw "HTTP2-ERROR", "no stream_id available for response";
         }
 
-        # Use the Socket HTTP/2 send response operation
-        current_op = sock.startPollSendHttp2Response(request.stream_id, status_code, headers, body);
-        state = STATE_SENDING;
+        # Create the send inner op via Qore Socket method, inject into C++ base
+        auto send_op = getSocket().startPollSendHttp2Response(request.stream_id, status_code, headers, body);
+        self.injectSendOp(send_op);
     }
 
     #! Starts sending an HTTP/2 streaming response from an InputStream
@@ -442,17 +257,14 @@ if (push) {
 
     */
     startSendResponse(int status_code, *hash<auto> headers, InputStream body, *int chunk_size) {
-        AutoLock al(op_lock);
-        if (state != STATE_REQUEST_READY && state != STATE_SENT) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot send response in state: %y", state);
-        }
+        auto request = getOutput();
         if (!request || !request.stream_id) {
             throw "HTTP2-ERROR", "no stream_id available for response";
         }
 
-        current_op = sock.startPollSendHttp2StreamingResponse(
+        auto send_op = getSocket().startPollSendHttp2StreamingResponse(
             request.stream_id, status_code, headers, body, chunk_size);
-        state = STATE_SENDING;
+        self.injectSendOp(send_op);
     }
 
     #! Starts reading the next HTTP/2 request on this connection
@@ -461,71 +273,21 @@ if (push) {
         call this to wait for the next request on the persistent HTTP/2 connection.
     */
     startReadNextRequest() {
-        AutoLock al(op_lock);
-        if (state != STATE_SENT && state != STATE_REQUEST_READY) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot read next request in state: %y", state);
-        }
-        remove request;
-        startReadRequest(headers_only);
-    }
-
-    #! Continues reading without creating a new C++ read operation
-    /** Called after a request has been dispatched in multiplexing mode.  The same
-        underlying C++ SocketHttp2ServerPollOperation continues reading frames.
-        This avoids the overhead of creating a new operation and preserves the
-        nghttp2 session state (including any already-received frames).
-
-        @note Thread safety: rejects the call if state is STATE_REQUEST_READY but
-        the request hasn't been consumed via getOutput() yet.  This prevents a
-        handler thread (calling resumeMultiplexedReading after body streaming)
-        from racing with the I/O controller dispatch.
-    */
-    continueReading() {
-        AutoLock al(op_lock);
-        if (state == STATE_REQUEST_READY && request_pending) {
-            # A request was found by continuePoll() but not yet consumed by
-            # getOutput().  A handler thread (via resumeMultiplexedReading) is
-            # racing with the I/O controller's dispatch callback.
-            throw "HTTP2-STATE-ERROR", "cannot continue reading: request pending dispatch";
-        }
-        if (state != STATE_REQUEST_READY) {
-            throw "HTTP2-STATE-ERROR", sprintf("cannot continue reading in state: %y", state);
-        }
-        remove request;
-        request_pending = False;
-        empty_read_count = 0;
-        state = STATE_READING;
+        # Create a new read inner op via Qore Socket method, inject into C++ base
+        auto read_op = getSocket().startPollReadHttp2Request(
+            isHeadersOnly() ? {"headers_only": True} : NOTHING);
+        self.injectReadOp(read_op);
     }
 
     #! Aborts the operation
+    /** Calls the C++ base abort, then cleans up stream queues.
+    */
     abort() {
-        AutoLock al(op_lock);
-        if (current_op) {
-            current_op.abort();
-        }
-        state = STATE_CLOSED;
-        # Push NOTHING sentinels to all registered stream queues so handler threads
-        # waiting on data wake up and see the stream is closed
-        foreach string sid in (keys stream_queues) {
-            try {
-                stream_queues{sid}.push(NOTHING);
-            } catch () {
-                # Ignore errors pushing to the queue
-            }
-        }
-        # Call all stream notify callbacks so handler threads are woken
-        foreach string sid in (keys stream_notify_callbacks) {
-            try {
-                stream_notify_callbacks{sid}();
-            } catch () {
-                # Ignore errors in notify callbacks
-            }
-        }
-        # Clear registrations
-        remove stream_queues;
-        remove stream_notify_callbacks;
+        # C++ abort() calls clearStreamQueues() which pushes NOTHING sentinels
+        # to all registered queues and notifies all EventNotifiers
+        Http2PollOperationBase::abort();
         try {
-            sock.close();
+            getSocket().close();
         } catch () {}
     }
 
@@ -533,85 +295,29 @@ if (push) {
     /** Called by the I/O controller when dispatching an extended CONNECT handler.
         The Queue must be unlimited (created with no max size) to ensure non-blocking pushes.
 
+        The optional EventNotifier is signaled on the I/O thread (pure C++) after data
+        is pushed to the Queue, enabling efficient cross-thread wake-up without Qore
+        interpreter calls.
+
         @param stream_id the HTTP/2 stream ID
         @param queue the unlimited Queue for data delivery
-        @param notify optional callback called on the I/O thread after data is pushed to the
-        Queue; use this for event-driven wakeup of handler threads (e.g., signaling a
-        Condition variable)
+        @param notifier optional EventNotifier for cross-thread wake-up after data is
+        drained to the Queue
 
         @note Must be called on the I/O controller thread before the handler starts reading.
 
-        @since HttpServerAsyncIo 1.1 added @a notify parameter
+        @since HttpServerAsyncIo 1.1
     */
     registerStreamQueue(int stream_id, Queue queue, *code<nothing()> notify) {
-        AutoLock al(op_lock);
-        stream_queues{stream_id} = queue;
-        if (notify) {
-            stream_notify_callbacks{stream_id} = notify;
-        }
+        # Delegate to the C++ base class — the notify closure is not used;
+        # the Queue's internal condition variable handles handler wake-up.
+        # The C++ drain pushes data to the Queue which wakes blocking get() calls.
+        Http2PollOperationBase::registerStreamQueue(stream_id, queue);
     }
 
-    #! Internal: starts the read request operation
-    private startReadRequest(*bool headers_only) {
-        current_op = sock.startPollReadHttp2Request(headers_only ? {"headers_only": True} : NOTHING);
-        state = STATE_READING;
-    }
-
-    #! Internal: drains buffered data for registered CONNECT streams into their Queues
-    /** Called after each continuePoll() cycle on the I/O controller thread.
-        Reads all available data from each registered stream's per-stream buffer
-        and pushes it to the corresponding Queue. When a stream is closed
-        (RST_STREAM, END_STREAM, or GOAWAY), a NOTHING sentinel is pushed
-        and the Queue registration is removed.
-    */
-    private drainStreamQueues() {
-        list<string> completed;
-        foreach string sid in (keys stream_queues) {
-            int stream_id = int(sid);
-            Queue queue = stream_queues{sid};
-            # Drain all available data from the per-stream buffer
-            int drain_count = 0;
-            int drain_bytes = 0;
-            while (True) {
-                *binary data = sock.readHttp2StreamData(stream_id);
-                if (!data) {
-                    break;
-                }
-                drain_bytes += data.size();
-                ++drain_count;
-                queue.push(data);
-            }
-            @debug {
-                if (drain_count && getenv("QORE_BIDI_TRACE")) {
-                    printf("drainStreamQueues: stream=%d drained %d chunks (%d bytes) qsize=%d\n",
-                        stream_id, drain_count, drain_bytes, queue.size());
-                }
-            }
-            # Notify handler thread that data is available
-            if (drain_count && stream_notify_callbacks{sid}) {
-                stream_notify_callbacks{sid}();
-            }
-            # Check if the remote peer has sent END_STREAM (client done sending)
-            # or if the stream is fully closed (RST_STREAM, GOAWAY)
-            if (sock.isHttp2StreamRemoteClosed(stream_id)
-                    || sock.isHttp2StreamClosed(stream_id)) {
-                @debug {
-                    if (getenv("QORE_BIDI_TRACE")) {
-                        printf("drainStreamQueues: stream=%d CLOSED, pushing sentinel\n",
-                            stream_id);
-                    }
-                }
-                queue.push(NOTHING);
-                # Notify on close too so the handler wakes up
-                if (stream_notify_callbacks{sid}) {
-                    stream_notify_callbacks{sid}();
-                }
-                completed += sid;
-            }
-        }
-        # Remove completed streams outside the iteration loop
-        map (remove stream_queues{$1}, remove stream_notify_callbacks{$1}), completed;
-    }
+    # drainStreamQueues() is now implemented in pure C++ in the
+    # Http2PollOperationBase parent class.  It is called automatically by
+    # continueReadPoll() after each inner op continuePoll() cycle.
 }
 
 } # namespace HttpServerAsyncIo

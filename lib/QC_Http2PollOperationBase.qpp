@@ -1,0 +1,839 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Http2PollOperationBase.qpp
+
+    Http2PollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_Http2PollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
+#include "qore/QoreQueue.h"
+#include "qore/intern/QoreEventNotifier.h"
+
+// Forward declarations for EventNotifier QPP type references
+extern QoreClass* QC_EVENTNOTIFIER;
+
+/** @cond INTERNAL */
+
+// ============================================================
+// Http2PollOperationPriv implementation
+// ============================================================
+
+Http2PollOperationPriv::Http2PollOperationPriv(QoreObject* self, QoreSocketObject* sock,
+        SocketPollOperationBase* initial_op, QoreObject* initial_op_obj, bool headers_only)
+    : SocketPollOperationBase(self),
+      sock(sock),
+      current_op(initial_op),
+      current_op_obj(initial_op_obj),
+      request(nullptr),
+      error_info(nullptr),
+      h2_state(H2ServerState::READING),
+      headers_only(headers_only),
+      request_pending(false),
+      keep_alive(true),
+      empty_read_count(0) {
+    // sock, initial_op, initial_op_obj are already ref'd by the QPP caller
+}
+
+Http2PollOperationPriv::~Http2PollOperationPriv() {
+    if (sock || current_op || current_op_obj || request || error_info
+            || !stream_queues.empty()) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+bool Http2PollOperationPriv::goalReached() const {
+    return h2_state == H2ServerState::REQUEST_READY
+        || h2_state == H2ServerState::SENT;
+}
+
+QoreHashNode* Http2PollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+
+    while (true) {
+        switch (h2_state) {
+            case H2ServerState::INIT:
+            case H2ServerState::READING:
+            case H2ServerState::WAIT_READ:
+                return continueReadPoll(xsink);
+
+            case H2ServerState::SENDING:
+                return continueSendPoll(xsink);
+
+            case H2ServerState::REQUEST_READY:
+            case H2ServerState::SENT:
+            case H2ServerState::CLOSED:
+                return nullptr;
+        }
+    }
+    return nullptr;
+}
+
+void Http2PollOperationPriv::abort(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    if (current_op) {
+        current_op->abort(xsink);
+    }
+    clearStreamQueues(xsink);
+    h2_state = H2ServerState::CLOSED;
+}
+
+QoreValue Http2PollOperationPriv::getOutput() const {
+    AutoLocker al(op_lock);
+    // Clear the pending flag — getOutput() is the dispatch callback's
+    // entry point, so the request is now being processed (or was never set).
+    request_pending = false;
+    if (request) {
+        request->ref();
+        return request;
+    }
+    return QoreValue();
+}
+
+void Http2PollOperationPriv::injectSendOp(SocketPollOperationBase* send_op, QoreObject* send_op_obj,
+        ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    if (h2_state != H2ServerState::REQUEST_READY && h2_state != H2ServerState::SENT) {
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot send response in state: '%s'", getH2State());
+        // Caller retains ownership of send_op/send_op_obj on error — they must deref
+        return;
+    }
+
+    releaseCurrentOp(xsink);
+    current_op = send_op;
+    current_op_obj = send_op_obj;
+    h2_state = H2ServerState::SENDING;
+}
+
+void Http2PollOperationPriv::injectReadOp(SocketPollOperationBase* read_op, QoreObject* read_op_obj,
+        ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    if (h2_state != H2ServerState::SENT && h2_state != H2ServerState::REQUEST_READY) {
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot read next request in state: '%s'", getH2State());
+        return;
+    }
+
+    if (request) {
+        request->deref(xsink);
+        request = nullptr;
+    }
+
+    releaseCurrentOp(xsink);
+    current_op = read_op;
+    current_op_obj = read_op_obj;
+    h2_state = H2ServerState::READING;
+}
+
+void Http2PollOperationPriv::continueReading(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    if (h2_state == H2ServerState::REQUEST_READY && request_pending) {
+        // A request was found by continuePoll() but not yet consumed by
+        // getOutput().  A handler thread (via resumeMultiplexedReading) is
+        // racing with the I/O controller's dispatch callback.
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot continue reading: request pending dispatch");
+        return;
+    }
+    if (h2_state != H2ServerState::REQUEST_READY) {
+        xsink->raiseException("HTTP2-STATE-ERROR",
+            "cannot continue reading in state: '%s'", getH2State());
+        return;
+    }
+    if (request) {
+        request->deref(xsink);
+        request = nullptr;
+    }
+    request_pending = false;
+    empty_read_count = 0;
+    h2_state = H2ServerState::READING;
+}
+
+void Http2PollOperationPriv::cleanup(ExceptionSink* xsink) {
+    releaseCurrentOp(xsink);
+    clearStreamQueues(xsink);
+
+    if (request) {
+        request->deref(xsink);
+        request = nullptr;
+    }
+    if (error_info) {
+        error_info->deref(xsink);
+        error_info = nullptr;
+    }
+    if (sock) {
+        sock->deref(xsink);
+        sock = nullptr;
+    }
+}
+
+const char* Http2PollOperationPriv::getStateImpl() const {
+    return getH2State();
+}
+
+void Http2PollOperationPriv::releaseCurrentOp(ExceptionSink* xsink) {
+    if (current_op) {
+        // current_op was obtained via getReferencedPrivateData() which adds
+        // an independent ref — must deref it separately from the QoreObject
+        current_op->deref(xsink);
+        current_op = nullptr;
+    }
+    if (current_op_obj) {
+        current_op_obj->deref(xsink);
+        current_op_obj = nullptr;
+    }
+}
+
+QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
+    // Handle WAIT_READ: start fresh from the existing inner op
+    if (h2_state == H2ServerState::WAIT_READ) {
+        h2_state = H2ServerState::READING;
+        // Fall through to drive the inner op
+    }
+
+    if (!current_op) {
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    QoreHashNode* poll_info = current_op->continuePoll(xsink);
+    if (*xsink) {
+        // Store the error info from xsink for later inspection via hasError()/getError()
+        error_info = new QoreHashNode(autoTypeInfo);
+        const QoreValue err_val = xsink->getExceptionErr();
+        if (err_val.getType() == NT_STRING) {
+            error_info->setKeyValue("err",
+                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+        }
+        const QoreValue desc_val = xsink->getExceptionDesc();
+        if (desc_val.getType() == NT_STRING) {
+            error_info->setKeyValue("desc",
+                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+        }
+        // Push NOTHING sentinels to all registered stream Queues on error
+        ExceptionSink clear_xsink;
+        clearStreamQueues(&clear_xsink);
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    // Drain registered CONNECT stream queues after every read poll cycle.
+    // The inner op may have processed DATA frames for CONNECT streams that
+    // need to be delivered to handler threads via their registered Queues.
+    drainStreamQueues(xsink);
+    if (*xsink) {
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    if (poll_info) {
+        // Inner op needs more polling
+        return poll_info;
+    }
+
+    // Read complete
+    if (current_op->goalReached()) {
+        QoreValue output = current_op->getOutput();
+        if (output.getType() == NT_HASH) {
+            request = output.get<QoreHashNode>();
+        } else {
+            output.discard(xsink);
+            request = nullptr;
+        }
+
+        if (request) {
+            empty_read_count = 0;
+            request_pending = true;
+            h2_state = H2ServerState::REQUEST_READY;
+            return nullptr;
+        }
+
+        // goalReached but no request: HTTP/2 control frames were processed
+        // (WINDOW_UPDATE, PING, SETTINGS ACK, etc.) without a new request.
+        // Wait for new socket data before retrying.
+        ++empty_read_count;
+        if (empty_read_count > MAX_EMPTY_READS) {
+            error_info = new QoreHashNode(autoTypeInfo);
+            error_info->setKeyValue("err",
+                new QoreStringNode("HTTP2-EMPTY-READ"), xsink);
+            QoreStringNode* desc = new QoreStringNode;
+            desc->sprintf("max consecutive empty reads (%d) exceeded", MAX_EMPTY_READS);
+            error_info->setKeyValue("desc", desc, xsink);
+            h2_state = H2ServerState::CLOSED;
+            return nullptr;
+        }
+        h2_state = H2ServerState::WAIT_READ;
+
+        // Return POLLIN on the socket to wait for new data
+        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    }
+
+    // Operation failed (goal not reached and returned nullptr — peer closed TCP)
+    // Push NOTHING sentinels to all registered stream Queues so handler threads
+    // (e.g., WebSocketStreamProcessor) wake up and detect the closure.
+    // Without this, handler threads block on Counter::waitForZero() forever because
+    // nghttp2 doesn't know about TCP closure (it only sees HTTP/2 frames).
+    clearStreamQueues(xsink);
+    h2_state = H2ServerState::CLOSED;
+    return nullptr;
+}
+
+QoreHashNode* Http2PollOperationPriv::continueSendPoll(ExceptionSink* xsink) {
+    if (!current_op) {
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    QoreHashNode* poll_info = current_op->continuePoll(xsink);
+    if (*xsink) {
+        // Store the error info from xsink for later inspection via hasError()/getError()
+        error_info = new QoreHashNode(autoTypeInfo);
+        const QoreValue err_val = xsink->getExceptionErr();
+        if (err_val.getType() == NT_STRING) {
+            error_info->setKeyValue("err",
+                err_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+        }
+        const QoreValue desc_val = xsink->getExceptionDesc();
+        if (desc_val.getType() == NT_STRING) {
+            error_info->setKeyValue("desc",
+                desc_val.get<const QoreStringNode>()->stringRefSelf(), xsink);
+        }
+        h2_state = H2ServerState::CLOSED;
+        return nullptr;
+    }
+
+    if (poll_info) {
+        // Inner op needs more polling
+        return poll_info;
+    }
+
+    // Send complete
+    if (current_op->goalReached()) {
+        h2_state = H2ServerState::SENT;
+        return nullptr;
+    }
+
+    // Operation failed
+    h2_state = H2ServerState::CLOSED;
+    return nullptr;
+}
+
+void Http2PollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
+        QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj) {
+    // If there's already a registration for this stream, update it
+    auto it = stream_queues.find(stream_id);
+    if (it != stream_queues.end()) {
+        // Deref old notifier refs if being replaced
+        if (it->second.notifier && it->second.notifier != notifier) {
+            ExceptionSink xsink;
+            it->second.notifier->deref(&xsink);
+        }
+        if (it->second.notifier_obj && it->second.notifier_obj != notifier_obj) {
+            ExceptionSink xsink;
+            it->second.notifier_obj->deref(&xsink);
+        }
+        // Queue/queue_obj should be the same; if caller passes new refs, deref old
+        if (it->second.queue != queue) {
+            ExceptionSink xsink;
+            it->second.queue->deref(&xsink);
+        }
+        if (it->second.queue_obj != queue_obj) {
+            ExceptionSink xsink;
+            it->second.queue_obj->deref(&xsink);
+        }
+        it->second = {queue, queue_obj, notifier, notifier_obj};
+    } else {
+        stream_queues[stream_id] = {queue, queue_obj, notifier, notifier_obj};
+    }
+
+    // Immediately drain any data already buffered in the H2 session for this
+    // stream. The CONNECT request and subsequent DATA frames may arrive in the
+    // same TCP segment. The CONNECT triggers request dispatch, but the DATA is
+    // already in the session's per-stream buffer. Without this drain, the data
+    // sits there until the next continuePoll cycle — which may never come
+    // because the SSL/TCP buffers are empty (analogous to the SSL data hole).
+    ExceptionSink xsink;
+    while (true) {
+        BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, &xsink);
+        if (xsink) {
+            xsink.clear();
+            break;
+        }
+        if (!data || data->empty()) {
+            if (data) {
+                data->deref(&xsink);
+            }
+            break;
+        }
+        queue->push(&xsink, data);
+        if (xsink) {
+            data->deref(&xsink);
+            xsink.clear();
+            break;
+        }
+        data_ready_streams.push_back(stream_id);
+    }
+}
+
+void Http2PollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
+    if (stream_queues.empty()) {
+        return;
+    }
+
+    std::vector<int32_t> completed;
+    for (auto& [stream_id, info] : stream_queues) {
+        // Drain all available data from the per-stream buffer
+        int drain_count = 0;
+        while (true) {
+            BinaryNode* data = sock->readHttp2StreamData(stream_id, 0, xsink);
+            if (*xsink) {
+                return;
+            }
+            if (!data) {
+                break;
+            }
+            if (data->empty()) {
+                data->deref(xsink);
+                break;
+            }
+            ++drain_count;
+            info.queue->push(xsink, data);
+            if (*xsink) {
+                data->deref(xsink);
+                return;
+            }
+        }
+
+        // Track that this stream had data drained — the controller will
+        // dispatch onStreamData() to the worker pool after continuePoll returns
+        if (drain_count > 0) {
+            data_ready_streams.push_back(stream_id);
+        }
+
+        // Check stream closure (remote END_STREAM or RST_STREAM/GOAWAY)
+        // Also check socket-level closure: for CONNECT streams (WebSocket tunnels),
+        // nghttp2 doesn't detect TCP closure — it only processes HTTP/2 frames.
+        // When the peer drops the TCP connection, the socket becomes closed but
+        // the HTTP/2 stream state in nghttp2 remains unchanged.
+        if (sock->isHttp2StreamRemoteClosed(stream_id)
+                || sock->isHttp2StreamClosed(stream_id)
+                || !sock->isOpen()) {
+            // Push NOTHING sentinel so the handler thread knows the stream is done
+            info.queue->push(xsink, QoreValue());
+            if (*xsink) {
+                return;
+            }
+            // Also mark as data-ready so the handler wakes up for the sentinel
+            if (std::find(data_ready_streams.begin(), data_ready_streams.end(),
+                    stream_id) == data_ready_streams.end()) {
+                data_ready_streams.push_back(stream_id);
+            }
+            completed.push_back(stream_id);
+        }
+    }
+
+    // Remove completed streams and deref their objects
+    for (int32_t sid : completed) {
+        auto it = stream_queues.find(sid);
+        if (it != stream_queues.end()) {
+            it->second.queue->deref(xsink);
+            it->second.queue_obj->deref(xsink);
+            if (it->second.notifier) {
+                it->second.notifier->deref(xsink);
+            }
+            if (it->second.notifier_obj) {
+                it->second.notifier_obj->deref(xsink);
+            }
+            stream_queues.erase(it);
+        }
+    }
+}
+
+void Http2PollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
+    for (auto& [stream_id, info] : stream_queues) {
+        // Push NOTHING sentinel so handler threads wake up and see closure
+        info.queue->push(xsink, QoreValue());
+        if (info.notifier) {
+            info.notifier->notify();
+        }
+        // Deref all refs
+        info.queue->deref(xsink);
+        info.queue_obj->deref(xsink);
+        if (info.notifier) {
+            info.notifier->deref(xsink);
+        }
+        if (info.notifier_obj) {
+            info.notifier_obj->deref(xsink);
+        }
+    }
+    stream_queues.clear();
+}
+
+/** @endcond */
+
+//! C++ base class for HTTP/2 server-side poll operation
+/** This class implements the core poll state machine for an HTTP/2 connection
+    lifecycle in pure C++, enabling the AsyncIoController I/O thread to drive
+    the poll without Qore interpreter overhead.
+
+    State machine:
+    - READING: delegates to inner SocketHttp2ServerPollOperation for reading requests
+    - WAIT_READ: empty read (control frames only), waiting for new socket data
+    - REQUEST_READY: a complete HTTP/2 request is available
+    - SENDING: delegates to inner send operation (response or streaming)
+    - SENT: response send completed
+    - CLOSED: connection closed or fatal error
+
+    Inner ops are injected from the Qore wrapper (Http2PollOperation) which
+    creates them via Qore Socket methods (startPollReadHttp2Request,
+    startPollSendHttp2Response, etc.).
+
+    The Qore wrapper (Http2PollOperation) adds stream queue management,
+    completion context, and push promise support.
+
+    @since %Qore 2.3
+*/
+qclass Http2PollOperationBase [
+    private_members=object sock,string goal;
+    ns=Qore;
+    arg=Http2PollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the HTTP/2 poll operation base
+/** @param sock the client Socket with an established HTTP/2 connection
+    @param initial_read_op the initial read poll operation from sock.startPollReadHttp2Request()
+    @param headers_only if True, dispatch requests on HEADERS (before END_STREAM)
+*/
+Http2PollOperationBase::constructor(Socket[QoreSocketObject] sock, object initial_read_op,
+        bool headers_only) {
+    // Validate that initial_read_op is a SocketPollOperationBase subclass
+    const QoreClass* op_cls = initial_read_op->getClass();
+    if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "initial_read_op must be a SocketPollOperationBase subclass");
+        return;
+    }
+
+    // Extract the SocketPollOperationBase priv from the initial_read_op
+    ReferenceHolder<SocketPollOperationBase> read_priv(reinterpret_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(initial_read_op)->getReferencedPrivateData(
+            CID_SOCKETPOLLOPERATIONBASE, xsink)), xsink);
+    if (*xsink || !read_priv) {
+        return;
+    }
+
+    // Store socket as Qore member for DGC visibility
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_qobj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_qobj) {
+        self->setMemberValue("sock", QC_HTTP2POLLOPERATIONBASE, sock_qobj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTP2POLLOPERATIONBASE,
+        new QoreStringNode("http2_connection"), xsink);
+
+    // Ref the socket for the C++ priv
+    QoreSocketObject* sock_ptr = *sock;
+    sock_ptr->ref();
+
+    // Ref the initial_read_op QoreObject for DGC (the priv takes ownership)
+    const_cast<QoreObject*>(initial_read_op)->ref();
+
+    self->setPrivate(CID_HTTP2POLLOPERATIONBASE,
+        new Http2PollOperationPriv(self, sock_ptr, read_priv.release(),
+            const_cast<QoreObject*>(initial_read_op), headers_only));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+Http2PollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTP2POLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+Http2PollOperationBase::copy() {
+    xsink->raiseException("HTTP2POLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return "http2_connection"
+*/
+string Http2PollOperationBase::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return one of "init", "reading", "wait_read", "request_ready", "sending", "sent", or "closed"
+*/
+string Http2PollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when a request is ready or a send is complete
+/** @return True when the state is REQUEST_READY or SENT
+*/
+bool Http2PollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> Http2PollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Aborts any inner poll operation and transitions to CLOSED state.
+*/
+nothing Http2PollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the HTTP/2 request when ready
+/** @return the completed request hash, or @ref nothing
+
+    @note Acquires op_lock to synchronize with continueReading() called from
+    handler threads.  Clears request_pending so that concurrent
+    continueReading() calls correctly throw instead of clearing a request
+    that is being dispatched.
+*/
+auto Http2PollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if the connection is closed
+/** @return True if the state is CLOSED
+*/
+bool Http2PollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if an error occurred
+/** @return True if error information is available
+*/
+bool Http2PollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
+    return priv->hasError();
+}
+
+//! Returns error information if an error occurred
+/** @return hash with "err" and "desc" keys, or @ref nothing
+*/
+*hash<auto> Http2PollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+    return priv->getErrorInfo();
+}
+
+//! Returns True if the connection should be kept alive
+/** @return True if keep_alive is set, state is not CLOSED, and no error occurred
+*/
+bool Http2PollOperationBase::shouldKeepAlive() [flags=RET_VALUE_ONLY] {
+    return priv->shouldKeepAlive();
+}
+
+//! Returns the current H2 state as a string
+/** @return one of "init", "reading", "wait_read", "request_ready", "sending", "sent", "closed"
+*/
+string Http2PollOperationBase::getH2State() [flags=RET_VALUE_ONLY] {
+    return new QoreStringNode(priv->getH2State());
+}
+
+//! Returns the socket being monitored
+/** @return the Socket object
+*/
+Socket Http2PollOperationBase::getSocket() {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}
+
+//! Returns True if headers-only mode is enabled
+/** @return True if requests are dispatched on HEADERS before END_STREAM
+*/
+bool Http2PollOperationBase::isHeadersOnly() [flags=RET_VALUE_ONLY] {
+    return priv->isHeadersOnly();
+}
+
+//! Injects a send operation created by the Qore wrapper
+/** Called from the handler thread when starting to send a response.
+    Extracts the SocketPollOperationBase priv from the QoreObject and
+    stores it as the current inner operation with SENDING state.
+
+    @param send_op the poll operation from sock.startPollSendHttp2Response() or similar
+
+    @throw HTTP2-STATE-ERROR if the current state does not allow sending
+    @throw HTTP2POLLOPERATIONBASE-ERROR if send_op is not a SocketPollOperationBase subclass
+*/
+nothing Http2PollOperationBase::injectSendOp(object send_op) {
+    const QoreClass* op_cls = send_op->getClass();
+    if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "send_op must be a SocketPollOperationBase subclass");
+        return QoreValue();
+    }
+
+    SocketPollOperationBase* send_priv = reinterpret_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(send_op)->getReferencedPrivateData(
+            CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (*xsink || !send_priv) {
+        return QoreValue();
+    }
+
+    // Ref the send_op QoreObject for DGC before transferring ownership
+    const_cast<QoreObject*>(send_op)->ref();
+
+    priv->injectSendOp(send_priv, const_cast<QoreObject*>(send_op), xsink);
+    if (*xsink) {
+        // injectSendOp did not take ownership on error; deref what we ref'd
+        send_priv->deref(xsink);
+        const_cast<QoreObject*>(send_op)->deref(xsink);
+    }
+}
+
+//! Injects a read operation created by the Qore wrapper
+/** Called from the handler thread when starting to read the next request.
+    Extracts the SocketPollOperationBase priv from the QoreObject and
+    stores it as the current inner operation with READING state.
+
+    @param read_op the poll operation from sock.startPollReadHttp2Request()
+
+    @throw HTTP2-STATE-ERROR if the current state does not allow reading
+    @throw HTTP2POLLOPERATIONBASE-ERROR if read_op is not a SocketPollOperationBase subclass
+*/
+nothing Http2PollOperationBase::injectReadOp(object read_op) {
+    const QoreClass* op_cls = read_op->getClass();
+    if (!op_cls || !op_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+        xsink->raiseException("HTTP2POLLOPERATIONBASE-ERROR",
+            "read_op must be a SocketPollOperationBase subclass");
+        return QoreValue();
+    }
+
+    SocketPollOperationBase* read_priv = reinterpret_cast<SocketPollOperationBase*>(
+        const_cast<QoreObject*>(read_op)->getReferencedPrivateData(
+            CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (*xsink || !read_priv) {
+        return QoreValue();
+    }
+
+    // Ref the read_op QoreObject for DGC before transferring ownership
+    const_cast<QoreObject*>(read_op)->ref();
+
+    priv->injectReadOp(read_priv, const_cast<QoreObject*>(read_op), xsink);
+    if (*xsink) {
+        // injectReadOp did not take ownership on error; deref what we ref'd
+        read_priv->deref(xsink);
+        const_cast<QoreObject*>(read_op)->deref(xsink);
+    }
+}
+
+//! Continues reading without creating a new read operation
+/** Called from the handler thread after a request has been dispatched in
+    multiplexing mode.  The same underlying SocketHttp2ServerPollOperation
+    continues reading frames.
+
+    @throw HTTP2-STATE-ERROR if the current state does not allow continuing to read,
+    or if a request is pending dispatch
+*/
+nothing Http2PollOperationBase::continueReading() {
+    priv->continueReading(xsink);
+}
+
+//! Registers a Queue and optional EventNotifier for a CONNECT stream
+/** Called from the Qore wrapper when dispatching an extended CONNECT handler.
+    The Queue is used for non-blocking data delivery from the I/O thread to
+    handler threads.  The EventNotifier (if provided) is signaled after data
+    is pushed to the Queue, enabling efficient cross-thread wake-up without
+    Qore interpreter calls.
+
+    @param stream_id the HTTP/2 stream ID
+    @param queue the Queue for data delivery (unlimited)
+    @param notifier optional EventNotifier for cross-thread wake-up
+
+    @note Must be called on the I/O controller thread before the handler starts reading.
+
+    @since %Qore 2.3
+*/
+nothing Http2PollOperationBase::registerStreamQueue(int stream_id,
+        Queue[Queue] queue, *EventNotifier[QoreEventNotifier] notifier) {
+    // Transfer the Queue ref from the ReferenceHolder to the C++ priv
+    Queue* queue_ptr = queue.release();
+    // Ref the QoreObject for DGC preventing garbage collection
+    const_cast<QoreObject*>(obj_queue)->ref();
+
+    QoreEventNotifier* notifier_ptr = nullptr;
+    QoreObject* notifier_obj_ptr = nullptr;
+    if (notifier) {
+        // Transfer the EventNotifier ref from the ReferenceHolder to the C++ priv
+        notifier_ptr = notifier.release();
+        notifier_obj_ptr = const_cast<QoreObject*>(obj_notifier);
+        notifier_obj_ptr->ref();
+    }
+
+    priv->registerStreamQueue(static_cast<int32_t>(stream_id), queue_ptr,
+        const_cast<QoreObject*>(obj_queue), notifier_ptr, notifier_obj_ptr);
+}
+
+//! Clears all stream queue registrations
+/** Pushes NOTHING sentinels to all registered queues and notifies all
+    EventNotifiers so handler threads wake up and see the stream is closed.
+    Derefs all queue and notifier objects.
+
+    Called by the Qore wrapper in abort() and cleanup paths.
+
+    @since %Qore 2.3
+*/
+nothing Http2PollOperationBase::clearStreamQueues() {
+    priv->clearStreamQueues(xsink);
+}
+
+//! Called on a worker thread when stream data has been drained to a Queue
+/** Dispatched by the async I/O controller's worker pool after the I/O
+    thread's drainStreamQueues() pushes data to a stream's Queue.
+
+    Override in Qore to notify the handler thread (e.g., call notifyIo()
+    on the WebSocket connection for the given stream).
+
+    @param stream_id the HTTP/2 stream ID that received data
+
+    @note This is NOT called on the I/O thread — it runs on the controller's
+    worker pool thread, safe for Qore method calls.
+
+    @since %Qore 2.3
+*/
+nothing Http2PollOperationBase::onStreamData(int stream_id) {
+    // Default no-op — Qore subclass overrides to wake handler
+}

@@ -86,7 +86,7 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR}/include/)
 include_directories(BEFORE ${CMAKE_BINARY_DIR})
 
 # for add the source dir include for cmake runs that refuse to add it in some environments for an unknown reason
-set(CMAKE_CXX_FLAGS "-I${CMAKE_SOURCE_DIR}/include")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/include")
 
 find_package(Java)
 
@@ -185,6 +185,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Channel.qpp
     lib/QC_ChannelIterator.qpp
     lib/QC_Future.qpp
+    lib/QC_FutureImpl.qpp
     lib/QC_Promise.qpp
     lib/QC_Semaphore.qpp
     lib/QC_AutoSemaphore.qpp
@@ -280,6 +281,20 @@ set(LIBQORE_QPP_SRC
     lib/QC_SocketPollOperationBase.qpp
     lib/QC_SocketPollOperation.qpp
     lib/QC_FilePollOperation.qpp
+    lib/QC_DelegatingPollOperation.qpp
+    lib/QC_AbstractHttpPollConnection.qpp
+    lib/QC_HttpIdlePollOperationBase.qpp
+    lib/QC_HttpKeepAlivePollOperationBase.qpp
+    lib/QC_HttpAcceptPollOperationBase.qpp
+    lib/QC_Http2PollOperationBase.qpp
+    lib/QC_HttpWebSocketPollOperationBase.qpp
+    lib/QC_WebSocketClientPollOperationBase.qpp
+    lib/QC_PollPipeline.qpp
+    lib/QC_Http1ClientPollOperationBase.qpp
+    lib/QC_Http3ClientPollOperationBase.qpp
+    lib/QC_Http3ServerPollOperation.qpp
+    lib/QC_HttpClientPingPollOperationBase.qpp
+    lib/QC_Http2ClientPollOperationBase.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
     lib/QC_LoggerInterfaceBase.qpp
@@ -1196,6 +1211,11 @@ set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
     lib/QuicPollOperations.cpp
 )
 
+# WebSocket frame codec (RFC 6455)
+set(LIBQORE_CPP_SRC ${LIBQORE_CPP_SRC}
+    lib/WebSocketFrameCodec.cpp
+)
+
 # get list of header files
 file(GLOB LIBQORE_SOURCE_HEADERS "include/qore/*.h" "include/qore/intern/*.h")
 set(LIBQORE_SOURCE_HEADERS ${LIBQORE_SOURCE_HEADERS} include/qore/qlist include/qore/safe_dslist include/qore/vector_map include/qore/vector_set)
@@ -1533,6 +1553,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_ChannelIterator.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Counter.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Future.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_FutureImpl.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Promise.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Semaphore.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AutoSemaphore.cpp\"
@@ -1579,6 +1600,20 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_SocketPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_AbstractHttpPollConnection.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http2PollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpWebSocketPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_WebSocketClientPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_PollPipeline.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http1ClientPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http3ClientPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http3ServerPollOperation.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_Http2ClientPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientPingPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
@@ -1627,6 +1662,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAOTExprNodeRegistry.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreTermIOS.cpp\"
+// WebSocket frame codec (RFC 6455)
+#include \"${CMAKE_SOURCE_DIR}/lib/WebSocketFrameCodec.cpp\"
 ")
     # Conditionally add alloc tracking QPP to the SCU (the QPP-generated C++ is safe for SCU;
     # only AllocTracking.cpp with its global malloc/free symbols must be compiled separately)
@@ -1658,6 +1695,11 @@ target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_DIR="${USER_MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE USER_MODULE_VER_DIR="${USER_MODULE_VER_DIR}")
+option(ENABLE_ASYNC_IO_TRACE "Enable async I/O controller trace instrumentation" OFF)
+if (ENABLE_ASYNC_IO_TRACE)
+    target_compile_definitions(libqore PRIVATE DEBUG_ASYNC_IO)
+    message(STATUS "Async I/O trace instrumentation enabled (set QORE_ASYNC_IO_TRACE=1 at runtime)")
+endif ()
 if (WIN32 OR MINGW OR MSYS)
     target_compile_definitions(libqore PUBLIC BUILDING_DLL)
 endif (WIN32 OR MINGW OR MSYS)
@@ -1996,7 +2038,8 @@ qore_user_module("qlib/QoreMLUtils" "modules/ml/ml")
 qore_user_module("qlib/QoreTokenizerUtils" "modules/tokenizer/tokenizer")
 qore_user_module("qlib/DpqlWebSocket" "DataProvider;HttpServerUtil;WebSocketHandler")
 qore_user_module("qlib/DebugProgramControl.qm" "DebugUtil")
-qore_user_module("qlib/HttpServerUtil.qm" "Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
+qore_user_module("qlib/HttpUtil.qm" "Util")
+qore_user_module("qlib/HttpServerUtil.qm" "HttpUtil;Mime;Util;FileLocationHandler;Logger;modules/logger_bin/logger_bin")
 qore_user_module("qlib/MailMessage.qm" "Mime")
 
 # base 4 modules
@@ -2020,7 +2063,7 @@ qore_user_module("qlib/DebugCmdLine.qm" "ConnectionProvider;DebugUtil;DebugProgr
 qore_user_module("qlib/DiscordWebSocketClient.qm" "ConnectionProvider;Util;WebSocketUtil;WebSocketClient")
 qore_user_module("qlib/HttpServer.qm" "HttpServerUtil;Mime;Util")
 qore_user_module("qlib/HttpServerAsyncIo" "HttpServer")
-qore_user_module("qlib/HttpClientIo" "Logger;AsyncSocketIo")
+qore_user_module("qlib/HttpClientIo" "HttpUtil;Logger;AsyncSocketIo")
 qore_user_module("qlib/HttpClientStreamingIo" "HttpClientIo")
 qore_user_module("qlib/Pop3Client.qm" "ConnectionProvider;MailMessage;Mime;Logger")
 qore_user_module("qlib/RestSchemaValidator.qm" "HttpServerUtil;Logger")

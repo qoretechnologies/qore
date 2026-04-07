@@ -83,7 +83,11 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         server = new HttpServer(http_opts);
         server.setHandler("repl", "/ws/repl", NOTHING, wsHandler);
         port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        on_exit server.stop();
+        on_exit {
+            server.stop();
+            delete server;
+            delete wsHandler;
+        }
 
         set_return_value(main());
     }
@@ -157,17 +161,22 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         # Send eval request - use a variable declaration that returns a value
         wsc.send(make_json({"type": "eval", "id": "req1", "code": "our int x = 42"}));
 
-        # Should get result
-        string raw = msgs.get(5s);
-        hash<auto> result_msg = parse_json(raw);
-        assertEq("result", result_msg.type, "Should receive result");
+        # Should get result and prompt (order may vary under load)
+        *hash<auto> result_msg;
+        bool got_prompt = False;
+        for (int i = 0; i < 4 && (!result_msg || !got_prompt); ++i) {
+            string raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "result") {
+                result_msg = msg;
+            } else if (msg.type == "prompt") {
+                got_prompt = True;
+            }
+        }
+        assertTrue(exists result_msg, "Should receive result");
         assertEq("req1", result_msg.id, "Should have correlation ID");
         assertTrue(exists result_msg.duration, "Should have duration");
-
-        # Should get prompt after result
-        raw = msgs.get(5s);
-        hash<auto> prompt_msg = parse_json(raw);
-        assertEq("prompt", prompt_msg.type, "Should receive prompt");
+        assertTrue(got_prompt, "Should receive prompt");
 
         wsc.disconnect();
     }
@@ -245,15 +254,21 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         # Complete the statement
         wsc.send(make_json({"type": "eval", "code": "}"}));
 
-        # Should get result and normal prompt
-        raw = msgs.get(5s);  # result
-        hash<auto> result_msg = parse_json(raw);
-        assertEq("result", result_msg.type, "Should receive result");
-
-        raw = msgs.get(5s);  # prompt
-        prompt_msg = parse_json(raw);
-        assertEq("qore> ", prompt_msg.value, "Should return to normal prompt");
-        assertFalse(prompt_msg.needsMoreInput, "Should not need more input");
+        # Should get result and normal prompt (order may vary under load)
+        bool got_result = False;
+        bool got_prompt = False;
+        for (int i = 0; i < 4 && (!got_result || !got_prompt); ++i) {
+            raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "result") {
+                got_result = True;
+            } else if (msg.type == "prompt" && !msg.needsMoreInput) {
+                assertEq("qore> ", msg.value, "Should return to normal prompt");
+                got_prompt = True;
+            }
+        }
+        assertTrue(got_result, "Should receive result");
+        assertTrue(got_prompt, "Should receive normal prompt");
 
         wsc.disconnect();
     }
@@ -273,18 +288,31 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         # Test /help command
         wsc.send(make_json({"type": "command", "command": "/help"}));
 
-        string raw = msgs.get(5s);
-        hash<auto> result_msg = parse_json(raw);
-        assertEq("result", result_msg.type, "Should receive result");
-        assertRegex("Commands:", result_msg.value, "Help should mention commands");
+        # Server may send prompt before or after the result under load
+        *hash<auto> help_result;
+        for (int i = 0; i < 3 && !help_result; ++i) {
+            string raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "result") {
+                help_result = msg;
+            }
+        }
+        assertTrue(exists help_result, "Should receive result");
+        assertRegex("Commands:", help_result.value, "Help should mention commands");
 
-        msgs.get(5s);  # prompt
-
-        # Test unknown command
+        # Test unknown command — server may send prompt before or after the error
         wsc.send(make_json({"type": "command", "command": "/unknown"}));
 
-        raw = msgs.get(5s);
-        hash<auto> error_msg = parse_json(raw);
+        *hash<auto> error_msg;
+        for (int i = 0; i < 3; ++i) {
+            string raw = msgs.get(5s);
+            hash<auto> msg = parse_json(raw);
+            if (msg.type == "error") {
+                error_msg = msg;
+                break;
+            }
+        }
+        assertTrue(exists error_msg, "Expected error message for unknown command");
         assertEq("error", error_msg.type, "Unknown command should return error");
         assertRegex("Unknown command", error_msg.description, "Should mention unknown command");
 
@@ -401,8 +429,15 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
 
         # Close first, then third should succeed
         client1.disconnect();
-        # Wait longer for server to process disconnect and decrement connection count
-        usleep(500ms);
+        # Wait for the server to detect the disconnect and decrement
+        # the connection count via async I/O close handling
+        int wait_ms = 0;
+        while (limitHandler.getConnectionCount() > 0 && wait_ms < 5000) {
+            usleep(50ms);
+            wait_ms += 50;
+        }
+        assertEq(0, limitHandler.getConnectionCount(),
+            "connection count should be 0 after disconnect");
 
         Queue msgs3();
         WebSocketClient client3(sub (*data msg) { msgs3.push(msg); }, {

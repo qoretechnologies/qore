@@ -120,7 +120,7 @@ public hashdecl HttpClientConnectionManagerOptions {
     int max_connections_per_host = DefaultMaxConnectionsPerHost;
     int max_streams_per_connection = DefaultMaxStreamsPerConnection;
     timeout idle_timeout = DefaultConnectionIdleTimeout;
-    timeout connect_timeout = DefaultConnectTimeout;
+    timeout connect_timeout = DefaultConnectTimeout;   # also used as stale detection timeout for reused connections
     timeout request_timeout = DefaultRequestTimeout;
     *int ssl_verify_mode;
     bool accept_all_certs = False;
@@ -350,6 +350,27 @@ Unified error codes use a protocol-neutral prefix:
 | `HTTPCLIENT-ABORT` | Connection aborted |
 
 Protocol-specific error codes (`HTTP2-*`, `HTTP3-*`, `QUIC-*`) are preserved in the `err` field of `HttpClientErrorInfo` when they originate from the transport layer.
+
+### Stale Connection Detection
+
+Dead connections are detected at two levels:
+
+1. **Instant detection (FIN/RST):** Idle pooled connections are registered for POLLIN on the I/O
+   thread's epoll/kqueue.  When the server sends FIN or RST, epoll fires immediately, the I/O thread
+   calls `handleIdle()` → `recv(MSG_PEEK)` → detects EOF → marks the connection as closed/errored.
+   The next `isConnectionAlive()` check in the pool scan sees the error and evicts the connection.
+   This is the same approach as curl's `cf_socket_conn_is_alive()` but driven by the async event
+   loop instead of a zero-timeout `poll()` call (which would conflict with epoll fd ownership).
+
+2. **Timeout detection (half-open):** If the server goes completely silent (no FIN, no RST — e.g.
+   process crash, network partition), there is no kernel-level signal.  For reused pooled connections,
+   the connection manager uses `connect_timeout` (not `request_timeout`) as the request deadline.
+   If the server doesn't respond within `connect_timeout`, the connection is assumed stale — the
+   manager closes it, evicts dead connections, and retries once on a fresh connection.  This provides
+   fast stale detection (typically 2-5s) instead of waiting the full `request_timeout` (30-60s).
+
+For fresh connections (not from the pool), the full `request_timeout` is used — a timeout on a new
+connection means the server is genuinely slow or unreachable, not stale.
 
 ## Module Registration
 

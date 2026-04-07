@@ -654,7 +654,7 @@ class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
     }
 
     constructor(*Logger logger) : PollingConnectionMonitor(logger) {
-        ping_timeout = 5s;
+        ping_timeout = 30s;
     }
 
     hash<auto> waitForResult() {

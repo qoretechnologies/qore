@@ -1,0 +1,965 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_Http3ServerPollOperation.qpp
+
+    Http3ServerPollOperation class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_Http3ServerPollOperation.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/QoreQueue.h"
+#include "qore/intern/QC_Queue.h"
+
+/** @cond INTERNAL */
+
+// ============================================================
+// Http3ServerPollOperationPriv implementation
+// ============================================================
+
+Http3ServerPollOperationPriv::Http3ServerPollOperationPriv(QoreObject* self,
+        QoreSocketObject* sock, std::chrono::microseconds drain_timeout, bool headers_only)
+    : SocketPollOperationBase(self), sock_obj(sock), headers_only(headers_only),
+      drain_timeout(drain_timeout) {
+    // sock is already ref'd by the caller; ownership transferred
+}
+
+void Http3ServerPollOperationPriv::setMaxRequestBodySize(int64_t size) {
+    if (read_op) {
+        read_op->setMaxRequestBodySize(size);
+    }
+}
+
+Http3ServerPollOperationPriv::~Http3ServerPollOperationPriv() {
+    // cleanup() should have been called before destructor via QPP destructor.
+    // Defensive cleanup to avoid leaks in program shutdown paths.
+    if (read_op || send_op || sock_obj || cached_request || error_info) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+void Http3ServerPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    if (read_op) {
+        read_op->abort(xsink);
+        read_op->deref(xsink);
+        read_op = nullptr;
+    }
+    if (send_op) {
+        send_op->abort(xsink);
+        send_op->deref(xsink);
+        send_op = nullptr;
+    }
+    if (cached_request) {
+        cached_request->deref(xsink);
+        cached_request = nullptr;
+    }
+    if (error_info) {
+        error_info->deref(xsink);
+        error_info = nullptr;
+    }
+    if (sock_obj) {
+        sock_obj->deref(xsink);
+        sock_obj = nullptr;
+    }
+    stream_queues.clear();
+    data_ready_streams.clear();
+}
+
+const char* Http3ServerPollOperationPriv::getStateImpl() const {
+    switch (h3_state.load(std::memory_order_acquire)) {
+        case H3State::INIT: return "init";
+        case H3State::READING: return "reading";
+        case H3State::WAIT_READ: return "wait_read";
+        case H3State::REQUEST_READY: return "request_ready";
+        case H3State::SENDING: return "sending";
+        case H3State::SENT: return "sent";
+        case H3State::DRAINING: return "draining";
+        case H3State::CLOSED: return "closed";
+        default: return "unknown";
+    }
+}
+
+QoreValue Http3ServerPollOperationPriv::getOutput() const {
+    AutoLocker al(op_lock);
+    // Always clear the pending flag — getOutput() is the dispatch callback's
+    // entry point, so the request is now being processed (or was never set).
+    request_pending = false;
+    if (cached_request) {
+        QoreHashNode* rv = cached_request;
+        cached_request = nullptr;
+        empty_read_count = 0;
+        h3_state.store(H3State::READING, std::memory_order_release);
+        return rv;
+    }
+    return QoreValue();
+}
+
+// --- continuePoll state machine (I/O thread) ---
+
+QoreHashNode* Http3ServerPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    // Check stream Queues on exit — data arrives during the inner op's
+    // continuePoll (via h3RecvDataCallback → Queue push), so checking
+    // AFTER processing gives the most up-to-date view
+    struct OnExit {
+        Http3ServerPollOperationPriv* self;
+        ~OnExit() { self->checkStreamQueues(); }
+    } on_exit{this};
+
+    while (true) {
+        H3State state = h3_state.load(std::memory_order_acquire);
+        switch (state) {
+            case H3State::INIT:
+            case H3State::READING:
+                return handleReading(xsink);
+
+            case H3State::WAIT_READ:
+                h3_state.store(H3State::READING, std::memory_order_release);
+                continue;
+
+            case H3State::SENDING:
+                return handleSending(xsink);
+
+            case H3State::DRAINING:
+                return handleDraining(xsink);
+
+            case H3State::REQUEST_READY:
+            case H3State::SENT:
+            case H3State::CLOSED:
+                return nullptr;
+        }
+    }
+}
+
+QoreHashNode* Http3ServerPollOperationPriv::handleReading(ExceptionSink* xsink) {
+    if (!read_op) {
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = read_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP3-READ-ERROR",
+            desc_str ? desc_str->c_str() : "QUIC read error", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    // QUIC is a long-running multiplexed operation:
+    // continuePoll() always returns poll info (never nullptr for completion).
+    // Check for available output after each continuePoll() call.
+    ValueHolder output(read_op->getOutput(), xsink);
+    if (output->getType() == NT_HASH) {
+        empty_read_count = 0;
+        request_pending = true;
+        cached_request = output.release().get<QoreHashNode>();
+        h3_state.store(H3State::REQUEST_READY, std::memory_order_release);
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    // continuePoll() returned nullptr but no output available
+    ++empty_read_count;
+    if (empty_read_count > MAX_EMPTY_READS) {
+        setError("HTTP3-EMPTY-READ",
+            (std::string("max consecutive empty reads (")
+                + std::to_string(MAX_EMPTY_READS) + ") exceeded").c_str(),
+            xsink);
+        return nullptr;
+    }
+    h3_state.store(H3State::WAIT_READ, std::memory_order_release);
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+}
+
+QoreHashNode* Http3ServerPollOperationPriv::handleSending(ExceptionSink* xsink) {
+    if (!send_op) {
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = send_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP3-SEND-ERROR",
+            desc_str ? desc_str->c_str() : "QUIC send error", xsink);
+        poll_xsink.clear();
+        return nullptr;
+    }
+
+    // Check if the send completed
+    if (send_op->goalReached()) {
+        h3_state.store(H3State::SENT, std::memory_order_release);
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    // continuePoll returned nullptr but goal not reached
+    h3_state.store(H3State::CLOSED, std::memory_order_release);
+    return nullptr;
+}
+
+QoreHashNode* Http3ServerPollOperationPriv::handleDraining(ExceptionSink* xsink) {
+    if (!read_op) {
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        return nullptr;
+    }
+
+    ExceptionSink poll_xsink;
+    QoreHashNode* poll_info = read_op->continuePoll(&poll_xsink);
+    if (poll_xsink) {
+        const QoreStringNode* err_str = poll_xsink.getExceptionErr().get<const QoreStringNode>();
+        const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError(err_str ? err_str->c_str() : "HTTP3-DRAIN-ERROR",
+            desc_str ? desc_str->c_str() : "QUIC drain error", xsink);
+        poll_xsink.clear();
+        if (read_op) {
+            read_op->abort(xsink);
+        }
+        return nullptr;
+    }
+
+    // Check if any final requests arrived before GOAWAY was processed
+    ValueHolder output(read_op->getOutput(), xsink);
+    if (output->getType() == NT_HASH) {
+        cached_request = output.release().get<QoreHashNode>();
+        request_pending = true;
+        h3_state.store(H3State::REQUEST_READY, std::memory_order_release);
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
+        return nullptr;
+    }
+
+    // After drain_timeout, send final shutdown and close
+    auto now = std::chrono::steady_clock::now();
+    if (now - drain_start > drain_timeout) {
+        // Send final GOAWAY with actual last stream ID
+        if (drain_session_id > 0) {
+            ExceptionSink shutdown_xsink;
+            sock_obj->submitQuicShutdown(drain_session_id, &shutdown_xsink);
+            // Best-effort; close anyway
+            if (shutdown_xsink) {
+                shutdown_xsink.clear();
+            }
+            // One more continuePoll() to flush the GOAWAY frame
+            ExceptionSink flush_xsink;
+            read_op->continuePoll(&flush_xsink);
+            if (flush_xsink) {
+                flush_xsink.clear();
+            }
+        }
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        if (read_op) {
+            ExceptionSink abort_xsink;
+            read_op->abort(&abort_xsink);
+            if (abort_xsink) {
+                abort_xsink.clear();
+            }
+        }
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
+        return nullptr;
+    }
+
+    if (poll_info) {
+        return poll_info;
+    }
+
+    // Return poll info to wait briefly for remaining data
+    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+}
+
+void Http3ServerPollOperationPriv::setError(const char* err, const char* desc,
+        ExceptionSink* xsink) {
+    if (!error_info) {
+        error_info = new QoreHashNode(autoTypeInfo);
+        error_info->setKeyValue("err", new QoreStringNode(err), xsink);
+        error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+    }
+    h3_state.store(H3State::CLOSED, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::abort(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    h3_state.store(H3State::CLOSED, std::memory_order_release);
+    if (read_op) {
+        read_op->abort(xsink);
+    }
+    if (send_op) {
+        send_op->abort(xsink);
+    }
+}
+
+// --- Handler-thread methods ---
+
+void Http3ServerPollOperationPriv::startSendResponse(int status_code,
+        const QoreHashNode* headers, const AbstractQoreNode* body,
+        ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (state != H3State::REQUEST_READY) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot send response in state: '%s' "
+            "(HTTP/3 allows only one response per request stream)", getStateImpl());
+        return;
+    }
+    if (!cached_request) {
+        xsink->raiseException("HTTP3-ERROR", "no request available for response");
+        return;
+    }
+    int64_t session_id = cached_request->getKeyValue("session_id").getAsBigInt();
+    int64_t stream_id = cached_request->getKeyValue("stream_id").getAsBigInt();
+    if (!session_id) {
+        xsink->raiseException("HTTP3-ERROR", "no session_id available for response");
+        return;
+    }
+    if (!stream_id) {
+        xsink->raiseException("HTTP3-ERROR", "no stream_id available for response");
+        return;
+    }
+
+    // Create the send operation directly
+    sock_obj->ref();
+    ReferenceHolder<SocketPollOperationBase> new_op(
+        new SocketQuicSendResponsePollOperation(xsink, sock_obj, session_id,
+            stream_id, status_code, headers, body),
+        xsink
+    );
+    if (*xsink) {
+        return;
+    }
+
+    // Set self on the inner op so it can build SocketPollInfo hashes
+    new_op->setSelf(*self);
+
+    // Clean up old send op if any
+    if (send_op) {
+        send_op->deref(xsink);
+    }
+    send_op = new_op.release();
+    h3_state.store(H3State::SENDING, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::startSendStreamingResponse(int status_code,
+        const QoreHashNode* headers, InputStream* body_stream, QoreObject* body_obj,
+        int64_t chunk_size, ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (state != H3State::REQUEST_READY) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot send streaming response in state: '%s' "
+            "(HTTP/3 allows only one response per request stream)", getStateImpl());
+        return;
+    }
+    if (!cached_request) {
+        xsink->raiseException("HTTP3-ERROR", "no request available for response");
+        return;
+    }
+    int64_t session_id = cached_request->getKeyValue("session_id").getAsBigInt();
+    int64_t stream_id = cached_request->getKeyValue("stream_id").getAsBigInt();
+    if (!session_id) {
+        xsink->raiseException("HTTP3-ERROR", "no session_id available for response");
+        return;
+    }
+    if (!stream_id) {
+        xsink->raiseException("HTTP3-ERROR", "no stream_id available for response");
+        return;
+    }
+
+    // Create the streaming send operation directly
+    // body_stream and body_obj ownership transferred to the operation
+    sock_obj->ref();
+    ReferenceHolder<SocketPollOperationBase> new_op(
+        new SocketQuicSendStreamingResponsePollOperation(xsink, sock_obj, session_id,
+            stream_id, status_code, headers, body_stream, body_obj,
+            chunk_size ? chunk_size : 16384),
+        xsink
+    );
+    if (*xsink) {
+        return;
+    }
+
+    // Unassign the stream from the current thread so that the I/O thread
+    // can reassign it to itself
+    body_stream->unassignThread(xsink);
+    if (*xsink) {
+        return;
+    }
+
+    // Set self on the inner op so it can build SocketPollInfo hashes
+    new_op->setSelf(*self);
+
+    // Clean up old send op if any
+    if (send_op) {
+        send_op->deref(xsink);
+    }
+    send_op = new_op.release();
+    h3_state.store(H3State::SENDING, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::startReadNextRequest(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (state != H3State::SENT && state != H3State::REQUEST_READY) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot read next request in state: '%s'", getStateImpl());
+        return;
+    }
+    if (cached_request) {
+        cached_request->deref(xsink);
+        cached_request = nullptr;
+    }
+    request_pending = false;
+    startReadRequest(xsink);
+}
+
+void Http3ServerPollOperationPriv::continueReading(ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (state == H3State::REQUEST_READY && request_pending) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot continue reading: request pending dispatch");
+        return;
+    }
+    if (state != H3State::REQUEST_READY) {
+        xsink->raiseException("HTTP3-STATE-ERROR",
+            "cannot continue reading in state: '%s'", getStateImpl());
+        return;
+    }
+    if (cached_request) {
+        cached_request->deref(xsink);
+        cached_request = nullptr;
+    }
+    request_pending = false;
+    empty_read_count = 0;
+    h3_state.store(H3State::READING, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::shutdown(int64_t session_id, ExceptionSink* xsink) {
+    AutoLocker al(op_lock);
+    H3State state = h3_state.load(std::memory_order_acquire);
+    if (state == H3State::CLOSED || state == H3State::DRAINING) {
+        return;
+    }
+    // Determine the session to shut down
+    if (!session_id && cached_request) {
+        session_id = cached_request->getKeyValue("session_id").getAsBigInt();
+    }
+    // No session to shut down — close immediately
+    if (!session_id) {
+        h3_state.store(H3State::CLOSED, std::memory_order_release);
+        if (read_op) {
+            read_op->abort(xsink);
+        }
+        if (send_op) {
+            send_op->abort(xsink);
+        }
+        return;
+    }
+
+    ExceptionSink notice_xsink;
+    sock_obj->submitQuicShutdownNotice(session_id, &notice_xsink);
+    if (notice_xsink) {
+        const QoreStringNode* desc_str = notice_xsink.getExceptionDesc().get<const QoreStringNode>();
+        setError("HTTP3-SHUTDOWN-ERROR",
+            desc_str ? desc_str->c_str() : "GOAWAY shutdown notice failed", xsink);
+        notice_xsink.clear();
+        if (read_op) {
+            read_op->abort(xsink);
+        }
+        if (send_op) {
+            send_op->abort(xsink);
+        }
+        return;
+    }
+
+    drain_start = std::chrono::steady_clock::now();
+    drain_session_id = session_id;
+    h3_state.store(H3State::DRAINING, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::startReadRequest(ExceptionSink* xsink) {
+    // Clean up old operations
+    if (read_op) {
+        read_op->deref(xsink);
+        read_op = nullptr;
+    }
+    if (send_op) {
+        send_op->deref(xsink);
+        send_op = nullptr;
+    }
+
+    // Create a new SocketQuicServerPollOperation
+    sock_obj->ref();
+    ReferenceHolder<SocketQuicServerPollOperation> new_op(
+        new SocketQuicServerPollOperation(xsink, sock_obj),
+        xsink
+    );
+    if (*xsink) {
+        return;
+    }
+
+    if (headers_only) {
+        reinterpret_cast<SocketQuicServerPollOperation*>(*new_op)->setHeadersOnly(true);
+    }
+
+    // Set self on the inner op so it can build SocketPollInfo hashes
+    new_op->setSelf(*self);
+
+    read_op = new_op.release();
+    h3_state.store(H3State::READING, std::memory_order_release);
+}
+
+void Http3ServerPollOperationPriv::checkStreamQueues() {
+    data_ready_streams.clear();
+    for (auto& [skey, queue] : stream_queues) {
+        if (queue && !queue->empty()) {
+            data_ready_streams.push_back(skey);
+        }
+    }
+}
+
+/** @endcond */
+
+// ============================================================
+// QPP wrapper class
+// ============================================================
+
+//! Poll operation for HTTP/3 server connection handling over QUIC
+/** This poll operation manages an HTTP/3 server connection lifecycle:
+
+    1. Accept a QUIC connection (including TLS 1.3 handshake)
+    2. Read QUIC packets and process HTTP/3 frames
+    3. Provide complete HTTP/3 requests to the handler
+    4. Support sending responses via startSendResponse()
+
+    Unlike HTTP/2 which builds on a TCP connection with a separate SSL handshake,
+    QUIC combines transport and encryption in a single handshake. This class wraps
+    the low-level Socket QUIC poll operations to provide a higher-level interface
+    for the HttpServer async I/O controller.
+
+    This is implemented as a C++ SocketPollOperationBase so that continuePoll()
+    runs on the I/O thread, avoiding the STREAM-THREAD-ERROR that occurs when
+    Qore poll operations are dispatched to random worker threads.
+
+    @note QUIC uses UDP, so this operation works with a UDP socket bound via
+    @ref Qore::Socket::bindINET() "Socket::bindINET()" with SOCK_DGRAM.
+
+    @since %Qore 2.3
+*/
+qclass Http3ServerPollOperation [arg=Http3ServerPollOperationPriv* priv; ns=Qore; vparent=SocketPollOperationBase; private_members=object sock,string goal,auto data_save];
+
+//! Creates the HTTP/3 server poll operation
+/** @param sock the UDP socket bound and ready for QUIC connections
+    @param drain_timeout duration to wait for in-flight requests to complete
+    during GOAWAY graceful shutdown; defaults to 5s
+    @param headers_only if @ref True, dispatches requests as soon as headers are
+    received (before the full body arrives)
+    @param max_request_body_size maximum request body size in bytes; 0 = unlimited
+*/
+Http3ServerPollOperation::constructor(Socket[QoreSocketObject] sock,
+        timeout drain_timeout = 5s, bool headers_only = False,
+        int max_request_body_size = 0) {
+    if (!*sock) {
+        xsink->raiseException("HTTP3-ERROR", "socket cannot be null");
+        return;
+    }
+
+    QoreSocketObject* sock_ptr = *sock;
+
+    // Set up the Qore object members
+    QoreValue sock_arg = args->retrieveEntry(0);
+    QoreObject* sock_obj = sock_arg.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(sock_arg.get<const QoreObject>()) : nullptr;
+    if (sock_obj) {
+        self->setMemberValue("sock", QC_HTTP3SERVERPOLLOPERATION,
+            sock_obj->refSelf(), xsink);
+    }
+    self->setMemberValue("goal", QC_HTTP3SERVERPOLLOPERATION,
+        new QoreStringNode("http3_connection"), xsink);
+
+    // Create private data — ref sock for ownership
+    sock_ptr->ref();
+    Http3ServerPollOperationPriv* p = new Http3ServerPollOperationPriv(self, sock_ptr,
+        std::chrono::microseconds(drain_timeout), (bool)headers_only);
+    self->setPrivate(CID_HTTP3SERVERPOLLOPERATION, p);
+
+    // Start accepting QUIC connection and reading HTTP/3 request
+    p->startReadRequest(xsink);
+
+    // Apply max request body size to the underlying QUIC server operation
+    if (!*xsink && max_request_body_size > 0) {
+        p->setMaxRequestBodySize(max_request_body_size);
+    }
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+Http3ServerPollOperation::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Copying is not supported
+/** @throw COPY-ERROR copying Http3ServerPollOperation objects is not supported
+*/
+Http3ServerPollOperation::copy() {
+    xsink->raiseException("COPY-ERROR", "Http3ServerPollOperation objects cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return the goal string "http3_connection"
+*/
+string Http3ServerPollOperation::getGoal() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return the current state string
+*/
+string Http3ServerPollOperation::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when a request is ready or a send is complete
+/** @return True if the goal has been reached
+*/
+bool Http3ServerPollOperation::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or NOTHING if complete
+*/
+*hash<SocketPollInfo> Http3ServerPollOperation::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Returns the completed request and atomically resumes reading
+/** When a request is available, atomically extracts it and transitions to
+    READING in a single lock acquisition.
+
+    @return the HTTP/3 request hash, or NOTHING if no request is available
+*/
+*hash<auto> Http3ServerPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns the socket
+/** @return the socket object
+*/
+Socket Http3ServerPollOperation::getSocket() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("sock", xsink);
+}
+
+//! Returns True if the connection should be kept alive
+/** @return True if the connection is alive and not draining
+*/
+bool Http3ServerPollOperation::shouldKeepAlive() [flags=RET_VALUE_ONLY] {
+    return priv->shouldKeepAlive();
+}
+
+//! Returns True if the connection is closed
+/** @return True if closed
+*/
+bool Http3ServerPollOperation::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if an error occurred
+/** @return True if an error has been recorded
+*/
+bool Http3ServerPollOperation::hasError() [flags=RET_VALUE_ONLY] {
+    return priv->hasError();
+}
+
+//! Returns error information if an error occurred
+/** @return the error hash with "err" and "desc" keys, or NOTHING
+*/
+*hash<auto> Http3ServerPollOperation::getError() [flags=RET_VALUE_ONLY] {
+    return priv->getErrorInfo();
+}
+
+//! Starts sending an HTTP/3 response
+/** @param status_code the HTTP status code
+    @param headers response headers
+    @param body response body (optional)
+*/
+nothing Http3ServerPollOperation::startSendResponse(int status_code, *hash<auto> headers,
+        *data body) {
+    priv->startSendResponse((int)status_code, headers, body, xsink);
+}
+
+//! Starts sending a streaming HTTP/3 response
+/** @param status_code the HTTP status code
+    @param headers response headers
+    @param body InputStream providing the response body
+    @param chunk_size optional chunk size for reading from the InputStream
+*/
+nothing Http3ServerPollOperation::startSendStreamingResponse(int status_code,
+        *hash<auto> headers, InputStream[InputStream] body, *int chunk_size) {
+    // body ref is owned by QPP ReferenceHolder; transfer ownership to the operation
+    InputStream* body_ptr = body.release();
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
+    priv->startSendStreamingResponse((int)status_code, headers, body_ptr, body_obj,
+        chunk_size ? chunk_size : 16384, xsink);
+}
+
+//! Starts reading the next HTTP/3 request
+/** After sending a response, call this to wait for the next request.
+*/
+nothing Http3ServerPollOperation::startReadNextRequest() {
+    priv->startReadNextRequest(xsink);
+}
+
+//! Continues reading without creating a new read operation
+/** Called after a request has been dispatched in multiplexing mode.
+*/
+nothing Http3ServerPollOperation::continueReading() {
+    priv->continueReading(xsink);
+}
+
+//! Gracefully shuts down the QUIC connection
+/** @param session_id optional session ID to shut down
+*/
+nothing Http3ServerPollOperation::shutdown(*int session_id) {
+    priv->shutdown(session_id ? session_id : 0, xsink);
+}
+
+//! Aborts the operation
+/** Does NOT close the UDP socket — it is shared across all QUIC sessions.
+*/
+nothing Http3ServerPollOperation::abort() {
+    priv->abort(xsink);
+}
+
+//! Sets the completion context for accept operations
+/** @param controller the async I/O controller
+    @param listener the server listener socket
+    @param target the async target
+    @param owner the owner identifier
+*/
+nothing Http3ServerPollOperation::setCompletionContext(object controller, object listener,
+        object target, string owner) {
+    // Store in internal members — accessed by onComplete()
+    QoreValue ctrl_arg = args->retrieveEntry(0);
+    QoreValue lsnr_arg = args->retrieveEntry(1);
+    QoreValue tgt_arg = args->retrieveEntry(2);
+    if (ctrl_arg.getType() == NT_OBJECT) {
+        self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
+            const_cast<QoreObject*>(ctrl_arg.get<const QoreObject>())->refSelf(), xsink);
+    }
+    if (lsnr_arg.getType() == NT_OBJECT) {
+        self->setMemberValue("completion_listener", QC_HTTP3SERVERPOLLOPERATION,
+            const_cast<QoreObject*>(lsnr_arg.get<const QoreObject>())->refSelf(), xsink);
+    }
+    if (tgt_arg.getType() == NT_OBJECT) {
+        self->setMemberValue("completion_target", QC_HTTP3SERVERPOLLOPERATION,
+            const_cast<QoreObject*>(tgt_arg.get<const QoreObject>())->refSelf(), xsink);
+    }
+    self->setMemberValue("completion_owner", QC_HTTP3SERVERPOLLOPERATION,
+        owner->refSelf(), xsink);
+}
+
+//! Sets the connection-level completion context for resubmitted ops
+/** @param controller the controller
+    @param uh the connection unique hash
+    @param state the connection state
+*/
+nothing Http3ServerPollOperation::setConnectionCompletionContext(object controller,
+        string uh, string state) {
+    QoreValue ctrl_arg = args->retrieveEntry(0);
+    if (ctrl_arg.getType() == NT_OBJECT) {
+        self->setMemberValue("completion_controller", QC_HTTP3SERVERPOLLOPERATION,
+            const_cast<QoreObject*>(ctrl_arg.get<const QoreObject>())->refSelf(), xsink);
+    }
+    self->setMemberValue("conn_completion_uh", QC_HTTP3SERVERPOLLOPERATION,
+        uh->refSelf(), xsink);
+    self->setMemberValue("conn_completion_state", QC_HTTP3SERVERPOLLOPERATION,
+        state->refSelf(), xsink);
+}
+
+//! Called when the operation completes; dispatches result to the controller
+/** Routes to handleConnectionResult() when a connection-level context is set
+    (resubmitted ops), or to handleQuicAcceptResult() for the initial accept.
+*/
+nothing Http3ServerPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+    ValueHolder ctrl(self->getReferencedMemberNoMethod("completion_controller", xsink), xsink);
+    if (*xsink || ctrl->isNullOrNothing()) {
+        return QoreValue();
+    }
+    QoreObject* ctrl_obj = ctrl->get<QoreObject>();
+
+    ValueHolder conn_uh(self->getReferencedMemberNoMethod("conn_completion_uh", xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (!conn_uh->isNullOrNothing()) {
+        // Connection-level completion
+        ValueHolder conn_state(self->getReferencedMemberNoMethod("conn_completion_state", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(result->refSelf(), xsink);
+        call_args->push(conn_uh.release(), xsink);
+        call_args->push(conn_state.release(), xsink);
+        ctrl_obj->evalMethod("handleConnectionResult", *call_args, xsink);
+    } else {
+        // Accept-level completion
+        ValueHolder lsnr(self->getReferencedMemberNoMethod("completion_listener", xsink), xsink);
+        ValueHolder tgt(self->getReferencedMemberNoMethod("completion_target", xsink), xsink);
+        ValueHolder owner(self->getReferencedMemberNoMethod("completion_owner", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        ReferenceHolder<QoreListNode> call_args(new QoreListNode(autoTypeInfo), xsink);
+        call_args->push(result->refSelf(), xsink);
+        call_args->push(lsnr.release(), xsink);
+        call_args->push(tgt.release(), xsink);
+        call_args->push(owner.release(), xsink);
+        call_args->push(self->objectRefSelf(), xsink);
+        ctrl_obj->evalMethod("handleQuicAcceptResult", *call_args, xsink);
+    }
+}
+
+//! Registers a Queue for stream data delivery
+/** @param session_id the QUIC session ID
+    @param stream_id the QUIC stream ID
+    @param queue the Queue that h3RecvDataCallback pushes data to
+*/
+nothing Http3ServerPollOperation::registerStreamQueue(int session_id, int stream_id,
+        Queue[Queue] queue) {
+    std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+
+    // Store the QoreObject ref in internal_members to prevent GC
+    QoreValue queue_arg = args->retrieveEntry(2);
+    {
+        ValueHolder existing(self->getReferencedMemberNoMethod("stream_queue_objs", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        QoreHashNode* queue_objs;
+        if (existing->getType() == NT_HASH) {
+            // copy() ensures unique ownership (refcount == 1) before mutation
+            queue_objs = existing->get<QoreHashNode>()->copy();
+        } else {
+            queue_objs = new QoreHashNode(objectTypeInfo);
+        }
+        if (queue_arg.getType() == NT_OBJECT) {
+            queue_objs->setKeyValue(skey.c_str(),
+                const_cast<QoreObject*>(queue_arg.get<const QoreObject>())->refSelf(), xsink);
+        }
+        self->setMemberValue("stream_queue_objs", QC_HTTP3SERVERPOLLOPERATION,
+            queue_objs, xsink);
+    }
+
+    // Register the C++ Queue pointer in the priv class
+    // Queue inherits from QoreQueue — empty() is available via the QoreQueue base
+    priv->registerStreamQueue(skey, *queue);
+}
+
+//! Registers a stream data listener
+/** @param session_id the QUIC session ID
+    @param stream_id the QUIC stream ID
+    @param listener object with notifyIo() method
+*/
+nothing Http3ServerPollOperation::registerStreamListener(int session_id, int stream_id,
+        object listener) {
+    std::string skey = std::to_string((int64_t)session_id) + ":" + std::to_string((int64_t)stream_id);
+
+    // Store in internal_members
+    QoreValue listener_arg = args->retrieveEntry(2);
+    {
+        ValueHolder existing(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        QoreHashNode* listeners;
+        if (existing->getType() == NT_HASH) {
+            // copy() ensures unique ownership (refcount == 1) before mutation
+            listeners = existing->get<QoreHashNode>()->copy();
+        } else {
+            listeners = new QoreHashNode(objectTypeInfo);
+        }
+        if (listener_arg.getType() == NT_OBJECT) {
+            listeners->setKeyValue(skey.c_str(),
+                const_cast<QoreObject*>(listener_arg.get<const QoreObject>())->refSelf(), xsink);
+        }
+        self->setMemberValue("stream_listeners", QC_HTTP3SERVERPOLLOPERATION,
+            listeners, xsink);
+    }
+}
+
+//! Called by the I/O controller on a worker thread when stream data is available
+/** @param stream_key composite key "session_id:stream_id"
+*/
+nothing Http3ServerPollOperation::onStreamData(string stream_key) {
+    ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+    if (*xsink || listeners->isNullOrNothing()) {
+        return QoreValue();
+    }
+    QoreHashNode* lhash = listeners->get<QoreHashNode>();
+    ValueHolder listener(lhash->getKeyValue(stream_key->c_str()).refSelf(), xsink);
+    if (!listener->isNullOrNothing() && listener->getType() == NT_OBJECT) {
+        QoreObject* lobj = listener->get<QoreObject>();
+        lobj->evalMethod("notifyIo", nullptr, xsink);
+    }
+}
+
+//! Returns and clears the list of stream keys with data available
+/** Called by the I/O controller after continuePoll().
+*/
+list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_VALUE_ONLY] {
+    std::vector<std::string> ready = priv->getAndClearDataReadyStreams();
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    for (auto& skey : ready) {
+        rv->push(new QoreStringNode(skey), xsink);
+    }
+    return rv.release();
+}

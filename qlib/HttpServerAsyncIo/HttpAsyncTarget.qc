@@ -57,12 +57,21 @@ public class HttpAsyncTarget {
 
         @param info Connection and request information (see @ref HttpConnectionInfo)
         @return Instructions for connection handling (see @ref HttpRequestResultInfo):
-            - \c close: True to close connection after response
-            - \c return_to_idle: True to return to keep-alive pool
-            - \c streaming: True for SSE/WebSocket
-            - \c stream_type: "sse" or "websocket"
+            - \c close: \c True to close connection after response
+            - \c return_to_idle: \c True to return to keep-alive pool
+            - \c streaming: \c True for SSE/WebSocket streaming
+            - \c stream_type: \c "sse" or \c "websocket"
             - \c stream_operation: The poll operation for streaming
             - \c ttl: Keep-alive timeout
+            - \c code: HTTP response code (for HTTP/2 streaming responses)
+            - \c hdr: Response headers (for HTTP/2 responses sent through h2op)
+            - \c body: Response body (for HTTP/2 responses sent through h2op)
+            - \c input_stream: Streaming response body (InputStream for HTTP/2 responses)
+            - \c status_message: HTTP status message text (e.g. \c "OK", \c "Not Found")
+            - \c chunked: \c True if the response uses chunked transfer encoding (HTTP/1.x)
+            - \c dedicated: \c True when a dedicated handler manages the socket lifecycle
+            - \c send_callback: Callback for chunked response data
+            - \c send_timeout: Timeout for send_callback responses
 
         @see HttpRequestResultInfo
         @see HttpConnectionInfo
@@ -136,8 +145,8 @@ public class HttpAsyncTarget {
         @ref nothing (all requests go to the thread pool).
 
         @warning Only handle requests inline that are very fast and non-blocking.
-        Long-running handlers will block the I/O thread and stall all other connections
-        on that I/O thread.
+        Long-running handlers will block the I/O callback thread and stall all other
+        connections on that I/O callback thread.
 
         @param info connection and request information
         @return result hash if handled inline, or @ref nothing to dispatch to thread pool

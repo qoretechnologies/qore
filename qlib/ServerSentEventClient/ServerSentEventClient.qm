@@ -93,17 +93,24 @@ module ServerSentEventClient {
 
     @section serversenteventclientintro Introduction to the ServerSentEventClient Module
 
-    The %ServerSentEventClient module provides a client to be used with the
-    <a href="../../HttpServer/html/index.html">HttpServer module</a> to provide
-    <a href="ç">Server-Sent Event</a> connections.
+    The %ServerSentEventClient module provides a client for connecting to
+    <a href="https://html.spec.whatwg.org/multipage/server-sent-events.html">Server-Sent Event</a> endpoints.
 
     To use this module, use \c "%requires ServerSentEventClient" in your code.
+
+    The module provides two client classes:
+    - @ref ServerSentEventClient::ServerSentEventClient "ServerSentEventClient": uses the legacy
+      @ref Qore::HTTPClient "HTTPClient" for HTTP/1.1 SSE connections
+    - @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo": uses
+      @ref HttpClientIo::HttpClientConnectionManager for async I/O across HTTP/1.x, HTTP/2, and HTTP/3
 
     All the public symbols in the module are defined in the ServerSentEventClient namespace.
 
     @section serversenteventclient_relnotes ServerSentEventClient Release History
 
     @subsection serversenteventclient_v1_1 Version 1.1
+    - added @ref ServerSentEventClient::ServerSentEventClientIo "ServerSentEventClientIo" class for async I/O
+      SSE connections across HTTP/1.x, HTTP/2, and HTTP/3
     - added \c SseConnectPollOperation for async connect
       support
     - added \c ServerSentEventConnection::supportsPollingApi()

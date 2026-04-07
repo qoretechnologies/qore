@@ -181,7 +181,7 @@ class QuicDatagramTest inherits QUnit::Test {
 
         int stream_id = ctx.client_sock.submitQuicRequest(method, path, req_headers, req_body);
         assertTrue(stream_id >= 0, "submitQuicRequest returned valid stream_id");
-        ctx.ctrl.wake();
+        ctx.ctrl.wakeSocket(ctx.client_sock);
 
         auto server_result = ctx.server_q.get(30000);
         assertTrue(ctx.server_op.goalReached(), "server reached goal");

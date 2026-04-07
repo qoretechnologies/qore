@@ -30,14 +30,19 @@
 */
 
 #include <qore/Qore.h>
-#include <qore/QoreSandboxManager.h>
-#include "qore/intern/QC_Future.h"
 
-//! The consumer side of a Promise/Future pair for cross-thread result delivery
+/** @cond INTERNAL */
+class AbstractFuture {
+};
+/** @endcond */
+
+//! Abstract base class for Future objects
 /** Future objects allow a thread to block until a result is available from another thread.
-    A Future can only be created by calling @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()".
 
-    Multiple threads can call @ref get() on the same Future; all will receive the same result.
+    The standard implementation is created by calling
+    @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()".
+    Subclasses can override get(), isDone(), and isError() to implement
+    custom Future behavior (e.g., wrapping another Future with post-processing).
 
     @par Example: Basic async computation
     @code{.py}
@@ -47,53 +52,14 @@ background sub() { p.set(42); }();
 auto result = f.get();  # blocks until set, returns 42
     @endcode
 
-    @par Example: Error handling
+    @par Example: Custom Future subclass
     @code{.py}
-Promise p();
-Future f = p.getFuture();
-background sub() {
-    try {
-        auto result = perform_network_request();
-        p.set(result);
-    } catch (hash<ExceptionInfo> ex) {
-        p.setError(ex.err, ex.desc, ex.arg);
-    }
-}();
-
-try {
-    auto result = f.get(30s);  # wait up to 30 seconds
-    printf("result: %y\n", result);
-} catch (hash<ExceptionInfo> ex) {
-    if (ex.err == "FUTURE-TIMEOUT") {
-        printf("request timed out\n");
-    } else {
-        printf("request failed: %s: %s\n", ex.err, ex.desc);
-    }
-}
-    @endcode
-
-    @par Example: Fan-out / fan-in with multiple Futures
-    @code{.py}
-# Launch multiple async operations
-list<Future> futures = map call_async(auto sub(auto url) {
-    return fetch_url(url);
-}, $1), urls;
-
-# Collect all results
-list<auto> results = map $1.get(), futures;
-    @endcode
-
-    @par Example: Polling with isDone()
-    @code{.py}
-Future f = call_async(sub() { return long_computation(); });
-while (!f.isDone()) {
-    printf("still working...\n");
-    sleep(1s);
-}
-if (f.isError()) {
-    printf("computation failed\n");
-} else {
-    printf("result: %y\n", f.get());
+class TransformingFuture inherits Future {
+    private { Future real; code transform; }
+    constructor(Future real, code transform) { self.real = real; self.transform = transform; }
+    auto get(timeout t = 0) { return transform(real.get(t)); }
+    bool isDone() { return real.isDone(); }
+    bool isError() { return real.isError(); }
 }
     @endcode
 
@@ -104,77 +70,31 @@ if (f.isError()) {
 
     @since %Qore 2.3
  */
-qclass Future [dom=THREAD_CLASS; arg=QoreFuture* f; ns=Qore::Thread];
-
-//! Throws an exception; Future objects can only be created by calling Promise::getFuture()
-/** @throw FUTURE-ERROR Future objects cannot be created directly
- */
-Future::constructor() {
-    xsink->raiseException("FUTURE-ERROR", "Future objects can only be created by calling Promise::getFuture()");
-}
-
-//! Destroys the Future object
-/** Note that it is a programming error to delete this object while other threads are blocked on it; in this case an exception is thrown in the deleting thread.
-
-    @throw FUTURE-ERROR Object deleted while other threads blocked on it
- */
-Future::destructor() {
-    f->destructor(xsink);
-    f->deref(xsink);
-}
-
-//! Throws an exception; Future objects cannot be copied
-/** @throw FUTURE-COPY-ERROR Objects of this class cannot be copied
- */
-Future::copy() {
-    xsink->raiseException("FUTURE-COPY-ERROR", "objects of this class cannot be copied");
-}
+qclass Future [dom=THREAD_CLASS; arg=AbstractFuture* f; ns=Qore::Thread];
 
 //! Blocks the calling thread until the result is available or an error occurs
-/** @param timeout_ms a @ref timeout_type "timeout" value to wait; integers are interpreted as milliseconds; @ref relative_dates "relative date/time values" are interpreted literally (with a resolution of milliseconds); 0 (the default) means wait indefinitely
+/** @param timeout_ms a @ref timeout_type "timeout" value to wait; integers are
+    interpreted as milliseconds; @ref relative_dates "relative date/time values"
+    are interpreted literally (with a resolution of milliseconds); 0 (the default)
+    means wait indefinitely
 
     @return the value set by the associated Promise
-
-    @par Example:
-    @code{.py}
-auto result = future.get();
-    @endcode
 
     @throw FUTURE-TIMEOUT timed out waiting for the result
     @throw FUTURE-ERROR Future object was deleted in another thread while waiting
     @throw PROMISE-ERROR Promise was destroyed without setting a value
-    @throw PROGRAM-INTERRUPTED this exception is thrown if the program has a @ref Qore::SandboxManager "SandboxManager" attached and @ref Qore::SandboxManager::requestInterrupt() "SandboxManager::requestInterrupt()" is called while the method is blocked
 
-    @note Any exception set via @ref Qore::Thread::Promise::setError() "Promise::setError()" will be re-thrown here
+    @note Any exception set via @ref Qore::Thread::Promise::setError() "Promise::setError()"
+    will be re-thrown here
  */
-auto Future::get(timeout timeout_ms = 0) {
-    return f->get(timeout_ms, xsink);
-}
+abstract auto Future::get(timeout timeout_ms = 0);
 
 //! Returns @ref True if the Future has been resolved or rejected
 /** @return @ref True if the result is available (resolved) or an error has been set (rejected)
-
-    @par Example:
-    @code{.py}
-if (future.isDone()) {
-    auto result = future.get();
-}
-    @endcode
  */
-bool Future::isDone() [flags=CONSTANT] {
-    return f->isDone();
-}
+abstract bool Future::isDone();
 
 //! Returns @ref True if the Future has been rejected with an error
 /** @return @ref True if an error has been set
-
-    @par Example:
-    @code{.py}
-if (future.isError()) {
-    try { future.get(); } catch (hash<auto> ex) { ... }
-}
-    @endcode
  */
-bool Future::isError() [flags=CONSTANT] {
-    return f->isError();
-}
+abstract bool Future::isError();

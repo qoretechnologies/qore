@@ -31,24 +31,10 @@ public namespace ConnectionProvider {
 
     @since ConnectionProvider 2.2
 */
-public class HttpPingPollOperation inherits Qore::AbstractPollOperation {
-    private {
-        *AbstractPollOperation poller;
-        *Logger::LoggerInterface logger;
-        string err_code;
-        string log_prefix;
-        bool goal_reached = False;
-        auto output;
-        string state = "ping";
-    }
-
+public class HttpPingPollOperation inherits Qore::PollPipeline {
     constructor(string base_url, string method, string path, *hash<auto> http_opts, *hash<auto> headers, auto body,
             *Logger::LoggerInterface logger, string err_code = "HTTP-PING-ERROR",
             string log_prefix = "HttpConnection") {
-        self.logger = logger;
-        self.err_code = err_code;
-        self.log_prefix = log_prefix;
-
         string request_method = method ?? "GET";
         string request_path = path ?? "/";
         auto request_body = request_method == "GET" ? NOTHING : body;
@@ -70,55 +56,19 @@ public class HttpPingPollOperation inherits Qore::AbstractPollOperation {
             }
         }
 
-        log("INFO", "%s async ping start: method=%s path=%y url=%y", log_prefix, request_method, request_path,
-            base_url);
-        poller = hc.startPollSendRecv(request_method, request_path, request_body, req_headers);
-    }
-
-    string getGoal() {
-        return "ping";
-    }
-
-    string getState() {
-        return state + (poller ? ("-" + poller.getState()) : NOTHING);
-    }
-
-    bool goalReached() {
-        return goal_reached;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (!poller) {
-            return;
-        }
-        *hash<SocketPollInfo> info = poller.continuePoll();
-        if (info) {
-            return info;
-        }
-        hash<auto> resp = poller.getOutput();
-        if (!exists resp.code || (resp.code / 100) != 2) {
-            log("ERROR", "%s async ping failed: code=%y", log_prefix, resp.code);
-            throw err_code, sprintf("ping failed with HTTP code %y", resp.code);
-        }
-        output = resp;
-        log("INFO", "%s async ping complete: code=%d", log_prefix, resp.code);
-        goal_reached = True;
-    }
-
-    auto getOutput() {
-        return output;
-    }
-
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    private log(string level, string msg, ...) {
         if (logger) {
-            logger.logArgs(level, msg, argv);
+            logger.logArgs("INFO", sprintf("%s async ping start: method=%s path=%y url=%y",
+                log_prefix, request_method, request_path, base_url));
         }
+
+        # Create the inner HTTP poll operation (C++ SocketPollOperationBase)
+        auto inner = hc.startPollSendRecv(request_method, request_path, request_body, req_headers);
+
+        # Build the pipeline: delegate → validate 2xx → deliver
+        self.addDelegate(inner);
+        self.addValidateStatus(200, 299, err_code);
+        self.addDeliverResult();
+        goal = "http-ping";
     }
 }
 
@@ -131,20 +81,7 @@ public class HttpPingPollOperation inherits Qore::AbstractPollOperation {
 
     @since ConnectionProvider 2.3
 */
-public class HttpRequestPollOperation inherits Qore::AbstractPollOperation {
-    private {
-        #! The underlying poll operation
-        *AbstractPollOperation poller;
-        #! Optional logger
-        *Logger::LoggerInterface logger;
-        #! Goal reached flag
-        bool goal_reached = False;
-        #! Output from the operation
-        auto output;
-        #! Current state
-        string state = "send-request";
-    }
-
+public class HttpRequestPollOperation inherits Qore::PollPipeline {
     #! Creates the poll operation for an async HTTP request
     /** @param base_url the HTTP URL
         @param method the HTTP method (GET, POST, etc.)
@@ -156,8 +93,6 @@ public class HttpRequestPollOperation inherits Qore::AbstractPollOperation {
     */
     constructor(string base_url, string method, string path, auto body, *hash<auto> http_opts,
             *hash<auto> headers, *Logger::LoggerInterface logger) {
-        self.logger = logger;
-
         hash<auto> req_headers;
         req_headers += headers;
 
@@ -176,52 +111,15 @@ public class HttpRequestPollOperation inherits Qore::AbstractPollOperation {
             }
         }
 
-        log("INFO", "HttpRequest async start: method=%s path=%y url=%y", method, path, base_url);
-        poller = hc.startPollSendRecv(method, path, method == "GET" ? NOTHING : body, req_headers);
-    }
-
-    string getGoal() {
-        return "http-request";
-    }
-
-    string getState() {
-        if (goal_reached) {
-            return "complete";
-        }
-        return state + (poller ? ("-" + poller.getState()) : "");
-    }
-
-    bool goalReached() {
-        return goal_reached;
-    }
-
-    *hash<SocketPollInfo> continuePoll() {
-        if (!poller) {
-            return;
-        }
-        *hash<SocketPollInfo> info = poller.continuePoll();
-        if (info) {
-            return info;
-        }
-        output = poller.getOutput();
-        log("INFO", "HttpRequest async complete: code=%d", output.code);
-        goal_reached = True;
-    }
-
-    auto getOutput() {
-        return output;
-    }
-
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    private log(string level, string msg, ...) {
         if (logger) {
-            logger.logArgs(level, msg, argv);
+            logger.logArgs("INFO", sprintf("HttpRequest async start: method=%s path=%y url=%y",
+                method, path, base_url));
         }
+
+        auto inner = hc.startPollSendRecv(method, path, method == "GET" ? NOTHING : body, req_headers);
+        self.addDelegate(inner);
+        self.addDeliverResult();
+        goal = "http-request";
     }
 }
 

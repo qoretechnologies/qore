@@ -35,7 +35,7 @@ public namespace HttpServerAsyncIo {
     The client receives events in the text/event-stream format.
 
 */
-public class HttpSseStreamPollOperation inherits AbstractPollOperation {
+public class HttpSseStreamPollOperation inherits HttpConnectionPollOperationBase {
     public {
         #! State constants
         const STATE_STREAMING = "streaming";
@@ -63,6 +63,9 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
         *string pending_data;
 
         #! Bytes already written from pending_data
+        /** @note Currently unused because \c send2() guarantees full delivery; retained for
+            future partial-write support if non-blocking sends are introduced.
+        */
         int pending_offset = 0;
 
     }
@@ -103,23 +106,13 @@ public class HttpSseStreamPollOperation inherits AbstractPollOperation {
             return NOTHING;
         }
 
-        # Try to detect client disconnect by checking for readable data
-        # (client shouldn't send data on SSE connection, so data = disconnect)
-        try {
-            if (sock.isDataAvailable(0ms)) {
-                # Try to read - if we get 0 bytes or error, client disconnected
-                *string data = sock.recv(1, 0ms);
-                if (!data || !data.size()) {
-                    state = STATE_DISCONNECTED;
-                    return NOTHING;
-                }
-                # Unexpected data from client - ignore it
-            }
-        } catch (hash<ExceptionInfo> ex) {
-            # Socket error means disconnect
-            state = STATE_DISCONNECTED;
-            return NOTHING;
-        }
+        # Client disconnect detection is handled by the async I/O controller:
+        # - H2 SSE: the H2 session detects RST_STREAM or GOAWAY via frame callbacks
+        # - H1 SSE: the controller detects EOF via EPOLLHUP on the socket
+        # Do NOT probe the raw socket here — for H2, isDataAvailable() returns
+        # true when H2 control frames (SETTINGS_ACK, WINDOW_UPDATE) are pending,
+        # which is normal and NOT a disconnect.  For H1, recv() would consume
+        # bytes that belong to the HTTP framing layer.
 
         # Send pending data using send2() which guarantees full delivery
         if (pending_data) {

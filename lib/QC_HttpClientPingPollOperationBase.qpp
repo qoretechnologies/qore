@@ -1,0 +1,458 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpClientPingPollOperationBase.qpp
+
+    HttpClientPingPollOperationBase class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_HttpClientPingPollOperationBase.h"
+#include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/ql_crypto.h"
+
+#include <openssl/evp.h>
+
+/** @cond INTERNAL */
+
+// WebSocket GUID per RFC 6455
+static const char* WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+
+// ============================================================
+// HttpClientPingPollOperationPriv implementation
+// ============================================================
+
+HttpClientPingPollOperationPriv::HttpClientPingPollOperationPriv(QoreObject* self,
+        SocketPollOperationBase* inner_op, QoreObject* inner_obj,
+        int expected_status_lo, int expected_status_hi,
+        const char* err_code,
+        const char* validate_header_name,
+        const char* validate_header_prefix,
+        const char* ws_key)
+    : SocketPollOperationBase(self), inner_op(inner_op), inner_obj(inner_obj),
+      expected_status_lo(expected_status_lo), expected_status_hi(expected_status_hi),
+      err_code(err_code),
+      validate_header_name(validate_header_name ? validate_header_name : ""),
+      validate_header_prefix(validate_header_prefix ? validate_header_prefix : "") {
+    // inner_op and inner_obj are already ref'd by the QPP constructor
+
+    // If a WebSocket key is provided, pre-compute the expected Sec-WebSocket-Accept value
+    // Formula: base64(SHA1(key + WS_GUID))
+    if (ws_key && *ws_key) {
+        std::string input = ws_key;
+        input += WS_GUID;
+
+        DigestHelper dh(input.c_str(), input.size());
+        if (dh.doDigest(SHA1_ERR, EVP_sha1()) == 0) {
+            SimpleRefHolder<BinaryNode> sha1_bin(dh.getBinary());
+            SimpleRefHolder<QoreStringNode> b64(new QoreStringNode(sha1_bin.release()));
+            expected_ws_accept = b64->c_str();
+        }
+    }
+}
+
+HttpClientPingPollOperationPriv::~HttpClientPingPollOperationPriv() {
+    if (inner_op || inner_obj || output || error_info) {
+        ExceptionSink xsink;
+        cleanup(&xsink);
+    }
+}
+
+void HttpClientPingPollOperationPriv::cleanup(ExceptionSink* xsink) {
+    if (inner_op) {
+        inner_op->deref(xsink);
+        inner_op = nullptr;
+    }
+    if (inner_obj) {
+        inner_obj->deref(xsink);
+        inner_obj = nullptr;
+    }
+    if (output) {
+        output->deref(xsink);
+        output = nullptr;
+    }
+    if (error_info) {
+        error_info->deref(xsink);
+        error_info = nullptr;
+    }
+}
+
+QoreHashNode* HttpClientPingPollOperationPriv::continuePoll(ExceptionSink* xsink) {
+    if (completed || closed) {
+        return nullptr;
+    }
+
+    if (!inner_op) {
+        setError("inner poll operation is not available", xsink);
+        return nullptr;
+    }
+
+    // Delegate to the inner operation
+    QoreHashNode* info = inner_op->continuePoll(xsink);
+    if (*xsink) {
+        setError("inner poll operation raised an exception", xsink);
+        return nullptr;
+    }
+
+    // If the inner op needs more I/O, pass it through
+    if (info) {
+        return info;
+    }
+
+    // Inner op completed — check if it reached its goal
+    if (!inner_op->goalReached()) {
+        setError("inner poll operation completed without reaching its goal", xsink);
+        return nullptr;
+    }
+
+    // Extract the inner op's output and validate the response
+    QoreValue out = inner_op->getOutput();
+    if (out.getType() == NT_HASH) {
+        output = out.get<QoreHashNode>()->hashRefSelf();
+    } else if (!out.isNullOrNothing()) {
+        // Wrap non-hash output
+        output = new QoreHashNode(autoTypeInfo);
+        output->setKeyValue("output", out.refSelf(), xsink);
+    }
+
+    validateResponse(xsink);
+    completed = true;
+    return nullptr;
+}
+
+void HttpClientPingPollOperationPriv::validateResponse(ExceptionSink* xsink) {
+    if (!output) {
+        setError("no response received from inner poll operation", xsink);
+        return;
+    }
+
+    // Extract status code from output hash "code" key
+    QoreValue code_val = output->getKeyValue("code");
+    int status_code = code_val.isNullOrNothing() ? 0 : (int)code_val.getAsBigInt();
+
+    // Validate status code range
+    if (status_code < expected_status_lo || status_code > expected_status_hi) {
+        // Try to get status message from response headers
+        QoreValue info_val = output->getKeyValue("info");
+        const char* status_message = "";
+        if (info_val.getType() == NT_HASH) {
+            QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
+            if (resp_hdr.getType() == NT_HASH) {
+                QoreValue sm_val = resp_hdr.get<QoreHashNode>()->getKeyValue("status_message");
+                if (sm_val.getType() == NT_STRING) {
+                    status_message = sm_val.get<const QoreStringNode>()->c_str();
+                }
+            }
+        }
+
+        QoreStringNode* desc = new QoreStringNode;
+        if (expected_status_lo == expected_status_hi) {
+            desc->sprintf("expected status %d, got %d %s",
+                expected_status_lo, status_code, status_message);
+        } else {
+            desc->sprintf("expected status %d-%d, got %d %s",
+                expected_status_lo, expected_status_hi, status_code, status_message);
+        }
+        xsink->raiseException(err_code.c_str(), desc);
+        setError(desc->c_str(), xsink);
+        return;
+    }
+
+    // Extract response headers for further validation
+    QoreHashNode* response_headers = nullptr;
+    QoreValue info_val = output->getKeyValue("info");
+    if (info_val.getType() == NT_HASH) {
+        QoreValue resp_hdr = info_val.get<QoreHashNode>()->getKeyValue("response-headers");
+        if (resp_hdr.getType() == NT_HASH) {
+            response_headers = resp_hdr.get<QoreHashNode>();
+        }
+    }
+
+    // Validate header if configured (e.g. Content-Type: text/event-stream)
+    if (!validate_header_name.empty() && response_headers) {
+        QoreValue hdr_val = response_headers->getKeyValue(validate_header_name.c_str());
+        const char* hdr_str = nullptr;
+        if (hdr_val.getType() == NT_STRING) {
+            hdr_str = hdr_val.get<const QoreStringNode>()->c_str();
+        }
+
+        if (!hdr_str) {
+            QoreStringNode* desc = new QoreStringNode;
+            desc->sprintf("missing required response header '%s'",
+                validate_header_name.c_str());
+            xsink->raiseException(err_code.c_str(), desc);
+            setError(desc->c_str(), xsink);
+            return;
+        }
+
+        if (!validate_header_prefix.empty()) {
+            if (strncasecmp(hdr_str, validate_header_prefix.c_str(),
+                    validate_header_prefix.size()) != 0) {
+                QoreStringNode* desc = new QoreStringNode;
+                desc->sprintf("expected header '%s' to start with '%s', got '%s'",
+                    validate_header_name.c_str(), validate_header_prefix.c_str(),
+                    hdr_str);
+                xsink->raiseException(err_code.c_str(), desc);
+                setError(desc->c_str(), xsink);
+                return;
+            }
+        }
+    }
+
+    // Validate WebSocket Sec-WebSocket-Accept if configured
+    if (!expected_ws_accept.empty() && response_headers) {
+        QoreValue accept_val = response_headers->getKeyValue("sec-websocket-accept");
+        const char* accept_str = nullptr;
+        if (accept_val.getType() == NT_STRING) {
+            accept_str = accept_val.get<const QoreStringNode>()->c_str();
+        }
+
+        if (!accept_str) {
+            QoreStringNode* desc = new QoreStringNode(
+                "WebSocket handshake failed: missing Sec-WebSocket-Accept header");
+            xsink->raiseException(err_code.c_str(), desc);
+            setError(desc->c_str(), xsink);
+            return;
+        }
+
+        if (expected_ws_accept != accept_str) {
+            QoreStringNode* desc = new QoreStringNode;
+            desc->sprintf("WebSocket handshake failed: invalid Sec-WebSocket-Accept "
+                "header: got '%s', expected '%s'", accept_str,
+                expected_ws_accept.c_str());
+            xsink->raiseException(err_code.c_str(), desc);
+            setError(desc->c_str(), xsink);
+            return;
+        }
+    }
+
+    // All validation passed
+    goal_reached = true;
+}
+
+void HttpClientPingPollOperationPriv::setError(const char* desc, ExceptionSink* xsink) {
+    completed = true;
+    closed = true;
+    if (!error_info) {
+        error_info = new QoreHashNode(autoTypeInfo);
+        error_info->setKeyValue("err", new QoreStringNode(err_code), xsink);
+        error_info->setKeyValue("desc", new QoreStringNode(desc), xsink);
+    }
+}
+
+void HttpClientPingPollOperationPriv::abort(ExceptionSink* xsink) {
+    if (closed) {
+        return;
+    }
+    closed = true;
+    completed = true;
+    if (inner_op) {
+        inner_op->abort(xsink);
+    }
+}
+
+QoreValue HttpClientPingPollOperationPriv::getOutput() const {
+    if (output) {
+        output->ref();
+        return output;
+    }
+    return QoreValue();
+}
+
+const char* HttpClientPingPollOperationPriv::getStateImpl() const {
+    if (closed && !goal_reached) {
+        return "closed";
+    }
+    if (goal_reached) {
+        return "complete";
+    }
+    if (inner_op) {
+        return inner_op->getState()->c_str();
+    }
+    return "none";
+}
+
+/** @endcond */
+
+//! C++ base for HTTP client ping/verify poll operations
+/** This class wraps an inner poll operation (from HTTPClient.startPollSendRecv())
+    and validates the HTTP response when it completes. It is configurable to handle
+    multiple ping/verify use cases:
+
+    - @b WebSocket @b ping: expects status 101, validates Sec-WebSocket-Accept header
+    - @b SSE @b connect: expects status 200, validates Content-Type: text/event-stream
+    - @b HTTP @b ping: expects status 200-299
+
+    The inner operation handles the entire HTTP request/response lifecycle
+    (connect, optional SSL, send request, read response). This class just
+    delegates continuePoll() to the inner op and validates the response.
+
+    @par Example:
+    @code{.py}
+    # Create an HTTPClient and start the inner poll operation
+    HTTPClient hc({"url": "http://example.com"});
+    auto inner = hc.startPollSendRecv("GET", "/health");
+    # Wrap it in a ping poll operation that validates 2xx response
+    auto ping = new HttpClientPingPollOperationBase(inner, 200, 299, "HTTP-PING-ERROR");
+    @endcode
+
+    @since %Qore 2.3
+*/
+qclass HttpClientPingPollOperationBase [
+    private_members=string goal;
+    ns=Qore;
+    arg=HttpClientPingPollOperationPriv* priv;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates the HTTP client ping/verify poll operation base
+/** @param inner_poll_op the inner poll operation from HTTPClient.startPollSendRecv()
+    @param status_lo lowest acceptable HTTP status code (inclusive)
+    @param status_hi highest acceptable HTTP status code (inclusive)
+    @param err_code Qore exception error code for validation failures
+    @param header_name optional response header name to validate (lowercase)
+    @param header_prefix optional required prefix for the validated header value
+    @param ws_key optional WebSocket key for Sec-WebSocket-Accept validation
+
+    @throw HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR if inner_poll_op is not a valid poll operation
+*/
+HttpClientPingPollOperationBase::constructor(object inner_poll_op, int status_lo, int status_hi,
+        string err_code, *string header_name, *string header_prefix, *string ws_key) {
+    // Extract the C++ SocketPollOperationBase from the inner poll op
+    SocketPollOperationBase* inner_priv = dynamic_cast<SocketPollOperationBase*>(
+        inner_poll_op->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+    if (!inner_priv) {
+        if (!*xsink) {
+            xsink->raiseException("HTTPCLIENTPINGPOLLOPERATIONBASE-ERROR",
+                "inner_poll_op is not a SocketPollOperationBase subclass");
+        }
+        return;
+    }
+    // inner_priv is ref'd by getReferencedPrivateData
+
+    // Ref the inner QoreObject to keep it alive
+    QoreObject* inner_obj = const_cast<QoreObject*>(
+        static_cast<const QoreObject*>(args->retrieveEntry(0).getInternalNode()));
+    inner_obj->ref();
+
+    // Set up the Qore goal member
+    self->setMemberValue("goal", QC_HTTPCLIENTPINGPOLLOPERATIONBASE,
+        new QoreStringNode("http-ping"), xsink);
+
+    // Create the private data
+    self->setPrivate(CID_HTTPCLIENTPINGPOLLOPERATIONBASE,
+        new HttpClientPingPollOperationPriv(self, inner_priv, inner_obj,
+            (int)status_lo, (int)status_hi,
+            err_code->c_str(),
+            header_name ? header_name->c_str() : nullptr,
+            header_prefix ? header_prefix->c_str() : nullptr,
+            ws_key ? ws_key->c_str() : nullptr));
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+HttpClientPingPollOperationBase::destructor() {
+    priv->cleanup(xsink);
+    priv->deref(xsink);
+}
+
+//! Throws an exception; objects of this class cannot be copied
+/** @throw HTTPCLIENTPINGPOLLOPERATIONBASE-COPY-ERROR objects of this class cannot be copied
+*/
+HttpClientPingPollOperationBase::copy() {
+    xsink->raiseException("HTTPCLIENTPINGPOLLOPERATIONBASE-COPY-ERROR",
+        "objects of this class cannot be copied");
+}
+
+//! Returns the goal of the operation
+/** @return the goal string
+*/
+string HttpClientPingPollOperationBase::getGoal() [flags=RET_VALUE_ONLY] {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state of the operation
+/** @return the current state string
+*/
+string HttpClientPingPollOperationBase::getState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
+
+//! Returns True when the goal has been reached (response validated)
+/** @return True if the response has been received and validated successfully
+*/
+bool HttpClientPingPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
+    return priv->goalReached();
+}
+
+//! Continues the poll operation
+/** Delegates to the inner poll operation and validates the response when complete.
+
+    @return socket poll info for the next poll cycle, or NOTHING if done
+*/
+*hash<SocketPollInfo> HttpClientPingPollOperationBase::continuePoll() {
+    return priv->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Aborts the inner poll operation.
+*/
+nothing HttpClientPingPollOperationBase::abort() {
+    priv->abort(xsink);
+}
+
+//! Returns the output of the operation
+/** @return the HTTP response hash from the inner operation, or NOTHING if not yet complete
+*/
+auto HttpClientPingPollOperationBase::getOutput() [flags=RET_VALUE_ONLY] {
+    return priv->getOutput();
+}
+
+//! Returns True if the operation has been closed or aborted
+/** @return True if closed
+*/
+bool HttpClientPingPollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True if an error occurred during validation
+/** @return True if error
+*/
+bool HttpClientPingPollOperationBase::hasError() [flags=RET_VALUE_ONLY] {
+    return priv->hasError();
+}
+
+//! Returns the error info hash if an error occurred
+/** @return error info hash with "err" and "desc" keys, or NOTHING
+*/
+*hash<auto> HttpClientPingPollOperationBase::getError() [flags=RET_VALUE_ONLY] {
+    return priv->getErrorInfo();
+}

@@ -532,6 +532,10 @@ public:
     // return value for use with %exec-class
     QoreValue exec_class_rv{};
 
+    // exec-class instance - kept alive until all threads terminate to prevent
+    // premature destruction of members that background threads may reference
+    QoreValue exec_class_inst{};
+
     // public object that owns this private implementation
     QoreProgram* pgm;
 

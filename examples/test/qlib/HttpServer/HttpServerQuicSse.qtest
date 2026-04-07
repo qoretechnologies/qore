@@ -85,7 +85,7 @@ class SseHandler inherits AbstractHttpRequestHandler {
         *code<nothing()> wake;
         *AsyncSocketIo::AsyncSocketIoController ctrl = cx.async_ctrl;
         if (ctrl) {
-            wake = \ctrl.wake();
+            wake = sub() { ctrl.wakeSocket(s); };
         }
 
         # Create HTTP/3 SSE stream using the listener socket

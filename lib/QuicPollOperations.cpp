@@ -392,10 +392,6 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
             errno, strerror(errno));
     }
 
-    // Non-blocking mode management pattern (used throughout QUIC poll operations):
-    //   Enable:  sock->priv->setNonBlock()  + set_non_blocking(true)  + set_non_block=true
-    //   Disable: set_non_blocking(false) + clearNonBlock() + set_non_block=false
-    // Both the guard flag (QoreSocketObject) and OS-level flag (fd) must stay in sync.
     // Set non-blocking guard flag on QoreSocketObject
     if (sock->priv->setNonBlock(xsink)) {
         return;
@@ -403,7 +399,8 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
     set_non_block = true;
 
     // Set OS-level non-blocking mode on the fd — required because QUIC uses
-    // raw recvfrom()/sendto() on the UDP socket
+    // raw recvfrom()/sendto() on the UDP socket, bypassing Qore's timeout-based
+    // poll wrappers.  Without this, recvfrom() blocks indefinitely.
     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
         sock->priv->clearNonBlock();
         set_non_block = false;
@@ -421,7 +418,6 @@ SocketQuicClientPollOperation::SocketQuicClientPollOperation(
         /*enable_0rtt=*/true,
         sock->priv->cert, sock->priv->pk);
     if (*xsink || !quic_session) {
-        sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
         set_non_block = false;
         return;
@@ -830,7 +826,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 // Check if connection closed
                 if (quic_session->isClosed()) {
                     qcs_state = QCS::CLOSED;
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                     set_non_block = false;
                     return nullptr;
@@ -953,7 +948,6 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
 
             case QCS::CLOSED:
                 if (set_non_block) {
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                     set_non_block = false;
                 }
@@ -1139,8 +1133,7 @@ SocketQuicServerPollOperation::SocketQuicServerPollOperation(
     set_non_block = true;
 
     // Set OS-level non-blocking mode on the fd — required because QUIC uses
-    // raw recvfrom()/sendto() on the UDP socket rather than the Qore socket
-    // I/O methods which handle non-blocking via timeout-based poll
+    // raw recvfrom()/sendto() on the UDP socket
     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
         sock->priv->clearNonBlock();
         set_non_block = false;
@@ -1220,18 +1213,14 @@ QoreHashNode* SocketQuicServerPollOperation::checkHeadersOnlyDispatch(bool& hand
     }
     // Iterate sessions to find one with a headers-ready stream
     for (auto& [id, session] : sessions_) {
-        std::shared_ptr<StreamNotifier> notifier;
-        auto stream = session->takeHeadersReadyStreamCopy(&notifier);
+        auto stream = session->takeHeadersReadyStreamCopy();
         if (stream) {
             handled = true;
             cached_stream_ = std::make_unique<CachedStream>();
             cached_stream_->session_id = session->getSessionId();
             cached_stream_->stream = std::move(stream);
             cached_stream_->session = session;
-            cached_stream_->notifier = std::move(notifier);
             qcs_state = QCS::HEADERS_READY;
-            // Restore OS-level blocking mode
-            sock->priv->socket->priv->set_non_blocking(false, xsink);
             sock->priv->clearNonBlock();
             set_non_block = false;
             return nullptr;  // goal reached
@@ -1711,7 +1700,6 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         cached_stream_->stream = std::move(stream);
                         cached_stream_->session = session;
                         qcs_state = QCS::REQUEST_READY;
-                        sock->priv->socket->priv->set_non_blocking(false, xsink);
                         sock->priv->clearNonBlock();
                         set_non_block = false;
                         return nullptr;  // goal reached
@@ -1738,7 +1726,7 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;
                     }
 
-                    // Check again for completed streams
+                    // Check again for completed streams (after send)
                     for (auto& entry : sessions_) {
                         auto& session = entry.second;
                         if (session->hasCompletedStreams()) {
@@ -1748,7 +1736,6 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                             cached_stream_->session = session;
                             cached_stream_->stream = std::move(stream);
                             qcs_state = QCS::REQUEST_READY;
-                            sock->priv->socket->priv->set_non_blocking(false, xsink);
                             sock->priv->clearNonBlock();
                             set_non_block = false;
                             return nullptr;  // goal reached
@@ -1861,8 +1848,10 @@ QoreHashNode* SocketQuicServerPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;
                     }
                     set_non_block = true;
-                    // Restore OS-level non-blocking mode for raw recvfrom()/sendto()
+                    // Set OS-level non-blocking mode for QUIC raw UDP I/O
                     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
                         return nullptr;
                     }
                 }
@@ -1953,7 +1942,6 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     local_addrlen_ = sizeof(local_addr_);
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno, "getsockname() failed in send-response setup");
-        sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
         set_non_block = false;
         return;
@@ -1973,7 +1961,6 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
     // Submit the response to the HTTP/3 layer
     int rv = quic_session->submitResponse(stream_id, status_code, hdr_map, body_ptr, body_len, xsink);
     if (*xsink) {
-        sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
         set_non_block = false;
         return;
@@ -2124,7 +2111,6 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
                 // Check for peer disconnect before doing more work
                 if (quic_session->isClosed()) {
                     qcs_state = QCS::SENT;
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                     set_non_block = false;
                     return nullptr;
@@ -2191,7 +2177,6 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
 
                 // All data delivered —
                 qcs_state = QCS::SENT;
-                sock->priv->socket->priv->set_non_blocking(false, xsink);
                 sock->priv->clearNonBlock();
                 set_non_block = false;
                 return nullptr;
@@ -2199,7 +2184,6 @@ QoreHashNode* SocketQuicSendResponsePollOperation::continuePoll(ExceptionSink* x
 
             case QCS::SENT:
                 if (set_non_block) {
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                     set_non_block = false;
                 }
@@ -2220,9 +2204,10 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     ExceptionSink* xsink, QoreSocketObject* sock,
     int64_t session_id, int64_t stream_id, int status_code,
     const QoreHashNode* headers,
-    InputStream* input_stream, int64 chunk_size)
+    InputStream* input_stream, QoreObject* input_stream_obj, int64 chunk_size)
     : SocketPollSocketOperationBase(sock), stream_id(stream_id),
-      input_stream(input_stream), chunk_size(chunk_size > 0 ? chunk_size : 16384),
+      input_stream(input_stream), input_stream_obj(input_stream_obj),
+      chunk_size(chunk_size > 0 ? chunk_size : 16384),
       is_pollable(input_stream->supportsNonBlockingIo()) {
     AutoLocker al(sock->priv->m);
 
@@ -2255,7 +2240,8 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     }
     set_non_block = true;
 
-    // Set OS-level non-blocking mode on the fd
+    // Set OS-level non-blocking mode on the fd — required because QUIC uses
+    // raw recvfrom()/sendto() on the UDP socket
     if (sock->priv->socket->priv->set_non_blocking(true, xsink)) {
         sock->priv->clearNonBlock();
         set_non_block = false;
@@ -2274,7 +2260,6 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr_), &local_addrlen_) < 0) {
         xsink->raiseErrnoException("QUIC-ERROR", errno,
             "getsockname() failed in streaming send-response setup");
-        sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
         set_non_block = false;
         return;
@@ -2287,7 +2272,6 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
     // Submit the streaming response (headers only, deferred data reader)
     int rv = quic_session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
     if (*xsink) {
-        sock->priv->socket->priv->set_non_blocking(false, xsink);
         sock->priv->clearNonBlock();
         set_non_block = false;
         return;
@@ -2523,7 +2507,6 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                 if (quic_session->isClosed()) {
                     ss_state = QCS_SS::DONE;
                     if (set_non_block) {
-                        sock->priv->socket->priv->set_non_blocking(false, xsink);
                         sock->priv->clearNonBlock();
                         set_non_block = false;
                     }
@@ -2563,7 +2546,6 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
                     // All done
                     ss_state = QCS_SS::DONE;
                     if (set_non_block) {
-                        sock->priv->socket->priv->set_non_blocking(false, xsink);
                         sock->priv->clearNonBlock();
                         set_non_block = false;
                     }
@@ -2636,7 +2618,6 @@ QoreHashNode* SocketQuicSendStreamingResponsePollOperation::continuePoll(Excepti
 
             case QCS_SS::DONE:
                 if (set_non_block) {
-                    sock->priv->socket->priv->set_non_blocking(false, xsink);
                     sock->priv->clearNonBlock();
                     set_non_block = false;
                 }

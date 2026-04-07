@@ -26,6 +26,7 @@
 
 %requires Logger
 %requires AsyncSocketIo
+%requires HttpUtil
 
 module HttpClientIo {
     version = "1.0";
@@ -49,15 +50,15 @@ module HttpClientIo {
     request/response exchanges (HTTP/1.1) regardless of the underlying transport protocol.
 
     Features:
-    - **Protocol auto-selection**: Try HTTP/3 (QUIC) first, fall back to HTTP/2 (TCP+TLS)
+    - **Protocol auto-selection**: Start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery
     - **HTTP/1.1 support**: Serial request/response with keep-alive; connection manager creates
       multiple connections for concurrent requests
     - **True multiplexing**: Multiple concurrent streams on a single connection (HTTP/2, HTTP/3)
     - **Connection pooling**: Shared connections across multiple clients
     - **Async I/O**: All I/O driven by AsyncSocketIoController (epoll/kqueue); sync \c request()
       blocks the caller via Future while the controller event loop handles actual I/O
-    - **Sync and async APIs**: Blocking and callback-based interfaces
-    - **Streaming support**: WebSocket and SSE over HTTP/2
+    - **Sync and async APIs**: Blocking and Future-based interfaces
+    - **Streaming support**: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
     - **Connection migration**: QUIC connection migration for HTTP/3
 
     @section httpclientio_components Components
@@ -95,23 +96,17 @@ printf("Status: %d, Protocol: %s\n", resp.status_code, resp.protocol);
 manager.closeAll();
     @endcode
 
-    @par Async Usage (callback API)
+    @par Async Usage (Future API)
     @code{.py}
 %requires HttpClientIo
 
 # Create manager (controller auto-created)
 HttpClientConnectionManager manager();
 
-# Submit async request with callback
-manager.submitRequestAsync("https://example.com", "GET", "/api/resource",
-    NOTHING, NOTHING,
-    sub (hash<auto> response, *hash<auto> error) {
-        if (error) {
-            printf("Error: %y\n", error);
-        } else {
-            printf("Response: %y\n", response);
-        }
-    });
+# Submit async request — returns a Future
+hash<auto> result = manager.submitRequestAsync("https://example.com", "GET", "/api/resource");
+hash<auto> response = result.future.get(30s);
+printf("Status: %d\n", response.status_code);
 
 manager.closeAll();
     @endcode
@@ -141,14 +136,22 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       negotiation
     - HTTP/3: auto-downgrades to HTTP/2 when a proxy is configured; throws if
       HTTP/3 is explicitly forced with a proxy
+    - Added @ref HttpClientStreamHandle::submitAsyncWithNotifier() "submitAsyncWithNotifier()"
+      for async request submission with EventNotifier signaling on completion
+    - Added @ref HttpClientConnectionManager::submitRequestAsync() "submitRequestAsync()"
+      for connection-manager-level async request submission with automatic retry
+    - Added @ref HttpClientConnectionManager::ensureConnectionAsync() "ensureConnectionAsync()"
+      for non-blocking connection pre-warming
 
     @subsection httpclientio_v1_1 Version 1.1
     - Added HTTP/1.1 support via @ref Http1ClientConnection, @ref Http1ClientPollOperation,
       and @ref Http1ClientStreamHandle
     - HTTP/1.1 serial request/response with keep-alive and connection pooling
     - Supports Content-Length, chunked transfer encoding, and connection-close body types
-    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" still prefers H3 then H2
+    - Protocol selection: \c "h1" forces HTTP/1.1; \c "auto" starts with H2 and upgrades to H3 via Alt-Svc
     - Connection manager creates multiple HTTP/1.1 connections for concurrent requests
+    - Added @ref HttpClientStreamHandle::submitAsyncNonBlocking() "submitAsyncNonBlocking()"
+      for non-blocking async request submission (throws if the connection is not ready)
 
     @subsection httpclientio_v1_0 Version 1.0
     - Initial release of unified HttpClientIo module
@@ -156,11 +159,11 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
       AsyncSocketIoController singleton with \c autostop=True; sync \c request()
       blocks via Future while the controller event loop drives actual I/O
     - Single-controller architecture eliminates cross-controller deadlocks
-    - Protocol auto-selection with HTTP/3 to HTTP/2 fallback
+    - Protocol auto-selection starting with HTTP/2, upgrading to HTTP/3 via Alt-Svc discovery
     - Abstract base classes for protocol-agnostic code
     - Connection pooling with configurable limits
     - Sync and async request APIs
-    - HTTP/2 streaming support (WebSocket, SSE)
+    - Streaming support (WebSocket, SSE) over HTTP/1.1, HTTP/2, and HTTP/3
     - HTTP/3 connection migration support
 */
 
@@ -193,7 +196,7 @@ public namespace HttpClientIo {
     /** @since HttpClientIo 1.0
     */
     public enum HttpClientProtocol {
-        #! Auto-detect protocol (prefer HTTP/3 for HTTPS, fall back to HTTP/2)
+        #! Auto-detect protocol (start with HTTP/2, upgrade to HTTP/3 via Alt-Svc discovery)
         Auto = 0,
         #! Force HTTP/2
         H2 = 1,
@@ -218,14 +221,6 @@ public namespace HttpClientIo {
         HttpClientProtocol::H3: "h3",
         HttpClientProtocol::H1: "h1",
     };
-
-    #! Callback type for async HTTP response handling
-    /** @param response the HTTP response hash
-        @param error optional error info hash (set on error)
-
-        @since HttpClientIo 1.0
-    */
-    public typedef HttpResponseCallback = code<nothing(hash<auto>, *hash<auto>)>;
 
     #! Connection state enum
     public enum HttpClientConnectionState {
@@ -346,7 +341,16 @@ public namespace HttpClientIo {
         #! Connection idle timeout
         timeout idle_timeout = DefaultConnectionIdleTimeout;
 
-        #! Connect timeout
+        #! Connect timeout (also used as stale detection timeout for reused pooled connections)
+        /** For fresh connections, this is the TCP/TLS establishment timeout.  For reused
+            pooled connections, this is also used as the request timeout — if a reused
+            connection doesn't respond within \c connect_timeout, the connection is assumed
+            stale, evicted, and the request is retried on a fresh connection.
+
+            Dead connections where the server sent FIN/RST are detected instantly by the
+            async I/O thread (epoll/kqueue + recv(MSG_PEEK)) and evicted before reuse.
+            This timeout only applies to the "half-open" case where the server goes silent.
+        */
         timeout connect_timeout = DefaultConnectTimeout;
 
         #! Default request timeout
@@ -384,5 +388,36 @@ public namespace HttpClientIo {
 
         #! HTTP/3-only: client private key for mutual TLS (mTLS)
         *SSLPrivateKey client_pk;
+
+        #! Enable automatic cookie handling (default: True)
+        /** When True, the connection manager automatically processes Set-Cookie
+            headers from responses and injects matching Cookie headers into
+            requests. This enables session-based authentication, OAuth2 token
+            endpoints, and other flows that depend on HTTP cookies.
+
+            Set to False to disable automatic cookie handling (e.g., when the
+            application manages cookies manually).
+
+            @since HttpClientIo 1.0
+        */
+        bool enable_cookies = True;
+
+        #! Maximum number of HTTP redirects to follow (default: 5)
+        /** Set to 0 to disable automatic redirect following.
+            Redirects with status 301, 302, 303, 307, and 308 are followed.
+            Set-Cookie headers in redirect responses are processed before
+            following the redirect (when cookies are enabled).
+
+            @since HttpClientIo 1.0
+        */
+        int max_redirects = 5;
+
+        #! Pass redirect responses to the caller instead of following them
+        /** When True, 3xx responses are returned as-is without following
+            the Location header.  Overrides \c max_redirects.
+
+            @since HttpClientIo 1.0
+        */
+        bool redirect_passthru = False;
     }
 }

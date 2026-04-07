@@ -32,8 +32,6 @@
 #ifndef _QORE_CLASS_FUTURE_H
 #define _QORE_CLASS_FUTURE_H
 
-#include "qore/intern/QoreFuture.h"
-
 DLLEXPORT extern qore_classid_t CID_FUTURE;
 DLLEXPORT extern QoreClass* QC_FUTURE;
 

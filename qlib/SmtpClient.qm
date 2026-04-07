@@ -1072,241 +1072,136 @@ public enum SmtpPingState : string {
     Complete = "complete",
 }
 
-#! Class for SMTP non-blocking / polling pings
-public class SmtpPingPollOperation inherits Qore::AbstractPollOperation {
-    private {
-        #! Info about the SMTP client
-        hash<auto> info;
+#! Class for SMTP non-blocking / polling pings using PollPipeline
+/** Expresses the entire SMTP handshake (connect, EHLO/HELO, optional STARTTLS,
+    optional AUTH PLAIN) as a declarative sequence of PollPipeline steps.
 
-        #! The Socket for communication with the server
-        Socket sock();
+    The pipeline layout (step indices are fixed):
+    - Steps 0-4: configuration transforms (set context booleans, pre-computed commands)
+    - Step 5: TCP connect (plain or SSL based on config)
+    - Step 6: receive server greeting line
+    - Step 7: detect ESMTP in greeting
+    - Step 8: select EHLO or HELO command
+    - Step 9: send EHLO/HELO
+    - Step 10: read multi-line EHLO/HELO reply
+    - Step 11: detect STARTTLS capability in reply
+    - Step 12: compute effective TLS decision (config OR server capability)
+    - Step 13: branch — TLS path (step 14) or auth check (step 17)
+    - Steps 14-16: STARTTLS handshake (send, read reply, SSL upgrade)
+    - Step 17: branch — auth path (step 18) or done (step 20)
+    - Steps 18-19: AUTH PLAIN (send, read reply)
+    - Step 20 (past end): pipeline complete
 
-        #! The current internal poll operation
-        AbstractPollOperation poller;
-
-        #! Lock for atomicity
-        Mutex m();
-
-        #! Current state
-        SmtpPingState state;
-
-        #! Goal reached flag
-        bool goal_reached = False;
-
-        #! ESMTP flag
-        bool esmtp = False;
-
-        #! Server's HELO / EHLO reply code
-        int hello_reply_code;
-
-        #! Server's HELO / EHLO reply
-        string hello_reply;
-
-        #! Server's STARTTLS code
-        int starttls_code;
-
-        #! Server's STARTTLS reply
-        string starttls_reply;
-
-        #! Server's login code
-        int login_code;
-
-        #! Server's login reply
-        string login_reply;
-    }
-
+    @since SmtpClient 2.2
+*/
+public class SmtpPingPollOperation inherits Qore::PollPipeline {
     #! Creates the object based on the SmtpClient
-    constructor(SmtpClient smtp) {
-        info = smtp.getInfo();
+    /** Builds the complete SMTP ping pipeline from connection configuration.
 
-        state = SmtpPingState::Connect;
-        poller = info.ssl
-            ? sock.startPollConnectSsl(info.target)
-            : sock.startPollConnect(info.target);
+        @param smtp the SmtpClient whose connection info drives the pipeline
+
+        @throw SMTP-POLL-ERROR if the SMTP server returns an error response
+    */
+    constructor(SmtpClient smtp) : PollPipeline(new Socket()) {
+        hash<auto> info = smtp.getInfo();
+        self.goal = "ping";
+
+        string hostname = gethostname();
+        bool do_auth = info.user.val() && info.pass.val();
+
+        # Pre-compute the AUTH PLAIN command (empty string if no auth)
+        string auth_cmd = "";
+        if (do_auth) {
+            auth_cmd = sprintf("AUTH PLAIN %s\r\n", make_base64_string(
+                binary(info.user) + <00> + binary(info.user) + <00> + binary(info.pass)));
+        }
+
+        # --- Steps 0-4: configuration transforms ---
+        # Step 0: store TLS flag from config
+        self.addSetContextBool("force_tls", info.tls ? True : False);
+        # Step 1: store auth flag
+        self.addSetContextBool("do_auth", do_auth);
+        # Step 2: pre-compute EHLO command
+        self.addSetContextBinary("ehlo_cmd", sprintf("EHLO %s\r\n", hostname));
+        # Step 3: pre-compute HELO command
+        self.addSetContextBinary("helo_cmd", sprintf("HELO %s\r\n", hostname));
+        # Step 4: pre-compute AUTH command (empty if unused; step 18 never executes)
+        self.addSetContextBinary("auth_cmd", auth_cmd);
+
+        # --- Step 5: connect ---
+        if (info.ssl) {
+            self.addConnectSsl(info.target);
+        } else {
+            self.addConnect(info.target);
+        }
+
+        # --- Step 6: read server greeting ---
+        self.addRecvUntilBytes("\n");
+
+        # --- Step 7: detect ESMTP in greeting (checks last_output) ---
+        self.addCheckContains("", "ESMTP", "esmtp");
+
+        # --- Step 8: select EHLO or HELO based on ESMTP flag ---
+        self.addSelectContextValue("send_cmd", "esmtp", "ehlo_cmd", "helo_cmd");
+
+        # --- Step 9: send the selected EHLO/HELO command ---
+        self.addSendFromContext("send_cmd");
+
+        # --- Step 10: read multi-line EHLO/HELO reply ---
+        self.addRecvLineResponse("hello_code", "hello_text", "SMTP-POLL-ERROR");
+
+        # --- Step 11: detect STARTTLS capability in reply ---
+        self.addCheckContains("hello_text", "STARTTLS", "server_has_starttls");
+
+        # --- Step 12: combine config TLS flag with server capability ---
+        self.addContextOr("do_tls", "force_tls", "server_has_starttls");
+
+        # --- Step 13: branch on TLS decision ---
+        # true (step 14): start STARTTLS handshake
+        # false (step 17): skip to auth check
+        self.addBranchOnContextKey("do_tls", 14, 17);
+
+        # --- Steps 14-16: STARTTLS handshake ---
+        # Step 14: send STARTTLS command
+        self.addSend("STARTTLS\r\n");
+        # Step 15: read STARTTLS reply
+        self.addRecvLineResponse("starttls_code", "starttls_text", "SMTP-POLL-ERROR");
+        # Step 16: upgrade connection to SSL
+        self.addSslUpgrade();
+
+        # --- Step 17: branch on auth decision ---
+        # true (step 18): start AUTH PLAIN
+        # false (step 20 = past end): pipeline complete
+        self.addBranchOnContextKey("do_auth", 18, 20);
+
+        # --- Steps 18-19: AUTH PLAIN ---
+        # Step 18: send AUTH PLAIN command
+        self.addSendFromContext("auth_cmd");
+        # Step 19: read auth reply (throws on error codes >= 400)
+        self.addRecvLineResponse("login_code", "login_text", "SMTP-POLL-ERROR");
+
+        # --- Step 20 (past end): pipeline completes automatically ---
     }
 
     #! Returns the goal
-    /** @return the goal set in the constructor
+    /** @return "ping"
     */
     string getGoal() {
         return "ping";
     }
 
-    #! Returns the current state
-    /** @return the current state
+    #! Returns the current state mapped to SmtpPingState values for backward compatibility
+    /** @return the current state string
     */
     string getState() {
-        AutoLock al(m);
-        if (!poller) {
-            return goal_reached ? "complete" : "error";
+        if (self.goalReached()) {
+            return SmtpPingState::Complete;
         }
-        return state;
-    }
-
-    #! Returns @ref True when the goal as been reached
-    /** @return @ref True when the goal as been reached
-    */
-    bool goalReached() {
-        return state == SmtpPingState::Complete;
-    }
-
-    #! Returns a hash to be used for I/O polling or @ref nothing in case the poll operation is complete
-    *hash<SocketPollInfo> continuePoll() {
-        AutoLock al(m);
-        if (!poller) {
-            return;
+        if (self.isClosed()) {
+            return "error";
         }
-        while (True) {
-            *hash<SocketPollInfo> pinfo = poller.continuePoll();
-            if (pinfo) {
-                return pinfo;
-            }
-
-            if (state == SmtpPingState::Connect) {
-                state = SmtpPingState::ReadHello;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == SmtpPingState::ReadHello) {
-                state = SmtpPingState::SendHello;
-                string rep = trim(poller.getOutput());
-                esmtp = (rep =~ /ESMTP/);
-                poller = sock.startPollSend(sprintf("%s %s\r\n", esmtp ? "EHLO" : "HELO", gethostname()));
-                continue;
-            }
-
-            if (state == SmtpPingState::SendHello) {
-                state = SmtpPingState::ReadHelloReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == SmtpPingState::ReadHelloReply) {
-                if (!getReply(\hello_reply_code, \hello_reply)) {
-                    # continue reading
-                    continue;
-                }
-
-                if (!info.tls && hello_reply =~ /STARTTLS/) {
-                    info.tls = True;
-                }
-
-                if (info.tls) {
-                    state = SmtpPingState::StartTls;
-                    poller = sock.startPollSend("STARTTLS\r\n");
-                    continue;
-                }
-
-                if (info.user && info.pass) {
-                    startLogin();
-                    continue;
-                }
-
-                delete poller;
-                goal_reached = True;
-                state = SmtpPingState::Complete;
-                break;
-            }
-
-            if (state == SmtpPingState::StartTls) {
-                state = SmtpPingState::ReadStartTlsReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == SmtpPingState::ReadStartTlsReply) {
-                if (!getReply(\starttls_code, \starttls_reply)) {
-                    # continue reading
-                    continue;
-                }
-
-                state = SmtpPingState::UpgradeToTls;
-                poller = sock.startPollUpgradeClientToSSL();
-                continue;
-            }
-
-            if (state == SmtpPingState::UpgradeToTls) {
-                if (info.user && info.pass) {
-                    startLogin();
-                    continue;
-                }
-
-                delete poller;
-                goal_reached = True;
-                state = SmtpPingState::Complete;
-                break;
-            }
-
-            if (state == SmtpPingState::Login) {
-                state = SmtpPingState::ReadLoginReply;
-                poller = sock.startPollRecvUntilBytesString("\n");
-                continue;
-            }
-
-            if (state == SmtpPingState::ReadLoginReply) {
-                if (!getReply(\login_code, \login_reply)) {
-                    # continue reading
-                    continue;
-                }
-
-                if (login_code != 235) {
-                    throw "SMTP-POLL-ERROR", sprintf("login failed: %s %s", login_code, login_reply);
-                }
-
-                delete poller;
-                goal_reached = True;
-                state = SmtpPingState::Complete;
-                break;
-            }
-        }
-    }
-
-    abort() {
-        if (poller) {
-            poller.abort();
-        }
-    }
-
-    #! Starts the polling login state
-    private startLogin() {
-        state = SmtpPingState::Login;
-        poller = sock.startPollSend(sprintf("AUTH PLAIN %s\r\n", make_base64_string(binary(info.user) + <00> +
-            binary(info.user) + <00> + binary(info.pass))));
-    }
-
-    #! Private reads a reply from the SMTP server
-    /** @return False to continue reading, True if done
-    */
-    private bool getReply(reference<int> rcode, reference<string> rmsg) {
-        string line = poller.getOutput();
-        if (line !~ /^[0-9]{3}[- ]/) {
-            throw "SMTP-POLL-ERROR", sprintf("server provided an invalid reply: %s", trim line);
-        }
-        int tcode = int(line);
-        if (!rcode) {
-            rcode = tcode;
-        } else if (tcode != rcode) {
-            throw "SMTP-POLL-ERROR", sprintf("server provided an inconsistent reply; expecting code %d; got "
-                "code %d", rcode, tcode);
-        }
-
-        bool cont = line[3] == "-";
-        if (rmsg) {
-            rmsg += "\n";
-        }
-        rmsg += extract line, 4;
-
-        # continue reading
-        if (cont) {
-            poller = sock.startPollRecvUntilBytesString("\n");
-            return False;
-        }
-
-        if (rcode >= 500) {
-            throw "SMTP-POLL-ERROR", sprintf("server replied with error code %d: %s", rcode, rmsg);
-        }
-        return True;
+        # Delegate to the pipeline for internal state
+        return PollPipeline::getState();
     }
 }
 

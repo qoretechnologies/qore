@@ -1430,14 +1430,20 @@ static int get_qore_type(const std::string& qt, std::string& cppt) {
                 if (!subtype.compare(0, 7, "string,")) {
                     subtype.erase(0, 7);
                     trim(subtype);
-                    std::string subtype_qt;
-                    get_qore_type(subtype, subtype_qt);
 
-                    // generate type name
-                    if (on)
-                        qc = "qore_get_complex_hash_or_nothing_type(" + subtype_qt + ")";
-                    else
-                        qc = "qore_get_complex_hash_type(" + subtype_qt + ")";
+                    // hash<string, auto> is equivalent to hash<auto>
+                    if (subtype == "auto") {
+                        qc = on ? "autoHashOrNothingTypeInfo" : "autoHashTypeInfo";
+                    } else {
+                        std::string subtype_qt;
+                        get_qore_type(subtype, subtype_qt);
+
+                        // generate type name
+                        if (on)
+                            qc = "qore_get_complex_hash_or_nothing_type(" + subtype_qt + ")";
+                        else
+                            qc = "qore_get_complex_hash_type(" + subtype_qt + ")";
+                    }
                     log(LL_DEBUG, "registering complex hash return type '%s': '%s'\n", qt.c_str(), qc.c_str());
                 } else {
                     log(LL_CRITICAL, "unsupported complex hash type found: '%s'\n", qt.c_str());

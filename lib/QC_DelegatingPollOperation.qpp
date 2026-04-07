@@ -1,0 +1,335 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_DelegatingPollOperation.qpp
+
+    DelegatingPollOperation class definition
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include "qore/intern/QC_SocketPollOperationBase.h"
+
+/** @cond INTERNAL */
+class DelegatingPollOperationPriv : public SocketPollOperationBase {
+public:
+    QoreObject* inner_obj;
+    SocketPollOperationBase* inner_base;
+    ResolvedCallReferenceNode* on_complete_code;
+    QoreObject* counter_obj;
+
+    DLLLOCAL DelegatingPollOperationPriv(QoreObject* self, QoreObject* inner_obj,
+            SocketPollOperationBase* inner_base, ResolvedCallReferenceNode* on_complete_code,
+            QoreObject* counter_obj)
+        : SocketPollOperationBase(self), inner_obj(inner_obj), inner_base(inner_base),
+          on_complete_code(on_complete_code), counter_obj(counter_obj) {
+        inner_obj->ref();
+        if (inner_base) {
+            inner_base->ref();
+        }
+        if (on_complete_code) {
+            on_complete_code->ref();
+        }
+        if (counter_obj) {
+            counter_obj->ref();
+        }
+    }
+
+    DLLLOCAL virtual ~DelegatingPollOperationPriv() {
+        assert(!inner_obj);
+        assert(!inner_base);
+        assert(!on_complete_code);
+        assert(!counter_obj);
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) {
+        if (inner_obj) {
+            inner_obj->deref(xsink);
+            inner_obj = nullptr;
+        }
+        if (inner_base) {
+            inner_base->deref(xsink);
+            inner_base = nullptr;
+        }
+        if (on_complete_code) {
+            on_complete_code->deref(xsink);
+            on_complete_code = nullptr;
+        }
+        if (counter_obj) {
+            counter_obj->deref(xsink);
+            counter_obj = nullptr;
+        }
+    }
+
+    DLLLOCAL bool goalReached() const override {
+        if (inner_base) {
+            return inner_base->goalReached();
+        }
+        // Fall back to evalMethod for non-C++ inner
+        ExceptionSink xsink;
+        ValueHolder rv(inner_obj->evalMethod("goalReached", nullptr, &xsink), &xsink);
+        if (xsink) {
+            xsink.clear();
+            return false;
+        }
+        return rv->getAsBool();
+    }
+
+    DLLLOCAL void abort(ExceptionSink* xsink) override {
+        if (inner_base) {
+            inner_base->abort(xsink);
+        } else {
+            ValueHolder rv(inner_obj->evalMethod("abort", nullptr, xsink), xsink);
+        }
+    }
+
+    //! Returns true when the inner op is a Qore object (not a C++ SocketPollOperationBase).
+    /** Causes the async I/O controller to dispatch continuePoll() to a worker thread
+        instead of running it on the I/O thread, preventing Qore evalMethod calls,
+        blocking waits, and synchronous I/O on the I/O thread.
+    */
+    DLLLOCAL bool needsWorkerDispatch() const override {
+        return inner_base == nullptr;
+    }
+
+    DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        if (inner_base) {
+            return inner_base->continuePoll(xsink);
+        }
+        // inner op is Qore — only called from a worker thread (needsWorkerDispatch() == true)
+        ValueHolder rv(inner_obj->evalMethod("continuePoll", nullptr, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (rv->getType() == NT_HASH) {
+            return rv.release().get<QoreHashNode>();
+        }
+        return nullptr;
+    }
+
+    DLLLOCAL int getAndClearItemsPushed() override {
+        if (inner_base) {
+            return inner_base->getAndClearItemsPushed();
+        }
+        return 0;
+    }
+
+    DLLLOCAL QoreValue getOutput() const override {
+        if (inner_base) {
+            return inner_base->getOutput();
+        }
+        ExceptionSink xsink;
+        ValueHolder rv(inner_obj->evalMethod("getOutput", nullptr, &xsink), &xsink);
+        if (xsink) {
+            xsink.clear();
+            return QoreValue();
+        }
+        return rv.release();
+    }
+
+protected:
+    // cached state string for getStateImpl() lifetime
+    mutable std::string cached_state;
+
+    DLLLOCAL const char* getStateImpl() const override {
+        // Get state from inner object via Qore method call
+        if (inner_obj) {
+            ExceptionSink xsink;
+            ValueHolder rv(inner_obj->evalMethod("getState", nullptr, &xsink), &xsink);
+            if (!xsink && rv->getType() == NT_STRING) {
+                cached_state = rv->get<const QoreStringNode>()->c_str();
+                return cached_state.c_str();
+            }
+        }
+        return "delegating";
+    }
+};
+/** @endcond */
+
+//! C++ delegating poll operation that wraps any AbstractPollOperation
+/** This class delegates all poll methods to an inner operation and provides
+    completion handling via onComplete(). Unlike the Qore CompletionPollProxy,
+    this class preserves the C++ fast path (spop_base) for continuePoll(),
+    which is critical for performance-sensitive operations like HTTP/2.
+
+    Use this for C++ operations we don't control (SSL upgrade, send/recv, connect)
+    that need completion handling.
+
+    @since %Qore 2.3
+*/
+qclass DelegatingPollOperation [
+    private_members=object sock,string goal,auto data_save;
+    ns=Qore;
+    arg=DelegatingPollOperationPriv* poll;
+    vparent=SocketPollOperationBase
+];
+
+//! Creates a delegating poll operation wrapping an inner operation
+/** @param inner the inner poll operation to delegate to
+    @param on_complete optional code reference called when the operation completes;
+        signature: \c code<nothing(hash<SocketPollResultInfo>)>
+    @param done optional Counter to decrement when the operation completes
+*/
+DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_complete, *Counter done) {
+    QoreObject* inner_obj = const_cast<QoreObject*>(inner);
+
+    // Get the inner operation's C++ private data if available
+    SocketPollOperationBase* inner_base = nullptr;
+    const QoreClass* inner_cls = inner_obj->getClass();
+    if (inner_cls->getClass(CID_SOCKETPOLLOPERATIONBASE)) {
+        inner_base = static_cast<SocketPollOperationBase*>(
+            inner_obj->getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE, xsink));
+        if (*xsink) {
+            return;
+        }
+    }
+
+    ResolvedCallReferenceNode* on_complete_ref = nullptr;
+    if (on_complete) {
+        on_complete_ref = const_cast<ResolvedCallReferenceNode*>(on_complete);
+        on_complete_ref->ref();
+    }
+
+    QoreObject* counter_obj = nullptr;
+    if (done) {
+        counter_obj = const_cast<QoreObject*>(done);
+        counter_obj->ref();
+    }
+
+    // Copy goal and sock from inner operation
+    ValueHolder goal_val(inner_obj->evalMethod("getGoal", nullptr, xsink), xsink);
+    if (!*xsink) {
+        self->setMemberValue("goal", QC_DELEGATINGPOLLOPERATION, *goal_val, xsink);
+    }
+    // Try to get sock from inner's members (for SocketPollOperationBase subclasses)
+    ValueHolder sock_val(inner_obj->getReferencedMemberNoMethod("sock", xsink), xsink);
+    if (!*xsink && sock_val->getType() == NT_OBJECT) {
+        self->setMemberValue("sock", QC_DELEGATINGPOLLOPERATION, *sock_val, xsink);
+    } else if (*xsink) {
+        xsink->clear();
+    }
+
+    self->setPrivate(CID_DELEGATINGPOLLOPERATION,
+        new DelegatingPollOperationPriv(self, inner_obj, inner_base, on_complete_ref, counter_obj));
+
+    // Release extra refs (constructor took ownership)
+    if (inner_base) {
+        inner_base->deref(xsink);
+    }
+    if (on_complete_ref) {
+        on_complete_ref->deref(xsink);
+    }
+    if (counter_obj) {
+        counter_obj->deref(xsink);
+    }
+}
+
+//! Destroys the object
+/** Releases all internal references.
+*/
+DelegatingPollOperation::destructor() {
+    poll->cleanup(xsink);
+    poll->deref(xsink);
+}
+
+//! Returns the goal
+/** @return the goal string from the inner operation
+*/
+string DelegatingPollOperation::getGoal() {
+    return self->getReferencedMemberNoMethod("goal", xsink);
+}
+
+//! Returns the current state
+/** @return the current state string from the inner operation
+*/
+string DelegatingPollOperation::getState() {
+    return poll->getState();
+}
+
+//! Returns True when the goal has been reached
+/** @return True when the inner operation's goal has been reached
+*/
+bool DelegatingPollOperation::goalReached() {
+    return poll->goalReached();
+}
+
+//! Continues the poll operation
+/** @return socket poll info for the next poll cycle, or @ref nothing if polling is complete
+*/
+*hash<SocketPollInfo> DelegatingPollOperation::continuePoll() {
+    return poll->continuePoll(xsink);
+}
+
+//! Aborts the operation
+/** Aborts the inner poll operation.
+*/
+nothing DelegatingPollOperation::abort() {
+    poll->abort(xsink);
+}
+
+//! Returns any output from the inner operation
+/** @return any output data from the inner operation
+*/
+auto DelegatingPollOperation::getOutput() [flags=RET_VALUE_ONLY] {
+    return poll->getOutput();
+}
+
+//! Called when the operation completes
+/** If a Counter was provided, it is decremented. If an onComplete code reference
+    was provided, it is called with the result hash. If both are provided, the
+    Counter is decremented first.
+*/
+nothing DelegatingPollOperation::onComplete(hash<SocketPollResultInfo> result) {
+    if (poll->counter_obj) {
+        // Decrement counter — use separate xsink so counter failures don't block callback
+        ExceptionSink dec_xsink;
+        ValueHolder rv(poll->counter_obj->evalMethod("dec", nullptr, &dec_xsink), &dec_xsink);
+        if (dec_xsink) {
+            dec_xsink.clear();
+        }
+    }
+    if (poll->on_complete_code) {
+        ExceptionSink cb_xsink;
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), &cb_xsink);
+        args->push(result->refSelf(), &cb_xsink);
+        ValueHolder rv(poll->on_complete_code->execValue(*args, &cb_xsink), &cb_xsink);
+        if (cb_xsink) {
+            xsink->assimilate(cb_xsink);
+        }
+    }
+}
+
+//! Called by the I/O controller when items have been pushed during continuePoll
+/** Forwards to the inner operation's onPollComplete method.
+
+    @since %Qore 2.3
+*/
+nothing DelegatingPollOperation::onPollComplete() {
+    if (poll->inner_obj) {
+        ValueHolder rv(poll->inner_obj->evalMethod("onPollComplete", nullptr, xsink), xsink);
+    }
+}

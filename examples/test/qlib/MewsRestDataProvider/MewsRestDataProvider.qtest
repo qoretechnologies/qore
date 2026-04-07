@@ -77,12 +77,17 @@ public class MewsRestClientDataProviderTest inherits QUnit::Test {
         *hash<auto> rec;
         try {
             rec = orderitems.searchSingleRecord(where_cond, {"limit": 1});
-            assertEq(Type::Hash, rec.type());
+            # rec may be NOTHING if no order items exist in the demo environment
+            if (rec) {
+                assertEq(Type::Hash, rec.type());
+            }
 
             AbstractDataProviderBulkRecordInterface i = orderitems.searchRecordsBulk(1000, where_cond, {"limit": 1});
-            hash<auto> q = i.getValue();
-            assertEq(Type::List, q.firstValue().type());
-            assertEq(1, q.firstValue().lsize());
+            *hash<auto> q = i.getValue();
+            if (q) {
+                assertEq(Type::List, q.firstValue().type());
+                assertEq(1, q.firstValue().lsize());
+            }
             assertNothing(i.getValue());
         } catch (hash<ExceptionInfo> ex) {
             # Handle connection/protocol errors

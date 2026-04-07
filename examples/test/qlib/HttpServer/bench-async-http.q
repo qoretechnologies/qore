@@ -80,16 +80,15 @@ class BenchServer {
             stdout.sync();
         }
 
-        string mode = async ? "async" : "sync";
         if (opt.duration) {
             if (!opt.quiet) {
-                stderr.printf("Running for %d seconds in %s mode...\n", opt.duration, mode);
+                stderr.printf("Running for %d seconds in async mode...\n", opt.duration);
             }
             sleep(opt.duration);
         } else {
             if (!opt.quiet) {
-                stderr.printf("Server ready on port %d in %s mode. "
-                    "Press Ctrl-C to stop.\n", bound_port, mode);
+                stderr.printf("Server ready on port %d in async mode. "
+                    "Press Ctrl-C to stop.\n", bound_port);
             }
             # Block until killed
             Counter c(1);

@@ -56,6 +56,7 @@
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/QC_ChannelIterator.h"
 #include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_WaitGroup.h"
 #include "qore/intern/QC_Semaphore.h"
@@ -3368,6 +3369,7 @@ QoreNamespace* get_thread_ns(QoreNamespace &qorens) {
     Thread->addSystemClass(initAbstractConnectionPoolClass(*Thread));
 
     Thread->addSystemClass(initFutureClass(*Thread));
+    Thread->addSystemClass(initFutureImplClass(*Thread));
     Thread->addSystemClass(initPromiseClass(*Thread));
     Thread->addSystemClass(initWaitGroupClass(*Thread));
     Thread->addSystemClass(initSemaphoreClass(*Thread));

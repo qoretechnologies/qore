@@ -285,19 +285,20 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
         AsyncSocketIo::AsyncSocketIoController controller(logger);
         string owner = "test-" + get_random_string(8);
 
-        # Use callback mode: the controller will drive continuePoll() automatically
-        # We use a self-resubmitting callback pattern
+        # Use DelegatingPollOperation to add completion handling to the C++
+        # WebSocketClientPollOperation (which doesn't support setCompletionHandler).
+        # The callback self-resubmits until goalReached().
         code make_callback;
         make_callback = sub (hash<SocketPollResultInfo> result) {
             # Re-submit if not done
             if (!poll_op.goalReached()) {
                 try {
+                    auto wrapper = new DelegatingPollOperation(poll_op, make_callback);
                     controller.submit(<SocketPollOperationInfo>{
                         "sock": hc,
-                        "spop": poll_op,
+                        "spop": wrapper,
                         "owner": owner,
                         "to": -1s,
-                        "callback": make_callback,
                     }, True);
                 } catch (hash<ExceptionInfo> ex) {
                     # Controller may be stopping
@@ -305,19 +306,19 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
             }
         };
 
+        auto wrapper = new DelegatingPollOperation(poll_op, make_callback);
         controller.submit(<SocketPollOperationInfo>{
             "sock": hc,
-            "spop": poll_op,
+            "spop": wrapper,
             "owner": owner,
             "to": -1s,
-            "callback": make_callback,
         });
 
         controller.waitForProcessing(5s);
 
         # Send a message — the controller should drive the I/O
         poll_op.sendText("controller-test");
-        controller.wake();
+        controller.wakeSocket(hc);
 
         # Wait for the echo
         *hash<auto> msg;
@@ -334,7 +335,7 @@ public class WebSocketClientPollOperationTest inherits QUnit::Test {
 
         # Close
         poll_op.sendClose();
-        controller.wake();
+        controller.wakeSocket(hc);
 
         # Wait for close to complete
         end = now_us() + 10s;

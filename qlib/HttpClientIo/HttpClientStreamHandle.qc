@@ -36,13 +36,12 @@ hash<auto> response = stream.request("GET", "/api/users");
 printf("Status: %d\n", response.status_code);
     @endcode
 
-    @par Asynchronous Usage
+    @par Asynchronous Usage (Future API)
     @code{.py}
 HttpClientStreamHandle stream = manager.acquireStream("https://example.com");
-stream.submitAsync("GET", "/api/users", NOTHING, NOTHING,
-    sub (hash<auto> response, *hash<auto> error) {
-        printf("Response: %y\n", response);
-    });
+hash<auto> result = stream.submitAsync("GET", "/api/users");
+hash<auto> response = result.future.get(30s);
+printf("Status: %d\n", response.status_code);
     @endcode
 
     @par Streaming Usage (SSE, gRPC, etc.)
@@ -87,9 +86,6 @@ public class HttpClientStreamHandle {
         #! Lock for thread safety
         Mutex lock();
 
-        #! Promise for synchronous request() -- set/cleared per call
-        *Promise request_promise;
-
         #! The response when complete
         *hash<auto> response;
 
@@ -127,23 +123,29 @@ public class HttpClientStreamHandle {
     }
 
     #! Protocol-specific async request submission (subclasses must implement)
-    /** @par Contract
-        Implementations MUST call handleResponse() with the response/error before
-        invoking the user \c callback.  The synchronous request() API creates a
-        Promise that is resolved inside handleResponse(); failing to call it will
-        cause request() to hang indefinitely.  Exceptions from handleResponse()
-        should be caught, logged, and converted to an error passed to \c callback.
+    /** Submits the request and returns a hash with the stream ID and a Future
+        for the response. The Future is resolved by a C++ completion action on
+        the I/O thread (PromiseAction for request/response, ChannelAction for
+        streaming) — no user code runs on the I/O thread.
 
         @param method HTTP method
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
 
-        @return the stream ID assigned to this request
+        @return hash with "stream_id" (int) and "future" (Future)
     */
-    abstract int submitAsyncImpl(string method, string path, *hash<auto> headers,
-        *data body, HttpResponseCallback callback);
+    abstract hash<auto> submitAsyncImpl(string method, string path, *hash<auto> headers,
+        *data body);
+
+    #! Protocol-specific async request submission with EventNotifier signaling
+    /** Override in subclasses to use submitRequestWithNotifier (H1/H2) or
+        registerStreamWithPromiseAndNotifier (H3).
+
+        @return hash with "stream_id" (int) and "future" (Future)
+    */
+    abstract hash<auto> submitAsyncWithNotifierImpl(string method, string path,
+        *hash<auto> headers, *data body, EventNotifier notifier);
 
     #! Returns the stream ID (NOTHING if not yet submitted)
     *int getStreamId() {
@@ -255,25 +257,38 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
             if (!conn.waitForReady(remaining)) {
+                # Cancel the stale connect poll operation in the I/O controller
+                # so it doesn't leak cache entries and socket fds
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {
+                    # ignore — controller may have already removed the operation
+                }
                 releaseReservationIfHeld();
                 throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
             }
         }
 
-        # Create Promise/Future for this request
-        Promise p();
+        # Check stream state — cancel may have fired during connection wait
         {
             AutoLock al(lock);
-            request_promise = p;
+            if (state != HttpClientStreamState::Pending
+                    && state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("cannot submit request in state: %y", state);
+            }
         }
-        on_exit {
-            AutoLock al(lock);
-            request_promise = NOTHING;
-        }
-        Future f = p.getFuture();
 
-        submitAsync(method, path, headers, body, \handleAsyncResponse());
-        @assert(exists stream_id);
+        # Submit request — returns {stream_id, future}
+        # The Future is resolved by C++ PromiseAction on the I/O thread
+        # (pure C++, no user code on I/O thread)
+        hash<auto> submit_result = conn.submitRequest(method, path, headers, body);
+        stream_id = submit_result.stream_id;
+        Future f = submit_result.future;
+        reservation_held = False;
 
         try {
             date remaining = end_time - now_us();
@@ -282,7 +297,18 @@ public class HttpClientStreamHandle {
                 throw "HTTPCLIENT-TIMEOUT",
                     sprintf("request timed out after %d ms", wait_timeout);
             }
-            return f.get(remaining) ?? {};
+            # Ensure at least 1ms to prevent QPP timeout type from truncating
+            # sub-millisecond dates to 0 (which means infinite wait)
+            if (remaining < 1ms) {
+                remaining = 1ms;
+            }
+            auto rv = f.get(remaining);
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Complete;
+                response = rv;
+            }
+            return normalizeResponseBody(rv ?? {});
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "FUTURE-TIMEOUT") {
                 cancel();
@@ -320,41 +346,14 @@ public class HttpClientStreamHandle {
         until the response is received.
     */
     Future requestAsync(string method, string path, *hash<auto> headers, *data body) {
-        # Wait for connection to become ready
-        if (!conn.isReady()) {
-            if (!conn.waitForReady(request_timeout)) {
-                releaseReservationIfHeld();
-                throw "HTTPCLIENT-TIMEOUT", "connection establishment timed out";
-            }
-        }
-
-        # Create Promise/Future — store Promise as member to keep it alive
-        # through the submitAsyncImpl closure chain (which captures self)
-        Promise p();
-        {
-            AutoLock al(lock);
-            request_promise = p;
-        }
-        Future f = p.getFuture();
-
-        try {
-            submitAsync(method, path, headers, body, \handleAsyncResponse());
-        } catch () {
-            # Clear request_promise on failure so the Promise is not leaked;
-            # handleResponse() will never be called for a failed submission
-            {
-                AutoLock al(lock);
-                remove request_promise;
-            }
-            rethrow;
-        }
-
-        return f;
+        hash<auto> result = submitAsync(method, path, headers, body);
+        return result.future;
     }
 
-    #! Submits an asynchronous request with a callback
-    int submitAsync(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback) {
+    #! Submits an async request and returns a Future for the response
+    /** @return hash with "stream_id" (int) and "future" (Future)
+    */
+    hash<auto> submitAsync(string method, string path, *hash<auto> headers, *data body) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -367,6 +366,12 @@ public class HttpClientStreamHandle {
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
             if (!conn.waitForReady(request_timeout)) {
+                # Cancel stale connect poll operation to prevent I/O controller leaks
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
@@ -389,10 +394,11 @@ public class HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request: %s %s", method, path);
 
+        hash<auto> result;
         try {
-            stream_id = submitAsyncImpl(method, path, headers, body, callback);
+            result = submitAsyncImpl(method, path, headers, body);
+            stream_id = result.stream_id;
             @assert(stream_id >= 0);
-            # Reservation converted to active stream
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -405,7 +411,131 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return stream_id;
+        return result;
+    }
+
+    #! Submits an async request and signals an EventNotifier on completion
+    /** Like submitAsync() but uses a CompositeAction (PromiseAction + EventNotifierAction)
+        so the I/O thread signals @a notifier when the response arrives.  The caller's
+        continuePoll() can then call Future::get() non-blockingly — no background thread.
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers request headers (optional)
+        @param body request body (optional)
+        @param notifier EventNotifier to signal on response completion
+
+        @return hash with "stream_id" (int) and "future" (Future)
+
+        @since %HttpClientIo 1.2
+    */
+    hash<auto> submitAsyncWithNotifier(string method, string path, *hash<auto> headers,
+            *data body, EventNotifier notifier) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        # The caller must ensure the connection is ready before calling this method.
+        # submitAsyncWithNotifier() must never block (waitForReady() would deadlock
+        # if called from the async I/O thread, since the I/O thread drives the
+        # connection to READY).  If the connection is not ready, throw immediately.
+        if (!conn.isReady()) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            throw "HTTPCLIENT-NOT-READY",
+                "connection is not ready for async request; "
+                "caller must ensure readiness via SPS_CONNECTING before calling submitAsyncWithNotifier()";
+        }
+
+        # Re-check state
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Open) {
+                releaseReservationIfHeld();
+                throw "HTTPCLIENT-CANCELLED", "stream was cancelled during connection setup";
+            }
+        }
+
+        log(LoggerLevel::DEBUG, "submitting async request with notifier: %s %s", method, path);
+
+        hash<auto> result;
+        try {
+            result = submitAsyncWithNotifierImpl(method, path, headers, body, notifier);
+            stream_id = result.stream_id;
+            @assert(stream_id >= 0);
+            reservation_held = False;
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            rethrow;
+        }
+
+        return result;
+    }
+
+    #! Submits an asynchronous request without blocking on connection establishment
+    /** If the connection is not ready, throws HTTPCLIENT-STATE-ERROR.
+        Use waitForReady() first if needed, or use submitAsync() which blocks.
+
+        @return hash with "stream_id" (int) and "future" (Future)
+
+        @note This method never blocks. The Future is resolved by a C++ PromiseAction
+        on the I/O thread (pure C++, no user code on I/O thread).
+
+        @since %HttpClientIo 1.1
+    */
+    hash<auto> submitAsyncNonBlocking(string method, string path, *hash<auto> headers, *data body) {
+        {
+            AutoLock al(lock);
+            if (state != HttpClientStreamState::Pending) {
+                throw "HTTPCLIENT-STATE-ERROR",
+                    sprintf("stream already in use: state=%y", state);
+            }
+            state = HttpClientStreamState::Open;
+        }
+
+        if (!conn.isReady()) {
+            {
+                AutoLock al(lock);
+                state = HttpClientStreamState::Pending;
+            }
+            releaseReservationIfHeld();
+            throw "HTTPCLIENT-STATE-ERROR", "connection not ready; use submitAsync() or waitForReady()";
+        }
+
+        log(LoggerLevel::DEBUG, "submitting async request (non-blocking): %s %s", method, path);
+        hash<auto> result;
+        try {
+            result = submitAsyncImpl(method, path, headers, body);
+            stream_id = result.stream_id;
+            @assert(stream_id >= 0);
+            reservation_held = False;
+        } catch (hash<ExceptionInfo> ex) {
+            {
+                AutoLock al(lock);
+                if (state == HttpClientStreamState::Open) {
+                    state = HttpClientStreamState::Pending;
+                }
+            }
+            releaseReservationIfHeld();
+            rethrow;
+        }
+        return result;
     }
 
     #! Submits an asynchronous request with a QUIC datagram atomically
@@ -420,7 +550,6 @@ public class HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback invoked when the response is complete
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -430,8 +559,8 @@ public class HttpClientStreamHandle {
         @throw HTTPCLIENT-CANCELLED if the stream was cancelled during connection setup
         @throw QUIC-DATAGRAM-NOT-SUPPORTED if the protocol does not support datagrams
     */
-    int submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
-            HttpResponseCallback callback, binary datagram) {
+    hash<auto> submitAsyncWithDatagram(string method, string path, *hash<auto> headers, *data body,
+            binary datagram) {
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -444,6 +573,12 @@ public class HttpClientStreamHandle {
         # Wait for connection to become ready if not already
         if (!conn.isReady()) {
             if (!conn.waitForReady(request_timeout)) {
+                # Cancel stale connect poll operation to prevent I/O controller leaks
+                try {
+                    AsyncSocketIo::AsyncSocketIoController ctl =
+                        AsyncSocketIo::getGlobalAsyncIoController();
+                    ctl.cancel(conn.getSocket());
+                } catch () {}
                 {
                     AutoLock al(lock);
                     if (state == HttpClientStreamState::Open) {
@@ -466,11 +601,11 @@ public class HttpClientStreamHandle {
 
         log(LoggerLevel::DEBUG, "submitting async request with datagram: %s %s", method, path);
 
+        hash<auto> result;
         try {
-            stream_id = submitAsyncWithDatagramImpl(method, path, headers, body,
-                callback, datagram);
+            result = submitAsyncWithDatagramImpl(method, path, headers, body, datagram);
+            stream_id = result.stream_id;
             @assert(stream_id >= 0);
-            # Reservation converted to active stream
             reservation_held = False;
         } catch (hash<ExceptionInfo> ex) {
             {
@@ -483,7 +618,7 @@ public class HttpClientStreamHandle {
             rethrow;
         }
 
-        return stream_id;
+        return result;
     }
 
     #! Protocol-specific async request + datagram submission (subclasses override)
@@ -493,7 +628,6 @@ public class HttpClientStreamHandle {
         @param path request path
         @param headers request headers (optional)
         @param body request body (optional)
-        @param callback user callback to invoke after handleResponse()
         @param datagram the datagram payload to send
 
         @return the stream ID assigned to this request
@@ -502,8 +636,8 @@ public class HttpClientStreamHandle {
 
         @see submitAsyncWithDatagram() for the public wrapper with state management
     */
-    private int submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
-            *data body, HttpResponseCallback callback, binary datagram) {
+    private hash<auto> submitAsyncWithDatagramImpl(string method, string path, *hash<auto> headers,
+            *data body, binary datagram) {
         throw "QUIC-DATAGRAM-NOT-SUPPORTED",
             "QUIC datagrams are only supported over HTTP/3; this stream uses "
             + conn.getProtocol();
@@ -512,7 +646,6 @@ public class HttpClientStreamHandle {
     #! Cancels the request
     cancel() {
         *int sid;
-        *Promise p;
         {
             AutoLock al(lock);
             if (state == HttpClientStreamState::Complete
@@ -522,7 +655,6 @@ public class HttpClientStreamHandle {
             }
             state = HttpClientStreamState::Cancelled;
             sid = stream_id;
-            p = request_promise;
         }
 
         # Release reservation if the stream was never submitted
@@ -536,52 +668,35 @@ public class HttpClientStreamHandle {
                 log(LoggerLevel::DEBUG, "cancel stream %d: %s: %s", sid, ex.err, ex.desc);
             }
         }
-
-        # Note: cancelRequest() above may have already resolved the Promise via
-        # the poll operation's callback → handleResponse().  The try/catch
-        # silently handles the double-resolve race (Promise.setError throws if
-        # already resolved).  Either resolution carries a cancellation error.
-        if (p) {
-            try { p.setError("HTTPCLIENT-CANCELLED", "stream cancelled"); } catch () {}
-        }
+        # Note: cancelRequest() above rejects the Promise in the poll operation,
+        # which resolves the Future with a cancellation error.
     }
 
-    #! Internal: placeholder callback for the sync request() path
-    /** This is intentionally a no-op.  The actual response handling is done by
-        handleResponse(), which concrete submitAsyncImpl() implementations call
-        before invoking this callback.  The Promise is already resolved by the
-        time this method runs.
+    #! Returns an EventNotifier that fires when the connection becomes ready (or closes)
+    /** If the underlying connection is already ready (or in a terminal state), returns
+        \c NOTHING — the caller can proceed immediately without polling.
+
+        Otherwise, registers an EventNotifier with the connection's C++ priv via
+        \c AbstractHttpPollConnection::registerReadyNotifier().  When the I/O thread
+        transitions the connection to READY or CLOSED, it signals the notifier.
+        The caller should poll the notifier FD for \c SOCK_POLLIN and check
+        \c conn.isReady() when it fires to determine whether to proceed or raise an error.
+
+        @return an EventNotifier to poll, or NOTHING if already decided
+
+        @since %HttpClientIo 1.2
     */
-    private handleAsyncResponse(hash<auto> resp, *hash<auto> err) {
-    }
-
-    #! Internal: handles response (called from protocol-specific submit callback)
-    private handleResponse(hash<auto> resp, *hash<auto> err) {
-        if (!err) {
-            resp = normalizeResponseBody(resp);
+    *EventNotifier getConnectionReadyNotifier() {
+        if (conn.isReady()) {
+            return NOTHING;
         }
-        *Promise p;
-        {
-            AutoLock al(lock);
-            if (err) {
-                error_info = err;
-                state = HttpClientStreamState::Error;
-            } else {
-                response = resp;
-                state = HttpClientStreamState::Complete;
-            }
-            p = request_promise;
-            # Clear the member reference so the Promise is not leaked in the
-            # async path (the sync request() path has its own on_exit cleanup)
-            remove request_promise;
+        EventNotifier notifier();
+        # registerReadyNotifier returns True if queued (CONNECTING), False if already decided
+        if (!conn.registerReadyNotifier(notifier)) {
+            # State transitioned (READY/DRAINING/CLOSED) between isReady() and registration
+            return NOTHING;
         }
-        if (p) {
-            if (err) {
-                try { p.setError(err.err, err.desc, err.arg); } catch () {}
-            } else {
-                try { p.set(resp); } catch () {}
-            }
-        }
+        return notifier;
     }
 
     #! Internal: converts binary body to string for text-based content types

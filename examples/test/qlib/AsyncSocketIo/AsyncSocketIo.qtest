@@ -33,18 +33,18 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         int port;
     }
 
-    #! Synchronous exec replacement: submit + Counter wait
+    #! Synchronous exec replacement: submit with DelegatingPollOperation + Counter wait
     /** Replaces the removed AsyncSocketIoController::exec() method.
     */
     static hash<SocketPollResultInfo> execOp(AsyncSocketIoController ctrl,
             hash<SocketPollOperationInfo> info) {
         Counter done(1);
         hash<SocketPollResultInfo> rv;
-        code cb = sub (hash<SocketPollResultInfo> result) {
-            rv = result;
-            done.dec();
-        };
-        info.callback = cb;
+        info.spop = new DelegatingPollOperation(info.spop,
+            sub (hash<SocketPollResultInfo> result) {
+                rv = cast<hash<SocketPollResultInfo>>(result);
+                done.dec();
+            });
         ctrl.submit(info);
         done.waitForZero();
         return rv;
@@ -704,12 +704,8 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         for (int i = 0; i < num_ops; ++i) {
             RestClient rest({"url": "http://127.0.0.1:" + port});
             AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-            io_controller.submit(<SocketPollOperationInfo>{
-                "sock": rest,
-                "spop": spop,
-                "to": 10s,
-                "owner": sprintf("cb-concurrent-%d", i),
-                "callback": code sub (hash<SocketPollResultInfo> result) {
+            auto wrapped = new DelegatingPollOperation(spop,
+                sub (hash<SocketPollResultInfo> result) {
                     {
                         AutoLock al(cb_m);
                         push callback_results, {
@@ -719,7 +715,12 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                         };
                     }
                     cb_cnt.dec();
-                },
+                });
+            io_controller.submit(<SocketPollOperationInfo>{
+                "sock": rest,
+                "spop": wrapped,
+                "to": 10s,
+                "owner": sprintf("cb-concurrent-%d", i),
             });
         }
 
@@ -791,20 +792,21 @@ public class AsyncSocketIoTest inherits QUnit::Test {
 
         RestClient rest({"url": "http://127.0.0.1:" + port});
         AbstractPollOperation spop = rest.startPollSendRecv("GET", "/api_text");
-        io_controller.submit(<SocketPollOperationInfo>{
-            "sock": rest,
-            "spop": spop,
-            "to": 10s,
-            "owner": "exception-safety-owner",
-            "callback": code sub (hash<SocketPollResultInfo> result) {
+        auto wrapped_spop = new DelegatingPollOperation(spop,
+            sub (hash<SocketPollResultInfo> result) {
                 {
                     AutoLock al(cb_m);
                     ++callback_count;
                 }
                 done.dec();
-                # Throw from callback — must not cause double delivery or crash
+                # Throw from onComplete — must not cause double delivery or crash
                 throw "TEST-CALLBACK-ERROR", "intentional test exception";
-            },
+            });
+        io_controller.submit(<SocketPollOperationInfo>{
+            "sock": rest,
+            "spop": wrapped_spop,
+            "to": 10s,
+            "owner": "exception-safety-owner",
         });
 
         done.waitForZero(10s);
@@ -843,14 +845,9 @@ public class AsyncSocketIoTest inherits QUnit::Test {
         Counter done(1);
 
         AbstractPollOperation op = server.startPollAccept();
-        ctrl.submit(<SocketPollOperationInfo>{
-            "sock": server,
-            "spop": op,
-            "key": "submit-cb-accept-1",
-            "owner": "submit-cb-test",
-            "to": 5s,
-            "callback": sub (hash<SocketPollResultInfo> result) {
-                # Submit a new accept from within the callback — previously caused LOCK-ERROR
+        auto wrapped = new DelegatingPollOperation(op,
+            sub (hash<SocketPollResultInfo> result) {
+                # Submit a new accept from within onComplete — previously caused LOCK-ERROR
                 AbstractPollOperation op2 = server.startPollAccept();
                 ctrl.submit(<SocketPollOperationInfo>{
                     "sock": server,
@@ -861,7 +858,13 @@ public class AsyncSocketIoTest inherits QUnit::Test {
                 });
                 submit_ok = True;
                 done.dec();
-            },
+            });
+        ctrl.submit(<SocketPollOperationInfo>{
+            "sock": server,
+            "spop": wrapped,
+            "key": "submit-cb-accept-1",
+            "owner": "submit-cb-test",
+            "to": 5s,
         });
 
         # Connect a client to trigger the accept

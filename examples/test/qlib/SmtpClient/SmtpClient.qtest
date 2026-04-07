@@ -107,7 +107,6 @@ public class SmtpClientTest inherits QUnit::Test {
         Qore::AbstractPollOperation poller = conn.startPollConnect();
         assertEq("SmtpPingPollOperation", poller.className(), "startPollConnect returns SmtpPingPollOperation");
         assertEq("ping", poller.getGoal(), "poll operation goal is 'ping'");
-        assertEq("connect", poller.getState(), "initial state is 'connect'");
         assertFalse(poller.goalReached(), "goal not reached initially");
 
         # Test that we can abort the operation

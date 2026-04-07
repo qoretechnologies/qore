@@ -119,7 +119,9 @@ class FutureTest inherits QUnit::Test {
     }
 
     testFutureDirectConstruct() {
-        assertThrows("FUTURE-ERROR", sub() { Future f(); });
+        # Use create_object() for runtime instantiation; `Future f()` triggers the abstract
+        # class check at parse time, which cannot be caught by try/catch or assertThrows.
+        assertThrows("ABSTRACT-CLASS-ERROR", sub() { create_object("Future"); });
     }
 
     testFutureCopy() {

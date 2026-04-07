@@ -419,6 +419,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("proxy with h1 protocol", \testProxyWithH1Protocol());
         addTestCase("proxy with h2 protocol", \testProxyWithH2Protocol());
 
+        # Callback API tests
+        addTestCase("restDoRequestAsync basic", \testRestDoRequestAsync());
+
+        # RestClientIoPingPollOperation tests
+        addTestCase("ping poll basic", \testPingPollBasic());
+        addTestCase("ping poll via monitor", \testPingPollViaMonitor());
+        addTestCase("ping poll oauth2 pre-refresh", \testPingPollOAuth2PreRefresh());
+        addTestCase("ping poll 401 retry", \testPingPoll401Retry());
+        addTestCase("ping poll 401 no retry", \testPingPoll401NoRetry());
+        addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
+        addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -2438,5 +2450,276 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit mgr.closeAll();
         hash<auto> stats = mgr.getStats();
         assertEq("h2", stats.protocol);
+    }
+
+    testRestDoRequestAsync() {
+        RestClientIo::RestClientIo client = createClient();
+
+        Future f = client.restDoRequestAsync("GET", "/api/test", NOTHING, NOTHING, True);
+        hash<auto> resp = f.get(15s);
+        assertTrue(exists resp, "should have response");
+        assertEq(200, resp.status_code, "async request should return 200");
+    }
+
+    # ---- RestClientIoPingPollOperation tests ----
+
+    #! Drive a RestClientIoPingPollOperation state machine without PollingConnectionMonitor
+    private static *hash<ExceptionInfo> drivePingOp(Qore::AbstractPollOperation op) {
+        try {
+            while (True) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                Socket::poll((info,), 5s);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+        return NOTHING;
+    }
+
+    #! Creates a RestConnection configured to ping the test server via the RestClientIo path
+    /** Uses plain HTTP so no SSL options are needed.  All handlers (including
+        /oauth/token) are available on h1_port.
+    */
+    private RestConnection createPingConnection(string name, *hash<auto> extra_opts) {
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        return new RestConnection(name, name, url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/api/test",
+        } + extra_opts);
+    }
+
+    testPingPollBasic() {
+%ifndef NoJson
+        # Drive the ping state machine directly — no PollingConnectionMonitor thread
+        RestConnection rc = createPingConnection("ping-basic");
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("ping error: %y\n", ex);
+        assertFalse(exists ex, "ping should succeed");
+        assertTrue(op.goalReached());
+%endif
+    }
+
+    testPingPollViaMonitor() {
+%ifndef NoJson
+        # Drive via TestPollingConnectionMonitor (exercises the full PollingConnectionMonitor path)
+        RestConnection rc = createPingConnection("ping-monitor");
+        TestPollingConnectionMonitor monitor(new Logger("pm", LoggerLevel::getLevelInfo()));
+        on_exit delete monitor;
+
+        monitor.add(rc);
+        hash<auto> result = monitor.waitForResult();
+        assertEq("ping-monitor", result.name);
+        on_error if (result.ex) {
+            printf("ping via monitor error: %y\n", result.ex);
+        }
+        assertEq("OK", result.result);
+%endif
+    }
+
+    testPingPollOAuth2PreRefresh() {
+%ifndef NoJson
+        # Token with very short expiry forces tokenRequiresRefresh() == True in constructor.
+        # The ping state machine must do: SPS_OAUTH2_REFRESH → (SPS_CONNECTING?) → SPS_IO_WAITING.
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("prerefresh-access-token");
+        token_handler.setReturnRefreshToken("prerefresh-refresh-token");
+        # Expiry in 5s — well within the 10-minute Oauth2TokenRefreshWindow
+        date near_expiry = now_us() + 5s;
+
+        # Seed an initial token so requiresRefresh() sees token_val + refresh_token + expiry
+        RestConnection rc = createPingConnection("ping-oauth2-prerefresh", {
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "token": "initial-soon-expiring-token",
+            "token_type": "Bearer",
+            "oauth2_refresh_token": "initial-refresh-token",
+            "oauth2_token_expiry": near_expiry,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("oauth2 pre-refresh ping error: %y\n", ex);
+        assertFalse(exists ex, "OAuth2 pre-refresh ping should succeed");
+        assertTrue(op.goalReached());
+
+        # Verify token refresh occurred
+        assertTrue(token_handler.getRequestCount() >= 1, "token refresh should have occurred");
+%endif
+    }
+
+    testPingPoll401Retry() {
+%ifndef NoJson
+        # Server returns 401 on first request with initial token, then 200 after refresh
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("retry-new-token");
+        token_handler.setReturnRefreshToken("retry-refresh-token");
+
+        # Reject the initial token so first ping attempt returns 401
+        string initial_token = "retry-initial-token";
+        auth401_handler.addRejectToken(initial_token);
+        on_exit auth401_handler.removeRejectToken(initial_token);
+
+        # Use the auth401 handler endpoint for the ping (plain HTTP)
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-401-retry", "ping-401-retry", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/auth401",
+            "token": initial_token,
+            "token_type": "Bearer",
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+            "oauth2_refresh_token": "retry-refresh-token",
+            "oauth2_auto_refresh": True,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        on_error printf("401 retry ping error: %y\n", ex);
+        assertFalse(exists ex, "401-retry ping should eventually succeed");
+        assertTrue(op.goalReached());
+%endif
+    }
+
+    testPingPoll401NoRetry() {
+%ifndef NoJson
+        # Non-2xx response (500 from /error handler) with no retry configured
+        # should result in REST-PING-ERROR
+        string url = sprintf("http://127.0.0.1:%d", h1_port);
+        RestConnection rc("ping-no-retry", "ping-no-retry", url, {}, {
+            "data": "json",
+            "ping_method": "GET",
+            "ping_path": "/error",
+            "oauth2_auto_refresh": False,
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        *hash<ExceptionInfo> ex = drivePingOp(op);
+        assertTrue(exists ex, "non-2xx ping without retry should throw");
+        assertEq("REST-PING-ERROR", ex.err);
+        assertFalse(op.goalReached());
+%endif
+    }
+
+    testPingPollNonExistentHost() {
+        # Connection to non-existent host — the error is thrown from the constructor
+        # of RestClientIoPingPollOperation (in doSubmitPing() → acquireStream() → DNS)
+        RestConnection rc("ping-nohost", "ping-nohost",
+            "http://nonexistent.invalid:9999", {}, {
+                "ping_method": "GET",
+                "ping_path": "/",
+                "connect_timeout": 1s,
+            });
+        assertThrows("QOREADDRINFO-GETINFO-ERROR", sub () { rc.startPollConnect(); });
+    }
+
+    #! Regression test: connection-closed notifier must trigger a retry, not throw HTTPCLIENT-NOT-READY
+    /** The bug: when connection_ready_notifier fired because the connection went to CLOSED
+        (not READY), continuePoll() called doSubmitPing() on the non-ready replacement
+        connection, throwing HTTPCLIENT-NOT-READY and crashing the ping.
+
+        The fix: call doStartConnecting() instead of doSubmitPing() after the notifier fires.
+        doStartConnecting() re-evaluates readiness:
+        - READY: calls doSubmitPing() immediately (SPS_IO_WAITING)
+        - CLOSED/DRAINING: registers a new notifier for the replacement connection (SPS_CONNECTING retry)
+    */
+    testPingPollConnectionClosedRetry() {
+        # Bind to a random port and immediately close — the port has nothing listening
+        # when the test runs, so all TCP connection attempts get ECONNREFUSED (→ CLOSED).
+        int refused_port;
+        {
+            Socket s();
+            s.bindINET("127.0.0.1", 0, True);
+            refused_port = s.getSocketInfo().port;
+        }
+
+        RestConnection rc("ping-conn-closed", "ping-conn-closed",
+            sprintf("http://127.0.0.1:%d", refused_port), {}, {
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        });
+
+        AbstractPollOperation op = rc.startPollConnect();
+        assertEq("ping", op.getGoal());
+
+        # Drive for up to 2s. With the fix the ping retries on each CLOSED notifier
+        # (continuePoll() keeps returning poll info). Without the fix it throws
+        # HTTPCLIENT-NOT-READY on the very first CLOSED notifier.
+        date deadline = now_us() + 2s;
+        *hash<ExceptionInfo> caught;
+        try {
+            while (now_us() < deadline) {
+                *hash<SocketPollInfo> info = op.continuePoll();
+                if (!info) {
+                    break;
+                }
+                date remaining = deadline - now_us();
+                if (remaining > 0) {
+                    Socket::poll((info,), min(remaining, 250ms));
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            caught = ex;
+        }
+
+        # The critical assertion: must NOT be the old HTTPCLIENT-NOT-READY crash
+        if (caught) {
+            assertNeq("HTTPCLIENT-NOT-READY", caught.err,
+                sprintf("ping should retry on connection close, not throw %s: %s",
+                    caught.err, caught.desc));
+        }
+        # Goal must not be reached — the port has nothing listening
+        assertFalse(op.goalReached());
+    }
+}
+
+class TestPollingConnectionMonitor inherits PollingConnectionMonitor {
+    private {
+        Queue msgq();
+    }
+
+    constructor(*Logger logger) : PollingConnectionMonitor(logger) {
+        ping_timeout = 30s;
+    }
+
+    hash<auto> waitForResult() {
+        return msgq.get();
+    }
+
+    private failedToStartPing(string name, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::failedToStartPing(name, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingSuccess(string name, date delta, *bool oldok) {
+        PollingConnectionMonitor::handlePingSuccess(name, delta, oldok);
+        msgq.push({"name": name, "result": "OK"});
+    }
+
+    private handlePingFailed(string name, date delta, hash<ExceptionInfo> ex) {
+        PollingConnectionMonitor::handlePingFailed(name, delta, ex);
+        msgq.push({"name": name, "result": "error", "ex": ex});
+    }
+
+    private handlePingTimeout(string name, date delta) {
+        PollingConnectionMonitor::handlePingTimeout(name, delta);
+        msgq.push({"name": name, "result": "timeout"});
     }
 }

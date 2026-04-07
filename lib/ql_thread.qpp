@@ -39,7 +39,7 @@
 #include "qore/intern/QC_AbstractThreadResource.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QC_TimeZone.h"
-#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Promise.h"
 #include "qore/intern/QC_Channel.h"
 
@@ -1232,7 +1232,7 @@ Future call_async(code callable, ...) [dom=THREAD_CLASS,THREAD_CONTROL] {
     // We no longer need the promise reference from here - the thread owns it via priv
     promise->deref(xsink);
 
-    return new QoreObject(QC_FUTURE, getProgram(), future);
+    return new QoreObject(QC_FUTUREIMPL, getProgram(), future);
 }
 
 // ===== parallel_map / parallel_foreach internal implementation =====

@@ -60,8 +60,8 @@ static AsyncIoControllerPriv* get_singleton(QoreObject*& obj, ExceptionSink* xsi
     @since %Qore 2.3
 */
 hashdecl Qore::SocketPollOperationInfo {
-    //! Socket object
-    Socket sock;
+    //! Pollable I/O object (Socket, EventNotifier, or any AbstractPollableIoObjectBase subclass)
+    AbstractPollableIoObjectBase sock;
 
     //! Poll operation
     AbstractPollOperation spop;
@@ -81,16 +81,12 @@ hashdecl Qore::SocketPollOperationInfo {
     *hash<auto> other;
 
     //! Optional result Queue; if provided, results will be pushed to this Queue instead of a new one
-    /** This allows multiple operations to share a single result Queue for easier coordination
+    /** This allows multiple operations to share a single result Queue for easier coordination.
+
+        If neither a Queue nor an @ref AbstractPollOperation::onComplete() "onComplete()" override
+        is provided, a new Queue is created and returned from @ref submit().
     */
     *Queue resultQueue;
-
-    //! Optional completion callback; called in the I/O thread when the operation completes
-    /** When provided, results are delivered via callback instead of Queue.
-        The callback signature must accept a single hash<SocketPollResultInfo> argument.
-        Mutually exclusive with \c resultQueue.
-    */
-    *code callback;
 
     //! Optional custom cache key; default: sock.uniqueHash()
     /** Allows multiple concurrent operations on the same socket (e.g., concurrent accepts
@@ -98,18 +94,13 @@ hashdecl Qore::SocketPollOperationInfo {
     */
     *string key;
 
-    //! If True, the operation runs on its own dedicated I/O thread
-    /** Useful for QUIC/HTTP/3 connections where the userspace protocol stack
-        requires prompt packet processing and cannot share an I/O thread with
-        other connections.
-
-        Dedicated threads use a minimal stack (128KB) and call the C++ continuePoll()
-        method directly. If the poll operation has a Qore-language override of
-        continuePoll(), calls are dispatched to a shared Qore worker thread pool.
+    //! Force onComplete dispatch even if the C++ auto-detection doesn't find an override
+    /** Works around C++/Qore multiple inheritance method resolution order issues where
+        findMethod("onComplete") returns the base no-op from the wrong parent class.
 
         @since %Qore 2.3
     */
-    *bool dedicated_thread;
+    bool has_on_complete = False;
 }
 
 //! Socket poll result info hash
@@ -118,8 +109,8 @@ hashdecl Qore::SocketPollOperationInfo {
     @since %Qore 2.3
 */
 hashdecl Qore::SocketPollResultInfo {
-    //! The socket that completed the operation
-    Socket sock;
+    //! The pollable I/O object that completed the operation
+    AbstractPollableIoObjectBase sock;
 
     //! The poll operation that completed
     AbstractPollOperation spop;
@@ -234,7 +225,7 @@ static *Queue AsyncIoController::submit(hash<SocketPollOperationInfo> info, *boo
     @return @ref True "True" if an operation was found and canceled
     @since %Qore 2.3
 */
-static bool AsyncIoController::cancel(Socket[QoreSocketObject] sock) {
+static bool AsyncIoController::cancel(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] sock) {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -243,6 +234,30 @@ static bool AsyncIoController::cancel(Socket[QoreSocketObject] sock) {
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     return ctrl->cancel(*sock, xsink);
+}
+
+//! Cancels an operation by I/O object and closes it
+/** Cancels the poll operation associated with the given I/O object, then shuts down
+    and closes it via closeIo(). This is the proper way to tear down a connection whose
+    lifecycle is managed by the async I/O controller.
+
+    @param sock the I/O object whose operation should be canceled and then closed
+    @return @ref True "True" if an operation was found and canceled
+
+    @since %Qore 2.3
+*/
+static bool AsyncIoController::cancelAndClose(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] sock) {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return false;
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    bool rv = ctrl->cancel(*sock, xsink);
+    // Close the I/O object via the type-safe virtual method
+    sock->closeIo(xsink);
+    return rv;
 }
 
 //! Cancels an operation by key on the global singleton
@@ -277,10 +292,16 @@ static int AsyncIoController::cancelByOwner(string owner) {
     return ctrl->cancelByOwner(owner, xsink);
 }
 
-//! Wakes the global singleton's I/O thread to force re-poll on all operations
-/** @since %Qore 2.3
+//! Wakes the I/O thread for a specific socket with pending data
+/** Enqueues a targeted re-poll command for the given socket. The I/O thread
+    includes that socket's operation in the next poll cycle regardless of
+    EventLoop socket readiness, allowing queued send data to be transmitted.
+
+    @param sock the I/O object whose operation needs re-polling
+
+    @since %Qore 2.3
 */
-static nothing AsyncIoController::wake() {
+static nothing AsyncIoController::wakeSocket(AbstractPollableIoObjectBase[AbstractPollableIoObjectBase] sock) {
     QoreObject* obj;
     AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
     if (!ctrl) {
@@ -288,7 +309,32 @@ static nothing AsyncIoController::wake() {
     }
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
-    ctrl->wake();
+    // Use QoreObject unique hash — the private data pointer
+    // (AbstractPollableIoObjectBase*) can change during QUIC handshake when
+    // the socket is reconfigured, causing hash mismatches with the cache key.
+    // The QoreObject unique hash is stable across the connection lifecycle.
+    ctrl->wakeSocketByObject(const_cast<QoreObject*>(obj_sock), xsink);
+}
+
+//! Waits for all pending onComplete/abort callbacks to be processed
+/** Call after cancelByOwner() to ensure all cancelled operation callbacks
+    have been delivered before stopping thread pools that depend on them.
+
+    This prevents shutdown deadlocks where a ThreadPool.stop() blocks
+    waiting for handler threads that are waiting for onComplete() to
+    signal their done counter.
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::flushCallbacks() {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->flushCallbacks();
 }
 
 //! Waits for the global singleton's I/O thread to be ready
@@ -485,4 +531,48 @@ static nothing AsyncIoController::submitTask(code<nothing()> task, *code<nothing
     ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
     ReferenceHolder<QoreObject> obj_holder(obj, xsink);
     ctrl->submitTask(task->refRefSelf(), cancel ? cancel->refRefSelf() : nullptr, xsink);
+}
+
+//! Sets the maximum number of callback dispatcher worker threads on the global singleton
+/** Controls the concurrency of user callback dispatch off the I/O thread.
+
+    The default is @code{.py}hardware_concurrency()@endcode (the number of hardware threads),
+    falling back to 4 if unavailable.
+
+    Takes effect when the dispatcher is next created (after controller stop/restart or first use).
+
+    @param max_workers the maximum number of workers; 0 = auto (hardware_concurrency(), fallback 4)
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::setMaxCallbackWorkers(int max_workers = 0) [dom=NETWORK,PROCESS] {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->setMaxCallbackWorkers((int)max_workers);
+}
+
+//! Sets the number of I/O threads for the global async I/O controller
+/** @param num_threads the number of I/O threads (0 = auto-detect from hardware_concurrency)
+
+    Multiple I/O threads enable nginx-style per-thread connection isolation,
+    scaling throughput near-linearly with core count for high connection counts.
+
+    Must be called before the first submit() or from Qore startup code.
+
+    @since %Qore 2.3
+*/
+static nothing AsyncIoController::setMaxIoThreads(int num_threads = 0) [dom=NETWORK,PROCESS] {
+    QoreObject* obj;
+    AsyncIoControllerPriv* ctrl = get_singleton(obj, xsink);
+    if (!ctrl) {
+        return QoreValue();
+    }
+    ReferenceHolder<AsyncIoControllerPriv> ctrl_holder(ctrl, xsink);
+    ReferenceHolder<QoreObject> obj_holder(obj, xsink);
+    ctrl->setMaxIoThreads((int)num_threads, xsink);
 }
