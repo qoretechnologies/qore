@@ -764,7 +764,9 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
 
 static bool writeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRDotEvalMethodDirectInstruction*>(ctx.inst);
-    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+    // Write NOTHING for expr — dispatch info is in the DOT_EVAL_TARGET slot classification
+    // and the instruction's own class_path + method_name fields below
+    if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");
@@ -822,8 +824,9 @@ static std::unique_ptr<QoreIRInstruction> readDotEvalMethodDirect(
 
 static bool writeInvokeDotEvalMethodDirect(AOTInstWriteCtx& ctx) {
     auto* ci = static_cast<const QoreIRInvokeDotEvalMethodDirectInstruction*>(ctx.inst);
-    // Write NOTHING for the expr (same rationale as writeDotEvalMethodDirect)
-    if (!ctx.writeExpr(ctx.writer, ci->expr)) {
+    // Write NOTHING for expr — dispatch info is in the DOT_EVAL_TARGET slot classification
+    // and the instruction's own class_path + method_name fields below
+    if (!ctx.writeExpr(ctx.writer, QoreValue())) {
         return false;
     }
     ctx.writer.writeStringRef(ci->qc ? ci->qc->getPath() : "");

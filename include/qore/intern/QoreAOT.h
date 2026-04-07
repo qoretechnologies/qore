@@ -39,6 +39,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <qore/QoreParseOptions.h>
 #include "qore/intern/QoreAOTBinary.h"
@@ -155,6 +156,7 @@ struct AOTSlotMap {
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
     std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
+    std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
 
     //! Check if a slot already exists for a LocalVar*
     bool hasLocalSlot(const void* local) const {

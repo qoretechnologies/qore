@@ -7222,6 +7222,7 @@ QoreIRValue QoreIRLowering::lowerDotEval(const QoreValue& expr, std::string& err
             return result;
         }
         // lowerCallArgs failed — fall through to generic path
+        error.clear();
     }
 
     std::vector<QoreIRValue> operands{base_val};
