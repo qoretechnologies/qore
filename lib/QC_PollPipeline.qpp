@@ -34,6 +34,7 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_PollPipeline.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
 #include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreObjectIntern.h"

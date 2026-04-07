@@ -2081,33 +2081,33 @@ QoreValue QoreFunction::evalDynamic(const QoreListNode* args, RuntimeConfig& rc,
 
 void QoreFunction::addBuiltinVariant(AbstractQoreFunctionVariant* variant) {
     assert(variant->getCallType() == CT_BUILTIN);
-#ifdef DEBUG
-    // FIXME: this algorithm is no longer valid due to default arguments
-    // does not detect ambiguous signatures
-    AbstractFunctionSignature* sig = variant->getSignature();
-    // check for duplicate parameter signatures
-    for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
-        AbstractFunctionSignature* vs = (*i)->getSignature();
-        unsigned tp = vs->numParams();
-        if (tp != sig->numParams())
-            continue;
-        if (!tp) {
-            printd(0, "BuiltinFunctionBase::addBuiltinVariant() this: %p %s(%s) added twice: %p, %p\n", this, getName(), sig->getSignatureText(), *i, variant);
-            assert(false);
-        }
-        bool ok = false;
-        for (unsigned pi = 0; pi < tp; ++pi) {
-            if (vs->getParamTypeInfo(pi) != sig->getParamTypeInfo(pi)) {
-                ok = true;
-                break;
+    // Check for duplicate parameter signatures — can happen when a binary module's init()
+    // re-initializes a class that was already initialized by a dependency module
+    // (e.g., grpc init calls initProtobufSchemaClass which protobuf already added).
+    {
+        AbstractFunctionSignature* sig = variant->getSignature();
+        for (vlist_t::iterator i = vlist.begin(), e = vlist.end(); i != e; ++i) {
+            AbstractFunctionSignature* vs = (*i)->getSignature();
+            unsigned tp = vs->numParams();
+            if (tp != sig->numParams()) {
+                continue;
+            }
+            bool different = false;
+            for (unsigned pi = 0; pi < tp; ++pi) {
+                if (vs->getParamTypeInfo(pi) != sig->getParamTypeInfo(pi)) {
+                    different = true;
+                    break;
+                }
+            }
+            if (!different) {
+                // Duplicate — skip it
+                printd(1, "QoreFunction::addBuiltinVariant() this: %p %s(%s) duplicate skipped\n",
+                    this, getName(), sig->getSignatureText());
+                variant->deref();
+                return;
             }
         }
-        if (!ok) {
-            printd(0, "BuiltinFunctionBase::addBuiltinVariant() this: %p %s(%s) added twice: %p, %p\n", this, getName(), sig->getSignatureText(), *i, variant);
-            assert(false);
-        }
     }
-#endif
     if (!has_builtin) {
         has_builtin = true;
     }

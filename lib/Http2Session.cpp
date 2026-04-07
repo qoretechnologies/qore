@@ -37,6 +37,7 @@
 #include "qore/intern/QoreIoUring.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/qore_socket_private.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <algorithm>
 #include <cctype>

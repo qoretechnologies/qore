@@ -53,6 +53,7 @@
 #include "qore/intern/QuicSession.h"
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
 
 #include <atomic>
 #include <cassert>

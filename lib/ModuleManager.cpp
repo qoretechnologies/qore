@@ -365,6 +365,12 @@ static QoreStringNode* loadModuleError(const char* name, ExceptionSink& xsink) {
 void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink) const {
     QoreModuleContextHelper qmc(name.c_str(), tpgm, xsink);
     // issue #3592: must add feature first
+    // Guard against double-registration: if module_ns_init already ran for this program
+    // (e.g., loaded as a dependency of another module that shares this program), skip.
+    if (qore_program_private::get(*tpgm)->hasFeature(name.c_str())) {
+        qmc.commit();
+        return;
+    }
     tpgm->addFeature(name.c_str());
 
     // make sure getProgram() returns this Program when module_ns_init() is called
@@ -1516,6 +1522,7 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
             qore_program_private::get(*mi->getProgram())->addUserFeature(mi->getName());
             omi = mi.release();
             addModule(omi);
+            trySetUserModule(name);
             return nullptr;
         }
         assert(!xsink);

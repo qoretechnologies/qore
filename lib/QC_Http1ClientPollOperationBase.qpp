@@ -34,7 +34,14 @@
 #include "qore/Qore.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
+#include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Channel.h"
+#include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreEventNotifier.h"
+
+// Forward declarations for QPP type references
+extern QoreClass* QC_ABSTRACTHTTPPOLLCONNECTION;
+extern QoreClass* QC_EVENTNOTIFIER;
 
 /** @cond INTERNAL */
 
