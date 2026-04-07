@@ -2241,8 +2241,8 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 #if defined(__linux__) && defined(HAVE_IO_URING)
                                 if (t.loop->getIoUring()) {
                                     ExceptionSink uring_xsink;
-                                    AbstractPollableIoObjectBase* so =
-                                        static_cast<AbstractPollableIoObjectBase*>(
+                                    QoreSocketObject* so =
+                                        static_cast<QoreSocketObject*>(
                                             poll_sock->getReferencedPrivateData(
                                                 CID_ABSTRACTPOLLABLEIOOBJECTBASE, &uring_xsink));
                                     if (so) {
@@ -2520,16 +2520,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         uring->processCompletions(completions);
                         std::unordered_set<int> affected_fds;
                         for (auto& cr : completions) {
-                            if (auto session = cr.session.lock()) {
-                                int fd = session->getSocketFd();
+                            if (cr.session) {
+                                int fd = cr.session->getSocketFd();
                                 if (fd >= 0) {
                                     affected_fds.insert(fd);
                                 }
                             }
                         }
                         for (auto& cr : completions) {
-                            if (auto session = cr.session.lock()) {
-                                session->handleAsyncReadCompletion(
+                            if (cr.session) {
+                                cr.session->handleAsyncReadCompletion(
                                     cr.stream_id, cr.data, cr.length, cr.error,
                                     std::move(cr.buffer), xsink);
                                 if (*xsink) {
