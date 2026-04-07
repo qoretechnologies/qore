@@ -1692,9 +1692,9 @@ ws.setEventQueue();
         } else {
             http_opts."timeout" = timeout_ms;
         }
-        # Default to HTTP/1.1 if http_version not specified
+        # Default to auto-negotiation so TLS connections prefer H2/H3
         if (!http_opts.http_version) {
-            http_opts.http_version = "1.1";
+            http_opts.http_version = "auto";
         }
         # remove the "token" option and use it if the Authorization header is not set
         if ((*string token = remove http_opts.token) && !http_opts.headers.Authorization) {
