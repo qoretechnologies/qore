@@ -376,9 +376,13 @@ void QoreBuiltinModule::addToProgramImpl(QoreProgram* tpgm, ExceptionSink& xsink
     module_ns_init(rns, qns, xsink);
 
     if (xsink || qmc.hasError()) {
-        // rollback all module changes
-        qmc.rollback();
-        qore_program_private::get(*tpgm)->removeFeature(name.c_str());
+        // module_ns_init() may have registered classes, enums, constants into existing
+        // namespaces via addSystemClass()/addEnum()/etc.  These direct modifications are
+        // NOT tracked by QoreModuleContext and cannot be safely rolled back.
+        // Commit partial changes to keep the namespace tree consistent, and keep the
+        // feature flag to prevent a retry that would double-register the same items.
+        qmc.commit();
+        qore_program_private::get(*tpgm)->commitFeature(name.c_str());
         return;
     }
 
@@ -990,6 +994,12 @@ QoreAbstractModule* QoreModuleManager::loadModuleIntern(ExceptionSink& xsink, Ex
 
     // if the feature already exists, then load the namespace changes into this program and register the feature
     if (mi && !(load_opt & QMLO_REINJECT)) {
+        // module init failed on a prior load — don't try to add it to programs
+        if (mi->isInitFailed()) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(name),
+                "module '%s' cannot be loaded because its initialization failed on a prior attempt", name);
+            return nullptr;
+        }
         if (load_opt & QMLO_INJECT) {
             xsink.raiseException("LOAD-MODULE-ERROR", "cannot load module '%s' for injection because the " \
                 "module has already been loaded; to reinject a module, call Program::loadApplyToUserModule() " \
@@ -1494,6 +1504,18 @@ QoreAbstractModule* QoreModuleManager::setupUserModule(ExceptionSink& xsink, std
 
         // init & run module initialization code if any
         if (qmd.init(*mi->getProgram(), xsink)) {
+            // The init closure may have registered data (factories, types) in foreign
+            // modules (e.g., DataProvider) containing TAG_ENUM values that reference enum
+            // declarations in this module's QoreProgram.  If we destroy the module now,
+            // those enum declarations are freed and the TAG_ENUM values become dangling
+            // pointers.  Keep the module alive (in the global list) so its QoreProgram
+            // and enum declarations survive.  ImplicitModuleTransaction will clean up the
+            // foreign registrations; the module's memory stays valid until process exit.
+            mi->set(desc, version, author, url, license_str, qmd.takeDel());
+            mi->setInitFailed();
+            qore_program_private::get(*mi->getProgram())->addUserFeature(mi->getName());
+            omi = mi.release();
+            addModule(omi);
             return nullptr;
         }
         assert(!xsink);

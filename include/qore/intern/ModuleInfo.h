@@ -99,7 +99,7 @@ public:
             const char* v, const char* a, const char* u, const QoreString& l, unsigned load_opt) :
             filename(fn), name(n), desc(d), author(a), url(u), license(l), path(fn) ,
             priv(load_opt & QMLO_PRIVATE), injected(load_opt & QMLO_INJECT), reinjected(load_opt & QMLO_REINJECT),
-            version_list(v) {
+            init_failed(false), version_list(v) {
         q_normalize_path(filename, cwd);
     }
 
@@ -108,7 +108,7 @@ public:
             const char* path = nullptr) :
             filename(fn), name(n), path(path ? path : fn), priv(load_opt & QMLO_PRIVATE),
             injected(load_opt & QMLO_INJECT),
-            reinjected(load_opt & QMLO_REINJECT) {
+            reinjected(load_opt & QMLO_REINJECT), init_failed(false) {
         q_normalize_path(filename, cwd);
     }
 
@@ -154,6 +154,14 @@ public:
 
     DLLLOCAL bool isReInjected() const {
         return reinjected;
+    }
+
+    DLLLOCAL bool isInitFailed() const {
+        return init_failed;
+    }
+
+    DLLLOCAL void setInitFailed() {
+        init_failed = true;
     }
 
     DLLLOCAL void addModuleReExport(const char* m) {
@@ -230,7 +238,8 @@ protected:
 
     bool priv : 1,
         injected : 1,
-        reinjected : 1;
+        reinjected : 1,
+        init_failed : 1;
 
     DLLLOCAL QoreHashNode* getHashIntern(bool with_filename = true) const;
 

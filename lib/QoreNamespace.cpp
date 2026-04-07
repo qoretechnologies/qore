@@ -2967,6 +2967,12 @@ void qore_ns_private::parseRollback(ExceptionSink* xsink, bool atomic_rollback) 
         }
         pending_hashdecl_names.clear();
 
+        // remove only enums added in this pending transaction
+        for (const auto& name : pending_enum_names) {
+            enumList.parseRemove(name.c_str());
+        }
+        pending_enum_names.clear();
+
         // remove only typedefs added in this pending transaction
         for (const auto& name : pending_typedef_names) {
             typedef_map_t::iterator i = typedefMap.find(name);
