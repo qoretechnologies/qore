@@ -165,6 +165,21 @@ public:
         return state == REJECTED;
     }
 
+    //! Cancels the future if still pending
+    /** @return true if cancelled, false if already resolved/rejected
+    */
+    DLLLOCAL bool cancel() {
+        AutoLocker al(&lock);
+        if (state != PENDING) {
+            return false;
+        }
+        err_code = "FUTURE-CANCELLED";
+        err_desc = "Future was cancelled";
+        state = REJECTED;
+        cond.broadcast();
+        return true;
+    }
+
     //! Called from Promise destructor: reject if still pending
     DLLLOCAL void promiseDestroyed(ExceptionSink* xsink) {
         AutoLocker al(&lock);

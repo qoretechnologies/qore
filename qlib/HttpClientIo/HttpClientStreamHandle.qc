@@ -879,4 +879,75 @@ public class HttpClientStreamHandle {
     }
 }
 
+#! A Future that supports cancellation of the underlying HTTP stream
+/** Wraps a raw protocol Future with a reference to the stream handle, enabling
+    callers to cancel an in-flight HTTP request via @ref cancel().
+
+    When @ref cancel() is called, the stream handle's
+    @ref HttpClientStreamHandle::cancel() "cancel()" method is invoked, which
+    sends a protocol-level cancellation (e.g., RST_STREAM for HTTP/2, STOP_SENDING
+    for HTTP/3) and rejects the internal Promise so that any thread blocked on
+    @ref get() receives a \c HTTPCLIENT-CANCELLED exception.
+
+    @par Example
+    @code{.py}
+HttpCancellableFuture f = mgr.requestAsync("https://api.example.com", "POST", "/v1/chat", hdr, body);
+# ... later, if the request should be cancelled:
+f.cancel();
+    @endcode
+
+    @since %HttpClientIo 1.3
+*/
+public class HttpCancellableFuture inherits Future {
+    private {
+        #! The raw protocol Future from submitAsync()
+        Future real_future;
+
+        #! The stream handle for I/O-level cancellation
+        HttpClientStreamHandle stream_handle;
+    }
+
+    #! Creates a new HttpCancellableFuture
+    /** @param real_future the raw protocol Future
+        @param stream_handle the stream handle to cancel on cancel()
+    */
+    constructor(Future real_future, HttpClientStreamHandle stream_handle) {
+        self.real_future = real_future;
+        self.stream_handle = stream_handle;
+    }
+
+    #! Blocks the calling thread until the result is available or an error occurs
+    /** @param timeout_ms timeout; 0 means wait indefinitely
+        @return the value set by the associated Promise
+    */
+    auto get(timeout timeout_ms = 0) {
+        return real_future.get(timeout_ms);
+    }
+
+    #! Returns True if the Future has been resolved or rejected
+    bool isDone() {
+        return real_future.isDone();
+    }
+
+    #! Returns True if the Future has been rejected with an error
+    bool isError() {
+        return real_future.isError();
+    }
+
+    #! Cancels the in-flight HTTP request
+    /** Calls @ref HttpClientStreamHandle::cancel() to send a protocol-level
+        cancellation and reject the internal Promise. Any thread blocked on
+        @ref get() will receive a \c HTTPCLIENT-CANCELLED exception.
+
+        @return True if the cancellation was initiated, False if already complete
+    */
+    bool cancel() {
+        if (real_future.isDone()) {
+            return False;
+        }
+        stream_handle.cancel();
+        return True;
+    }
+}
+
 } # namespace HttpClientIo

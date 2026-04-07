@@ -448,6 +448,81 @@ public class HttpClientConnectionManager {
         }
     }
 
+    #! Submits an async request and returns a cancellable Future
+    /** Unlike @ref submitRequestAsync(), this method returns an
+        @ref HttpCancellableFuture that the caller can cancel to abort the
+        in-flight HTTP request at the protocol level.
+
+        @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
+        @param method HTTP method
+        @param path the full request path to send (must include any base path from the URL)
+        @param headers request headers (optional)
+        @param body request body (optional)
+
+        @return a @ref HttpCancellableFuture that resolves to the raw response hash and
+        supports cancel()
+
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+
+        @since %HttpClientIo 1.3
+    */
+    HttpCancellableFuture requestAsync(string url, string method, string path,
+            *hash<auto> headers, *data body) {
+        # Inject cookies from jar into request headers
+        hash<UrlInfo> url_info;
+        if (cookie_jar) {
+            url_info = parse_url(url);
+            *string cookie_hdr = cookie_jar.getCookieHeader(
+                url_info.host, path, url_info.protocol == "https");
+            if (cookie_hdr) {
+                headers = headers ?? {};
+                if (headers.Cookie) {
+                    headers.Cookie += "; " + cookie_hdr;
+                } else {
+                    headers.Cookie = cookie_hdr;
+                }
+            }
+        }
+
+        int retries = 0;
+        while (True) {
+            *HttpClientStreamHandle stream;
+            try {
+                stream = acquireStream(url);
+                hash<auto> result = stream.submitAsync(method, path, headers, body);
+                Future raw_future = result.future;
+                # Wrap with cookie extraction if needed
+                if (cookie_jar) {
+                    if (!url_info) {
+                        url_info = parse_url(url);
+                    }
+                    raw_future = new CookieExtractingFuture(raw_future,
+                        cookie_jar, url_info.host, path,
+                        url_info.protocol == "https");
+                }
+                return new HttpCancellableFuture(raw_future, stream);
+            } catch (hash<ExceptionInfo> ex) {
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
+                        && ++retries <= MaxRequestRetries) {
+                    if (isConnectionError(ex.err)) {
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
+                            ex.err, retries, MaxRequestRetries);
+                        evictDeadConnections(url);
+                        handleProtocolFallback(url, ex.err);
+                    } else {
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
     #! Performs a synchronous request
     /** @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
@@ -1647,6 +1722,10 @@ class CookieExtractingFuture inherits Future {
 
     bool isError() {
         return real_future.isError();
+    }
+
+    bool cancel() {
+        return real_future.cancel();
     }
 }
 
