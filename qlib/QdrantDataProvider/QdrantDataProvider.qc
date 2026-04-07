@@ -58,22 +58,22 @@ public class QdrantDataProvider inherits QdrantDataProviderBase {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client for accessing the Qdrant server",
-                "type": AbstractDataProviderType::get(new Type("RestClient")),
+                "type": AbstractDataProviderType::get(new Type("RestClientIo::RestClientIo")),
                 "desc": "The REST client for accessing the Qdrant server",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "URL",
                 "short_desc": "The URL to the Qdrant server",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The URL to the Qdrant REST server; overrides any URL in any RestClient object passed "
+                "desc": "The URL to the Qdrant REST server; overrides any URL in any RestClientIo object passed "
                     "as an option",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
                 "short_desc": "Options to any REST client created",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "desc": "Options to the `RestClient` constructor; only used if a `RestClient` object is created for "
-                    "a call to the Qdrant server",
+                "desc": "Options to the `RestClientIo` constructor; only used if a `RestClientIo` object is "
+                    "created for a call to the Qdrant server",
             },
         };
     }
@@ -104,27 +104,25 @@ public class QdrantDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Returns a REST connection from the given options
-    static RestClient::RestClient getRestConnection(*hash<auto> options) {
-        RestClient rest;
+    /** @note if a \c restclient option is passed, it is returned as-is; the \c url option is only used when
+        creating a new client
+    */
+    static RestClientIo::RestClientIo getRestConnection(*hash<auto> options) {
         if (options.restclient) {
-            rest = options.restclient;
-            if (options.url) {
-                rest.setURL(options.url);
-            }
-        } else {
-            if (!options.url && !options.restclient_options) {
-                throw "CONSTRUCTOR-ERROR", "no 'restclient', 'url', or 'restclient_options' option passed; "
-                    "cannot create REST client to Qdrant instance without a URL";
-            }
-
-            hash<auto> opts;
-            opts += options.restclient_options;
-            if (options.url) {
-                opts.url = options.url;
-            }
-            rest = new RestClient(opts);
+            return options.restclient;
         }
-        return rest;
+
+        if (!options.url && !options.restclient_options) {
+            throw "CONSTRUCTOR-ERROR", "no 'restclient', 'url', or 'restclient_options' option passed; "
+                "cannot create REST client to Qdrant instance without a URL";
+        }
+
+        hash<auto> opts;
+        opts += options.restclient_options;
+        if (options.url) {
+            opts.url = options.url;
+        }
+        return new RestClientIo::RestClientIo(opts);
     }
 
     #! Returns the data provider name
@@ -134,7 +132,7 @@ public class QdrantDataProvider inherits QdrantDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant data provider for `%s`", rest.getSafeURL());
+        return sprintf("Qdrant data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

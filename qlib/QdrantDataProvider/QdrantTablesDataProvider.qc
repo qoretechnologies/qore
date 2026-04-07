@@ -54,7 +54,7 @@ public class QdrantTablesDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : QdrantDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -64,7 +64,7 @@ public class QdrantTablesDataProvider inherits QdrantDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant tables data provider for `%s`", rest.getSafeURL());
+        return sprintf("Qdrant tables data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info
@@ -103,14 +103,13 @@ public class QdrantTablesDataProvider inherits QdrantDataProviderBase {
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         # verify the collection exists
-        hash<auto> info;
         try {
-            rest.get(collectionPath(name), NOTHING, \info);
-        } catch (hash<ExceptionInfo> ex) {
-            if (info."response-code" == 404) {
+            hash<auto> resp = rest.restGet(collectionPath(name));
+            if (resp.status_code == 404) {
                 return;
             }
-            rethrow;
+        } catch (hash<ExceptionInfo> ex) {
+            return;
         }
         return new QdrantCollectionTableDataProvider(rest, name);
     }

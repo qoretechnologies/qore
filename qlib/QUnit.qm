@@ -657,6 +657,8 @@ public class TestReporter {
         string m_name;
         #! test case version
         string m_version;
+        #! the script name for usage output (resolved from the call stack)
+        *string m_script_name;
 
         #! total number of assertions in script
         int num_asserts = 0;
@@ -714,7 +716,7 @@ public class TestReporter {
     }
 
     private usageIntern(int offset = OffsetColumn) {
-        printf("usage: %s [options]\n", get_script_name());
+        printf("usage: %s [options]\n", m_script_name ?? get_script_name());
         printOption("-h,--help", "this help text", offset);
         printOption("   --format=type", "output format [default: plainquiet]", offset);
         print("        Format descriptions:
@@ -811,6 +813,15 @@ public class TestReporter {
     private init(string name, string version, reference<list<string>> p_argv, hash<auto> opts = Opts) {
         m_name = name;
         m_version = version;
+        # resolve the calling script name from the call stack; find the outermost frame
+        # that is not from QUnit.qm and not a builtin pseudo-location
+        list<hash<CallStackInfo>> cs = get_thread_call_stack();
+        for (int i = cs.size() - 1; i >= 0; --i) {
+            if (cs[i].type == "user" && cs[i].file !~ /^</ && !regex(cs[i].file, "\\.qm$")) {
+                m_script_name = basename(cs[i].file);
+                break;
+            }
+        }
         if (!p_argv) {
             # issue #3857: there is no ARGV when Qore is initialized from other languages like Java
             p_argv = cast<list<string>>(ARGV ?? ());

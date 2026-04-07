@@ -1594,6 +1594,11 @@ public class HttpClientConnectionManager {
         }
     }
 
+    #! Sets the logger for this connection manager
+    setLogger(*LoggerInterface logger) {
+        self.logger = logger;
+    }
+
     #! Internal: logging helper
     private log(int level, string fmt) {
         if (logger) {

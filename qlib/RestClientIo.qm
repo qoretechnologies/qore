@@ -650,6 +650,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return logger;
         }
 
+        #! Sets the logger for this client
+        setLogger(*LoggerInterface logger) {
+            self.logger = logger;
+            mgr.setLogger(logger);
+        }
+
         #! Sets whether any response content type is allowed
         /** When True, deserialization errors are silently ignored and the raw body is
             returned instead of throwing a \c DESERIALIZATION-ERROR exception.

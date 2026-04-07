@@ -59,7 +59,7 @@ public class QdrantServiceLivenessDataProvider inherits QdrantDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : QdrantDataProviderBase(rest) {
+    constructor(RestClientIo::RestClientIo rest) : QdrantDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -69,12 +69,12 @@ public class QdrantServiceLivenessDataProvider inherits QdrantDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Qdrant service liveness check provider for `%s`", rest.getSafeURL());
+        return sprintf("Qdrant service liveness check provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return rest.get("/livez").body;
+        return rest.restGet("/livez").body;
     }
 
     #! Returns the description of a successful request message, if any

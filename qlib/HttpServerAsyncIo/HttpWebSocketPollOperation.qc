@@ -218,6 +218,11 @@ public class HttpWebSocketPollOperation inherits HttpWebSocketPollOperationBase,
         if (done) {
             done.dec();
         }
+        # Call base class to trigger handleConnectionResult() → handleWebSocketClose(),
+        # which removes the stale connections{uh} entry and cancels the I/O operation.
+        # Without this, asyncIo.stop() finds stale entries and sends unnecessary cancel
+        # commands that can race with I/O thread auto-stop on ARM.
+        HttpConnectionPollOperationBase::onComplete(result);
     }
 
     #! gotRawMessage return values (from WebSocketHandler, duplicated to avoid circular dep)

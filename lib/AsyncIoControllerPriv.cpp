@@ -2287,6 +2287,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     int64 deadline = get_epoch_us() + pt_ms * 1000;
                                     pinfo.poll_timeout_deadline_us = deadline;
                                     t.timeout_heap.push({deadline, result.key});
+                                    // Ensure the event loop wakes in time for this
+                                    // deadline — poll_deadline_us was computed in
+                                    // Phase 1 before this entry existed.
+                                    if (poll_deadline_us == 0
+                                            || deadline < poll_deadline_us) {
+                                        poll_deadline_us = deadline;
+                                    }
                                 }
                             } else {
                                 pinfo.poll_timeout_deadline_us = 0;
@@ -2703,7 +2710,21 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     t.cmdq.push(std::move(pending_cmd));
                     continue;
                 }
-                if (pending_cmd.cmd == IoCommand::CancelByProgram && pending_cmd.pending_threads) {
+                if (pending_cmd.cmd == IoCommand::Cancel) {
+                    // Signal cancel waiter — the operation was already completed
+                    // naturally (removed from cache) before this Cancel arrived.
+                    // Without this, waitCancel() hangs forever on ARM where weak
+                    // memory ordering can delay visibility of the cmdq push,
+                    // allowing the auto-stop check to see an empty queue.
+                    auto cit = cancel_cond_map.find(pending_cmd.key);
+                    if (cit != cancel_cond_map.end()) {
+                        cit->second->broadcast();
+                        delete cit->second;
+                        cancel_cond_map.erase(cit);
+                    }
+                } else if ((pending_cmd.cmd == IoCommand::CancelByProgram
+                            || pending_cmd.cmd == IoCommand::CancelOwner)
+                        && pending_cmd.pending_threads) {
                     // Multi-thread command: decrement counter; only last thread signals
                     if (pending_cmd.pending_threads->fetch_sub(1, std::memory_order_acq_rel) == 1) {
                         if (pending_cmd.cancel_done_flag) {

@@ -34,7 +34,7 @@ public namespace QdrantDataProvider {
 public class QdrantCollectionBulkOperation inherits DataProvider::AbstractDataProviderBulkOperation {
     private {
         #! The REST client for Qdrant
-        RestClient rest;
+        RestClientIo::RestClientIo rest;
 
         #! Pre-built URI for the upsert endpoint
         string uri;
@@ -55,7 +55,7 @@ public class QdrantCollectionBulkOperation inherits DataProvider::AbstractDataPr
         @param collection_name the collection name for the bulk operations
         @param block_size the block size for bulk operations (default: 1000)
     */
-    constructor(DataProvider::AbstractDataProvider provider, RestClient rest, string collection_name,
+    constructor(DataProvider::AbstractDataProvider provider, RestClientIo::RestClientIo rest, string collection_name,
             *int block_size)
             : AbstractDataProviderBulkOperation(provider, "upsert", block_size ?? DefaultBlockSize) {
         self.rest = rest;
@@ -117,7 +117,7 @@ public class QdrantCollectionBulkOperation inherits DataProvider::AbstractDataPr
             push points, point;
         }
 
-        rest.put(uri, {"points": points});
+        rest.restPut(uri, {"points": points});
 
         int bs = row_buf.size();
         row_count += bs;

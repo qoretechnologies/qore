@@ -533,6 +533,20 @@ int SocketQuicClientPollOperation::sendPendingPackets(
     return 0;
 }
 
+int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
+    if (!quic_session || !quic_session->hasPendingWrite()) {
+        return 0;
+    }
+    ngtcp2_tstamp next_expiry;
+    int rv = sendPendingPackets(next_expiry, xsink);
+    if (rv < 0) {
+        return -1;
+    }
+    // rv == SOCK_POLLOUT means partial send — acceptable for flush purposes,
+    // the I/O thread will pick up the remainder
+    return 0;
+}
+
 int SocketQuicClientPollOperation::recvAndProcessPacket(ExceptionSink* xsink) {
     // Thread-local to reduce stack pressure (see QuicCommon.h for rationale)
     static thread_local struct sockaddr_storage src_addr;

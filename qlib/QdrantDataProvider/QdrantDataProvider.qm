@@ -30,6 +30,7 @@
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
 %requires(reexport) RestClient
+%requires(reexport) RestClientIo
 
 module QdrantDataProvider {
     version = "1.0";

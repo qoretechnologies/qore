@@ -28,7 +28,7 @@ public namespace QdrantDataProvider {
 public class QdrantDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
         #! The REST client for Qdrant API access
-        RestClient rest;
+        RestClientIo::RestClientIo rest;
     }
 
     #! Creates the object
@@ -36,7 +36,7 @@ public class QdrantDataProviderBase inherits DataProvider::AbstractDataProvider 
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient rest) {
+    constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
@@ -46,29 +46,34 @@ public class QdrantDataProviderBase inherits DataProvider::AbstractDataProvider 
         LoggerWrapper::setLogger(logger);
     }
 
+    #! Returns the REST client
+    RestClientIo::RestClientIo getRestClient() {
+        return rest;
+    }
+
     #! Makes a GET request to the Qdrant API and returns the result
     private auto doQdrantGet(string path) {
-        return rest.get(path).body.result;
+        return rest.restGet(path).body.result;
     }
 
     #! Makes a POST request to the Qdrant API and returns the result
     private auto doQdrantPost(string path, *hash<auto> body) {
-        return rest.post(path, body).body.result;
+        return rest.restPost(path, body).body.result;
     }
 
     #! Makes a PUT request to the Qdrant API and returns the result
     private auto doQdrantPut(string path, *hash<auto> body) {
-        return rest.put(path, body).body.result;
+        return rest.restPut(path, body).body.result;
     }
 
     #! Makes a PATCH request to the Qdrant API and returns the result
     private auto doQdrantPatch(string path, *hash<auto> body) {
-        return rest.patch(path, body).body.result;
+        return rest.restPatch(path, body).body.result;
     }
 
     #! Makes a DELETE request to the Qdrant API and returns the result
     private auto doQdrantDelete(string path, *hash<auto> body) {
-        return rest.del(path, body).body.result;
+        return rest.restDel(path, body).body.result;
     }
 
     #! Returns a collection path with an optional suffix
