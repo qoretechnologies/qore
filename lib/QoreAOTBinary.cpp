@@ -3037,6 +3037,9 @@ static QoreIRInstGroup classifyInstruction(const QoreIRInstruction* inst) {
     if (dynamic_cast<const QoreIRHashKeyStoreInstruction*>(inst)) {
         return QoreIRInstGroup::HashKeyStore;
     }
+    if (dynamic_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst)) {
+        return QoreIRInstGroup::HashKeyStoreDynamic;
+    }
     if (dynamic_cast<const QoreIRHashKeyAccessInstruction*>(inst)) {
         return QoreIRInstGroup::HashKeyAccess;
     }

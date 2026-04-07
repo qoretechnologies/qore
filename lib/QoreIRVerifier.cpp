@@ -1216,6 +1216,15 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                         hks->container_slot_id = it->second;
                     }
                 }
+            } else if (inst->opcode == QoreIROpcode::HashKeyStoreDynamic) {
+                auto* hksd = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                if (hksd->container && hksd->container->ref.id) {
+                    auto it = slot_map.find(
+                        reinterpret_cast<const LocalVar*>(hksd->container->ref.id));
+                    if (it != slot_map.end()) {
+                        hksd->container_slot_id = it->second;
+                    }
+                }
             } else if (inst->opcode == QoreIROpcode::ListIndexStore) {
                 auto* lis = static_cast<QoreIRListIndexStoreInstruction*>(inst.get());
                 if (lis->container && lis->container->ref.id) {

@@ -35,7 +35,7 @@ struct OpcodeInfo {
 };
 
 //! Registry of all IR opcodes (in enum ID order, accounting for removed IDs 134, 141, 142)
-constexpr OpcodeInfo OPCODE_REGISTRY[355] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[356] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 2
@@ -391,12 +391,13 @@ constexpr OpcodeInfo OPCODE_REGISTRY[355] = {
     { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , true , false, false }, // 352
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 353
     { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 354
+    { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 355
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 355,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 355"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 356,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 356"
 );
 
 //! ============================================================================

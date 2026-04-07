@@ -1200,6 +1200,7 @@ enum class QoreIRInstGroup : uint8_t {
     Summarize = 55,         //!< QoreIRSummarizeInstruction
     ListIndexAccess = 56,   //!< QoreIRListIndexAccessInstruction
     NewHashDeclFromHash = 57, //!< QoreIRNewHashDeclFromHashInstruction
+    HashKeyStoreDynamic = 58, //!< QoreIRHashKeyStoreDynamicInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

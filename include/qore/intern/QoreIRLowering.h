@@ -265,12 +265,18 @@ private:
     QoreIRValue emitHashKeyCompoundOp(const VarRefNode* container_var, const std::string& key_name,
         const QoreValue& key_expr, QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyDynamicCompoundOp(const VarRefNode* container_var, const QoreValue& key_expr,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue emitListKeyCompoundOp(const VarRefNode* container_var, const QoreValue& index_expr,
         QoreIROpcode arith_op, const QoreIRValue& right,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
     QoreIRValue emitHashKeyDirectStore(const VarRefNode* container_var, const std::string& key_name,
         const QoreValue& key_expr, const QoreIRValue& value,
         const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error);
+    QoreIRValue emitHashKeyDynamicStore(const VarRefNode* container_var, const QoreValue& key_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error);
     QoreIRValue emitListIndexDirectStore(const VarRefNode* container_var, const QoreValue& index_expr,
         const QoreIRValue& value, const QoreValue& full_expr,
         const QoreProgramLocation* loc, std::string& error);

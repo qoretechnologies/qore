@@ -2662,6 +2662,32 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     return true;
 }
 
+// Returns true if expr is $hash{dynamic_key} where $hash is a non-reference, non-object
+// local variable and key is any lowerable expression (not just constant string).
+// Sets container_var and key_expr (the dynamic key expression to lower).
+static bool isDynamicKeyHashSubscript(const QoreValue& expr,
+        const VarRefNode*& container_var, QoreValue& key_expr) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) return false;
+    const auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
+    if (!hd) return false;
+    key_expr = hd->getRight();
+    const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
+    if (!vr) return false;
+    qore_var_t vtype = vr->getType();
+    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+    if (vr->ref.id && QoreTypeInfo::isReference(
+            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+        return false;
+    }
+    if (vr->ref.id && QoreTypeInfo::getUniqueReturnClass(
+            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo()) != nullptr) {
+        return false;
+    }
+    container_var = vr;
+    return true;
+}
+
 // Returns true if expr is $list[index] where $list is a local variable and index is compile-time constant.
 // Sets container_var and index_expr if true.
 static bool isConstIndexListSubscript(const QoreValue& expr,
@@ -4304,6 +4330,11 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             return emitHashKeyDirectStore(container_var, key_name, key_expr, right, expr,
                 assign->loc, error);
         }
+        // Fast path: dynamic-key hash subscript → LoadLocal + HashKeyStoreDynamic (no EXPR_TREE)
+        if (!is_weak && isDynamicKeyHashSubscript(assign->getLeft(), container_var, key_expr)) {
+            return emitHashKeyDynamicStore(container_var, key_expr, right, expr,
+                assign->loc, error);
+        }
         // Fast path: const-index list subscript → LoadLocal + ListIndexStore (no EXPR_TREE)
         QoreValue index_expr;
         if (!is_weak && isConstIndexListSubscript(assign->getLeft(), container_var, index_expr)) {
@@ -4419,6 +4450,11 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
         if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
+                arith_op, right, expr, op->loc, error);
+        }
+        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::AddAssignInt : QoreIROpcode::AddAssignAny;
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
 
@@ -4577,6 +4613,11 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 arith_op, right, expr, op->loc, error);
         }
+        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+            QoreIROpcode arith_op = force_int ? QoreIROpcode::SubAssignInt : QoreIROpcode::SubAssignAny;
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
+                arith_op, right, expr, op->loc, error);
+        }
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
@@ -4718,6 +4759,10 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
+        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
+                QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
+        }
 
         // Fast path: list index subscript compound assignment
         QoreValue index_expr;
@@ -4817,6 +4862,10 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
         QoreValue key_expr;
         if (isConstKeyHashSubscript(op->getLeft(), container_var, key_name, key_expr)) {
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
+                QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
+        }
+        if (isDynamicKeyHashSubscript(op->getLeft(), container_var, key_expr)) {
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
@@ -5246,6 +5295,11 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
+        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)) {
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
+                QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
+        }
     }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
@@ -5395,6 +5449,11 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
+                QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
+        }
+        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)) {
+            QoreIRValue one = builder.createConstInt(1, op->loc)->result;
+            return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
         }
     }
@@ -7349,6 +7408,55 @@ QoreIRValue QoreIRLowering::emitHashKeyCompoundOp(
     return new_val;
 }
 
+// Emit LoadLocal → HashDerefDynamic → op → HashKeyStoreDynamic for $hash{dyn_key} OP= val.
+// Like emitHashKeyCompoundOp but key is a dynamic expression.
+QoreIRValue QoreIRLowering::emitHashKeyDynamicCompoundOp(
+        const VarRefNode* container_var, const QoreValue& key_expr,
+        QoreIROpcode arith_op, const QoreIRValue& right,
+        const QoreValue& full_expr, const QoreProgramLocation* loc, std::string& error) {
+    // Load the hash container without refcount inflation (auto_ref=false)
+    QoreIRValue hash_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        hash_val = loadVarRef(container_var, error, "hash-dynamic-compound-op", full_expr);
+    }
+    if (!hash_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Lower the key expression
+    QoreIRValue key_val = lowerExpression(key_expr, error);
+    if (!key_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Load current element value via HashDerefDynamic
+    std::vector<QoreIRValue> deref_operands{hash_val, key_val};
+    QoreIRValue old_val = lowerExprOpOrInvoke(QoreIROpcode::HashDerefDynamic, full_expr,
+        deref_operands, loc, error);
+    if (!old_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Apply arithmetic
+    QoreIRValue new_val = lowerBinaryOpOrInvoke(arith_op, full_expr, old_val, right, loc, error);
+    if (!new_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Store result back with dynamic key
+    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
+        container_var);
+    store_inst->loc = loc;
+    store_inst->operands.push_back(hash_val);
+    store_inst->operands.push_back(new_val);
+    store_inst->operands.push_back(key_val);
+
+    return new_val;
+}
+
 // Emit LoadLocal → ListIndexAccess → op → ListIndexStore sequence for $list[index] OP= val.
 // arith_op must be one of AddAssignInt/Float/Any, SubAssignInt/Float/Any, etc.
 QoreIRValue QoreIRLowering::emitListKeyCompoundOp(
@@ -7416,6 +7524,41 @@ QoreIRValue QoreIRLowering::emitHashKeyDirectStore(
     store_inst->loc = loc;
     store_inst->operands.push_back(hash_val);
     store_inst->operands.push_back(value);
+
+    return value;
+}
+
+// Emit LoadLocal(hash, auto_ref=false) → HashKeyStoreDynamic(hash, value, key) for h{dyn_key} = val.
+// Like emitHashKeyDirectStore but key is a dynamic expression lowered to IR.
+QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
+        const VarRefNode* container_var, const QoreValue& key_expr,
+        const QoreIRValue& value, const QoreValue& full_expr,
+        const QoreProgramLocation* loc, std::string& error) {
+    // Load the hash container without refcount inflation (auto_ref=false)
+    QoreIRValue hash_val;
+    if (container_var->getType() == VT_LOCAL && container_var->ref.id) {
+        LocalVar* lv = const_cast<LocalVar*>(reinterpret_cast<const LocalVar*>(container_var->ref.id));
+        hash_val = builder.createLoadLocal(lv, loc, false)->result;
+    } else {
+        hash_val = loadVarRef(container_var, error, "hash-dynamic-store", full_expr);
+    }
+    if (!hash_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Lower the key expression to IR
+    QoreIRValue key_val = lowerExpression(key_expr, error);
+    if (!key_val.isValid()) {
+        return QoreIRValue();
+    }
+
+    // Store value to hash element with dynamic key
+    auto* store_inst = builder.getBlock()->appendInstruction<QoreIRHashKeyStoreDynamicInstruction>(
+        container_var);
+    store_inst->loc = loc;
+    store_inst->operands.push_back(hash_val);
+    store_inst->operands.push_back(value);
+    store_inst->operands.push_back(key_val);
 
     return value;
 }

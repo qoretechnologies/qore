@@ -396,6 +396,7 @@ MAKE_STUB_PAIR(47, QoreIRSwitchRegexMatchInstruction)
 MAKE_STUB_PAIR(49, QoreIRMakeHashConstKeysInstruction)
 MAKE_STUB_PAIR(50, QoreIRSwitchCaseMatchInstruction)
 MAKE_STUB_PAIR(51, QoreIRListIndexAccessInstruction)
+MAKE_STUB_PAIR(52, QoreIRHashKeyStoreDynamicInstruction)
 
 #undef MAKE_STUB_PAIR
 
@@ -1994,6 +1995,30 @@ static std::unique_ptr<QoreIRInstruction> readListIndexAccess(
 }
 
 // ============================================================================
+// Group 58: HashKeyStoreDynamic - Hash key storage with dynamic key
+// ============================================================================
+
+static bool writeHashKeyStoreDynamic(AOTInstWriteCtx& ctx) {
+    auto* hi = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(ctx.inst);
+    ctx.writer.writeU32(hi->container_slot_id);
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+    auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
+    hi->opcode = static_cast<QoreIROpcode>(opcode_raw);
+    hi->container_slot_id = container_slot_id;
+    hi->result = QoreIRValue(result_id);
+    hi->operands = operands;
+    hi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(hi);
+}
+
+// ============================================================================
 // Instruction Group Registry Table
 // ============================================================================
 
@@ -2173,8 +2198,11 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 57: NewHashDeclFromHash
     { "NewHashDeclFromHash", 57, true, false, writeNewHashDeclFromHash, readNewHashDeclFromHash, "Hashdecl from hash" },
 
-    // Remaining 58-255: Unsupported/undefined
-    UNUSED_ENTRY(58), UNUSED_ENTRY(59),
+    // Index 58: HashKeyStoreDynamic
+    { "HashKeyStoreDynamic", 58, true, false, writeHashKeyStoreDynamic, readHashKeyStoreDynamic, "Hash key storage with dynamic key" },
+
+    // Remaining 59-255: Unsupported/undefined
+    UNUSED_ENTRY(59),
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),

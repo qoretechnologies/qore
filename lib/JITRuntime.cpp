@@ -1643,6 +1643,25 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     return value_bits;
 }
 
+// JIT path: hash[dynamic_key] = value with COW (key is NaN-boxed QoreValue, converted to string)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow(
+        LocalVar* var, uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue key_val = fromBits(key_bits);
+    QoreStringValueHelper key_str(key_val);
+    return qore_rt_hash_key_store_cow(var, hash_bits, key_str->c_str(), value_bits, xsink);
+}
+
+// AOT path: hash[dynamic_key] = value with COW (key is NaN-boxed QoreValue, converted to string)
+extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_dynamic_cow_aot(
+        QoreAOTContext* ctx, uint32_t local_slot,
+        uint64_t hash_bits, uint64_t key_bits,
+        uint64_t value_bits, ExceptionSink* xsink) {
+    QoreValue key_val = fromBits(key_bits);
+    QoreStringValueHelper key_str(key_val);
+    return qore_rt_hash_key_store_cow_aot(ctx, local_slot, hash_bits, key_str->c_str(), value_bits, xsink);
+}
+
 // JIT path: list[index] = value with COW
 // var: container LocalVar* (used to update the local when COW triggers).
 extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(

@@ -3113,6 +3113,15 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             break;
         }
 
+        case QoreIRInstGroup::HashKeyStoreDynamic: {
+            uint32_t container_slot_id = QoreAOTBinaryReader::readU32(ptr);
+            auto* hi = new QoreIRHashKeyStoreDynamicInstruction(nullptr);
+            hi->opcode = opcode;
+            hi->container_slot_id = container_slot_id;
+            inst.reset(hi);
+            break;
+        }
+
         case QoreIRInstGroup::FusedAddLocal: {
             const char* target_name = reader.readStringRef(ptr);
             const char* source_name = reader.readStringRef(ptr);

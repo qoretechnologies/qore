@@ -566,8 +566,11 @@ enum class QoreIROpcode : uint16_t {
     HashDerefDynamic    = 353,
     //! Dynamic list/container index with pre-evaluated index: operands[0]=container, operands[1]=index
     ListIndexDynamic    = 354,
+    //! Dynamic hash key store: operands[0]=hash, operands[1]=value, operands[2]=key
+    //! Like HashKeyStore but key is a pre-evaluated IR value instead of constant string
+    HashKeyStoreDynamic = 355,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (355, 356, ...)
+    // NOTE: When adding new opcodes, assign the next sequential ID (356, 357, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -575,8 +578,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::ListIndexDynamic);
-static_assert(QORE_IR_MAX_OPCODE == 354, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::HashKeyStoreDynamic);
+static_assert(QORE_IR_MAX_OPCODE == 355, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -958,6 +961,22 @@ public:
     uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
+};
+
+//! Dynamic hash key store instruction - stores value at hash[key] where key is a pre-evaluated
+//! IR operand. Like HashKeyStore but handles dynamic (non-constant) keys.
+class QoreIRHashKeyStoreDynamicInstruction : public QoreIRInstruction {
+public:
+    QoreIRHashKeyStoreDynamicInstruction(const VarRefNode* n_container)
+            : QoreIRInstruction(QoreIROpcode::HashKeyStoreDynamic),
+              container(n_container) {
+    }
+
+    const VarRefNode* container;  //!< Container variable (for COW: get LocalVar* from ref.id)
+    uint32_t container_slot_id = UINT32_MAX; // Pre-computed slot index for container variable
+    // operands[0] = hash value (from LoadLocal on container)
+    // operands[1] = new element value to store
+    // operands[2] = key value (converted to string at runtime)
 };
 
 //! List index access instruction - loads list[index] directly (no AST delegation)

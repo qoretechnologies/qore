@@ -39,7 +39,7 @@
 // Compile-time guard: forces review of LLVM lowering when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 354,
+static_assert(QORE_IR_MAX_OPCODE == 355,
     "New IR opcode added — review QoreIRToLLVM.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRInterpreter.cpp.");
 #include "qore/intern/QoreLibIntern.h"
@@ -6972,6 +6972,50 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 reinterpret_cast<const void*>(hks_inst->container->ref.id);
             reloadLocalFromRuntime(container_key, module, llvm_func);
 
+            return true;
+        }
+        case QoreIROpcode::HashKeyStoreDynamic: {
+            const auto* hksd_inst = static_cast<const QoreIRHashKeyStoreDynamicInstruction*>(inst);
+            std::string err;
+            auto* hash_v = getVal(inst->operands[0].id, err);
+            auto* val_v  = getVal(inst->operands[1].id, err);
+            auto* key_v  = getVal(inst->operands[2].id, err);
+            if (!hash_v || !val_v || !key_v) {
+                error = err;
+                return false;
+            }
+            llvm::Value* hash_boxed = boxValue(hash_v, inst->operands[0].id);
+            llvm::Value* val_boxed  = boxValue(val_v,  inst->operands[1].id);
+            llvm::Value* key_boxed  = boxValue(key_v,  inst->operands[2].id);
+
+            llvm::Value* call_result;
+            if (aot_mode) {
+                uint32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                        reinterpret_cast<const void*>(hksd_inst->container->ref.id));
+                llvm::Value* slot_val = llvm::ConstantInt::get(i32_type, slot);
+                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_dynamic_cow_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(fn,
+                        {aot_ctx_arg, slot_val, hash_boxed, key_boxed, val_boxed, xsink_arg});
+            } else {
+                auto var_int = llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uint64_t>(hksd_inst->container->ref.id));
+                auto* var_ptr = builder->CreateIntToPtr(var_int, ptr_type);
+                auto fn = module.getOrInsertFunction("qore_rt_hash_key_store_dynamic_cow",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                call_result = builder->CreateCall(fn, {var_ptr, hash_boxed, key_boxed, val_boxed, xsink_arg});
+            }
+            if (inst->result.isValid()) {
+                values[inst->result.id] = call_result;
+                nanboxed_values.insert(inst->result.id);
+                trackResultForCleanup(call_result, inst->result.id, llvm_func);
+            }
+            emitExceptionCheck(module, llvm_func, inst);
+            const void* container_key =
+                reinterpret_cast<const void*>(hksd_inst->container->ref.id);
+            reloadLocalFromRuntime(container_key, module, llvm_func);
             return true;
         }
         case QoreIROpcode::ListIndexStore: {

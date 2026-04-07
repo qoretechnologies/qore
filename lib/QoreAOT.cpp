@@ -383,7 +383,8 @@ static uint64_t opcodeToFeatureFlag(QoreIROpcode op) {
         case QoreIROpcode::ListGetValue:       return QORE_AOT_FEAT_DIRECT_INDEX;
         case QoreIROpcode::HashKeyAccess:
         case QoreIROpcode::HashKeyAccessInt:   return QORE_AOT_FEAT_HASH_KEY_ACCESS;
-        case QoreIROpcode::HashKeyStore:       return QORE_AOT_FEAT_HASH_KEY_STORE;
+        case QoreIROpcode::HashKeyStore:
+        case QoreIROpcode::HashKeyStoreDynamic: return QORE_AOT_FEAT_HASH_KEY_STORE;
         case QoreIROpcode::ListIndexAccess:
         case QoreIROpcode::ListIndexStore:     return QORE_AOT_FEAT_LIST_INDEX_STORE;
         case QoreIROpcode::CallMethodDirect:
@@ -4123,6 +4124,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());
                     // Register container local slot so COW path can update the variable in AOT mode
                     slots.getLocalSlot(reinterpret_cast<const void*>(hks->container->ref.id));
+                    break;
+                }
+                case QoreIROpcode::HashKeyStoreDynamic: {
+                    auto* hksd = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst.get());
+                    slots.getLocalSlot(reinterpret_cast<const void*>(hksd->container->ref.id));
                     break;
                 }
                 case QoreIROpcode::ListIndexStore: {

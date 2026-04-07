@@ -63,7 +63,7 @@
 // Compile-time guard: forces review of interpreter dispatch when opcodes change.
 // Update this value after verifying the new opcode is handled (or deliberately
 // falls through to the default case).
-static_assert(QORE_IR_MAX_OPCODE == 354,
+static_assert(QORE_IR_MAX_OPCODE == 355,
     "New IR opcode added — review QoreIRInterpreter.cpp dispatch switch "
     "and update this assertion.  Also check QoreIRToLLVM.cpp.");
 #include <qore/intern/QoreJIT.h>
@@ -3664,6 +3664,55 @@ load_local_done:
                 }
                 if (hks_inst->result.isValid()) {
                     setValueSlot(values, hks_inst->result.id, val, xsink);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::HashKeyStoreDynamic: {
+                auto* hksd_inst = static_cast<QoreIRHashKeyStoreDynamicInstruction*>(inst);
+                QoreValue hash_val = getIRValue(values, hksd_inst->operands[0]);
+                QoreValue val      = getIRValue(values, hksd_inst->operands[1]);
+                QoreValue key_val  = getIRValue(values, hksd_inst->operands[2]);
+                // Convert key to string
+                QoreStringValueHelper key_str(key_val);
+                if (hash_val.getType() == NT_HASH) {
+                    QoreHashNode* h = hash_val.get<QoreHashNode>();
+                    if (h->reference_count() > 1) {
+                        QoreHashNode* new_h = h->copy();
+                        LocalVar* lv = const_cast<LocalVar*>(
+                            reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
+                        if (hksd_inst->container->getType() == VT_CLOSURE) {
+                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
+                        } else {
+                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
+                        }
+                        if (xsink && *xsink) {
+                            new_h->deref(xsink);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        new_h->deref(xsink);
+                        h = new_h;
+                    }
+                    h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                    clearLoadSlots(hksd_inst->container_slot_id);
+                    uint32_t csid = hksd_inst->container_slot_id;
+                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                        locals_slot_cache[csid].discard(xsink);
+                    }
+                    values[hksd_inst->operands[0].id] = QoreValue();
+                } else if (hash_val.getType() == NT_OBJECT) {
+                    const_cast<QoreObject*>(hash_val.get<const QoreObject>())->setValue(
+                        key_str->c_str(), val.refSelf(), xsink);
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (hksd_inst->result.isValid()) {
+                    setValueSlot(values, hksd_inst->result.id, val, xsink);
                 }
                 ++ip;
                 break;

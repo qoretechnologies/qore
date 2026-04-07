@@ -383,6 +383,7 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::MulNumber: return "mul.number";
         case QoreIROpcode::DivNumber: return "div.number";
         case QoreIROpcode::HashKeyStore: return "hash.key.store";
+        case QoreIROpcode::HashKeyStoreDynamic: return "hash.key.store.dynamic";
         case QoreIROpcode::ListIndexAccess: return "list.index.access";
         case QoreIROpcode::ListIndexStore: return "list.index.store";
         case QoreIROpcode::AddAssignLocalInt: return "add.assign.local.int";
