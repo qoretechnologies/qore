@@ -1,0 +1,79 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# FailingFactoryModule.qm - test module that registers a DataProvider factory then fails
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%enable-all-warnings
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+%requires reflection
+
+module FailingFactoryModule {
+    version = "1.0";
+    desc = "Test module that registers a DataProvider factory then fails during init";
+    author = "Qore Technologies";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Step 1: Register a factory in DataProvider's factory_cache
+        DataProvider::registerFactory(new FailingFactoryModule::TestFailingFactory());
+
+        # Step 2: Throw an exception - this causes module load to fail
+        # The factory registration should be rolled back by ImplicitModuleTransaction
+        throw "INIT-ERROR", "intentional failure after factory registration";
+    };
+}
+
+public namespace FailingFactoryModule {
+#! Minimal data provider for the test factory
+public class TestFailingDataProvider inherits DataProvider::AbstractDataProvider {
+    public {
+        const ProviderInfo = <DataProviderInfo>{
+            "type": "TestFailingDataProvider",
+        };
+    }
+
+    constructor(*hash<auto> options) {
+    }
+
+    string getName() {
+        return "TestFailingDataProvider";
+    }
+
+    *string getDesc() {
+        return "test provider from failing module";
+    }
+
+    hash<DataProviderInfo> getStaticInfoImpl() {
+        return ProviderInfo;
+    }
+}
+
+#! Minimal factory that will be registered then should be rolled back
+public class TestFailingFactory inherits DataProvider::AbstractDataProviderFactory {
+    private {
+        static Class cls = new Class("FailingFactoryModule::TestFailingDataProvider");
+
+        const FactoryInfo = <DataProviderFactoryInfo>{
+            "name": "test-failing-factory",
+            "desc": "test factory from a module that fails during init",
+        };
+    }
+
+    private hash<DataProviderFactoryInfo> getInfoImpl() {
+        return FactoryInfo;
+    }
+
+    private hash<DataProviderInfo> getProviderInfoImpl() {
+        return TestFailingDataProvider::ProviderInfo;
+    }
+
+    private Class getClassImpl() {
+        return cls;
+    }
+}
+}
