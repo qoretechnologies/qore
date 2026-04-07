@@ -1,0 +1,132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  SseStreaming.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%requires HttpServer
+%requires HttpServerAsyncIo
+%requires ServerSentEventHandler
+%requires HttpClientIo
+%requires HttpClientStreamingIo
+%requires Mime
+%requires Logger
+%requires QUnit
+
+%exec-class SseStreamingTest
+
+class TestSseHandler inherits ServerSentEventHandler {
+    constructor() : ServerSentEventHandler() {
+    }
+
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        # Send an initial event upon registration
+        conn.send(<SseMessageInfo>{
+            "event": "hello",
+            "data": "world",
+        });
+    }
+}
+
+class SseStreamingTest inherits Test {
+    private {
+        HttpServer server;
+        int port;
+        TestSseHandler handler();
+    }
+
+    constructor() : Test("SseStreamingTest", "1.0") {
+        addTestCase("SSE streaming receives events", \testSseReceivesEvents());
+        addTestCase("SSE streaming multiple events", \testSseMultipleEvents());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        server = new HttpServer(http_opts);
+        server.setDefaultHandler("sse", handler);
+        port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+    }
+
+    testSseReceivesEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/sse", {"Accept": "text/event-stream"});
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        # The server sends a "hello" event during connection registration
+        *hash<SseMessageInfo> evt = reader.readEvent(5s);
+        assertEq(True, exists evt, "SSE event received");
+        assertEq("hello", evt.event);
+        assertEq("\"world\"", evt.data);
+
+        # No more events — should timeout, NOT get end_stream
+        *hash<SseMessageInfo> evt2 = reader.readEvent(500ms);
+        assertEq(NOTHING, evt2, "no more events (timeout)");
+        assertEq(False, reader.isDone(), "stream still open after timeout");
+
+        stream.cancel();
+    }
+
+    testSseMultipleEvents() {
+        string url = sprintf("http://localhost:%d/sse", port);
+        HttpClientIo::HttpClientConnectionManager mgr();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireAndStartStreaming(
+            url, "GET", "/sse", {"Accept": "text/event-stream"});
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        # Read the initial hello event
+        *hash<SseMessageInfo> evt1 = reader.readEvent(5s);
+        assertEq(True, exists evt1, "first SSE event received");
+        assertEq("hello", evt1.event);
+
+        # Send a second event from the server
+        handler.sendAll(<SseMessageInfo>{
+            "event": "update",
+            "data": "test-data",
+        });
+
+        # Read the second event
+        *hash<SseMessageInfo> evt2 = reader.readEvent(5s);
+        assertEq(True, exists evt2, "second SSE event received");
+        assertEq("update", evt2.event);
+        assertEq("\"test-data\"", evt2.data);
+
+        stream.cancel();
+    }
+}

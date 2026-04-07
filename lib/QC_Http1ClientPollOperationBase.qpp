@@ -1123,6 +1123,11 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
         return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
     }
 
+    if (poll_info) {
+        // More I/O needed — return poll info to wait for data
+        return poll_info;
+    }
+
     if (current_op->goalReached()) {
         ValueHolder data_val(current_op->getOutput(), xsink);
         bool has_data = false;
