@@ -429,15 +429,14 @@ HttpAcceptPollOperationBase::constructor(Socket[QoreSocketObject] listener, obje
         return;
     }
 
-    // Store listener as Qore member for DGC visibility
-    QoreValue listener_arg = args->retrieveEntry(0);
-    QoreObject* listener_qobj = listener_arg.getType() == NT_OBJECT
-        ? const_cast<QoreObject*>(listener_arg.get<const QoreObject>()) : nullptr;
-    if (listener_qobj) {
-        self->setMemberValue("sock", QC_HTTPACCEPTPOLLOPERATIONBASE, listener_qobj->refSelf(), xsink);
-    }
-    self->setMemberValue("goal", QC_HTTPACCEPTPOLLOPERATIONBASE,
-        new QoreStringNode("http_accept"), xsink);
+    // NOTE: We intentionally do NOT set the "sock" member to the listener Socket here.
+    // The inner accept operation (current_op) already holds a "sock" reference to the
+    // listener, and duplicating it causes a DGC-related leak: during member hash cleanup,
+    // doDelete is called on the Socket from this object's "sock" member, setting its
+    // status to OS_DELETED before the inner accept op releases its own "sock" ref,
+    // leaving the Socket with a non-zero ref count.
+    // The C++ listener_sock ref provides the needed listener reference for I/O operations.
+    self->setValue("goal", new QoreStringNode("http_accept"), xsink);
 
     // Extract SSLCertificate from the cert QoreObject (if provided)
     QoreSSLCertificate* cert_ptr = nullptr;

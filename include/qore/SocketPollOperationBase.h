@@ -68,7 +68,8 @@ public:
     /** @param self the QoreObject wrapping this private data (tRef'd)
     */
     DLLEXPORT SocketPollOperationBase(QoreObject* self) : self(self) {
-        self->tRef();
+        // NOTE: QoreObjectWeakRefHolder(QoreObject*) already calls tRef() in its constructor,
+        // so we must NOT call tRef() again here — that would double-tRef, leaking the object
     }
 
     //! Creates the poll operation without a self reference
