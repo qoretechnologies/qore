@@ -1093,41 +1093,19 @@ l50Xb2GWQesIt9k5jF5IOw==
             printf("testHttpClientAltSvcUpgrade: first request OK, Alt-Svc=%y\n", resp1."alt-svc");
         }
 
-        # Second request should attempt QUIC upgrade
+        # Second request should upgrade to QUIC via Alt-Svc (synchronous handshake)
         hash<auto> resp2 = client.send("", "GET", "/test", NOTHING, True);
         assertEq(200, int(resp2.status_code), "second request should return 200");
+        assertTrue(client.isHttp3Active(), "HTTP/3 should be active after Alt-Svc upgrade");
 
-        # Check if HTTP/3 is now active
-        if (client.isHttp3Active()) {
-            if (m_options.verbose > 1) {
-                printf("testHttpClientAltSvcUpgrade: HTTP/3 active after Alt-Svc upgrade\n");
-            }
-            # Third request should also use HTTP/3
-            hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
-            assertEq(200, int(resp3.status_code), "third HTTP/3 request should return 200");
-            assertTrue(client.isHttp3Active(), "should still be HTTP/3 after third request");
-        } else {
-            if (m_options.verbose > 1) {
-                printf("testHttpClientAltSvcUpgrade: QUIC upgrade not yet active after 2nd request, retrying\n");
-            }
-            # Retry requests while async QUIC handshake completes; Queue.get()
-            # yields the thread deterministically instead of busy-waiting
-            Queue yield_q();
-            bool upgraded = False;
-            for (int i = 0; i < 5; ++i) {
-                try { yield_q.get(200ms); } catch () {}
-                hash<auto> resp_retry = client.send("", "GET", "/test", NOTHING, True);
-                assertEq(200, int(resp_retry.status_code),
-                    sprintf("retry request %d should return 200", i + 3));
-                if (client.isHttp3Active()) {
-                    upgraded = True;
-                    break;
-                }
-            }
-            if (!upgraded) {
-                testSkip("QUIC upgrade did not complete (QUIC handshake may have failed)");
-            }
+        if (m_options.verbose > 1) {
+            printf("testHttpClientAltSvcUpgrade: HTTP/3 active after Alt-Svc upgrade\n");
         }
+
+        # Third request should also use HTTP/3
+        hash<auto> resp3 = client.send("", "GET", "/test", NOTHING, True);
+        assertEq(200, int(resp3.status_code), "third HTTP/3 request should return 200");
+        assertTrue(client.isHttp3Active(), "should still be HTTP/3 after third request");
     }
 
     testHttpClientHttp3Disabled() {
@@ -1340,22 +1318,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         hash<auto> resp1 = mgr.request(url, "GET", "/test");
         assertEq(200, resp1.status_code, "sync: first H2 request");
 
-        # Wait for the QUIC connection to be established and retry
-        bool upgraded = False;
-        for (int i = 0; i < 5; ++i) {
-            hash<auto> resp = mgr.request(url, "GET", "/test");
-            assertEq(200, resp.status_code, sprintf("sync: upgrade attempt %d", i + 2));
-            if (resp.protocol == "h3") {
-                upgraded = True;
-                break;
-            }
-            sleep(200ms);
-        }
-
-        if (!upgraded) {
-            testSkip("QUIC handshake did not complete (may be slow CI)");
-        }
-        assertTrue(upgraded, "sync: should upgrade to H3 via Alt-Svc");
+        # Second request: should upgrade to H3 via Alt-Svc (synchronous handshake)
+        hash<auto> resp2 = mgr.request(url, "GET", "/test");
+        assertEq(200, resp2.status_code, "sync: second request after Alt-Svc");
+        assertEq("h3", resp2.protocol, "sync: should upgrade to H3 via Alt-Svc");
 
         # Subsequent request should stay on H3
         hash<auto> resp_final = mgr.request(url, "GET", "/test");
@@ -1411,23 +1377,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertEq(200, resp2.status_code, "async: H2 request on mgr2");
 
         # After request(), checkAltSvc() processed the Alt-Svc header.
-        # Now verify the upgrade path works — subsequent requests should
-        # attempt H3.
-        bool upgraded = False;
-        for (int i = 0; i < 5; ++i) {
-            hash<auto> resp = mgr2.request(url, "GET", "/test");
-            assertEq(200, resp.status_code, sprintf("async: upgrade attempt %d", i + 1));
-            if (resp.protocol == "h3") {
-                upgraded = True;
-                break;
-            }
-            sleep(200ms);
-        }
-
-        if (!upgraded) {
-            testSkip("QUIC handshake did not complete (may be slow CI)");
-        }
-        assertTrue(upgraded, "async: should upgrade to H3 via Alt-Svc");
+        # Next request should upgrade to H3 (synchronous handshake).
+        hash<auto> resp3 = mgr2.request(url, "GET", "/test");
+        assertEq(200, resp3.status_code, "async: second request after Alt-Svc");
+        assertEq("h3", resp3.protocol, "async: should upgrade to H3 via Alt-Svc");
     }
 
     #! Test: Alt-Svc is ignored when a proxy is configured

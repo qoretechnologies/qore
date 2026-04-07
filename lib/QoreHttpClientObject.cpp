@@ -1049,8 +1049,9 @@ struct qore_httpclient_priv {
 
     // Alt-Svc cache entry
     struct AltSvcEntry {
-        int port;              // QUIC port from Alt-Svc header
-        int64 expiry_epoch;    // When this entry expires (epoch seconds)
+        int port;                    // QUIC port from Alt-Svc header
+        int64 expiry_epoch;          // When this entry expires (epoch seconds)
+        int64 retry_after_epoch{0};  // After QUIC failure, don't retry before this time
     };
 
     // Alt-Svc cache: "host:port" → {quic_port, expiry}
@@ -2304,13 +2305,25 @@ struct qore_httpclient_priv {
     // Look up Alt-Svc entry for a given origin; returns nullptr if not found or expired
     DLLLOCAL std::optional<AltSvcEntry> lookupAltSvc(const char* host, int port);
 
-    //! Remove Alt-Svc entry after a failed QUIC connect attempt
-    /** Prevents repeated QUIC upgrade attempts to a broken endpoint.
-        A fresh Alt-Svc header from the server will re-add the entry.
-    */
+    //! Remove Alt-Svc entry (used on QUIC disconnect for clean slate)
     DLLLOCAL void removeAltSvc(const char* host, int port) {
         std::string origin = std::string(host) + ":" + std::to_string(port);
         alt_svc_cache.erase(origin);
+    }
+
+    //! Mark Alt-Svc entry as failed with a backoff period
+    /** Prevents repeated QUIC upgrade attempts to a broken endpoint.
+        The entry remains in the cache but lookupAltSvc() will skip it
+        until the backoff expires.  New Alt-Svc headers from the server
+        do not reset the backoff — only expiry does.
+    */
+    DLLLOCAL void markAltSvcFailed(const char* host, int port) {
+        std::string origin = std::string(host) + ":" + std::to_string(port);
+        auto it = alt_svc_cache.find(origin);
+        if (it != alt_svc_cache.end()) {
+            // 5-minute backoff before retrying QUIC for this origin
+            it->second.retry_after_epoch = q_epoch() + 300;
+        }
     }
 
     // Establish a QUIC/HTTP3 connection to the given server
@@ -5595,12 +5608,10 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             info, timeout_ms, code, xsink);
     }
 
-    // Try HTTP/3 upgrade if Alt-Svc is cached — but NOT when HTTP/2 is already
-    // active and healthy.  Attempting QUIC on every request when H2 works adds
-    // a multi-second penalty per failed QUIC handshake (connect timeout).
-    // Only attempt QUIC upgrade when no H2 session exists or when H3 is required.
-    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl
-            && !(http2_active && getH2Session())) {
+    // Try HTTP/3 upgrade if Alt-Svc is cached.  On QUIC failure, the entry
+    // is marked with a 5-minute backoff so we don't retry on every request
+    // (the penalty is a blocking handshake timeout per attempt).
+    if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
         auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
         if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
             if (!connectQuic(xsink, connection)) {
@@ -5611,11 +5622,10 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
             if (http3_mode == HTTP3_MODE_REQUIRED) {
                 return nullptr;
             }
-            // QUIC connect failed — remove the Alt-Svc entry so we don't retry
-            // on every subsequent request (RFC 9369 §3.2: clients SHOULD cache
-            // failures and avoid repeated connection attempts).  A fresh Alt-Svc
-            // header from the server will re-enable the upgrade path.
-            removeAltSvc(connection.host.c_str(), connection.port);
+            // QUIC connect failed — mark the Alt-Svc entry with a 5-minute
+            // backoff so we don't retry on every request (RFC 9369 §3.2:
+            // clients SHOULD cache failures and avoid repeated attempts).
+            markAltSvcFailed(connection.host.c_str(), connection.port);
             // Log QUIC error details before clearing for HTTP/1.x fallback.
             // xsink->clear() is intentional: the QUIC failure is non-fatal when
             // http3_mode == HTTP3_MODE_AUTO — we retry with TCP/TLS below.
@@ -6380,10 +6390,14 @@ void qore_httpclient_priv::parseAltSvc(const char* value, const char* host, int 
         // Only store h3 (not h3-29 or other draft versions)
         if (proto == "h3" && alt_port > 0) {
             std::string origin = std::string(host) + ":" + std::to_string(port);
-            alt_svc_cache[origin] = AltSvcEntry{
-                alt_port,
-                q_epoch() + max_age,
-            };
+            auto it = alt_svc_cache.find(origin);
+            if (it != alt_svc_cache.end()) {
+                // Update port and expiry but preserve retry_after backoff
+                it->second.port = alt_port;
+                it->second.expiry_epoch = q_epoch() + max_age;
+            } else {
+                alt_svc_cache[origin] = AltSvcEntry{alt_port, q_epoch() + max_age, 0};
+            }
         }
     }
 }
@@ -6397,6 +6411,10 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
     // Check if entry has expired
     if (it->second.expiry_epoch <= q_epoch()) {
         alt_svc_cache.erase(it);
+        return std::nullopt;
+    }
+    // Check if retry backoff is active (after QUIC failure)
+    if (it->second.retry_after_epoch > q_epoch()) {
         return std::nullopt;
     }
     return it->second;
