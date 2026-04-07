@@ -4503,7 +4503,6 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
             return QoreIRValue();
         }
     }
-
     QoreIROpcode opcode = QoreIROpcode::AddAssignAny;
     QoreParseAnalysis left_analysis;
     QoreParseAnalysis right_analysis;

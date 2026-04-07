@@ -166,6 +166,8 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         addTestCase("IR cast expression in map hash type smoke", \testIrCastInMapHashTypeSmoke());
         addTestCase("IR map or_nothing from wildcard iterator", \testIrMapOrNothingFromWildcard());
         addTestCase("IR exception callstack regression", \testExceptionCallstackIRMode());
+        addTestCase("IR compound assign slot cache repopulation", \testIrCompoundAssignSlotCache());
+        addTestCase("IR compound assign in try/catch", \testIrCompoundAssignInTryCatch());
         set_return_value(main());
     }
 
@@ -5925,5 +5927,120 @@ class IRExecModeSmokeTest inherits QUnit::Test {
         # Verify exception shows throwingFunc in callstack (not corrupted)
         assertTrue(stdout_b =~ /TEST-ERROR:throw from sub:throwingFunc:\d+/,
             "IR throw from sub shows correct function in callstack");
+    }
+
+    testIrCompoundAssignSlotCache() {
+        # Regression test: compound assignment on typed locals (list, hash) forced to
+        # the lvalue path must repopulate the IR slot cache after the operation.
+        # Without the fix, the slot cache retains NOTHING and subsequent reads fail.
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        # Test 1: *list<auto> += list — verify type is list, not NOTHING
+        script.file.write("*list<auto> x;\n");
+        script.file.write("x += (1, 2, 3);\n");
+        script.file.write("if (x.typeCode() != NT_LIST) { printf(\"FAIL1: type %d\\n\", x.typeCode()); exit(1); }\n");
+        script.file.write("if (x.size() != 3) { printf(\"FAIL1: size %d\\n\", x.size()); exit(1); }\n");
+        # Test 2: separate declaration and +=
+        script.file.write("*list<auto> y;\n");
+        script.file.write("y += (10,);\n");
+        script.file.write("y += (20,);\n");
+        script.file.write("if (y.size() != 2) { printf(\"FAIL2: size %d\\n\", y.size()); exit(1); }\n");
+        script.file.write("if (y[0] != 10) { printf(\"FAIL2: y[0] %y\\n\", y[0]); exit(1); }\n");
+        script.file.write("if (y[1] != 20) { printf(\"FAIL2: y[1] %y\\n\", y[1]); exit(1); }\n");
+        # Test 3: *hash<auto> += hash
+        script.file.write("*hash<auto> h;\n");
+        script.file.write("h += {\"a\": 1};\n");
+        script.file.write("h += {\"b\": 2};\n");
+        script.file.write("if (h.size() != 2) { printf(\"FAIL3: size %d\\n\", h.size()); exit(1); }\n");
+        script.file.write("if (h.a != 1) { printf(\"FAIL3: h.a %y\\n\", h.a); exit(1); }\n");
+        script.file.write("if (h.b != 2) { printf(\"FAIL3: h.b %y\\n\", h.b); exit(1); }\n");
+        # Test 4: compound assign in loop body
+        script.file.write("*list<auto> acc;\n");
+        script.file.write("for (int i = 0; i < 5; ++i) { acc += (i,); }\n");
+        script.file.write("if (acc.size() != 5) { printf(\"FAIL4: size %d\\n\", acc.size()); exit(1); }\n");
+        script.file.write("if (acc[4] != 4) { printf(\"FAIL4: acc[4] %y\\n\", acc[4]); exit(1); }\n");
+        # Test 5: float compound assign (also forced to lvalue path)
+        script.file.write("*float f = 1.5;\n");
+        script.file.write("f += 2.5;\n");
+        script.file.write("if (f != 4.0) { printf(\"FAIL5: f %y\\n\", f); exit(1); }\n");
+        script.file.write("printf(\"OK:%d:%d:%d:%d:%.1f\\n\", x.size(), y.size(), h.size(), acc.size(), f);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR compound assign slot cache process should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("OK:3:2:2:5:4.0\n", stdout_output,
+            "IR compound assign slot cache repopulation");
+    }
+
+    testIrCompoundAssignInTryCatch() {
+        # Regression test: compound assignments inside try/catch go through the Invoke
+        # handler path — verify slot cache is properly invalidated.
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return;
+        }
+
+        TmpFile script();
+        script.file.write("%modern\n");
+        # Test 1: *list<auto> += inside try block
+        script.file.write("*list<auto> x;\n");
+        script.file.write("try { x += (1, 2, 3); } catch (hash<ExceptionInfo> e) {}\n");
+        script.file.write("if (x.typeCode() != NT_LIST) { printf(\"FAIL1: type %d\\n\", x.typeCode()); exit(1); }\n");
+        script.file.write("if (x.size() != 3) { printf(\"FAIL1: size %d\\n\", x.size()); exit(1); }\n");
+        # Test 2: *hash<auto> += inside try block
+        script.file.write("*hash<auto> h;\n");
+        script.file.write("try { h += {\"a\": 1}; } catch (hash<ExceptionInfo> e) {}\n");
+        script.file.write("if (h.size() != 1) { printf(\"FAIL2: size %d\\n\", h.size()); exit(1); }\n");
+        # Test 3: int += inside try block
+        script.file.write("int val = 10;\n");
+        script.file.write("try { val += 5; } catch (hash<ExceptionInfo> e) {}\n");
+        script.file.write("if (val != 15) { printf(\"FAIL3: val %d\\n\", val); exit(1); }\n");
+        # Test 4: object member compound assign inside try block
+        script.file.write("class C { public { int v = 0; } }\n");
+        script.file.write("C obj = new C();\n");
+        script.file.write("try { obj.v += 7; } catch (hash<ExceptionInfo> e) {}\n");
+        script.file.write("if (obj.v != 7) { printf(\"FAIL4: obj.v %d\\n\", obj.v); exit(1); }\n");
+        script.file.write("printf(\"OK:%d:%d:%d:%d\\n\", x.size(), h.size(), val, obj.v);\n");
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+
+        string cmd = sprintf("%s --exec-mode=ir %s > %s 2> %s",
+            qore_bin, script.path, out.path, err.path);
+        int rc = runCommand(cmd, script.path);
+        string err_output = ReadOnlyFile::readTextFile(err.path);
+        if (rc != 0 && err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+            testSkip("exec-mode option not supported by test qore binary");
+            return;
+        }
+
+        assertEq(0, rc, "IR compound assign in try/catch should exit cleanly");
+        assertFalse(err_output =~ /IR exec fallback to AST:/, "Unexpected IR fallback warning");
+
+        string stdout_output = ReadOnlyFile::readTextFile(out.path);
+        assertEq("OK:3:1:15:7\n", stdout_output,
+            "IR compound assign in try/catch slot cache");
     }
 }

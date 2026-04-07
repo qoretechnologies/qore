@@ -1151,6 +1151,19 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 auto* f = static_cast<QoreIRBranchIfLtLocalIntInstruction*>(inst.get());
                 assign_slot(f->lhs);
                 assign_slot(f->rhs);
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LoadLValue)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::SpliceLValue)) {
+                // Lvalue instructions: ensure locals referenced through lvalue
+                // expressions get slot assignments (needed for compound assignment
+                // on types forced to the lvalue path: list, hash, etc.)
+                auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst.get());
+                const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
+                if (base_var) {
+                    qore_var_t vtype = base_var->getType();
+                    if ((vtype == VT_LOCAL || vtype == VT_LOCAL_TS) && base_var->ref.id) {
+                        assign_slot(reinterpret_cast<const LocalVar*>(base_var->ref.id));
+                    }
+                }
             }
         }
     }

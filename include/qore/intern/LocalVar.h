@@ -504,22 +504,40 @@ public:
             return val->eval(needs_deref, xsink);
         }
 
-        // Prefer cvstack lookup (topmost = current function's own variable).
-        // Use try_find() to avoid crashing if the variable hasn't been instantiated
-        // yet (AOT mode skips closure-use var pre-instantiation in evalTiered,
-        // relying on LLVM codegen for lazy instantiation).
-        ClosureVarValue* val = thread_try_find_closure_var(name.c_str());
-        if (!val) {
+        // When executing inside a closure body, prefer the closure's captured
+        // CVV over the cvstack.  CVecInstantiator pushes captured variables
+        // back onto the cvstack in an order that reverses same-named variables
+        // from different recursion depths.  For recursive functions with
+        // closure-captured variables, this causes the cvstack to have the
+        // OUTER call's variable on top, making name-based lookup return the
+        // wrong value.  The closure's own cmap always has the correct CVV
+        // that was captured at closure creation time.
+        ClosureVarValue* val = nullptr;
+        if (thread_has_runtime_closure_env()) {
+            // Inside closure body: prefer closure's captured CVV (by pointer)
             val = thread_try_get_runtime_closure_var(this);
-        }
-        if (!val && !thread_has_runtime_closure_env()) {
-            // Only lazily instantiate when NOT inside a closure body (no runtime
-            // closure env set). In a closure body on a worker thread, the variable
-            // must be found via the runtime closure environment — instantiating a
-            // new CVV on the worker thread would create a separate copy invisible
-            // to the declaring function's thread.
-            const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+            if (!val) {
+                val = thread_try_find_closure_var(name.c_str());
+            }
+        } else {
+            // Direct function body: prefer cvstack (by name, topmost = current
+            // function's own variable).  Use try_find() to avoid crashing if the
+            // variable hasn't been instantiated yet (AOT mode skips closure-use
+            // var pre-instantiation in evalTiered, relying on LLVM codegen for
+            // lazy instantiation).
             val = thread_try_find_closure_var(name.c_str());
+            if (!val) {
+                val = thread_try_get_runtime_closure_var(this);
+            }
+            if (!val) {
+                // Lazily instantiate when NOT inside a closure body.  In a
+                // closure body on a worker thread, the variable must be found
+                // via the runtime closure environment — instantiating a new CVV
+                // on the worker thread would create a separate copy invisible
+                // to the declaring function's thread.
+                const_cast<LocalVar*>(this)->instantiate(QoreParseOptions());
+                val = thread_try_find_closure_var(name.c_str());
+            }
         }
         if (!val) {
             needs_deref = false;

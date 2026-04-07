@@ -598,11 +598,19 @@ struct IRCallFrame {
 
     // Reset all fields for reuse.  clear() retains capacity, so no heap
     // allocation after the first call at each recursion depth.
+    // IMPORTANT: QoreValue has no destructor that calls discard(), so we must
+    // explicitly discard all reference-counted values before clearing vectors.
     void reset(size_t reserve_size, size_t local_slot_count) {
+        for (auto& val : values) {
+            val.discard(nullptr);
+        }
         values.clear();
         values.resize(reserve_size);
         cleanup.clear();
         if (local_slot_count > 0) {
+            for (auto& val : locals_slot_cache) {
+                val.discard(nullptr);
+            }
             locals_slot_cache.clear();
             locals_slot_cache.resize(local_slot_count);
             locals_lvar_cache.assign(local_slot_count, nullptr);
@@ -612,6 +620,9 @@ struct IRCallFrame {
             local_load_slots.clear();
             local_load_slots.resize(local_slot_count);
         } else {
+            for (auto& val : locals_slot_cache) {
+                val.discard(nullptr);
+            }
             locals_slot_cache.clear();
             locals_lvar_cache.clear();
             locals_ir_only.clear();
@@ -624,8 +635,17 @@ struct IRCallFrame {
         instantiated_locals_ordered.clear();
         locally_uninstantiated.clear();
         ephemeral_weak_ref_slots.clear();
+        for (auto& entry : globals) {
+            entry.second.discard(nullptr);
+        }
         globals.clear();
+        for (auto& entry : threadlocals) {
+            entry.second.discard(nullptr);
+        }
         threadlocals.clear();
+        for (auto& entry : closures) {
+            entry.second.discard(nullptr);
+        }
         closures.clear();
         active_iterators.clear();
         on_block_exit_handlers.clear();
@@ -2119,6 +2139,83 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     // bodies with no own locals that reference enclosing-function params).
     const std::unordered_set<const void*>* function_own_locals = &func.pre_instantiated_locals;
 
+    // Helper: invalidate the closure variable cache for a given VarRefNode.
+    // LoadClosure caches values in the closures map; lvalue operations modify the
+    // cvstack directly, so the cache becomes stale.  Must be called before AND after
+    // any lvalue operation that could modify a closure-use variable.
+    auto invalidateClosureCache = [&](const VarRefNode* vrn) {
+        if (vrn && vrn->ref.id) {
+            qore_var_t vtype = vrn->getType();
+            if (vtype == VT_CLOSURE || (vtype == VT_LOCAL && vrn->ref.id->closureUse())) {
+                auto cit = closures.find(vrn->ref.id);
+                if (cit != closures.end()) {
+                    cit->second.discard(xsink);
+                    closures.erase(cit);
+                }
+            }
+        }
+    };
+
+    // Helper: prepare slot cache before a lvalue operation.
+    // Extracts the base VarRefNode, calls ensureLocalInstantiated, and pre-invalidates
+    // the slot cache entry and closure cache. Returns the base VarRefNode.
+    auto prepareLValueSlotCache = [&](const QoreIRLValueInstruction* lval_inst) -> const VarRefNode* {
+        const VarRefNode* lval_vrn = extractLValueBaseVarRef(lval_inst->lvalue);
+        if (lval_vrn && lval_vrn->ref.id) {
+            qore_var_t vtype = lval_vrn->getType();
+            if (vtype == VT_LOCAL || vtype == VT_LOCAL_TS || vtype == VT_CLOSURE) {
+                ensureLocalInstantiated(lval_vrn->ref.id, instantiated_locals,
+                    instantiated_locals_ordered, pre_instantiated,
+                    function_own_locals, &locally_uninstantiated);
+            }
+            invalidateClosureCache(lval_vrn);
+        }
+        if (lval_inst->hasLocalTarget()) {
+            if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
+                locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
+            }
+            clearLoadSlots(lval_inst->lvalue_slot_id);
+        } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
+            for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                locals_slot_cache[i].discard(xsink);
+                locals_slot_cache[i] = QoreValue();
+            }
+        }
+        return lval_vrn;
+    };
+
+    // Helper: finalize slot cache after a lvalue operation.
+    // For simple variable lvalues (VarRefNode directly): repopulate with result value.
+    // For complex lvalues (member/index access): invalidate (set to NOTHING) so next
+    // LoadLocal re-reads from TLS.  This distinction is critical: for h.value += 3,
+    // res is the member's new value (8), not the container (h) — repopulating h's slot
+    // with 8 would corrupt the cache.
+    // Also invalidates the closures cache for closure-use variables.
+    auto finalizeLValueSlotCache = [&](const QoreIRLValueInstruction* lval_inst,
+            const VarRefNode* lval_vrn, const QoreValue& res, bool repopulate) {
+        invalidateClosureCache(lval_vrn);
+        // Handle local variable slot cache
+        uint32_t sid = lval_inst->lvalue_slot_id;
+        if (!lval_inst->hasLocalTarget() && lval_vrn
+                && (lval_vrn->getType() == VT_LOCAL || lval_vrn->getType() == VT_LOCAL_TS)
+                && lval_vrn->ref.id) {
+            auto it = func.local_var_slots.find(lval_vrn->ref.id);
+            if (it != func.local_var_slots.end()) {
+                sid = it->second;
+            }
+        }
+        if (sid < locals_slot_cache.size()) {
+            locals_slot_cache[sid].discard(xsink);
+            if (repopulate) {
+                locals_slot_cache[sid] = res.hasNode() ? res.refSelf() : res;
+            } else {
+                locals_slot_cache[sid] = QoreValue();
+            }
+            clearLoadSlots(sid);
+        }
+    };
+
     // RAII guard: fire remaining on_block_exit handlers on ANY function exit path.
     // Normal exits fire handlers via ScopeExit instructions (which clear scope_stack
     // and on_block_exit_handlers). Error exits (exception from Call/ExprOp/etc.)
@@ -2870,6 +2967,11 @@ next_instruction:
                 // causing ensureUnique() to trigger COW unnecessarily — the modification
                 // would be applied to the copy while the cache retains the stale original.
                 // See design/lvalue-loads-in-ir.md.
+                // Pre-invalidation for all lvalue-modifying invoke opcodes.
+                // Use extractLValueBaseVarRef on the full expression to handle ALL
+                // lvalue operator types (assignment, compound assignment, shift, etc.)
+                const VarRefNode* inv_base_var = nullptr;
+                uint32_t inv_lvalue_sid = UINT32_MAX;
                 switch (inv->invoke_opcode) {
                     case QoreIROpcode::AddAssignLValue:
                     case QoreIROpcode::SubAssignLValue:
@@ -2910,29 +3012,26 @@ next_instruction:
                     case QoreIROpcode::PushAny:
                     case QoreIROpcode::ListAssignAny:
                     case QoreIROpcode::StoreLValue: {
-                        // Targeted invalidation: only clear the lvalue target's slot
-                        // cache entry and values[] entries to prevent COW from inflated
-                        // refcounts. Non-local targets (members, globals) don't need
-                        // slot cache invalidation.
-                        // inv->expr is the full QoreAssignmentOperatorNode; extract the lvalue first.
-                        const VarRefNode* inv_base_var = nullptr;
+                        // Extract base variable from the full expression — handles ALL
+                        // lvalue operator types (assignment, compound assignment, shift, etc.)
                         if (inv->expr.hasNode()) {
-                            auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
-                                    inv->expr.getInternalNode());
-                            if (assign) {
-                                inv_base_var = extractLValueBaseVarRef(assign->getLeft());
-                            }
+                            inv_base_var = extractLValueBaseVarRef(inv->expr);
                         }
-                        if (inv_base_var && inv_base_var->ref.id) {
+                        if (inv_base_var
+                                && (inv_base_var->getType() == VT_LOCAL || inv_base_var->getType() == VT_LOCAL_TS)
+                                && inv_base_var->ref.id) {
+                            ensureLocalInstantiated(inv_base_var->ref.id, instantiated_locals,
+                                instantiated_locals_ordered, pre_instantiated,
+                                function_own_locals, &locally_uninstantiated);
                             auto inv_slot_it = func.local_var_slots.find(
                                 reinterpret_cast<const LocalVar*>(inv_base_var->ref.id));
                             if (inv_slot_it != func.local_var_slots.end()) {
-                                uint32_t sid = inv_slot_it->second;
-                                if (sid < locals_slot_cache.size()) {
-                                    locals_slot_cache[sid].discard(xsink);
-                                    locals_slot_cache[sid] = QoreValue();
+                                inv_lvalue_sid = inv_slot_it->second;
+                                if (inv_lvalue_sid < locals_slot_cache.size()) {
+                                    locals_slot_cache[inv_lvalue_sid].discard(xsink);
+                                    locals_slot_cache[inv_lvalue_sid] = QoreValue();
                                 }
-                                clearLoadSlots(sid);
+                                clearLoadSlots(inv_lvalue_sid);
                             }
                         }
                         break;
@@ -2941,27 +3040,24 @@ next_instruction:
                         break;
                 }
                 QoreValue res = evalInvoke(inv, values, xsink);
+                // Post-invalidation: ensure slot cache is cleared after the lvalue
+                // operation modifies TLS. Always invalidate (not repopulate) since
+                // the invoke expression may be a complex lvalue.
+                if (inv_lvalue_sid < locals_slot_cache.size()) {
+                    locals_slot_cache[inv_lvalue_sid].discard(xsink);
+                    locals_slot_cache[inv_lvalue_sid] = QoreValue();
+                    clearLoadSlots(inv_lvalue_sid);
+                }
                 // Invalidate external caches after Invoke — the AST call may have
-                // modified globals, thread-locals, or closure variables. The locals
-                // slot cache remains valid: called code runs in its own frame and
-                // cannot modify the current function's local variables.
-                // Fast path: skip if no external values were cached (checked in lambda)
+                // modified globals, thread-locals, or closure variables.
                 invalidateExternalCaches();
 
                 // For reference write-through assignments via StoreLValue invoke, flush all local
                 // caches — writing through a reference can modify any arbitrary local variable.
-                if (inv->invoke_opcode == QoreIROpcode::StoreLValue) {
-                    if (inv->expr.hasNode()) {
-                        auto* assign = dynamic_cast<const QoreAssignmentOperatorNode*>(
-                                inv->expr.getInternalNode());
-                        if (assign) {
-                            const VarRefNode* base = extractLValueBaseVarRef(assign->getLeft());
-                            if (base && base->getTypeInfo()
-                                    && QoreTypeInfo::isReference(base->getTypeInfo())) {
-                                cleanupLocalCaches();
-                            }
-                        }
-                    }
+                if (inv->invoke_opcode == QoreIROpcode::StoreLValue && inv_base_var
+                        && inv_base_var->getTypeInfo()
+                        && QoreTypeInfo::isReference(inv_base_var->getTypeInfo())) {
+                    cleanupLocalCaches();
                 }
                 if (xsink && *xsink) {
                     if (debug_active) {
@@ -5951,10 +6047,11 @@ load_local_done:
                 const VarRefNode* base_var = extractLValueBaseVarRef(lval_inst->lvalue);
                 if (base_var) {
                     qore_var_t type = base_var->getType();
-                    if ((type == VT_LOCAL || type == VT_LOCAL_TS) && base_var->ref.id) {
+                    if ((type == VT_LOCAL || type == VT_LOCAL_TS || type == VT_CLOSURE) && base_var->ref.id) {
                         ensureLocalInstantiated(base_var->ref.id, instantiated_locals, instantiated_locals_ordered, pre_instantiated,
                                 function_own_locals, &locally_uninstantiated);
                     }
+                    invalidateClosureCache(base_var);
                 }
                 QoreValue val = getIRValue(values, lval_inst->operands[0]);
                 // Hold an explicit reference to the RHS value through
@@ -6040,6 +6137,9 @@ load_local_done:
             case QoreIROpcode::PostIncLValue:
             case QoreIROpcode::PostDecLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
+                // Invalidate closure cache for closure-use variables
+                const VarRefNode* inc_vrn = extractLValueBaseVarRef(lval_inst->lvalue);
+                invalidateClosureCache(inc_vrn);
                 // Targeted cache invalidation before the lvalue operation
                 if (lval_inst->hasLocalTarget()) {
                     if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
@@ -6048,17 +6148,13 @@ load_local_done:
                     }
                     clearLoadSlots(lval_inst->lvalue_slot_id);
                 } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    // Unresolved lvalue target - full slot cache wipe for safety
                     for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
                         locals_slot_cache[i].discard(xsink);
                         locals_slot_cache[i] = QoreValue();
                     }
                 }
-                // else: LVALUE_NON_LOCAL — no local cache invalidation needed
                 // evalLValueUnary returns the old value for post-inc/dec, new value for pre-inc/dec.
-                // It also modifies the lvalue in place via LValueHelper, so no reload is needed.
-                // The slot cache was already pre-invalidated above; the next LoadLocal will
-                // re-populate it from the updated variable.
+                // The slot cache was pre-invalidated above; next LoadLocal re-reads from TLS.
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -6074,28 +6170,15 @@ load_local_done:
             }
             case QoreIROpcode::ShiftLValue: {
                 auto* lval_inst = static_cast<QoreIRLValueInstruction*>(inst);
-                // Targeted cache invalidation before the lvalue operation
-                if (lval_inst->hasLocalTarget()) {
-                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(lval_inst->lvalue_slot_id);
-                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    // Unresolved lvalue target - full slot cache wipe for safety
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
-                    }
-                }
-                // else: LVALUE_NON_LOCAL — no local cache invalidation needed
+                const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
                 QoreValue res = QoreIRInterpreter::evalLValueUnary(inst->opcode, lval_inst->lvalue, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                // shift returns the removed element, not the updated list
+                // Shift returns the removed element — always invalidate (never repopulate)
+                finalizeLValueSlotCache(lval_inst, lval_vrn, res, false);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
@@ -6115,26 +6198,17 @@ load_local_done:
                     return false;
                 }
                 QoreValue right = getIRValue(values, lval_inst->operands[0]);
-                // Targeted cache invalidation BEFORE the lvalue operation
-                if (lval_inst->hasLocalTarget()) {
-                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(lval_inst->lvalue_slot_id);
-                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
-                    }
-                }
+                const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
+                // Simple variable: lvalue IS the VarRefNode (e.g., x += expr)
+                // Complex lvalue: lvalue is member/index access (e.g., h.value += expr)
+                bool is_simple_var = dynamic_cast<const VarRefNode*>(
+                    lval_inst->lvalue.getInternalNode()) != nullptr;
                 // Int fast path: probe type under lock, do direct operation if int
                 QoreValue res;
                 bool fast_path_done = false;
                 {
                     LValueHelper v(lval_inst->lvalue, xsink);
                     if (v && v.getType() == NT_INT) {
-                        // Direct int plus-equals — no SafeDerefHelper, no type dispatch
                         v.plusEqualsBigInt(right.getAsBigInt());
                         if (!*xsink) {
                             res = v.getReferencedValue();
@@ -6151,6 +6225,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
@@ -6178,19 +6253,9 @@ load_local_done:
                     return false;
                 }
                 QoreValue right = getIRValue(values, lval_inst->operands[0]);
-                // Targeted cache invalidation BEFORE the lvalue operation
-                if (lval_inst->hasLocalTarget()) {
-                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(lval_inst->lvalue_slot_id);
-                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
-                    }
-                }
+                const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
+                bool is_simple_var = dynamic_cast<const VarRefNode*>(
+                    lval_inst->lvalue.getInternalNode()) != nullptr;
                 // Int fast path: probe type under lock, do direct operation if int
                 QoreValue res;
                 bool fast_path_done = false;
@@ -6245,6 +6310,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
@@ -6264,30 +6330,16 @@ load_local_done:
                     return false;
                 }
                 QoreValue right = getIRValue(values, lval_inst->operands[0]);
-                // Targeted cache invalidation BEFORE the lvalue operation to prevent
-                // COW from inflated refcounts.  See design/lvalue-loads-in-ir.md.
-                if (lval_inst->hasLocalTarget()) {
-                    // Local variable: only invalidate this variable's slot cache entry
-                    // and any values[] entries loaded from this variable
-                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(lval_inst->lvalue_slot_id);
-                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    // Unresolved lvalue target - full slot cache wipe for safety
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
-                    }
-                }
-                // else: LVALUE_NON_LOCAL — no local cache invalidation needed
+                const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
+                bool is_simple_var = dynamic_cast<const VarRefNode*>(
+                    lval_inst->lvalue.getInternalNode()) != nullptr;
                 QoreValue res = QoreIRInterpreter::evalLValueBinary(inst->opcode, lval_inst->lvalue, right, xsink);
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
+                finalizeLValueSlotCache(lval_inst, lval_vrn, res, is_simple_var);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
@@ -6308,21 +6360,7 @@ load_local_done:
                 QoreValue first = getIRValue(values, lval_inst->operands[0]);
                 QoreValue second = getIRValue(values, lval_inst->operands[1]);
                 QoreValue third = getIRValue(values, lval_inst->operands[2]);
-                // Targeted pre-invalidation BEFORE the lvalue operation (see design/lvalue-loads-in-ir.md)
-                if (lval_inst->hasLocalTarget()) {
-                    if (lval_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[lval_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[lval_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(lval_inst->lvalue_slot_id);
-                } else if (lval_inst->lvalue_slot_id == UINT32_MAX) {
-                    // Unresolved lvalue target - full slot cache wipe for safety
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
-                    }
-                }
-                // else: LVALUE_NON_LOCAL — no local cache invalidation needed
+                const VarRefNode* lval_vrn = prepareLValueSlotCache(lval_inst);
                 QoreValue res = QoreIRInterpreter::evalLValueTernary(inst->opcode, lval_inst->lvalue, first, second,
                     third, xsink);
                 if (xsink && *xsink) {
@@ -6330,6 +6368,8 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
+                // Splice returns the removed portion — always invalidate (never repopulate)
+                finalizeLValueSlotCache(lval_inst, lval_vrn, res, false);
                 setValueSlot(values, lval_inst->result.id, res, xsink);
                 if (res.hasNode()) {
                     cleanup.push_back(lval_inst->result.id);
