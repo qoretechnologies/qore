@@ -6229,8 +6229,7 @@ load_local_done:
                     return false;
                 }
 
-                // Targeted invalidation for the root variable (not cleanupLocalCaches
-                // which would conflict with locks held by LValueHelper)
+                // Targeted cache invalidation for root variable
                 if (path_inst->hasLocalTarget()) {
                     if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -6240,8 +6239,11 @@ load_local_done:
                 }
 
                 if (path_inst->result.isValid()) {
-                    setValueSlot(values, path_inst->result.id, val, xsink);
-                    if (val.hasNode()) {
+                    // Use refSelf() to create an independent reference — val also exists
+                    // in the operand slot, and cleanup would double-deref without this
+                    QoreValue result_val = val.refSelf();
+                    setValueSlot(values, path_inst->result.id, result_val, xsink);
+                    if (result_val.hasNode()) {
                         cleanup.push_back(path_inst->result.id);
                     }
                 }
@@ -6319,7 +6321,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Targeted invalidation (not cleanupLocalCaches — would conflict with LValueHelper lock)
+                // Targeted cache invalidation for root variable
                 if (path_inst->hasLocalTarget()) {
                     if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);

@@ -392,7 +392,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[361] = {
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 353
     { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 354
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 355
-    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", false, false, false, false }, // 356 — produces_result false until handler crash is fixed
+    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 356
     { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 357
     { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 358
     { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 359

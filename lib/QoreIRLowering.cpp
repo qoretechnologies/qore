@@ -4484,10 +4484,9 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                     }
                 }
                 // Create LValuePathAssign instruction (no result value — assignment
-                // No result value — produces_result=false forces AST fallback for
-                // functions containing this instruction until the handler crash is fixed
                 auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
                     QoreIROpcode::LValuePathAssign);
+                path_inst->result = builder.getFunction()->createValue();
                 path_inst->path = std::move(lv_path);
                 path_inst->weak = is_weak;
                 path_inst->loc = assign->loc;
@@ -4496,7 +4495,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                 for (auto& dv : dyn_vals) {
                     path_inst->operands.push_back(dv);
                 }
-                return right;
+                return path_inst->result;
             }
         }
         if (!guardLValueBase(assign->getLeft(), error)) {
@@ -7884,9 +7883,9 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (lv_path.empty()) {
         return QoreIRValue();
     }
-    // Skip reference-typed root variables — navigatePath resolves the reference
-    // target at runtime but the IR slot cache can't track the write-through
-    // (the target variable's cache won't be invalidated)
+    // Skip reference-typed root variables — the IR stores target values directly
+    // (not ReferenceNodes), so navigatePath can't follow the reference. These
+    // operations must fall back to AST which handles reference write-through.
     if (lv_path[0].type_info && QoreTypeInfo::isReference(lv_path[0].type_info)) {
         return QoreIRValue();
     }
