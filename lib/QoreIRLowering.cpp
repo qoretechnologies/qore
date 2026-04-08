@@ -6971,6 +6971,20 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
         }
     }
 
+    // Path-based push for complex lvalues (member chains, nested subscripts)
+    {
+        QoreIRValue push_val = lowerExpression(op->getRight(), error);
+        if (!push_val.isValid()) {
+            return QoreIRValue();
+        }
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
+            left_expr, &push_val, op->loc, error, false, LVCompoundOp::AddAssign,
+            LVUnaryOp::PreInc, LVBinaryMutOp::Push);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
+
     // Fallback: delegate to AST for non-local lvalues (global, complex lvalues)
     if (!guardLValueBase(left_expr, error, true)) {
         return QoreIRValue();
@@ -7342,6 +7356,15 @@ QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& 
     auto* op = dynamic_cast<const QoreRegexSubstOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
+    }
+    // Path-based regex subst for complex lvalues
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign,
+            LVUnaryOp::PreInc, LVBinaryMutOp::RegexSubst, expr);
+        if (path_result.isValid()) {
+            return path_result;
+        }
     }
     QoreIRValue operand = lowerExpression(op->getExp(), error);
     if (!operand.isValid()) {
@@ -7847,13 +7870,15 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 // by existing fast paths (emitHashKeyCompoundOp, etc.) or guardLValueBase fallback.
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
-        bool weak, LVCompoundOp compound_op, LVUnaryOp unary_op) {
+        bool weak, LVCompoundOp compound_op, LVUnaryOp unary_op,
+        LVBinaryMutOp binary_mut_op, const QoreValue& pattern_expr) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
         return QoreIRValue();
     }
-    // Only use path-based ops for paths with at least root + 1 navigation step.
+    // Use path-based ops for paths with at least root + 1 navigation step.
+    // Single-step bare variable lvalues are handled by existing fast paths.
     if (lv_path.size() < 2) {
         return QoreIRValue();
     }
@@ -7884,6 +7909,10 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     path_inst->weak = weak;
     path_inst->compound_op = compound_op;
     path_inst->unary_op = unary_op;
+    path_inst->binary_mut_op = binary_mut_op;
+    if (pattern_expr.hasNode()) {
+        const_cast<QoreValue&>(path_inst->pattern_expr) = pattern_expr;
+    }
     path_inst->loc = loc;
     // Add RHS operand if provided
     if (rhs) {

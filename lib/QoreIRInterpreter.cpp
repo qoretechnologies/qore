@@ -28,6 +28,10 @@
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/OnBlockExitStatement.h>
 #include <qore/intern/QoreRegex.h>
+#include <qore/intern/QoreRegexSubst.h>
+#include <qore/intern/QoreRegexSubstOperatorNode.h>
+#include <qore/intern/QoreTransliteration.h>
+#include <qore/intern/QoreTransliterationOperatorNode.h>
 #include <qore/intern/QoreRegexMatchOperatorNode.h>
 #include <qore/intern/QoreRegexNMatchOperatorNode.h>
 #include <qore/intern/QoreRegexExtractOperatorNode.h>
@@ -6413,11 +6417,152 @@ load_local_done:
                 ++ip;
                 break;
             }
-            // LValuePathBinaryMut and LValuePathTernary — stub handlers for future use
-            case QoreIROpcode::LValuePathBinaryMut:
+            case QoreIROpcode::LValuePathBinaryMut: {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (path_inst->path.empty()) {
+                    xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.binary_mut missing path");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                // Resolve dynamic key/index operands
+                for (auto& step : path_inst->path) {
+                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        QoreStringValueHelper key_str(key_val);
+                        step.name = key_str->c_str();
+                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    }
+                }
+                // Get RHS value (operands[0] for push/unshift)
+                QoreValue rhs;
+                if (!path_inst->operands.empty()) {
+                    rhs = getIRValue(values, path_inst->operands[0]);
+                }
+                // Pre-invalidation for local variable targets
+                const LVPathStep& root = path_inst->path[0];
+                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                        locals_slot_cache[i].discard(xsink);
+                        locals_slot_cache[i] = QoreValue();
+                    }
+                }
+                QoreValue res;
+                LValueHelper lvh(xsink);
+                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                switch (path_inst->binary_mut_op) {
+                    case LVBinaryMutOp::Push:
+                    case LVBinaryMutOp::Unshift: {
+                        // Auto-vivify NOTHING to empty list
+                        if (lvh.getType() == NT_NOTHING) {
+                            const QoreTypeInfo* vti = lvh.getTypeInfo();
+                            if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+                                const QoreTypeInfo* lti = vti == autoTypeInfo
+                                    ? autoTypeInfo
+                                    : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+                                if (lvh.assign(new QoreListNode(lti))) {
+                                    assert(*xsink);
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                            }
+                        }
+                        if (lvh.getType() != NT_LIST) {
+                            if (runtime_check_parse_option(PO_STRICT_ARGS)) {
+                                xsink->raiseException(
+                                    path_inst->binary_mut_op == LVBinaryMutOp::Push
+                                        ? "PUSH-ERROR" : "UNSHIFT-ERROR",
+                                    "the lvalue argument is type \"%s\"; expecting \"list\"",
+                                    lvh.getTypeName());
+                            }
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                        lvh.ensureUnique();
+                        QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                        if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
+                            l->push(rhs.refSelf(), xsink);
+                        } else {
+                            l->insert(rhs.refSelf(), xsink);
+                        }
+                        res = l->refSelf();
+                        break;
+                    }
+                    case LVBinaryMutOp::RegexSubst: {
+                        // If not a string, do nothing (matches AST behavior)
+                        if (!lvh.checkType(NT_STRING)) {
+                            break;
+                        }
+                        // Get the regex from the pattern expression
+                        if (path_inst->pattern_expr.hasNode()) {
+                            auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
+                                path_inst->pattern_expr.getInternalNode());
+                            if (regex_op && regex_op->getRegexSubst()) {
+                                const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
+                                QoreStringNode* nv = regex_op->getRegexSubst()->exec(str, xsink);
+                                if (!*xsink && nv) {
+                                    lvh.assign(nv);
+                                    res = nv->refSelf();
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    case LVBinaryMutOp::Transliterate: {
+                        // If not a string, do nothing
+                        if (!lvh.checkType(NT_STRING)) {
+                            break;
+                        }
+                        if (path_inst->pattern_expr.hasNode()) {
+                            auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
+                                path_inst->pattern_expr.getInternalNode());
+                            if (trans_op && trans_op->getTransliteration()) {
+                                const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
+                                QoreStringNode* nv = trans_op->getTransliteration()->exec(str, xsink);
+                                if (!*xsink && nv) {
+                                    lvh.assign(nv);
+                                    res = nv->refSelf();
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    default:
+                        xsink->raiseException("IR-EXEC-ERROR",
+                            "unsupported binary mutation op %d", (int)path_inst->binary_mut_op);
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                cleanupLocalCaches();
+                if (path_inst->result.isValid()) {
+                    setValueSlot(values, path_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(path_inst->result.id);
+                    }
+                } else {
+                    res.discard(xsink);
+                }
+                ++ip;
+                break;
+            }
+            // LValuePathTernary — stub handler for future use (splice/extract)
             case QoreIROpcode::LValuePathTernary: {
                 xsink->raiseException("IR-EXEC-ERROR",
-                    "lvalue path binary mutation / ternary not yet implemented (opcode %d)",
+                    "lvalue path ternary not yet implemented (opcode %d)",
                     (int)inst->opcode);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();

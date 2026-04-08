@@ -228,7 +228,9 @@ private:
     QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         bool weak, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
-        LVUnaryOp unary_op = LVUnaryOp::PreInc);
+        LVUnaryOp unary_op = LVUnaryOp::PreInc,
+        LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push,
+        const QoreValue& pattern_expr = QoreValue());
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;
