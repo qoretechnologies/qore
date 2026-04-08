@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file MysqlSqlUtil.qm Qore user module for working with MySQL SQL data
 
-/*  MysqlSqlUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  MysqlSqlUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1634,6 +1634,24 @@ end";
                         string exp0 = info.table.getExpressionArg(\info, role, args[0],
                             AbstractDataProviderTypeMap."date");
                         return sprintf("cast(date_format(%s, %s) as datetime)", exp0, str);
+                    },
+                },
+                # --- Date/Time functions for MySQL ---
+                DP_FUNC_NOW: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_NOW,
+                        "display_name": "now",
+                        "short_desc": "Returns the current date/time",
+                        "desc": "Returns the current date/time",
+                        "symbol": "now()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return "now(6)";
                     },
                 },
                 # --- Duration functions for MySQL ---

@@ -1869,6 +1869,24 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                     return sprintf("currval('%s')", args[0]);
                 }
             },
+            # --- Date/Time functions for PostgreSQL ---
+            DP_FUNC_NOW: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": DP_FUNC_NOW,
+                    "display_name": "now",
+                    "short_desc": "Returns the current date/time",
+                    "desc": "Returns the current date/time with microsecond precision",
+                    "symbol": "now()",
+                    "groups": "Date/Time",
+                    "role": ER_All,
+                    "args": (),
+                    "return_type": AbstractDataProviderTypeMap."date",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return "now()";
+                },
+            },
             # --- Duration functions for PostgreSQL ---
             DP_FUNC_YEARS: {
                 "exp": <DataProviderExpressionInfo>{
