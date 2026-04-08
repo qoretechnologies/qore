@@ -4484,7 +4484,8 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                     }
                 }
                 // Create LValuePathAssign instruction (no result value — assignment
-                // returns the RHS directly, no need for the instruction to produce one)
+                // No result value — produces_result=false forces AST fallback for
+                // functions containing this instruction until the handler crash is fixed
                 auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
                     QoreIROpcode::LValuePathAssign);
                 path_inst->path = std::move(lv_path);
