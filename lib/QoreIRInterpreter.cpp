@@ -6559,7 +6559,9 @@ load_local_done:
                                 QoreStringNode* nv = regex_op->getRegexSubst()->exec(str, xsink);
                                 if (!*xsink && nv) {
                                     lvh.assign(nv);
-                                    res = nv->refSelf();
+                                    if (path_inst->ref_rv) {
+                                        res = nv->refSelf();
+                                    }
                                 }
                             }
                         }
@@ -6578,7 +6580,9 @@ load_local_done:
                                 QoreStringNode* nv = trans_op->getTransliteration()->exec(str, xsink);
                                 if (!*xsink && nv) {
                                     lvh.assign(nv);
-                                    res = nv->refSelf();
+                                    if (path_inst->ref_rv) {
+                                        res = nv->refSelf();
+                                    }
                                 }
                             }
                         }

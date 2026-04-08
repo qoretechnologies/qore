@@ -1076,6 +1076,9 @@ public:
     //! For RegexSubst/Transliterate — pattern info
     const QoreValue pattern_expr;   //!< Regex/transliteration pattern (for runtime eval)
 
+    //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
+    bool ref_rv = true;
+
     // Operands layout depends on opcode:
     // LValuePathAssign:    operands[0] = RHS value; dynamic key/index operands follow
     // LValuePathCompound:  operands[0] = RHS value; dynamic key/index operands follow

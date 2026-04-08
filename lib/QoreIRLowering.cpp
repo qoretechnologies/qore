@@ -7879,6 +7879,7 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     }
     // Use path-based ops for paths with at least root + 1 navigation step.
     // Single-step bare variable lvalues are handled by existing fast paths.
+    // 1-step paths cause Dpql regressions — needs further investigation.
     if (lv_path.size() < 2) {
         return QoreIRValue();
     }
@@ -7912,6 +7913,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     path_inst->binary_mut_op = binary_mut_op;
     if (pattern_expr.hasNode()) {
         const_cast<QoreValue&>(path_inst->pattern_expr) = pattern_expr;
+        // Copy ref_rv flag from the operator node (determines if return value is used)
+        auto* op_node = dynamic_cast<const QoreOperatorNode*>(pattern_expr.getInternalNode());
+        if (op_node) {
+            path_inst->ref_rv = op_node->needsReturnValue();
+        }
     }
     path_inst->loc = loc;
     // Add RHS operand if provided

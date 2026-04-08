@@ -76,6 +76,11 @@ public:
        return in_parentheses;
    }
 
+   //! Returns true if the operator's return value is used
+   DLLLOCAL bool needsReturnValue() const {
+       return ref_rv;
+   }
+
    DLLLOCAL void setInParentheses() {
        in_parentheses = true;
    }
