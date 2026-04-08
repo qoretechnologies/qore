@@ -684,6 +684,11 @@ string result = diff_unified(old_text, new_text, "a/file.txt", "b/file.txt");
 
         list<string> old_lines = s1.split("\n");
         list<string> new_lines = s2.split("\n");
+        # Track whether each file ends with a newline (split drops trailing empty)
+        bool old_nl = s1.size() > 0 && s1[s1.size() - 1] == "\n";
+        bool new_nl = s2.size() > 0 && s2[s2.size() - 1] == "\n";
+        int last_old_idx = old_lines.size() - 1;
+        int last_new_idx = new_lines.size() - 1;
 
         # Get the raw diff result (list of matched lines and {d:, i:} hashes)
         list<auto> results = diff(old_lines, new_lines);
@@ -787,12 +792,22 @@ string result = diff_unified(old_text, new_text, "a/file.txt", "b/file.txt");
                 switch (op.type) {
                     case "equal":
                         output += " " + op.text + "\n";
+                        if ((!old_nl && op.old_line == last_old_idx)
+                                || (!new_nl && op.new_line == last_new_idx)) {
+                            output += "\\ No newline at end of file\n";
+                        }
                         break;
                     case "delete":
                         output += "-" + op.text + "\n";
+                        if (!old_nl && op.old_line == last_old_idx) {
+                            output += "\\ No newline at end of file\n";
+                        }
                         break;
                     case "insert":
                         output += "+" + op.text + "\n";
+                        if (!new_nl && op.new_line == last_new_idx) {
+                            output += "\\ No newline at end of file\n";
+                        }
                         break;
                 }
             }
@@ -850,13 +865,21 @@ string result = patch_apply(original, patch);
                 };
             } else if (current_hunk) {
                 if (pline =~ /^ /) {
-                    push current_hunk.ops, {"type": "context", "text": pline.substr(1)};
+                    push current_hunk.ops, {"type": "context", "text": pline.substr(1),
+                        "no_nl": False};
                 } else if (pline =~ /^-/) {
-                    push current_hunk.ops, {"type": "delete", "text": pline.substr(1)};
+                    push current_hunk.ops, {"type": "delete", "text": pline.substr(1),
+                        "no_nl": False};
                 } else if (pline =~ /^\+/) {
-                    push current_hunk.ops, {"type": "insert", "text": pline.substr(1)};
+                    push current_hunk.ops, {"type": "insert", "text": pline.substr(1),
+                        "no_nl": False};
+                } else if (pline == "\\ No newline at end of file") {
+                    # Mark the last op in this hunk as having no trailing newline
+                    if (current_hunk.ops) {
+                        current_hunk.ops[current_hunk.ops.size() - 1].no_nl = True;
+                    }
                 }
-                # Skip other lines (e.g., "\ No newline at end of file")
+                # Skip other unrecognized lines
             }
             # Skip --- and +++ header lines
         }
@@ -908,6 +931,20 @@ string result = patch_apply(original, patch);
         while (src_pos < src_lines.size()) {
             push result, src_lines[src_pos];
             ++src_pos;
+        }
+
+        # Determine trailing newline from the patch:
+        # If no source lines remain after the last hunk, the trailing newline
+        # is determined by the patch's "\ No newline at end of file" markers
+        if (src_pos >= src_lines.size() && hunks) {
+            hash<auto> last_hunk = hunks[hunks.size() - 1];
+            # Find the last insert or context op to check its no_nl flag
+            for (int j = last_hunk.ops.size() - 1; j >= 0; --j) {
+                if (last_hunk.ops[j].type == "insert" || last_hunk.ops[j].type == "context") {
+                    trailing_nl = !last_hunk.ops[j].no_nl;
+                    break;
+                }
+            }
         }
 
         string output = result.join("\n");

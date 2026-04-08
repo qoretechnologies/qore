@@ -82,6 +82,25 @@ public class DiffTest inherits QUnit::Test {
         list<string> hunk_lines = select r5.split("\n"), regex($1, "^@@");
         assertTrue(hunk_lines.size() >= 2,
             "separate hunks for distant changes (got " + hunk_lines.size() + ")");
+
+        # No newline at end of file markers
+        {
+            # Neither file has trailing newline
+            string r6 = diff_unified("a\nb", "a\nc");
+            assertTrue(regex(r6, "^-b$", RE_MultiLine), "no-nl: delete b");
+            assertTrue(regex(r6, "\\\\ No newline at end of file"), "no-nl: marker after -b");
+            assertTrue(regex(r6, "^\\+c$", RE_MultiLine), "no-nl: insert c");
+
+            # Old has newline, new doesn't
+            string r7 = diff_unified("a\nb\n", "a\nc");
+            assertFalse(regex(r7, "-b\n\\\\ No"), "nl-to-no-nl: no marker after -b");
+            assertTrue(regex(r7, "\\+c\n\\\\ No newline"), "nl-to-no-nl: marker after +c");
+
+            # Old no newline, new has newline
+            string r8 = diff_unified("a\nb", "a\nc\n");
+            assertTrue(regex(r8, "-b\n\\\\ No newline"), "no-nl-to-nl: marker after -b");
+            assertFalse(regex(r8, "\\+c\n\\\\ No"), "no-nl-to-nl: no marker after +c");
+        }
     }
 
     stringDiff() {
@@ -535,6 +554,22 @@ h";
                 caught = ex.err == "PATCH-ERROR";
             }
             assertTrue(caught, "mismatch throws PATCH-ERROR");
+        }
+
+        # Trailing newline roundtrips
+        {
+            # Both have trailing nl
+            assertEq("a\nc\n", patch_apply("a\nb\n", diff_unified("a\nb\n", "a\nc\n")),
+                "patch nl: both have nl");
+            # Neither has trailing nl
+            assertEq("a\nc", patch_apply("a\nb", diff_unified("a\nb", "a\nc")),
+                "patch nl: neither has nl");
+            # Old has nl, new doesn't
+            assertEq("a\nc", patch_apply("a\nb\n", diff_unified("a\nb\n", "a\nc")),
+                "patch nl: old nl, new no nl");
+            # Old no nl, new has nl
+            assertEq("a\nc\n", patch_apply("a\nb", diff_unified("a\nb", "a\nc\n")),
+                "patch nl: old no nl, new has nl");
         }
 
         # Large roundtrip
