@@ -40,6 +40,10 @@
 
 #! Command-line diff tool powered by the Diff module
 class QdiffApp {
+    public {
+        static TerminalColor color;
+    }
+
     private {
         const Version = "1.0.0";
 
@@ -58,8 +62,6 @@ class QdiffApp {
             "help":         "h,help",
             "version":      "V,version",
         };
-
-        TerminalColor color;
     }
 
     constructor() {
@@ -72,6 +74,8 @@ class QdiffApp {
             exit(2);
         }
 
+        color = new TerminalColor(!opts.nocolor);
+
         if (opts.version) {
             printf("qdiff %s\n", Version);
             exit(0);
@@ -81,8 +85,6 @@ class QdiffApp {
             usage();
             exit(opts.help ? 0 : 2);
         }
-
-        color = new TerminalColor(!opts.nocolor);
 
         string path1 = shift ARGV;
         string path2 = shift ARGV;
@@ -325,34 +327,59 @@ class QdiffApp {
         return 80;
     }
 
+    private static printHelpLine(string colored, string desc, int width) {
+        printf("  %s %s\n", TerminalColor::padRight(colored, width), desc);
+    }
+
     static usage() {
-        stdout.print("Usage: qdiff [options] file1 file2
+        string script = get_script_name();
+        int kw = 24;
 
-Compare two files and display differences.
+        printf("%s - Qore Diff Tool\n\n", color.bold(script));
 
-Output modes (default: unified):
-  -u, --unified        Unified diff format (default)
-  -n, --normal         Normal (traditional) diff format
-  -y, --side-by-side   Side-by-side columnar format
-  --chars              Character-level inline diff
-  --words              Word-level inline diff
-  -D, --data           Structured data diff (JSON/YAML/Qore data)
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s [options] file1 file2\n\n", script);
 
-Options:
-  -c, --context=N      Number of context lines (default: 3, unified mode)
-  -w, --width=N        Output width (default: terminal width, side-by-side mode)
-  -s, --stats          Show statistics (insertions, deletions, unchanged)
-  -C, --no-color       Disable colored output
-  -q, --quiet          Suppress output; exit 0 if identical, 1 if different
-  -h, --help           Show this help message
-  -V, --version        Show version information
+        printf("%s\n", color.bold("OUTPUT MODES"));
+        printHelpLine(color.key("-u, --unified"), "Unified diff format (default)", kw);
+        printHelpLine(color.key("-n, --normal"), "Normal (traditional) diff format", kw);
+        printHelpLine(color.key("-y, --side-by-side"), "Side-by-side columnar format", kw);
+        printHelpLine(color.key("--chars"), "Character-level inline diff", kw);
+        printHelpLine(color.key("--words"), "Word-level inline diff", kw);
+        printHelpLine(color.key("-D, --data"), "Structured data diff (JSON/YAML/Qore)", kw);
+        printf("\n");
 
-Use '-' as a file path to read from stdin (only one file can be stdin).
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-c, --context=N"), "Context lines (default: 3, unified mode)", kw);
+        printHelpLine(color.key("-w, --width=N"), "Output width (default: terminal width)", kw);
+        printHelpLine(color.key("-s, --stats"), "Show insertion/deletion/unchanged counts", kw);
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", kw);
+        printHelpLine(color.key("-q, --quiet"), "Exit 0 if identical, 1 if different", kw);
+        printHelpLine(color.key("-V, --version"), "Show version information", kw);
+        printHelpLine(color.key("-h, --help"), "Show this help message", kw);
+        printf("\n");
 
-Exit codes:
-  0  Files are identical
-  1  Files differ
-  2  Error (missing file, invalid options, etc.)
-");
+        printf("%s\n", color.bold("NOTES"));
+        printf("  Use %s as a file path to read from stdin.\n\n", color.key("'-'"));
+
+        printf("%s\n", color.bold("EXIT CODES"));
+        printHelpLine(color.key("0"), "Files are identical", kw);
+        printHelpLine(color.key("1"), "Files differ", kw);
+        printHelpLine(color.key("2"), "Error (missing file, invalid options)", kw);
+        printf("\n");
+
+        printf("%s\n", color.bold("EXAMPLES"));
+        printf("  %s old.txt new.txt                  %s\n",
+            script, color.dim("# unified diff (default)"));
+        printf("  %s -y -w 120 old.txt new.txt        %s\n",
+            script, color.dim("# side-by-side, 120 cols"));
+        printf("  %s --chars old.txt new.txt           %s\n",
+            script, color.dim("# character-level diff"));
+        printf("  %s -D old.json new.json              %s\n",
+            script, color.dim("# structured data diff"));
+        printf("  %s -us old.txt new.txt               %s\n",
+            script, color.dim("# unified + statistics"));
+        printf("  %s old.txt - < new.txt               %s\n",
+            script, color.dim("# read new from stdin"));
     }
 }

@@ -44,8 +44,10 @@ class QpatchApp {
             "help":     "h,help",
             "version":  "V,version",
         };
+    }
 
-        TerminalColor color;
+    public {
+        static TerminalColor color;
     }
 
     constructor() {
@@ -58,6 +60,8 @@ class QpatchApp {
             exit(2);
         }
 
+        color = new TerminalColor(!opts.nocolor);
+
         if (opts.version) {
             printf("qpatch %s\n", Version);
             exit(0);
@@ -67,8 +71,6 @@ class QpatchApp {
             usage();
             exit(opts.help ? 0 : 2);
         }
-
-        color = new TerminalColor(!opts.nocolor);
 
         string file_path = shift ARGV;
         string patch_path = ARGV ? shift ARGV : "-";
@@ -166,42 +168,46 @@ class QpatchApp {
         return result.join("\n");
     }
 
+    private static printHelpLine(string colored, string desc, int width) {
+        printf("  %s %s\n", TerminalColor::padRight(colored, width), desc);
+    }
+
     static usage() {
-        stdout.print("Usage: qpatch [options] file [patch]
+        string script = get_script_name();
+        int kw = 24;
 
-Apply a unified diff patch to a file.
+        printf("%s - Qore Patch Tool\n\n", color.bold(script));
 
-If no patch file is given, the patch is read from stdin.
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s [options] file [patch]\n\n", script);
+        printf("  If no patch file is given, the patch is read from stdin.\n\n");
 
-Options:
-  -d, --dry-run        Check if patch applies without modifying the file
-  -R, --reverse        Reverse the patch (undo changes)
-  -o, --output=FILE    Write result to FILE instead of overwriting the original
-  -v, --verbose        Show status messages
-  -C, --no-color       Disable colored output
-  -h, --help           Show this help message
-  -V, --version        Show version information
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-d, --dry-run"), "Check if patch applies without modifying", kw);
+        printHelpLine(color.key("-R, --reverse"), "Reverse the patch (undo changes)", kw);
+        printHelpLine(color.key("-o, --output=FILE"), "Write result to FILE instead of original", kw);
+        printHelpLine(color.key("-v, --verbose"), "Show status messages", kw);
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", kw);
+        printHelpLine(color.key("-V, --version"), "Show version information", kw);
+        printHelpLine(color.key("-h, --help"), "Show this help message", kw);
+        printf("\n");
 
-Exit codes:
-  0  Patch applied successfully (or dry-run passed)
-  1  Patch failed (context mismatch)
-  2  Error (missing file, invalid options, etc.)
+        printf("%s\n", color.bold("EXIT CODES"));
+        printHelpLine(color.key("0"), "Patch applied successfully (or dry-run passed)", kw);
+        printHelpLine(color.key("1"), "Patch failed (context mismatch)", kw);
+        printHelpLine(color.key("2"), "Error (missing file, invalid options)", kw);
+        printf("\n");
 
-Examples:
-  # Apply a patch from a file
-  qpatch myfile.txt changes.patch
-
-  # Apply a patch from stdin (e.g., from qdiff)
-  qdiff old.txt new.txt | qpatch old.txt
-
-  # Check if a patch applies without modifying
-  qpatch -d myfile.txt changes.patch
-
-  # Reverse a previously applied patch
-  qpatch -R myfile.txt changes.patch
-
-  # Write patched output to a new file
-  qpatch -o result.txt myfile.txt changes.patch
-");
+        printf("%s\n", color.bold("EXAMPLES"));
+        printf("  %s myfile.txt changes.patch          %s\n",
+            script, color.dim("# apply a patch file"));
+        printf("  qdiff old.txt new.txt | %s old.txt   %s\n",
+            script, color.dim("# apply from stdin"));
+        printf("  %s -d myfile.txt changes.patch       %s\n",
+            script, color.dim("# dry-run check"));
+        printf("  %s -R myfile.txt changes.patch       %s\n",
+            script, color.dim("# reverse a patch"));
+        printf("  %s -o out.txt src.txt changes.patch  %s\n",
+            script, color.dim("# write to new file"));
     }
 }
