@@ -71,7 +71,15 @@ class RuntimeConfig;
 class QoreEnumMember;
 
 //! this is the union that stores values in QoreLValue (legacy - kept for QoreLValue compatibility)
+/** The may_alias attribute tells the compiler that pointers to this type may alias with any other
+    pointer type, preventing strict-aliasing-based misoptimizations when the same memory is accessed
+    through different pointer contexts (e.g., via LValueHelper's dual val/qv pointer pattern).
+*/
+#if defined(__GNUC__) || defined(__clang__)
+union __attribute__((may_alias)) qore_value_u {
+#else
 union qore_value_u {
+#endif
     bool b;                     //!< for boolean values
     int64 i;                    //!< for integer values
     double f;                   //!< for double values
@@ -264,7 +272,11 @@ namespace detail {
     - pointers to AbstractQoreNode for heap-allocated values
     - special values (nothing, null, true, false)
 */
+#if defined(__GNUC__) || defined(__clang__)
+class __attribute__((may_alias)) QoreValue {
+#else
 class QoreValue {
+#endif
     friend class ValueHolder;
     friend class ValueOptionalRefHolder;
     friend class ValueEvalRefHolder;

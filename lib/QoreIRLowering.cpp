@@ -7075,6 +7075,16 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
     if (!op) {
         return QoreIRValue();
     }
+    // Path-based remove for complex lvalues (must be before lowerExpression to avoid
+    // emitting dead instructions). Only matches multi-step SelfMember paths.
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Remove);
+        if (path_result.isValid()) {
+            markLocalUnassignmentFromExpression(op->getExp());
+            return path_result;
+        }
+    }
     QoreIRValue operand = lowerExpression(op->getExp(), error);
     if (!operand.isValid()) {
         return QoreIRValue();
@@ -7107,6 +7117,15 @@ QoreIRValue QoreIRLowering::lowerDelete(const QoreValue& expr, std::string& erro
     auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
+    }
+    // Path-based delete for complex lvalues (must be before lowerExpression)
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Delete);
+        if (path_result.isValid()) {
+            markLocalUnassignmentFromExpression(op->getExp());
+            return path_result;
+        }
     }
     QoreIRValue operand = lowerExpression(op->getExp(), error);
     if (!operand.isValid()) {
@@ -7834,10 +7853,11 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
         return QoreIRValue();
     }
-    // Only use path-based ops for multi-step paths (root + 2+ navigation steps),
-    // e.g. self.obj.member, self.hash.key[idx]. Simple single-step lvalues
-    // (local[idx], self.member) are handled by existing fast paths or guardLValueBase.
-    if (lv_path.size() < 3) {
+    // Only use path-based ops for SelfMember-rooted paths with at least 1 navigation step.
+    // Local/closure/global variable paths have known issues in the LValuePath handler
+    // (double-increment for inc/dec, missing remove semantics for list subscripts).
+    // These cases are already well-handled by existing fast paths and guardLValueBase.
+    if (lv_path.size() < 2 || lv_path[0].kind != LVPathStepKind::SelfMember) {
         return QoreIRValue();
     }
     // Lower dynamic key/index operands

@@ -872,9 +872,9 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::RegexNMatchBool:
         case QoreIROpcode::RegexExtractAny:
         case QoreIROpcode::RegexExtractList:
-        // Lvalue compound assignment and list assignment delegate to AST
-        case QoreIROpcode::AddAssignLValue:
-        case QoreIROpcode::SubAssignLValue:
+        // List assignment delegates to AST (QoreIRExprInstruction)
+        // NOTE: AddAssignLValue/SubAssignLValue are QoreIRLValueInstruction, not
+        // QoreIRExprInstruction — they are handled by isLValueOp() + line 1008
         case QoreIROpcode::ListAssignAny:
         // Elements/size ops delegate to AST
         case QoreIROpcode::ElementsAny:

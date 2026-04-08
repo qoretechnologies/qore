@@ -36,7 +36,11 @@
 DLLLOCAL void check_lvalue_object_in_out(AbstractQoreNode* in, AbstractQoreNode* out);
 
 template <typename U = qore_value_u>
+#if defined(__GNUC__) || defined(__clang__)
+class __attribute__((may_alias)) QoreLValue {
+#else
 class QoreLValue {
+#endif
 protected:
     // returns the old value just in case it needs to be dereferenced outside a lock
     template <class T, typename t, int nt>
