@@ -1,0 +1,358 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file qdiff command-line diff tool using the Diff module
+
+/*  qdiff Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Diff
+%requires Util
+
+%try-module json
+%define NoJson
+%endtry
+
+%try-module yaml
+%define NoYaml
+%endtry
+
+%exec-class QdiffApp
+
+#! Command-line diff tool powered by the Diff module
+class QdiffApp {
+    private {
+        const Version = "1.0.0";
+
+        const Opts = {
+            "unified":      "u,unified",
+            "side_by_side": "y,side-by-side",
+            "normal":       "n,normal",
+            "chars":        "chars",
+            "words":        "words",
+            "data":         "D,data",
+            "stats":        "s,stats",
+            "context":      "c,context=i",
+            "width":        "w,width=i",
+            "nocolor":      "C,no-color",
+            "quiet":        "q,quiet",
+            "help":         "h,help",
+            "version":      "V,version",
+        };
+
+        TerminalColor color;
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        hash<auto> opts;
+        try {
+            opts = getopt.parse3(\ARGV);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qdiff: %s\n", ex.desc);
+            exit(2);
+        }
+
+        if (opts.version) {
+            printf("qdiff %s\n", Version);
+            exit(0);
+        }
+
+        if (opts.help || ARGV.size() < 2) {
+            usage();
+            exit(opts.help ? 0 : 2);
+        }
+
+        color = new TerminalColor(!opts.nocolor);
+
+        string path1 = shift ARGV;
+        string path2 = shift ARGV;
+
+        string s1;
+        string s2;
+        try {
+            s1 = path1 == "-" ? stdin.read(-1) : ReadOnlyFile::readTextFile(path1);
+            s2 = path2 == "-" ? stdin.read(-1) : ReadOnlyFile::readTextFile(path2);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qdiff: %s: %s\n", ex.err, ex.desc);
+            exit(2);
+        }
+
+        if (opts.quiet) {
+            exit(s1 == s2 ? 0 : 1);
+        }
+
+        int ctx_lines = opts.context ?? 3;
+        int width = opts.width ?? getTerminalWidth();
+
+        if (opts.data) {
+            doDataDiff(s1, s2, path1, path2, opts);
+        } else if (opts.chars) {
+            doCharsDiff(s1, s2);
+        } else if (opts.words) {
+            doWordsDiff(s1, s2);
+        } else if (opts.side_by_side) {
+            doSideBySide(s1, s2, width);
+        } else if (opts.normal) {
+            doNormalDiff(s1, s2);
+        } else {
+            # Default: unified diff
+            doUnifiedDiff(s1, s2, path1, path2, ctx_lines, opts);
+        }
+    }
+
+    private doUnifiedDiff(string s1, string s2, string label1, string label2, int ctx_lines,
+            hash<auto> opts) {
+        string result = diff_unified(s1, s2, label1, label2, ctx_lines);
+        if (result.empty()) {
+            exit(0);
+        }
+        if (color.enabled) {
+            foreach string line in (result.split("\n")) {
+                if (line =~ /^---/) {
+                    stdout.printf("%s\n", color.bold(line));
+                } else if (line =~ /^\+\+\+/) {
+                    stdout.printf("%s\n", color.bold(line));
+                } else if (line =~ /^@@/) {
+                    stdout.printf("%s\n", color.info(line));
+                } else if (line =~ /^\+/) {
+                    stdout.printf("%s\n", color.green(line));
+                } else if (line =~ /^-/) {
+                    stdout.printf("%s\n", color.red(line));
+                } else {
+                    stdout.printf("%s\n", line);
+                }
+            }
+        } else {
+            stdout.print(result);
+        }
+
+        if (opts.stats) {
+            printStats(s1, s2);
+        }
+        exit(1);
+    }
+
+    private doNormalDiff(string s1, string s2) {
+        string result = diff_text(s1, s2);
+        if (result.empty()) {
+            exit(0);
+        }
+        if (color.enabled) {
+            foreach string line in (result.split("\n")) {
+                if (line =~ /^< /) {
+                    stdout.printf("%s\n", color.red(line));
+                } else if (line =~ /^> /) {
+                    stdout.printf("%s\n", color.green(line));
+                } else if (line =~ /^---$/) {
+                    stdout.printf("%s\n", color.info(line));
+                } else if (line =~ /^[0-9]/) {
+                    stdout.printf("%s\n", color.bold(line));
+                } else if (line != "") {
+                    stdout.printf("%s\n", line);
+                }
+            }
+        } else {
+            stdout.print(result);
+        }
+        exit(1);
+    }
+
+    private doSideBySide(string s1, string s2, int width) {
+        string result = diff_side_by_side(s1, s2, width, color.enabled);
+        if (result.empty()) {
+            exit(0);
+        }
+        stdout.print(result);
+        exit(1);
+    }
+
+    private doCharsDiff(string s1, string s2) {
+        if (s1 == s2) {
+            exit(0);
+        }
+        # Diff each line pair
+        list<string> lines1 = s1.split("\n");
+        list<string> lines2 = s2.split("\n");
+        list<auto> line_diff = diff(lines1, lines2);
+        foreach auto item in (line_diff) {
+            if (item.typeCode() == NT_HASH) {
+                list<auto> del = item.d;
+                list<auto> ins = item.i;
+                int max_len = del.size() > ins.size() ? del.size() : ins.size();
+                for (int i = 0; i < max_len; ++i) {
+                    if (i < del.size() && i < ins.size()) {
+                        # Show character-level diff for changed lines
+                        stdout.printf("%s\n", diff_chars(string(del[i]), string(ins[i]),
+                            color.enabled));
+                    } else if (i < del.size()) {
+                        if (color.enabled) {
+                            stdout.printf("%s\n", color.red(string(del[i])));
+                        } else {
+                            stdout.printf("{-%s-}\n", del[i]);
+                        }
+                    } else {
+                        if (color.enabled) {
+                            stdout.printf("%s\n", color.green(string(ins[i])));
+                        } else {
+                            stdout.printf("{+%s+}\n", ins[i]);
+                        }
+                    }
+                }
+            } else {
+                stdout.printf("%s\n", item);
+            }
+        }
+        exit(1);
+    }
+
+    private doWordsDiff(string s1, string s2) {
+        if (s1 == s2) {
+            exit(0);
+        }
+        list<string> lines1 = s1.split("\n");
+        list<string> lines2 = s2.split("\n");
+        list<auto> line_diff = diff(lines1, lines2);
+        foreach auto item in (line_diff) {
+            if (item.typeCode() == NT_HASH) {
+                list<auto> del = item.d;
+                list<auto> ins = item.i;
+                int max_len = del.size() > ins.size() ? del.size() : ins.size();
+                for (int i = 0; i < max_len; ++i) {
+                    if (i < del.size() && i < ins.size()) {
+                        stdout.printf("%s\n", diff_words(string(del[i]), string(ins[i]),
+                            color.enabled));
+                    } else if (i < del.size()) {
+                        if (color.enabled) {
+                            stdout.printf("%s\n", color.red(string(del[i])));
+                        } else {
+                            stdout.printf("{-%s-}\n", del[i]);
+                        }
+                    } else {
+                        if (color.enabled) {
+                            stdout.printf("%s\n", color.green(string(ins[i])));
+                        } else {
+                            stdout.printf("{+%s+}\n", ins[i]);
+                        }
+                    }
+                }
+            } else {
+                stdout.printf("%s\n", item);
+            }
+        }
+        exit(1);
+    }
+
+    private doDataDiff(string s1, string s2, string path1, string path2, hash<auto> opts) {
+        auto data1 = parseData(s1, path1);
+        auto data2 = parseData(s2, path2);
+        list<hash<DiffInfo>> changes = diff_data(data1, data2);
+        if (!changes) {
+            exit(0);
+        }
+
+        stdout.print(diff_data_text(data1, data2, color.enabled));
+
+        if (opts.stats) {
+            int added = (select changes, $1.type == "added").size();
+            int removed = (select changes, $1.type == "removed").size();
+            int changed = (select changes, $1.type == "changed").size();
+            stderr.printf("%d addition(s), %d removal(s), %d change(s)\n",
+                added, removed, changed);
+        }
+        exit(1);
+    }
+
+    private auto parseData(string s, string path) {
+        # Try JSON first, then YAML, then return as raw string
+%ifndef NoJson
+        try {
+            return parse_json(s);
+        } catch () {
+            # not JSON
+        }
+%endif
+%ifndef NoYaml
+        try {
+            return parse_yaml(s);
+        } catch () {
+            # not YAML
+        }
+%endif
+        # Fall back to evaluating as Qore data
+        try {
+            return parse_to_qore_value(s);
+        } catch () {
+            # not parseable, return as-is
+        }
+        return s;
+    }
+
+    private printStats(string s1, string s2) {
+        hash<DiffStats> stats = diff_stats(s1, s2);
+        stderr.printf("%d insertion(s), %d deletion(s), %d unchanged\n",
+            stats.added, stats.removed, stats.unchanged);
+    }
+
+    private int getTerminalWidth() {
+        try {
+            hash<auto> ws = TermIOS::getWindowSize();
+            if (ws.columns > 0) {
+                return ws.columns;
+            }
+        } catch () {
+            # not a terminal
+        }
+        return 80;
+    }
+
+    static usage() {
+        stdout.print("Usage: qdiff [options] file1 file2
+
+Compare two files and display differences.
+
+Output modes (default: unified):
+  -u, --unified        Unified diff format (default)
+  -n, --normal         Normal (traditional) diff format
+  -y, --side-by-side   Side-by-side columnar format
+  --chars              Character-level inline diff
+  --words              Word-level inline diff
+  -D, --data           Structured data diff (JSON/YAML/Qore data)
+
+Options:
+  -c, --context=N      Number of context lines (default: 3, unified mode)
+  -w, --width=N        Output width (default: terminal width, side-by-side mode)
+  -s, --stats          Show statistics (insertions, deletions, unchanged)
+  -C, --no-color       Disable colored output
+  -q, --quiet          Suppress output; exit 0 if identical, 1 if different
+  -h, --help           Show this help message
+  -V, --version        Show version information
+
+Use '-' as a file path to read from stdin (only one file can be stdin).
+
+Exit codes:
+  0  Files are identical
+  1  Files differ
+  2  Error (missing file, invalid options, etc.)
+");
+    }
+}
