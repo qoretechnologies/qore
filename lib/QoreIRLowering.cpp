@@ -4462,7 +4462,7 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
             std::vector<QoreValue> dynamic_operands;
             if (extractLValuePath(assign->getLeft(), lv_path, dynamic_operands)
                     && !lv_path.empty()
-                    && !(lv_path[0].type_info && QoreTypeInfo::isReference(lv_path[0].type_info))) {
+                    ) {
                 // Lower dynamic key/index operands
                 std::vector<QoreIRValue> dyn_vals;
                 for (auto& dop : dynamic_operands) {

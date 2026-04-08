@@ -6237,7 +6237,8 @@ load_local_done:
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
                         && QoreTypeInfo::isReference(path_inst->path[0].type_info);
                     if (is_ref) {
-                        // Broad local invalidation for reference write-through (IR-only-aware)
+                        // Broad invalidation for reference write-through:
+                        // 1. Local slot cache (the target variable's cached value)
                         for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
@@ -6245,6 +6246,11 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
+                        // 2. Closures and globals caches (LoadClosure/LoadGlobal read
+                        //    from these caches; reference write-through updates the
+                        //    actual storage but not these caches)
+                        cleanupStoredValues(closures, xsink);
+                        cleanupStoredValues(globals, xsink);
                     } else {
                         if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                             locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -6349,6 +6355,9 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
+                        // Also clear closures and globals caches for reference write-through
+                        cleanupStoredValues(closures, xsink);
+                        cleanupStoredValues(globals, xsink);
                     } else {
                         if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                             locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
