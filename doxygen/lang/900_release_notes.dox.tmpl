@@ -1497,6 +1497,17 @@ cargo install tree-sitter-cli@0.26.5
       - webhook-based event triggers for order and shipment notifications
       - action catalog integration with 36 actions and 4 triggers
       - connection support with \c shipstation:// URL scheme
+    - @ref systemeiorestclientintro "SystemeIoRestClient" module
+      - new module providing a REST client for <a href="https://systeme.io/">Systeme.io</a>'s marketing platform API
+      - supports API key authentication via X-API-Key header
+      - provides SystemeIoRestConnection for connection management with \c systemeio:// URL scheme
+    - @ref systemeio_dataproviderintro "SystemeIoDataProvider" module
+      - new module providing a data provider API for <a href="https://systeme.io/">Systeme.io</a> all-in-one marketing platform
+      - contact management (create, update, delete, list, tag assignment)
+      - tag, custom field, course, enrollment, community, membership, and subscription management
+      - polling-based event triggers for new contacts and tags
+      - action catalog integration with 28 actions and 2 triggers
+      - connection support with \c systemeio:// URL scheme
     - @ref squarerestclientintro "SquareRestClient" module
       - new module providing a REST client for <a href="https://squareup.com/">Square</a>'s payments and commerce API
       - supports OAuth2 authentication with bearer tokens
