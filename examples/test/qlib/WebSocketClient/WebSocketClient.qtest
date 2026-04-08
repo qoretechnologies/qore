@@ -615,6 +615,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 }
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "TEST-SKIPPED-EXCEPTION") {
+                    rethrow;
+                }
                 assertTrue(False, sprintf("auto mode WS failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;

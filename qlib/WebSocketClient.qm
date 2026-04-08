@@ -1335,6 +1335,12 @@ ws.connect();
         startAsyncIo();
         updateTid(-1);
         logDebug("WS async I/O started (no delivery thread)");
+
+        # Normalize HCIO response for backward compatibility: old HTTPClient.send()
+        # returned headers at the top level; HCIO readData() nests them under "headers"
+        if (h.headers.typeCode() == NT_HASH) {
+            h = h.headers + h{"status_code",};
+        }
         return h;
     }
 
@@ -2004,6 +2010,10 @@ ws.setEventQueue();
                 # and use the C++ WebSocket codec directly (full-duplex, proven)
                 HttpClientIo::HttpClientConnection conn = hcio_stream.getConnection();
                 Socket ws_sock = conn.getSocket();
+                # Cancel the HCIO poll operation for this socket before submitting
+                # the WebSocket one — without this, the old HCIO poll op and the new
+                # WS poll op conflict on the same fd (causes kqueue issues on macOS)
+                try { controller.cancel(ws_sock); } catch () {}
                 poll_op = new WebSocketClientPollOperation(ws_sock, transport, 0,
                     active_extensions, timeout_ms, logger, raw_callback, on_poll_complete);
                 async_wake_socket = ws_sock;
