@@ -589,6 +589,14 @@ public const DataProviderSignatureOptionalDataType = <DataProviderSignatureTypeI
     "type_code": ST_Any,
 };
 
+#! Data provider signature optional any type
+/** @since DataProvider 3.3
+*/
+public const DataProviderSignatureOptionalAnyType = <DataProviderSignatureTypeInfo>{
+    "type": AbstractDataProviderTypeMap."any",
+    "type_code": ST_Any,
+};
+
 /** @defgroup dataprovider_expression_type_codes DataProvider Expression Type Codes
 
     @since DataProvider 2.3
@@ -1231,6 +1239,13 @@ public const RegexOpts = {
     "RE_MultiLine": RE_MultiLine,
     "RE_Unicode": RE_Unicode,
     "RE_Global": RE_Global,
+    # Short flag names (as emitted by DPQL parser from /pattern/flags syntax)
+    "i": RE_Caseless,
+    "s": RE_DotAll,
+    "x": RE_Extended,
+    "m": RE_MultiLine,
+    "u": RE_Unicode,
+    "g": RE_Global,
 };
 
 #! Regular expression argument info
@@ -1387,8 +1402,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "type": DET_Operator,
                     "name": DP_SEARCH_OP_NOT,
                     "display_name": "logical not (!)",
-                    "short_desc": "This operator reverses the logcal value of the argument",
-                    "desc": "This operator reverses the logcal value of the argument",
+                    "short_desc": "This operator reverses the logical value of the argument",
+                    "desc": "This operator reverses the logical value of the argument",
                     "symbol": "!",
                     "groups": "Logical",
                     "args": (DataProviderSignatureBoolType,),
@@ -1411,9 +1426,9 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "type": DET_Operator,
                     "name": DP_SEARCH_OP_EQ,
                     "display_name": "equals (==)",
-                    "short_desc": "Returs True if the two arguments are logically equal; types are converted if "
+                    "short_desc": "Returns True if the two arguments are logically equal; types are converted if "
                         "necessary",
-                    "desc": "Returs `True` if the two arguments are logically equal; types are converted if "
+                    "desc": "Returns `True` if the two arguments are logically equal; types are converted if "
                         "necessary",
                     "symbol": "==",
                     "groups": "Comparison",
@@ -1612,9 +1627,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                     "type": DET_Operator,
                     "name": DP_SEARCH_OP_BETWEEN,
                     "display_name": "between",
-                    "short_desc": "Returns True if the first argument is greater than the second and less than the "
-                        "third",
-                    "desc": "Returns `True` if the first argument is greater than the second and less than the third",
+                    "short_desc": "Returns True if the first argument is greater than or equal to the second and "
+                        "less than or equal to the third",
+                    "desc": "Returns `True` if the first argument is greater than or equal to the second and less "
+                        "than or equal to the third (inclusive on both bounds, like SQL `BETWEEN`)",
                     "symbol": "between",
                     "groups": "Comparison",
                     "render_template": "$arg[0] between $arg[1] and $arg[2]",
@@ -1627,8 +1643,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                         <DataProviderArgInfo>{
                             "display_name": "Value",
                             "short_desc": "A value to compare",
-                            "desc": "A value to compare; first value must be greater than the second and less than "
-                                "the third for the overall expression to return `True`",
+                            "desc": "A value to compare; first value must be greater than or equal to the second "
+                                "and less than or equal to the third for the overall expression to return `True`",
                             "label_after": "between",
                         },
                         <DataProviderArgInfo>{
@@ -1647,8 +1663,8 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
                 },
                 "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> template_context) {
                     auto arg0 = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], template_context);
-                    return arg0 > AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context)
-                        && arg0 < AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context);
+                    return arg0 >= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[1], template_context)
+                        && arg0 <= AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[2], template_context);
                 },
             },
             DP_SEARCH_OP_IN: {

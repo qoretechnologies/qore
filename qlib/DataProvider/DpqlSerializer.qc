@@ -27,10 +27,12 @@ public namespace DataProvider {
 
 #! Operator precedence levels (lower = binds tighter)
 const DPQL_PREC_PRIMARY = 0;
-const DPQL_PREC_UNARY = 1;
-const DPQL_PREC_COMPARISON = 2;
-const DPQL_PREC_AND = 3;
-const DPQL_PREC_OR = 4;
+const DPQL_PREC_MULTIPLICATIVE = 1;
+const DPQL_PREC_ADDITIVE = 2;
+const DPQL_PREC_UNARY = 3;
+const DPQL_PREC_COMPARISON = 4;
+const DPQL_PREC_AND = 5;
+const DPQL_PREC_OR = 6;
 
 #! Serializer for DPQL (Data Provider Query Language) expressions
 /** This class converts DataProviderExpression hashes back into human-readable
@@ -81,6 +83,11 @@ public class DpqlSerializer {
             DP_SEARCH_OP_IN: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_REGEX: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_NOT: DPQL_PREC_UNARY,
+            DP_OP_PLUS: DPQL_PREC_ADDITIVE,
+            DP_OP_MINUS: DPQL_PREC_ADDITIVE,
+            DP_OP_MULT: DPQL_PREC_MULTIPLICATIVE,
+            DP_OP_DIV: DPQL_PREC_MULTIPLICATIVE,
+            DP_OP_MOD: DPQL_PREC_MULTIPLICATIVE,
         };
 
         #! Map of operators to their DPQL symbols
@@ -94,6 +101,11 @@ public class DpqlSerializer {
             DP_SEARCH_OP_GT: ">",
             DP_SEARCH_OP_GE: ">=",
             DP_SEARCH_OP_NOT: "!",
+            DP_OP_PLUS: "+",
+            DP_OP_MINUS: "-",
+            DP_OP_MULT: "*",
+            DP_OP_DIV: "/",
+            DP_OP_MOD: "%",
         };
     }
 
@@ -181,6 +193,14 @@ public class DpqlSerializer {
                 result = serializeRegexOp(exp.args);
                 break;
 
+            case DP_OP_PLUS:
+            case DP_OP_MINUS:
+            case DP_OP_MULT:
+            case DP_OP_DIV:
+            case DP_OP_MOD:
+                result = serializeArithmeticOp(exp.args, OperatorSymbols{op}, prec);
+                break;
+
             case DP_EXPR_VALUE:
                 # Value expression - just serialize the argument (field reference)
                 result = serializeArg(exp.args[0], DPQL_PREC_PRIMARY);
@@ -258,6 +278,15 @@ public class DpqlSerializer {
             serializeArg(args[1], DPQL_PREC_COMPARISON);
     }
 
+    #! Serializes an arithmetic binary operator with correct precedence
+    private string serializeArithmeticOp(list<auto> args, string symbol, int prec) {
+        if (args.size() < 2) {
+            return "";
+        }
+        return serializeArg(args[0], prec) + " " + symbol + " " +
+            serializeArg(args[1], prec);
+    }
+
     #! Serializes the NOT operator
     private string serializeNotOp(list<auto> args) {
         if (!args) {
@@ -301,26 +330,58 @@ public class DpqlSerializer {
         # Escape forward slashes in pattern
         pattern = replace(pattern, "/", "\\/");
 
-        # Build flags from remaining args
+        # Build flags from args[2] (list of flag name strings) or legacy individual int args
         string flags = "";
-        for (int i = 2; i < args.size(); ++i) {
-            if (args[i].typeCode() == NT_INT) {
-                switch (args[i]) {
-                    case RE_Caseless:
-                        flags += "i";
-                        break;
-                    case RE_DotAll:
-                        flags += "s";
-                        break;
-                    case RE_MultiLine:
-                        flags += "m";
-                        break;
-                    case RE_Extended:
-                        flags += "x";
-                        break;
-                    case RE_Unicode:
-                        flags += "u";
-                        break;
+        if (args.size() > 2) {
+            if (args[2].typeCode() == NT_LIST) {
+                # New format: args[2] is a list of flag name strings
+                foreach string flag in (args[2]) {
+                    # Accept both short ("i") and long ("RE_Caseless") names
+                    switch (flag) {
+                        case "i":
+                        case "RE_Caseless":
+                            flags += "i";
+                            break;
+                        case "s":
+                        case "RE_DotAll":
+                            flags += "s";
+                            break;
+                        case "m":
+                        case "RE_MultiLine":
+                            flags += "m";
+                            break;
+                        case "x":
+                        case "RE_Extended":
+                            flags += "x";
+                            break;
+                        case "u":
+                        case "RE_Unicode":
+                            flags += "u";
+                            break;
+                    }
+                }
+            } else {
+                # Legacy format: individual integer constants at args[2..]
+                for (int i = 2; i < args.size(); ++i) {
+                    if (args[i].typeCode() == NT_INT) {
+                        switch (args[i]) {
+                            case RE_Caseless:
+                                flags += "i";
+                                break;
+                            case RE_DotAll:
+                                flags += "s";
+                                break;
+                            case RE_MultiLine:
+                                flags += "m";
+                                break;
+                            case RE_Extended:
+                                flags += "x";
+                                break;
+                            case RE_Unicode:
+                                flags += "u";
+                                break;
+                        }
+                    }
                 }
             }
         }

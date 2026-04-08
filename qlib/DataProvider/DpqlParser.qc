@@ -804,9 +804,65 @@ public class DpqlParser {
         return parseComparison();
     }
 
+    #! Parses additive_expr: multiplicative_expr { ("+" | "-") multiplicative_expr }
+    private auto parseAdditiveExpr() {
+        auto left = parseMultiplicativeExpr();
+        skipWhitespace();
+
+        while (!atEnd()) {
+            hash<DpqlTokenInfo> tok = peek();
+            string op;
+            if (tok.type == DPQL_TOK_OP_PLUS) {
+                op = DP_OP_PLUS;
+            } else if (tok.type == DPQL_TOK_OP_MINUS) {
+                op = DP_OP_MINUS;
+            } else {
+                break;
+            }
+            nextToken();
+            skipWhitespace();
+            auto right = parseMultiplicativeExpr();
+            left = <DataProviderExpression>{
+                "exp": op,
+                "args": (left, right),
+            };
+            skipWhitespace();
+        }
+        return left;
+    }
+
+    #! Parses multiplicative_expr: value { ("*" | "/" | "%") value }
+    private auto parseMultiplicativeExpr() {
+        auto left = parseValue();
+        skipWhitespace();
+
+        while (!atEnd()) {
+            hash<DpqlTokenInfo> tok = peek();
+            string op;
+            if (tok.type == DPQL_TOK_OP_MULTIPLY) {
+                op = DP_OP_MULT;
+            } else if (tok.type == DPQL_TOK_OP_DIVIDE) {
+                op = DP_OP_DIV;
+            } else if (tok.type == DPQL_TOK_OP_MOD) {
+                op = DP_OP_MOD;
+            } else {
+                break;
+            }
+            nextToken();
+            skipWhitespace();
+            auto right = parseValue();
+            left = <DataProviderExpression>{
+                "exp": op,
+                "args": (left, right),
+            };
+            skipWhitespace();
+        }
+        return left;
+    }
+
     #! Parses a comparison expression
     private auto parseComparison() {
-        auto left = parseValue();
+        auto left = parseAdditiveExpr();
         skipWhitespace();
 
         if (atEnd()) {
@@ -822,7 +878,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_EQ,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_NE:
@@ -830,7 +886,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_NE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_LT:
@@ -838,7 +894,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_LT,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_LE:
@@ -846,7 +902,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_LE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_GT:
@@ -854,7 +910,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_GT,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_GE:
@@ -862,7 +918,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_GE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_REGEX:
@@ -875,7 +931,7 @@ public class DpqlParser {
                 if (kw == "between") {
                     nextToken();  # consume 'between'
                     skipWhitespace();
-                    auto low = parseValue();
+                    auto low = parseAdditiveExpr();
                     skipWhitespace();
                     # Expect 'and'
                     hash<DpqlTokenInfo> and_tok = peek();
@@ -885,7 +941,7 @@ public class DpqlParser {
                     }
                     nextToken();  # consume 'and'
                     skipWhitespace();
-                    auto high = parseValue();
+                    auto high = parseAdditiveExpr();
                     return <DataProviderExpression>{
                         "exp": DP_SEARCH_OP_BETWEEN,
                         "args": (left, low, high),
@@ -924,7 +980,7 @@ public class DpqlParser {
                         skipWhitespace();
                         return <DataProviderExpression>{
                             "exp": exp_name,
-                            "args": (left, parseValue()),
+                            "args": (left, parseAdditiveExpr()),
                         };
                     }
                 }
@@ -971,29 +1027,25 @@ public class DpqlParser {
 
         list<auto> args = (left, regex_pattern);
 
-        # Convert flags to regex option constants
+        # Collect flags as a list of string flag names for args[2]
         if (flags) {
+            list<string> flag_list = ();
             for (int i = 0; i < flags.size(); ++i) {
                 string flag = flags[i];
                 switch (flag) {
                     case "i":
-                        args += RE_Caseless;
-                        break;
                     case "s":
-                        args += RE_DotAll;
-                        break;
                     case "m":
-                        args += RE_MultiLine;
-                        break;
                     case "x":
-                        args += RE_Extended;
-                        break;
                     case "u":
-                        args += RE_Unicode;
+                        flag_list += flag;
                         break;
                     default:
                         addError(sprintf("Unknown regex flag '%s'", flag), "DPQL-E009", tok);
                 }
+            }
+            if (flag_list) {
+                args += (flag_list,);
             }
         }
 

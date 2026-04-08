@@ -286,6 +286,109 @@ public const DP_FUNC_DECODE_URL = "decode_url";
 #! Returns the current date/time with microsecond precision
 public const DP_FUNC_NOW = "now";
 
+#! Split string by plain separator
+public const DP_FUNC_SPLIT = "split";
+
+#! Concatenate multiple values as strings
+public const DP_FUNC_CONCAT = "concat";
+
+#! Trim whitespace (or custom characters) from both sides of a string
+public const DP_FUNC_TRIM = "trim";
+
+#! Trim whitespace (or custom characters) from the left side of a string
+public const DP_FUNC_LTRIM = "ltrim";
+
+#! Trim whitespace (or custom characters) from the right side of a string
+public const DP_FUNC_RTRIM = "rtrim";
+
+#! Returns the absolute value of a number
+public const DP_FUNC_ABS = "abs";
+
+#! Rounds a number to the given number of decimal places
+public const DP_FUNC_ROUND = "round";
+
+#! Returns the largest integer not greater than the argument
+public const DP_FUNC_FLOOR = "floor";
+
+#! Returns the smallest integer not less than the argument
+public const DP_FUNC_CEIL = "ceil";
+
+#! Returns the first non-NOTHING argument
+public const DP_FUNC_COALESCE = "coalesce";
+
+#! Returns NOTHING if the two arguments are equal, otherwise returns the first argument
+public const DP_FUNC_NULLIF = "nullif";
+
+#! Returns a relative date/time value representing the given number of years
+public const DP_FUNC_YEARS = "years";
+
+#! Returns a relative date/time value representing the given number of months
+public const DP_FUNC_MONTHS = "months";
+
+#! Returns a relative date/time value representing the given number of weeks
+public const DP_FUNC_WEEKS = "weeks";
+
+#! Returns a relative date/time value representing the given number of days
+public const DP_FUNC_DAYS = "days";
+
+#! Returns a relative date/time value representing the given number of hours
+public const DP_FUNC_HOURS = "hours";
+
+#! Returns a relative date/time value representing the given number of minutes
+public const DP_FUNC_MINUTES = "minutes";
+
+#! Returns a relative date/time value representing the given number of seconds
+public const DP_FUNC_SECONDS = "seconds";
+
+#! Returns a relative date/time value representing the given number of milliseconds
+public const DP_FUNC_MILLISECONDS = "milliseconds";
+
+#! Returns a relative date/time value representing the given number of microseconds
+public const DP_FUNC_MICROSECONDS = "microseconds";
+
+#! Extracts the year component from a date/time value
+public const DP_FUNC_GET_YEAR = "get_year";
+
+#! Extracts the month component from a date/time value
+public const DP_FUNC_GET_MONTH = "get_month";
+
+#! Extracts the day component from a date/time value
+public const DP_FUNC_GET_DAY = "get_day";
+
+#! Extracts the hour component from a date/time value
+public const DP_FUNC_GET_HOUR = "get_hour";
+
+#! Extracts the minute component from a date/time value
+public const DP_FUNC_GET_MINUTE = "get_minute";
+
+#! Extracts the second component from a date/time value
+public const DP_FUNC_GET_SECOND = "get_second";
+
+#! Maps a list by applying an expression to each element, returning a new list
+public const DP_FUNC_MAP = "map";
+
+#! Maps a list by applying key and value expressions to each element, returning a hash
+public const DP_FUNC_HASH_MAP = "hash_map";
+#/@}
+
+/** @defgroup dpql_extended_operator_ops2 DPQL Extended Operator Constants (Part 2)
+    These constants define extended operators for DPQL expressions
+
+    @since DataProvider 3.3
+*/
+#/@{
+#! Returns True if the argument is NOTHING (null)
+public const DP_OP_IS_NULL = "isNull";
+
+#! Returns True if the argument is not NOTHING (not null)
+public const DP_OP_IS_NOT_NULL = "isNotNull";
+
+#! Returns True if the first argument is not found in the second argument (list)
+public const DP_OP_NOT_IN = "notIn";
+
+#! Modulus operator: returns the remainder of dividing the first argument by the second
+public const DP_OP_MOD = "mod";
+
 #! Serialize value to YAML string
 public const DP_FUNC_MAKE_YAML = "make_yaml";
 

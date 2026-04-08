@@ -34,6 +34,14 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("field reference tests", \fieldReferenceTests());
         addTestCase("negative tests", \negativeTests());
         addTestCase("alias tests", \aliasTests());
+        addTestCase("between fix tests", \betweenFixTests());
+        addTestCase("findIn fix tests", \findInFixTests());
+        addTestCase("duration function tests", \durationTests());
+        addTestCase("date extraction tests", \dateExtractionTests());
+        addTestCase("null handling tests", \nullHandlingTests());
+        addTestCase("math function tests", \mathTests());
+        addTestCase("string function tests (new)", \newStringTests());
+        addTestCase("map/hash_map tests", \mapTests());
         set_return_value(main());
     }
 
@@ -286,9 +294,9 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertEq("b", eval_expr("findIn", ("b", ("a", "b", "c"))));
         assertEq(NOTHING, eval_expr("findIn", ("z", ("a", "b", "c"))));
 
-        # find in with dot path
+        # find in with dot path (returns the matching element, not the search value)
         list<hash<auto>> data = ({"id": 1, "name": "alice"}, {"id": 2, "name": "bob"});
-        assertEq(2, eval_expr("findIn", (2, data, "id")));
+        assertEq({"id": 2, "name": "bob"}, eval_expr("findIn", (2, data, "id")));
         assertEq(NOTHING, eval_expr("findIn", (99, data, "id")));
     }
 
@@ -372,5 +380,316 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         assertEq("llo", eval_expr("SUBSTR", ("hello", 2)));
         assertTrue(eval_expr("HAS-VALUE", ("test")));
         assertTrue(eval_expr("STARTS-WITH", ("hello", "HELLO", True)));
+    }
+
+    betweenFixTests() {
+        # between should be inclusive on both bounds (SQL BETWEEN semantics)
+        assertTrue(eval_expr("between", (5, 1, 10)));    # in range
+        assertTrue(eval_expr("between", (1, 1, 10)));    # equal to lower bound (inclusive)
+        assertTrue(eval_expr("between", (10, 1, 10)));   # equal to upper bound (inclusive)
+        assertFalse(eval_expr("between", (0, 1, 10)));   # below lower bound
+        assertFalse(eval_expr("between", (11, 1, 10)));  # above upper bound
+
+        # date between
+        date d = 2026-06-15;
+        assertTrue(eval_expr("between", (d, 2026-01-01, 2026-12-31)));
+        assertTrue(eval_expr("between", (2026-01-01, 2026-01-01, 2026-12-31)));  # lower inclusive
+        assertTrue(eval_expr("between", (2026-12-31, 2026-01-01, 2026-12-31)));  # upper inclusive
+    }
+
+    findInFixTests() {
+        # findIn should return the matching element, not the search value
+        list<hash<auto>> items = (
+            {"id": 1, "name": "alpha"},
+            {"id": 2, "name": "beta"},
+            {"id": 3, "name": "gamma"},
+        );
+        # with dot-path, should return the full element
+        hash<auto> result = eval_expr("findIn", (2, items, "id"));
+        assertEq({"id": 2, "name": "beta"}, result);
+
+        # no match
+        assertEq(NOTHING, eval_expr("findIn", (99, items, "id")));
+
+        # without dot-path, returns the value itself
+        assertEq(2, eval_expr("findIn", (2, (1, 2, 3))));
+        assertEq(NOTHING, eval_expr("findIn", (99, (1, 2, 3))));
+    }
+
+    durationTests() {
+        # years
+        date d = eval_expr("years", (2));
+        assertEq(2, get_years(d));
+
+        # months
+        d = eval_expr("months", (6));
+        assertEq(6, get_months(d));
+
+        # weeks (= 7 * days)
+        d = eval_expr("weeks", (2));
+        assertEq(14, get_days(d));
+
+        # days
+        d = eval_expr("days", (10));
+        assertEq(10, get_days(d));
+
+        # hours
+        d = eval_expr("hours", (5));
+        assertEq(5, get_hours(d));
+
+        # minutes
+        d = eval_expr("minutes", (30));
+        assertEq(30, get_minutes(d));
+
+        # seconds
+        d = eval_expr("seconds", (45));
+        assertEq(45, get_seconds(d));
+
+        # milliseconds
+        d = eval_expr("milliseconds", (500));
+        assertEq(500000, get_microseconds(d));
+
+        # microseconds
+        d = eval_expr("microseconds", (12345));
+        assertEq(12345, get_microseconds(d));
+
+        # date arithmetic with +
+        date base = 2026-01-15;
+        date result = eval_expr("+", (base, eval_expr("days", (10))));
+        assertEq(2026-01-25, result);
+
+        result = eval_expr("-", (base, eval_expr("months", (1))));
+        assertEq(2025-12-15, result);
+    }
+
+    dateExtractionTests() {
+        date d = 2026-03-15T14:30:45;
+
+        assertEq(2026, eval_expr("get_year", (d)));
+        assertEq(3, eval_expr("get_month", (d)));
+        assertEq(15, eval_expr("get_day", (d)));
+        assertEq(14, eval_expr("get_hour", (d)));
+        assertEq(30, eval_expr("get_minute", (d)));
+        assertEq(45, eval_expr("get_second", (d)));
+
+        # edge cases
+        date midnight = 2026-01-01T00:00:00;
+        assertEq(0, eval_expr("get_hour", (midnight)));
+        assertEq(0, eval_expr("get_minute", (midnight)));
+        assertEq(0, eval_expr("get_second", (midnight)));
+    }
+
+    nullHandlingTests() {
+        # isNull
+        assertTrue(eval_expr("isNull", (NOTHING)));
+        assertTrue(eval_expr("isNull", (NULL)));
+        assertFalse(eval_expr("isNull", (0)));
+        assertFalse(eval_expr("isNull", ("")));
+        assertFalse(eval_expr("isNull", (False)));
+
+        # isNotNull
+        assertFalse(eval_expr("isNotNull", (NOTHING)));
+        assertFalse(eval_expr("isNotNull", (NULL)));
+        assertTrue(eval_expr("isNotNull", (0)));
+        assertTrue(eval_expr("isNotNull", ("")));
+        assertTrue(eval_expr("isNotNull", (42)));
+
+        # isNull/isNotNull with field references
+        hash<auto> rec = {"name": "test", "value": NOTHING};
+        auto result = AbstractDataProvider::evalGenericExpression(rec,
+            <DataProvider::DataProviderExpression>{
+                "exp": "isNull",
+                "args": (<DataProvider::DataProviderFieldReference>{"field": "value"},),
+            });
+        assertTrue(result);
+
+        result = AbstractDataProvider::evalGenericExpression(rec,
+            <DataProvider::DataProviderExpression>{
+                "exp": "isNotNull",
+                "args": (<DataProvider::DataProviderFieldReference>{"field": "name"},),
+            });
+        assertTrue(result);
+
+        # notIn
+        assertTrue(eval_expr("notIn", (5, (1, 2, 3))));
+        assertFalse(eval_expr("notIn", (2, (1, 2, 3))));
+        assertTrue(eval_expr("notIn", ("d", ("a", "b", "c"))));
+
+        # coalesce
+        assertEq(42, eval_expr("coalesce", (NOTHING, NOTHING, 42)));
+        assertEq("first", eval_expr("coalesce", ("first", "second")));
+        assertEq(NOTHING, eval_expr("coalesce", (NOTHING, NOTHING)));
+        assertEq(0, eval_expr("coalesce", (NOTHING, 0, 1)));
+
+        # nullif
+        assertEq(NOTHING, eval_expr("nullif", (5, 5)));
+        assertEq(5, eval_expr("nullif", (5, 10)));
+        assertEq("a", eval_expr("nullif", ("a", "b")));
+        assertEq(NOTHING, eval_expr("nullif", ("same", "same")));
+    }
+
+    mathTests() {
+        # abs
+        assertEq(5, eval_expr("abs", (-5)));
+        assertEq(5, eval_expr("abs", (5)));
+        assertEq(3.14, eval_expr("abs", (-3.14)));
+        assertEq(0, eval_expr("abs", (0)));
+
+        # round
+        assertEq(4.0, eval_expr("round", (3.7)));
+        assertEq(3.0, eval_expr("round", (3.2)));
+        assertEq(3.14, eval_expr("round", (3.14159, 2)));
+        assertEq(3.1, eval_expr("round", (3.14159, 1)));
+
+        # floor
+        assertEq(3, eval_expr("floor", (3.9)));
+        assertEq(-4, eval_expr("floor", (-3.1)));
+        assertEq(5, eval_expr("floor", (5.0)));
+
+        # ceil
+        assertEq(4, eval_expr("ceil", (3.1)));
+        assertEq(-3, eval_expr("ceil", (-3.9)));
+        assertEq(5, eval_expr("ceil", (5.0)));
+
+        # mod
+        assertEq(1, eval_expr("mod", (10, 3)));
+        assertEq(0, eval_expr("mod", (10, 5)));
+        assertEq(2, eval_expr("mod", (17, 5)));
+    }
+
+    newStringTests() {
+        # trim
+        assertEq("hello", eval_expr("trim", ("  hello  ")));
+        assertEq("hello", eval_expr("trim", ("xxhelloxx", "x")));
+        assertEq("hello", eval_expr("trim", ("hello")));
+
+        # ltrim
+        assertEq("hello  ", eval_expr("ltrim", ("  hello  ")));
+        assertEq("helloxx", eval_expr("ltrim", ("xxhelloxx", "x")));
+
+        # rtrim
+        assertEq("  hello", eval_expr("rtrim", ("  hello  ")));
+        assertEq("xxhello", eval_expr("rtrim", ("xxhelloxx", "x")));
+
+        # split
+        assertEq(("a", "b", "c"), eval_expr("split", ("a,b,c", ",")));
+        assertEq(("hello world",), eval_expr("split", ("hello world", ",")));
+        assertEq(("a", "b", "c"), eval_expr("split", ("a::b::c", "::")));
+
+        # concat
+        assertEq("hello world", eval_expr("concat", ("hello", " ", "world")));
+        assertEq("42", eval_expr("concat", (42)));
+        assertEq("abc", eval_expr("concat", ("a", "b", "c")));
+    }
+
+    mapTests() {
+        # map over list of hashes - extract field values
+        list<hash<auto>> users = (
+            {"name": "Alice", "age": 30},
+            {"name": "Bob", "age": 25},
+            {"name": "Carol", "age": 35},
+        );
+        auto result = AbstractDataProvider::evalGenericExpression({"users": users},
+            <DataProvider::DataProviderExpression>{
+                "exp": "map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
+                    <DataProvider::DataProviderFieldReference>{"field": "name"},
+                ),
+            });
+        assertEq(("Alice", "Bob", "Carol"), result);
+
+        # map with filter expression
+        result = AbstractDataProvider::evalGenericExpression({"users": users},
+            <DataProvider::DataProviderExpression>{
+                "exp": "map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
+                    <DataProvider::DataProviderFieldReference>{"field": "name"},
+                    <DataProvider::DataProviderExpression>{
+                        "exp": ">",
+                        "args": (
+                            <DataProvider::DataProviderFieldReference>{"field": "age"},
+                            28,
+                        ),
+                    },
+                ),
+            });
+        assertEq(("Alice", "Carol"), result);
+
+        # map with body expression (uppercase names)
+        result = AbstractDataProvider::evalGenericExpression({"users": users},
+            <DataProvider::DataProviderExpression>{
+                "exp": "map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
+                    <DataProvider::DataProviderExpression>{
+                        "exp": "upr",
+                        "args": (
+                            <DataProvider::DataProviderFieldReference>{"field": "name"},
+                        ),
+                    },
+                ),
+            });
+        assertEq(("ALICE", "BOB", "CAROL"), result);
+
+        # map over list of non-hash values (wrapped as {"value": elem})
+        result = AbstractDataProvider::evalGenericExpression({"nums": (1, 2, 3, 4, 5)},
+            <DataProvider::DataProviderExpression>{
+                "exp": "map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "nums"},
+                    <DataProvider::DataProviderExpression>{
+                        "exp": "*",
+                        "args": (
+                            <DataProvider::DataProviderFieldReference>{"field": "value"},
+                            2,
+                        ),
+                    },
+                ),
+            });
+        assertEq((2, 4, 6, 8, 10), result);
+
+        # hash_map - build a hash from a list
+        result = AbstractDataProvider::evalGenericExpression({"users": users},
+            <DataProvider::DataProviderExpression>{
+                "exp": "hash_map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
+                    <DataProvider::DataProviderFieldReference>{"field": "name"},
+                    <DataProvider::DataProviderFieldReference>{"field": "age"},
+                ),
+            });
+        assertEq({"Alice": 30, "Bob": 25, "Carol": 35}, result);
+
+        # hash_map with filter
+        result = AbstractDataProvider::evalGenericExpression({"users": users},
+            <DataProvider::DataProviderExpression>{
+                "exp": "hash_map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "users"},
+                    <DataProvider::DataProviderFieldReference>{"field": "name"},
+                    <DataProvider::DataProviderFieldReference>{"field": "age"},
+                    <DataProvider::DataProviderExpression>{
+                        "exp": ">=",
+                        "args": (
+                            <DataProvider::DataProviderFieldReference>{"field": "age"},
+                            30,
+                        ),
+                    },
+                ),
+            });
+        assertEq({"Alice": 30, "Carol": 35}, result);
+
+        # map with empty list
+        result = AbstractDataProvider::evalGenericExpression({"items": ()},
+            <DataProvider::DataProviderExpression>{
+                "exp": "map",
+                "args": (
+                    <DataProvider::DataProviderFieldReference>{"field": "items"},
+                    <DataProvider::DataProviderFieldReference>{"field": "value"},
+                ),
+            });
+        assertEq((), result);
     }
 }

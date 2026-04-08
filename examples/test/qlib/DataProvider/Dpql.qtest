@@ -120,6 +120,7 @@ public class DpqlTest inherits QUnit::Test {
         addTestCase("free-form expression tests", \freeFormExpressionTests());
         addTestCase("type-aware completion tests", \typeAwareCompletionTests());
         addTestCase("infix comparison operator tests", \infixComparisonOperatorTests());
+        addTestCase("new expression DPQL tests", \newExpressionDpqlTests());
 
         # Return for compatibility with test harnesses that check the return value.
         set_return_value(main());
@@ -184,16 +185,22 @@ public class DpqlTest inherits QUnit::Test {
 
         # Test numbers
         {
-            DpqlTokenizer tok("123 -456 78.90 -12.34");
+            # After a number, - is a subtraction operator, not a negative prefix
+            DpqlTokenizer tok("123 78.90");
             list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
             assertEq(DPQL_TOK_NUMBER, tokens[0].type);
             assertEq("123", tokens[0].value);
             assertEq(DPQL_TOK_NUMBER, tokens[2].type);
-            assertEq("-456", tokens[2].value);
+            assertEq("78.90", tokens[2].value);
+
+            # Negative numbers at the start of input or after an operator
+            DpqlTokenizer tok2("-456 + -12.34");
+            tokens = tok2.getAllTokens();
+            assertEq(DPQL_TOK_NUMBER, tokens[0].type);
+            assertEq("-456", tokens[0].value);
+            assertEq(DPQL_TOK_OP_PLUS, tokens[2].type);
             assertEq(DPQL_TOK_NUMBER, tokens[4].type);
-            assertEq("78.90", tokens[4].value);
-            assertEq(DPQL_TOK_NUMBER, tokens[6].type);
-            assertEq("-12.34", tokens[6].value);
+            assertEq("-12.34", tokens[4].value);
         }
 
         # Test quoted field reference
@@ -282,14 +289,16 @@ public class DpqlTest inherits QUnit::Test {
             assertEq("list-contains", tokens[0].value);
         }
 
-        # Test hyphen followed by digit is NOT part of identifier (minus operator)
+        # Test hyphen after identifier is a minus operator, not a negative number prefix
         {
             DpqlTokenizer tok('foo-3');
             list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
             assertEq(DPQL_TOK_IDENTIFIER, tokens[0].type);
             assertEq("foo", tokens[0].value);
-            assertEq(DPQL_TOK_NUMBER, tokens[1].type);
-            assertEq("-3", tokens[1].value);
+            assertEq(DPQL_TOK_OP_MINUS, tokens[1].type);
+            assertEq("-", tokens[1].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("3", tokens[2].value);
         }
 
         # Test keywords and boolean/null
@@ -619,8 +628,9 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(DP_SEARCH_OP_REGEX, exp.exp);
             assertEq("email", exp.args[0].field);
             assertEq("example.com$", exp.args[1]);
-            # Check for case-insensitive flag
-            assertEq(RE_Caseless, exp.args[2]);
+            # Check for case-insensitive flag (now a list of flag name strings)
+            assertEq(3, exp.args.size());
+            assertEq(("i",), exp.args[2]);
         }
 
         # Test regex with combined flags
@@ -630,12 +640,12 @@ public class DpqlTest inherits QUnit::Test {
             assertEq(DP_SEARCH_OP_REGEX, exp.exp);
             assertEq("text", exp.args[0].field);
             assertEq("^start.*end$", exp.args[1]);
-            # Check all flags are present
-            assertTrue(exp.args.size() >= 4);
-            list<int> flags = exp.args[2..];
-            assertTrue(inlist(RE_Caseless, flags));
-            assertTrue(inlist(RE_MultiLine, flags));
-            assertTrue(inlist(RE_DotAll, flags));
+            # Check all flags are present as a single list at args[2]
+            assertEq(3, exp.args.size());
+            list<string> flags = exp.args[2];
+            assertTrue(inlist("i", flags));
+            assertTrue(inlist("m", flags));
+            assertTrue(inlist("s", flags));
         }
 
         # Test scientific notation
@@ -6169,6 +6179,385 @@ public class DpqlTest inherits QUnit::Test {
                 'like("test", "%t%")', fields, expmap, expmap);
             assertTrue(diags.size() > 0,
                 "search validation: like without field ref produces error");
+        }
+    }
+
+    newExpressionDpqlTests() {
+        list<hash<auto>> test_data = (
+            {"name": "Alice", "age": 25, "score": 88.5, "status": "active",
+             "created": 2026-03-15T10:30:00Z, "tags": ("dev", "lead"),
+             "address": {"city": "Prague", "zip": "11000"}},
+            {"name": "Bob", "age": 30, "score": 72.3, "status": "inactive",
+             "created": 2026-01-20T14:00:00Z, "tags": ("dev",),
+             "address": {"city": "Berlin", "zip": "10115"}},
+            {"name": "Carol", "age": 35, "score": 95.0, "status": "active",
+             "created": 2025-11-01T08:00:00Z, "tags": ("mgmt", "lead"),
+             "address": {"city": "London", "zip": NOTHING}},
+            {"name": "  Dave  ", "age": 28, "score": 60.0, "status": "pending",
+             "created": 2026-02-28T23:59:59Z, "tags": (),
+             "address": {"city": "Paris", "zip": "75001"}},
+        );
+        hash<string, AbstractDataField> fields = {
+            "name": new QoreDataField("name", "Name", new QoreStringDataType()),
+            "age": new QoreDataField("age", "Age", new QoreIntDataType()),
+            "score": new QoreDataField("score", "Score", new QoreFloatDataType()),
+            "status": new QoreDataField("status", "Status", new QoreStringDataType()),
+            "created": new QoreDataField("created", "Created", new QoreDateDataType()),
+            "tags": new QoreDataField("tags", "Tags", AbstractDataProviderTypeMap."any"),
+            "address": new QoreDataField("address", "Address", AbstractDataProviderTypeMap."any"),
+        };
+        DpqlTestDataProvider dp(test_data, fields);
+
+        # --- Math function parse + round-trip + evaluate ---
+        {
+            # abs() in DPQL
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('abs(@score - 80) < 10');
+            assertEq(DP_SEARCH_OP_LT, exp.exp);
+            assertEq(DP_FUNC_ABS, exp.args[0].exp);
+            # round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(exp.exp, reparsed.exp);
+            assertEq(exp.args[0].exp, reparsed.args[0].exp);
+        }
+
+        # round() in DPQL
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('round(@score, 0) == 89');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_FUNC_ROUND, exp.args[0].exp);
+            assertEq(2, exp.args[0].args.size());
+        }
+
+        # floor/ceil parse
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('floor(@score) >= 88');
+            assertEq(DP_FUNC_FLOOR, exp.args[0].exp);
+        }
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('ceil(@score) <= 96');
+            assertEq(DP_FUNC_CEIL, exp.args[0].exp);
+        }
+
+        # mod operator parse
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@age % 2 == 0');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_OP_MOD, exp.args[0].exp);
+        }
+
+        # --- String function parse + evaluate ---
+        # trim()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('trim(@name) == "Dave"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_FUNC_TRIM, exp.args[0].exp);
+
+            # evaluate against the padded name
+            hash<auto> rec = {"name": "  Dave  "};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # concat()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'concat(@name, " - ", @status) == "Alice - active"');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_FUNC_CONCAT, exp.args[0].exp);
+            assertEq(3, exp.args[0].args.size());
+
+            hash<auto> rec = {"name": "Alice", "status": "active"};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # split()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'split("a,b,c", ",") == ("a", "b", "c")');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_FUNC_SPLIT, exp.args[0].exp);
+        }
+
+        # --- Null handling parse + evaluate ---
+        # coalesce()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'coalesce(@address{zip}, "N/A") != "N/A"');
+            assertEq(DP_SEARCH_OP_NE, exp.exp);
+            assertEq(DP_FUNC_COALESCE, exp.args[0].exp);
+        }
+
+        # nullif()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'nullif(@status, "inactive") != null');
+            assertEq(DP_SEARCH_OP_NE, exp.exp);
+            assertEq(DP_FUNC_NULLIF, exp.args[0].exp);
+        }
+
+        # --- Duration function parse + evaluate ---
+        # days() with arithmetic
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@created + days(30) > now()');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq(DP_OP_PLUS, exp.args[0].exp);
+            assertEq(DP_FUNC_DAYS, exp.args[0].args[1].exp);
+        }
+
+        # hours()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@created + hours(1) > @created');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq(DP_OP_PLUS, exp.args[0].exp);
+            assertEq(DP_FUNC_HOURS, exp.args[0].args[1].exp);
+
+            # evaluate - adding hours to a date always makes it larger
+            hash<auto> rec = {"created": 2026-01-01T00:00:00Z};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # months(), years()
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('months(6) + years(1)');
+            assertEq(DP_OP_PLUS, exp.exp);
+            assertEq(DP_FUNC_MONTHS, exp.args[0].exp);
+            assertEq(DP_FUNC_YEARS, exp.args[1].exp);
+        }
+
+        # --- Date extraction parse + evaluate ---
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'get_year(@created) == 2026');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_FUNC_GET_YEAR, exp.args[0].exp);
+
+            hash<auto> rec = {"created": 2026-03-15T10:30:00Z};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'get_month(@created) == 3');
+            hash<auto> rec = {"created": 2026-03-15T10:30:00Z};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        {
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                'get_hour(@created) >= 10 && get_minute(@created) == 30');
+            hash<auto> rec = {"created": 2026-03-15T10:30:00Z};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # --- End-to-end DPQL string search with new expressions ---
+
+        # Search with math: find records where score rounds to >= 89
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('round(@score) >= 89');
+            list<hash<auto>> results = map $1, i;
+            assertEq(2, results.size());
+            # Alice score=88.5 rounds to 89 (included), Carol score=95.0 rounds to 95 (included)
+            assertEq("Alice", results[0].name);
+            assertEq("Carol", results[1].name);
+        }
+
+        # Search with floor: floor(@score) >= 89
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('floor(@score) >= 89');
+            list<hash<auto>> results = map $1, i;
+            # Only Carol (floor(95.0) = 95 >= 89)
+            assertEq(1, results.size());
+            assertEq("Carol", results[0].name);
+        }
+
+        # Search with mod: even ages
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('@age % 2 == 0');
+            list<hash<auto>> results = map $1, i;
+            assertEq(2, results.size());  # Bob=30 (even), Dave=28 (even)
+            assertEq("Bob", results[0].name);
+            assertEq("  Dave  ", results[1].name);
+        }
+
+        # Search with trim: trim name equals "Dave"
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('trim(@name) == "Dave"');
+            list<hash<auto>> results = map $1, i;
+            assertEq(1, results.size());
+            assertEq("  Dave  ", results[0].name);
+        }
+
+        # Search with concat
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords(
+                'concat(@name, ":", @status) == "Alice:active"');
+            list<hash<auto>> results = map $1, i;
+            assertEq(1, results.size());
+            assertEq("Alice", results[0].name);
+        }
+
+        # Search with date extraction
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('get_year(@created) == 2026');
+            list<hash<auto>> results = map $1, i;
+            assertEq(3, results.size());  # Alice, Bob, Dave (Carol is 2025)
+        }
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords(
+                'get_month(@created) == 3 && get_day(@created) == 15');
+            list<hash<auto>> results = map $1, i;
+            assertEq(1, results.size());
+            assertEq("Alice", results[0].name);
+        }
+
+        # Search with between (inclusive bounds fix)
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('@age between 25 and 30');
+            list<hash<auto>> results = map $1, i;
+            assertEq(3, results.size());  # Alice=25, Bob=30, Dave=28 (all inclusive)
+        }
+
+        # Search with abs
+        {
+            AbstractDataProviderRecordIterator i = dp.searchRecords('abs(@score - 80) < 10');
+            list<hash<auto>> results = map $1, i;
+            # Alice: abs(88.5-80) = 8.5 < 10 (yes); Bob: abs(72.3-80) = 7.7 < 10 (yes)
+            # Carol: abs(95-80) = 15 < 10 (no); Dave: abs(60-80) = 20 < 10 (no)
+            assertEq(2, results.size());
+            assertEq("Alice", results[0].name);
+            assertEq("Bob", results[1].name);
+        }
+
+        # Duration functions: date arithmetic in search
+        {
+            # Records created within ~60 days before 2026-04-01
+            AbstractDataProviderRecordIterator i = dp.searchRecords(
+                '@created >= 2026-04-01 - days(60)');
+            list<hash<auto>> results = map $1, i;
+            # 2026-04-01 - 60 days = 2026-01-31
+            # Alice 2026-03-15 (yes), Bob 2026-01-20 (no), Carol 2025-11-01 (no), Dave 2026-02-28 (yes)
+            assertEq(2, results.size());
+            assertEq("Alice", results[0].name);
+            assertEq("  Dave  ", results[1].name);
+        }
+
+        # --- Arithmetic: literal-first, precedence, and grouped expressions ---
+        {
+            # literal + field ref
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('1 + @value');
+            assertEq(DP_OP_PLUS, exp.exp);
+            assertEq(1, exp.args[0]);
+            assertEq("value", exp.args[1].field);
+
+            hash<auto> rec = {"value": 10};
+            assertEq(11, AbstractDataProvider::evalGenericExpression(rec, exp));
+
+            # literal - field ref
+            exp = DataProvider::parseDpqlExpression('100 - @score');
+            assertEq(DP_OP_MINUS, exp.exp);
+            rec = {"score": 80};
+            assertEq(20, AbstractDataProvider::evalGenericExpression(rec, exp));
+
+            # literal * field ref
+            exp = DataProvider::parseDpqlExpression('2 * @quantity');
+            assertEq(DP_OP_MULT, exp.exp);
+            rec = {"quantity": 5};
+            assertEq(10, AbstractDataProvider::evalGenericExpression(rec, exp));
+
+            # precedence: 1 + 2 * 3 == 7 (not 9)
+            exp = DataProvider::parseDpqlExpression('1 + 2 * 3');
+            assertEq(DP_OP_PLUS, exp.exp);
+            assertEq(DP_OP_MULT, exp.args[1].exp);
+            assertEq(7, AbstractDataProvider::evalGenericExpression({}, exp));
+
+            # grouped: (1 + 2) * 3 == 9
+            exp = DataProvider::parseDpqlExpression('(1 + 2) * 3');
+            assertEq(DP_OP_MULT, exp.exp);
+            assertEq(DP_OP_PLUS, exp.args[0].exp);
+            assertEq(9, AbstractDataProvider::evalGenericExpression({}, exp));
+
+            # division and mod with literals
+            exp = DataProvider::parseDpqlExpression('100 / @divisor');
+            assertEq(DP_OP_DIV, exp.exp);
+            rec = {"divisor": 4};
+            assertEq(25, AbstractDataProvider::evalGenericExpression(rec, exp));
+
+            exp = DataProvider::parseDpqlExpression('100 % @mod_val');
+            assertEq(DP_OP_MOD, exp.exp);
+            rec = {"mod_val": 7};
+            assertEq(2, AbstractDataProvider::evalGenericExpression(rec, exp));
+
+            # negative number on RHS of comparison
+            exp = DataProvider::parseDpqlExpression('@temp > -10');
+            assertEq(DP_SEARCH_OP_GT, exp.exp);
+            assertEq(-10, exp.args[1]);
+
+            # arithmetic in comparison RHS
+            exp = DataProvider::parseDpqlExpression('@total == @price * @qty + @tax');
+            assertEq(DP_SEARCH_OP_EQ, exp.exp);
+            assertEq(DP_OP_PLUS, exp.args[1].exp);
+            assertEq(DP_OP_MULT, exp.args[1].args[0].exp);
+            rec = {"total": 110, "price": 10, "qty": 10, "tax": 10};
+            assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
+        }
+
+        # --- Regex end-to-end evaluation ---
+        {
+            # case-insensitive regex match
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression('@name =~ /alice/i');
+            assertTrue(AbstractDataProvider::evalGenericExpression({"name": "Alice"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"name": "Bob"}, exp));
+
+            # regex without flags (case-sensitive)
+            exp = DataProvider::parseDpqlExpression('@name =~ /^Alice$/');
+            assertTrue(AbstractDataProvider::evalGenericExpression({"name": "Alice"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"name": "alice"}, exp));
+
+            # multiple flags
+            exp = DataProvider::parseDpqlExpression('@text =~ /hello.*world/is');
+            assertTrue(AbstractDataProvider::evalGenericExpression({"text": "Hello\nWorld"}, exp));
+
+            # round-trip preserves flags
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertTrue(serialized.find("/is") >= 0 || serialized.find("/si") >= 0);
+        }
+
+        # Round-trip for new function expressions
+        {
+            list<string> expressions = (
+                'abs(@score) > 50',
+                'round(@score, 2) == 88.5',
+                'floor(@score) >= 88',
+                'ceil(@score) <= 96',
+                '@age % 2 == 0',
+                'trim(@name) == "Dave"',
+                'concat(@name, " ", @status)',
+                'coalesce(@name, "unknown")',
+                'nullif(@status, "inactive")',
+                'days(30)',
+                'hours(1) + minutes(30)',
+                'get_year(@created) == 2026',
+                'get_month(@created) >= 1',
+                'split(@name, ",")',
+                # Arithmetic expressions
+                '1 + @value',
+                '100 - @score',
+                '2 * @quantity',
+                '@a + @b * @c',
+                '(@a + @b) * @c',
+                '@total == @price * @qty + @tax',
+            );
+            foreach string expr in (expressions) {
+                hash<DataProviderExpression> parsed = DataProvider::parseDpqlExpression(expr);
+                string serialized = DataProvider::serializeDpqlExpression(parsed);
+                hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+                assertEq(parsed.exp, reparsed.exp,
+                    sprintf("new expr round-trip failed for: %s (serialized: %s)", expr, serialized));
+                assertEq(parsed.args.size(), reparsed.args.size(),
+                    sprintf("new expr round-trip args size for: %s", expr));
+            }
         }
     }
 }

@@ -625,7 +625,7 @@ public const ExtendedExpressionImplementations = {
                         }
                     }
                     if (v == val) {
-                        return val;
+                        return e;
                     }
                 }
                 return NOTHING;
@@ -1804,6 +1804,937 @@ public const ExtendedExpressionImplementations = {
         },
         "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
             return now_us();
+        },
+    },
+
+    # --- Duration functions ---
+    DP_FUNC_YEARS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_YEARS,
+            "display_name": "years",
+            "short_desc": "Returns a relative date/time value representing the given number of years",
+            "desc": "Returns a relative date/time value representing the given number of years; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "years()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Years",
+                    "short_desc": "The number of years",
+                    "desc": "The number of years for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::months(dp_eval_arg(rec, exp, 0, tc) * 12);
+        },
+    },
+    DP_FUNC_MONTHS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MONTHS,
+            "display_name": "months",
+            "short_desc": "Returns a relative date/time value representing the given number of months",
+            "desc": "Returns a relative date/time value representing the given number of months; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "months()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Months",
+                    "short_desc": "The number of months",
+                    "desc": "The number of months for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::months(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_WEEKS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_WEEKS,
+            "display_name": "weeks",
+            "short_desc": "Returns a relative date/time value representing the given number of weeks",
+            "desc": "Returns a relative date/time value representing the given number of weeks; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "weeks()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Weeks",
+                    "short_desc": "The number of weeks",
+                    "desc": "The number of weeks for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::days(dp_eval_arg(rec, exp, 0, tc) * 7);
+        },
+    },
+    DP_FUNC_DAYS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_DAYS,
+            "display_name": "days",
+            "short_desc": "Returns a relative date/time value representing the given number of days",
+            "desc": "Returns a relative date/time value representing the given number of days; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "days()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Days",
+                    "short_desc": "The number of days",
+                    "desc": "The number of days for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::days(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_HOURS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_HOURS,
+            "display_name": "hours",
+            "short_desc": "Returns a relative date/time value representing the given number of hours",
+            "desc": "Returns a relative date/time value representing the given number of hours; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "hours()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Hours",
+                    "short_desc": "The number of hours",
+                    "desc": "The number of hours for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::hours(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_MINUTES: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MINUTES,
+            "display_name": "minutes",
+            "short_desc": "Returns a relative date/time value representing the given number of minutes",
+            "desc": "Returns a relative date/time value representing the given number of minutes; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "minutes()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Minutes",
+                    "short_desc": "The number of minutes",
+                    "desc": "The number of minutes for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::minutes(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_SECONDS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_SECONDS,
+            "display_name": "seconds",
+            "short_desc": "Returns a relative date/time value representing the given number of seconds",
+            "desc": "Returns a relative date/time value representing the given number of seconds; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "seconds()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Seconds",
+                    "short_desc": "The number of seconds",
+                    "desc": "The number of seconds for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::seconds(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_MILLISECONDS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MILLISECONDS,
+            "display_name": "milliseconds",
+            "short_desc": "Returns a relative date/time value representing the given number of milliseconds",
+            "desc": "Returns a relative date/time value representing the given number of milliseconds; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "milliseconds()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Milliseconds",
+                    "short_desc": "The number of milliseconds",
+                    "desc": "The number of milliseconds for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::milliseconds(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_MICROSECONDS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MICROSECONDS,
+            "display_name": "microseconds",
+            "short_desc": "Returns a relative date/time value representing the given number of microseconds",
+            "desc": "Returns a relative date/time value representing the given number of microseconds; "
+                "use with the `+` or `-` operators for date arithmetic",
+            "symbol": "microseconds()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureIntType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Microseconds",
+                    "short_desc": "The number of microseconds",
+                    "desc": "The number of microseconds for the duration",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."date",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return Qore::microseconds(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+
+    # --- Date extraction functions ---
+    DP_FUNC_GET_YEAR: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_YEAR,
+            "display_name": "get_year",
+            "short_desc": "Extracts the year component from a date/time value",
+            "desc": "Returns the year component from a date/time value as an integer",
+            "symbol": "get_year()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the year from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_years(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_GET_MONTH: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_MONTH,
+            "display_name": "get_month",
+            "short_desc": "Extracts the month component from a date/time value",
+            "desc": "Returns the month component from a date/time value as an integer (1-12)",
+            "symbol": "get_month()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the month from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_months(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_GET_DAY: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_DAY,
+            "display_name": "get_day",
+            "short_desc": "Extracts the day component from a date/time value",
+            "desc": "Returns the day-of-month component from a date/time value as an integer (1-31)",
+            "symbol": "get_day()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the day from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_days(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_GET_HOUR: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_HOUR,
+            "display_name": "get_hour",
+            "short_desc": "Extracts the hour component from a date/time value",
+            "desc": "Returns the hour component from a date/time value as an integer (0-23)",
+            "symbol": "get_hour()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the hour from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_hours(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_GET_MINUTE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_MINUTE,
+            "display_name": "get_minute",
+            "short_desc": "Extracts the minute component from a date/time value",
+            "desc": "Returns the minute component from a date/time value as an integer (0-59)",
+            "symbol": "get_minute()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the minute from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_minutes(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_GET_SECOND: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_GET_SECOND,
+            "display_name": "get_second",
+            "short_desc": "Extracts the second component from a date/time value",
+            "desc": "Returns the second component from a date/time value as an integer (0-59)",
+            "symbol": "get_second()",
+            "groups": "Date/Time",
+            "args": (DataProviderSignatureDateType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Date",
+                    "short_desc": "The date/time value",
+                    "desc": "The date/time value to extract the second from",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return get_seconds(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+
+    # --- Null handling ---
+    DP_OP_IS_NULL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_IS_NULL,
+            "display_name": "is null",
+            "short_desc": "Returns True if the argument is NOTHING (null)",
+            "desc": "Returns `True` if the argument is `NOTHING` (null)",
+            "symbol": "isNull",
+            "render_template": "$arg[0].isNull()",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The value to check",
+                    "desc": "The value to check for null",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto val = dp_eval_arg(rec, exp, 0, tc);
+            return !exists val || val === NULL;
+        },
+    },
+    DP_OP_IS_NOT_NULL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_IS_NOT_NULL,
+            "display_name": "is not null",
+            "short_desc": "Returns True if the argument is not NOTHING (not null)",
+            "desc": "Returns `True` if the argument is not `NOTHING` (not null)",
+            "symbol": "isNotNull",
+            "render_template": "$arg[0].isNotNull()",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The value to check",
+                    "desc": "The value to check for not null",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto val = dp_eval_arg(rec, exp, 0, tc);
+            return exists val && val !== NULL;
+        },
+    },
+    DP_OP_NOT_IN: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_NOT_IN,
+            "display_name": "not in",
+            "short_desc": "Returns True if the first argument is not found in the second argument",
+            "desc": "Returns `True` if the first argument is not found in the second argument (list)",
+            "symbol": "notIn",
+            "render_template": "$arg[0] not in ($arg[1])",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "A value to look for (needle)",
+                    "desc": "A value to look for; first value must not be found in the second for the overall "
+                        "expression to return `True`",
+                    "label_after": "not in",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Search Source",
+                    "short_desc": "The list to search in (haystack)",
+                    "desc": "The list to search in (haystack)",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return !inlist(dp_eval_arg(rec, exp, 0, tc), dp_eval_arg(rec, exp, 1, tc));
+        },
+    },
+    DP_FUNC_COALESCE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_COALESCE,
+            "display_name": "coalesce",
+            "short_desc": "Returns the first non-NOTHING argument",
+            "desc": "Returns the value of the first argument that is not `NOTHING`; returns `NOTHING` if all "
+                "arguments are `NOTHING`",
+            "symbol": "coalesce()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "A value to check",
+                    "desc": "A value to check; the first non-NOTHING value is returned",
+                },
+            ),
+            "varargs": True,
+            "min_args": 1,
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            foreach auto arg in (exp.args) {
+                auto val = AbstractDataProvider::evalGenericExpressionValue(rec, arg, tc);
+                if (exists val && val !== NULL) {
+                    return val;
+                }
+            }
+            return NOTHING;
+        },
+    },
+    DP_FUNC_NULLIF: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_NULLIF,
+            "display_name": "nullif",
+            "short_desc": "Returns NOTHING if the two arguments are equal, otherwise the first argument",
+            "desc": "Returns `NOTHING` if the two arguments are equal; otherwise returns the first argument",
+            "symbol": "nullif()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "The value to return if not equal",
+                    "desc": "The value to return if the two arguments are not equal",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Compare Value",
+                    "short_desc": "The value to compare against",
+                    "desc": "If this value equals the first argument, NOTHING is returned",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto val = dp_eval_arg(rec, exp, 0, tc);
+            return val == dp_eval_arg(rec, exp, 1, tc) ? NOTHING : val;
+        },
+    },
+
+    # --- Math functions ---
+    DP_FUNC_ABS: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_ABS,
+            "display_name": "abs",
+            "short_desc": "Returns the absolute value of a number",
+            "desc": "Returns the absolute value of a number",
+            "symbol": "abs()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureNumberType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Number",
+                    "short_desc": "The number to get the absolute value of",
+                    "desc": "The number to get the absolute value of",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+            "return_type_first_arg": True,
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return abs(dp_eval_arg(rec, exp, 0, tc));
+        },
+    },
+    DP_FUNC_ROUND: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_ROUND,
+            "display_name": "round",
+            "short_desc": "Rounds a number to the given number of decimal places",
+            "desc": "Rounds a number to the given number of decimal places; default precision is 0 "
+                "(rounds to nearest integer)",
+            "symbol": "round()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureNumberType, DataProviderSignatureOptionalIntType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Number",
+                    "short_desc": "The number to round",
+                    "desc": "The number to round",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Precision",
+                    "short_desc": "Number of decimal places (default: 0)",
+                    "desc": "The number of decimal places to round to; default: `0`",
+                    "default_value": 0,
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+            "return_type_first_arg": True,
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            auto val = dp_eval_arg(rec, exp, 0, tc);
+            int prec = dp_eval_arg(rec, exp, 1, tc) ?? 0;
+            return round(val, prec);
+        },
+    },
+    DP_FUNC_FLOOR: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_FLOOR,
+            "display_name": "floor",
+            "short_desc": "Returns the largest integer not greater than the argument",
+            "desc": "Returns the largest integer not greater than the argument (rounds down)",
+            "symbol": "floor()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureNumberType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Number",
+                    "short_desc": "The number to round down",
+                    "desc": "The number to round down to the nearest integer",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return int(floor(dp_eval_arg(rec, exp, 0, tc)));
+        },
+    },
+    DP_FUNC_CEIL: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_CEIL,
+            "display_name": "ceil",
+            "short_desc": "Returns the smallest integer not less than the argument",
+            "desc": "Returns the smallest integer not less than the argument (rounds up)",
+            "symbol": "ceil()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureNumberType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Number",
+                    "short_desc": "The number to round up",
+                    "desc": "The number to round up to the nearest integer",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."int",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return int(ceil(dp_eval_arg(rec, exp, 0, tc)));
+        },
+    },
+    DP_OP_MOD: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_MOD,
+            "display_name": "modulus (%)",
+            "short_desc": "Returns the remainder of dividing the first argument by the second",
+            "desc": "Returns the remainder of dividing the first argument by the second (modulus operator)",
+            "symbol": "%",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureNumberType, DataProviderSignatureNumberType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Dividend",
+                    "short_desc": "The value to divide",
+                    "desc": "The value to divide (dividend)",
+                    "label_after": "%",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Divisor",
+                    "short_desc": "The divisor",
+                    "desc": "The divisor",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."any",
+            "return_type_arg_priority": ("number", "float", "int"),
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return dp_eval_arg(rec, exp, 0, tc) % dp_eval_arg(rec, exp, 1, tc);
+        },
+    },
+
+    # --- String functions ---
+    DP_FUNC_TRIM: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_TRIM,
+            "display_name": "trim",
+            "short_desc": "Trims whitespace from both sides of a string",
+            "desc": "Returns the string with leading and trailing whitespace removed; optionally specify "
+                "characters to trim instead of whitespace",
+            "symbol": "trim()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureOptionalStringType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "String",
+                    "short_desc": "The string to trim",
+                    "desc": "The string to trim",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Characters",
+                    "short_desc": "Characters to trim (default: whitespace)",
+                    "desc": "Optional characters to trim instead of whitespace",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."string",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            string str = dp_eval_arg(rec, exp, 0, tc);
+            *string chars = dp_eval_arg(rec, exp, 1, tc);
+            return trim(str, chars);
+        },
+    },
+    DP_FUNC_LTRIM: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_LTRIM,
+            "display_name": "ltrim",
+            "short_desc": "Trims whitespace from the left side of a string",
+            "desc": "Returns the string with leading whitespace removed; optionally specify "
+                "characters to trim instead of whitespace",
+            "symbol": "ltrim()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureOptionalStringType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "String",
+                    "short_desc": "The string to trim",
+                    "desc": "The string to trim from the left",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Characters",
+                    "short_desc": "Characters to trim (default: whitespace)",
+                    "desc": "Optional characters to trim instead of whitespace",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."string",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            string str = dp_eval_arg(rec, exp, 0, tc);
+            *string chars = dp_eval_arg(rec, exp, 1, tc);
+            return ltrim(str, chars);
+        },
+    },
+    DP_FUNC_RTRIM: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_RTRIM,
+            "display_name": "rtrim",
+            "short_desc": "Trims whitespace from the right side of a string",
+            "desc": "Returns the string with trailing whitespace removed; optionally specify "
+                "characters to trim instead of whitespace",
+            "symbol": "rtrim()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureOptionalStringType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "String",
+                    "short_desc": "The string to trim",
+                    "desc": "The string to trim from the right",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Characters",
+                    "short_desc": "Characters to trim (default: whitespace)",
+                    "desc": "Optional characters to trim instead of whitespace",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."string",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            string str = dp_eval_arg(rec, exp, 0, tc);
+            *string chars = dp_eval_arg(rec, exp, 1, tc);
+            return rtrim(str, chars);
+        },
+    },
+    DP_FUNC_SPLIT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_SPLIT,
+            "display_name": "split",
+            "short_desc": "Splits a string by a plain separator",
+            "desc": "Splits a string by a plain separator string and returns a list of substrings",
+            "symbol": "split()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureStringType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "String To Split",
+                    "short_desc": "The string to split",
+                    "desc": "The string to split",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Separator",
+                    "short_desc": "The separator string",
+                    "desc": "The separator string to split by",
+                    "example_value": ",",
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            string str = dp_eval_arg(rec, exp, 0, tc);
+            string sep = dp_eval_arg(rec, exp, 1, tc);
+            return str.split(sep);
+        },
+    },
+    DP_FUNC_CONCAT: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_CONCAT,
+            "display_name": "concat",
+            "short_desc": "Concatenates multiple values as strings",
+            "desc": "Concatenates all arguments as strings and returns the result",
+            "symbol": "concat()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType,),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Value",
+                    "short_desc": "A value to concatenate",
+                    "desc": "A value to concatenate; all values are converted to strings",
+                },
+            ),
+            "varargs": True,
+            "min_args": 1,
+            "return_type": AbstractDataProviderTypeMap."string",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            return foldl $1 + $2,
+                (map string(AbstractDataProvider::evalGenericExpressionValue(rec, $1, tc)), exp.args);
+        },
+    },
+
+    # --- Map functions ---
+    DP_FUNC_MAP: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_MAP,
+            "display_name": "map",
+            "short_desc": "Applies an expression to each element of a list, returning a new list",
+            "desc": "Applies the body expression to each element of the source list and returns a new list "
+                "of results. Within the body expression, field references (`@field`) resolve against the "
+                "current iteration element. An optional filter expression can be provided to skip elements "
+                "that do not match",
+            "symbol": "map()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                DataProviderSignatureOptionalAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source List",
+                    "short_desc": "The list to iterate over",
+                    "desc": "The list to iterate over; each element becomes the context for the body expression",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Body Expression",
+                    "short_desc": "Expression applied to each element",
+                    "desc": "The expression to apply to each element; field references resolve against the "
+                        "current element",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Filter Expression",
+                    "short_desc": "Optional filter condition",
+                    "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                },
+            ),
+
+            "return_type": AbstractDataProviderTypeMap."list",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc);
+            auto body = exp.args[1];
+            *auto filter = exp.args.size() > 2 ? exp.args[2] : NOTHING;
+            list<auto> result = ();
+            foreach auto elem in (source) {
+                hash<auto> iter_rec = elem.typeCode() == NT_HASH ? elem : {"value": elem};
+                if (exists filter && filter.val()) {
+                    if (!AbstractDataProvider::evalGenericExpressionValue(iter_rec, filter, tc)) {
+                        continue;
+                    }
+                }
+                result += AbstractDataProvider::evalGenericExpressionValue(iter_rec, body, tc);
+            }
+            return result;
+        },
+    },
+    DP_FUNC_HASH_MAP: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Function,
+            "role": ER_All,
+            "name": DP_FUNC_HASH_MAP,
+            "display_name": "hash_map",
+            "short_desc": "Maps a list to a hash by applying key and value expressions to each element",
+            "desc": "Applies key and value expressions to each element of the source list and returns a hash. "
+                "Within the expressions, field references (`@field`) resolve against the current iteration "
+                "element. An optional filter expression can be provided to skip elements that do not match",
+            "symbol": "hash_map()",
+            "groups": "Data Manipulation",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                DataProviderSignatureAnyType, DataProviderSignatureOptionalAnyType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "Source List",
+                    "short_desc": "The list to iterate over",
+                    "desc": "The list to iterate over; each element becomes the context for the expressions",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Key Expression",
+                    "short_desc": "Expression for the hash key",
+                    "desc": "The expression that produces the hash key for each element; field references resolve "
+                        "against the current element",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Value Expression",
+                    "short_desc": "Expression for the hash value",
+                    "desc": "The expression that produces the hash value for each element; field references resolve "
+                        "against the current element",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Filter Expression",
+                    "short_desc": "Optional filter condition",
+                    "desc": "Optional boolean expression; only elements where this evaluates to True are included",
+                },
+            ),
+
+            "return_type": AbstractDataProviderTypeMap."hash",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            softlist<auto> source = AbstractDataProvider::evalGenericExpressionValue(rec, exp.args[0], tc);
+            auto key_expr = exp.args[1];
+            auto val_expr = exp.args[2];
+            *auto filter = exp.args.size() > 3 ? exp.args[3] : NOTHING;
+            hash<auto> result = {};
+            foreach auto elem in (source) {
+                hash<auto> iter_rec = elem.typeCode() == NT_HASH ? elem : {"value": elem};
+                if (exists filter && filter.val()) {
+                    if (!AbstractDataProvider::evalGenericExpressionValue(iter_rec, filter, tc)) {
+                        continue;
+                    }
+                }
+                auto k = AbstractDataProvider::evalGenericExpressionValue(iter_rec, key_expr, tc);
+                auto v = AbstractDataProvider::evalGenericExpressionValue(iter_rec, val_expr, tc);
+                result{k} = v;
+            }
+            return result;
         },
     },
 };
