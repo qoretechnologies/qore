@@ -4655,8 +4655,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                 string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                # DPQL produces varargs (field, v1, v2, ...) so iterate args[1..]
                 *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), args[1]));
+                    AbstractDataProviderTypeMap."any"), args[1..]));
                 return exists ins ? sprintf("%s in (%s)", exp0, ins) : "1 != 1";
             },
         },
@@ -5344,8 +5345,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                 string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                # DPQL produces varargs (field, v1, v2, ...) so iterate args[1..]
                 *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), args[1]));
+                    AbstractDataProviderTypeMap."any"), args[1..]));
                 return exists ins ? sprintf("%s not in (%s)", exp0, ins) : "1 = 1";
             },
         },
@@ -5477,6 +5479,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "role": ER_All,
                 "args": (DataProviderSignatureAnyType,),
                 "varargs": True,
+                "min_args": 1,
                 "return_type": AbstractDataProviderTypeMap."any",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
@@ -5551,6 +5554,7 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 "role": ER_All,
                 "args": (DataProviderSignatureAnyType,),
                 "varargs": True,
+                "min_args": 1,
                 "return_type": AbstractDataProviderTypeMap."string",
             },
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {

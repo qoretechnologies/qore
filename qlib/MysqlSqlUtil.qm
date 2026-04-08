@@ -1921,6 +1921,7 @@ end";
                         "role": ER_All,
                         "args": (DataProviderSignatureAnyType,),
                         "varargs": True,
+                        "min_args": 1,
                         "return_type": AbstractDataProviderTypeMap."string",
                     },
                     "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
