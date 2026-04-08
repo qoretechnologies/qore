@@ -269,6 +269,20 @@ public class Http2ClientStreamHandle inherits HttpClientStreamHandle {
             sid = stream_id;
         }
 
+        # Check connection state (lock-free atomic read) AFTER the stream-level
+        # checks.  The underlying H2 connection may have been closed (GOAWAY,
+        # TCP reset) while the stream handle's state is still Open.  Catching
+        # this here produces a clean HTTPCLIENT-STREAM-CLOSED instead of the
+        # opaque HTTP2-STATE-ERROR from sendStreamData().
+        if (!h2conn.isReady()) {
+            if (end_stream && data.empty()) {
+                return;
+            }
+            throw "HTTPCLIENT-STREAM-CLOSED",
+                sprintf("cannot send data: H2 connection closed (state: %y)",
+                    h2conn.getConnectionState());
+        }
+
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
         h2conn.sendStreamData(sid, data, end_stream);
     }

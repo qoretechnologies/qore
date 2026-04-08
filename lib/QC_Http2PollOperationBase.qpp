@@ -257,6 +257,28 @@ QoreHashNode* Http2PollOperationPriv::continueReadPoll(ExceptionSink* xsink) {
         return nullptr;
     }
 
+    // Flush pending outgoing data (responses queued by handler threads via
+    // sendHttp2StreamData → nghttp2_session_resume_data).  Without this,
+    // WebSocket responses sit in the nghttp2 session buffer and never reach
+    // the client — the read poll cycle only reads, it doesn't write.
+    {
+        int srv = sock->flushHttp2PendingData(xsink);
+        if (*xsink) {
+            h2_state = H2ServerState::CLOSED;
+            return nullptr;
+        }
+        // sendPendingData returns 1 if data remains (would block) —
+        // request POLLOUT so the I/O thread retries when writable
+        if (srv == 1 && poll_info) {
+            QoreHashNode* pi = poll_info;
+            pi->setKeyValue("events", SOCK_POLLIN | SOCK_POLLOUT, xsink);
+            if (*xsink) {
+                h2_state = H2ServerState::CLOSED;
+                return nullptr;
+            }
+        }
+    }
+
     if (poll_info) {
         // Inner op needs more polling
         return poll_info;

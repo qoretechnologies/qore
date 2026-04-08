@@ -171,6 +171,15 @@ public:
     //! Remove a program from the shutting-down set
     DLLLOCAL void clearProgramShuttingDown(QoreProgram* pgm);
 
+    //! Wait for in-flight callbacks belonging to a specific program to complete
+    /** Unlike waitForIdle() which waits for ALL callbacks, this only waits for
+        callbacks whose program matches \a pgm. This avoids deadlock when the
+        caller holds a lock that callbacks from OTHER programs also need.
+
+        @param pgm the program to wait for (must already be marked as shutting down)
+    */
+    DLLLOCAL void waitForProgramIdle(QoreProgram* pgm);
+
     //! Fallback cap for auto-scaled workers when hardware_concurrency() is unavailable
     static constexpr int DEFAULT_WORKER_CAP = 4;
 
@@ -186,6 +195,8 @@ private:
     bool stopping = false;                  //!< Set during shutdown
     AsyncIoControllerPriv* ctrl = nullptr;  //!< Owning controller for logging (not ref'd — controller outlives dispatcher)
     std::unordered_set<QoreProgram*> shutting_down_programs;  //!< Programs being destroyed — skip callbacks
+    std::unordered_map<QoreProgram*, int> active_per_program; //!< Per-program in-flight callback count
+    QoreCondition pgm_idle_cond;                //!< Signaled when a program's active count reaches zero
 
     //! Enqueue a work item, starting a worker if needed
     DLLLOCAL void enqueue(AsyncWorkItem&& item);

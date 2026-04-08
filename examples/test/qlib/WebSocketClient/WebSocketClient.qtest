@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %requires ../../../../qlib/Util.qm
@@ -200,6 +202,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("HTTP/1.1 async WebSocket tests", \http1AsyncWebSocketTests());
         addTestCase("connection tests", \connectionTests());
         addTestCase("HTTP/2 WebSocket tests", \http2WebSocketTests());
+        addTestCase("HTTP/2 WebSocket multi-send tests", \http2WebSocketMultiSendTests());
         addTestCase("HTTP/2 WebSocket external server tests", \http2WebSocketExternalTests());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
@@ -581,7 +584,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             testSkip("HTTPS/HTTP/2 listener not available");
         }
 
-        # Test 0: HTTP/2 auto negotiation prefers HTTP/2 when available
+        # Test 0: "auto" mode uses happy eyeballs — ALPN negotiates H2 when available
         {
             list<auto> l = ();
             Counter c(1);
@@ -604,15 +607,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 wsc.connect();
                 wsc.send("REQUEST");
                 c.waitForZero(5s);
-                assertEq(list("RESPONSE:REQUEST"), l, "HTTP/2 auto negotiation should echo messages");
+                assertEq(list("RESPONSE:REQUEST"), l, "auto mode should echo messages");
                 if (!wsc.isHttp2()) {
                     testSkip("HTTP/2 not negotiated (ALPN may not be available)");
                 } else {
-                    assertTrue(wsc.isHttp2(), "HTTP/2 auto negotiation should report http2=True");
+                    assertTrue(wsc.isHttp2(), "auto mode should negotiate H2 via ALPN");
                 }
                 wsc.disconnect();
             } catch (hash<ExceptionInfo> ex) {
-                assertTrue(False, sprintf("HTTP/2 auto negotiation failed: %s: %s", ex.err, ex.desc));
+                assertTrue(False, sprintf("auto mode WS failed: %s: %s", ex.err, ex.desc));
             }
             delete wsc;
         }
@@ -797,6 +800,87 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                 "HTTP/2 CONNECT without Sec-WebSocket-Key should not return Sec-WebSocket-Accept");
             bad_hc.sendHttp2StreamData(no_key_resp.stream_id, close_frame, True);
             delete bad_hc;
+        }
+    }
+
+    #! Test H2 WebSocket multiple sequential sends on same connection
+    /** Reproduces the scenario where an H2 WS connection closes between operations.
+    */
+    http2WebSocketMultiSendTests() {
+        if (!h2info) {
+            testSkip("HTTPS/HTTP/2 listener not available");
+        }
+
+        # Test 1: rapid sequential sends
+        {
+            list<auto> received = ();
+            Counter c(3);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    received += msg;
+                    c.dec();
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            on_exit {
+                try { wsc.disconnect(); } catch () {}
+                delete wsc;
+            }
+
+            wsc.connect();
+            if (!wsc.isHttp2()) {
+                testSkip("HTTP/2 not negotiated");
+            }
+
+            wsc.send("msg1");
+            wsc.send("msg2");
+            wsc.send("msg3");
+            c.waitForZero(10s);
+            assertEq(3, received.size(), "rapid: should receive all 3 responses");
+        }
+
+        # Test 2: sends with delays (simulates idle time between test cases)
+        {
+            list<auto> received = ();
+            Counter c(3);
+            code cb = sub (*data msg) {
+                if (exists msg) {
+                    received += msg;
+                    c.dec();
+                }
+            };
+            hash<auto> opts = {
+                "url": "wss://localhost:" + h2info.port,
+                "logger": logger,
+                "http_version": "auto",
+                "ssl_verify_cert": False,
+            };
+            WebSocketClient wsc(cb, opts);
+            on_exit {
+                try { wsc.disconnect(); } catch () {}
+                delete wsc;
+            }
+
+            wsc.connect();
+            if (!wsc.isHttp2()) {
+                testSkip("HTTP/2 not negotiated");
+            }
+
+            wsc.send("delayed1");
+            sleep(500ms);
+            assertTrue(wsc.isOpen(), "connection should be open after 500ms idle");
+            wsc.send("delayed2");
+            sleep(500ms);
+            assertTrue(wsc.isOpen(), "connection should be open after second 500ms idle");
+            wsc.send("delayed3");
+            c.waitForZero(10s);
+            assertEq(3, received.size(), "delayed: should receive all 3 responses");
         }
     }
 

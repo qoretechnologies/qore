@@ -90,20 +90,17 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         @param method HTTP method (e.g., "GET", "POST")
         @param path request path
         @param headers request headers (optional)
-        @param body_streaming not supported for HTTP/1.1; must be \c False
+        @param body_streaming if \c True, enables bidirectional mode; for HTTP/1.1 this
+            is used for 101 Switching Protocols (WebSocket upgrade) where the socket
+            transitions to raw bidirectional I/O after the handshake
 
         @return the stream ID
 
         @throw HTTPCLIENT-STATE-ERROR if the stream is already in use
         @throw HTTPCLIENT-TIMEOUT if connection establishment times out
-        @throw HTTP1-STREAMING-ERROR if \c body_streaming is \c True (not supported)
     */
     int startStreaming(string method, string path, *hash<auto> headers,
             bool body_streaming = False, *data body) {
-        if (body_streaming) {
-            throw "HTTP1-STREAMING-ERROR",
-                "bidirectional body streaming is not supported over HTTP/1.1";
-        }
         {
             AutoLock al(lock);
             if (state != HttpClientStreamState::Pending) {
@@ -245,12 +242,18 @@ public class Http1ClientStreamHandle inherits HttpClientStreamHandle {
         }
     }
 
-    #! Not supported for HTTP/1.1 response-only streaming
-    /** @throw HTTP1-STREAMING-ERROR always thrown — HTTP/1.1 does not support bidirectional streaming
+    #! Not supported for HTTP/1.1 streaming
+    /** After 101 Switching Protocols, the socket is extracted from the H1
+        connection and used directly with WebSocketClientPollOperationBase.
+        This method is not called in that flow.
+
+        @throw HTTP1-STREAMING-ERROR always thrown
     */
     sendData(data data, bool end_stream = False) {
         throw "HTTP1-STREAMING-ERROR",
-            "bidirectional body streaming is not supported over HTTP/1.1";
+            "bidirectional body streaming is not supported over HTTP/1.1; "
+            "after 101 Upgrade, use the extracted socket with "
+            "WebSocketClientPollOperationBase";
     }
 
     #! Protocol-specific async request submission — returns {stream_id, future}

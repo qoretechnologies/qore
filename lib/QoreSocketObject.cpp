@@ -846,6 +846,14 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
     return priv->socket->sendHttp2Trailers(stream_id, trailers, xsink);
 }
 
+int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (!priv->socket->priv->h2_session) {
+        return 0;
+    }
+    return priv->socket->priv->h2_session->sendPendingData(0, xsink);
+}
+
 int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,
         const QoreHashNode* headers, ExceptionSink* xsink) {
     AutoLocker al(priv->m);

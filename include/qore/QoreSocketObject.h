@@ -450,6 +450,15 @@ public:
     DLLEXPORT int sendHttp2Trailers(int32_t stream_id, const QoreHashNode* trailers,
             ExceptionSink* xsink);
 
+    //! Flushes pending HTTP/2 write data (non-blocking)
+    /** Drains data queued by sendHttp2StreamData() from the nghttp2 session
+        and sends it on the socket. Returns 0 if all data was sent, 1 if
+        data remains (would block), -1 on error.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int flushHttp2PendingData(ExceptionSink* xsink);
+
     //! Submits HTTP/2 streaming response headers without body or END_STREAM
     /** @since %Qore 2.3
     */

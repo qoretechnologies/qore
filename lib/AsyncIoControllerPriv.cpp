@@ -311,6 +311,17 @@ void QoreCallDispatcher::waitForIdle() {
     }
 }
 
+void QoreCallDispatcher::waitForProgramIdle(QoreProgram* pgm) {
+    AutoLocker al(m);
+    while (true) {
+        auto it = active_per_program.find(pgm);
+        if (it == active_per_program.end() || it->second == 0) {
+            break;
+        }
+        pgm_idle_cond.wait(m);
+    }
+}
+
 void QoreCallDispatcher::markProgramShuttingDown(QoreProgram* pgm) {
     AutoLocker al(m);
     shutting_down_programs.insert(pgm);
@@ -348,6 +359,10 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item = async_queue.front();
             async_queue.pop_front();
             ++active_processing;
+            // Track per-program active count for targeted flush
+            if (async_item.pgm) {
+                ++active_per_program[async_item.pgm];
+            }
         }
 
         ExceptionSink work_xsink;
@@ -511,6 +526,16 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         {
             AutoLocker al(m);
             --active_processing;
+            // Decrement per-program count and signal waiters
+            if (async_item.pgm) {
+                auto it = active_per_program.find(async_item.pgm);
+                if (it != active_per_program.end()) {
+                    if (--it->second <= 0) {
+                        active_per_program.erase(it);
+                        pgm_idle_cond.broadcast();
+                    }
+                }
+            }
             if (async_queue.empty() && active_processing == 0) {
                 idle_cond.broadcast();
             }
@@ -1182,11 +1207,17 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         }
     }
 
-    // Flush ALL pending callbacks (not just cancel-related ones) to ensure
-    // no in-flight callbacks from normal I/O processing are pending.
+    // Wait for in-flight callbacks belonging to this program to complete.
+    // Uses per-program tracking instead of global waitForIdle() to avoid
+    // deadlock when the caller holds a lock that other programs' callbacks need.
     // The I/O thread may have dispatched onComplete/onPollComplete callbacks
     // before cancelByProgram ran; those must complete while ptid is not set.
-    flushCallbacks();
+    {
+        QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
+        if (cd) {
+            cd->waitForProgramIdle(pgm);
+        }
+    }
 
     // Re-mark the program if the dispatcher was lazily created by the I/O
     // thread since our initial mark (handles the case where call_dispatcher
@@ -1206,9 +1237,12 @@ void AsyncIoControllerPriv::cancelByProgram(QoreProgram* pgm, ExceptionSink* xsi
         pinfo.cleanup(xsink);
     }
 
-    // Flush again to drain callbacks from the cancel delivery above.
+    // Wait again for any callbacks triggered by the cancel delivery above.
     if (!cancel_pinfos.empty()) {
-        flushCallbacks();
+        QoreCallDispatcher* cd = call_dispatcher.load(std::memory_order_acquire);
+        if (cd) {
+            cd->waitForProgramIdle(pgm);
+        }
     }
 
     // Clear the shutting-down mark — after this point, ptid will be set

@@ -754,7 +754,13 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
 
 void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     for (auto& [stream_id, info] : stream_queues) {
-        info.queue->push(xsink, QoreValue());
+        // Push an error marker instead of NOTHING so consumers (e.g.,
+        // WebSocketClientHcioPollOp) can distinguish "connection closed"
+        // from "no data available" (timeout).
+        ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+        err_hash->setKeyValue("error", true, xsink);
+        err_hash->setKeyValue("end_stream", true, xsink);
+        info.queue->push(xsink, err_hash.release());
         if (info.notifier) {
             info.notifier->notify();
         }
