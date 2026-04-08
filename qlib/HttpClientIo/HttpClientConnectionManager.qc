@@ -1343,13 +1343,22 @@ public class HttpClientConnectionManager {
             return h2conn;
         }
 
-        # Neither connected — clean up both and throw
+        # Neither connected — collect error details and clean up both
+        *hash<auto> h3_err = h3conn.getPollOperation().getError();
+        *hash<auto> h2_err = h2conn.getPollOperation().getError();
         try { controller.cancel(h3conn.getSocket()); } catch () {}
         try { h3conn.close(); } catch () {}
         try { controller.cancel(h2conn.getSocket()); } catch () {}
         try { h2conn.close(); } catch () {}
-        throw "HTTPCLIENT-CONNECT-ERROR",
-            sprintf("happy eyeballs: both H3 and H2 connections to %s failed", key);
+
+        # Build a user-friendly error message with the underlying failure reasons
+        string desc = sprintf("could not connect to %s", key);
+        # Use the most informative underlying error (prefer H2 as it's TCP-based)
+        *string detail = h2_err.desc ?? h3_err.desc;
+        if (detail) {
+            desc += sprintf(": %s", detail);
+        }
+        throw "HTTPCLIENT-CONNECT-ERROR", desc;
     }
 
     #! Internal: submits a connection poll operation to the controller

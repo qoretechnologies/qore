@@ -2582,8 +2582,8 @@ ws.setEventQueue();
         } + hdr0;
 
         # TLS with "auto" or explicit H2/H3: use HCIO manager for protocol negotiation.
-        # The manager uses ALPN happy eyeballs — negotiates the best protocol,
-        # then we choose CONNECT (H2/H3) or Upgrade (H1) based on what was negotiated.
+        # The manager races H3 and H2 in parallel, then we choose CONNECT (H2/H3)
+        # or Upgrade (H1) based on what was negotiated.
         if (isUrlTls() && http_opts.http_version != "1.1"
                 && http_opts.http_version != "1.0") {
             try {
