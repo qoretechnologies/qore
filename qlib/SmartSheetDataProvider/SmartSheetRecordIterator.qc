@@ -45,6 +45,9 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
 
         #! Where conditions for client-side filtering
         *hash<auto> where_cond;
+
+        #! Search options
+        *hash<auto> search_options;
     }
 
     #! Creates the iterator
@@ -63,6 +66,7 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
         self.sheet_id = sheet_id;
         self.record_info = record_info;
         self.where_cond = where_cond;
+        self.search_options = search_options;
 
         # Fetch rows from the sheet
         list<hash<auto>> records = ();
@@ -113,7 +117,7 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
 
     #! Returns the current row value
     hash<auto> getValue() {
-        return i.getValue();
+        return search_options.columns ? i.getValue(){search_options.columns} : i.getValue();
     }
 
     #! Returns the record type
