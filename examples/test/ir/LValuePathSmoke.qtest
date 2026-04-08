@@ -1,0 +1,214 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# LValuePath integration tests — verifies identical behavior across ast/ir/jit modes
+
+%modern
+%no-child-restrictions
+
+%requires QUnit
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class LValuePathSmokeTest
+
+class LValuePathSmokeTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LValuePathSmokeTest", "1.0", \ARGV) {
+        addTestCase("compound op in loop", \testCompoundInLoop());
+        addTestCase("hash delete removes key", \testHashDeleteRemovesKey());
+        addTestCase("hash remove returns value", \testHashRemoveReturnsValue());
+        addTestCase("self.member compound in loop", \testSelfMemberCompoundLoop());
+        addTestCase("regex subst in-place", \testRegexSubst());
+        addTestCase("regex subst return value", \testRegexSubstReturnValue());
+        addTestCase("reference variable assignment", \testReferenceAssignment());
+        addTestCase("list index increment", \testListIndexIncrement());
+        addTestCase("push to member list", \testPushToMemberList());
+        addTestCase("remove from member list", \testRemoveFromMemberList());
+        addTestCase("pre/post increment on member", \testMemberIncrement());
+        addTestCase("compound on local hash key", \testLocalHashKeyCompound());
+        addTestCase("trim and chomp", \testTrimChomp());
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        string qore_bin = QORE_ARGV[0] ?? ARGV[0] ?? NOTHING;
+        if (!qore_bin || qore_bin == NOTHING) {
+            testSkip("no qore binary path available");
+            return "";
+        }
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        TmpFile err();
+        string cmd = sprintf("%s --exec-mode=%s %s > %s 2> %s",
+            qore_bin, mode, script.path, out.path, err.path);
+        int rc = system(cmd);
+        if (rc != 0) {
+            string err_output = ReadOnlyFile::readTextFile(err.path) ?? "";
+            if (err_output =~ /exec-mode/ && err_output =~ /valid long option/) {
+                testSkip("exec-mode option not supported");
+                return "";
+            }
+        }
+        return ReadOnlyFile::readTextFile(out.path) ?? "";
+    }
+
+    private assertSameInAllModes(string code, string expected, string desc) {
+        foreach string mode in ("ast", "ir") {
+            string result = runInMode(code, mode);
+            assertEq(expected, result, sprintf("%s (%s)", desc, mode));
+        }
+    }
+
+    testCompoundInLoop() {
+        # Bug: cleanupLocalCaches destroyed IR-only loop counter → infinite loop
+        string code = "
+list<hash> l = ();
+for (int i = 0; i < 3; ++i) {
+    l += {\"n\": i};
+}
+printf(\"%d\\n\", l.size());
+";
+        assertSameInAllModes(code, "3\n", "compound in loop");
+    }
+
+    testHashDeleteRemovesKey() {
+        # Bug: LValueHelper::remove() cleared value but didn't remove hash key
+        string code = "
+hash h = (\"a\": 1, \"b\": 2);
+delete h.b;
+printf(\"%d:%s\\n\", h.size(), h.b == NOTHING ? \"ok\" : \"bad\");
+";
+        assertSameInAllModes(code, "1:ok\n", "hash delete");
+    }
+
+    testHashRemoveReturnsValue() {
+        string code = "
+hash h = (\"x\": 42, \"y\": 99);
+auto v = remove h.x;
+printf(\"%d:%d\\n\", v, h.size());
+";
+        assertSameInAllModes(code, "42:1\n", "hash remove returns value");
+    }
+
+    testSelfMemberCompoundLoop() {
+        # Bug: self.items += i hung because cleanupLocalCaches destroyed loop counter
+        string code = "
+class C {
+    public { list<int> items; }
+    constructor() {
+        for (int i = 0; i < 3; ++i) {
+            self.items += i;
+        }
+    }
+    int getSize() { return items.size(); }
+}
+C c();
+printf(\"%d\\n\", c.getSize());
+";
+        assertSameInAllModes(code, "3\n", "self.member compound in loop");
+    }
+
+    testRegexSubst() {
+        # Bug: regex subst handler didn't check ref_rv flag
+        string code = "
+string s = \"hello world\";
+s =~ s/world/qore/;
+printf(\"%s\\n\", s);
+";
+        assertSameInAllModes(code, "hello qore\n", "regex subst");
+    }
+
+    testRegexSubstReturnValue() {
+        string code = "
+string s = \"foo bar baz\";
+string r = (s =~ s/bar/BAR/);
+printf(\"%s:%s\\n\", s, r);
+";
+        assertSameInAllModes(code, "foo BAR baz:foo BAR baz\n", "regex subst return value");
+    }
+
+    testReferenceAssignment() {
+        # Reference variables fall back to AST — verify correctness
+        string code = "
+int val = 10;
+reference<int> ref = \\val;
+ref = 42;
+printf(\"%d\\n\", val);
+";
+        assertSameInAllModes(code, "42\n", "reference assignment");
+    }
+
+    testListIndexIncrement() {
+        # Bug: missing result value ID caused double execution (increment by 2)
+        string code = "
+list<auto> l = (10, 20, 30);
+++l[0];
+l[2]--;
+printf(\"%d,%d\\n\", l[0], l[2]);
+";
+        assertSameInAllModes(code, "11,29\n", "list index increment");
+    }
+
+    testPushToMemberList() {
+        string code = "
+class D {
+    public { list<auto> items = (); }
+    add(auto v) { push self.items, v; }
+    int sz() { return self.items.size(); }
+}
+D d();
+d.add(1);
+d.add(2);
+d.add(3);
+printf(\"%d\\n\", d.sz());
+";
+        assertSameInAllModes(code, "3\n", "push to member list");
+    }
+
+    testRemoveFromMemberList() {
+        string code = "
+hash<auto> h = {\"data\": {\"x\": 1, \"y\": 2, \"z\": 3}};
+auto v = remove h.data.y;
+printf(\"%d:%d\\n\", v, h.data.size());
+";
+        assertSameInAllModes(code, "2:2\n", "remove from nested hash");
+    }
+
+    testMemberIncrement() {
+        string code = "
+final class Counter {
+    public { int count = 5; }
+    int inc() { return ++count; }
+}
+Counter c();
+int r1 = c.inc();
+int r2 = c.inc();
+int r3 = c.inc();
+printf(\"%d:%d:%d\\n\", r1, r2, r3);
+";
+        assertSameInAllModes(code, "1:2:3\n", "member post-increment");
+    }
+
+    testLocalHashKeyCompound() {
+        string code = "
+hash<auto> h = {\"total\": 0};
+for (int i = 1; i <= 3; ++i) {
+    h.total += i;
+}
+printf(\"%d\\n\", h.total);
+";
+        assertSameInAllModes(code, "6\n", "local hash key compound");
+    }
+
+    testTrimChomp() {
+        string code = "
+string s = \"  hello  \";
+trim s;
+printf(\"%s:%d\\n\", s, s.length());
+";
+        assertSameInAllModes(code, "hello:5\n", "trim");
+    }
+}
