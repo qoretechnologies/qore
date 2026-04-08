@@ -724,6 +724,50 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
 
+    @par Comprehensive Regular Expression Improvements
+    @parblock
+    The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
+
+    <b>Bug Fixes:</b>
+    - \c $0 backreference in substitution replacement strings now correctly references the full match text
+      (previously \c $0 was silently ignored)
+    - @ref RE_Ungreedy "RE_Ungreedy" (\c QRE_UNGREEDY) is now accepted by the regex API (previously defined
+      in the public header but rejected at runtime)
+
+    <b>New Options and Constants:</b>
+    - @ref RE_Ungreedy "RE_Ungreedy" constant and \c /U scanner flag for ungreedy quantifiers
+    - @ref RE_DollarEndOnly "RE_DollarEndOnly" constant — \c $ matches only at true end of string
+    - @ref RE_Anchored "RE_Anchored" constant — forces anchored matching
+    - @ref RE_DupNames "RE_DupNames" constant — allows duplicate named subpatterns
+
+    <b>Named Capture Groups:</b>
+    - New @ref Qore::Regex::extractNamedGroups() "Regex::extractNamedGroups()" and
+      @ref Qore::RegexExtract::extractNamedGroups() "RegexExtract::extractNamedGroups()" methods
+    - New regex_extract_named() function
+    - New \c \<string\>::regexExtractNamed() pseudo-method
+    - Supports \c (?<name>...) and \c (?P<name>...) syntax; returns a hash keyed by group name
+
+    <b>Detailed Match Extraction:</b>
+    - New @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl with match text, byte offset, length,
+      captured groups, and named groups
+    - New @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()" and
+      @ref Qore::RegexExtract::extractDetailed() "RegexExtract::extractDetailed()" methods
+    - New regex_extract_detailed() function and \c \<string\>::regexExtractDetailed() pseudo-method
+
+    <b>Callback-Based Substitution:</b>
+    - New @ref Qore::RegexSubst::subst() "RegexSubst::subst(str, callback)" overload accepting a
+      \c code<string(hash<RegexMatchInfo>)> callback for dynamic replacement computation
+    - New regex_subst() overload with callback parameter
+
+    <b>New Utility Functions:</b>
+    - regex_count() function, @ref Qore::Regex::count() "Regex::count()" /
+      @ref Qore::RegexExtract::count() "RegexExtract::count()" methods,
+      and \c \<string\>::regexCount() pseudo-method for efficient match counting
+    - regex_escape() built-in function and \c \<string\>::regexEscape() pseudo-method for escaping
+      regex metacharacters
+    - \c \<string\>::splitRegex() now accepts an optional \a limit parameter to cap the number of splits
+    @endparblock
+
     @subsection qore_2_3_0_new_builtin_modules New Builtin Modules
     - @ref linenoiseintro "linenoise" module
       - integrated into the %Qore build tree (previously a separate external module)
