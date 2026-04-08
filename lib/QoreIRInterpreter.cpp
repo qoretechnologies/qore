@@ -6391,6 +6391,55 @@ load_local_done:
                         case LVUnaryOp::PreDec: res = lvh.preDecrementBigInt(); break;
                         case LVUnaryOp::PostInc: res = lvh.postIncrementBigInt(); break;
                         case LVUnaryOp::PostDec: res = lvh.postDecrementBigInt(); break;
+                        case LVUnaryOp::Shift: {
+                            if (lvh.getType() != NT_LIST) {
+                                break;
+                            }
+                            lvh.ensureUnique();
+                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                            if (l && l->size() > 0) {
+                                res = l->shift();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::Pop: {
+                            if (lvh.getType() != NT_LIST) {
+                                break;
+                            }
+                            lvh.ensureUnique();
+                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                            if (l && l->size() > 0) {
+                                res = l->pop();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::Trim: {
+                            if (!lvh.checkType(NT_STRING)) {
+                                break;
+                            }
+                            lvh.ensureUnique();
+                            QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                            if (str) {
+                                str->trim();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::Chomp: {
+                            if (!lvh.checkType(NT_STRING)) {
+                                break;
+                            }
+                            lvh.ensureUnique();
+                            QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                            if (str) {
+                                // chomp removes trailing \n or \r\n
+                                qore_size_t len = str->size();
+                                if (len > 0 && str->c_str()[len - 1] == '\n') {
+                                    str->terminate(len > 1 && str->c_str()[len - 2] == '\r'
+                                        ? len - 2 : len - 1);
+                                }
+                            }
+                            break;
+                        }
                         default:
                             xsink->raiseException("IR-EXEC-ERROR",
                                 "unsupported unary op %d in lvalue.path.unary",
