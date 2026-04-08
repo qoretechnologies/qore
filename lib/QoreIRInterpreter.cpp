@@ -6215,7 +6215,6 @@ load_local_done:
                 // Pre-invalidation for local variable targets
                 const LVPathStep& root = path_inst->path[0];
                 if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
-                    // Full slot cache wipe for safety (path may reference any local)
                     for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
                         locals_slot_cache[i].discard(xsink);
                         locals_slot_cache[i] = QoreValue();
@@ -6249,6 +6248,10 @@ load_local_done:
             }
             case QoreIROpcode::LValuePathCompound: {
                 auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (getenv("QORE_COMPOUND_TRACE")) {
+                    fprintf(stderr, "LPATH-COMPOUND-ENTRY: ops=%zu path=%zu\n",
+                        path_inst->operands.size(), path_inst->path.size());
+                }
                 if (path_inst->operands.empty() || path_inst->path.empty()) {
                     xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.compound missing operand or path");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -6268,7 +6271,8 @@ load_local_done:
                 }
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
-                // Pre-invalidation for local variable targets
+                // Pre-invalidation for local variable targets (prevents deadlocks when
+                // navigatePath acquires the variable lock)
                 const LVPathStep& root = path_inst->path[0];
                 if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
                     for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
@@ -6354,12 +6358,14 @@ load_local_done:
                         step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
                     }
                 }
-                // Pre-invalidation
-                const LVPathStep& root = path_inst->path[0];
-                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
+                // Pre-invalidation for local variable targets
+                {
+                    const LVPathStep& root = path_inst->path[0];
+                    if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                            locals_slot_cache[i].discard(xsink);
+                            locals_slot_cache[i] = QoreValue();
+                        }
                     }
                 }
                 QoreValue res;
@@ -6491,11 +6497,13 @@ load_local_done:
                     rhs = getIRValue(values, path_inst->operands[0]);
                 }
                 // Pre-invalidation for local variable targets
-                const LVPathStep& root = path_inst->path[0];
-                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
-                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
-                        locals_slot_cache[i].discard(xsink);
-                        locals_slot_cache[i] = QoreValue();
+                {
+                    const LVPathStep& root = path_inst->path[0];
+                    if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                        for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                            locals_slot_cache[i].discard(xsink);
+                            locals_slot_cache[i] = QoreValue();
+                        }
                     }
                 }
                 QoreValue res;
