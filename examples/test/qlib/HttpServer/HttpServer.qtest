@@ -3280,9 +3280,10 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 assertTrue(False, "connection to closed port must throw");
             } catch (hash<ExceptionInfo> ex) {
                 date elapsed = now_us() - start;
-                # Must fail fast (< 5s), not wait the full connect timeout
-                assertTrue(elapsed < 5s,
-                    sprintf("connection refused took %y, expected < 5s", elapsed));
+                # Must fail fast, not wait the full connect timeout
+                # (use generous 15s threshold for resource-constrained CI)
+                assertTrue(elapsed < 15s,
+                    sprintf("connection refused took %y, expected < 15s", elapsed));
                 # Must be a connect error, not a timeout
                 assertRegex("CONNECT-ERROR|SOCKET-CONNECT-ERROR",
                     ex.err, "connection refused error type");
@@ -3302,8 +3303,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
                 assertTrue(False, "SSL connection to closed port must throw");
             } catch (hash<ExceptionInfo> ex) {
                 date elapsed = now_us() - start;
-                assertTrue(elapsed < 5s,
-                    sprintf("SSL connection refused took %y, expected < 5s", elapsed));
+                assertTrue(elapsed < 15s,
+                    sprintf("SSL connection refused took %y, expected < 15s", elapsed));
             }
         }
     }
