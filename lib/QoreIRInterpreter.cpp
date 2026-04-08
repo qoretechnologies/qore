@@ -2037,7 +2037,12 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
             // Clear to prevent double-instantiation if cleanupLocalCaches is called again.
             locally_uninstantiated.clear();
         }
+        // Clear local slot cache, preserving IR-only locals (loop counters etc.)
+        // that only exist in the cache and have no variable-stack backing.
         for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+            if (i < locals_ir_only.size() && locals_ir_only[i]) {
+                continue;  // Preserve IR-only locals
+            }
             locals_slot_cache[i].discard(xsink);
             locals_slot_cache[i] = QoreValue();
         }
@@ -6224,7 +6229,8 @@ load_local_done:
                     return false;
                 }
 
-                // Targeted cache invalidation for the root variable
+                // Targeted invalidation for the root variable (not cleanupLocalCaches
+                // which would conflict with locks held by LValueHelper)
                 if (path_inst->hasLocalTarget()) {
                     if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -6313,9 +6319,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Targeted cache invalidation: only the root variable's slot cache entry.
-                // Must NOT call cleanupLocalCaches() — it destroys IR-only locals
-                // (loop counters etc.) that only exist in locals_slot_cache.
+                // Targeted invalidation (not cleanupLocalCaches — would conflict with LValueHelper lock)
                 if (path_inst->hasLocalTarget()) {
                     if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -6485,16 +6489,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Targeted cache invalidation: only the root variable's slot cache entry.
-                // Must NOT call cleanupLocalCaches() — it destroys IR-only locals
-                // (loop counters etc.) that only exist in locals_slot_cache.
-                if (path_inst->hasLocalTarget()) {
-                    if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(path_inst->lvalue_slot_id);
-                }
+                cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
@@ -6632,16 +6627,7 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Targeted cache invalidation: only the root variable's slot cache entry.
-                // Must NOT call cleanupLocalCaches() — it destroys IR-only locals
-                // (loop counters etc.) that only exist in locals_slot_cache.
-                if (path_inst->hasLocalTarget()) {
-                    if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
-                    }
-                    clearLoadSlots(path_inst->lvalue_slot_id);
-                }
+                cleanupLocalCaches();
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
                     if (res.hasNode()) {
