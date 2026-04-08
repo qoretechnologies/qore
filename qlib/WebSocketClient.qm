@@ -1335,12 +1335,6 @@ ws.connect();
         startAsyncIo();
         updateTid(-1);
         logDebug("WS async I/O started (no delivery thread)");
-
-        # Normalize HCIO response for backward compatibility: old HTTPClient.send()
-        # returned headers at the top level; HCIO readData() nests them under "headers"
-        if (h.headers.typeCode() == NT_HASH) {
-            h = h.headers + h{"status_code",};
-        }
         return h;
     }
 
