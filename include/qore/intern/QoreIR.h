@@ -1079,6 +1079,12 @@ public:
     //! Whether the return value of the operation is used (from QoreOperatorNode::ref_rv)
     bool ref_rv = true;
 
+    //! Slot ID of the root local variable (for targeted cache invalidation after the operation).
+    //! Set by the IR verifier. UINT32_MAX if root is not a local variable.
+    static constexpr uint32_t LVALUE_NON_LOCAL = UINT32_MAX;
+    bool hasLocalTarget() const { return lvalue_slot_id < LVALUE_NON_LOCAL; }
+    uint32_t lvalue_slot_id = UINT32_MAX;
+
     // Operands layout depends on opcode:
     // LValuePathAssign:    operands[0] = RHS value; dynamic key/index operands follow
     // LValuePathCompound:  operands[0] = RHS value; dynamic key/index operands follow

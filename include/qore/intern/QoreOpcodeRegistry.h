@@ -392,15 +392,11 @@ constexpr OpcodeInfo OPCODE_REGISTRY[361] = {
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 353
     { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 354
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 355
-    // NOTE: produces_result is false for LValuePath opcodes to prevent the verifier from
-    // accepting functions that contain them. This forces AST fallback via eagerlyCompile,
-    // which avoids deadlocks in the IR handler when navigatePath acquires local variable locks.
-    // TODO: set produces_result=true once deadlock is resolved in LValuePath handlers.
-    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", false, false, false, false }, // 356
-    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", false, false, false, false }, // 357
-    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", false, false, false, false }, // 358
-    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", false, false, false, false }, // 359
-    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", false, false, false, false }, // 360
+    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 356
+    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 357
+    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 358
+    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 359
+    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 360
 };
 
 //! Static assertion to verify registry completeness

@@ -7880,13 +7880,6 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (lv_path.empty()) {
         return QoreIRValue();
     }
-    // Block 1-step non-SelfMember compound ops — they cause deadlocks in the Dpql test
-    // when navigatePath acquires the local variable lock (pre-invalidation needed but
-    // insufficient to prevent the deadlock in complex module code).
-    if (lv_path.size() == 1 && lv_path[0].kind != LVPathStepKind::SelfMember
-            && opcode == QoreIROpcode::LValuePathCompound) {
-        return QoreIRValue();
-    }
     // Lower dynamic key/index operands
     std::vector<QoreIRValue> dyn_vals;
     for (auto& dop : dynamic_operands) {

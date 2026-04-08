@@ -1289,6 +1289,22 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                 } else {
                     lval_inst->lvalue_slot_id = QoreIRLValueInstruction::LVALUE_NON_LOCAL;
                 }
+            } else if (static_cast<int>(inst->opcode) >= static_cast<int>(QoreIROpcode::LValuePathAssign)
+                    && static_cast<int>(inst->opcode) <= static_cast<int>(QoreIROpcode::LValuePathTernary)) {
+                // LValuePath instruction: set root variable's slot_id for targeted cache invalidation
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst.get());
+                if (!path_inst->path.empty()) {
+                    const LVPathStep& root = path_inst->path[0];
+                    if ((root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar)
+                            && root.ref_ptr) {
+                        auto it = slot_map.find(reinterpret_cast<const LocalVar*>(root.ref_ptr));
+                        if (it != slot_map.end()) {
+                            path_inst->lvalue_slot_id = it->second;
+                        }
+                    } else {
+                        path_inst->lvalue_slot_id = QoreIRLValuePathInstruction::LVALUE_NON_LOCAL;
+                    }
+                }
             }
         }
     }
