@@ -7883,12 +7883,8 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (lv_path.empty()) {
         return QoreIRValue();
     }
-    // Skip reference-typed root variables — the IR stores target values directly
-    // (not ReferenceNodes), so navigatePath can't follow the reference. These
-    // operations must fall back to AST which handles reference write-through.
-    if (lv_path[0].type_info && QoreTypeInfo::isReference(lv_path[0].type_info)) {
-        return QoreIRValue();
-    }
+    // Reference-typed roots are allowed — navigatePath's LocalVarValue::getLValue()
+    // detects NT_REFERENCE and follows it via doLValue(ref, for_remove).
     // Lower dynamic key/index operands
     std::vector<QoreIRValue> dyn_vals;
     for (auto& dop : dynamic_operands) {

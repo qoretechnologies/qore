@@ -6229,13 +6229,29 @@ load_local_done:
                     return false;
                 }
 
-                // Targeted cache invalidation for root variable
+                // Cache invalidation: broad for reference roots (write-through can modify
+                // any variable), targeted for non-reference roots.
+                // NOTE: can't use cleanupLocalCaches() here — LValueHelper still holds lock.
+                // Only clear locals_slot_cache (not globals/closures) to avoid lock conflicts.
                 if (path_inst->hasLocalTarget()) {
-                    if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                    bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
+                        && QoreTypeInfo::isReference(path_inst->path[0].type_info);
+                    if (is_ref) {
+                        // Broad local invalidation for reference write-through (IR-only-aware)
+                        for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (j < locals_ir_only.size() && locals_ir_only[j]) {
+                                continue;
+                            }
+                            locals_slot_cache[j].discard(xsink);
+                            locals_slot_cache[j] = QoreValue();
+                        }
+                    } else {
+                        if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
+                            locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                        }
+                        clearLoadSlots(path_inst->lvalue_slot_id);
                     }
-                    clearLoadSlots(path_inst->lvalue_slot_id);
                 }
 
                 if (path_inst->result.isValid()) {
@@ -6321,13 +6337,25 @@ load_local_done:
                     cleanupLocalCaches();
                     return false;
                 }
-                // Targeted cache invalidation for root variable
+                // Cache invalidation: broad for reference roots, targeted for others
                 if (path_inst->hasLocalTarget()) {
-                    if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
-                        locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
-                        locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                    bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
+                        && QoreTypeInfo::isReference(path_inst->path[0].type_info);
+                    if (is_ref) {
+                        for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
+                            if (j < locals_ir_only.size() && locals_ir_only[j]) {
+                                continue;
+                            }
+                            locals_slot_cache[j].discard(xsink);
+                            locals_slot_cache[j] = QoreValue();
+                        }
+                    } else {
+                        if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
+                            locals_slot_cache[path_inst->lvalue_slot_id] = QoreValue();
+                        }
+                        clearLoadSlots(path_inst->lvalue_slot_id);
                     }
-                    clearLoadSlots(path_inst->lvalue_slot_id);
                 }
                 if (path_inst->result.isValid()) {
                     setValueSlot(values, path_inst->result.id, res, xsink);
