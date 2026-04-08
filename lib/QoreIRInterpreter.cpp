@@ -825,8 +825,10 @@ static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals
     }
 }
 
-// Forward declaration — defined after execute() with other evalXxxEquals helpers
+// Forward declarations — defined after execute() with other evalXxxEquals helpers
 static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink);
+static QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+static QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
 static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     if (!var) {
@@ -6241,14 +6243,181 @@ load_local_done:
                 ++ip;
                 break;
             }
-            // LValuePathCompound, LValuePathUnary, LValuePathBinaryMut, LValuePathTernary
-            // — stub handlers; will be implemented incrementally
-            case QoreIROpcode::LValuePathCompound:
-            case QoreIROpcode::LValuePathUnary:
+            case QoreIROpcode::LValuePathCompound: {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (path_inst->operands.empty() || path_inst->path.empty()) {
+                    xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.compound missing operand or path");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                // Resolve dynamic key/index operands
+                for (auto& step : path_inst->path) {
+                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        QoreStringValueHelper key_str(key_val);
+                        step.name = key_str->c_str();
+                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    }
+                }
+                QoreValue rhs = getIRValue(values, path_inst->operands[0]);
+                ValueHolder rhs_holder(rhs.refSelf(), xsink);
+                // Pre-invalidation for local variable targets
+                const LVPathStep& root = path_inst->path[0];
+                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                        locals_slot_cache[i].discard(xsink);
+                        locals_slot_cache[i] = QoreValue();
+                    }
+                }
+                LValueHelper lvh(xsink);
+                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue res;
+                switch (path_inst->compound_op) {
+                    case LVCompoundOp::AddAssign:
+                        res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+                        break;
+                    case LVCompoundOp::SubAssign:
+                        res = doMinusEqualsOnLValue(lvh, rhs, xsink);
+                        break;
+                    default: {
+                        // For other compound ops (mul, div, mod, and, or, xor, shl, shr),
+                        // use type-specific LValueHelper methods
+                        qore_type_t vtype = lvh.getType();
+                        if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                            double rv = rhs.getAsFloat();
+                            switch (path_inst->compound_op) {
+                                case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                                case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
+                                default: res = QoreValue(); break;
+                            }
+                        } else {
+                            int64 rv = rhs.getAsBigInt();
+                            switch (path_inst->compound_op) {
+                                case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                                case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
+                                case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
+                                case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
+                                case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
+                                case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
+                                case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
+                                case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                                default: break;
+                            }
+                        }
+                        break;
+                    }
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                cleanupLocalCaches();
+                if (path_inst->result.isValid()) {
+                    setValueSlot(values, path_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(path_inst->result.id);
+                    }
+                } else {
+                    res.discard(xsink);
+                }
+                ++ip;
+                break;
+            }
+            case QoreIROpcode::LValuePathUnary: {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (path_inst->path.empty()) {
+                    xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.unary missing path");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                // Resolve dynamic key/index operands
+                for (auto& step : path_inst->path) {
+                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        QoreStringValueHelper key_str(key_val);
+                        step.name = key_str->c_str();
+                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    }
+                }
+                // Pre-invalidation
+                const LVPathStep& root = path_inst->path[0];
+                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                        locals_slot_cache[i].discard(xsink);
+                        locals_slot_cache[i] = QoreValue();
+                    }
+                }
+                QoreValue res;
+                bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
+                                || path_inst->unary_op == LVUnaryOp::Delete);
+                if (is_remove) {
+                    // Navigate with for_remove=true, then use LValueHelper::removeValue/remove
+                    LValueHelper lvh(xsink);
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), true)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    if (path_inst->unary_op == LVUnaryOp::Remove) {
+                        bool static_assignment = false;
+                        res = lvh.remove(static_assignment);
+                    } else {
+                        res = lvh.removeValue(true);  // for_del=true
+                    }
+                } else {
+                    LValueHelper lvh(xsink);
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    switch (path_inst->unary_op) {
+                        case LVUnaryOp::PreInc: res = lvh.preIncrementBigInt(); break;
+                        case LVUnaryOp::PreDec: res = lvh.preDecrementBigInt(); break;
+                        case LVUnaryOp::PostInc: res = lvh.postIncrementBigInt(); break;
+                        case LVUnaryOp::PostDec: res = lvh.postDecrementBigInt(); break;
+                        default:
+                            xsink->raiseException("IR-EXEC-ERROR",
+                                "unsupported unary op %d in lvalue.path.unary",
+                                (int)path_inst->unary_op);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                    }
+                }
+                if (xsink && *xsink) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                cleanupLocalCaches();
+                if (path_inst->result.isValid()) {
+                    setValueSlot(values, path_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(path_inst->result.id);
+                    }
+                } else {
+                    res.discard(xsink);
+                }
+                ++ip;
+                break;
+            }
+            // LValuePathBinaryMut and LValuePathTernary — stub handlers for future use
             case QoreIROpcode::LValuePathBinaryMut:
             case QoreIROpcode::LValuePathTernary: {
                 xsink->raiseException("IR-EXEC-ERROR",
-                    "lvalue path compound/unary/mutation/ternary not yet implemented (opcode %d)",
+                    "lvalue path binary mutation / ternary not yet implemented (opcode %d)",
                     (int)inst->opcode);
                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
                 cleanupLocalCaches();
@@ -9470,21 +9639,11 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
 }
 
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
-static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
-    // Hold an extra reference on the RHS to ensure COW triggers correctly
-    // when the LHS is a member of the RHS (e.g., h.b += h).
-    // Without this, the hash appears unique (refcount 1) and self-assignment
-    // creates a cycle. Matches AST path's ensureReferencedValue().
-    ValueHolder right_holder(right.refSelf(), xsink);
-
+// Inner function: perform += on an already-navigated LValueHelper.
+// Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
+static QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     // values requiring dereferencing must be dereferenced outside the lock
     SafeDerefHelper sdh(xsink);
-
-    // get ptr to current value (lvalue is locked for the scope of the LValueHelper object)
-    LValueHelper v(lvalue, xsink);
-    if (!v) {
-        return QoreValue();
-    }
 
     qore_type_t vtype = v.getType();
 
@@ -9585,12 +9744,17 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
     return v.getReferencedValue();
 }
 
-static QoreValue evalMinusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    ValueHolder right_holder(right.refSelf(), xsink);
     LValueHelper v(lvalue, xsink);
     if (!v) {
         return QoreValue();
     }
+    return doPlusEqualsOnLValue(v, right, xsink);
+}
 
+// Inner function: perform -= on an already-navigated LValueHelper.
+static QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
         return v.getReferencedValue();
     }
@@ -9702,6 +9866,14 @@ static QoreValue evalMinusEquals(const QoreValue& lvalue, const QoreValue& right
         return QoreValue();
     }
     return v.getReferencedValue();
+}
+
+static QoreValue evalMinusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
+    LValueHelper v(lvalue, xsink);
+    if (!v) {
+        return QoreValue();
+    }
+    return doMinusEqualsOnLValue(v, right, xsink);
 }
 
 static QoreValue evalMultiplyEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink) {
