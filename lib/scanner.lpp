@@ -87,6 +87,9 @@ static thread_local int assert_paren_depth = 0;
 // Brace depth for @debug block skip state
 static thread_local int debug_brace_depth = 0;
 
+// Brace depth for brace-delimited regex states
+static thread_local int regex_brace_depth = 0;
+
 #ifdef AST_SCANNER
 static int brace_depth = 0;
 static std::vector<int> typed_hash_depths;
@@ -1006,7 +1009,7 @@ static bool angle_balanced(const char* p) {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state p_skip_assert p_skip_debug_block
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment block_comment1 block_comment2 exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module p_skip_to_endtry angle_state p_skip_assert p_skip_debug_block regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1916,6 +1919,235 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                            QORE_FLEX_DO_EOF
                                         }
 }
+<regex_brace_state>{
+      \{                                { ++regex_brace_depth; yylval->Regex->concat('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->Regex->concat('}');
+                                            } else {
+                                                // get regex modifiers
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexModifier(yylval->Regex, c));
+                                                if (!c) {
+                                                    yylval->Regex->deref();
+                                                    QORE_FLEX_DO_EOF
+                                                } else {
+                                                    unput(c);
+                                                    yylloc->restoreFirst();
+                                                    BEGIN(INITIAL);
+                                                    yylval->Regex->parse([&] () { return get_loc(yylloc); });
+                                                    return REGEX;
+                                                }
+                                            }
+                                        }
+      \n                                yylval->Regex->concat('\n');
+      \\\{                              yylval->Regex->concat('{');
+      \\\}                              yylval->Regex->concat('}');
+      \\.                               { yylval->Regex->concat('\\'); yylval->Regex->concat(yytext[1]); }
+      [^\n\\\{\}]+                      {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->Regex->concat(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                           yylval->Regex->deref();
+                                           QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_extract_brace_state>{
+      \{                                { ++regex_brace_depth; yylval->Regex->concat('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->Regex->concat('}');
+                                            } else {
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexExtractModifier(yylval->Regex, c));
+                                                if (!c) {
+                                                    yylval->Regex->deref();
+                                                    QORE_FLEX_DO_EOF
+                                                } else {
+                                                    unput(c);
+                                                    yylloc->restoreFirst();
+                                                    BEGIN(INITIAL);
+                                                    yylval->Regex->parse([&] () { return get_loc(yylloc); });
+                                                    return REGEX_EXTRACT;
+                                                }
+                                            }
+                                        }
+      \n                                yylval->Regex->concat('\n');
+      \\\{                              yylval->Regex->concat('{');
+      \\\}                              yylval->Regex->concat('}');
+      \\.                               { yylval->Regex->concat('\\'); yylval->Regex->concat(yytext[1]); }
+      [^\n\\\{\}]+                      {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->Regex->concat(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                           yylval->Regex->deref();
+                                           QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_subst1_brace>{
+      \{                                { ++regex_brace_depth; yylval->RegexSubst->concatSource('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->RegexSubst->concatSource('}');
+                                            } else {
+                                                BEGIN(regex_subst2_brace_wait);
+                                            }
+                                        }
+      \n                                yylval->RegexSubst->concatSource('\n');
+      \\\{                              yylval->RegexSubst->concatSource('{');
+      \\\}                              yylval->RegexSubst->concatSource('}');
+      \\.                               { yylval->RegexSubst->concatSource('\\'); yylval->RegexSubst->concatSource(yytext[1]); }
+      [^\n\\\{\}]+                      {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->RegexSubst->concatSource(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                            yylval->RegexSubst->deref();
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_subst2_brace_wait>{
+      \{                                { regex_brace_depth = 0; BEGIN(regex_subst2_brace); }
+      {WSNL}+                           /* ignore whitespace between }...{ */
+      .                                 {
+                                            parse_error(*get_loc(yylloc), "expected '{' for replacement part of brace-delimited substitution expression");
+                                            yylval->RegexSubst->deref();
+                                            BEGIN(INITIAL);
+                                        }
+      <<EOF>>                           {
+                                            yylval->RegexSubst->deref();
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_subst2_brace>{
+      \{                                { ++regex_brace_depth; yylval->RegexSubst->concatTarget('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->RegexSubst->concatTarget('}');
+                                            } else {
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexSubstModifier(yylval->RegexSubst, c));
+                                                if (!c) {
+                                                    yylval->RegexSubst->deref();
+                                                    QORE_FLEX_DO_EOF
+                                                } else {
+                                                    unput(c);
+                                                    yylloc->restoreFirst();
+                                                    BEGIN(INITIAL);
+                                                    yylval->RegexSubst->parse();
+                                                    return REGEX_SUBST;
+                                                }
+                                            }
+                                        }
+      \n                                yylval->RegexSubst->concatTarget('\n');
+      \\\{                              yylval->RegexSubst->concatTarget('{');
+      \\\}                              yylval->RegexSubst->concatTarget('}');
+      \\\.                              yylval->RegexSubst->concatTarget('.');
+      \\.                               { yylval->RegexSubst->concatTarget('\\'); yylval->RegexSubst->concatTarget(yytext[1]); }
+      [^\n\\\{\}]+                      {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->RegexSubst->concatTarget(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                            yylval->RegexSubst->deref();
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_trans1_brace>{
+      -                                 yylval->Trans->setSourceRange();
+      \{                                { ++regex_brace_depth; yylval->Trans->concatSource('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->Trans->concatSource('}');
+                                            } else {
+                                                yylval->Trans->finishSource();
+                                                BEGIN(regex_trans2_brace_wait);
+                                            }
+                                        }
+      \n                                yylval->Trans->concatSource('\n');
+      \\n                               yylval->Trans->concatSource('\n');
+      \\t                               yylval->Trans->concatSource('\t');
+      \\r                               yylval->Trans->concatSource('\r');
+      \\b                               yylval->Trans->concatSource('\b');
+      \\f                               yylval->Trans->concatSource('\f');
+      \\\n                              yylval->Trans->concatSource('\n');
+      \\\{                              yylval->Trans->concatSource('{');
+      \\\}                              yylval->Trans->concatSource('}');
+      \\.                               yylval->Trans->concatSource(yytext[1]);
+      [^\n\\\{\}\-]+                    {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->Trans->concatSource(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                           yylval->Trans->deref();
+                                           QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_trans2_brace_wait>{
+      \{                                { regex_brace_depth = 0; BEGIN(regex_trans2_brace); }
+      {WSNL}+                           /* ignore whitespace between }...{ */
+      .                                 {
+                                            parse_error(*get_loc(yylloc), "expected '{' for target part of brace-delimited transliteration expression");
+                                            yylval->Trans->deref();
+                                            BEGIN(INITIAL);
+                                        }
+      <<EOF>>                           {
+                                            yylval->Trans->deref();
+                                            QORE_FLEX_DO_EOF
+                                        }
+}
+<regex_trans2_brace>{
+      -                                 yylval->Trans->setTargetRange();
+      \{                                { ++regex_brace_depth; yylval->Trans->concatTarget('{'); }
+      \}                                {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->Trans->concatTarget('}');
+                                            } else {
+                                                yylloc->restoreFirst();
+                                                BEGIN(INITIAL);
+                                                yylval->Trans->finishTarget();
+                                                return REGEX_TRANS;
+                                            }
+                                        }
+      \n                                yylval->Trans->concatTarget('\n');
+      \\n                               yylval->Trans->concatTarget('\n');
+      \\t                               yylval->Trans->concatTarget('\t');
+      \\r                               yylval->Trans->concatTarget('\r');
+      \\b                               yylval->Trans->concatTarget('\b');
+      \\f                               yylval->Trans->concatTarget('\f');
+      \\\n                              yylval->Trans->concatTarget('\n');
+      \\\{                              yylval->Trans->concatTarget('{');
+      \\\}                              yylval->Trans->concatTarget('}');
+      \\.                               yylval->Trans->concatTarget(yytext[1]);
+      [^\n\\\{\}\-]+                    {
+                                           char* yptr = yytext;
+                                           while (*yptr)
+                                              yylval->Trans->concatTarget(*(yptr++));
+                                        }
+      <<EOF>>                           {
+                                           yylval->Trans->deref();
+                                           QORE_FLEX_DO_EOF
+                                        }
+}
 <regex_state>{
       \/                                {
                                             // get regex modifiers
@@ -2039,9 +2271,11 @@ by                                      return TOK_BY;
 switch                                  return TOK_SWITCH;
 case                                    BEGIN(case_state); return TOK_CASE;
 <case_state>{
+   m\{                                  yylval->Regex = new QoreRegex(); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
    \/                                   yylval->Regex = new QoreRegex(); yylloc->saveFirst(); BEGIN(regex_state);
    {WS}+                                /* ignore */
-   [^\/]                                yyless(0); BEGIN(INITIAL);
+   [^\/m]                               yyless(0); BEGIN(INITIAL);
+   m                                    yyless(0); BEGIN(INITIAL);
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }
@@ -2456,22 +2690,27 @@ hash\<{WORD}\>\{                        {
       [^\/\*]                           BEGIN(block_comment1);
 }
 <regex_googleplex>{
+   s\{                                  yylval->RegexSubst = new QoreRegexSubst; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_subst1_brace);
    s\/                                  yylval->RegexSubst = new QoreRegexSubst; yylloc->saveFirst(); BEGIN(regex_subst1);
+   x\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_extract_brace_state);
    x\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_extract_state);
+   tr\{                                 yylval->Trans = new QoreTransliteration(get_loc(yylloc)); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_trans1_brace);
    tr\/                                 yylval->Trans = new QoreTransliteration(get_loc(yylloc)); yylloc->saveFirst(); BEGIN(regex_trans1);
+   m\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
    m\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
    \/                                   yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
    {WSNL}+                              /* ignore whitespace */
-   [^sxmt\/]                            parse_error(*get_loc(yylloc), "missing regular expression after =~"); BEGIN(INITIAL);
+   [^sxmt\/\{]                          parse_error(*get_loc(yylloc), "missing regular expression after =~"); BEGIN(INITIAL);
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }
 }
 <regex_negative_universe>{
+   m\{                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state);
    m\/                                  yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
    \/                                   yylval->Regex = new QoreRegex; yylloc->saveFirst(); BEGIN(regex_state);
    {WSNL}+                              /* ignore whitespace */
-   [^m\/]                               parse_error(*get_loc(yylloc), "missing regular expression after !~"); BEGIN(INITIAL);
+   [^m\/\{]                             parse_error(*get_loc(yylloc), "missing regular expression after !~"); BEGIN(INITIAL);
    <<EOF>>                              {
                                            QORE_FLEX_DO_EOF
                                         }

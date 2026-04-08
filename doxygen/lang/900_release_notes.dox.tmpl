@@ -768,6 +768,24 @@ cargo install tree-sitter-cli@0.26.5
     - \c \<string\>::splitRegex() now accepts an optional \a limit parameter to cap the number of splits
     @endparblock
 
+    @par Brace-Delimited Regular Expressions
+    @parblock
+    All regular expression operators now support brace (<tt>{}</tt>) delimiters as an alternative to
+    forward slashes.  This is particularly useful when patterns contain literal forward slashes (URLs,
+    file paths), avoiding the need to escape them:
+    - <tt>m{pattern}flags</tt> — match
+    - <tt>s{pattern}{replacement}flags</tt> — substitution
+    - <tt>x{pattern}flags</tt> — extraction
+    - <tt>tr{source}{target}</tt> — transliteration
+    - <tt>case m{pattern}:</tt> — case matching
+
+    Brace nesting in PCRE2 quantifiers (e.g., <tt>\\d{3}</tt>, <tt>a{2,5}</tt>) is handled automatically
+    via depth tracking.  The \c m prefix is required for brace-delimited match (bare <tt>{</tt> is not
+    supported to avoid ambiguity with blocks).
+
+    See @ref qore_regex_brace_delimiters for more information.
+    @endparblock
+
     @subsection qore_2_3_0_new_builtin_modules New Builtin Modules
     - @ref linenoiseintro "linenoise" module
       - integrated into the %Qore build tree (previously a separate external module)

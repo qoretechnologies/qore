@@ -72,6 +72,48 @@
     |\c U|makes quantifiers ungreedy by default; individual quantifiers can be made greedy by appending \c ? \
         (since %Qore 2.3)
 
+    @section qore_regex_brace_delimiters Brace-Delimited Regular Expressions
+
+    In addition to the traditional slash (<tt>/</tt>) delimiter, %Qore supports brace (<tt>{}</tt>) delimiters
+    for regular expressions.  This is particularly useful when patterns contain literal forward slashes (such as
+    URLs or file paths), avoiding the need to escape them.
+
+    @note The \c m prefix is required for brace-delimited match expressions; bare <tt>{</tt> is not supported
+    to avoid ambiguity with block statements.
+
+    <b>Brace-Delimited Syntax</b>
+    |!Operation|!Syntax|!Example
+    |Match|\c m{pattern}flags|<tt>str =~ m{https://example\\.com}</tt>
+    |Substitution|\c s{pattern}{replacement}flags|<tt>str =~ s{http://old\\.com}{https://new.com}g</tt>
+    |Extraction|\c x{pattern}flags|<tt>l = (str =~ x{(\\w+)://(\\w+)})</tt>
+    |Transliteration|\c tr{source}{target}|<tt>str =~ tr{a-z}{A-Z}</tt>
+    |Case match|\c case \c m{pattern}:|<tt>case m{\\d{3}}:</tt>
+
+    Brace nesting in patterns is handled automatically — PCRE2 quantifiers like <tt>\\d{3}</tt> or
+    <tt>a{2,5}</tt> work correctly because the scanner tracks brace depth.  Escaped braces (<tt>\\{</tt> and
+    <tt>\\}</tt>) do not affect depth tracking.
+
+    @par Examples:
+    @code{.py}
+    # URL matching — no need to escape slashes
+    if (url =~ m{https?://[\w.]+/\w+})
+        process(url);
+    @endcode
+    @code{.py}
+    # URL substitution
+    str =~ s{http://old\.example\.com}{https://new.example.com}g;
+    @endcode
+    @code{.py}
+    # quantifiers work naturally with brace delimiters
+    if (str =~ m{^\d{3}-\d{4}$})
+        printf("phone number: %s\n", str);
+    @endcode
+
+    @note Inside <tt>[...]</tt> character classes, use <tt>\\{</tt> and <tt>\\}</tt> instead of literal braces
+    when using brace delimiters, since the scanner does not track character class boundaries.
+
+    @since %Qore 2.3
+
     @section qore_regex_functions Qore Regular Expression Functions
 
     The following is a list of functions providing regular expression functionality where the pattern may be given at

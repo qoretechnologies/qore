@@ -14,6 +14,7 @@ class RegexTest inherits QUnit::Test {
         addTestCase("bug329", \test329());
         addTestCase("$0 full match backreference", \testDollarZero());
         addTestCase("ungreedy modifier", \testUngreedy());
+        addTestCase("brace delimiters", \testBraceDelimiters());
         set_return_value(main());
     }
 
@@ -652,5 +653,149 @@ class RegexTest inherits QUnit::Test {
         s = "<b>bold</b> and <i>italic</i>";
         s =~ s/<.*>/[]/gU;
         assertEq("[]bold[] and []italic[]", s);  # ungreedy: matches each <...> separately
+    }
+
+    testBraceDelimiters() {
+        # --- basic match ---
+        assertTrue("hello world" =~ m{hello});
+        assertFalse("hello world" =~ m{goodbye});
+        assertTrue("hello world" !~ m{goodbye});
+
+        # match with modifiers
+        assertTrue("Hello" =~ m{hello}i);
+        assertTrue("line1\nline2" =~ m{^line2$}m);
+
+        # --- brace nesting (quantifiers) ---
+        assertTrue("abc123" =~ m{\w{3}\d{3}});
+        assertTrue("ab12345" =~ m{\w{2}\d{3,5}});
+        assertFalse("ab1" =~ m{\w{2}\d{3,5}});
+        assertTrue("aab" =~ m{a{2}b});
+        assertTrue("aaab" =~ m{a{2,3}b});
+
+        # nested quantifiers inside groups
+        assertTrue("abc123def" =~ m{(\w{3})(\d{3})(\w{3})});
+
+        # --- escaped braces ---
+        assertTrue("hello{world}" =~ m{hello\{world\}});
+        assertFalse("helloworld" =~ m{hello\{world\}});
+
+        # mixed quantifiers and escaped braces
+        assertTrue("ab{123}" =~ m{\w{2}\{\d{3}\}});
+
+        # --- extraction ---
+        *list<*string> l = ("key:value" =~ x{(\w+):(\w+)});
+        assertEq(list("key", "value"), l);
+
+        # global extraction
+        l = ("a:1 b:2 c:3" =~ x{(\w+):(\w+)}g);
+        assertEq(list("a", "1", "b", "2", "c", "3"), l);
+
+        # extraction with quantifier nesting
+        l = ("abc123" =~ x{(\w{3})(\d{3})});
+        assertEq(list("abc", "123"), l);
+
+        # --- substitution ---
+        string s = "hello world";
+        s =~ s{world}{earth};
+        assertEq("hello earth", s);
+
+        # global substitution
+        s = "aaa bbb ccc";
+        s =~ s{\w+}{X}g;
+        assertEq("X X X", s);
+
+        # backreferences
+        s = "hello world";
+        s =~ s{(\w+) (\w+)}{$2 $1};
+        assertEq("world hello", s);
+
+        # substitution with modifiers
+        s = "Hello World";
+        s =~ s{hello}{hi}i;
+        assertEq("hi World", s);
+
+        # substitution with quantifiers in pattern
+        s = "abc123def";
+        s =~ s{\d{3}}{XXX};
+        assertEq("abcXXXdef", s);
+
+        # braces in replacement string (nested braces)
+        s = "test";
+        s =~ s{test}{{result}};
+        assertEq("{result}", s);
+
+        # escaped brace in replacement
+        s = "test";
+        s =~ s{test}{a\}b};
+        assertEq("a}b", s);
+
+        # URL substitution — the motivating use case!
+        s = "visit http://old.example.com/path for info";
+        s =~ s{http://old\.example\.com}{https://new.example.com}g;
+        assertEq("visit https://new.example.com/path for info", s);
+
+        # --- transliteration ---
+        s = "abc";
+        s =~ tr{abc}{xyz};
+        assertEq("xyz", s);
+
+        # transliteration with ranges
+        s = "hello";
+        s =~ tr{a-z}{A-Z};
+        assertEq("HELLO", s);
+
+        # --- case statement ---
+        string result;
+        switch ("abc123") {
+            case m{\d{3}}:
+                result = "digits";
+                break;
+            default:
+                result = "none";
+                break;
+        }
+        assertEq("digits", result);
+
+        switch ("abc123") {
+            case m{^[a-z]+\d+$}:
+                result = "alphanum";
+                break;
+            default:
+                result = "none";
+                break;
+        }
+        assertEq("alphanum", result);
+
+        # case with modifier
+        switch ("HELLO") {
+            case m{hello}i:
+                result = "matched";
+                break;
+            default:
+                result = "none";
+                break;
+        }
+        assertEq("matched", result);
+
+        # --- whitespace between }{ ---
+        s = "foo";
+        s =~ s{foo} {bar};
+        assertEq("bar", s);
+
+        # --- $0 works with brace delimiters too ---
+        s = "hello";
+        s =~ s{hello}{[$0]};
+        assertEq("[hello]", s);
+
+        # --- URL matching (no escaping needed!) ---
+        assertTrue("https://example.com/path/to/resource" =~ m{https?://[\w.]+/\w+});
+        assertFalse("not a url" =~ m{https?://[\w.]+/\w+});
+
+        # --- existing slash regex still works (regression) ---
+        assertTrue("hello" =~ /hello/);
+        assertTrue("hello" =~ m/hello/);
+        s = "abc";
+        s =~ s/abc/xyz/;
+        assertEq("xyz", s);
     }
 }
