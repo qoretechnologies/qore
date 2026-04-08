@@ -2278,7 +2278,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     QoreSocketObject* so =
                                         static_cast<QoreSocketObject*>(
                                             poll_sock->getReferencedPrivateData(
-                                                CID_ABSTRACTPOLLABLEIOOBJECTBASE, &uring_xsink));
+                                                CID_SOCKET, &uring_xsink));
                                     if (so) {
                                         Http2SessionPtr h2s =
                                             so->priv->socket->priv->h2_session;
@@ -3837,6 +3837,15 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         (int)has_on_complete, (void*)spop_obj, (void*)queue,
         spop_obj ? spop_obj->getClassName() : "null");
     if (has_on_complete && spop_obj) {
+        if (!result) {
+            // buildResultHash failed — don't dispatch onComplete with null result
+            // (the Qore method would receive NOTHING, causing PSEUDO-METHOD-DOES-NOT-EXIST
+            // when accessing result members)
+            log(QORE_LOG_LEVEL_ERROR, "deliverResult: buildResultHash returned null for %s; "
+                "skipping onComplete dispatch", spop_obj->getClassName());
+            spop_obj->deref(xsink);
+            return;
+        }
         // Dispatch onComplete() to worker pool — no Qore code on the I/O thread.
         // The closure's captured program context ensures proper execution.
         ensureCallDispatcher();

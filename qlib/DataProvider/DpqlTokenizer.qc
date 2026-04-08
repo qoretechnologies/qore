@@ -72,6 +72,16 @@ public const DPQL_TOK_OP_NOT = 18;
 public const DPQL_TOK_OP_REGEX = 19;
 #! Regex pattern (/pattern/flags)
 public const DPQL_TOK_REGEX = 20;
+#! Addition operator (+)
+public const DPQL_TOK_OP_PLUS = 23;
+#! Subtraction operator (-)
+public const DPQL_TOK_OP_MINUS = 24;
+#! Multiplication operator (*)
+public const DPQL_TOK_OP_MULTIPLY = 25;
+#! Division operator (/)
+public const DPQL_TOK_OP_DIVIDE = 26;
+#! Modulus operator (%)
+public const DPQL_TOK_OP_MOD = 27;
 #! Left parenthesis
 public const DPQL_TOK_LPAREN = 30;
 #! Right parenthesis
@@ -126,6 +136,11 @@ public const DpqlTokenTypeNames = {
     DPQL_TOK_OP_NOT: "!",
     DPQL_TOK_OP_REGEX: "=~",
     DPQL_TOK_REGEX: "regex",
+    DPQL_TOK_OP_PLUS: "+",
+    DPQL_TOK_OP_MINUS: "-",
+    DPQL_TOK_OP_MULTIPLY: "*",
+    DPQL_TOK_OP_DIVIDE: "/",
+    DPQL_TOK_OP_MOD: "%",
     DPQL_TOK_LPAREN: "(",
     DPQL_TOK_RPAREN: ")",
     DPQL_TOK_COMMA: ",",
@@ -272,6 +287,33 @@ public class DpqlTokenizer {
             return c;
         }
         return "";
+    }
+
+    #! Peeks at the next identifier value after the current peeked token, skipping whitespace
+    /** Scans the raw input without consuming tokens to check what identifier follows.
+        Used by the parser for multi-keyword lookahead (e.g., "not in", "not between").
+
+        @return the lowercase identifier string, or "" if no identifier follows
+
+        @since DataProvider 3.3
+    */
+    string peekAheadSkipWhitespace() {
+        # pos is already past the peeked token (scanToken advances pos)
+        int scan_pos = pos;
+        # Skip whitespace
+        while (scan_pos < len && input[scan_pos] =~ /[ \t\r\n]/) {
+            ++scan_pos;
+        }
+        if (scan_pos >= len) {
+            return "";
+        }
+        # Read identifier
+        string result = "";
+        while (scan_pos < len && input[scan_pos] =~ /[a-zA-Z_]/) {
+            result += input[scan_pos];
+            ++scan_pos;
+        }
+        return result.lwr();
     }
 
     #! Returns all tokens as a list (for syntax highlighting)
@@ -452,14 +494,46 @@ public class DpqlTokenizer {
             return makeToken(DPQL_TOK_DOT, ".", start_line, start_column);
         }
 
-        # Regex pattern (after =~ operator context, or standalone)
+        # Arithmetic operators: +, -, *, /, %
+        # These are context-sensitive: after a value they are operators;
+        # otherwise - is a negative number prefix and / starts a regex
+        if (c == "+" || c == "*" || c == "%") {
+            in_field_ref_context = False;
+            advance();
+            int tok_type;
+            switch (c) {
+                case "+": tok_type = DPQL_TOK_OP_PLUS; break;
+                case "*": tok_type = DPQL_TOK_OP_MULTIPLY; break;
+                case "%": tok_type = DPQL_TOK_OP_MOD; break;
+            }
+            return makeToken(tok_type, c, start_line, start_column);
+        }
+
+        # / is division after a value, regex otherwise
         if (c == "/") {
+            string prev = prevNonWhitespaceChar();
+            if (prev =~ /[a-zA-Z0-9_"'\)\]\}]/) {
+                in_field_ref_context = False;
+                advance();
+                return makeToken(DPQL_TOK_OP_DIVIDE, "/", start_line, start_column);
+            }
             return scanRegex();
         }
 
         # Date literal (YYYY-MM-DD with optional time)
         if (c =~ /[0-9]/ && looksLikeDateLiteral()) {
             return scanDateLiteral();
+        }
+
+        # - is subtraction after a value, negative number prefix otherwise
+        if (c == "-") {
+            string prev = prevNonWhitespaceChar();
+            if (prev =~ /[a-zA-Z0-9_"'\)\]\}]/) {
+                in_field_ref_context = False;
+                advance();
+                return makeToken(DPQL_TOK_OP_MINUS, "-", start_line, start_column);
+            }
+            # Fall through to number scanning for negative literals
         }
 
         # Number (including negative)

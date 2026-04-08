@@ -1,0 +1,213 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# @file qpatch command-line patch tool using the Diff module
+
+/*  qpatch Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires Diff
+%requires Util
+
+%exec-class QpatchApp
+
+#! Command-line patch tool powered by the Diff module
+class QpatchApp {
+    private {
+        const Version = "1.0.0";
+
+        const Opts = {
+            "dryrun":   "d,dry-run",
+            "reverse":  "R,reverse",
+            "output":   "o,output=s",
+            "nocolor":  "C,no-color",
+            "verbose":  "v,verbose",
+            "help":     "h,help",
+            "version":  "V,version",
+        };
+    }
+
+    public {
+        static TerminalColor color;
+    }
+
+    constructor() {
+        GetOpt getopt(Opts);
+        hash<auto> opts;
+        try {
+            opts = getopt.parse3(\ARGV);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qpatch: %s\n", ex.desc);
+            exit(2);
+        }
+
+        color = new TerminalColor(!opts.nocolor);
+
+        if (opts.version) {
+            printf("qpatch %s\n", Version);
+            exit(0);
+        }
+
+        if (opts.help || ARGV.size() < 1) {
+            usage();
+            exit(opts.help ? 0 : 2);
+        }
+
+        string file_path = shift ARGV;
+        string patch_path = ARGV ? shift ARGV : "-";
+
+        # Read source file
+        string source;
+        try {
+            source = ReadOnlyFile::readTextFile(file_path);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qpatch: %s: %s\n", file_path, ex.desc);
+            exit(2);
+        }
+
+        # Read patch (from file or stdin)
+        string patch;
+        try {
+            if (patch_path == "-") {
+                patch = stdin.read(-1);
+            } else {
+                patch = ReadOnlyFile::readTextFile(patch_path);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("qpatch: %s: %s\n", patch_path, ex.desc);
+            exit(2);
+        }
+
+        if (opts.reverse) {
+            patch = reversePatch(patch);
+        }
+
+        # Apply patch
+        string result;
+        try {
+            result = patch_apply(source, patch);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "PATCH-ERROR") {
+                stderr.printf("qpatch: %s: %s\n", color.error("PATCH FAILED"), ex.desc);
+                exit(1);
+            }
+            rethrow;
+        }
+
+        if (opts.dryrun) {
+            if (opts.verbose) {
+                stdout.printf("%s %s\n", color.success("OK"), file_path);
+            }
+            exit(0);
+        }
+
+        if (opts.output) {
+            # Write to output file
+            File f();
+            f.open2(opts.output, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(result);
+            if (opts.verbose) {
+                stdout.printf("%s %s -> %s\n", color.success("PATCHED"), file_path, opts.output);
+            }
+        } else {
+            # Overwrite original file
+            File f();
+            f.open2(file_path, O_WRONLY | O_TRUNC);
+            f.write(result);
+            if (opts.verbose) {
+                stdout.printf("%s %s\n", color.success("PATCHED"), file_path);
+            }
+        }
+    }
+
+    #! Reverses a unified diff patch (swaps + and - lines)
+    private string reversePatch(string patch) {
+        list<string> lines = patch.split("\n");
+        list<string> result = ();
+        foreach string line in (lines) {
+            if (line =~ /^---\s/) {
+                push result, regex_subst(line, "^---", "+++");
+            } else if (line =~ /^\+\+\+\s/) {
+                push result, regex_subst(line, "^\\+\\+\\+", "---");
+            } else if (line =~ /^@@/) {
+                # Swap -old,count +new,count in hunk header
+                *list<*string> m = regex_extract(line,
+                    "^@@\\s+-(\\d+(?:,\\d+)?)\\s+\\+(\\d+(?:,\\d+)?)\\s+@@(.*)$");
+                if (m) {
+                    push result, sprintf("@@ -%s +%s @@%s", m[1], m[0], m[2] ?? "");
+                } else {
+                    push result, line;
+                }
+            } else if (line =~ /^\+/) {
+                push result, "-" + line.substr(1);
+            } else if (line =~ /^-/) {
+                push result, "+" + line.substr(1);
+            } else {
+                push result, line;
+            }
+        }
+        return result.join("\n");
+    }
+
+    private static printHelpLine(string colored, string desc, int width) {
+        printf("  %s %s\n", TerminalColor::padRight(colored, width), desc);
+    }
+
+    static usage() {
+        string script = get_script_name();
+        int kw = 24;
+
+        printf("%s - Qore Patch Tool\n\n", color.bold(script));
+
+        printf("%s\n", color.bold("USAGE"));
+        printf("  %s [options] file [patch]\n\n", script);
+        printf("  If no patch file is given, the patch is read from stdin.\n\n");
+
+        printf("%s\n", color.bold("OPTIONS"));
+        printHelpLine(color.key("-d, --dry-run"), "Check if patch applies without modifying", kw);
+        printHelpLine(color.key("-R, --reverse"), "Reverse the patch (undo changes)", kw);
+        printHelpLine(color.key("-o, --output=FILE"), "Write result to FILE instead of original", kw);
+        printHelpLine(color.key("-v, --verbose"), "Show status messages", kw);
+        printHelpLine(color.key("-C, --no-color"), "Disable colored output", kw);
+        printHelpLine(color.key("-V, --version"), "Show version information", kw);
+        printHelpLine(color.key("-h, --help"), "Show this help message", kw);
+        printf("\n");
+
+        printf("%s\n", color.bold("EXIT CODES"));
+        printHelpLine(color.key("0"), "Patch applied successfully (or dry-run passed)", kw);
+        printHelpLine(color.key("1"), "Patch failed (context mismatch)", kw);
+        printHelpLine(color.key("2"), "Error (missing file, invalid options)", kw);
+        printf("\n");
+
+        printf("%s\n", color.bold("EXAMPLES"));
+        printf("  %s myfile.txt changes.patch          %s\n",
+            script, color.dim("# apply a patch file"));
+        printf("  qdiff old.txt new.txt | %s old.txt   %s\n",
+            script, color.dim("# apply from stdin"));
+        printf("  %s -d myfile.txt changes.patch       %s\n",
+            script, color.dim("# dry-run check"));
+        printf("  %s -R myfile.txt changes.patch       %s\n",
+            script, color.dim("# reverse a patch"));
+        printf("  %s -o out.txt src.txt changes.patch  %s\n",
+            script, color.dim("# write to new file"));
+    }
+}

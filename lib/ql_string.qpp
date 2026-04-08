@@ -491,7 +491,43 @@ const RE_Global = QRE_GLOBAL;
 /** @since %Qore 0.9.4
 */
 const RE_Unicode = PCRE2_UCP;
+
+//! makes quantifiers ungreedy by default (individual quantifiers can be made greedy by appending \c ?), equivalent to <tt>/U</tt>
+/** @since %Qore 2.3
+*/
+const RE_Ungreedy = PCRE2_UNGREEDY;
+
+//! makes \c $ match only the end of the string (not before a final newline); without this option, \c $ also matches immediately before a newline at the end of the string
+/** @since %Qore 2.3
+*/
+const RE_DollarEndOnly = PCRE2_DOLLAR_ENDONLY;
+
+//! anchors the pattern; the pattern is forced to match only at the start of the subject string, equivalent to prefixing with \c ^
+/** @since %Qore 2.3
+*/
+const RE_Anchored = PCRE2_ANCHORED;
+
+//! allows duplicate named subpatterns; by default, PCRE2 requires named subpatterns to have unique names
+/** @since %Qore 2.3
+*/
+const RE_DupNames = PCRE2_DUPNAMES;
 ///@}
+
+//! Hash returned by regex_extract_detailed() and related methods providing detailed match information
+/** @since %Qore 2.3
+*/
+hashdecl Qore::RegexMatchInfo {
+    //! Full match text (\c $0)
+    string match;
+    //! Byte offset of the match start in the target string
+    int offset;
+    //! Byte length of the match
+    int length;
+    //! Captured groups (\c $1, \c $2, ...); @ref nothing if no capturing groups
+    *list<*string> groups;
+    //! Named captures; @ref nothing if no named groups in the pattern
+    *hash<string, *string> named_groups;
+}
 
 /** @defgroup string_functions String Functions
 
@@ -1349,6 +1385,54 @@ string regex_subst(string str, string regex, string subst, int options = 0) [fla
 nothing regex_subst() [flags=RUNTIME_NOOP] {
 }
 
+//! Performs a regular expression substitution using a callback function to compute replacement text
+/** The callback receives a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash for each match and must return
+    a string to use as the replacement.
+
+    @param str the string to process
+    @param regex the regular expression pattern to match
+    @param callback a callback that takes a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and returns the
+    replacement string
+    @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to replace all matches
+
+    @return the resulting string with substitutions applied
+
+    @par Example:
+    @code{.py}
+string result = regex_subst("abc 123 def 456", "\\d+", string sub (hash<RegexMatchInfo> m) {
+    return "[" + m.match + "]";
+}, RE_Global);
+# result = "abc [123] def [456]"
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+    @throw REGEX-SUBST-ERROR infinite recursion detected with global substitution on empty pattern
+
+    @since %Qore 2.3
+*/
+string regex_subst(string str, string regex, code<string(hash<RegexMatchInfo>)> callback, int options = 0) [flags=RET_VALUE_ONLY] {
+    bool do_global;
+    if (options & QRE_GLOBAL) {
+        do_global = true;
+        options &= 0xffffffff;
+    } else {
+        do_global = false;
+    }
+
+    QoreRegexSubst qrs(regex, (int)options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    if (do_global) {
+        qrs.setGlobal();
+    }
+    return qrs.execWithCallback(str, callback, xsink);
+}
+
 //! Returns a list of substrings in a string based on matching patterns defined by a regular expression
 /** Strings are converted to UTF-8 for pattern-matching; if any invalid encodings are encountered, an ENCODING-CONVERSION-ERROR is raised
 
@@ -1385,6 +1469,122 @@ nothing regex_subst() [flags=RUNTIME_NOOP] {
 /**
  */
 nothing regex_extract() [flags=RUNTIME_NOOP] {
+}
+
+//! Returns the number of non-overlapping matches of a regular expression pattern in a string
+/** @param str the string to search
+    @param regex the regular expression pattern to count
+    @param options optional @ref regex_constants "regex option constants"
+
+    @return the number of non-overlapping matches found; 0 if no match
+
+    @par Example:
+    @code{.py}
+int n = regex_count("abc 123 def 456", "\\d+"); # returns 2
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+int regex_count(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.countMatches(str, xsink);
+}
+
+//! Extracts named capture groups from a string using a regular expression pattern
+/** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
+
+    @param str the string to match against
+    @param regex the regular expression pattern containing named groups
+    @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to extract all matches
+
+    @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
+    (or @ref nothing for unmatched optional groups); for global: \c *list<hash<string, *string>>; returns
+    @ref nothing if there are no named groups in the pattern or no match
+
+    @par Example:
+    @code{.py}
+auto h = regex_extract_named("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+# h = {"year": "2026", "month": "04", "day": "08"}
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+auto regex_extract_named(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.extractNamedGroups(str, xsink);
+}
+
+//! Returns detailed match information for all matches of a regular expression pattern in a string
+/** Returns a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes containing match text,
+    offsets, captured groups, and named groups.
+
+    @param str the string to match against
+    @param regex the regular expression pattern
+    @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to find all matches
+
+    @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
+
+    @par Example:
+    @code{.py}
+*list<hash<RegexMatchInfo>> matches = regex_extract_detailed("hello world", "\\w+", RE_Global);
+# matches[0] = {"match": "hello", "offset": 0, "length": 5}
+# matches[1] = {"match": "world", "offset": 6, "length": 5}
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+*list<hash<RegexMatchInfo>> regex_extract_detailed(string str, string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.extractDetailed(str, xsink);
+}
+
+//! Escapes all non-alphanumeric characters in a string with a backslash, making the string safe for use as a literal pattern in regular expressions
+/** @param str the string to escape
+
+    @return a new string where all non-alphanumeric characters are prefixed with a backslash
+
+    @par Example:
+    @code{.py}
+string escaped = regex_escape("price: $100 (USD)"); # returns "price\\:\\ \\$100\\ \\(USD\\)"
+    @endcode
+
+    @since %Qore 2.3
+*/
+string regex_escape(string str) [flags=CONSTANT] {
+    SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
+    const char* p = str->c_str();
+    while (*p) {
+        if (!isalnum((unsigned char)*p)) {
+            (*result)->concat('\\');
+        }
+        (*result)->concat(*p);
+        ++p;
+    }
+    return result.release();
 }
 
 //! Replaces all occurrences of a substring in a string with another string

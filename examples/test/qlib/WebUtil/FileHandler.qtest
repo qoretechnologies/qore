@@ -1,0 +1,538 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/WebUtil.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class FileHandlerTest
+
+public class FileHandlerTest inherits QUnit::Test {
+    private {
+        string tmpdir;
+        int port;
+        HttpServer server;
+        HTTPClient client;
+    }
+
+    constructor() : Test("FileHandlerTest", "1.0") {
+        addTestCase("ETag generation and consistency", \etagTest());
+        addTestCase("If-None-Match returns 304", \ifNoneMatchTest());
+        addTestCase("If-None-Match mismatch returns 200", \ifNoneMatchMismatchTest());
+        addTestCase("If-None-Match with comma-separated ETags", \ifNoneMatchMultipleTest());
+        addTestCase("If-Modified-Since returns 304", \ifModifiedSinceTest());
+        addTestCase("If-Modified-Since with newer file returns 200", \ifModifiedSinceNewerTest());
+        addTestCase("Cache-Control default", \cacheControlDefaultTest());
+        addTestCase("Cache-Control by extension", \cacheControlByExtTest());
+        addTestCase("Last-Modified header present", \lastModifiedTest());
+        addTestCase("Pre-compressed gzip serving", \precompressedGzipTest());
+        addTestCase("Pre-compressed brotli serving", \precompressedBrotliTest());
+        addTestCase("Pre-compressed preference order", \precompressedPreferenceTest());
+        addTestCase("Pre-compressed fallback to original", \precompressedFallbackTest());
+        addTestCase("Pre-compressed 304 with ETag", \precompressed304Test());
+        addTestCase("Vary header with encoding", \varyHeaderTest());
+        addTestCase("Range bytes=0-99", \rangeStartEndTest());
+        addTestCase("Range bytes=100-", \rangeOpenEndTest());
+        addTestCase("Range bytes=-100", \rangeSuffixTest());
+        addTestCase("Invalid range returns 416", \rangeInvalidTest());
+        addTestCase("If-Range with matching ETag", \ifRangeMatchTest());
+        addTestCase("If-Range with mismatched ETag", \ifRangeMismatchTest());
+        addTestCase("On-the-fly compression for small files", \onTheFlyCompressionTest());
+        addTestCase("Large file streamed uncompressed", \largeFileStreamTest());
+        addTestCase("Features can be disabled", \disabledFeaturesTest());
+        addTestCase("Accept-Ranges header present", \acceptRangesTest());
+        addTestCase("Stat cache basic test", \statCacheTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmpdir = tmp_location() + DirSep + "filehandler_test_" + getpid();
+        mkdir(tmpdir);
+
+        # create test files
+        writeFile(tmpdir + DirSep + "hello.html", "<html>hello world</html>");
+        writeFile(tmpdir + DirSep + "style.css", "body { color: red; }");
+        writeFile(tmpdir + DirSep + "app.js",
+            "// JavaScript file\n" + strmul("var x = 1;\n", 200));
+
+        # create a binary test file with known content (256 bytes of incrementing bytes)
+        binary bdata;
+        for (int i = 0; i < 256; ++i) {
+            bdata += binary(chr(i % 256));
+        }
+        writeFileBinary(tmpdir + DirSep + "data.bin", bdata);
+
+        # create pre-compressed variants
+        string html_content = "<html>hello world</html>";
+        writeFileBinary(tmpdir + DirSep + "hello.html.gz", gzip(html_content));
+        writeFileBinary(tmpdir + DirSep + "hello.html.br", brotli(html_content));
+
+        # create a file that only has .gz variant (no .br)
+        writeFile(tmpdir + DirSep + "only-gz.txt", "only gzip available");
+        writeFileBinary(tmpdir + DirSep + "only-gz.txt.gz", gzip("only gzip available"));
+    }
+
+    globalTearDown() {
+        if (tmpdir) {
+            FsUtil::remove_tree(tmpdir);
+        }
+    }
+
+    private writeFile(string path, string content) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+    }
+
+    private writeFileBinary(string path, binary content) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(content);
+    }
+
+    private hash<auto> setupServer(*hash<auto> handler_opts) {
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        HttpServer srv(http_opts);
+        FileHandler fh(tmpdir, "/", handler_opts);
+        srv.setHandler("fh", "/", MimeTypeHtml, fh);
+        srv.setDefaultHandler("fh", fh);
+        int p = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        HTTPClient c({"url": "http://localhost:" + p});
+        c.connect();
+
+        return {
+            "server": srv,
+            "client": c,
+            "port": p,
+        };
+    }
+
+    private hash<auto> doGet(HTTPClient c, string path, *hash<auto> extra_headers) {
+        hash<auto> info;
+        hash<auto> hdr = extra_headers ?? {};
+        try {
+            auto body = c.get(path, hdr, \info);
+            return {
+                "body": body,
+                "info": info,
+                "headers": info."response-headers",
+                "status": info."response-headers".status_code,
+            };
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "HTTP-CLIENT-RECEIVE-ERROR" && ex.arg.status_code) {
+                return {
+                    "body": NOTHING,
+                    "info": NOTHING,
+                    "headers": ex.arg,
+                    "status": ex.arg.status_code,
+                };
+            }
+            rethrow;
+        }
+    }
+
+    # ---- Phase 1: HTTP Caching Tests ----
+
+    etagTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        assertEq(200, resp.status);
+        # ETag should be present and quoted
+        string etag = resp.headers.etag;
+        assertTrue(etag.val(), "ETag header present");
+        assertTrue(etag =~ /^".*"$/, "ETag is quoted");
+
+        # second request should return the same ETag
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html");
+        assertEq(etag, resp2.headers.etag, "ETag is consistent across requests");
+    }
+
+    ifNoneMatchTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # first request to get ETag
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        string etag = resp.headers.etag;
+
+        # second request with If-None-Match
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html", {"If-None-Match": etag});
+        assertEq(304, resp2.status, "If-None-Match with matching ETag returns 304");
+    }
+
+    ifNoneMatchMismatchTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"If-None-Match": "\"wrong-etag\""});
+        assertEq(200, resp.status, "If-None-Match with wrong ETag returns 200");
+    }
+
+    ifNoneMatchMultipleTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # get the real ETag
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        string etag = resp.headers.etag;
+
+        # send comma-separated list including the real ETag
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html",
+            {"If-None-Match": "\"wrong1\", " + etag + ", \"wrong2\""});
+        assertEq(304, resp2.status, "If-None-Match with matching ETag in list returns 304");
+    }
+
+    ifModifiedSinceTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # get the Last-Modified header
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        string last_modified = resp.headers."last-modified";
+        assertTrue(last_modified.val(), "Last-Modified header present");
+
+        # request with If-Modified-Since set to the same time
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html",
+            {"If-Modified-Since": last_modified});
+        assertEq(304, resp2.status, "If-Modified-Since with same time returns 304");
+    }
+
+    ifModifiedSinceNewerTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # request with a very old date
+        hash<auto> resp = doGet(ctx.client, "/hello.html",
+            {"If-Modified-Since": "Mon, 01 Jan 2001 00:00:00 GMT"});
+        assertEq(200, resp.status, "If-Modified-Since with old date returns 200");
+    }
+
+    cacheControlDefaultTest() {
+        hash<auto> ctx = setupServer({"default_cache_control": "public, max-age=3600"});
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        assertEq("public, max-age=3600", resp.headers."cache-control",
+            "default Cache-Control header present");
+    }
+
+    cacheControlByExtTest() {
+        hash<auto> ctx = setupServer({
+            "default_cache_control": "public, max-age=60",
+            "cache_control_by_ext": {
+                "js": "private, max-age=86400",
+                "css": "public, max-age=604800",
+            },
+        });
+        on_exit delete ctx.server;
+
+        hash<auto> resp_js = doGet(ctx.client, "/app.js");
+        assertEq("private, max-age=86400", resp_js.headers."cache-control",
+            "Cache-Control by extension for JS");
+
+        hash<auto> resp_css = doGet(ctx.client, "/style.css");
+        assertEq("public, max-age=604800", resp_css.headers."cache-control",
+            "Cache-Control by extension for CSS");
+
+        # HTML should use default
+        hash<auto> resp_html = doGet(ctx.client, "/hello.html");
+        assertEq("public, max-age=60", resp_html.headers."cache-control",
+            "Cache-Control falls back to default for HTML");
+    }
+
+    lastModifiedTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html");
+        string lm = resp.headers."last-modified";
+        assertTrue(lm.val(), "Last-Modified header present");
+        # should end with "GMT"
+        assertTrue(lm =~ /GMT$/, "Last-Modified in GMT format");
+    }
+
+    # ---- Phase 2: Pre-compressed File Tests ----
+
+    precompressedGzipTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # request with only gzip accepted
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "gzip"});
+        assertEq(200, resp.status);
+        assertEq("gzip", resp.headers."content-encoding", "Content-Encoding is gzip");
+        # body should be decompressed by client
+        assertEq("<html>hello world</html>", resp.body, "decompressed body matches original");
+    }
+
+    precompressedBrotliTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "br"});
+        assertEq(200, resp.status);
+        assertEq("br", resp.headers."content-encoding", "Content-Encoding is br");
+        assertEq("<html>hello world</html>", resp.body, "decompressed body matches original");
+    }
+
+    precompressedPreferenceTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # when both br and gzip are accepted, br should be preferred
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "gzip, br"});
+        assertEq(200, resp.status);
+        assertEq("br", resp.headers."content-encoding",
+            "brotli preferred over gzip when both available");
+    }
+
+    precompressedFallbackTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # style.css has no pre-compressed variant
+        hash<auto> resp = doGet(ctx.client, "/style.css", {"Accept-Encoding": "gzip"});
+        assertEq(200, resp.status);
+        # should be compressed on-the-fly by HttpServer or served without encoding
+        # the key check is that it works and returns the correct content
+        assertTrue(resp.body =~ /body.*color.*red/, "CSS content served correctly");
+    }
+
+    precompressed304Test() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # get pre-compressed response to capture its ETag
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "gzip"});
+        string etag = resp.headers.etag;
+        assertTrue(etag.val(), "pre-compressed response has ETag");
+
+        # request with If-None-Match
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html",
+            {"Accept-Encoding": "gzip", "If-None-Match": etag});
+        assertEq(304, resp2.status, "304 for pre-compressed file with matching ETag");
+    }
+
+    varyHeaderTest() {
+        hash<auto> ctx = setupServer();
+        on_exit delete ctx.server;
+
+        # pre-compressed response should have Vary: Accept-Encoding
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "gzip"});
+        assertEq("Accept-Encoding", resp.headers.vary,
+            "Vary header present for pre-compressed response");
+    }
+
+    # ---- Phase 3: Range Request Tests ----
+
+    rangeStartEndTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        # request first 5 bytes of hello.html
+        hash<auto> resp = doGet(ctx.client, "/hello.html",
+            {"Range": "bytes=0-4", "Accept-Encoding": "identity"});
+        assertEq(206, resp.status, "Range request returns 206");
+        assertEq("<html", resp.body, "correct partial content");
+        assertTrue(resp.headers."content-range" =~ /^bytes 0-4\//, "Content-Range header present");
+        assertEq("5", resp.headers."content-length", "Content-Length matches range");
+    }
+
+    rangeOpenEndTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        string content = "<html>hello world</html>";
+        int offset = 6;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html",
+            {"Range": sprintf("bytes=%d-", offset), "Accept-Encoding": "identity"});
+        assertEq(206, resp.status);
+        assertEq(content.substr(offset), resp.body, "open-ended range content correct");
+    }
+
+    rangeSuffixTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        string content = "<html>hello world</html>";
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html",
+            {"Range": "bytes=-7", "Accept-Encoding": "identity"});
+        assertEq(206, resp.status);
+        assertEq(content.substr(-7), resp.body, "suffix range content correct");
+    }
+
+    rangeInvalidTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        # range beyond file size
+        try {
+            hash<auto> resp = doGet(ctx.client, "/hello.html",
+                {"Range": "bytes=99999-", "Accept-Encoding": "identity"});
+            assertEq(416, resp.status, "Invalid range returns 416");
+        } catch (hash<ExceptionInfo> ex) {
+            # HTTP client may throw on 4xx responses
+            assertTrue(ex.desc =~ /416/, "Invalid range returns 416");
+        }
+    }
+
+    ifRangeMatchTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        # get ETag first
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "identity"});
+        string etag = resp.headers.etag;
+
+        # If-Range with matching ETag should return partial content
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html",
+            {"Range": "bytes=0-4", "If-Range": etag, "Accept-Encoding": "identity"});
+        assertEq(206, resp2.status, "If-Range with matching ETag returns 206");
+    }
+
+    ifRangeMismatchTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        # If-Range with mismatched ETag should return full file
+        hash<auto> resp = doGet(ctx.client, "/hello.html",
+            {"Range": "bytes=0-4", "If-Range": "\"wrong\"", "Accept-Encoding": "identity"});
+        assertEq(200, resp.status, "If-Range with wrong ETag returns 200 (full file)");
+        assertEq("<html>hello world</html>", resp.body, "full file returned");
+    }
+
+    # ---- Phase 4: On-the-fly Compression Tests ----
+
+    onTheFlyCompressionTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 10 * 1024 * 1024,
+        });
+        on_exit delete ctx.server;
+
+        # app.js is > 1024 bytes, should be compressed on-the-fly
+        hash<auto> resp = doGet(ctx.client, "/app.js", {"Accept-Encoding": "gzip"});
+        assertEq(200, resp.status);
+        # HttpServer should have compressed it
+        assertTrue(resp.headers."content-encoding".val(),
+            "Content-Encoding present for on-the-fly compression");
+        assertTrue(resp.body =~ /var x = 1/, "content correctly decompressed");
+    }
+
+    largeFileStreamTest() {
+        # create a file larger than max_compress_size
+        string large_path = tmpdir + DirSep + "large.dat";
+        {
+            File f();
+            f.open2(large_path, O_CREAT | O_WRONLY | O_TRUNC);
+            # write 100 bytes (we'll set max_compress_size to 50 to simulate "large")
+            f.write(strmul("A", 100));
+        }
+
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 50,
+        });
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/large.dat", {"Accept-Encoding": "identity"});
+        assertEq(200, resp.status);
+        assertEq(100, resp.body.size(), "large file served correctly without compression");
+    }
+
+    # ---- Phase 5: Feature Disable Tests ----
+
+    disabledFeaturesTest() {
+        hash<auto> ctx = setupServer({
+            "enable_etag": False,
+            "enable_last_modified": False,
+            "enable_range": False,
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "identity"});
+        assertEq(200, resp.status);
+        assertFalse(resp.headers.hasKey("etag"), "ETag disabled");
+        assertFalse(resp.headers.hasKey("last-modified"), "Last-Modified disabled");
+        assertFalse(resp.headers.hasKey("accept-ranges"), "Accept-Ranges disabled");
+
+        # range request should be ignored
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html",
+            {"Range": "bytes=0-4", "Accept-Encoding": "identity"});
+        assertEq(200, resp2.status, "Range request ignored when disabled");
+    }
+
+    acceptRangesTest() {
+        hash<auto> ctx = setupServer({
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "identity"});
+        assertEq("bytes", resp.headers."accept-ranges", "Accept-Ranges: bytes header present");
+    }
+
+    # ---- Phase 5: Stat Cache Tests ----
+
+    statCacheTest() {
+        hash<auto> ctx = setupServer({
+            "stat_cache_ttl": 5s,
+            "serve_precompressed": False,
+            "max_compress_size": 0,
+        });
+        on_exit delete ctx.server;
+
+        # first request should work
+        hash<auto> resp = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "identity"});
+        assertEq(200, resp.status);
+        assertEq("<html>hello world</html>", resp.body, "cached stat path works correctly");
+
+        # second request should still work (from cache)
+        hash<auto> resp2 = doGet(ctx.client, "/hello.html", {"Accept-Encoding": "identity"});
+        assertEq(200, resp2.status);
+        assertEq("<html>hello world</html>", resp2.body, "cached stat path serves correctly");
+    }
+}

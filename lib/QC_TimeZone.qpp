@@ -206,14 +206,21 @@ date TimeZone::date(date d) [flags=CONSTANT] {
 }
 
 //! Returns the equivalent date in the time zone of the current object
-/** @param dtstr The string to be used to return a date in the object's time zone
+/** @param dtstr The string to be used to return a date in the object's time zone; supports
+    ISO-8601, RFC 7231 (HTTP dates: IMF-fixdate, RFC 850, asctime), and RFC 2822 (email dates
+    with numeric timezone offset) formats
 
     @par Example:
     @code{.py}
 date dt = tz.date("2012-01-01T13:56:23");
+date dt = tz.date("Sun, 06 Nov 1994 08:49:37 GMT");  # RFC 7231 IMF-fixdate
     @endcode
 
+    @note RFC 7231 and RFC 2822 dates are always returned as UTC regardless of the TimeZone object's zone
+
     @since %Qore 0.8.4
+
+    @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
 date TimeZone::date(string dtstr) [flags=CONSTANT] {
     return new DateTimeNode(z->get(), dtstr->getBuffer());

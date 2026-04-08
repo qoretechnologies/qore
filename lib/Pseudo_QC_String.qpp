@@ -519,6 +519,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     <em>str</em>'s @ref character_encoding "character encoding"
     @param options regular expression options; see @ref regex_constants for possible values
     @param with_separator include the separator string in every element
+    @param limit the maximum number of elements to return; \c -1 (the default) means no limit; when the limit is
+    reached, the last element will contain the remainder of the string
 
     @return a list of each component of a string separated by a separator regular expression, with the separator
     removed; the separator pattern will not be included in the elements of the list returned unless the
@@ -528,14 +530,15 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 1.0.7
+    @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string regex_sep, int options = 0, bool with_separator = False) [flags=RET_VALUE_ONLY] {
+list<string> <string>::splitRegex(string regex_sep, int options = 0, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
     QoreRegex qr(*regex_sep, options, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return qr.extractWithPattern(*str, with_separator, xsink);
+    return qr.extractWithPattern(*str, with_separator, xsink, limit);
 }
 
 //! Splits a string into a list of components based on a separator regular expression
@@ -551,6 +554,8 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     string has a different @ref character_encoding "character encoding" than \a str, then it will be converted to
     <em>str</em>'s @ref character_encoding "character encoding"
     @param with_separator include the separator string in every element
+    @param limit the maximum number of elements to return; \c -1 (the default) means no limit; when the limit is
+    reached, the last element will contain the remainder of the string
 
     @return a list of each component of a string separated by a separator regular expression, with the separator
     removed; the separator pattern will not be included in the elements of the list returned unless the
@@ -560,14 +565,15 @@ list<string> list = str.splitRegex("(?<!\\\\)\\:"); # returns ("some\\:text", "h
     @ref character_encoding "character encodings" and an error occurs during encoding conversion
 
     @since %Qore 1.0.7
+    @since %Qore 2.3 added the \a limit parameter
  */
-list<string> <string>::splitRegex(string regex_sep, bool with_separator = False) [flags=RET_VALUE_ONLY] {
+list<string> <string>::splitRegex(string regex_sep, bool with_separator = False, int limit = -1) [flags=RET_VALUE_ONLY] {
     QoreRegex qr(*regex_sep, 0, xsink);
     if (*xsink) {
         return QoreValue();
     }
 
-    return qr.extractWithPattern(*str, with_separator, xsink);
+    return qr.extractWithPattern(*str, with_separator, xsink, limit);
 }
 
 //! Returns @ref True if the regular expression matches the string passed, otherwise returns @ref False
@@ -640,6 +646,125 @@ string str = "ns:element";
         return QoreValue();
 
     return qr.extractSubstrings(str, xsink);
+}
+
+//! Returns the number of non-overlapping matches of a regular expression pattern in the string
+/** @param regex the regular expression pattern to count
+    @param options optional @ref regex_constants "regex option constants"
+
+    @return the number of non-overlapping matches found; 0 if no match
+
+    @par Example:
+    @code{.py}
+int n = "abc 123 def 456".regexCount("\\d+"); # returns 2
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+
+    @see regex_count()
+*/
+int <string>::regexCount(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.countMatches(str, xsink);
+}
+
+//! Extracts named capture groups from the string using a regular expression pattern
+/** Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
+
+    @param regex the regular expression pattern containing named groups
+    @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to extract all matches
+
+    @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
+    (or @ref nothing for unmatched optional groups); for global: \c *list<hash<string, *string>>; returns
+    @ref nothing if there are no named groups in the pattern or no match
+
+    @par Example:
+    @code{.py}
+auto h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+# h = {"year": "2026", "month": "04", "day": "08"}
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+
+    @see regex_extract_named()
+*/
+auto <string>::regexExtractNamed(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.extractNamedGroups(str, xsink);
+}
+
+//! Returns detailed match information for all matches of a regular expression pattern in the string
+/** Returns a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes containing match text,
+    offsets, captured groups, and named groups.
+
+    @param regex the regular expression pattern
+    @param options optional @ref regex_constants "regex option constants"; use @ref RE_Global to find all matches
+
+    @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
+
+    @par Example:
+    @code{.py}
+*list<hash<RegexMatchInfo>> matches = "hello world".regexExtractDetailed("\\w+", RE_Global);
+# matches[0] = {"match": "hello", "offset": 0, "length": 5}
+# matches[1] = {"match": "world", "offset": 6, "length": 5}
+    @endcode
+
+    @throw REGEX-COMPILATION-ERROR invalid regular expression
+    @throw REGEX-OPTION-ERROR invalid option flag
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+
+    @see regex_extract_detailed()
+*/
+*list<hash<RegexMatchInfo>> <string>::regexExtractDetailed(string regex, int options = 0) [flags=RET_VALUE_ONLY] {
+    QoreRegex qr(*regex, options, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return qr.extractDetailed(str, xsink);
+}
+
+//! Escapes all non-alphanumeric characters in the string with a backslash, making it safe for use as a literal pattern in regular expressions
+/** @return a new string where all non-alphanumeric characters are prefixed with a backslash
+
+    @par Example:
+    @code{.py}
+string escaped = "price: $100".regexEscape(); # returns "price\\:\\ \\$100"
+    @endcode
+
+    @since %Qore 2.3
+
+    @see regex_escape()
+*/
+string <string>::regexEscape() [flags=CONSTANT] {
+    SimpleRefHolder<QoreStringNode> result(new QoreStringNode);
+    const char* p = str->c_str();
+    while (*p) {
+        if (!isalnum((unsigned char)*p)) {
+            (*result)->concat('\\');
+        }
+        (*result)->concat(*p);
+        ++p;
+    }
+    return result.release();
 }
 
 //! Returns the <a href="http://en.wikipedia.org/wiki/MD5">MD5 message digest</a> of the string as a hex string

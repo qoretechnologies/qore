@@ -74,6 +74,7 @@ static int ascii_to_octal(char c) {
 #ifdef AST_SCANNER
 static int brace_depth = 0;
 static std::vector<int> typed_hash_depths;
+static int regex_brace_depth = 0;
 
 static bool is_identifier_string(const std::string& s) {
     if (s.empty()) {
@@ -798,7 +799,7 @@ extern "C" void ast_scanner_clear_tree() {
 %option noyy_push_state
 %option noyy_pop_state
 
-%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state
+%x str_state regex_state incl p_def p_ifdef p_ifndef p_if p_elif p_skip_to_endif p_skip_to_endif_or_else case_state regex_googleplex regex_negative_universe regex_subst1 regex_subst2 line_comment doc_line_comment block_comment1 block_comment2 doc_block_comment exec_class_state requires regex_trans1 regex_trans2 regex_extract_state disable_warning enable_warning append_path_state append_module_state module_cmd set_zone try_module try_reexport_module angle_state regex_brace_state regex_extract_brace_state regex_subst1_brace regex_subst2_brace_wait regex_subst2_brace regex_trans1_brace regex_trans2_brace_wait regex_trans2_brace
 
 HEX_DIGIT       [0-9A-Fa-f]
 HEX_CONST       0x{HEX_DIGIT}+
@@ -1363,6 +1364,218 @@ RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
                                             AST_FLEX_DO_EOF
                                         }
 }
+<regex_brace_state>{
+    \{                                  { ++regex_brace_depth; yylval->regex->str += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regex->str += '}';
+                                            } else {
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexModifier(yylval->regex, c));
+                                                unput(c);
+                                                yylloc->restoreFirst();
+                                                yylval->regex->loc = *yylloc;
+                                                BEGIN(INITIAL);
+                                                return REGEX;
+                                            }
+                                        }
+    \n                                  yylval->regex->str += '\n';
+    \\\{                                yylval->regex->str += '{';
+    \\\}                                yylval->regex->str += '}';
+    \\.                                 { yylval->regex->str += '\\'; yylval->regex->str += yytext[1]; }
+    [^\n\\\{\}]+                        {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regex->str += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regex;
+                                            yylval->regex = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_extract_brace_state>{
+    \{                                  { ++regex_brace_depth; yylval->regex->str += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regex->str += '}';
+                                            } else {
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexExtractModifier(yylval->regex, c));
+                                                unput(c);
+                                                yylloc->restoreFirst();
+                                                yylval->regex->loc = *yylloc;
+                                                BEGIN(INITIAL);
+                                                return REGEX_EXTRACT;
+                                            }
+                                        }
+    \n                                  yylval->regex->str += '\n';
+    \\\{                                yylval->regex->str += '{';
+    \\\}                                yylval->regex->str += '}';
+    \\.                                 { yylval->regex->str += '\\'; yylval->regex->str += yytext[1]; }
+    [^\n\\\{\}]+                        {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regex->str += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regex;
+                                            yylval->regex = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_subst1_brace>{
+    \{                                  { ++regex_brace_depth; yylval->regexsubst->source += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regexsubst->source += '}';
+                                            } else {
+                                                BEGIN(regex_subst2_brace_wait);
+                                            }
+                                        }
+    \n                                  yylval->regexsubst->source += '\n';
+    \\\{                                yylval->regexsubst->source += '{';
+    \\\}                                yylval->regexsubst->source += '}';
+    \\.                                 { yylval->regexsubst->source += '\\'; yylval->regexsubst->source += yytext[1]; }
+    [^\n\\\{\}]+                        {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regexsubst->source += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regexsubst;
+                                            yylval->regexsubst = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_subst2_brace_wait>{
+    \{                                  { regex_brace_depth = 0; BEGIN(regex_subst2_brace); }
+    {WSNL}+                             /* ignore whitespace between }...{ */
+    .                                   { BEGIN(INITIAL); return NO_REGEX_AFTER_MATCH_ERROR; }
+    <<EOF>>                             {
+                                            delete yylval->regexsubst;
+                                            yylval->regexsubst = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_subst2_brace>{
+    \{                                  { ++regex_brace_depth; yylval->regexsubst->target += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regexsubst->target += '}';
+                                            } else {
+                                                int c;
+                                                do {
+                                                    c = yyinput(yyscanner);
+                                                } while (isRegexSubstModifier(yylval->regexsubst, c));
+                                                unput(c);
+                                                yylloc->restoreFirst();
+                                                yylval->regexsubst->loc = *yylloc;
+                                                BEGIN(INITIAL);
+                                                return REGEX_SUBST;
+                                            }
+                                        }
+    \n                                  yylval->regexsubst->target += '\n';
+    \\\{                                yylval->regexsubst->target += '{';
+    \\\}                                yylval->regexsubst->target += '}';
+    \\\.                                yylval->regexsubst->target += '.';
+    \\.                                 { yylval->regexsubst->target += '\\'; yylval->regexsubst->target += yytext[1]; }
+    [^\n\\\{\}]+                        {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regexsubst->target += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regexsubst;
+                                            yylval->regexsubst = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_trans1_brace>{
+    -                                   yylval->regextrans->source += '-';
+    \{                                  { ++regex_brace_depth; yylval->regextrans->source += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regextrans->source += '}';
+                                            } else {
+                                                BEGIN(regex_trans2_brace_wait);
+                                            }
+                                        }
+    \n                                  yylval->regextrans->source += '\n';
+    \\n                                 yylval->regextrans->source += '\n';
+    \\t                                 yylval->regextrans->source += '\t';
+    \\r                                 yylval->regextrans->source += '\r';
+    \\b                                 yylval->regextrans->source += '\b';
+    \\f                                 yylval->regextrans->source += '\f';
+    \\\n                                yylval->regextrans->source += '\n';
+    \\\{                                yylval->regextrans->source += '{';
+    \\\}                                yylval->regextrans->source += '}';
+    \\.                                 yylval->regextrans->source += yytext[1];
+    [^\n\\\{\}\-]+                      {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regextrans->source += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regextrans;
+                                            yylval->regextrans = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_trans2_brace_wait>{
+    \{                                  { regex_brace_depth = 0; BEGIN(regex_trans2_brace); }
+    {WSNL}+                             /* ignore whitespace between }...{ */
+    .                                   { BEGIN(INITIAL); return NO_REGEX_AFTER_MATCH_ERROR; }
+    <<EOF>>                             {
+                                            delete yylval->regextrans;
+                                            yylval->regextrans = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
+<regex_trans2_brace>{
+    -                                   yylval->regextrans->target += '-';
+    \{                                  { ++regex_brace_depth; yylval->regextrans->target += '{'; }
+    \}                                  {
+                                            if (regex_brace_depth > 0) {
+                                                --regex_brace_depth;
+                                                yylval->regextrans->target += '}';
+                                            } else {
+                                                yylloc->restoreFirst();
+                                                yylval->regextrans->loc = *yylloc;
+                                                BEGIN(INITIAL);
+                                                return REGEX_TRANS;
+                                            }
+                                        }
+    \n                                  yylval->regextrans->target += '\n';
+    \\n                                 yylval->regextrans->target += '\n';
+    \\t                                 yylval->regextrans->target += '\t';
+    \\r                                 yylval->regextrans->target += '\r';
+    \\b                                 yylval->regextrans->target += '\b';
+    \\f                                 yylval->regextrans->target += '\f';
+    \\\n                                yylval->regextrans->target += '\n';
+    \\\{                                yylval->regextrans->target += '{';
+    \\\}                                yylval->regextrans->target += '}';
+    \\.                                 yylval->regextrans->target += yytext[1];
+    [^\n\\\{\}\-]+                      {
+                                            char* yptr = yytext;
+                                            while (*yptr)
+                                                yylval->regextrans->target += (*(yptr++));
+                                        }
+    <<EOF>>                             {
+                                            delete yylval->regextrans;
+                                            yylval->regextrans = nullptr;
+                                            AST_FLEX_DO_EOF
+                                        }
+}
 <regex_state>{
     \/                                  {
                                             /* get regex modifiers */
@@ -1540,9 +1753,11 @@ by                                      return TOK_BY;
 switch                                  return TOK_SWITCH;
 case                                    BEGIN(case_state); return TOK_CASE;
 <case_state>{
+    m\{                                 { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state); }
     \/                                  { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); BEGIN(regex_state); }
     {WS}+                               /* ignore */
-    [^\/]                               { yyless(0); BEGIN(INITIAL); }
+    [^\/m]                              { yyless(0); BEGIN(INITIAL); }
+    m                                   { yyless(0); BEGIN(INITIAL); }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 default                                 return TOK_DEFAULT;
@@ -1999,20 +2214,25 @@ hash\<{WORD}\>\{                        {
                                         }
 }
 <regex_googleplex>{
+    s\{                                 { yylval->regexsubst = new ASTRegexSubstExpression; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_subst1_brace); }
     s\/                                 { yylval->regexsubst = new ASTRegexSubstExpression; yylloc->saveFirst(); BEGIN(regex_subst1); }
+    x\{                                 { yylval->regex = new ASTRegexExpression(true); yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_extract_brace_state); }
     x\/                                 { yylval->regex = new ASTRegexExpression(true); yylloc->saveFirst(); BEGIN(regex_extract_state); }
+    tr\{                                { yylval->regextrans = new ASTRegexTransExpression; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_trans1_brace); }
     tr\/                                { yylval->regextrans = new ASTRegexTransExpression; yylloc->saveFirst(); BEGIN(regex_trans1); }
+    m\{                                 { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state); }
     m\/                                 { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); BEGIN(regex_state); }
     \/                                  { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); BEGIN(regex_state); }
     {WSNL}+                             /* ignore whitespace */
-    [^sxmt\/]                           { BEGIN(INITIAL); return NO_REGEX_AFTER_MATCH_ERROR; }
+    [^sxmt\/\{]                         { BEGIN(INITIAL); return NO_REGEX_AFTER_MATCH_ERROR; }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 <regex_negative_universe>{
+    m\{                                 { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); regex_brace_depth = 0; BEGIN(regex_brace_state); }
     m\/                                 { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); BEGIN(regex_state); }
     \/                                  { yylval->regex = new ASTRegexExpression; yylloc->saveFirst(); BEGIN(regex_state); }
     {WSNL}+                             /* ignore whitespace */
-    [^m\/]                              { BEGIN(INITIAL); return NO_REGEX_AFTER_NOTMATCH_ERROR; }
+    [^m\/\{]                            { BEGIN(INITIAL); return NO_REGEX_AFTER_NOTMATCH_ERROR; }
     <<EOF>>                             { AST_FLEX_DO_EOF }
 }
 =\~                                     { BEGIN(regex_googleplex); return REGEX_MATCH; }

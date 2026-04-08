@@ -1787,12 +1787,20 @@ date date(date dt) [flags=CONSTANT] {
 
 //! Converts the argument to a date and returns the date
 /**
-    @param dtstr string a string to bo converted literally to an @ref absolute_dates "absolute date/time value"; if no time zone information is present, the local time zone is assumed
+    @param dtstr string a string to be converted literally to an @ref absolute_dates "absolute date/time value"; if no time zone information is present, the local time zone is assumed
+
+    Supports the following date string formats:
+    - <b>ISO-8601</b>: \c "YYYY-MM-DDTHH:mm:SS[.ffffff][Z|±HH[:MM[:SS]]]" (and compact variants without separators)
+    - <b>RFC 7231 IMF-fixdate</b> (preferred HTTP format): \c "Sun, 06 Nov 1994 08:49:37 GMT"
+    - <b>RFC 7231 RFC 850</b> (obsolete HTTP format): \c "Sunday, 06-Nov-94 08:49:37 GMT"
+    - <b>RFC 7231 asctime</b> (obsolete HTTP format): \c "Sun Nov  6 08:49:37 1994"
+    - <b>RFC 2822</b> (email dates with numeric timezone offset): \c "Sun, 06 Nov 1994 08:49:37 +0500"
 
     @return the @ref absolute_dates "absolute date/time value" corresponding to the string argument passed
 
     @par Example:
     @code{.py}
+# ISO-8601 formats
 date d = date("2001-01-01T15:35:23"); # returns 2001-01-01 15:35:23 Mon +01:00 (CET)
 date d = date("20010101 15:35:23Z"); # returns 2001-01-01 15:35:23 Mon Z (UTC)
 date d = date("20010101 153523Z"); # returns 2001-01-01 15:35:23 Mon Z (UTC)
@@ -1800,6 +1808,12 @@ date d = date("20010101 153523-02"); # returns 2001-01-01 15:35:23 Mon -02:00 (-
 date d = date("20010101 153523-02:00:00"); # returns 2001-01-01 15:35:23 Mon -02:00 (-02:00)
 date d = date("2001-01-01-153523-020000"); # returns 2001-01-01 15:35:23 Mon -02:00 (-02:00)
 date d = date("20010101-153523"); # returns 2001-01-01 15:35:23 Mon +01:00 (CET)
+# RFC 7231 / HTTP date formats (always returns UTC)
+date d = date("Sun, 06 Nov 1994 08:49:37 GMT"); # IMF-fixdate
+date d = date("Sunday, 06-Nov-94 08:49:37 GMT"); # RFC 850
+date d = date("Sun Nov  6 08:49:37 1994");       # asctime
+# RFC 2822 email date (numeric offset converted to UTC)
+date d = date("Mon, 06 Nov 1994 08:49:37 +0500");
     @endcode
 
     @throw INVALID-DATE thrown if the date is invalid; invalid or missing date components
@@ -1807,6 +1821,8 @@ date d = date("20010101-153523"); # returns 2001-01-01 15:35:23 Mon +01:00 (CET)
     @see date(string, string)
 
     @since %Qore 0.8.12.4 \c INVALID-DATE exceptions are thrown if the date is invalid
+
+    @since %Qore 2.3.0 RFC 7231 (HTTP) and RFC 2822 (email) date formats are supported
  */
 date date(string dtstr) [flags=CONSTANT] {
     DateTimeNodeValueHelper date(dtstr, xsink);

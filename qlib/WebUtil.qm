@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file WebUtil.qm Qore user module supprting web server operations
 
-/*  WebUtil.qm Copyright (C) 2013 - 2025 Qore Technologies, s.r.o.
+/*  WebUtil.qm Copyright (C) 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -33,7 +33,7 @@
 %modern
 
 module WebUtil {
-    version = "1.7";
+    version = "1.8";
     desc = "user module supporting web server operations";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -72,6 +72,25 @@ module WebUtil {
       files found; supports automatic compilation of and rendering from template files
 
     @section webutil_relnotes Release Notes
+
+    @subsection webutil_v1_8 WebUtil v1.8
+    - @ref WebUtil::FileHandler "FileHandler" file-serving performance and functionality improvements:
+      - added HTTP caching headers: \c ETag (size+mtime based), \c Last-Modified, configurable
+        \c Cache-Control (default and per-extension)
+      - added conditional request handling: \c If-None-Match and \c If-Modified-Since return
+        304 Not Modified (RFC 7232 compliant)
+      - added automatic pre-compressed file serving: checks for \c .br, \c .zst, \c .gz, \c .bz2
+        variants on the filesystem and serves them with the appropriate \c Content-Encoding header;
+        preference order: brotli > zstd > gzip > bzip2
+      - added HTTP Range request support: single byte-range requests return 206 Partial Content
+        with \c Content-Range; supports \c If-Range for conditional ranges
+      - added on-the-fly compression for small/medium files: files below \c max_compress_size
+        (default 10MB) without pre-compressed variants are read into memory so the HTTP server
+        transport layer can apply automatic compression
+      - added optional file stat caching with configurable TTL via \c stat_cache_ttl
+      - new constructor options: \c enable_etag, \c enable_last_modified, \c default_cache_control,
+        \c cache_control_by_ext, \c serve_precompressed, \c enable_range, \c max_compress_size,
+        \c stat_cache_ttl
 
     @subsection webutil_v1_7 WebUtil v1.7
     - mark the context as handling file data in the authentication method to enable authentication errors to be
@@ -801,6 +820,109 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         */
         const DirSep = Qore::DirSep;
 
+        #! enable ETag generation and conditional request handling
+        /** When enabled, an ETag header is generated for each file response based on the file's size
+            and modification time, and @c If-None-Match / @c If-Modified-Since request headers are
+            checked to return 304 Not Modified responses when appropriate.
+
+            @since WebUtil 1.8
+        */
+        bool enable_etag = True;
+
+        #! enable Last-Modified header in file responses
+        /** @since WebUtil 1.8
+        */
+        bool enable_last_modified = True;
+
+        #! default Cache-Control header value for file responses
+        /** If set, this value is used as the Cache-Control header for all file responses unless
+            overridden by @ref cache_control_by_ext or @ref getResponseHeadersForFile().
+
+            @since WebUtil 1.8
+        */
+        *string default_cache_control;
+
+        #! Cache-Control header values by file extension
+        /** Keys are lowercase file extensions (without the leading dot), values are Cache-Control
+            header strings.  Takes precedence over @ref default_cache_control.
+
+            Example:
+            @code{.py}
+            {"js": "private, max-age=86400", "css": "public, max-age=604800"}
+            @endcode
+
+            @since WebUtil 1.8
+        */
+        *hash<string, string> cache_control_by_ext;
+
+        #! enable serving pre-compressed file variants from the filesystem
+        /** When enabled, the handler checks for pre-compressed files (e.g. \c index.html.br,
+            \c index.html.gz) and serves them with the appropriate @c Content-Encoding header when
+            the client accepts the encoding.
+
+            @since WebUtil 1.8
+
+            @see PrecompressedOrder
+        */
+        bool serve_precompressed = True;
+
+        #! enable HTTP Range request support (206 Partial Content)
+        /** When enabled, the handler parses @c Range request headers and returns partial content
+            responses for byte range requests.
+
+            @since WebUtil 1.8
+        */
+        bool enable_range = True;
+
+        #! maximum file size in bytes for on-the-fly compression
+        /** Files smaller than or equal to this size that don't have pre-compressed variants on disk
+            will be read into memory and returned as binary data, allowing the HTTP server transport
+            layer to apply automatic compression.
+
+            Files larger than this threshold are streamed via @ref FileInputStream without
+            compression.
+
+            Default: 10MB
+
+            @since WebUtil 1.8
+        */
+        int max_compress_size = 10 * 1024 * 1024;
+
+        #! file stat cache TTL; if set, file stat results are cached for this duration
+        /** Default: @ref nothing (caching disabled)
+
+            @since WebUtil 1.8
+        */
+        *timeout stat_cache_ttl;
+
+        #! minimum response body size for compression eligibility (matches HttpServer)
+        /** @since WebUtil 1.8
+        */
+        const CompressionThreshold = 1024;
+
+        #! month name to number mapping for HTTP date parsing
+        /** @since WebUtil 1.8
+        */
+        const MonthMap = {
+            "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+            "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+        };
+
+        #! mapping from Content-Encoding values to pre-compressed file extensions
+        /** @since WebUtil 1.8
+        */
+        const PrecompressedExtensions = {
+            "br": ".br",
+            "zstd": ".zst",
+            "gzip": ".gz",
+            "bzip2": ".bz2",
+        };
+
+        #! preference order for pre-compressed file serving (best compression first)
+        /** @since WebUtil 1.8
+        */
+        const PrecompressedOrder = ("br", "zstd", "gzip", "bzip2");
+
         #! default configuration values
         /** - \c ChunkSize: 64KB — read buffer size for file I/O; reduces syscalls vs smaller buffers
         */
@@ -864,6 +986,12 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
     private {
         #! static templates
         StaticTemplateManager stm();
+
+        #! mutex for stat cache access
+        Mutex stat_cache_mutex();
+
+        #! stat cache: path -> {stat, cached_at}
+        hash<string, hash<auto>> stat_cache;
     }
 
     #! create the object optionally with the given HttpServer::AbstractAuthenticator
@@ -881,6 +1009,19 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             default no authentication will be required
         - \c error_level: the level of error reporting (0, 1, or 2)
         - \c chunk_size: the read buffer size in bytes for file I/O (default: 64KB)
+        - \c enable_etag: enable ETag generation and conditional request handling (default: @ref True)
+        - \c enable_last_modified: enable Last-Modified header (default: @ref True)
+        - \c default_cache_control: default Cache-Control header value for file responses
+        - \c cache_control_by_ext: hash of file extension to Cache-Control header value
+        - \c serve_precompressed: enable serving pre-compressed file variants (default: @ref True)
+        - \c enable_range: enable HTTP Range request support (default: @ref True)
+        - \c max_compress_size: maximum file size for on-the-fly compression in bytes (default: 10MB)
+        - \c stat_cache_ttl: file stat cache TTL; if set, stat results are cached for this duration
+
+        @since
+        - \c enable_etag, \c enable_last_modified, \c default_cache_control, \c cache_control_by_ext,
+          \c serve_precompressed, \c enable_range, \c max_compress_size, \c stat_cache_ttl options
+          added in WebUtil 1.8
     */
     constructor(string new_file_root, string url_root = "/", *hash<auto> opt)
             : HttpServer::AbstractUrlHandler(url_root, opt.auth), TemplateFileManager(opt.po, opt.psetup) {
@@ -895,6 +1036,30 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         }
         if (opt.chunk_size) {
             chunk_size = opt.chunk_size;
+        }
+        if (opt.hasKey("enable_etag")) {
+            enable_etag = opt.enable_etag;
+        }
+        if (opt.hasKey("enable_last_modified")) {
+            enable_last_modified = opt.enable_last_modified;
+        }
+        if (opt.hasKey("default_cache_control")) {
+            default_cache_control = opt.default_cache_control;
+        }
+        if (opt.hasKey("cache_control_by_ext")) {
+            cache_control_by_ext = opt.cache_control_by_ext;
+        }
+        if (opt.hasKey("serve_precompressed")) {
+            serve_precompressed = opt.serve_precompressed;
+        }
+        if (opt.hasKey("enable_range")) {
+            enable_range = opt.enable_range;
+        }
+        if (opt.max_compress_size) {
+            max_compress_size = opt.max_compress_size;
+        }
+        if (opt.hasKey("stat_cache_ttl")) {
+            stat_cache_ttl = opt.stat_cache_ttl;
         }
 
         # setup :dirlisting template
@@ -1108,6 +1273,20 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return sendFilePath(listener, s, cx, hdr, body, path, stat_hash);
     }
 
+    #! serves a static file with caching headers, pre-compressed variants, range support, and compression
+    /** @param listener the HTTP listener interface
+        @param s the socket
+        @param cx the call context hash
+        @param hdr the request headers (lowercase keys)
+        @param body the request body (if any)
+        @param path the filesystem path to serve
+        @param stat_hash the file's stat information
+
+        @return an HttpResponseInfo response, or @ref nothing if the file cannot be opened
+
+        @since WebUtil 1.8: added caching headers, pre-compressed file serving, range requests,
+        and on-the-fly compression support
+    */
     private *hash<HttpResponseInfo> sendFilePath(HttpServer::HttpListenerInterface listener, Qore::Socket s,
             hash<auto> cx, hash<auto> hdr, *data body, string path, hash<StatInfo> stat_hash) {
         # send an empty response for an empty file
@@ -1115,6 +1294,120 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
             return makeResponse(204, "");
         }
 
+        # get response headers from subclass-overridable method; may return NOTHING from subclasses
+        *hash<auto> respHdr = getResponseHeadersForFile(path, cx, hdr);
+        # add the content type if it's missing for backwards compatibility
+        if (!respHdr."Content-Type") {
+            respHdr."Content-Type" = get_mime_type_from_ext(path);
+        }
+
+        # generate ETag and add caching headers
+        *string etag;
+        if (enable_etag) {
+            etag = generateETag(stat_hash);
+            respHdr.ETag = etag;
+        }
+        if (enable_last_modified) {
+            respHdr."Last-Modified" = formatHttpDate(stat_hash.mtime);
+        }
+
+        # add Cache-Control header if not already set by getResponseHeadersForFile()
+        if (!respHdr."Cache-Control") {
+            *string ext = (path =~ x/\.([a-z0-9]+)$/i)[0];
+            *string cc = ext ? cache_control_by_ext{ext.lwr()} : NOTHING;
+            if (!cc) {
+                cc = default_cache_control;
+            }
+            if (cc) {
+                respHdr."Cache-Control" = cc;
+            }
+        }
+
+        # handle conditional requests (304 Not Modified)
+        # skip conditional check when Range is present (RFC 7233 Section 3.1)
+        if (!hdr.range) {
+            *hash<HttpResponseInfo> not_modified = checkConditionalRequest(hdr, stat_hash, etag);
+            if (not_modified) {
+                return not_modified;
+            }
+        }
+
+        # handle range requests (206 Partial Content)
+        if (hdr.range && enable_range) {
+            # If-Range: serve range only if ETag/date matches, otherwise serve full file
+            if (hdr."if-range") {
+                # If-Range can be an ETag or an HTTP-date
+                string if_range = hdr."if-range";
+                if (if_range =~ /^"/) {
+                    # ETag comparison
+                    if (etag && if_range != etag) {
+                        # ETag doesn't match; ignore Range header, serve full file
+                        hdr -= "range";
+                    }
+                } else {
+                    # HTTP-date comparison
+                    *date if_range_date = parseHttpDate(if_range);
+                    if (if_range_date && stat_hash.mtime > if_range_date) {
+                        hdr -= "range";
+                    }
+                }
+            }
+
+            if (hdr.range) {
+                *hash<auto> range = parseRangeHeader(hdr.range, stat_hash.size);
+                if (range) {
+                    return serveRangeRequest(path, stat_hash, range, respHdr);
+                }
+                # unsatisfiable range
+                return <HttpResponseInfo>{
+                    "code": 416,
+                    "body": "Range Not Satisfiable",
+                    "hdr": {
+                        "Content-Range": sprintf("bytes */%d", stat_hash.size),
+                        "Content-Type": "text/plain",
+                    },
+                };
+            }
+        }
+
+        # signal range request support
+        if (enable_range) {
+            respHdr."Accept-Ranges" = "bytes";
+        }
+
+        # try serving a pre-compressed variant from the filesystem
+        if (serve_precompressed && cx."header-info"."accept-encoding") {
+            *hash<HttpResponseInfo> precompressed = tryServePrecompressed(path, stat_hash, cx,
+                hdr, respHdr);
+            if (precompressed) {
+                return precompressed;
+            }
+        }
+
+        # on-the-fly compression for small/medium files:
+        # read into memory as binary so HttpServer can auto-compress
+        if (cx.encoding && stat_hash.size > CompressionThreshold
+                && stat_hash.size <= max_compress_size) {
+            binary file_data;
+            try {
+                ReadOnlyFile f(path);
+                file_data = f.readBinary(stat_hash.size);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "FILE-OPEN2-ERROR") {
+                    return;
+                }
+                rethrow;
+            }
+            # do NOT set Content-Length here; HttpServer will compress the body and set
+            # Content-Length to the compressed size
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": file_data,
+                "hdr": respHdr,
+            };
+        }
+
+        # default: stream via FileInputStream
         FileInputStream stream;
         try {
             stream = new FileInputStream(path, DefaultFileReadTimeout);
@@ -1123,12 +1416,6 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
                 return;
             }
             rethrow;
-        }
-
-        *hash<auto> respHdr = getResponseHeadersForFile(path, cx, hdr);
-        # add the content type if it's missing for backwards compatibility
-        if (!respHdr."Content-Type") {
-            respHdr."Content-Type" = get_mime_type_from_ext(path);
         }
 
         # Return FileInputStream with Content-Length; the transport layer (HTTP/1.x,
@@ -1142,11 +1429,336 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         };
     }
 
+    #! generates an ETag string from file stat information
+    /** The ETag is based on the file's size and modification time (hex-encoded), providing
+        a cheap identity check without content hashing.
+
+        @param stat_hash the file's stat information
+        @param suffix an optional suffix to distinguish different representations (e.g. encoding)
+
+        @return the ETag string in the format \c "\"<hex-size>-<hex-mtime-epoch>[-suffix]\""
+
+        @since WebUtil 1.8
+    */
+    private string generateETag(hash<StatInfo> stat_hash, *string suffix) {
+        string tag = sprintf("\"%x-%x", stat_hash.size, gmtime(stat_hash.mtime).getEpochSeconds());
+        if (suffix) {
+            tag += "-" + suffix;
+        }
+        return tag + "\"";
+    }
+
+    #! formats a date value as an HTTP date string per RFC 7231
+    /** @param d the date value to format
+        @return a date string in RFC 7231 format (e.g. \c "Sun, 06 Nov 1994 08:49:37 GMT")
+
+        @since WebUtil 1.8
+    */
+    private string formatHttpDate(date d) {
+        return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+    }
+
+    #! parses an HTTP date string per RFC 7231 (all three formats: IMF-fixdate, RFC 850, asctime)
+    /** @param date_str the HTTP date string
+        @return a date value in UTC, or @ref nothing if parsing fails
+
+        @note Uses the core date() function which natively handles RFC 7231 / RFC 2822 date formats
+
+        @since WebUtil 1.8
+    */
+    private *date parseHttpDate(string date_str) {
+        try {
+            return date(date_str);
+        } catch () {
+            return;
+        }
+    }
+
+    #! checks conditional request headers and returns a 304 response if the resource is unchanged
+    /** Checks @c If-None-Match (ETag) and @c If-Modified-Since headers per RFC 7232.
+        @c If-None-Match takes precedence over @c If-Modified-Since.
+
+        @param hdr the request headers
+        @param stat_hash the file's stat information
+        @param etag the generated ETag string (or @ref nothing if ETags are disabled)
+
+        @return a 304 Not Modified response, or @ref nothing if the resource has been modified
+
+        @since WebUtil 1.8
+    */
+    private *hash<HttpResponseInfo> checkConditionalRequest(hash<auto> hdr, hash<StatInfo> stat_hash,
+            *string etag) {
+        # If-None-Match takes precedence (RFC 7232 Section 6)
+        if (hdr."if-none-match") {
+            if (etag) {
+                # check if any of the client's ETags match
+                string inm = hdr."if-none-match";
+                if (inm == "*" || inm == etag) {
+                    return make304Response(etag, stat_hash.mtime);
+                }
+                # check comma-separated list of ETags
+                if (inm =~ /,/) {
+                    foreach string candidate in (inm.split(",")) {
+                        if (trim(candidate) == etag) {
+                            return make304Response(etag, stat_hash.mtime);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        # fall back to If-Modified-Since
+        if (hdr."if-modified-since" && enable_last_modified) {
+            *date ims = parseHttpDate(hdr."if-modified-since");
+            if (ims) {
+                # compare at second resolution (HTTP dates don't have sub-second precision)
+                if (gmtime(stat_hash.mtime).getEpochSeconds()
+                        <= gmtime(ims).getEpochSeconds()) {
+                    return make304Response(etag, stat_hash.mtime);
+                }
+            }
+        }
+    }
+
+    #! creates a 304 Not Modified response with appropriate headers
+    /** @param etag the ETag to include in the response (or @ref nothing if ETags are disabled)
+        @param mtime the file modification time for the Last-Modified header
+
+        @return a 304 Not Modified response with caching headers
+
+        @since WebUtil 1.8
+    */
+    private hash<HttpResponseInfo> make304Response(*string etag, date mtime) {
+        hash<auto> hdr;
+        if (etag) {
+            hdr.ETag = etag;
+        }
+        if (enable_last_modified) {
+            hdr."Last-Modified" = formatHttpDate(mtime);
+        }
+        if (default_cache_control) {
+            hdr."Cache-Control" = default_cache_control;
+        }
+        return <HttpResponseInfo>{
+            "code": 304,
+            "hdr": hdr,
+        };
+    }
+
+    #! tries to serve a pre-compressed variant of the requested file
+    /** Checks for pre-compressed files (e.g. \c .br, \c .gz, \c .zst, \c .bz2) in order of
+        compression quality and serves the best match that the client accepts.
+
+        @param path the original file path
+        @param orig_stat the original file's stat information
+        @param cx the call context hash
+        @param hdr the request headers
+        @param respHdr the response headers being built (Content-Type etc)
+
+        @return an HttpResponseInfo for the pre-compressed file, or @ref nothing if no suitable
+        pre-compressed variant is found
+
+        @since WebUtil 1.8
+    */
+    private *hash<HttpResponseInfo> tryServePrecompressed(string path, hash<StatInfo> orig_stat,
+            hash<auto> cx, hash<auto> hdr, hash<auto> respHdr) {
+        hash<auto> accept = cx."header-info"."accept-encoding";
+        foreach string encoding in (PrecompressedOrder) {
+            if (!accept{encoding}) {
+                continue;
+            }
+            string comp_path = path + PrecompressedExtensions{encoding};
+            *hash<StatInfo> comp_stat = hstat(comp_path);
+            if (!comp_stat || comp_stat.type != "REGULAR") {
+                continue;
+            }
+
+            # generate encoding-specific ETag based on original file's identity
+            *string comp_etag;
+            if (enable_etag) {
+                comp_etag = generateETag(orig_stat, encoding);
+                # check conditional request for the compressed variant
+                *hash<HttpResponseInfo> not_modified = checkConditionalRequest(hdr, orig_stat,
+                    comp_etag);
+                if (not_modified) {
+                    return not_modified;
+                }
+            }
+
+            # serve the pre-compressed file
+            FileInputStream stream;
+            try {
+                stream = new FileInputStream(comp_path, DefaultFileReadTimeout);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "FILE-OPEN2-ERROR") {
+                    continue;
+                }
+                rethrow;
+            }
+            stream.unassignThread();
+
+            hash<auto> comp_hdr = respHdr + {
+                "Content-Encoding": encoding,
+                "Content-Length": string(comp_stat.size),
+                "Vary": "Accept-Encoding",
+            };
+            if (comp_etag) {
+                comp_hdr.ETag = comp_etag;
+            }
+
+            logDebug("serving pre-compressed %y (%s) in place of %y", comp_path, encoding, path);
+            return <HttpResponseInfo>{
+                "code": 200,
+                "body": stream,
+                "hdr": comp_hdr,
+                "no_content_encoding": True,
+            };
+        }
+    }
+
+    #! parses an HTTP Range header value
+    /** Supports single byte ranges in the formats:
+        - \c bytes=START-END
+        - \c bytes=START- (from START to end of file)
+        - \c bytes=-SUFFIX (last SUFFIX bytes)
+
+        @param range_hdr the Range header value
+        @param file_size the total file size in bytes
+
+        @return a hash with \c start, \c end, and \c length keys, or @ref nothing if the range is
+        unsatisfiable or invalid
+
+        @since WebUtil 1.8
+    */
+    private *hash<auto> parseRangeHeader(string range_hdr, int file_size) {
+        # only support "bytes=" ranges
+        if (range_hdr !~ /^bytes=/) {
+            return;
+        }
+        string range_spec = range_hdr.substr(6);
+
+        # reject multi-range requests (comma-separated)
+        if (range_spec =~ /,/) {
+            return;
+        }
+
+        int start;
+        int end;
+
+        if (range_spec =~ /^-([0-9]+)$/) {
+            # suffix range: bytes=-N (last N bytes)
+            int suffix = int((range_spec =~ x/^-([0-9]+)$/)[0]);
+            if (suffix <= 0 || suffix > file_size) {
+                return;
+            }
+            start = file_size - suffix;
+            end = file_size - 1;
+        } else if (range_spec =~ /^([0-9]+)-$/) {
+            # open-ended range: bytes=N-
+            start = int((range_spec =~ x/^([0-9]+)-$/)[0]);
+            if (start >= file_size) {
+                return;
+            }
+            end = file_size - 1;
+        } else if (range_spec =~ /^([0-9]+)-([0-9]+)$/) {
+            # closed range: bytes=N-M
+            list<auto> parts = (range_spec =~ x/^([0-9]+)-([0-9]+)$/);
+            start = int(parts[0]);
+            end = int(parts[1]);
+            if (start > end || start >= file_size) {
+                return;
+            }
+            # clamp end to file size
+            if (end >= file_size) {
+                end = file_size - 1;
+            }
+        } else {
+            return;
+        }
+
+        return {
+            "start": start,
+            "end": end,
+            "length": end - start + 1,
+        };
+    }
+
+    #! serves a range request with a 206 Partial Content response
+    /** @param path the file path
+        @param stat_hash the file's stat information
+        @param range the parsed range (start, end, length)
+        @param respHdr the base response headers
+
+        @return a 206 Partial Content response
+
+        @since WebUtil 1.8
+    */
+    private hash<HttpResponseInfo> serveRangeRequest(string path, hash<StatInfo> stat_hash,
+            hash<auto> range, hash<auto> respHdr) {
+        respHdr += {
+            "Content-Range": sprintf("bytes %d-%d/%d", range.start, range.end, stat_hash.size),
+            "Content-Length": string(range.length),
+            "Accept-Ranges": "bytes",
+        };
+
+        ReadOnlyFile f;
+        try {
+            f = new ReadOnlyFile(path);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "FILE-OPEN2-ERROR") {
+                return makeResponse(404, "File not found");
+            }
+            rethrow;
+        }
+        if (range.start > 0) {
+            f.setPos(range.start);
+        }
+        binary range_data = f.readBinary(range.length);
+        return <HttpResponseInfo>{
+            "code": 206,
+            "body": range_data,
+            "hdr": respHdr,
+        };
+    }
+
     private *hash<StatInfo> statPath(hash<auto> cx, hash<auto> hdr, reference<string> path) {
         path = file_root + cx.resource_path;
         # no need to convert UNIX-style dir separators to Windows-style on Windows
         # because Windows supports UNIX-style dir separators as well
+        if (stat_cache_ttl) {
+            return statPathCached(path);
+        }
         return hstat(path);
+    }
+
+    #! returns cached stat information for the given path
+    /** @param path the filesystem path to stat
+
+        @return the stat information, or @ref nothing if the file does not exist
+
+        @since WebUtil 1.8
+    */
+    private *hash<StatInfo> statPathCached(string path) {
+        {
+            AutoLock al(stat_cache_mutex);
+            *hash<auto> entry = stat_cache{path};
+            if (entry) {
+                date elapsed = now_us() - entry.cached_at;
+                if (int(elapsed) < stat_cache_ttl) {
+                    return entry.stat;
+                }
+            }
+        }
+        *hash<StatInfo> st = hstat(path);
+        {
+            AutoLock al(stat_cache_mutex);
+            stat_cache{path} = {
+                "stat": st,
+                "cached_at": now_us(),
+            };
+        }
+        return st;
     }
 
     #! must return a AbstractStreamRequest object to stream the requested file with chunked transfer encoding

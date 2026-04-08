@@ -19,6 +19,7 @@ class DateTest inherits QUnit::Test {
         addTestCase("TimeZoneTests", \timeZoneTests());
         addTestCase("WindowsTimeZoneTests", \windowsTimeZoneTests());
         addTestCase("issue 2546", \issue2546());
+        addTestCase("RFC 7231 date parsing", \rfc7231Tests());
 
         set_return_value(main());
     }
@@ -327,6 +328,115 @@ class DateTest inherits QUnit::Test {
         #if (d >= 1970-01-01 && d < 2038-01-19)
             #testAssertionValue("qore epoch conversion " + ri, timegm(d), int(d));
         ri++;
+    }
+
+    rfc7231Tests() {
+        # Reference date: 1994-11-06T08:49:37 UTC (from RFC 7231 §7.1.1.1 examples)
+        date ref_date = date("1994-11-06T08:49:37Z");
+
+        # --- IMF-fixdate (RFC 7231 preferred format) ---
+        assertEq(ref_date, date("Sun, 06 Nov 1994 08:49:37 GMT"), "IMF-fixdate basic");
+        # Case-insensitive month
+        assertEq(ref_date, date("Sun, 06 NOV 1994 08:49:37 GMT"), "IMF-fixdate uppercase month");
+        # Single-digit day (non-standard but seen in the wild)
+        assertEq(ref_date, date("Sun, 6 Nov 1994 08:49:37 GMT"), "IMF-fixdate single-digit day");
+        # Different day-of-week (we don't validate it)
+        assertEq(ref_date, date("Mon, 06 Nov 1994 08:49:37 GMT"), "IMF-fixdate wrong dow accepted");
+        # UTC timezone alias
+        assertEq(ref_date, date("Sun, 06 Nov 1994 08:49:37 UTC"), "IMF-fixdate with UTC");
+        # Year 2000+
+        date y2k = date("2026-04-08T16:24:32Z");
+        assertEq(y2k, date("Wed, 08 Apr 2026 16:24:32 GMT"), "IMF-fixdate year 2026");
+        # Midnight
+        assertEq(date("2024-12-25T00:00:00Z"), date("Wed, 25 Dec 2024 00:00:00 GMT"),
+            "IMF-fixdate midnight");
+        # End of day
+        assertEq(date("2024-12-25T23:59:59Z"), date("Wed, 25 Dec 2024 23:59:59 GMT"),
+            "IMF-fixdate end of day");
+
+        # --- RFC 850 format (obsolete) ---
+        assertEq(ref_date, date("Sunday, 06-Nov-94 08:49:37 GMT"), "RFC 850 basic");
+        # 2-digit year 00-49 → 2000-2049
+        assertEq(date("2026-04-08T16:24:32Z"), date("Wednesday, 08-Apr-26 16:24:32 GMT"),
+            "RFC 850 2-digit year 26 → 2026");
+        # 2-digit year 50-99 → 1950-1999
+        assertEq(date("1994-11-06T08:49:37Z"), date("Sunday, 06-Nov-94 08:49:37 GMT"),
+            "RFC 850 2-digit year 94 → 1994");
+        assertEq(date("1950-01-01T00:00:00Z"), date("Sunday, 01-Jan-50 00:00:00 GMT"),
+            "RFC 850 2-digit year 50 → 1950");
+        assertEq(date("2049-12-31T23:59:59Z"), date("Friday, 31-Dec-49 23:59:59 GMT"),
+            "RFC 850 2-digit year 49 → 2049");
+
+        # --- asctime format (obsolete) ---
+        assertEq(ref_date, date("Sun Nov  6 08:49:37 1994"), "asctime basic");
+        # Two-digit day
+        assertEq(date("1994-11-16T08:49:37Z"), date("Wed Nov 16 08:49:37 1994"),
+            "asctime two-digit day");
+        # No trailing timezone (asctime never has one)
+        assertEq(date("2024-03-15T10:30:00Z"), date("Fri Mar 15 10:30:00 2024"),
+            "asctime year 2024");
+
+        # --- RFC 2822 format (email dates with numeric offset) ---
+        # +0000 = UTC
+        assertEq(ref_date, date("Sun, 06 Nov 1994 08:49:37 +0000"), "RFC 2822 +0000");
+        # +0500 = 5 hours ahead, so UTC = local - 5h
+        assertEq(date("1994-11-06T03:49:37Z"), date("Sun, 06 Nov 1994 08:49:37 +0500"),
+            "RFC 2822 +0500");
+        # -0500 = 5 hours behind, so UTC = local + 5h
+        assertEq(date("1994-11-06T13:49:37Z"), date("Sun, 06 Nov 1994 08:49:37 -0500"),
+            "RFC 2822 -0500");
+        # +0530 (India)
+        assertEq(date("1994-11-06T03:19:37Z"), date("Sun, 06 Nov 1994 08:49:37 +0530"),
+            "RFC 2822 +0530");
+        # -1200 (Baker Island, extreme west)
+        assertEq(date("1994-11-06T20:49:37Z"), date("Sun, 06 Nov 1994 08:49:37 -1200"),
+            "RFC 2822 -1200");
+        # +1400 (Line Islands, extreme east)
+        assertEq(date("1994-11-05T18:49:37Z"), date("Sun, 06 Nov 1994 08:49:37 +1400"),
+            "RFC 2822 +1400");
+
+        # --- All three RFC 7231 formats represent the same instant ---
+        date d_imf = date("Sun, 06 Nov 1994 08:49:37 GMT");
+        date d_850 = date("Sunday, 06-Nov-94 08:49:37 GMT");
+        date d_asc = date("Sun Nov  6 08:49:37 1994");
+        assertEq(d_imf, d_850, "IMF == RFC850");
+        assertEq(d_imf, d_asc, "IMF == asctime");
+
+        # --- TimeZone::date() also works ---
+        TimeZone utc("UTC");
+        assertEq(ref_date, utc.date("Sun, 06 Nov 1994 08:49:37 GMT"),
+            "TimeZone::date() IMF-fixdate");
+
+        # --- Round-trip: format → parse ---
+        date now_utc = gmtime(now_us());
+        string formatted = now_utc.format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
+        date parsed = date(formatted);
+        # Compare without microseconds (HTTP format doesn't have them)
+        assertEq(now_utc - microseconds(now_utc.microseconds()), parsed,
+            "round-trip format/parse");
+
+        # --- Leap year edge cases ---
+        assertEq(date("2024-02-29T12:00:00Z"), date("Thu, 29 Feb 2024 12:00:00 GMT"),
+            "IMF-fixdate leap day 2024");
+        assertEq(date("2000-02-29T00:00:00Z"), date("Tue, 29 Feb 2000 00:00:00 GMT"),
+            "IMF-fixdate leap day 2000 (400-year rule)");
+
+        # --- All 12 months parse correctly ---
+        list<string> month_abbrs = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec");
+        for (int i = 0; i < 12; ++i) {
+            string ds = sprintf("Mon, 01 %s 2024 00:00:00 GMT", month_abbrs[i]);
+            date d = date(ds);
+            assertEq(i + 1, d.months(), sprintf("month %s parses to month %d", month_abbrs[i], i + 1));
+        }
+
+        # --- Negative tests ---
+        # Invalid month abbreviation — falls through to ISO-8601, which fails on short input
+        assertThrows("INVALID-DATE", \date(), ("Sun, 06 Xyz 1994 08:49:37 GMT"));
+        # Invalid day (Feb 30)
+        assertThrows("INVALID-DATE", \date(), ("Sun, 30 Feb 2024 12:00:00 GMT"));
+        # Feb 29 on non-leap year
+        assertThrows("INVALID-DATE", \date(), ("Sun, 29 Feb 2023 12:00:00 GMT"));
     }
 
     issue2546() {

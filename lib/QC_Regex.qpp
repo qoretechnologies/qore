@@ -154,3 +154,77 @@ int opts = r.getOptions();  # returns RE_Caseless | RE_MultiLine
 int Regex::getOptions() [flags=CONSTANT] {
     return r->getOptions();
 }
+
+//! Returns the number of times the pattern matches in the given string
+/** @param str the string to search for matches
+
+    @return the number of non-overlapping matches found; 0 if no match
+
+    @par Example:
+    @code{.py}
+Regex r("\\d+");
+int n = r.count("abc 123 def 456"); # returns 2
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+int Regex::count(string str) [flags=RET_VALUE_ONLY] {
+    return r->countMatches(str, xsink);
+}
+
+//! Extracts named capture groups from a string and returns a hash keyed by group name
+/** If the pattern has no named groups, @ref nothing is returned. If the @ref RE_Global option was
+    used, returns a list of hashes (one per match). Otherwise returns a single hash.
+
+    Named groups are defined with \c (?<name>...) or \c (?P<name>...) syntax.
+
+    @param str the string to match against
+
+    @return for non-global: \c *hash<string, *string> where keys are group names and values are matched text
+    (or @ref nothing for unmatched optional groups); for global: \c *list<hash<string, *string>>; returns
+    @ref nothing if there are no named groups in the pattern or no match
+
+    @par Example:
+    @code{.py}
+Regex r("(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+auto h = r.extractNamedGroups("2026-04-08");
+# h = {"year": "2026", "month": "04", "day": "08"}
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+auto Regex::extractNamedGroups(string str) [flags=RET_VALUE_ONLY] {
+    return r->extractNamedGroups(str, xsink);
+}
+
+//! Returns detailed match information including positions, groups, and named groups
+/** Returns a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes, one per match.
+    Without the @ref RE_Global option, returns at most one match. With @ref RE_Global,
+    returns all non-overlapping matches.
+
+    @param str the string to match against
+
+    @return a list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes; @ref nothing if no match
+
+    @par Example:
+    @code{.py}
+Regex r("(?<word>\\w+)", RE_Global);
+*list<hash<RegexMatchInfo>> matches = r.extractDetailed("hello world");
+# matches[0].match = "hello", matches[0].offset = 0, matches[0].length = 5
+# matches[1].match = "world", matches[1].offset = 6, matches[1].length = 5
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+
+    @since %Qore 2.3
+*/
+*list<hash<RegexMatchInfo>> Regex::extractDetailed(string str) [flags=RET_VALUE_ONLY] {
+    return r->extractDetailed(str, xsink);
+}

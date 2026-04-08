@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -71,6 +71,18 @@ public:
 
     DLLLOCAL bool match(const QoreString* target, ExceptionSink* xsink) const {
         return regex ? regex->exec(target, xsink) : false;
+    }
+
+    DLLLOCAL int64 countMatches(const QoreString* target, ExceptionSink* xsink) const {
+        return regex ? regex->countMatches(target, xsink) : 0;
+    }
+
+    DLLLOCAL QoreValue extractNamedGroups(const QoreString* target, ExceptionSink* xsink) const {
+        return regex ? regex->extractNamedGroups(target, xsink) : QoreValue();
+    }
+
+    DLLLOCAL QoreListNode* extractDetailed(const QoreString* target, ExceptionSink* xsink) const {
+        return regex ? regex->extractDetailed(target, xsink) : nullptr;
     }
 
     DLLLOCAL const QoreString* getPattern() const {

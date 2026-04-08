@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file XdbcFirebirdSqlUtilBase.qm Qore user module for working with Firebird SQL data
 
-/*  XdbcFirebirdSqlUtilBase.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  XdbcFirebirdSqlUtilBase.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1135,6 +1135,278 @@ auto v = c.name;
                             return "1 != 1";
                         }
                         return "(" + (foldl $1 + " or " + $2, map sprintf("%s in (%s)", exp0, $1), argl) + ")";
+                    },
+                },
+                # --- Date/Time functions for Firebird ---
+                DP_FUNC_NOW: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_NOW,
+                        "display_name": "now",
+                        "short_desc": "Returns the current date/time",
+                        "desc": "Returns the current date/time",
+                        "symbol": "now()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return "current_timestamp";
+                    },
+                },
+                # --- Duration functions for Firebird ---
+                DP_FUNC_YEARS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_YEARS,
+                        "display_name": "years",
+                        "short_desc": "Returns an interval of the given number of years",
+                        "desc": "Returns an interval of the given number of years added to a base date",
+                        "symbol": "years()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s year to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_MONTHS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_MONTHS,
+                        "display_name": "months",
+                        "short_desc": "Returns an interval of the given number of months",
+                        "desc": "Returns an interval of the given number of months added to a base date",
+                        "symbol": "months()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s month to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_WEEKS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_WEEKS,
+                        "display_name": "weeks",
+                        "short_desc": "Returns an interval of the given number of weeks",
+                        "desc": "Returns an interval of the given number of weeks added to a base date",
+                        "symbol": "weeks()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s week to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_DAYS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_DAYS,
+                        "display_name": "days",
+                        "short_desc": "Returns an interval of the given number of days",
+                        "desc": "Returns an interval of the given number of days added to a base date",
+                        "symbol": "days()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s day to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_HOURS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_HOURS,
+                        "display_name": "hours",
+                        "short_desc": "Returns an interval of the given number of hours",
+                        "desc": "Returns an interval of the given number of hours added to a base date",
+                        "symbol": "hours()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s hour to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_MINUTES: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_MINUTES,
+                        "display_name": "minutes",
+                        "short_desc": "Returns an interval of the given number of minutes",
+                        "desc": "Returns an interval of the given number of minutes added to a base date",
+                        "symbol": "minutes()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s minute to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_SECONDS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_SECONDS,
+                        "display_name": "seconds",
+                        "short_desc": "Returns an interval of the given number of seconds",
+                        "desc": "Returns an interval of the given number of seconds added to a base date",
+                        "symbol": "seconds()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s second to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                DP_FUNC_MILLISECONDS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_MILLISECONDS,
+                        "display_name": "milliseconds",
+                        "short_desc": "Returns an interval of the given number of milliseconds",
+                        "desc": "Returns an interval of the given number of milliseconds added to a base date",
+                        "symbol": "milliseconds()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureIntType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("dateadd(%s millisecond to cast(0 as timestamp))",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."int"));
+                    },
+                },
+                # --- Date extraction functions for Firebird ---
+                DP_FUNC_GET_YEAR: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_YEAR,
+                        "display_name": "get_year",
+                        "short_desc": "Extracts the year from a date",
+                        "desc": "Extracts the year component from a date/time value",
+                        "symbol": "get_year()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(year from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                    },
+                },
+                DP_FUNC_GET_MONTH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_MONTH,
+                        "display_name": "get_month",
+                        "short_desc": "Extracts the month from a date",
+                        "desc": "Extracts the month component from a date/time value (1-12)",
+                        "symbol": "get_month()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(month from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                    },
+                },
+                DP_FUNC_GET_DAY: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_DAY,
+                        "display_name": "get_day",
+                        "short_desc": "Extracts the day from a date",
+                        "desc": "Extracts the day-of-month component from a date/time value (1-31)",
+                        "symbol": "get_day()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(day from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                    },
+                },
+                DP_FUNC_GET_HOUR: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_HOUR,
+                        "display_name": "get_hour",
+                        "short_desc": "Extracts the hour from a date",
+                        "desc": "Extracts the hour component from a date/time value (0-23)",
+                        "symbol": "get_hour()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(hour from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                    },
+                },
+                DP_FUNC_GET_MINUTE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_MINUTE,
+                        "display_name": "get_minute",
+                        "short_desc": "Extracts the minute from a date",
+                        "desc": "Extracts the minute component from a date/time value (0-59)",
+                        "symbol": "get_minute()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(minute from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                    },
+                },
+                DP_FUNC_GET_SECOND: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_GET_SECOND,
+                        "display_name": "get_second",
+                        "short_desc": "Extracts the second from a date",
+                        "desc": "Extracts the second component from a date/time value (0-59)",
+                        "symbol": "get_second()",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("extract(second from %s)",
+                            info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                     },
                 },
             };

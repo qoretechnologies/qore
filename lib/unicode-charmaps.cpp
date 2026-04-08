@@ -3,7 +3,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -39,6 +39,9 @@ static unicodecharmap_t accent_map;
 
 // unicode lower to upper case map
 static unicodemap_t lumap;
+
+// unicode lower to upper case map for 1-to-many mappings (e.g., ß → SS)
+static unicodecharmap_t lumap_multi;
 
 // unicode upper to lower case map
 static unicodemap_t ulmap;
@@ -1530,6 +1533,16 @@ void init_charmaps() {
 
    for (unicodemap_t::const_iterator i = lumap.begin(), e = lumap.end(); i != e; ++i)
       ulmap[i->second] = i->first;
+
+   // 1-to-many uppercase mappings
+   lumap_multi[0x00df] = "SS";     // ß -> SS (latin small letter sharp s)
+   lumap_multi[0xfb00] = "FF";     // ﬀ -> FF (latin small ligature ff)
+   lumap_multi[0xfb01] = "FI";     // ﬁ -> FI (latin small ligature fi)
+   lumap_multi[0xfb02] = "FL";     // ﬂ -> FL (latin small ligature fl)
+   lumap_multi[0xfb03] = "FFI";    // ﬃ -> FFI (latin small ligature ffi)
+   lumap_multi[0xfb04] = "FFL";    // ﬄ -> FFL (latin small ligature ffl)
+   lumap_multi[0xfb05] = "ST";     // ﬅ -> ST (latin small ligature long s t)
+   lumap_multi[0xfb06] = "ST";     // ﬆ -> ST (latin small ligature st)
 }
 
 static int apply_unicode_charmap(const unicodecharmap_t& umap, QoreString& str, const QoreString& src, ExceptionSink* xsink) {
@@ -1579,7 +1592,8 @@ static int q_ascii_toupper(int c) {
    return c > 96 && c < 123 ? c - 32 : c;
 }
 
-static int apply_unicode_map(const unicodemap_t& umap, ascii_func_t func, QoreString& str, const QoreString& src, ExceptionSink* xsink) {
+static int apply_unicode_map(const unicodemap_t& umap, ascii_func_t func, QoreString& str, const QoreString& src,
+        ExceptionSink* xsink, const unicodecharmap_t* multi_map = nullptr) {
    assert(str.empty());
    assert(str.getEncoding() == src.getEncoding());
 
@@ -1592,7 +1606,16 @@ static int apply_unicode_map(const unicodemap_t& umap, ascii_func_t func, QoreSt
          unsigned uc = src.getUnicodePointFromBytePos(p - src.getBuffer(), len, xsink);
          if (*xsink)
             return -1;
-         // see if there is a mapping
+         // check 1-to-many override map first (e.g., ß -> SS)
+         if (multi_map) {
+            unicodecharmap_t::const_iterator mi = multi_map->find(uc);
+            if (mi != multi_map->end()) {
+               str.concat(mi->second);
+               p += (len - 1);
+               continue;
+            }
+         }
+         // see if there is a 1-to-1 mapping
          unicodemap_t::const_iterator i = umap.find(uc);
          // if the character was not found, then just add the original character
          if (i == umap.end()) {
@@ -1621,5 +1644,5 @@ int do_tolower(QoreString& str, const QoreString& src, ExceptionSink* xsink) {
 }
 
 int do_toupper(QoreString& str, const QoreString& src, ExceptionSink* xsink) {
-   return apply_unicode_map(lumap, q_ascii_toupper, str, src, xsink);
+   return apply_unicode_map(lumap, q_ascii_toupper, str, src, xsink, &lumap_multi);
 }

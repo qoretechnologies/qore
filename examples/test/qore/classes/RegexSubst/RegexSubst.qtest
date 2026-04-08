@@ -20,6 +20,9 @@ public class RegexSubstTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner cases test", \cornerCasesTest());
         addTestCase("escape sequences test", \escapeSequencesTest());
+        addTestCase("$0 full match test", \dollarZeroTest());
+        addTestCase("RE_Ungreedy test", \ungreedyTest());
+        addTestCase("callback substitution test", \callbackTest());
 
         set_return_value(main());
     }
@@ -176,5 +179,70 @@ public class RegexSubstTest inherits QUnit::Test {
 
         RegexSubst r4("x", "a\\$1b");
         assertEq("a$1b", r4.subst("x"));
+    }
+
+    private dollarZeroTest() {
+        # $0 references the full match in the default replacement
+        RegexSubst r("\\w+", "[$0]");
+        assertEq("[hello] world", r.subst("hello world"));
+
+        # $0 with global flag
+        RegexSubst rg("\\w+", "[$0]", RE_Global);
+        assertEq("[hello] [world]", rg.subst("hello world"));
+
+        # $0 combined with $1
+        RegexSubst r2("(\\w)\\w*", "[$0:$1]", RE_Global);
+        assertEq("[hello:h] [world:w]", r2.subst("hello world"));
+
+        # $0 in override replacement
+        RegexSubst r3("\\d+", "UNUSED");
+        assertEq("num=[42]", r3.subst("num=42", "[$0]"));
+
+        # $0 with no capture groups
+        RegexSubst r4("abc", "{$0}");
+        assertEq("{abc} def", r4.subst("abc def"));
+    }
+
+    private ungreedyTest() {
+        # RE_Ungreedy makes quantifiers lazy by default
+        RegexSubst r1("a.*X", "[]");
+        assertEq("[]c", r1.subst("aXbXc"));  # greedy
+
+        RegexSubst r2("a.*X", "[]", RE_Ungreedy);
+        assertEq("[]bXc", r2.subst("aXbXc"));  # ungreedy: stops at first X
+
+        # RE_Ungreedy with global substitution
+        RegexSubst r3("<.*>", "[]", RE_Global | RE_Ungreedy);
+        assertEq("[]bold[] and []italic[]", r3.subst("<b>bold</b> and <i>italic</i>"));
+    }
+
+    private callbackTest() {
+        # basic callback via class
+        RegexSubst r("\\w+", "UNUSED", RE_Global);
+        string result = r.subst("hello world", string sub (hash<RegexMatchInfo> m) {
+            return m.match.upr();
+        });
+        assertEq("HELLO WORLD", result);
+
+        # callback with named groups
+        RegexSubst r2("(?<k>\\w+)=(?<v>\\w+)", "UNUSED");
+        result = r2.subst("key=val", string sub (hash<RegexMatchInfo> m) {
+            return m.named_groups.v + "=" + m.named_groups.k;
+        });
+        assertEq("val=key", result);
+
+        # callback receives correct offset
+        RegexSubst r3("\\d+", "UNUSED");
+        result = r3.subst("abc 123", string sub (hash<RegexMatchInfo> m) {
+            assertEq(4, m.offset);
+            assertEq(3, m.length);
+            return "[" + m.match + "]";
+        });
+        assertEq("abc [123]", result);
+
+        # exception in callback propagates
+        RegexSubst r4("\\w+", "UNUSED");
+        assertThrows("TEST-ERROR", \r4.subst(), ("test",
+            string sub (hash<RegexMatchInfo> m) { throw "TEST-ERROR", "test"; }));
     }
 }

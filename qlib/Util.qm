@@ -2413,10 +2413,9 @@ public hash<ExceptionInfo> sub check_exception_serializable(hash<ExceptionInfo> 
                 }
             }
             ex.arg = new_arg;
-        } else {
-            if (ex.arg.ex instanceof hash<ExceptionInfo>) {
-                ex.arg.ex = check_exception_serializable(ex.arg.ex);
-            }
+        } else if (ex.arg.typeCode() == NT_HASH && ex.arg.hasKey("ex")
+                && ex.arg.ex instanceof hash<ExceptionInfo>) {
+            ex.arg.ex = check_exception_serializable(ex.arg.ex);
         }
         if (ex.next) {
             ex.next = check_exception_serializable(ex.next);

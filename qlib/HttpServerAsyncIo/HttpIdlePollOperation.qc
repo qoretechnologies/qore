@@ -54,6 +54,15 @@ public class HttpIdlePollOperation inherits HttpIdlePollOperationBase, HttpConne
     constructor(Socket sock, timeout ttl = DefaultIdleTimeout) :
             HttpIdlePollOperationBase(sock, int(ttl)) {
     }
+
+    #! Override onComplete to fix MI method resolution
+    /** Without this override, evalMethod("onComplete") resolves to the C++ no-op in
+        AbstractPollOperation (via HttpIdlePollOperationBase) instead of the Qore
+        override in HttpConnectionPollOperationBase.
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        HttpConnectionPollOperationBase::onComplete(result);
+    }
 }
 
 } # namespace HttpServerAsyncIo

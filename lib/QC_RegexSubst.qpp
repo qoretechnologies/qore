@@ -188,3 +188,32 @@ int opts = r.getOptions();  # returns RE_Caseless | RE_Global
 int RegexSubst::getOptions() [flags=CONSTANT] {
     return r->getOptions();
 }
+
+//! Performs a substitution where the replacement is determined by calling a callback function for each match
+/** The callback receives a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and must return a string to use
+    as the replacement text. With the @ref RE_Global option, the callback is called for each match.
+
+    @param str the string to perform substitutions on
+    @param callback a callback that takes a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash and returns the
+    replacement string
+
+    @return the resulting string with substitutions applied
+
+    @par Example:
+    @code{.py}
+RegexSubst r("\\d+", "UNUSED", RE_Global);
+string result = r.subst("abc 123 def 456", string sub (hash<RegexMatchInfo> m) {
+    return "[" + m.match + "]";
+});
+# result = "abc [123] def [456]"
+    @endcode
+
+    @throw ENCODING-CONVERSION-ERROR this exception could be thrown if the string arguments have different
+    @ref character_encoding "character encodings" and an error occurs during encoding conversion
+    @throw REGEX-SUBST-ERROR infinite recursion detected with global substitution on empty pattern
+
+    @since %Qore 2.3
+*/
+string RegexSubst::subst(string str, code<string(hash<RegexMatchInfo>)> callback) [flags=RET_VALUE_ONLY] {
+    return r->substCallback(str, callback, xsink);
+}

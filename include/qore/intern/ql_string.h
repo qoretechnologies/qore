@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2023 David Nichols
+  Copyright (C) 2003 - 2026 David Nichols
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -34,5 +34,6 @@
 #define QORE_LIB_STRING_H
 
 DLLLOCAL void init_string_functions(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_RegexMatchInfo(QoreNamespace& ns);
 
 #endif
