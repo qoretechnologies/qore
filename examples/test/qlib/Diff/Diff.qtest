@@ -3,6 +3,7 @@
 
 %modern
 
+%requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Diff.qm
 
@@ -18,6 +19,7 @@ public class DiffTest inherits QUnit::Test {
         addTestCase("Test stats and data text", \statsAndDataText(), NOTHING);
         addTestCase("Test chars and words diff", \charsAndWordsDiff(), NOTHING);
         addTestCase("Test patch apply", \patchApply(), NOTHING);
+        addTestCase("Test side by side and files", \sideBySideAndFiles(), NOTHING);
         addTestCase("Test performance", \perfTest(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -585,6 +587,99 @@ h";
                 }
             }
             assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: 50 lines");
+        }
+    }
+
+    sideBySideAndFiles() {
+        # Side-by-side: identical → empty
+        assertEq("", diff_side_by_side("same\n", "same\n", 80, False),
+            "sbs identical: empty");
+
+        # Side-by-side: basic change
+        {
+            string r = diff_side_by_side("line1\nold\nline3\n",
+                "line1\nnew\nline3\n", 40, False);
+            # Equal lines appear on both sides
+            assertTrue(regex(r, "line1.*line1"), "sbs: equal line1");
+            assertTrue(regex(r, "line3.*line3"), "sbs: equal line3");
+            # Changed line has | marker
+            assertTrue(regex(r, "old.*\\|.*new"), "sbs: changed with |");
+        }
+
+        # Side-by-side: deletion uses < marker
+        {
+            string r = diff_side_by_side("a\nb\nc\n", "a\nc\n", 40, False);
+            assertTrue(regex(r, "b.*<"), "sbs: deletion with <");
+        }
+
+        # Side-by-side: insertion uses > marker
+        {
+            string r = diff_side_by_side("a\nc\n", "a\nb\nc\n", 40, False);
+            assertTrue(regex(r, ">.*b"), "sbs: insertion with >");
+        }
+
+        # Side-by-side: long lines truncated
+        {
+            string long_line = strmul("x", 100);
+            string r = diff_side_by_side(long_line + "\n", "short\n", 40, False);
+            assertTrue(regex(r, ">"), "sbs: long line truncated");
+            # Result should not exceed width per line
+            list<string> lines = r.split("\n");
+            foreach string line in (lines) {
+                if (line.length() > 0) {
+                    assertTrue(line.length() <= 40,
+                        sprintf("sbs: line width <= 40 (got %d)", line.length()));
+                }
+            }
+        }
+
+        # Side-by-side: no color produces no ANSI codes
+        {
+            string r = diff_side_by_side("old\n", "new\n", 40, False);
+            assertFalse(regex(r, "\033"), "sbs: no ANSI when disabled");
+        }
+
+        # diff_files: roundtrip with temp files
+        {
+            string tmp1 = tmp_location() + "/diff_test_old.txt";
+            string tmp2 = tmp_location() + "/diff_test_new.txt";
+            {
+                File f1();
+                f1.open(tmp1, O_WRONLY | O_CREAT | O_TRUNC);
+                f1.write("line1\nline2\nline3\n");
+            }
+            {
+                File f2();
+                f2.open(tmp2, O_WRONLY | O_CREAT | O_TRUNC);
+                f2.write("line1\nchanged\nline3\nnew\n");
+            }
+            on_exit {
+                unlink(tmp1);
+                unlink(tmp2);
+            }
+
+            string r = diff_files(tmp1, tmp2);
+            assertTrue(regex(r, "^--- " + regex_escape(tmp1), RE_MultiLine),
+                "files: old label");
+            assertTrue(regex(r, "^\\+\\+\\+ " + regex_escape(tmp2), RE_MultiLine),
+                "files: new label");
+            assertTrue(regex(r, "^-line2", RE_MultiLine), "files: deleted line");
+            assertTrue(regex(r, "^\\+changed", RE_MultiLine), "files: inserted line");
+            assertTrue(regex(r, "^\\+new", RE_MultiLine), "files: added line");
+
+            # Identical files
+            assertEq("", diff_files(tmp1, tmp1), "files: identical");
+        }
+
+        # diff_files: nonexistent file throws
+        {
+            bool caught = False;
+            try {
+                diff_files("/nonexistent/path/file.txt", "/nonexistent/other.txt");
+            } catch (hash<auto> ex) {
+                caught = True;
+            }
+            assertTrue(caught, "files: nonexistent throws");
         }
     }
 

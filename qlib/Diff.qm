@@ -54,6 +54,8 @@ module Diff {
     - @ref Diff::diff_data_text()
     - @ref Diff::diff_stats()
     - @ref Diff::diff_text()
+    - @ref Diff::diff_files()
+    - @ref Diff::diff_side_by_side()
     - @ref Diff::diff_unified()
     - @ref Diff::diff_words()
     - @ref Diff::patch_apply()
@@ -68,6 +70,8 @@ module Diff {
     - replaced the diff algorithm with the Myers diff algorithm for optimal
       (shortest) edit scripts and better performance with scattered changes
     - added @ref Diff::diff_chars() and @ref Diff::diff_words() for intra-line diffing
+    - added @ref Diff::diff_files() for comparing files directly
+    - added @ref Diff::diff_side_by_side() for columnar side-by-side output
     - added @ref Diff::patch_apply() for applying unified diffs
     - added @ref Diff::diff_data() for recursive structured data comparison
     - added @ref Diff::diff_data_text() for human-readable data diff output
@@ -813,6 +817,129 @@ string result = diff_unified(old_text, new_text, "a/file.txt", "b/file.txt");
             }
         }
         return output;
+    }
+
+    #! produces side-by-side diff output between two strings, similar to \c "diff -y"
+    /** @par Example:
+        @code{.py}
+string result = diff_side_by_side("line1\nold\nline3\n", "line1\nnew\nline3\n");
+# Output:
+# line1                          line1
+# old                           | new
+# line3                          line3
+        @endcode
+
+        @param s1 the original string
+        @param s2 the modified string
+        @param width total output width in columns (default: 80)
+        @param enable_color if @ref True "True", use ANSI colors when stdout is a terminal
+
+        @return side-by-side diff string; empty string if inputs are identical
+
+        @since Diff 1.1
+    */
+    public string sub diff_side_by_side(string s1, string s2, int width = 80,
+            bool enable_color = True) {
+        if (s1 == s2) {
+            return "";
+        }
+
+        list<string> old_lines = s1.split("\n");
+        list<string> new_lines = s2.split("\n");
+        list<auto> results = diff(old_lines, new_lines);
+
+        TerminalColor color(enable_color);
+        # Each side gets half the width minus the 3-char separator (" | ", " < ", " > ", "   ")
+        int col_width = (width - 3) / 2;
+        if (col_width < 1) {
+            col_width = 1;
+        }
+
+        string output = "";
+        foreach auto item in (results) {
+            if (item.typeCode() == NT_HASH) {
+                list<auto> del = item.d;
+                list<auto> ins = item.i;
+                int max_len = del.size() > ins.size() ? del.size() : ins.size();
+                for (int i = 0; i < max_len; ++i) {
+                    string left = i < del.size() ? string(del[i]) : "";
+                    string right = i < ins.size() ? string(ins[i]) : "";
+                    string marker;
+                    if (i < del.size() && i < ins.size()) {
+                        marker = " | ";
+                    } else if (i < del.size()) {
+                        marker = " < ";
+                    } else {
+                        marker = " > ";
+                    }
+                    string line = sbs_pad(left, col_width) + marker + sbs_trunc(right, col_width);
+                    if (color.enabled) {
+                        if (marker == " | ") {
+                            output += color.yellow(line) + "\n";
+                        } else if (marker == " < ") {
+                            output += color.red(line) + "\n";
+                        } else {
+                            output += color.green(line) + "\n";
+                        }
+                    } else {
+                        output += line + "\n";
+                    }
+                }
+            } else {
+                string text = string(item);
+                output += sbs_pad(text, col_width) + "   " + sbs_trunc(text, col_width) + "\n";
+            }
+        }
+        return output;
+    }
+
+    #! Pads or truncates a string to exactly the given width
+    string sub sbs_pad(string s, int width) {
+        if (s.length() > width) {
+            return s.substr(0, width - 1) + ">";
+        }
+        return sprintf("%-" + string(width) + "s", s);
+    }
+
+    #! Truncates a string to at most the given width
+    string sub sbs_trunc(string s, int width) {
+        if (s.length() > width) {
+            return s.substr(0, width - 1) + ">";
+        }
+        return s;
+    }
+
+    #! compares two files and returns a unified diff
+    /** Reads both files and produces unified diff output, equivalent to calling
+        @ref diff_unified() on the file contents.
+
+        @par Example:
+        @code{.py}
+string patch = diff_files("/path/to/old.txt", "/path/to/new.txt");
+if (patch) {
+    printf("%s\n", patch);
+}
+        @endcode
+
+        @param path1 path to the original file
+        @param path2 path to the modified file
+        @param ctx_lines number of context lines around each change (default: 3)
+
+        @return unified diff string with file paths as labels; empty string if files are identical
+
+        @throw FILE-OPEN2-ERROR if either file cannot be opened
+        @throw FILE-READ-ERROR if either file cannot be read
+
+        @since Diff 1.1
+    */
+    public string sub diff_files(string path1, string path2, int ctx_lines = 3) {
+        ReadOnlyFile f1(path1);
+        string s1 = f1.read(-1);
+
+        ReadOnlyFile f2(path2);
+        string s2 = f2.read(-1);
+
+        return diff_unified(s1, s2, path1, path2, ctx_lines);
     }
 
     #! applies a unified diff patch to a source string
