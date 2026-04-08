@@ -3122,6 +3122,38 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
             break;
         }
 
+        case QoreIRInstGroup::LValuePath: {
+            auto* pi = new QoreIRLValuePathInstruction(opcode);
+            pi->weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
+            for (uint8_t i = 0; i < num_steps; ++i) {
+                LVPathStep step;
+                step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ptr));
+                step.slot_id = QoreAOTBinaryReader::readU32(ptr);
+                const char* name = reader.readStringRef(ptr);
+                step.name = name ? name : "";
+                step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
+                // Resolve local vars from AOT locals
+                if ((step.kind == LVPathStepKind::LocalVar || step.kind == LVPathStepKind::ClosureVar)
+                        && step.slot_id != UINT32_MAX && step.slot_id < ctx->num_locals) {
+                    step.ref_ptr = ctx->locals[step.slot_id];
+                }
+                // GlobalVar/ThreadLocalVar: resolve by name via program namespace
+                if ((step.kind == LVPathStepKind::GlobalVar || step.kind == LVPathStepKind::ThreadLocalVar)
+                        && !step.name.empty()) {
+                    step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
+                        *pp->RootNS, step.name.c_str());
+                }
+                pi->path.push_back(step);
+            }
+            inst.reset(pi);
+            break;
+        }
+
         case QoreIRInstGroup::FusedAddLocal: {
             const char* target_name = reader.readStringRef(ptr);
             const char* source_name = reader.readStringRef(ptr);

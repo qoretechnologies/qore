@@ -1213,17 +1213,23 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
         const LVPathStep& step = steps[i];
         qore_type_t t = val ? val->getType() : qv->getType();
         switch (step.kind) {
-            case LVPathStepKind::HashKeyConst: {
-                if (doHashLValue(t, step.name.c_str(), for_remove)) {
-                    return -1;
-                }
-                break;
-            }
+            case LVPathStepKind::HashKeyConst:
             case LVPathStepKind::HashKey: {
-                // Dynamic key — the caller must have set up the key string
-                // The key is passed as a string in step.name (resolved by the caller)
-                if (doHashLValue(t, step.name.c_str(), for_remove)) {
-                    return -1;
+                // Check if the target is an object — use doObjLValue instead of doHashLValue
+                QoreObject* o = nullptr;
+                if (t == NT_WEAKREF) {
+                    o = getValue().get<const WeakReferenceNode>()->get();
+                } else if (t == NT_OBJECT) {
+                    o = getValue().get<QoreObject>();
+                }
+                if (o) {
+                    if (doObjLValue(o, step.name.c_str(), for_remove)) {
+                        return -1;
+                    }
+                } else {
+                    if (doHashLValue(t, step.name.c_str(), for_remove)) {
+                        return -1;
+                    }
                 }
                 break;
             }

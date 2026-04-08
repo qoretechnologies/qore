@@ -2688,6 +2688,120 @@ static bool isDynamicKeyHashSubscript(const QoreValue& expr,
     return true;
 }
 
+// Extract a structured lvalue path from an AST lvalue expression.
+// Returns true if the expression can be represented as a sequence of LVPathSteps.
+// On success, populates `path` and `dynamic_operands` (expressions to lower for dynamic keys/indices).
+// This handles ALL variable types (local, closure, global, thread-local, self member, static var)
+// and ALL navigation types (hash key const, hash key dynamic, list index).
+static bool extractLValuePath(const QoreValue& expr,
+        std::vector<LVPathStep>& path, std::vector<QoreValue>& dynamic_operands) {
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (!node) {
+        return false;
+    }
+
+    // Root: VarRefNode (local, closure, global, thread-local, immediate)
+    if (auto* vr = dynamic_cast<const VarRefNode*>(node)) {
+        LVPathStep step;
+        qore_var_t vtype = vr->getType();
+        switch (vtype) {
+            case VT_LOCAL:
+            case VT_LOCAL_TS:
+                step.kind = LVPathStepKind::LocalVar;
+                step.ref_ptr = vr->ref.id;
+                step.type_info = vr->getTypeInfo();
+                break;
+            case VT_CLOSURE:
+                step.kind = LVPathStepKind::ClosureVar;
+                step.ref_ptr = vr->ref.id;
+                step.name = vr->getName();
+                step.type_info = vr->getTypeInfo();
+                break;
+            case VT_GLOBAL:
+                step.kind = LVPathStepKind::GlobalVar;
+                step.ref_ptr = vr->ref.var;
+                step.name = vr->getName();
+                step.type_info = vr->getTypeInfo();
+                break;
+            case VT_THREAD_LOCAL:
+                step.kind = LVPathStepKind::ThreadLocalVar;
+                step.ref_ptr = vr->ref.var;
+                step.name = vr->getName();
+                step.type_info = vr->getTypeInfo();
+                break;
+            case VT_IMMEDIATE:
+                // Immediate closures — treat as closure var
+                step.kind = LVPathStepKind::ClosureVar;
+                step.ref_ptr = nullptr;
+                step.name = vr->getName();
+                step.type_info = vr->getTypeInfo();
+                break;
+            default:
+                return false;
+        }
+        path.push_back(step);
+        return true;
+    }
+
+    // Root: SelfVarrefNode (self.member)
+    if (auto* sv = dynamic_cast<const SelfVarrefNode*>(node)) {
+        LVPathStep step;
+        step.kind = LVPathStepKind::SelfMember;
+        step.name = sv->str;
+        path.push_back(step);
+        return true;
+    }
+
+    // Root: StaticClassVarRefNode (ClassName::var)
+    if (auto* scv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
+        LVPathStep step;
+        step.kind = LVPathStepKind::StaticVar;
+        step.ref_ptr = scv;
+        step.name = scv->str;
+        path.push_back(step);
+        return true;
+    }
+
+    // Navigation: QoreHashObjectDereferenceOperatorNode (container{key})
+    if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        // Recurse on left side (container)
+        if (!extractLValuePath(hd->getLeft(), path, dynamic_operands)) {
+            return false;
+        }
+        // Add hash key step
+        LVPathStep step;
+        const QoreValue right = hd->getRight();
+        if (right.hasNode() && right.getType() == NT_STRING) {
+            step.kind = LVPathStepKind::HashKeyConst;
+            step.name = right.get<const QoreStringNode>()->c_str();
+        } else {
+            step.kind = LVPathStepKind::HashKey;
+            // Store the expression to lower as a dynamic operand
+            dynamic_operands.push_back(right);
+            // operand_idx will be set after lowering
+        }
+        path.push_back(step);
+        return true;
+    }
+
+    // Navigation: QoreSquareBracketsOperatorNode (container[index])
+    if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        // Recurse on left side (container)
+        if (!extractLValuePath(sb->getLeft(), path, dynamic_operands)) {
+            return false;
+        }
+        // Add list index step
+        LVPathStep step;
+        step.kind = LVPathStepKind::ListIndex;
+        dynamic_operands.push_back(sb->getRight());
+        path.push_back(step);
+        return true;
+    }
+
+    // Unsupported expression type for path extraction
+    return false;
+}
+
 // Returns true if expr is $list[index] where $list is a local variable and index is compile-time constant.
 // Sets container_var and index_expr if true.
 static bool isConstIndexListSubscript(const QoreValue& expr,
@@ -4340,6 +4454,46 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         if (!is_weak && isConstIndexListSubscript(assign->getLeft(), container_var, index_expr)) {
             return emitListIndexDirectStore(container_var, index_expr, right, expr,
                 assign->loc, error);
+        }
+        // LValuePath: structured path for all remaining lvalue cases (reference vars,
+        // object vars, non-VarRef containers, nested member access, etc.)
+        {
+            std::vector<LVPathStep> lv_path;
+            std::vector<QoreValue> dynamic_operands;
+            if (extractLValuePath(assign->getLeft(), lv_path, dynamic_operands)) {
+                // Lower dynamic key/index operands
+                std::vector<QoreIRValue> dyn_vals;
+                for (auto& dop : dynamic_operands) {
+                    QoreIRValue dv = lowerExpression(dop, error);
+                    if (!dv.isValid()) {
+                        return QoreIRValue();
+                    }
+                    dyn_vals.push_back(dv);
+                }
+                // Assign operand indices to dynamic path steps
+                uint32_t dyn_idx = 0;
+                for (auto& step : lv_path) {
+                    if ((step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex)
+                            && step.operand_idx == UINT32_MAX) {
+                        if (dyn_idx < dyn_vals.size()) {
+                            step.operand_idx = dyn_vals[dyn_idx].id;
+                            ++dyn_idx;
+                        }
+                    }
+                }
+                // Create LValuePathAssign instruction
+                auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+                    QoreIROpcode::LValuePathAssign);
+                path_inst->path = std::move(lv_path);
+                path_inst->weak = is_weak;
+                path_inst->loc = assign->loc;
+                path_inst->operands.push_back(right);
+                // Add dynamic operands so they're tracked for cleanup
+                for (auto& dv : dyn_vals) {
+                    path_inst->operands.push_back(dv);
+                }
+                return right;
+            }
         }
         if (!guardLValueBase(assign->getLeft(), error)) {
             return QoreIRValue();
@@ -7561,6 +7715,55 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
     store_inst->operands.push_back(key_val);
 
     return value;
+}
+
+// Try to emit a LValuePath instruction for any lvalue expression that can be path-encoded.
+// Returns valid QoreIRValue on success, invalid on failure (lvalue not path-encodable).
+QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
+        const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
+        bool weak, LVCompoundOp compound_op, LVUnaryOp unary_op) {
+    std::vector<LVPathStep> lv_path;
+    std::vector<QoreValue> dynamic_operands;
+    if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
+        return QoreIRValue();
+    }
+    // Lower dynamic key/index operands
+    std::vector<QoreIRValue> dyn_vals;
+    for (auto& dop : dynamic_operands) {
+        QoreIRValue dv = lowerExpression(dop, error);
+        if (!dv.isValid()) {
+            return QoreIRValue();
+        }
+        dyn_vals.push_back(dv);
+    }
+    // Assign operand indices to dynamic path steps
+    uint32_t dyn_idx = 0;
+    for (auto& step : lv_path) {
+        if ((step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex)
+                && step.operand_idx == UINT32_MAX) {
+            if (dyn_idx < dyn_vals.size()) {
+                step.operand_idx = dyn_vals[dyn_idx].id;
+                ++dyn_idx;
+            }
+        }
+    }
+    // Create the instruction
+    auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(opcode);
+    path_inst->path = std::move(lv_path);
+    path_inst->weak = weak;
+    path_inst->compound_op = compound_op;
+    path_inst->unary_op = unary_op;
+    path_inst->loc = loc;
+    // Add RHS operand if provided
+    if (rhs) {
+        path_inst->operands.push_back(*rhs);
+    }
+    // Add dynamic operands
+    for (auto& dv : dyn_vals) {
+        path_inst->operands.push_back(dv);
+    }
+    // Return a sentinel value (the RHS or a dummy for unary ops)
+    return rhs ? *rhs : path_inst->result;
 }
 
 // Emit LoadLocal(list, auto_ref=false) → ListIndexStore(list, value, index) for l[i] = val.

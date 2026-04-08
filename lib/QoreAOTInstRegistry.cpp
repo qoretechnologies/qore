@@ -397,6 +397,7 @@ MAKE_STUB_PAIR(49, QoreIRMakeHashConstKeysInstruction)
 MAKE_STUB_PAIR(50, QoreIRSwitchCaseMatchInstruction)
 MAKE_STUB_PAIR(51, QoreIRListIndexAccessInstruction)
 MAKE_STUB_PAIR(52, QoreIRHashKeyStoreDynamicInstruction)
+MAKE_STUB_PAIR(53, QoreIRLValuePathInstruction)
 
 #undef MAKE_STUB_PAIR
 
@@ -2019,6 +2020,58 @@ static std::unique_ptr<QoreIRInstruction> readHashKeyStoreDynamic(
 }
 
 // ============================================================================
+// Group 59: LValuePath - Structured lvalue path operations
+// ============================================================================
+
+static bool writeLValuePath(AOTInstWriteCtx& ctx) {
+    auto* pi = static_cast<const QoreIRLValuePathInstruction*>(ctx.inst);
+    // Write opcode sub-fields
+    ctx.writer.writeU8(pi->weak ? 1 : 0);
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->compound_op));
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->unary_op));
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->binary_mut_op));
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->ternary_op));
+    // Write path steps
+    ctx.writer.writeU8(static_cast<uint8_t>(pi->path.size()));
+    for (const auto& step : pi->path) {
+        ctx.writer.writeU8(static_cast<uint8_t>(step.kind));
+        ctx.writer.writeU32(step.slot_id);
+        ctx.writer.writeStringRef(step.name.c_str());
+        ctx.writer.writeU32(step.operand_idx);
+    }
+    return true;
+}
+
+static std::unique_ptr<QoreIRInstruction> readLValuePath(
+        uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
+        const std::vector<QoreIRValue>& operands, uint32_t result_id,
+        AOTInstReadCtx& ctx) {
+    auto* pi = new QoreIRLValuePathInstruction(static_cast<QoreIROpcode>(opcode_raw));
+    pi->weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
+    pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ctx.ptr));
+    // Read path steps
+    uint8_t num_steps = QoreAOTBinaryReader::readU8(ctx.ptr);
+    for (uint8_t i = 0; i < num_steps; ++i) {
+        LVPathStep step;
+        step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ctx.ptr));
+        step.slot_id = QoreAOTBinaryReader::readU32(ctx.ptr);
+        const char* name = ctx.reader.readStringRef(ctx.ptr);
+        step.name = name ? name : "";
+        step.operand_idx = QoreAOTBinaryReader::readU32(ctx.ptr);
+        // ref_ptr is resolved at deserialization time in QoreAOTRuntime.cpp,
+        // not here — AOTInstReadCtx doesn't have the local/global resolution context
+        pi->path.push_back(step);
+    }
+    pi->result = QoreIRValue(result_id);
+    pi->operands = operands;
+    pi->exception_target = exc_target;
+    return std::unique_ptr<QoreIRInstruction>(pi);
+}
+
+// ============================================================================
 // Instruction Group Registry Table
 // ============================================================================
 
@@ -2201,8 +2254,10 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 58: HashKeyStoreDynamic
     { "HashKeyStoreDynamic", 58, true, false, writeHashKeyStoreDynamic, readHashKeyStoreDynamic, "Hash key storage with dynamic key" },
 
-    // Remaining 59-255: Unsupported/undefined
-    UNUSED_ENTRY(59),
+    // Index 59: LValuePath
+    { "LValuePath", 59, true, false, writeLValuePath, readLValuePath, "Structured lvalue path operations" },
+
+    // Remaining 60-255: Unsupported/undefined
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),

@@ -384,6 +384,11 @@ static const char* opcodeName(QoreIROpcode op) {
         case QoreIROpcode::DivNumber: return "div.number";
         case QoreIROpcode::HashKeyStore: return "hash.key.store";
         case QoreIROpcode::HashKeyStoreDynamic: return "hash.key.store.dynamic";
+        case QoreIROpcode::LValuePathAssign: return "lvalue.path.assign";
+        case QoreIROpcode::LValuePathCompound: return "lvalue.path.compound";
+        case QoreIROpcode::LValuePathUnary: return "lvalue.path.unary";
+        case QoreIROpcode::LValuePathBinaryMut: return "lvalue.path.binary.mut";
+        case QoreIROpcode::LValuePathTernary: return "lvalue.path.ternary";
         case QoreIROpcode::ListIndexAccess: return "list.index.access";
         case QoreIROpcode::ListIndexStore: return "list.index.store";
         case QoreIROpcode::AddAssignLocalInt: return "add.assign.local.int";

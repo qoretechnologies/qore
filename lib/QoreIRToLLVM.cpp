@@ -9866,6 +9866,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return false;
         }
 
+        // LValuePath opcodes: not yet lowered to LLVM; function falls back to IR interpreter
+        case QoreIROpcode::LValuePathAssign:
+        case QoreIROpcode::LValuePathCompound:
+        case QoreIROpcode::LValuePathUnary:
+        case QoreIROpcode::LValuePathBinaryMut:
+        case QoreIROpcode::LValuePathTernary:
+            error = "LValuePath opcodes not yet supported in LLVM backend";
+            return false;
+
         default:
             error = "unsupported IR opcode for LLVM lowering: " + std::to_string(static_cast<int>(inst->opcode));
             return false;

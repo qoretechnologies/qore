@@ -6181,6 +6181,79 @@ load_local_done:
                 ++ip;
                 break;
             }
+            case QoreIROpcode::LValuePathAssign: {
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (path_inst->operands.empty() || path_inst->path.empty()) {
+                    xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.assign missing operand or path");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+
+                // Resolve dynamic key/index operands into the path step names
+                // (the navigatePath method uses step.name for hash keys)
+                for (auto& step : path_inst->path) {
+                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        QoreStringValueHelper key_str(key_val);
+                        step.name = key_str->c_str();
+                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    }
+                }
+
+                QoreValue val = getIRValue(values, path_inst->operands[0]);
+                ValueHolder val_holder(val.refSelf(), xsink);
+
+                // Pre-invalidation for local variable targets
+                const LVPathStep& root = path_inst->path[0];
+                if (root.kind == LVPathStepKind::LocalVar || root.kind == LVPathStepKind::ClosureVar) {
+                    // Full slot cache wipe for safety (path may reference any local)
+                    for (size_t i = 0; i < locals_slot_cache.size(); ++i) {
+                        locals_slot_cache[i].discard(xsink);
+                        locals_slot_cache[i] = QoreValue();
+                    }
+                }
+
+                LValueHelper lvh(xsink);
+                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+
+                // After write-through (reference variables, object members, etc.),
+                // slot caches for other variables may be stale. Full cleanup is safe.
+                cleanupLocalCaches();
+
+                if (path_inst->result.isValid()) {
+                    setValueSlot(values, path_inst->result.id, val, xsink);
+                    if (val.hasNode()) {
+                        cleanup.push_back(path_inst->result.id);
+                    }
+                }
+                ++ip;
+                break;
+            }
+            // LValuePathCompound, LValuePathUnary, LValuePathBinaryMut, LValuePathTernary
+            // — stub handlers; will be implemented incrementally
+            case QoreIROpcode::LValuePathCompound:
+            case QoreIROpcode::LValuePathUnary:
+            case QoreIROpcode::LValuePathBinaryMut:
+            case QoreIROpcode::LValuePathTernary: {
+                xsink->raiseException("IR-EXEC-ERROR",
+                    "lvalue path compound/unary/mutation/ternary not yet implemented (opcode %d)",
+                    (int)inst->opcode);
+                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                cleanupLocalCaches();
+                return false;
+            }
             case QoreIROpcode::PreIncLValue:
             case QoreIROpcode::PreDecLValue:
             case QoreIROpcode::PostIncLValue:

@@ -4137,6 +4137,23 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     slots.getLocalSlot(reinterpret_cast<const void*>(lis->container->ref.id));
                     break;
                 }
+                case QoreIROpcode::LValuePathAssign:
+                case QoreIROpcode::LValuePathCompound:
+                case QoreIROpcode::LValuePathUnary:
+                case QoreIROpcode::LValuePathBinaryMut:
+                case QoreIROpcode::LValuePathTernary: {
+                    // Register local variable slots referenced in path steps
+                    auto* pi = static_cast<QoreIRLValuePathInstruction*>(inst.get());
+                    for (auto& step : pi->path) {
+                        if ((step.kind == LVPathStepKind::LocalVar
+                                || step.kind == LVPathStepKind::ClosureVar)
+                                && step.ref_ptr) {
+                            int32_t sid = slots.getLocalSlot(step.ref_ptr);
+                            step.slot_id = static_cast<uint32_t>(sid);
+                        }
+                    }
+                    break;
+                }
                 case QoreIROpcode::ConstEnum: {
                     auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
                     QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
