@@ -240,7 +240,8 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclSocketPollOperationInfo,
     * hashdeclSocketPollResultInfo,
     * hashdeclEventPollInfo,
-    * hashdeclTimerEventInfo;
+    * hashdeclTimerEventInfo,
+    * hashdeclRegexMatchInfo;
 
 const QoreEnumDecl* enumHTTP2Mode;
 const QoreEnumDecl* enumHTTP3Mode;
@@ -1362,6 +1363,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initProgramClass(qns));
     qns.addSystemClass(initDebugProgramClass(qns));
     qns.addSystemClass(initBreakpointClass(qns));
+
+    hashdeclRegexMatchInfo = init_hashdecl_RegexMatchInfo(qns);
 
     qns.addSystemClass(initRegexClass(qns));
     qns.addSystemClass(initRegexSubstClass(qns));

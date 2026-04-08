@@ -2,7 +2,7 @@
 /*
     QoreRegexInterface.h
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -41,6 +41,7 @@
 #define QRE_NOTBOL             0x00000001u
 #define QRE_NOTEOL             0x00000002u
 #define QRE_UNGREEDY           0x00040000u  /* C       */
+#define QRE_DUPNAMES           0x00000040u  /* C       */
 #define QRE_NOTEMPTY           0x00000004u  /* ) These two must be kept */
 #define QRE_UTF                0x00080000u  /* C J M D */
 #define QRE_UCP                0x00020000u  /* C J M D */

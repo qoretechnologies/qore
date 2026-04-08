@@ -354,7 +354,9 @@ set(QORE_BIN_FILES
     bin/qdbg-vsc-adapter
     bin/qore-openapi3-gen
     bin/qore-asyncapi-gen
+    bin/qdiff
     bin/qfmt
+    bin/qpatch
     bin/qls
     bin/qore-extract-qm-metadata
 )

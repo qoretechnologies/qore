@@ -1462,7 +1462,8 @@ if (x !== y)
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a expression <tt>=~ [m]/</tt><em>regex</em><tt>/[isxmu]</tt>
+    \a expression <tt>=~ [m]/</tt><em>regex</em><tt>/[isxmuU]</tt>\n
+    \a expression <tt>=~ m{</tt><em>regex</em><tt>}[isxmuU]</tt>
 
     @par Return Type
     @ref bool_type "bool"
@@ -1471,6 +1472,11 @@ if (x !== y)
     @code{.py}
 if (str =~ /hello/)
     printf("%s contains 'hello'\n", str);
+    @endcode
+    @code{.py}
+# brace delimiters avoid escaping slashes
+if (url =~ m{https?://[\w.]+/\w+})
+    printf("URL: %s\n", url);
     @endcode
 
     <b>Arguments Processed by =~</b>
@@ -1512,7 +1518,8 @@ if (str !~ /hello/)
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a lvalue <tt>=~ s/</tt><em>regex_pattern</em><tt>/</tt><em>target_string</em><tt>/[isxmug]</tt>
+    \a lvalue <tt>=~ s/</tt><em>regex_pattern</em><tt>/</tt><em>target_string</em><tt>/[isxmugU]</tt>\n
+    \a lvalue <tt>=~ s{</tt><em>regex_pattern</em><tt>}{</tt><em>target_string</em><tt>}[isxmugU]</tt>
 
     @par Return Type
     @ref string_type "string" or @ref nothing (if the \a lvalue does not hold a string)
@@ -1521,6 +1528,10 @@ if (str !~ /hello/)
     @code{.py}
 str =~ s/hello/goodbye/i;
 str =~ s/(\w+) +(\w+)/$2, $1/;
+    @endcode
+    @code{.py}
+# brace delimiters avoid escaping slashes
+str =~ s{http://old\.example\.com}{https://new.example.com}g;
     @endcode
 
     <b>Arguments Processed by =~ s///</b>
@@ -1537,7 +1548,8 @@ str =~ s/(\w+) +(\w+)/$2, $1/;
     See @ref qore_regex for more information about regular expression support in %Qore.
 
     @par Syntax
-    \a string <tt>=~ x/</tt><em>regex_with_patterns</em><tt>/[isxmug]</tt>
+    \a string <tt>=~ x/</tt><em>regex_with_patterns</em><tt>/[isxmugU]</tt>\n
+    \a string <tt>=~ x{</tt><em>regex_with_patterns</em><tt>}[isxmugU]</tt>
 
     @par Return Type
     @ref list_type "list" or @ref nothing (if the \a lvalue does not hold a string or if the pattern is not matched)
@@ -1561,13 +1573,15 @@ list =~ x/(.*)\.(.*)/;
     Makes character substitutions in an lvalue; character ranges can also be used.
 
     @par Syntax
-    \a lvalue <tt>=~ tr/</tt><em>source_chars</em><tt>/</tt><em>target_chars</em><tt>/</tt>
+    \a lvalue <tt>=~ tr/</tt><em>source_chars</em><tt>/</tt><em>target_chars</em><tt>/</tt>\n
+    \a lvalue <tt>=~ tr{</tt><em>source_chars</em><tt>}{</tt><em>target_chars</em><tt>}</tt>
 
     @par Return Type
     @ref string_type "string" or @ref nothing (if the \a lvalue does not hold a string)
 
     @par Example
     @code{.py} str =~ tr/a-z/A-Z/;@endcode
+    @code{.py} str =~ tr{a-z}{A-Z};@endcode
 
     <b>Arguments Processed by =~ tr//</b>
     |!Argument|!Processing

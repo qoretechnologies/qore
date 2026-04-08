@@ -20,6 +20,10 @@ public class RegexTest inherits QUnit::Test {
         addTestCase("getter methods test", \getterMethodsTest());
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner cases test", \cornerCasesTest());
+        addTestCase("ungreedy test", \ungreedyTest());
+        addTestCase("count test", \countTest());
+        addTestCase("named groups test", \namedGroupsTest());
+        addTestCase("detailed extraction test", \detailedExtractionTest());
 
         set_return_value(main());
     }
@@ -219,5 +223,79 @@ public class RegexTest inherits QUnit::Test {
         Regex negLookahead("foo(?!bar)");
         assertFalse(negLookahead.match("foobar"));
         assertTrue(negLookahead.match("foobaz"));
+    }
+
+    private ungreedyTest() {
+        # RE_Ungreedy makes quantifiers lazy by default
+        Regex greedy("a(.*)X");
+        *list<*string> l = greedy.extractGroups("aXbXc");
+        assertEq(list("Xb"), l);  # greedy: .* matches Xb (full match is aXbX)
+
+        Regex ungreedy("a(.*)X", RE_Ungreedy);
+        l = ungreedy.extractGroups("aXbXc");
+        # ungreedy: .* matches "" (empty), full match is "aX"; empty-only capture returns NOTHING
+        assertNothing(l);
+
+        # RE_Ungreedy with match
+        assertTrue(ungreedy.match("aXbXc"));
+
+        # getOptions reflects RE_Ungreedy
+        assertEq(RE_Ungreedy, ungreedy.getOptions() & RE_Ungreedy);
+    }
+
+    private countTest() {
+        Regex r("\\d+");
+        assertEq(2, r.count("abc 123 def 456"));
+        assertEq(0, r.count("no digits"));
+        assertEq(0, r.count(""));
+    }
+
+    private namedGroupsTest() {
+        Regex r("(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+        auto h = r.extractNamedGroups("date: 2026-04-08");
+        assertEq("2026", h.year);
+        assertEq("04", h.month);
+        assertEq("08", h.day);
+
+        # no match
+        assertNothing(r.extractNamedGroups("no date here"));
+
+        # pattern without named groups returns NOTHING
+        Regex r2("\\d+");
+        assertNothing(r2.extractNamedGroups("123"));
+
+        # global named extraction
+        Regex rg("(?<word>\\w+)", RE_Global);
+        auto l = rg.extractNamedGroups("hello world");
+        assertEq(2, l.size());
+        assertEq("hello", l[0].word);
+        assertEq("world", l[1].word);
+    }
+
+    private detailedExtractionTest() {
+        Regex r("(\\d+)", RE_Global);
+        *list<hash<RegexMatchInfo>> matches = r.extractDetailed("a1 b22 c333");
+        assertEq(3, matches.size());
+        assertEq("1", matches[0].match);
+        assertEq(1, matches[0].offset);
+        assertEq(1, matches[0].length);
+        assertEq(list("1"), matches[0].groups);
+        assertEq("22", matches[1].match);
+        assertEq(4, matches[1].offset);
+        assertEq("333", matches[2].match);
+        assertEq(8, matches[2].offset);
+        assertEq(3, matches[2].length);
+
+        # no match
+        Regex r2("\\d+");
+        assertNothing(r2.extractDetailed("no digits"));
+
+        # with named groups
+        Regex r3("(?<k>\\w+)=(?<v>\\w+)");
+        matches = r3.extractDetailed("key=val");
+        assertEq(1, matches.size());
+        assertEq("key=val", matches[0].match);
+        assertEq("key", matches[0].named_groups.k);
+        assertEq("val", matches[0].named_groups.v);
     }
 }

@@ -4655,8 +4655,9 @@ int rows_updated = t.update(("counter": uop_divide(2)));
             "exp": AbstractDataProvider::GenericExpressions{DP_SEARCH_OP_IN},
             "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                 string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                # DPQL produces varargs (field, v1, v2, ...) so iterate args[1..]
                 *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
-                    AbstractDataProviderTypeMap."any"), args[1]));
+                    AbstractDataProviderTypeMap."any"), args[1..]));
                 return exists ins ? sprintf("%s in (%s)", exp0, ins) : "1 != 1";
             },
         },
@@ -5264,11 +5265,11 @@ int rows_updated = t.update(("counter": uop_divide(2)));
         COP_RANK: (
             "exp": <DataProviderExpressionInfo>{
                 "type": DET_Operator,
-                "name": COP_PERCENT_RANK,
-                "display_name": COP_PERCENT_RANK,
-                "short_desc": "Returns the row number of a row in an ordered group of rows",
-                "desc": "Returns the row number of a row in an ordered group of rows",
-                "symbol": COP_PERCENT_RANK,
+                "name": COP_RANK,
+                "display_name": COP_RANK,
+                "short_desc": "Returns the rank of a row in an ordered group of rows",
+                "desc": "Returns the rank of a row in an ordered group of rows",
+                "symbol": COP_RANK,
                 "groups": "Window",
                 "args": (),
                 "role": ER_Field,
@@ -5295,6 +5296,272 @@ int rows_updated = t.update(("counter": uop_divide(2)));
                 return "row_number()";
             },
         ),
+        # --- Null handling ---
+        DP_OP_IS_NULL: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_IS_NULL,
+                "display_name": "is null",
+                "short_desc": "Returns True if the argument is null",
+                "desc": "Returns True if the argument is null",
+                "symbol": "isNull",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("%s is null",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_OP_IS_NOT_NULL: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_IS_NOT_NULL,
+                "display_name": "is not null",
+                "short_desc": "Returns True if the argument is not null",
+                "desc": "Returns True if the argument is not null",
+                "symbol": "isNotNull",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("%s is not null",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_OP_NOT_IN: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_NOT_IN,
+                "display_name": "not in",
+                "short_desc": "Returns True if the value is not in the list",
+                "desc": "Returns True if the value is not in the list",
+                "symbol": "notIn",
+                "groups": "Comparison",
+                "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                "return_type": AbstractDataProviderTypeMap."bool",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any");
+                # DPQL produces varargs (field, v1, v2, ...) so iterate args[1..]
+                *string ins = (foldl $1 + "," + $2, (map info.table.getExpressionArg(\info, role, $1,
+                    AbstractDataProviderTypeMap."any"), args[1..]));
+                return exists ins ? sprintf("%s not in (%s)", exp0, ins) : "1 = 1";
+            },
+        },
+        # --- Math functions ---
+        DP_FUNC_ABS: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_ABS,
+                "display_name": "abs",
+                "short_desc": "Returns the absolute value",
+                "desc": "Returns the absolute value of a number",
+                "symbol": "abs()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("abs(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_FUNC_ROUND: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_ROUND,
+                "display_name": "round",
+                "short_desc": "Rounds a number to the given precision",
+                "desc": "Rounds a number to the given number of decimal places",
+                "symbol": "round()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalIntType),
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                    AbstractDataProviderTypeMap."any");
+                if (exists args[1]) {
+                    return sprintf("round(%s, %s)", exp0,
+                        info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."int"));
+                }
+                return sprintf("round(%s)", exp0);
+            },
+        },
+        DP_FUNC_FLOOR: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_FLOOR,
+                "display_name": "floor",
+                "short_desc": "Returns the largest integer not greater than the argument",
+                "desc": "Returns the largest integer not greater than the argument (rounds down)",
+                "symbol": "floor()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."int",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("floor(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_FUNC_CEIL: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_CEIL,
+                "display_name": "ceil",
+                "short_desc": "Returns the smallest integer not less than the argument",
+                "desc": "Returns the smallest integer not less than the argument (rounds up)",
+                "symbol": "ceil()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType,),
+                "return_type": AbstractDataProviderTypeMap."int",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("ceil(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_OP_MOD: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Operator,
+                "name": DP_OP_MOD,
+                "display_name": "modulus",
+                "short_desc": "Returns the remainder of integer division",
+                "desc": "Returns the remainder of dividing the first argument by the second",
+                "symbol": "%",
+                "groups": "Data Manipulation",
+                "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("mod(%s, %s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"),
+                    info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        # --- Null handling functions ---
+        DP_FUNC_NULLIF: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_NULLIF,
+                "display_name": "nullif",
+                "short_desc": "Returns null if the two arguments are equal",
+                "desc": "Returns null if the two arguments are equal; otherwise returns the first argument",
+                "symbol": "nullif()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType),
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("nullif(%s, %s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."any"),
+                    info.table.getExpressionArg(\info, role, args[1], AbstractDataProviderTypeMap."any"));
+            },
+        },
+        DP_FUNC_COALESCE: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_COALESCE,
+                "display_name": "coalesce",
+                "short_desc": "Returns the first non-null argument",
+                "desc": "Returns the value of the first argument that is not null",
+                "symbol": "coalesce()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType,),
+                "varargs": True,
+                "min_args": 1,
+                "return_type": AbstractDataProviderTypeMap."any",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("coalesce(%s)", (foldl $1 + ", " + $2,
+                    (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args)));
+            },
+        },
+        # --- String functions ---
+        DP_FUNC_TRIM: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_TRIM,
+                "display_name": "trim",
+                "short_desc": "Trims whitespace from both sides of a string",
+                "desc": "Returns the string with leading and trailing whitespace removed",
+                "symbol": "trim()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureStringType,),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("trim(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."string"));
+            },
+        },
+        DP_FUNC_LTRIM: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_LTRIM,
+                "display_name": "ltrim",
+                "short_desc": "Trims whitespace from the left side of a string",
+                "desc": "Returns the string with leading whitespace removed",
+                "symbol": "ltrim()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureStringType,),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("ltrim(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."string"));
+            },
+        },
+        DP_FUNC_RTRIM: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_RTRIM,
+                "display_name": "rtrim",
+                "short_desc": "Trims whitespace from the right side of a string",
+                "desc": "Returns the string with trailing whitespace removed",
+                "symbol": "rtrim()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureStringType,),
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return sprintf("rtrim(%s)",
+                    info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."string"));
+            },
+        },
+        DP_FUNC_CONCAT: {
+            "exp": <DataProviderExpressionInfo>{
+                "type": DET_Function,
+                "name": DP_FUNC_CONCAT,
+                "display_name": "concat",
+                "short_desc": "Concatenates values as strings",
+                "desc": "Concatenates all arguments as strings",
+                "symbol": "concat()",
+                "groups": "Data Manipulation",
+                "role": ER_All,
+                "args": (DataProviderSignatureAnyType,),
+                "varargs": True,
+                "min_args": 1,
+                "return_type": AbstractDataProviderTypeMap."string",
+            },
+            "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                return (foldl $1 + " || " + $2,
+                    (map info.table.getExpressionArg(\info, role, $1, AbstractDataProviderTypeMap."any"), args));
+            },
+        },
     };
 
     #! a hash of valid operators for use in @ref where_clauses

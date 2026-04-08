@@ -554,7 +554,7 @@ void qore_string_private::concatUTF8FromUnicode(unsigned code) {
         concat(0x80 | ((code & (0x3f << 6)) >> 6));
         concat(0x80 | (code & 0x3f));
     } else if (code > 0x7f) { // 2-byte code
-        concat(0xc0 | ((code & (0x2f << 6)) >> 6));
+        concat(0xc0 | ((code & (0x1f << 6)) >> 6));
         concat(0x80 | (code & 0x3f));
     } else
         concat((char)code);
@@ -2836,19 +2836,18 @@ QoreString* QoreString::copy() const {
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::tolwr() {
-    char* c = priv->buf;
-    while (*c) {
-        *c = ::tolower(*c);
-        c++;
+    ExceptionSink xsink;
+    QoreString tmp(getEncoding());
+    if (!do_tolower(tmp, *this, &xsink)) {
+        *this = tmp;
     }
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::toupr() {
-    char* c = priv->buf;
-    while (*c) {
-        *c = ::toupper(*c);
-        c++;
+    ExceptionSink xsink;
+    QoreString tmp(getEncoding());
+    if (!do_toupper(tmp, *this, &xsink)) {
+        *this = tmp;
     }
 }
 

@@ -124,9 +124,70 @@ int QoreRegexSubst::parse() {
     return 0;
 }
 
+// case conversion mode for \U, \L, \u, \l, \E in replacement strings
+enum CaseMode { CM_NONE, CM_UPPER, CM_LOWER };
+
+// helper: apply case conversion to a string and concatenate to output
+static void concat_case(ExceptionSink& xsink, QoreString* cstr, const char* text, size_t len,
+        CaseMode case_mode, bool& next_upper, bool& next_lower) {
+    if (case_mode == CM_NONE && !next_upper && !next_lower) {
+        cstr->concat(text, len);
+        return;
+    }
+
+    QoreString src(text, len, QCS_UTF8);
+    if (next_upper || next_lower) {
+        // \u or \l: apply to first character only, pass rest through with current case_mode
+        unsigned first_len;
+        src.getUnicodePointFromBytePos(0, first_len, &xsink);
+        if (xsink) {
+            return;
+        }
+        QoreString first_char(text, first_len, QCS_UTF8);
+        QoreString tmp(QCS_UTF8);
+        if (next_upper) {
+            do_toupper(tmp, first_char, &xsink);
+        } else {
+            do_tolower(tmp, first_char, &xsink);
+        }
+        if (!xsink) {
+            cstr->concat(tmp.c_str());
+        }
+        next_upper = false;
+        next_lower = false;
+        // apply ongoing case_mode to remainder
+        if (first_len < len) {
+            bool nu = false, nl = false;
+            concat_case(xsink, cstr, text + first_len, len - first_len, case_mode, nu, nl);
+        }
+        return;
+    }
+
+    // \U or \L mode: convert entire text
+    QoreString tmp(QCS_UTF8);
+    if (case_mode == CM_UPPER) {
+        do_toupper(tmp, src, &xsink);
+    } else {
+        do_tolower(tmp, src, &xsink);
+    }
+    if (!xsink) {
+        cstr->concat(tmp.c_str());
+    }
+}
+
+// helper: apply case conversion to a single char and concatenate
+static void concat_case_char(ExceptionSink& xsink, QoreString* cstr, char ch,
+        CaseMode case_mode, bool& next_upper, bool& next_lower) {
+    concat_case(xsink, cstr, &ch, 1, case_mode, next_upper, next_lower);
+}
+
 // static function
 int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* ovector, int olen, const char* ptr,
         const char* target, int rc) {
+    CaseMode case_mode = CM_NONE;
+    bool next_upper = false;
+    bool next_lower = false;
+
     while (*ptr) {
         if (*ptr == '\\') {
             ++ptr;
@@ -137,41 +198,55 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
                         "(decimal %d; must be < 256)", *ptr, *(ptr + 1), *(ptr + 2), val);
                     return -1;
                 }
-                cstr->concat((const char)val);
+                concat_case_char(xsink, cstr, (char)val, case_mode, next_upper, next_lower);
                 ptr += 3;
             } else if (*(ptr) == '\\' || *(ptr) == '$') {
-                cstr->concat(*(ptr++));
+                concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
             } else if (*ptr == 'a') {
-                // \a = BEL (bell)
-                cstr->concat((const char)7);
+                concat_case_char(xsink, cstr, (char)7, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'b') {
-                // \b = BS (backspace)
-                cstr->concat((const char)8);
+                concat_case_char(xsink, cstr, (char)8, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'e') {
-                // \e = ESC (escape)
-                cstr->concat((const char)27);
+                concat_case_char(xsink, cstr, (char)27, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'f') {
-                // \f = FF (form feed)
-                cstr->concat((const char)12);
+                concat_case_char(xsink, cstr, (char)12, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'n') {
-                // \n = NL (newline)
-                cstr->concat((const char)10);
+                concat_case_char(xsink, cstr, (char)10, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'r') {
-                // \r = CR (carriage return)
-                cstr->concat((const char)13);
+                concat_case_char(xsink, cstr, (char)13, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 't') {
-                // \t = HT (horizontal tab)
-                cstr->concat((const char)9);
+                concat_case_char(xsink, cstr, (char)9, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'v') {
-                // \v = VT (vertical tab)
-                cstr->concat((const char)11);
+                concat_case_char(xsink, cstr, (char)11, case_mode, next_upper, next_lower);
+                ++ptr;
+            } else if (*ptr == 'U') {
+                // \U = uppercase until \E
+                case_mode = CM_UPPER;
+                ++ptr;
+            } else if (*ptr == 'L') {
+                // \L = lowercase until \E
+                case_mode = CM_LOWER;
+                ++ptr;
+            } else if (*ptr == 'u') {
+                // \u = uppercase next character
+                next_upper = true;
+                next_lower = false;
+                ++ptr;
+            } else if (*ptr == 'l') {
+                // \l = lowercase next character
+                next_lower = true;
+                next_upper = false;
+                ++ptr;
+            } else if (*ptr == 'E') {
+                // \E = end case conversion
+                case_mode = CM_NONE;
                 ++ptr;
             } else {
                 cstr->concat('\\');
@@ -184,16 +259,17 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
             } while (isdigit(*ptr));
             int num = atoi(n.c_str());
             int pos = num * 2;
-            //printd(5, "QoreRegexSubst::concat() pos: %d olen: %d ovector[%d]: %d ovector[%d]: %d rc: %d\n", pos,
-            //  olen, pos, ovector[pos], pos + 1, ovector[pos + 1], rc);
-            if (pos > 0 && pos < olen && num < rc && ovector[pos] != -1) {
-                cstr->concat(target + ovector[pos], ovector[pos + 1] - ovector[pos]);
+            if (pos >= 0 && pos < olen && num < rc && ovector[pos] != -1) {
+                concat_case(xsink, cstr, target + ovector[pos], ovector[pos + 1] - ovector[pos],
+                    case_mode, next_upper, next_lower);
             }
         } else {
-            cstr->concat(*(ptr++));
+            concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
+        }
+        if (xsink) {
+            return -1;
         }
     }
-    //printd(5, "QoreRegexSubst::concat() target: '%s' cstr: '%s'\n", target, cstr->c_str());
     return 0;
 }
 
@@ -278,6 +354,129 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
 // called for run-time evaluation of parse-time-created objects
 QoreStringNode* QoreRegexSubst::exec(const QoreString* target, ExceptionSink* xsink) const {
     return exec(target, newstr, xsink);
+}
+
+QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
+        const ResolvedCallReferenceNode* callback, ExceptionSink* xsink) const {
+    TempEncodingHelper t(target, QCS_UTF8, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // get named capture group info
+    uint32_t namecount = 0;
+    uint32_t name_entry_size = 0;
+    PCRE2_SPTR nametable = nullptr;
+    pcre2_pattern_info(p, PCRE2_INFO_NAMECOUNT, &namecount);
+    if (namecount) {
+        pcre2_pattern_info(p, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
+        pcre2_pattern_info(p, PCRE2_INFO_NAMETABLE, &nametable);
+    }
+
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode);
+    const char* ptr = t->c_str();
+    PCRE2_SIZE last_match = (PCRE2_SIZE)-1;
+
+    pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
+    ON_BLOCK_EXIT(pcre2_match_data_free, md);
+
+    while (true) {
+        PCRE2_SIZE offset = ptr - t->c_str();
+        if (offset >= t->size()) {
+            break;
+        }
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        if (rc < 1) {
+            break;
+        }
+
+        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
+
+        // detect infinite recursion
+        if (ovector[0] == last_match) {
+            xsink->raiseException("REGEX-SUBST-ERROR", "Infinite recursion detected in regex substitution with "
+                "callback; this normally happens with an empty pattern with use with the global option (RE_GLOBAL)");
+            return nullptr;
+        }
+        last_match = ovector[0];
+
+        // copy text before match
+        if (ovector[0] > offset) {
+            tstr->concat(ptr, ovector[0] - offset);
+        }
+
+        // build RegexMatchInfo hash for callback
+        ReferenceHolder<QoreHashNode> match_info(new QoreHashNode(hashdeclRegexMatchInfo, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        match_info->setKeyValue("match", new QoreStringNode(t->c_str() + ovector[0],
+            ovector[1] - ovector[0]), xsink);
+        match_info->setKeyValue("offset", static_cast<int64>(ovector[0]), xsink);
+        match_info->setKeyValue("length", static_cast<int64>(ovector[1] - ovector[0]), xsink);
+
+        // captured groups
+        if (rc > 1) {
+            ReferenceHolder<QoreListNode> groups(new QoreListNode(stringOrNothingTypeInfo), xsink);
+            for (int x = 1; x < rc; ++x) {
+                int pos = x * 2;
+                if (ovector[pos] == (PCRE2_SIZE)-1) {
+                    groups->push(QoreValue(), xsink);
+                } else {
+                    groups->push(new QoreStringNode(t->c_str() + ovector[pos],
+                        ovector[pos + 1] - ovector[pos]), xsink);
+                }
+            }
+            match_info->setKeyValue("groups", groups.release(), xsink);
+        }
+
+        // named groups
+        if (namecount) {
+            ReferenceHolder<QoreHashNode> named(new QoreHashNode(stringOrNothingTypeInfo), xsink);
+            PCRE2_SPTR tabptr = nametable;
+            for (uint32_t i = 0; i < namecount; ++i) {
+                int n = (tabptr[0] << 8) | tabptr[1];
+                const char* name = reinterpret_cast<const char*>(tabptr + 2);
+                if (n < rc && ovector[2 * n] != (PCRE2_SIZE)-1) {
+                    named->setKeyValue(name, new QoreStringNode(t->c_str() + ovector[2 * n],
+                        ovector[2 * n + 1] - ovector[2 * n]), xsink);
+                } else {
+                    named->setKeyValue(name, QoreValue(), xsink);
+                }
+                tabptr += name_entry_size;
+            }
+            match_info->setKeyValue("named_groups", named.release(), xsink);
+        }
+
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // call the callback
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(match_info.release(), xsink);
+        ValueHolder rv(const_cast<ResolvedCallReferenceNode*>(callback)->execValue(*args, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // use the callback's return value as the replacement
+        QoreStringValueHelper replacement(*rv);
+        tstr->concat(replacement->c_str());
+
+        ptr = t->c_str() + ovector[1];
+
+        if (!global) {
+            break;
+        }
+    }
+
+    if (*ptr) {
+        tstr->concat(ptr);
+    }
+
+    return tstr.release();
 }
 
 void QoreRegexSubst::setGlobal() {

@@ -804,9 +804,65 @@ public class DpqlParser {
         return parseComparison();
     }
 
+    #! Parses additive_expr: multiplicative_expr { ("+" | "-") multiplicative_expr }
+    private auto parseAdditiveExpr() {
+        auto left = parseMultiplicativeExpr();
+        skipWhitespace();
+
+        while (!atEnd()) {
+            hash<DpqlTokenInfo> tok = peek();
+            string op;
+            if (tok.type == DPQL_TOK_OP_PLUS) {
+                op = DP_OP_PLUS;
+            } else if (tok.type == DPQL_TOK_OP_MINUS) {
+                op = DP_OP_MINUS;
+            } else {
+                break;
+            }
+            nextToken();
+            skipWhitespace();
+            auto right = parseMultiplicativeExpr();
+            left = <DataProviderExpression>{
+                "exp": op,
+                "args": (left, right),
+            };
+            skipWhitespace();
+        }
+        return left;
+    }
+
+    #! Parses multiplicative_expr: value { ("*" | "/" | "%") value }
+    private auto parseMultiplicativeExpr() {
+        auto left = parseValue();
+        skipWhitespace();
+
+        while (!atEnd()) {
+            hash<DpqlTokenInfo> tok = peek();
+            string op;
+            if (tok.type == DPQL_TOK_OP_MULTIPLY) {
+                op = DP_OP_MULT;
+            } else if (tok.type == DPQL_TOK_OP_DIVIDE) {
+                op = DP_OP_DIV;
+            } else if (tok.type == DPQL_TOK_OP_MOD) {
+                op = DP_OP_MOD;
+            } else {
+                break;
+            }
+            nextToken();
+            skipWhitespace();
+            auto right = parseValue();
+            left = <DataProviderExpression>{
+                "exp": op,
+                "args": (left, right),
+            };
+            skipWhitespace();
+        }
+        return left;
+    }
+
     #! Parses a comparison expression
     private auto parseComparison() {
-        auto left = parseValue();
+        auto left = parseAdditiveExpr();
         skipWhitespace();
 
         if (atEnd()) {
@@ -822,7 +878,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_EQ,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_NE:
@@ -830,7 +886,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_NE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_LT:
@@ -838,7 +894,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_LT,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_LE:
@@ -846,7 +902,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_LE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_GT:
@@ -854,7 +910,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_GT,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_GE:
@@ -862,7 +918,7 @@ public class DpqlParser {
                 skipWhitespace();
                 return <DataProviderExpression>{
                     "exp": DP_SEARCH_OP_GE,
-                    "args": (left, parseValue()),
+                    "args": (left, parseAdditiveExpr()),
                 };
 
             case DPQL_TOK_OP_REGEX:
@@ -872,59 +928,79 @@ public class DpqlParser {
 
             case DPQL_TOK_IDENTIFIER: {
                 string kw = tok.value.lwr();
-                if (kw == "between") {
-                    nextToken();  # consume 'between'
-                    skipWhitespace();
-                    auto low = parseValue();
-                    skipWhitespace();
-                    # Expect 'and'
-                    hash<DpqlTokenInfo> and_tok = peek();
-                    if (and_tok.type != DPQL_TOK_IDENTIFIER || and_tok.value.lwr() != "and") {
-                        addError("Expected 'and' in between expression", "DPQL-E001", and_tok);
-                        throw "DPQL-PARSE-ERROR", "Expected 'and'";
+                if (kw == "between" || kw == "in"
+                        || (kw == "not" && tokenizer.peekAheadSkipWhitespace() == "in")
+                        || (kw == "not" && tokenizer.peekAheadSkipWhitespace() == "between")) {
+                    # Handle "not in" and "not between" keyword pairs
+                    bool negated = kw == "not";
+                    if (negated) {
+                        nextToken();  # consume 'not'
+                        skipWhitespace();
+                        kw = peek().value.lwr();
                     }
-                    nextToken();  # consume 'and'
-                    skipWhitespace();
-                    auto high = parseValue();
-                    return <DataProviderExpression>{
-                        "exp": DP_SEARCH_OP_BETWEEN,
-                        "args": (left, low, high),
-                    };
-                }
-                if (kw == "in") {
-                    nextToken();  # consume 'in'
-                    skipWhitespace();
-                    list<auto> values = ();
-                    if (!atEnd() && peek().type == DPQL_TOK_LIST) {
-                        auto parsed = parseStructuredLiteral();
-                        if (parsed.typeCode() != NT_LIST) {
-                            addError("Expected list literal after 'in'", "DPQL-E013", line, column, line, column);
-                            throw "DPQL-PARSE-ERROR", "Expected list literal";
+                    if (kw == "in") {
+                        nextToken();  # consume 'in'
+                        skipWhitespace();
+                        list<auto> values = ();
+                        if (!atEnd() && peek().type == DPQL_TOK_LIST) {
+                            auto parsed = parseStructuredLiteral();
+                            if (parsed.typeCode() != NT_LIST) {
+                                addError("Expected list literal after 'in'", "DPQL-E013",
+                                    line, column, line, column);
+                                throw "DPQL-PARSE-ERROR", "Expected list literal";
+                            }
+                            values = parsed;
+                        } else {
+                            expect(DPQL_TOK_LPAREN, "'('");
+                            skipWhitespace();
+                            values = parseValueList();
+                            skipWhitespace();
+                            expect(DPQL_TOK_RPAREN, "')'");
                         }
-                        values = parsed;
-                    } else {
-                        expect(DPQL_TOK_LPAREN, "'('");
-                        skipWhitespace();
-                        values = parseValueList();
-                        skipWhitespace();
-                        expect(DPQL_TOK_RPAREN, "')'");
+                        return <DataProviderExpression>{
+                            "exp": negated ? DP_OP_NOT_IN : DP_SEARCH_OP_IN,
+                            "args": (left,) + values,
+                        };
                     }
-                    return <DataProviderExpression>{
-                        "exp": DP_SEARCH_OP_IN,
-                        "args": (left,) + values,
-                    };
+                    if (kw == "between") {
+                        nextToken();  # consume 'between'
+                        skipWhitespace();
+                        auto low = parseAdditiveExpr();
+                        skipWhitespace();
+                        hash<DpqlTokenInfo> and_tok = peek();
+                        if (and_tok.type != DPQL_TOK_IDENTIFIER || and_tok.value.lwr() != "and") {
+                            addError("Expected 'and' in between expression", "DPQL-E001", and_tok);
+                            throw "DPQL-PARSE-ERROR", "Expected 'and'";
+                        }
+                        nextToken();  # consume 'and'
+                        skipWhitespace();
+                        auto high = parseAdditiveExpr();
+                        if (negated) {
+                            return <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_NOT,
+                                "args": (<DataProviderExpression>{
+                                    "exp": DP_SEARCH_OP_BETWEEN,
+                                    "args": (left, low, high),
+                                },),
+                            };
+                        }
+                        return <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_BETWEEN,
+                            "args": (left, low, high),
+                        };
+                    }
                 }
                 # Check for provider-specific infix comparison operators (e.g. "like")
                 *string exp_name = symbol_to_name{kw};
                 if (exp_name && expressions{exp_name}) {
                     hash<DataProviderExpressionInfo> info = expressions{exp_name};
                     if (info.type == DET_Operator && inlist("Comparison", info.groups)
-                            && info.args.size() == 2) {
+                            && info.args.size() >= 2) {
                         nextToken();  # consume the operator keyword
                         skipWhitespace();
                         return <DataProviderExpression>{
                             "exp": exp_name,
-                            "args": (left, parseValue()),
+                            "args": (left, parseAdditiveExpr()),
                         };
                     }
                 }
@@ -971,29 +1047,25 @@ public class DpqlParser {
 
         list<auto> args = (left, regex_pattern);
 
-        # Convert flags to regex option constants
+        # Collect flags as a list of string flag names for args[2]
         if (flags) {
+            list<string> flag_list = ();
             for (int i = 0; i < flags.size(); ++i) {
                 string flag = flags[i];
                 switch (flag) {
                     case "i":
-                        args += RE_Caseless;
-                        break;
                     case "s":
-                        args += RE_DotAll;
-                        break;
                     case "m":
-                        args += RE_MultiLine;
-                        break;
                     case "x":
-                        args += RE_Extended;
-                        break;
                     case "u":
-                        args += RE_Unicode;
+                        flag_list += flag;
                         break;
                     default:
                         addError(sprintf("Unknown regex flag '%s'", flag), "DPQL-E009", tok);
                 }
+            }
+            if (flag_list) {
+                args += (flag_list,);
             }
         }
 

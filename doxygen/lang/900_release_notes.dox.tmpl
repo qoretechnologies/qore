@@ -724,6 +724,80 @@ cargo install tree-sitter-cli@0.26.5
         - new @ref WebSocketUtil::PerMessageDeflateExtension "PerMessageDeflateExtension" implementing <a href="http://tools.ietf.org/html/rfc7692">RFC 7692</a>
           permessage-deflate compression
 
+    @par Comprehensive Regular Expression Improvements
+    @parblock
+    The @ref qore_regex "regular expression" subsystem has been significantly enhanced:
+
+    <b>Bug Fixes:</b>
+    - \c $0 backreference in substitution replacement strings now correctly references the full match text
+      (previously \c $0 was silently ignored)
+    - @ref RE_Ungreedy "RE_Ungreedy" (\c QRE_UNGREEDY) is now accepted by the regex API (previously defined
+      in the public header but rejected at runtime)
+
+    <b>New Options and Constants:</b>
+    - @ref RE_Ungreedy "RE_Ungreedy" constant and \c /U scanner flag for ungreedy quantifiers
+    - @ref RE_DollarEndOnly "RE_DollarEndOnly" constant — \c $ matches only at true end of string
+    - @ref RE_Anchored "RE_Anchored" constant — forces anchored matching
+    - @ref RE_DupNames "RE_DupNames" constant — allows duplicate named subpatterns
+
+    <b>Named Capture Groups:</b>
+    - New @ref Qore::Regex::extractNamedGroups() "Regex::extractNamedGroups()" and
+      @ref Qore::RegexExtract::extractNamedGroups() "RegexExtract::extractNamedGroups()" methods
+    - New regex_extract_named() function
+    - New \c \<string\>::regexExtractNamed() pseudo-method
+    - Supports \c (?<name>...) and \c (?P<name>...) syntax; returns a hash keyed by group name
+
+    <b>Detailed Match Extraction:</b>
+    - New @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl with match text, byte offset, length,
+      captured groups, and named groups
+    - New @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()" and
+      @ref Qore::RegexExtract::extractDetailed() "RegexExtract::extractDetailed()" methods
+    - New regex_extract_detailed() function and \c \<string\>::regexExtractDetailed() pseudo-method
+
+    <b>Callback-Based Substitution:</b>
+    - New @ref Qore::RegexSubst::subst() "RegexSubst::subst(str, callback)" overload accepting a
+      \c code<string(hash<RegexMatchInfo>)> callback for dynamic replacement computation
+    - New regex_subst() overload with callback parameter
+
+    <b>New Utility Functions:</b>
+    - regex_count() function, @ref Qore::Regex::count() "Regex::count()" /
+      @ref Qore::RegexExtract::count() "RegexExtract::count()" methods,
+      and \c \<string\>::regexCount() pseudo-method for efficient match counting
+    - regex_escape() built-in function and \c \<string\>::regexEscape() pseudo-method for escaping
+      regex metacharacters
+    - \c \<string\>::splitRegex() now accepts an optional \a limit parameter to cap the number of splits
+    - Perl-style case conversion escape sequences in regex replacement strings: \c \\U (uppercase until
+      \c \\E), \c \\L (lowercase until \c \\E), \c \\u (uppercase next char), \c \\l (lowercase next char),
+      \c \\E (end case conversion); all Unicode-aware
+    @endparblock
+
+    @par Unicode Case Conversion Fixes
+    @parblock
+    - Fixed a bug in 2-byte UTF-8 encoding in \c concatUTF8FromUnicode() that corrupted all codepoints in
+      the U+0080-U+07FF range (Cyrillic, Armenian, Hebrew, Arabic, etc.) during case conversion
+    - @ref QoreString::toupr() "QoreString::toupr()" and @ref QoreString::tolwr() "QoreString::tolwr()"
+      are now Unicode-aware (previously ASCII-only)
+    - Added 1-to-many uppercase mappings: ß→SS, ﬁ→FI, ﬂ→FL, ﬃ→FFI, ﬄ→FFL, ﬅ→ST, ﬆ→ST
+    @endparblock
+
+    @par Brace-Delimited Regular Expressions
+    @parblock
+    All regular expression operators now support brace (<tt>{}</tt>) delimiters as an alternative to
+    forward slashes.  This is particularly useful when patterns contain literal forward slashes (URLs,
+    file paths), avoiding the need to escape them:
+    - <tt>m{pattern}flags</tt> — match
+    - <tt>s{pattern}{replacement}flags</tt> — substitution
+    - <tt>x{pattern}flags</tt> — extraction
+    - <tt>tr{source}{target}</tt> — transliteration
+    - <tt>case m{pattern}:</tt> — case matching
+
+    Brace nesting in PCRE2 quantifiers (e.g., <tt>\\d{3}</tt>, <tt>a{2,5}</tt>) is handled automatically
+    via depth tracking.  The \c m prefix is required for brace-delimited match (bare <tt>{</tt> is not
+    supported to avoid ambiguity with blocks).
+
+    See @ref qore_regex_brace_delimiters for more information.
+    @endparblock
+
     @subsection qore_2_3_0_new_builtin_modules New Builtin Modules
     - @ref linenoiseintro "linenoise" module
       - integrated into the %Qore build tree (previously a separate external module)
@@ -1669,7 +1743,19 @@ cargo install tree-sitter-cli@0.26.5
     - <a href="../../modules/WebSocketHandler/html/index.html#websockethandlerintro">WebSocketHandler</a> module
       - fixed bugs handling UTF-8 data
         (<a href="https://github.com/qoretechnologies/qore/issues/4984">issue 4984</a>)
-    - <a href="../../modules/WebUtil/html/index.html#webutilintro">WebUtil</a> module
+    - <a href="../../modules/WebUtil/html/index.html#webutilintro">WebUtil</a> module (version 1.8):
+      - added HTTP caching headers to @ref WebUtil::FileHandler "FileHandler": \c ETag,
+        \c Last-Modified, \c Cache-Control, and conditional request handling (\c If-None-Match,
+        \c If-Modified-Since) returning 304 Not Modified
+      - added automatic pre-compressed file serving: checks for \c .br, \c .zst, \c .gz, \c .bz2
+        variants on disk and serves them with appropriate \c Content-Encoding headers
+      - added HTTP Range request support (206 Partial Content) with \c If-Range support
+      - added on-the-fly compression for small/medium files (configurable threshold, default 10MB)
+      - added optional file stat caching with configurable TTL
+      - all features are backward-compatible and configurable via new constructor options:
+        \c enable_etag, \c enable_last_modified, \c default_cache_control,
+        \c cache_control_by_ext, \c serve_precompressed, \c enable_range,
+        \c max_compress_size, \c stat_cache_ttl
       - mark the context as handling file data in the authentication method to enable authentication errors to be
         redirected for handlers handling UI file data
         (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)

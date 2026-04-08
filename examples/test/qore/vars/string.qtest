@@ -247,6 +247,29 @@ class StringTest inherits QUnit::Test {
         assertEq("PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ ÚPĚL ĎÁBELSKÉ ÓDY", ustr, "<string>::upr()");
         assertEq("příliš žluťoučký kůň úpěl ďábelské ódy", ustr.lwr(), "<string>::lwr()");
 
+        # Ukrainian Cyrillic case conversion (tests 2-byte UTF-8 encoding in concatUTF8FromUnicode)
+        assertEq("ПРИВІТ СВІТЕ", "привіт світе".upr(), "Ukrainian upr()");
+        assertEq("привіт світе", "ПРИВІТ СВІТЕ".lwr(), "Ukrainian lwr()");
+        # Ukrainian-specific letters
+        assertEq("І", "і".upr(), "Ukrainian і -> І");
+        assertEq("Ї", "ї".upr(), "Ukrainian ї -> Ї");
+        assertEq("Є", "є".upr(), "Ukrainian є -> Є");
+        assertEq("Ґ", "ґ".upr(), "Ukrainian ґ -> Ґ");
+        assertEq("і", "І".lwr(), "Ukrainian І -> і");
+        assertEq("ї", "Ї".lwr(), "Ukrainian Ї -> ї");
+
+        # 1-to-many uppercase mappings
+        assertEq("STRASSE", "straße".upr(), "German ß -> SS");
+        assertEq("FIND", "ﬁnd".upr(), "ligature ﬁ -> FI");
+        assertEq("FLOOR", "ﬂoor".upr(), "ligature ﬂ -> FL");
+
+        # Greek case conversion
+        assertEq("ΑΒΓΔ", "αβγδ".upr(), "Greek upr()");
+        assertEq("αβγδ", "ΑΒΓΔ".lwr(), "Greek lwr()");
+
+        # Latin extended
+        assertEq("HÉLLO CAFÉ", "héllo café".upr(), "Latin extended upr()");
+
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("ß", "US-ASCII"));
         assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("汉字", "ISO-8859-1"));
     }

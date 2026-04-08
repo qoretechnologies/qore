@@ -3,6 +3,7 @@
 
 %modern
 
+%requires ../../../../qlib/Util.qm
 %requires ../../../../qlib/QUnit.qm
 %requires ../../../../qlib/Diff.qm
 
@@ -13,6 +14,13 @@ public class DiffTest inherits QUnit::Test {
         addTestCase("Test list diffs", \listDiff(), NOTHING);
         addTestCase("Test string diffs", \stringDiff(), NOTHING);
         addTestCase("Test unified diffs", \unifiedDiff(), NOTHING);
+        addTestCase("Test edge cases", \edgeCaseDiff(), NOTHING);
+        addTestCase("Test data diff", \dataDiff(), NOTHING);
+        addTestCase("Test stats and data text", \statsAndDataText(), NOTHING);
+        addTestCase("Test chars and words diff", \charsAndWordsDiff(), NOTHING);
+        addTestCase("Test patch apply", \patchApply(), NOTHING);
+        addTestCase("Test side by side and files", \sideBySideAndFiles(), NOTHING);
+        addTestCase("Test performance", \perfTest(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -76,6 +84,25 @@ public class DiffTest inherits QUnit::Test {
         list<string> hunk_lines = select r5.split("\n"), regex($1, "^@@");
         assertTrue(hunk_lines.size() >= 2,
             "separate hunks for distant changes (got " + hunk_lines.size() + ")");
+
+        # No newline at end of file markers
+        {
+            # Neither file has trailing newline
+            string r6 = diff_unified("a\nb", "a\nc");
+            assertTrue(regex(r6, "^-b$", RE_MultiLine), "no-nl: delete b");
+            assertTrue(regex(r6, "\\\\ No newline at end of file"), "no-nl: marker after -b");
+            assertTrue(regex(r6, "^\\+c$", RE_MultiLine), "no-nl: insert c");
+
+            # Old has newline, new doesn't
+            string r7 = diff_unified("a\nb\n", "a\nc");
+            assertFalse(regex(r7, "-b\n\\\\ No"), "nl-to-no-nl: no marker after -b");
+            assertTrue(regex(r7, "\\+c\n\\\\ No newline"), "nl-to-no-nl: marker after +c");
+
+            # Old no newline, new has newline
+            string r8 = diff_unified("a\nb", "a\nc\n");
+            assertTrue(regex(r8, "-b\n\\\\ No newline"), "no-nl-to-nl: marker after -b");
+            assertFalse(regex(r8, "\\+c\n\\\\ No"), "no-nl-to-nl: no marker after +c");
+        }
     }
 
     stringDiff() {
@@ -103,5 +130,608 @@ h";
 > h
 ";
         testAssertion("diff string", \diff_text(), (a, b), new QUnit::TestResultValue(result));
+    }
+
+    edgeCaseDiff() {
+        # Both empty
+        assertEq((), diff((), ()), "both empty lists");
+
+        # One empty
+        list<auto> r1 = diff((), list("a"));
+        assertEq(1, r1.size(), "old empty: one entry");
+        assertEq((), r1[0].d, "old empty: no deletes");
+        assertEq(list("a"), r1[0].i, "old empty: insert list");
+
+        list<auto> r2 = diff(list("a"), ());
+        assertEq(1, r2.size(), "new empty: one entry");
+        assertEq(list("a"), r2[0].d, "new empty: delete list");
+        assertEq((), r2[0].i, "new empty: no inserts");
+
+        # Identical
+        assertEq(("a", "b", "c"), diff(("a", "b", "c"), ("a", "b", "c")), "identical lists");
+
+        # Single element same
+        assertEq(list("x"), diff(list("x"), list("x")), "single same element");
+
+        # Single element different
+        list<auto> r3 = diff(list("x"), list("y"));
+        assertEq(1, r3.size(), "single different: one entry");
+        assertEq(list("x"), r3[0].d, "single different: delete");
+        assertEq(list("y"), r3[0].i, "single different: insert");
+
+        # Completely different
+        list<auto> r4 = diff(("a", "b", "c"), ("x", "y", "z"));
+        assertEq(1, (select r4, $1.typeCode() == NT_HASH).size(),
+            "all different: one change hunk");
+
+        # Prefix match
+        list<auto> r5 = diff(("a", "b", "c"), ("a", "b", "c", "d"));
+        assertEq("a", r5[0], "prefix: a");
+        assertEq("b", r5[1], "prefix: b");
+        assertEq("c", r5[2], "prefix: c");
+        assertEq((), r5[3].d, "prefix: no deletes");
+        assertEq(list("d"), r5[3].i, "prefix: insert d");
+
+        # Suffix match
+        list<auto> r6 = diff(("a", "b", "c"), ("b", "c"));
+        assertEq(list("a"), r6[0].d, "suffix: delete a");
+        assertEq((), r6[0].i, "suffix: no inserts");
+        assertEq("b", r6[1], "suffix: b");
+        assertEq("c", r6[2], "suffix: c");
+
+        # Optimality: edit distance is minimal
+        # Transposition requires edit distance 2 (one delete + one insert)
+        list<auto> r7 = diff(("a", "b", "c", "d", "e"), ("a", "c", "b", "d", "e"));
+        int changes = (select r7, $1.typeCode() == NT_HASH).size();
+        assertEq(2, changes, "transposition: 2 change hunks (optimal)");
+        int equals = (select r7, $1.typeCode() != NT_HASH).size();
+        assertEq(4, equals, "transposition: 4 equal elements (LCS length)");
+
+        # diff_text with empty strings
+        assertEq("", diff_text("", ""), "diff_text both empty");
+        assertEq("", diff_text("abc", "abc"), "diff_text identical");
+
+        # diff_unified with completely replaced content
+        string u1 = diff_unified("old\n", "new\n");
+        assertMultilineRegex("full replace: delete", "^-old", u1);
+        assertMultilineRegex("full replace: insert", "^\\+new", u1);
+    }
+
+    dataDiff() {
+        # Identical values
+        assertEq((), diff_data(1, 1), "identical scalars");
+        assertEq((), diff_data("abc", "abc"), "identical strings");
+        assertEq((), diff_data(NOTHING, NOTHING), "both NOTHING");
+        assertEq((), diff_data({"a": 1}, {"a": 1}), "identical hashes");
+        assertEq((), diff_data((1, 2, 3), (1, 2, 3)), "identical lists");
+
+        # Scalar changes
+        {
+            list<hash<DiffInfo>> r = diff_data(1, 2);
+            assertEq(1, r.size(), "scalar change: one entry");
+            assertEq("", r[0].path, "scalar change: root path");
+            assertEq("changed", r[0].type, "scalar change: type");
+            assertEq(1, r[0].old_value, "scalar change: old");
+            assertEq(2, r[0].new_value, "scalar change: new");
+        }
+
+        # Type mismatch
+        {
+            list<hash<DiffInfo>> r = diff_data(42, "hello");
+            assertEq(1, r.size(), "type mismatch: one entry");
+            assertEq("changed", r[0].type, "type mismatch: type");
+            assertEq(42, r[0].old_value, "type mismatch: old");
+            assertEq("hello", r[0].new_value, "type mismatch: new");
+        }
+
+        # NOTHING vs value
+        {
+            list<hash<DiffInfo>> r = diff_data(NOTHING, "hello");
+            assertEq(1, r.size(), "NOTHING→value: one entry");
+            assertEq("added", r[0].type, "NOTHING→value: added");
+            assertEq("hello", r[0].new_value, "NOTHING→value: new");
+        }
+        {
+            list<hash<DiffInfo>> r = diff_data("hello", NOTHING);
+            assertEq(1, r.size(), "value→NOTHING: one entry");
+            assertEq("removed", r[0].type, "value→NOTHING: removed");
+            assertEq("hello", r[0].old_value, "value→NOTHING: old");
+        }
+
+        # Flat hash comparison
+        {
+            hash<auto> old_h = {"host": "localhost", "port": 8080, "debug": True};
+            hash<auto> new_h = {"host": "localhost", "port": 9090, "tls": True};
+            list<hash<DiffInfo>> r = diff_data(old_h, new_h);
+            assertEq(3, r.size(), "flat hash: 3 changes");
+
+            # Find each change by path
+            hash<auto> by_path = map {$1.path: $1}, r;
+            assertEq("changed", by_path{"port"}.type, "flat hash: port changed");
+            assertEq(8080, by_path{"port"}.old_value, "flat hash: port old");
+            assertEq(9090, by_path{"port"}.new_value, "flat hash: port new");
+            assertEq("removed", by_path{"debug"}.type, "flat hash: debug removed");
+            assertEq("added", by_path{"tls"}.type, "flat hash: tls added");
+        }
+
+        # Nested hash comparison
+        {
+            hash<auto> old_h = {
+                "server": {"host": "localhost", "port": 8080},
+                "version": "1.0",
+            };
+            hash<auto> new_h = {
+                "server": {"host": "example.com", "port": 8080, "tls": True},
+                "version": "1.0",
+                "env": "prod",
+            };
+            list<hash<DiffInfo>> r = diff_data(old_h, new_h);
+            hash<auto> by_path = map {$1.path: $1}, r;
+            assertEq("changed", by_path{"server.host"}.type, "nested: host changed");
+            assertEq("localhost", by_path{"server.host"}.old_value, "nested: host old");
+            assertEq("example.com", by_path{"server.host"}.new_value, "nested: host new");
+            assertEq("added", by_path{"server.tls"}.type, "nested: tls added");
+            assertEq("added", by_path{"env"}.type, "nested: env added");
+            assertFalse(by_path.hasKey("server.port"), "nested: port unchanged");
+            assertFalse(by_path.hasKey("version"), "nested: version unchanged");
+        }
+
+        # List comparison (index-based)
+        {
+            list<hash<DiffInfo>> r = diff_data((1, 2, 3), (1, 99, 3));
+            assertEq(1, r.size(), "list: one change");
+            assertEq("[1]", r[0].path, "list: index path");
+            assertEq("changed", r[0].type, "list: type");
+            assertEq(2, r[0].old_value, "list: old");
+            assertEq(99, r[0].new_value, "list: new");
+        }
+
+        # List length changes
+        {
+            list<hash<DiffInfo>> r = diff_data((1, 2), (1, 2, 3, 4));
+            assertEq(2, r.size(), "list grow: 2 additions");
+            assertEq("[2]", r[0].path, "list grow: [2] path");
+            assertEq("added", r[0].type, "list grow: [2] added");
+            assertEq("[3]", r[1].path, "list grow: [3] path");
+        }
+        {
+            list<hash<DiffInfo>> r = diff_data((1, 2, 3), (1,));
+            assertEq(2, r.size(), "list shrink: 2 removals");
+            assertEq("removed", r[0].type, "list shrink: [1] removed");
+            assertEq("removed", r[1].type, "list shrink: [2] removed");
+        }
+
+        # Deeply nested structures
+        {
+            hash<auto> old_h = {"a": {"b": {"c": {"d": 1}}}};
+            hash<auto> new_h = {"a": {"b": {"c": {"d": 2}}}};
+            list<hash<DiffInfo>> r = diff_data(old_h, new_h);
+            assertEq(1, r.size(), "deep: one change");
+            assertEq("a.b.c.d", r[0].path, "deep: path");
+            assertEq(1, r[0].old_value, "deep: old");
+            assertEq(2, r[0].new_value, "deep: new");
+        }
+
+        # Mixed nested types (hash containing lists containing hashes)
+        {
+            hash<auto> old_h = {"users": ({"name": "alice", "age": 30}, {"name": "bob", "age": 25})};
+            hash<auto> new_h = {"users": ({"name": "alice", "age": 31}, {"name": "bob", "age": 25})};
+            list<hash<DiffInfo>> r = diff_data(old_h, new_h);
+            assertEq(1, r.size(), "mixed: one change");
+            assertEq("users[0].age", r[0].path, "mixed: path");
+            assertEq(30, r[0].old_value, "mixed: old");
+            assertEq(31, r[0].new_value, "mixed: new");
+        }
+
+        # Custom path prefix
+        {
+            list<hash<DiffInfo>> r = diff_data(1, 2, "config.value");
+            assertEq("config.value", r[0].path, "custom path prefix");
+        }
+
+        # Empty hash/list
+        assertEq((), diff_data({}, {}), "empty hashes identical");
+        assertEq((), diff_data((), ()), "empty lists identical");
+        {
+            list<hash<DiffInfo>> r = diff_data({}, {"a": 1});
+            assertEq(1, r.size(), "empty→hash: one add");
+            assertEq("added", r[0].type, "empty→hash: added");
+        }
+    }
+
+    statsAndDataText() {
+        # diff_stats: identical strings
+        {
+            hash<DiffStats> s = diff_stats("abc", "abc");
+            assertEq(0, s.added, "stats identical: added");
+            assertEq(0, s.removed, "stats identical: removed");
+            assertEq(1, s.unchanged, "stats identical: unchanged");
+        }
+
+        # diff_stats: single line change
+        {
+            hash<DiffStats> s = diff_stats("line1\nline2\nline3\n",
+                "line1\nmodified\nline3\nnew\n");
+            assertEq(2, s.added, "stats changes: added");
+            assertEq(1, s.removed, "stats changes: removed");
+            assertEq(2, s.unchanged, "stats changes: unchanged");
+        }
+
+        # diff_stats: empty strings
+        {
+            hash<DiffStats> s = diff_stats("", "");
+            assertEq(0, s.added, "stats empty: added");
+            assertEq(0, s.removed, "stats empty: removed");
+        }
+
+        # diff_stats: all new
+        {
+            hash<DiffStats> s = diff_stats("", "a\nb\n");
+            assertTrue(s.added > 0, "stats all new: added > 0");
+        }
+
+        # diff_stats_from_result
+        {
+            list<auto> r = diff(("a", "b", "c"), ("a", "x", "c", "d"));
+            hash<DiffStats> s = diff_stats_from_result(r);
+            assertEq(2, s.added, "stats_from_result: added");
+            assertEq(1, s.removed, "stats_from_result: removed");
+            assertEq(2, s.unchanged, "stats_from_result: unchanged");
+        }
+
+        # diff_data_text: identical → empty
+        assertEq("", diff_data_text(1, 1, False), "data_text identical: empty");
+
+        # diff_data_text: scalar change
+        {
+            string out = diff_data_text(1, 2, False);
+            assertTrue(regex(out, "~.*\\(root\\)"), "data_text scalar: contains ~");
+        }
+
+        # diff_data_text: hash changes (no color)
+        {
+            string out = diff_data_text(
+                {"host": "localhost", "port": 8080, "debug": True},
+                {"host": "example.com", "port": 8080, "tls": True},
+                False
+            );
+            assertTrue(regex(out, "\\+ tls"), "data_text: + tls");
+            assertTrue(regex(out, "- debug"), "data_text: - debug");
+            assertTrue(regex(out, "~ host"), "data_text: ~ host");
+            assertFalse(regex(out, "port"), "data_text: port not shown");
+        }
+
+        # diff_data_text: nested paths
+        {
+            string out = diff_data_text(
+                {"a": {"b": 1}},
+                {"a": {"b": 2}},
+                False
+            );
+            assertTrue(regex(out, "a\\.b"), "data_text nested: a.b path");
+        }
+
+        # diff_data_text: color disabled produces no ANSI codes
+        {
+            string out = diff_data_text({"a": 1}, {"a": 2}, False);
+            assertFalse(regex(out, "\033"), "data_text no color: no ANSI codes");
+        }
+    }
+
+    charsAndWordsDiff() {
+        # diff_chars: identical
+        assertEq("same", diff_chars("same", "same", False), "chars identical");
+
+        # diff_chars: single char change
+        {
+            string r = diff_chars("cat", "bat", False);
+            assertTrue(regex(r, "\\{-c-\\}"), "chars: delete c");
+            assertTrue(regex(r, "\\{\\+b\\+\\}"), "chars: insert b");
+            assertTrue(regex(r, "at"), "chars: 'at' unchanged");
+        }
+
+        # diff_chars: prefix append
+        assertEq("abc{+def+}", diff_chars("abc", "abcdef", False), "chars: prefix append");
+
+        # diff_chars: suffix prepend
+        assertEq("{+abc+}def", diff_chars("def", "abcdef", False), "chars: suffix prepend");
+
+        # diff_chars: middle change
+        {
+            string r = diff_chars("the cat sat", "the bat sat", False);
+            assertTrue(regex(r, "the "), "chars middle: prefix");
+            assertTrue(regex(r, "at sat"), "chars middle: suffix");
+        }
+
+        # diff_chars: empty strings
+        assertEq("", diff_chars("", "", False), "chars: both empty");
+        assertEq("{+abc+}", diff_chars("", "abc", False), "chars: old empty");
+        assertEq("{-abc-}", diff_chars("abc", "", False), "chars: new empty");
+
+        # diff_chars: no color produces no ANSI codes
+        {
+            string r = diff_chars("old", "new", False);
+            assertFalse(regex(r, "\033"), "chars: no ANSI codes when disabled");
+        }
+
+        # diff_words: identical
+        assertEq("same text", diff_words("same text", "same text", False), "words identical");
+
+        # diff_words: single word change
+        {
+            string r = diff_words("the quick fox", "the slow fox", False);
+            assertTrue(regex(r, "the "), "words: 'the ' unchanged");
+            assertTrue(regex(r, "\\{-quick-\\}"), "words: delete quick");
+            assertTrue(regex(r, "\\{\\+slow\\+\\}"), "words: insert slow");
+            assertTrue(regex(r, " fox"), "words: ' fox' unchanged");
+        }
+
+        # diff_words: insertion
+        {
+            string r = diff_words("a b", "a new b", False);
+            assertTrue(regex(r, "\\{\\+new \\+\\}"), "words insert: new added");
+        }
+
+        # diff_words: deletion
+        {
+            string r = diff_words("a old b", "a b", False);
+            assertTrue(regex(r, "\\{-old -\\}"), "words delete: old removed");
+        }
+
+        # diff_words: multiple changes
+        {
+            string r = diff_words("the quick brown fox", "the slow brown dog", False);
+            assertTrue(regex(r, "\\{-quick-\\}"), "words multi: delete quick");
+            assertTrue(regex(r, "\\{\\+slow\\+\\}"), "words multi: insert slow");
+            assertTrue(regex(r, "\\{-fox-\\}"), "words multi: delete fox");
+            assertTrue(regex(r, "\\{\\+dog\\+\\}"), "words multi: insert dog");
+            assertTrue(regex(r, " brown "), "words multi: brown unchanged");
+        }
+
+        # diff_words: empty strings
+        assertEq("", diff_words("", "", False), "words: both empty");
+
+        # diff_words: no color
+        {
+            string r = diff_words("old text", "new text", False);
+            assertFalse(regex(r, "\033"), "words: no ANSI codes when disabled");
+        }
+    }
+
+    patchApply() {
+        # Roundtrip: diff_unified → patch_apply
+        {
+            string orig = "line1\nline2\nline3\n";
+            string mod = "line1\nchanged\nline3\nnew\n";
+            string patch = diff_unified(orig, mod);
+            assertEq(mod, patch_apply(orig, patch), "roundtrip: basic change");
+        }
+
+        # Multiple hunks
+        {
+            string s1 = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n";
+            string s2 = "1\nX\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\nY\n";
+            string patch = diff_unified(s1, s2, "a", "b", 1);
+            assertEq(s2, patch_apply(s1, patch), "roundtrip: multiple hunks");
+        }
+
+        # Insertion only
+        {
+            string s1 = "a\nb\n";
+            string s2 = "a\nnew\nb\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: insert only");
+        }
+
+        # Deletion only
+        {
+            string s1 = "a\nold\nb\n";
+            string s2 = "a\nb\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: delete only");
+        }
+
+        # All lines changed
+        {
+            string s1 = "old\n";
+            string s2 = "new\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: all changed");
+        }
+
+        # Empty patch (identical strings)
+        assertEq("hello\n", patch_apply("hello\n", ""), "empty patch: no change");
+
+        # No trailing newline
+        {
+            string s1 = "abc";
+            string s2 = "def";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: no trailing nl");
+        }
+
+        # Patch mismatch throws PATCH-ERROR
+        {
+            string patch = "--- a\n+++ b\n@@ -1,1 +1,1 @@\n-wrong\n+new\n";
+            bool caught = False;
+            try {
+                patch_apply("actual\n", patch);
+            } catch (hash<auto> ex) {
+                caught = ex.err == "PATCH-ERROR";
+            }
+            assertTrue(caught, "mismatch throws PATCH-ERROR");
+        }
+
+        # Trailing newline roundtrips
+        {
+            # Both have trailing nl
+            assertEq("a\nc\n", patch_apply("a\nb\n", diff_unified("a\nb\n", "a\nc\n")),
+                "patch nl: both have nl");
+            # Neither has trailing nl
+            assertEq("a\nc", patch_apply("a\nb", diff_unified("a\nb", "a\nc")),
+                "patch nl: neither has nl");
+            # Old has nl, new doesn't
+            assertEq("a\nc", patch_apply("a\nb\n", diff_unified("a\nb\n", "a\nc")),
+                "patch nl: old nl, new no nl");
+            # Old no nl, new has nl
+            assertEq("a\nc\n", patch_apply("a\nb", diff_unified("a\nb", "a\nc\n")),
+                "patch nl: old no nl, new has nl");
+        }
+
+        # Large roundtrip
+        {
+            string s1 = "";
+            string s2 = "";
+            for (int i = 1; i <= 50; ++i) {
+                s1 += sprintf("line%d\n", i);
+                if (i % 10 == 0) {
+                    s2 += sprintf("CHANGED%d\n", i);
+                } else {
+                    s2 += sprintf("line%d\n", i);
+                }
+            }
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: 50 lines");
+        }
+    }
+
+    sideBySideAndFiles() {
+        # Side-by-side: identical → empty
+        assertEq("", diff_side_by_side("same\n", "same\n", 80, False),
+            "sbs identical: empty");
+
+        # Side-by-side: basic change
+        {
+            string r = diff_side_by_side("line1\nold\nline3\n",
+                "line1\nnew\nline3\n", 40, False);
+            # Equal lines appear on both sides
+            assertTrue(regex(r, "line1.*line1"), "sbs: equal line1");
+            assertTrue(regex(r, "line3.*line3"), "sbs: equal line3");
+            # Changed line has | marker
+            assertTrue(regex(r, "old.*\\|.*new"), "sbs: changed with |");
+        }
+
+        # Side-by-side: deletion uses < marker
+        {
+            string r = diff_side_by_side("a\nb\nc\n", "a\nc\n", 40, False);
+            assertTrue(regex(r, "b.*<"), "sbs: deletion with <");
+        }
+
+        # Side-by-side: insertion uses > marker
+        {
+            string r = diff_side_by_side("a\nc\n", "a\nb\nc\n", 40, False);
+            assertTrue(regex(r, ">.*b"), "sbs: insertion with >");
+        }
+
+        # Side-by-side: long lines truncated
+        {
+            string long_line = strmul("x", 100);
+            string r = diff_side_by_side(long_line + "\n", "short\n", 40, False);
+            assertTrue(regex(r, ">"), "sbs: long line truncated");
+            # Result should not exceed width per line
+            list<string> lines = r.split("\n");
+            foreach string line in (lines) {
+                if (line.length() > 0) {
+                    assertTrue(line.length() <= 40,
+                        sprintf("sbs: line width <= 40 (got %d)", line.length()));
+                }
+            }
+        }
+
+        # Side-by-side: no color produces no ANSI codes
+        {
+            string r = diff_side_by_side("old\n", "new\n", 40, False);
+            assertFalse(regex(r, "\033"), "sbs: no ANSI when disabled");
+        }
+
+        # diff_files: roundtrip with temp files
+        {
+            string tmp1 = tmp_location() + "/diff_test_old.txt";
+            string tmp2 = tmp_location() + "/diff_test_new.txt";
+            {
+                File f1();
+                f1.open(tmp1, O_WRONLY | O_CREAT | O_TRUNC);
+                f1.write("line1\nline2\nline3\n");
+            }
+            {
+                File f2();
+                f2.open(tmp2, O_WRONLY | O_CREAT | O_TRUNC);
+                f2.write("line1\nchanged\nline3\nnew\n");
+            }
+            on_exit {
+                unlink(tmp1);
+                unlink(tmp2);
+            }
+
+            string r = diff_files(tmp1, tmp2);
+            assertTrue(regex(r, "^--- " + regex_escape(tmp1), RE_MultiLine),
+                "files: old label");
+            assertTrue(regex(r, "^\\+\\+\\+ " + regex_escape(tmp2), RE_MultiLine),
+                "files: new label");
+            assertTrue(regex(r, "^-line2", RE_MultiLine), "files: deleted line");
+            assertTrue(regex(r, "^\\+changed", RE_MultiLine), "files: inserted line");
+            assertTrue(regex(r, "^\\+new", RE_MultiLine), "files: added line");
+
+            # Identical files
+            assertEq("", diff_files(tmp1, tmp1), "files: identical");
+        }
+
+        # diff_files: nonexistent file throws
+        {
+            bool caught = False;
+            try {
+                diff_files("/nonexistent/path/file.txt", "/nonexistent/other.txt");
+            } catch (hash<auto> ex) {
+                caught = True;
+            }
+            assertTrue(caught, "files: nonexistent throws");
+        }
+    }
+
+    perfTest() {
+        # Regression test: old algorithm took >15s for this case
+        int n = 1000;
+        list<string> l1 = ();
+        list<string> l2 = ();
+        for (int i = 0; i < n; ++i) {
+            push l1, sprintf("line%d", i);
+            if (i % 20 == 0) {
+                push l2, sprintf("MODIFIED%d", i);
+            } else {
+                push l2, sprintf("line%d", i);
+            }
+        }
+        date start = now_us();
+        list<auto> r = diff(l1, l2);
+        date elapsed = now_us() - start;
+        assertTrue(elapsed < 10s,
+            sprintf("1000 lines, 5%% changes: %y (must be < 10s)", elapsed));
+
+        # Verify correctness of result
+        int equal_count = (select r, $1.typeCode() != NT_HASH).size();
+        int change_count = (select r, $1.typeCode() == NT_HASH).size();
+        assertEq(950, equal_count, "perf: equal line count");
+        assertEq(50, change_count, "perf: change hunk count");
+
+        # Verify each change hunk has exactly 1 delete and 1 insert
+        foreach auto item in (r) {
+            if (item.typeCode() == NT_HASH) {
+                assertEq(1, item.d.size(), "perf: each change has 1 delete");
+                assertEq(1, item.i.size(), "perf: each change has 1 insert");
+            }
+        }
+
+        # Larger test: 5000 lines should also complete quickly
+        n = 5000;
+        l1 = ();
+        l2 = ();
+        for (int i = 0; i < n; ++i) {
+            push l1, sprintf("line%d", i);
+            if (i % 20 == 0) {
+                push l2, sprintf("MODIFIED%d", i);
+            } else {
+                push l2, sprintf("line%d", i);
+            }
+        }
+        start = now_us();
+        r = diff(l1, l2);
+        elapsed = now_us() - start;
+        assertTrue(elapsed < 30s,
+            sprintf("5000 lines, 5%% changes: %y (must be < 30s)", elapsed));
     }
 }

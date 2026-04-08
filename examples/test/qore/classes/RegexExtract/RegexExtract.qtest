@@ -20,6 +20,10 @@ public class RegexExtractTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner cases test", \cornerCasesTest());
         addTestCase("optional groups test", \optionalGroupsTest());
+        addTestCase("ungreedy test", \ungreedyTest());
+        addTestCase("count test", \countTest());
+        addTestCase("named groups test", \namedGroupsTest());
+        addTestCase("detailed extraction test", \detailedExtractionTest());
 
         set_return_value(main());
     }
@@ -194,5 +198,65 @@ public class RegexExtractTest inherits QUnit::Test {
         result = alt.extractGroups("I have a dog");
         assertEq(1, result.size());
         assertEq("dog", result[0]);
+    }
+
+    private ungreedyTest() {
+        # RE_Ungreedy makes quantifiers lazy
+        RegexExtract greedy("(a.*X)");
+        *list<*string> result = greedy.extractGroups("aXbXc");
+        assertEq(list("aXbX"), result);  # greedy: .* matches as much as possible
+
+        RegexExtract ungreedy("(a.*X)", RE_Ungreedy);
+        result = ungreedy.extractGroups("aXbXc");
+        assertEq(list("aX"), result);  # ungreedy: .* matches as little as possible
+
+        # RE_Ungreedy with global extraction
+        RegexExtract ug_global("(<.*>)", RE_Ungreedy | RE_Global);
+        result = ug_global.extractGroups("<b>bold</b>");
+        assertEq(list("<b>", "</b>"), result);
+
+        # match still works with RE_Ungreedy
+        assertTrue(ungreedy.match("aXbXc"));
+
+        # getOptions reflects RE_Ungreedy
+        assertEq(RE_Ungreedy, ungreedy.getOptions() & RE_Ungreedy);
+    }
+
+    private countTest() {
+        RegexExtract r("(\\d+)");
+        assertEq(3, r.count("1 22 333"));
+        assertEq(0, r.count("no digits"));
+    }
+
+    private namedGroupsTest() {
+        RegexExtract r("(?<host>[\\w.]+):(?<port>\\d+)");
+        auto h = r.extractNamedGroups("example.com:8080");
+        assertEq("example.com", h.host);
+        assertEq("8080", h.port);
+
+        # no match
+        assertNothing(r.extractNamedGroups("no host here"));
+
+        # global named extraction
+        RegexExtract rg("(?<n>\\d+)", RE_Global);
+        auto l = rg.extractNamedGroups("a1 b2 c3");
+        assertEq(3, l.size());
+        assertEq("1", l[0].n);
+        assertEq("3", l[2].n);
+    }
+
+    private detailedExtractionTest() {
+        RegexExtract r("(\\w+)", RE_Global);
+        *list<hash<RegexMatchInfo>> matches = r.extractDetailed("hi there");
+        assertEq(2, matches.size());
+        assertEq("hi", matches[0].match);
+        assertEq(0, matches[0].offset);
+        assertEq(2, matches[0].length);
+        assertEq(list("hi"), matches[0].groups);
+        assertEq("there", matches[1].match);
+        assertEq(3, matches[1].offset);
+
+        # no match
+        assertNothing(r.extractDetailed(""));
     }
 }

@@ -135,6 +135,25 @@ Field reference operators can be chained:
 | `<` | Less than |
 | `<=` | Less than or equal |
 
+## Arithmetic Operators
+
+| Operator | Meaning |
+|----------|---------|
+| `+` | Addition (numbers, strings, dates, lists) |
+| `-` | Subtraction |
+| `*` | Multiplication |
+| `/` | Division |
+| `%` | Modulus (remainder) |
+
+Arithmetic follows standard precedence: `*`, `/`, `%` bind tighter than `+`, `-`.
+Use parentheses to override:
+
+```dpql
+@price * @qty + @tax         # multiplication first
+(@price + @tax) * @qty       # addition first
+@age % 2 == 0                # even ages
+```
+
 ## Logical Operators
 
 | Operator | Meaning |
@@ -147,15 +166,19 @@ Field reference operators can be chained:
 
 ```dpql
 @status in ("active", "pending")
+@status not in ("deleted", "archived")
 ```
 
 ## Range Operators
 
 ```dpql
-@age between 18 and 65
+@age between 18 and 65            # inclusive on both bounds
+@age not between 18 and 65        # negated range
 ```
 
 ## Pattern Matching
+
+### Regex
 
 ```dpql
 @name =~ /^John/         # Regex match
@@ -168,6 +191,85 @@ Supported regex flags:
 - `m` — multiline mode
 - `x` — extended syntax (ignore whitespace)
 - `u` — Unicode
+
+### LIKE
+
+SQL-style pattern matching with `%` (any sequence) and `_` (single character) wildcards:
+
+```dpql
+@name like "%John%"
+@email like "%@example.com"
+@code like "A_C"
+```
+
+## Built-in Functions
+
+### Math Functions
+
+```dpql
+abs(@value)                  # Absolute value
+round(@score, 2)             # Round to 2 decimal places
+floor(@price)                # Round down to integer
+ceil(@price)                 # Round up to integer
+```
+
+### String Functions
+
+```dpql
+trim(@name)                  # Remove leading/trailing whitespace
+ltrim(@name)                 # Remove leading whitespace
+rtrim(@name)                 # Remove trailing whitespace
+concat(@first, " ", @last)   # Concatenate values as strings
+split(@csv, ",")             # Split by separator
+substr(@name, 0, 5)          # Substring extraction
+```
+
+### Null Handling Functions
+
+```dpql
+coalesce(@nickname, @name, "unknown")  # First non-null value
+nullif(@status, "inactive")            # Null if equal
+```
+
+### Date/Time Functions
+
+```dpql
+now()                        # Current date/time
+
+# Duration constructors (for date arithmetic with + and -)
+@created + days(30)
+@deadline - hours(12)
+years(1) + months(6)
+weeks(2)
+minutes(30) + seconds(15)
+milliseconds(500)
+microseconds(1000)
+
+# Date component extraction
+get_year(@created)           # Year (e.g. 2026)
+get_month(@created)          # Month (1-12)
+get_day(@created)            # Day (1-31)
+get_hour(@created)           # Hour (0-23)
+get_minute(@created)         # Minute (0-59)
+get_second(@created)         # Second (0-59)
+
+# Date formatting
+format_date(@created, "YYYY-MM-DD")
+format_number(@price, ",", ".", 2)
+```
+
+### Collection Functions
+
+```dpql
+# Apply expression to each element, return list
+map(@orders, @product.name)
+
+# With filter
+map(@orders, @product.name, @status == "active")
+
+# Build hash from list
+hash_map(@users, @id, @name)
+```
 
 ## Values
 
@@ -331,8 +433,30 @@ are passed as raw strings to the callback for handling.
 # Date comparison
 @created >= 2026-01-01 && @created < 2026-02-01
 
-# Regex with flags
+# Date arithmetic with duration functions
+@created + days(30) > now()
+@deadline - hours(12) < now()
+
+# Arithmetic in comparisons
+@total == @price * @qty + @tax
+@score - 80 > 0
+
+# Pattern matching
 @email =~ /example\.com$/i
+@name like "%Smith%"
+
+# Null handling
+coalesce(@nickname, @name) != "unknown"
+@status not in ("deleted", "archived")
+
+# Math functions
+abs(@balance) > 1000 && round(@rate, 2) == 3.14
+
+# String functions
+trim(@name) == "Alice" && concat(@first, " ", @last) == @full_name
+
+# Date extraction
+get_year(@created) == 2026 && get_month(@created) >= 6
 
 # Chained field reference operators
 @orders[-1]{items}[0].product_id == 123
