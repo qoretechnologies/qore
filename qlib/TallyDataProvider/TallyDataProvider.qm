@@ -1,0 +1,506 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore TallyDataProvider module definition
+
+/*  TallyDataProvider.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) TallyRestClient
+%requires RestClientIo
+
+module TallyDataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for Tally.so form management services";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new TallyDataProviderFactory());
+
+        # register the data provider application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": TallyDataProvider::AppName,
+            "display_name": "Tally",
+            "short_desc": "Tally.so form builder and management",
+            "desc": "Provides access to [Tally.so](https://tally.so/) for programmatic form creation, "
+                "submission management, and webhook configuration.\n\n"
+                "**Common use cases**:\n"
+                "- **Form management**: create, update, and publish forms programmatically\n"
+                "- **Submission processing**: retrieve and filter form submissions for data analysis\n"
+                "- **Automation**: set up webhooks to trigger workflows when forms are submitted\n"
+                "- **User management**: retrieve authenticated user information",
+            "scheme": "tally",
+            "logo": TallyLogo,
+            "logo_file_name": "tally-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::FormsSurveys,),
+        });
+
+        # --- Form Actions ---
+
+        # create-form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/create-form",
+            "action": "create-form",
+            "display_name": "Create Form",
+            "short_desc": "Create a new form",
+            "desc": "Create a new form with content blocks and settings, optionally based on a template "
+                "or within a specific workspace",
+            "action_code": DPAT_API,
+            "groups": ("Forms",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateFormRequestDataType::Fields{"blocks", "status"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateFormRequestDataType::Fields{"workspaceId", "templateId",}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateFormRequestDataType::Fields - ("blocks", "status", "workspaceId", "templateId")
+            ),
+            "output_type": TallyCreateFormDataProvider::ResponseType,
+        });
+
+        # get-form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/get-form",
+            "action": "get-form",
+            "display_name": "Get Form",
+            "short_desc": "Get a form by ID",
+            "desc": "Retrieve a single form by its ID, including all blocks and settings",
+            "action_code": DPAT_API,
+            "groups": ("Forms",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyGetFormRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ),
+            "output_type": TallyGetFormDataProvider::ResponseType,
+        });
+
+        # update-form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/update-form",
+            "action": "update-form",
+            "display_name": "Update Form",
+            "short_desc": "Update a form",
+            "desc": "Update a form's settings, blocks, or status",
+            "action_code": DPAT_API,
+            "groups": ("Forms",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateFormRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateFormRequestDataType::Fields{"name", "status"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateFormRequestDataType::Fields - ("id", "name", "status")
+            ),
+            "output_type": TallyUpdateFormDataProvider::ResponseType,
+        });
+
+        # delete-form
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/delete-form",
+            "action": "delete-form",
+            "display_name": "Delete Form",
+            "short_desc": "Delete a form",
+            "desc": "Delete a form by its ID and move it to the trash",
+            "action_code": DPAT_API,
+            "groups": ("Forms",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyDeleteFormRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ),
+            "output_type": TallyDeleteFormDataProvider::ResponseType,
+        });
+
+        # search-forms
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/forms",
+            "action": "search-forms",
+            "display_name": "Search Forms",
+            "short_desc": "Search and list forms",
+            "desc": "Search and list forms with optional pagination and workspace filtering",
+            "action_code": DPAT_FIND,
+            "groups": ("Forms",),
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Page number for pagination (default `1`)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of forms per page (1-500, default `50`)",
+                    "preselected": True,
+                },
+                "workspaceIds": <ActionOptionInfo>{
+                    "display_name": "Workspace IDs",
+                    "short_desc": "Filter by workspace IDs",
+                    "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                    "desc": "List of workspace IDs to filter results",
+                },
+            },
+            "output_type": TallyFormDataType,
+        });
+
+        # --- Submission Actions ---
+
+        # get-submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/get-submission",
+            "action": "get-submission",
+            "display_name": "Get Submission",
+            "short_desc": "Get a submission by ID",
+            "desc": "Retrieve a specific form submission with all its responses and the form questions",
+            "action_code": DPAT_API,
+            "groups": ("Submissions",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyGetSubmissionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": TallyGetSubmissionDataProvider::ResponseType,
+        });
+
+        # delete-submission
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/delete-submission",
+            "action": "delete-submission",
+            "display_name": "Delete Submission",
+            "short_desc": "Delete a submission",
+            "desc": "Delete a specific submission from a form",
+            "action_code": DPAT_API,
+            "groups": ("Submissions",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyDeleteSubmissionRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": TallyDeleteSubmissionDataProvider::ResponseType,
+        });
+
+        # search-submissions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/submissions",
+            "action": "search-submissions",
+            "display_name": "Search Submissions",
+            "short_desc": "Search and list form submissions",
+            "desc": "Search and list submissions for a specific form with optional filtering by status, "
+                "date range, and pagination",
+            "action_code": DPAT_FIND,
+            "groups": ("Submissions",),
+            "options": {
+                "form_id": <ActionOptionInfo>{
+                    "display_name": "Form ID",
+                    "short_desc": "The form to list submissions for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "desc": "The ID of the form to retrieve submissions from",
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                },
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Page number for pagination (default `1`)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of submissions per page (1-500, default `50`)",
+                    "preselected": True,
+                },
+                "filter": <ActionOptionInfo>{
+                    "display_name": "Filter",
+                    "short_desc": "Submission status filter",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter submissions by completion status",
+                    "allowed_values": (
+                        <AllowedValueInfo>{"value": "all", "display_name": "All"},
+                        <AllowedValueInfo>{"value": "completed", "display_name": "Completed"},
+                        <AllowedValueInfo>{"value": "partial", "display_name": "Partial"},
+                    ),
+                },
+                "startDate": <ActionOptionInfo>{
+                    "display_name": "Start Date",
+                    "short_desc": "Filter by start date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter submissions submitted on or after this ISO 8601 date",
+                },
+                "endDate": <ActionOptionInfo>{
+                    "display_name": "End Date",
+                    "short_desc": "Filter by end date",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Filter submissions submitted on or before this ISO 8601 date",
+                },
+                "afterId": <ActionOptionInfo>{
+                    "display_name": "After ID",
+                    "short_desc": "Cursor-based pagination",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "desc": "Get submissions after a specific submission ID",
+                },
+            },
+            "output_type": TallySubmissionDataType,
+        });
+
+        # --- Question Actions ---
+
+        # search-questions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/questions",
+            "action": "search-questions",
+            "display_name": "Search Questions",
+            "short_desc": "List form questions",
+            "desc": "List all questions in a specific form",
+            "action_code": DPAT_FIND,
+            "groups": ("Questions",),
+            "options": {
+                "form_id": <ActionOptionInfo>{
+                    "display_name": "Form ID",
+                    "short_desc": "The form to list questions for",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "desc": "The ID of the form to retrieve questions from",
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                },
+            },
+            "output_type": TallyQuestionDataType,
+        });
+
+        # --- Webhook Actions ---
+
+        # create-webhook
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/create-webhook",
+            "action": "create-webhook",
+            "display_name": "Create Webhook",
+            "short_desc": "Create a new webhook",
+            "desc": "Create a new webhook for a form to receive events when forms are submitted",
+            "action_code": DPAT_API,
+            "groups": ("Webhooks",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateWebhookRequestDataType::Fields{"formId",}, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateWebhookRequestDataType::Fields{"url", "eventTypes"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyCreateWebhookRequestDataType::Fields - ("formId", "url", "eventTypes")
+            ),
+            "output_type": TallyCreateWebhookDataProvider::ResponseType,
+        });
+
+        # update-webhook
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/update-webhook",
+            "action": "update-webhook",
+            "display_name": "Update Webhook",
+            "short_desc": "Update a webhook",
+            "desc": "Update an existing webhook configuration",
+            "action_code": DPAT_API,
+            "groups": ("Webhooks",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateWebhookRequestDataType::Fields{"id",}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateWebhookRequestDataType::Fields{"url", "isEnabled"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateWebhookRequestDataType::Fields - ("id", "url", "isEnabled")
+            ),
+            "output_type": TallyUpdateWebhookDataProvider::ResponseType,
+        });
+
+        # delete-webhook
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/delete-webhook",
+            "action": "delete-webhook",
+            "display_name": "Delete Webhook",
+            "short_desc": "Delete a webhook",
+            "desc": "Delete a webhook by its ID",
+            "action_code": DPAT_API,
+            "groups": ("Webhooks",),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                TallyDeleteWebhookRequestDataType::Fields, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ),
+            "output_type": TallyDeleteWebhookDataProvider::ResponseType,
+        });
+
+        # search-webhooks
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/webhooks",
+            "action": "search-webhooks",
+            "display_name": "Search Webhooks",
+            "short_desc": "Search and list webhooks",
+            "desc": "List all webhooks across your accessible forms with optional pagination",
+            "action_code": DPAT_FIND,
+            "groups": ("Webhooks",),
+            "options": {
+                "page": <ActionOptionInfo>{
+                    "display_name": "Page",
+                    "short_desc": "Page number",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Page number for pagination (default `1`)",
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Number of results per page",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Number of webhooks per page (1-100, default `25`)",
+                    "preselected": True,
+                },
+            },
+            "output_type": TallyWebhookDataType,
+        });
+
+        # --- User Actions ---
+
+        # get-current-user
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/get-current-user",
+            "action": "get-current-user",
+            "display_name": "Get Current User",
+            "short_desc": "Get the current authenticated user",
+            "desc": "Retrieve information about the currently authenticated user",
+            "action_code": DPAT_API,
+            "groups": ("User",),
+            "options": {},
+            "output_type": TallyGetCurrentUserDataProvider::ResponseType,
+        });
+
+        # --- Event Actions ---
+
+        # watch form submissions
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": TallyDataProvider::AppName,
+            "path": "/events/" + EVENT_FORM_SUBMISSION,
+            "action": EVENT_FORM_SUBMISSION,
+            "display_name": "Watch Form Submissions",
+            "short_desc": "Watch for new form submissions",
+            "desc": "Polls for new form submissions and fires an event for each new submission received",
+            "action_code": DPAT_EVENT,
+            "groups": ("Events",),
+            "options": {
+                "form_id": <ActionOptionInfo>{
+                    "display_name": "Form ID",
+                    "short_desc": "The form to watch for submissions",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "desc": "The ID of the form to watch for new submissions",
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                },
+                "poll_interval": <ActionOptionInfo>{
+                    "display_name": "Poll Interval",
+                    "short_desc": "Polling interval in seconds",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "desc": "Polling interval in seconds (minimum `" + MinPollInterval + "`, default `"
+                        + DefaultPollInterval + "`)",
+                },
+            },
+        });
+    };
+}
+
+/** @mainpage TallyDataProvider Module
+
+    @tableofcontents
+
+    @section tallydataproviderintro TallyDataProvider Introduction
+
+    The %TallyDataProvider module provides a data provider API for Tally.so
+    form building and management services.
+
+    The following classes are provided by this module:
+    - @ref TallyDataProvider::TallyDataProvider "TallyDataProvider" - the root data provider
+    - @ref TallyDataProvider::TallyFormsDataProvider "TallyFormsDataProvider" - search/list forms
+    - @ref TallyDataProvider::TallySubmissionsDataProvider "TallySubmissionsDataProvider" - search/list submissions
+    - @ref TallyDataProvider::TallyQuestionsDataProvider "TallyQuestionsDataProvider" - search/list questions
+    - @ref TallyDataProvider::TallyWebhooksDataProvider "TallyWebhooksDataProvider" - search/list webhooks
+    - @ref TallyDataProvider::TallyCreateFormDataProvider "TallyCreateFormDataProvider" - create a form
+    - @ref TallyDataProvider::TallyGetFormDataProvider "TallyGetFormDataProvider" - get a form by ID
+    - @ref TallyDataProvider::TallyUpdateFormDataProvider "TallyUpdateFormDataProvider" - update a form
+    - @ref TallyDataProvider::TallyDeleteFormDataProvider "TallyDeleteFormDataProvider" - delete a form
+    - @ref TallyDataProvider::TallyGetSubmissionDataProvider "TallyGetSubmissionDataProvider" - get a submission
+    - @ref TallyDataProvider::TallyDeleteSubmissionDataProvider "TallyDeleteSubmissionDataProvider" - delete a submission
+    - @ref TallyDataProvider::TallyCreateWebhookDataProvider "TallyCreateWebhookDataProvider" - create a webhook
+    - @ref TallyDataProvider::TallyUpdateWebhookDataProvider "TallyUpdateWebhookDataProvider" - update a webhook
+    - @ref TallyDataProvider::TallyDeleteWebhookDataProvider "TallyDeleteWebhookDataProvider" - delete a webhook
+    - @ref TallyDataProvider::TallyGetCurrentUserDataProvider "TallyGetCurrentUserDataProvider" - get current user
+    - @ref TallyDataProvider::TallyWatchFormSubmissionDataProvider "TallyWatchFormSubmissionDataProvider" - watch submissions
+
+    @section tallydataproviderrelnotes Release Notes
+
+    @subsection tallydataproviderv1_0 TallyDataProvider v1.0
+    - the initial version of the %TallyDataProvider module
+*/

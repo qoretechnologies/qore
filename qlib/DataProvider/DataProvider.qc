@@ -242,6 +242,7 @@ public class DataProvider {
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",
+            "tally": "TallyDataProvider",
 
             # provided by the ssh2 module
             "sftpclient": "SftpClientDataProvider",

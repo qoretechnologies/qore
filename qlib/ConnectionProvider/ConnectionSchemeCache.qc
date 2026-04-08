@@ -247,6 +247,7 @@ public class ConnectionSchemeCache {
             "squarespaceres": "SquarespaceRestClient",
 
             "tableaures": "TableauRestClient",
+            "tally": "TallyRestClient",
 
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",
