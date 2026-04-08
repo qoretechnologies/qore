@@ -766,6 +766,18 @@ cargo install tree-sitter-cli@0.26.5
     - regex_escape() built-in function and \c \<string\>::regexEscape() pseudo-method for escaping
       regex metacharacters
     - \c \<string\>::splitRegex() now accepts an optional \a limit parameter to cap the number of splits
+    - Perl-style case conversion escape sequences in regex replacement strings: \c \\U (uppercase until
+      \c \\E), \c \\L (lowercase until \c \\E), \c \\u (uppercase next char), \c \\l (lowercase next char),
+      \c \\E (end case conversion); all Unicode-aware
+    @endparblock
+
+    @par Unicode Case Conversion Fixes
+    @parblock
+    - Fixed a bug in 2-byte UTF-8 encoding in \c concatUTF8FromUnicode() that corrupted all codepoints in
+      the U+0080-U+07FF range (Cyrillic, Armenian, Hebrew, Arabic, etc.) during case conversion
+    - @ref QoreString::toupr() "QoreString::toupr()" and @ref QoreString::tolwr() "QoreString::tolwr()"
+      are now Unicode-aware (previously ASCII-only)
+    - Added 1-to-many uppercase mappings: ß→SS, ﬁ→FI, ﬂ→FL, ﬃ→FFI, ﬄ→FFL, ﬅ→ST, ﬆ→ST
     @endparblock
 
     @par Brace-Delimited Regular Expressions

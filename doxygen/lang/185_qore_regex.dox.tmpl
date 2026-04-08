@@ -158,6 +158,24 @@
     |\\\\|\c \\|\c 134|\c 092|\c 5C|a literal backslash character
     |\\[0-7][0-7][0-7]|-|-|-|-|the ASCII character represented by the octal code
 
+    <b>Case Conversion Escape Codes (since %Qore 2.3)</b>
+    |!Escape|!Description
+    |\\U|Converts all following replacement text to uppercase until \\E
+    |\\L|Converts all following replacement text to lowercase until \\E
+    |\\u|Converts only the next character to uppercase
+    |\\l|Converts only the next character to lowercase
+    |\\E|Ends case conversion started by \\U or \\L
+
+    Case conversion is Unicode-aware and works with all scripts supported by %Qore's Unicode character maps
+    (Latin, Cyrillic, Greek, etc.).
+
+    @par Case Conversion Examples
+    @code{.py}
+    str =~ s/(\w+)/\U$1/g;            # uppercase all words
+    str =~ s/(\w+)/\L\u$1/g;          # Title Case (lowercase then capitalize first)
+    str =~ s/test/\Ufoo\E bar/;       # "FOO bar" — \E stops uppercase
+    @endcode
+
     Otherwise any backslashes in the replacement string will be copied literally to the output string.
 
     @section qore_regex_backreferences Qore Regular Expression Backreferences

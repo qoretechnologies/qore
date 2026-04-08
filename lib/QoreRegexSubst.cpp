@@ -124,9 +124,70 @@ int QoreRegexSubst::parse() {
     return 0;
 }
 
+// case conversion mode for \U, \L, \u, \l, \E in replacement strings
+enum CaseMode { CM_NONE, CM_UPPER, CM_LOWER };
+
+// helper: apply case conversion to a string and concatenate to output
+static void concat_case(ExceptionSink& xsink, QoreString* cstr, const char* text, size_t len,
+        CaseMode case_mode, bool& next_upper, bool& next_lower) {
+    if (case_mode == CM_NONE && !next_upper && !next_lower) {
+        cstr->concat(text, len);
+        return;
+    }
+
+    QoreString src(text, len, QCS_UTF8);
+    if (next_upper || next_lower) {
+        // \u or \l: apply to first character only, pass rest through with current case_mode
+        unsigned first_len;
+        src.getUnicodePointFromBytePos(0, first_len, &xsink);
+        if (xsink) {
+            return;
+        }
+        QoreString first_char(text, first_len, QCS_UTF8);
+        QoreString tmp(QCS_UTF8);
+        if (next_upper) {
+            do_toupper(tmp, first_char, &xsink);
+        } else {
+            do_tolower(tmp, first_char, &xsink);
+        }
+        if (!xsink) {
+            cstr->concat(tmp.c_str());
+        }
+        next_upper = false;
+        next_lower = false;
+        // apply ongoing case_mode to remainder
+        if (first_len < len) {
+            bool nu = false, nl = false;
+            concat_case(xsink, cstr, text + first_len, len - first_len, case_mode, nu, nl);
+        }
+        return;
+    }
+
+    // \U or \L mode: convert entire text
+    QoreString tmp(QCS_UTF8);
+    if (case_mode == CM_UPPER) {
+        do_toupper(tmp, src, &xsink);
+    } else {
+        do_tolower(tmp, src, &xsink);
+    }
+    if (!xsink) {
+        cstr->concat(tmp.c_str());
+    }
+}
+
+// helper: apply case conversion to a single char and concatenate
+static void concat_case_char(ExceptionSink& xsink, QoreString* cstr, char ch,
+        CaseMode case_mode, bool& next_upper, bool& next_lower) {
+    concat_case(xsink, cstr, &ch, 1, case_mode, next_upper, next_lower);
+}
+
 // static function
 int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* ovector, int olen, const char* ptr,
         const char* target, int rc) {
+    CaseMode case_mode = CM_NONE;
+    bool next_upper = false;
+    bool next_lower = false;
+
     while (*ptr) {
         if (*ptr == '\\') {
             ++ptr;
@@ -137,41 +198,55 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
                         "(decimal %d; must be < 256)", *ptr, *(ptr + 1), *(ptr + 2), val);
                     return -1;
                 }
-                cstr->concat((const char)val);
+                concat_case_char(xsink, cstr, (char)val, case_mode, next_upper, next_lower);
                 ptr += 3;
             } else if (*(ptr) == '\\' || *(ptr) == '$') {
-                cstr->concat(*(ptr++));
+                concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
             } else if (*ptr == 'a') {
-                // \a = BEL (bell)
-                cstr->concat((const char)7);
+                concat_case_char(xsink, cstr, (char)7, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'b') {
-                // \b = BS (backspace)
-                cstr->concat((const char)8);
+                concat_case_char(xsink, cstr, (char)8, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'e') {
-                // \e = ESC (escape)
-                cstr->concat((const char)27);
+                concat_case_char(xsink, cstr, (char)27, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'f') {
-                // \f = FF (form feed)
-                cstr->concat((const char)12);
+                concat_case_char(xsink, cstr, (char)12, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'n') {
-                // \n = NL (newline)
-                cstr->concat((const char)10);
+                concat_case_char(xsink, cstr, (char)10, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'r') {
-                // \r = CR (carriage return)
-                cstr->concat((const char)13);
+                concat_case_char(xsink, cstr, (char)13, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 't') {
-                // \t = HT (horizontal tab)
-                cstr->concat((const char)9);
+                concat_case_char(xsink, cstr, (char)9, case_mode, next_upper, next_lower);
                 ++ptr;
             } else if (*ptr == 'v') {
-                // \v = VT (vertical tab)
-                cstr->concat((const char)11);
+                concat_case_char(xsink, cstr, (char)11, case_mode, next_upper, next_lower);
+                ++ptr;
+            } else if (*ptr == 'U') {
+                // \U = uppercase until \E
+                case_mode = CM_UPPER;
+                ++ptr;
+            } else if (*ptr == 'L') {
+                // \L = lowercase until \E
+                case_mode = CM_LOWER;
+                ++ptr;
+            } else if (*ptr == 'u') {
+                // \u = uppercase next character
+                next_upper = true;
+                next_lower = false;
+                ++ptr;
+            } else if (*ptr == 'l') {
+                // \l = lowercase next character
+                next_lower = true;
+                next_upper = false;
+                ++ptr;
+            } else if (*ptr == 'E') {
+                // \E = end case conversion
+                case_mode = CM_NONE;
                 ++ptr;
             } else {
                 cstr->concat('\\');
@@ -184,16 +259,17 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
             } while (isdigit(*ptr));
             int num = atoi(n.c_str());
             int pos = num * 2;
-            //printd(5, "QoreRegexSubst::concat() pos: %d olen: %d ovector[%d]: %d ovector[%d]: %d rc: %d\n", pos,
-            //  olen, pos, ovector[pos], pos + 1, ovector[pos + 1], rc);
             if (pos >= 0 && pos < olen && num < rc && ovector[pos] != -1) {
-                cstr->concat(target + ovector[pos], ovector[pos + 1] - ovector[pos]);
+                concat_case(xsink, cstr, target + ovector[pos], ovector[pos + 1] - ovector[pos],
+                    case_mode, next_upper, next_lower);
             }
         } else {
-            cstr->concat(*(ptr++));
+            concat_case_char(xsink, cstr, *(ptr++), case_mode, next_upper, next_lower);
+        }
+        if (xsink) {
+            return -1;
         }
     }
-    //printd(5, "QoreRegexSubst::concat() target: '%s' cstr: '%s'\n", target, cstr->c_str());
     return 0;
 }
 

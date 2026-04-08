@@ -22,6 +22,7 @@ class RegexTest inherits QUnit::Test {
         addTestCase("regex_extract_detailed function", \testRegexExtractDetailed());
         addTestCase("callback substitution", \testCallbackSubst());
         addTestCase("splitRegex limit", \testSplitRegexLimit());
+        addTestCase("case escape sequences", \testCaseEscapes());
         set_return_value(main());
     }
 
@@ -1091,5 +1092,56 @@ class RegexTest inherits QUnit::Test {
         assertEq(2, l.size());
         assertEq("a", l[0]);
         assertEq("b:c:d", l[1]);
+    }
+
+    testCaseEscapes() {
+        # \U = uppercase all until \E
+        assertEq("HELLO WORLD", regex_subst("hello world", "(\\w+)", "\\U$1", RE_Global));
+
+        # \L = lowercase all until \E
+        assertEq("hello world", regex_subst("HELLO WORLD", "(\\w+)", "\\L$1", RE_Global));
+
+        # \u = uppercase first character only
+        assertEq("Hello World", regex_subst("hello world", "(\\w+)", "\\u$1", RE_Global));
+
+        # \l = lowercase first character only
+        assertEq("hELLO", regex_subst("HELLO", "(\\w+)", "\\l$1"));
+
+        # \L\u = Title Case (lowercase all, then uppercase first)
+        assertEq("Hello World", regex_subst("hELLO wORLD", "(\\w+)", "\\L\\u$1", RE_Global));
+
+        # \E stops case conversion
+        assertEq("FOO bar", regex_subst("test", "test", "\\Ufoo\\E bar"));
+
+        # \U and \E with backreferences
+        assertEq("[HELLO] world", regex_subst("hello world", "(\\w+)", "[\\U$1\\E]"));
+
+        # $0 with \U
+        assertEq("HELLO", regex_subst("hello", "hello", "\\U$0"));
+
+        # operator syntax
+        string s = "hello world";
+        s =~ s/(\w+)/\U$1/g;
+        assertEq("HELLO WORLD", s);
+
+        s = "hELLO wORLD";
+        s =~ s/(\w+)/\L\u$1/g;
+        assertEq("Hello World", s);
+
+        # brace delimiters
+        s = "hello";
+        s =~ s{(\w+)}{\U$1};
+        assertEq("HELLO", s);
+
+        # UTF-8 case conversion (need /u for \w to match Unicode)
+        assertEq("ПРИВІТ", regex_subst("привіт", "(.+)", "\\U$1"));
+        assertEq("привіт", regex_subst("ПРИВІТ", "(.+)", "\\L$1"));
+        assertEq("Привіт", regex_subst("привіт", "(.+)", "\\u$1"));
+
+        # no case mode: \U \L etc. don't appear in output (previously they produced literal \U)
+        assertEq("FOO", regex_subst("test", "test", "\\Ufoo"));
+
+        # regex_subst function with case escapes
+        assertEq("HELLO", regex_subst("hello", "(\\w+)", "\\U$1"));
     }
 }
