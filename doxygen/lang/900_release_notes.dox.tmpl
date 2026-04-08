@@ -1743,7 +1743,19 @@ cargo install tree-sitter-cli@0.26.5
     - <a href="../../modules/WebSocketHandler/html/index.html#websockethandlerintro">WebSocketHandler</a> module
       - fixed bugs handling UTF-8 data
         (<a href="https://github.com/qoretechnologies/qore/issues/4984">issue 4984</a>)
-    - <a href="../../modules/WebUtil/html/index.html#webutilintro">WebUtil</a> module
+    - <a href="../../modules/WebUtil/html/index.html#webutilintro">WebUtil</a> module (version 1.8):
+      - added HTTP caching headers to @ref WebUtil::FileHandler "FileHandler": \c ETag,
+        \c Last-Modified, \c Cache-Control, and conditional request handling (\c If-None-Match,
+        \c If-Modified-Since) returning 304 Not Modified
+      - added automatic pre-compressed file serving: checks for \c .br, \c .zst, \c .gz, \c .bz2
+        variants on disk and serves them with appropriate \c Content-Encoding headers
+      - added HTTP Range request support (206 Partial Content) with \c If-Range support
+      - added on-the-fly compression for small/medium files (configurable threshold, default 10MB)
+      - added optional file stat caching with configurable TTL
+      - all features are backward-compatible and configurable via new constructor options:
+        \c enable_etag, \c enable_last_modified, \c default_cache_control,
+        \c cache_control_by_ext, \c serve_precompressed, \c enable_range,
+        \c max_compress_size, \c stat_cache_ttl
       - mark the context as handling file data in the authentication method to enable authentication errors to be
         redirected for handlers handling UI file data
         (<a href="https://github.com/qoretechnologies/qore/issues/4970">issue 4970</a>)
