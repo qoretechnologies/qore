@@ -2836,19 +2836,18 @@ QoreString* QoreString::copy() const {
 
 // FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::tolwr() {
-    char* c = priv->buf;
-    while (*c) {
-        *c = ::tolower(*c);
-        c++;
+    ExceptionSink xsink;
+    QoreString tmp(getEncoding());
+    if (!do_tolower(tmp, *this, &xsink)) {
+        *this = tmp;
     }
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::toupr() {
-    char* c = priv->buf;
-    while (*c) {
-        *c = ::toupper(*c);
-        c++;
+    ExceptionSink xsink;
+    QoreString tmp(getEncoding());
+    if (!do_toupper(tmp, *this, &xsink)) {
+        *this = tmp;
     }
 }
 
