@@ -179,7 +179,253 @@ void qore_absolute_time::set(const AbstractQoreZoneInfo* n_zone, const QoreValue
    }
 }
 
+// helper: skip whitespace
+static inline void skip_ws(const char*& p) {
+    while (*p == ' ' || *p == '\t') {
+        ++p;
+    }
+}
+
+// helper: parse a variable-width unsigned integer (1 or 2 digits)
+static int get_uint_var(const char*& p) {
+    if (!isdigit(*p)) {
+        return -1;
+    }
+    int rc = *p - '0';
+    ++p;
+    if (isdigit(*p)) {
+        rc = rc * 10 + (*p - '0');
+        ++p;
+    }
+    return rc;
+}
+
+// Try to parse an RFC 7231 / RFC 2822 date string.
+// Supports:
+//   IMF-fixdate : Sun, 06 Nov 1994 08:49:37 GMT        (RFC 7231 preferred)
+//   RFC 850     : Sunday, 06-Nov-94 08:49:37 GMT        (obsolete)
+//   asctime     : Sun Nov  6 08:49:37 1994              (obsolete)
+//   RFC 2822    : Mon, 06 Nov 1994 08:49:37 +0000       (email dates)
+// Returns true if the string was recognized and parsed, false otherwise.
+static bool try_parse_rfc7231(const char* str, qore_absolute_time& target, ExceptionSink* xsink) {
+    const char* p = str;
+
+    // RFC 7231 / RFC 2822 dates start with a day-of-week name (alpha chars)
+    if (!isalpha(*p)) {
+        return false;
+    }
+
+    // Skip day-of-week name (we don't validate it — just skip past it)
+    while (isalpha(*p)) {
+        ++p;
+    }
+
+    // Determine format: asctime has no comma after day-of-week
+    bool is_asctime = (*p != ',');
+
+    if (!is_asctime) {
+        // Skip comma and whitespace: "Sun, " or "Sunday, "
+        ++p;  // skip ','
+        skip_ws(p);
+    } else {
+        // asctime: "Sun Nov  6 08:49:37 1994" — skip whitespace after day name
+        skip_ws(p);
+    }
+
+    int day, month_ix, year, hour, minute, second;
+
+    if (is_asctime) {
+        // asctime format: Mon Nov  6 08:49:37 1994
+        // Parse month abbreviation (3 chars)
+        if (!isalpha(*p)) {
+            return false;
+        }
+        char mon_buf[4];
+        for (int i = 0; i < 3; ++i) {
+            if (!isalpha(p[i])) {
+                return false;
+            }
+            mon_buf[i] = p[i];
+        }
+        mon_buf[3] = '\0';
+        p += 3;
+
+        month_ix = qore_date_info::getMonthIxFromAbbr(mon_buf);
+        if (month_ix < 0) {
+            return false;
+        }
+
+        // Skip whitespace (may be 1 or 2 spaces for single-digit day)
+        skip_ws(p);
+
+        // Parse day (1 or 2 digits)
+        day = get_uint_var(p);
+        if (day < 1 || day > 31) {
+            return false;
+        }
+
+        skip_ws(p);
+
+        // Parse time: HH:MM:SS
+        hour = get_uint(p, 2);
+        if (hour < 0 || *p != ':') {
+            return false;
+        }
+        ++p;
+        minute = get_uint(p, 2);
+        if (minute < 0 || *p != ':') {
+            return false;
+        }
+        ++p;
+        second = get_uint(p, 2);
+        if (second < 0) {
+            return false;
+        }
+
+        skip_ws(p);
+
+        // Parse 4-digit year
+        year = get_uint(p, 4);
+        if (year < 0) {
+            return false;
+        }
+    } else {
+        // IMF-fixdate / RFC 850 / RFC 2822: day comes first
+        // Parse day (1 or 2 digits)
+        day = get_uint_var(p);
+        if (day < 1 || day > 31) {
+            return false;
+        }
+
+        // Separator: space or dash
+        char sep = *p;
+        if (sep != ' ' && sep != '-') {
+            return false;
+        }
+        ++p;
+
+        // Parse month abbreviation (3 chars)
+        if (!isalpha(*p)) {
+            return false;
+        }
+        char mon_buf[4];
+        for (int i = 0; i < 3; ++i) {
+            if (!isalpha(p[i])) {
+                return false;
+            }
+            mon_buf[i] = p[i];
+        }
+        mon_buf[3] = '\0';
+        p += 3;
+
+        month_ix = qore_date_info::getMonthIxFromAbbr(mon_buf);
+        if (month_ix < 0) {
+            return false;
+        }
+
+        // Separator (same as before)
+        if (*p != sep) {
+            return false;
+        }
+        ++p;
+
+        // Parse year: 4 digits (IMF-fixdate / RFC 2822) or 2 digits (RFC 850)
+        if (!isdigit(*p)) {
+            return false;
+        }
+        year = get_uint(p, 2);
+        if (year < 0) {
+            return false;
+        }
+        if (isdigit(*p)) {
+            // 4-digit year: we already have the first 2 digits, read 2 more
+            int low = get_uint(p, 2);
+            if (low < 0) {
+                return false;
+            }
+            year = year * 100 + low;
+        } else {
+            // 2-digit year (RFC 850): interpret per RFC 2822 §4.3
+            // 00-49 → 2000-2049, 50-99 → 1950-1999
+            year += (year < 50) ? 2000 : 1900;
+        }
+
+        skip_ws(p);
+
+        // Parse time: HH:MM:SS
+        hour = get_uint(p, 2);
+        if (hour < 0 || *p != ':') {
+            return false;
+        }
+        ++p;
+        minute = get_uint(p, 2);
+        if (minute < 0 || *p != ':') {
+            return false;
+        }
+        ++p;
+        second = get_uint(p, 2);
+        if (second < 0) {
+            return false;
+        }
+
+        skip_ws(p);
+    }
+
+    // Validate ranges
+    int month = month_ix + 1;  // month_ix is 0-based
+    if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 || second > 59) {
+        if (xsink) {
+            xsink->raiseException("INVALID-DATE", "RFC 7231 date '%s' has invalid field values", str);
+        }
+        target.set((const AbstractQoreZoneInfo*)nullptr, 0, 0);
+        return true;
+    }
+    if (day > qore_date_info::getLastDayOfMonth(month, year)) {
+        if (xsink) {
+            xsink->raiseException("INVALID-DATE", "RFC 7231 date '%s': day %d exceeds days in month %d/%d",
+                str, day, month, year);
+        }
+        target.set((const AbstractQoreZoneInfo*)nullptr, 0, 0);
+        return true;
+    }
+
+    // Parse optional timezone: "GMT", "+HHMM", "-HHMM", or end of string
+    int utc_offset = 0;
+    if (*p && strncasecmp(p, "GMT", 3) != 0 && strncasecmp(p, "UTC", 3) != 0) {
+        // Try RFC 2822 numeric offset: +HHMM or -HHMM
+        if (*p == '+' || *p == '-') {
+            int sign = (*p == '-') ? -1 : 1;
+            ++p;
+            int off_h = get_uint(p, 2);
+            if (off_h < 0) {
+                return false;
+            }
+            int off_m = get_uint(p, 2);
+            if (off_m < 0) {
+                off_m = 0;  // allow "+HH" without minutes
+            }
+            utc_offset = sign * (off_h * 3600 + off_m * 60);
+        }
+        // else: unknown timezone — treat as UTC
+    }
+
+    // Compute UTC epoch seconds and adjust for offset
+    int64 epoch_secs = qore_date_info::getEpochSeconds(year, month, day, hour, minute, second);
+    // Subtract offset to convert to UTC (e.g., +0500 means local is ahead, so UTC = local - 5h)
+    epoch_secs -= utc_offset;
+    target.set((const AbstractQoreZoneInfo*)nullptr, epoch_secs, 0);
+    return true;
+}
+
 void qore_absolute_time::set(const char* str, const AbstractQoreZoneInfo* n_zone, ExceptionSink* xsink) {
+    // Try RFC 7231 / RFC 2822 format first (starts with alpha = day-of-week name)
+    if (isalpha(*str)) {
+        if (try_parse_rfc7231(str, *this, xsink)) {
+            return;
+        }
+        // Fall through to ISO-8601 parsing (will likely fail with a clear error)
+    }
+
     size_t len = strlen(str);
 
     // we need at least YYYYMMDD

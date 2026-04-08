@@ -1458,26 +1458,17 @@ public class FileHandler inherits public HttpServer::AbstractUrlHandler, private
         return gmtime(d).format("Dy, DD Mon YYYY HH:mm:SS") + " GMT";
     }
 
-    #! parses an HTTP date string (RFC 7231 format: "Dy, DD Mon YYYY HH:mm:SS GMT")
+    #! parses an HTTP date string per RFC 7231 (all three formats: IMF-fixdate, RFC 850, asctime)
     /** @param date_str the HTTP date string
         @return a date value in UTC, or @ref nothing if parsing fails
+
+        @note Uses the core date() function which natively handles RFC 7231 / RFC 2822 date formats
 
         @since WebUtil 1.8
     */
     private *date parseHttpDate(string date_str) {
-        # parse RFC 7231 format: "Wed, 08 Apr 2026 16:24:32 GMT"
-        *list<auto> parts = (date_str =~ x/(\d+)\s+(\w+)\s+(\d+)\s+(\d+):(\d+):(\d+)/);
-        if (!parts || parts.size() != 6) {
-            return;
-        }
-        *int month = MonthMap{parts[1]};
-        if (!month) {
-            return;
-        }
         try {
-            return date(sprintf("%04d-%02d-%02dT%02d:%02d:%02d+00:00",
-                int(parts[2]), month, int(parts[0]),
-                int(parts[3]), int(parts[4]), int(parts[5])));
+            return date(date_str);
         } catch () {
             return;
         }

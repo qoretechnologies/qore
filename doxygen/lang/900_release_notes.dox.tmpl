@@ -530,6 +530,17 @@ cargo install tree-sitter-cli@0.26.5
       - @ref Qore::thread_cancelled() "thread_cancelled()": returns @ref True if cancellation has been requested
         for the current thread
 
+    @par RFC 7231 / RFC 2822 Date Parsing
+    The @ref Qore::date(string) "date(string)" function and @ref Qore::TimeZone::date(string) "TimeZone::date(string)"
+    method now support parsing HTTP and email date formats in addition to ISO-8601:
+    - <b>RFC 7231 IMF-fixdate</b> (preferred HTTP format): \c "Sun, 06 Nov 1994 08:49:37 GMT"
+    - <b>RFC 7231 RFC 850</b> (obsolete HTTP format): \c "Sunday, 06-Nov-94 08:49:37 GMT"
+    - <b>RFC 7231 asctime</b> (obsolete HTTP format): \c "Sun Nov  6 08:49:37 1994"
+    - <b>RFC 2822</b> (email dates with numeric timezone offset): \c "Sun, 06 Nov 1994 08:49:37 +0500"
+
+    RFC 7231 dates (with \c GMT or \c UTC timezone) are always returned as UTC. RFC 2822 numeric
+    offsets (e.g. \c +0530) are converted to UTC.
+
     @subsection qore_2_3_0_updated_modules Updated Modules
     - @ref astparserintro "astparser" module
       - added a <a href="https://tree-sitter.github.io/tree-sitter/">tree-sitter</a>-based parser backend
