@@ -554,7 +554,7 @@ void qore_string_private::concatUTF8FromUnicode(unsigned code) {
         concat(0x80 | ((code & (0x3f << 6)) >> 6));
         concat(0x80 | (code & 0x3f));
     } else if (code > 0x7f) { // 2-byte code
-        concat(0xc0 | ((code & (0x2f << 6)) >> 6));
+        concat(0xc0 | ((code & (0x1f << 6)) >> 6));
         concat(0x80 | (code & 0x3f));
     } else
         concat((char)code);
