@@ -580,16 +580,15 @@ module BitlyDataProvider {
 
         # ========== EVENT TRIGGERS ==========
 
-        # Bitlink Click Event
+        # Bitlink Clicked
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": BitlyDataProvider::AppName,
             "path": "/events/" + EVENT_BITLINK_CLICK,
             "action": EVENT_BITLINK_CLICK,
             "groups": "Events",
-            "display_name": "Bitlink Click Event",
-            "short_desc": "Watch for bitlink click activity",
-            "desc": "Poll for bitlinks with new click activity in a group. "
-                "Emits events when bitlinks are modified (indicating new clicks)",
+            "display_name": "Bitlink Clicked",
+            "short_desc": "Trigger when a bitlink receives clicks",
+            "desc": "Fires when a bitlink receives new click activity in a group",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_BITLINK_CLICK,
         });

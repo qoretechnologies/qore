@@ -212,7 +212,7 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Builds a query string from a hash of parameters
-    private string buildQueryString(hash<auto> params) {
+    static string buildQueryString(hash<auto> params) {
         list<string> parts;
         foreach string key in (keys params) {
             auto val = params{key};
@@ -236,6 +236,7 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
             "sheets": True,
             "workspaces": True,
             "folders": True,
+            "reports": True,
             "users": True,
             "groups": True,
         };
@@ -248,6 +249,7 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
             case "sheets": return getReferenceSheets();
             case "workspaces": return getReferenceWorkspaces();
             case "folders": return getReferenceFolders();
+            case "reports": return getReferenceReports();
             case "users": return getReferenceUsers();
             case "groups": return getReferenceGroups();
         }
@@ -310,6 +312,26 @@ public class SmartSheetDataProviderBase inherits DataProvider::AbstractDataProvi
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::WARN, "Failed to fetch folders reference data: %s: %s",
+                ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available reports for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceReports() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<hash<auto>> reports = fetchAllPages("reports", "data", NOTHING, 200);
+            foreach hash<auto> report in (reports) {
+                rv += <AllowedValueInfo>{
+                    "display_name": report.name,
+                    "short_desc": string(report.id),
+                    "desc": sprintf("%s (ID: %s)", report.name, report.id),
+                    "value": string(report.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN, "Failed to fetch reports reference data: %s: %s",
                 ex.err, ex.desc);
         }
         return rv;

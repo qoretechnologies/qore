@@ -82,12 +82,14 @@ public class SmartSheetUpdateFolderRequestDataType inherits DataProvider::HashDa
                 "short_desc": "ID of the folder to update",
                 "desc": "The unique identifier of the folder to update",
                 "required": True,
+                "ref_data": "folders",
             },
             "name": {
                 "display_name": "Name",
                 "type": SoftStringOrNothingType,
                 "short_desc": "New folder name",
                 "desc": "The new name for the folder",
+                "preselected": True,
             },
         };
     }
@@ -107,6 +109,7 @@ public class SmartSheetDeleteFolderRequestDataType inherits DataProvider::HashDa
                 "short_desc": "ID of the folder to delete",
                 "desc": "The unique identifier of the folder to delete",
                 "required": True,
+                "ref_data": "folders",
             },
         };
     }

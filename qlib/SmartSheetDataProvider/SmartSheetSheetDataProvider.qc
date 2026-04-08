@@ -310,65 +310,88 @@ public class SmartSheetSheetDataProvider inherits SmartSheetDataProviderBase {
                     record_info.date_fields{col_name} = True;
                 }
 
-                # Build field info
-                hash<auto> field_info = {
-                    "name": col_name,
-                    "display_name": col_name,
-                    "short_desc": sprintf("%s column", col_type),
-                    "desc": sprintf("Sheet column '%s' of type `%s`", col_name, col_type),
-                };
+                # Determine type and allowed values from column type
+                Type field_type;
+                *list<hash<AllowedValueInfo>> field_allowed_values;
 
-                # Map SmartSheet type to Qore type
                 switch (col_type) {
                     case "TEXT_NUMBER":
-                        field_info.type = SoftStringOrNothingType;
+                        field_type = SoftStringOrNothingType;
                         break;
                     case "CONTACT_LIST":
-                        field_info.type = SoftStringOrNothingType;
+                        field_type = SoftStringOrNothingType;
+                        if (col.contactOptions) {
+                            field_allowed_values = map <AllowedValueInfo>{
+                                "display_name": $1.name ?? $1.email,
+                                "value": $1.email,
+                            }, col.contactOptions;
+                        }
                         break;
                     case "DATE":
-                        field_info.type = SoftDateOrNothingType;
+                        field_type = SoftDateOrNothingType;
                         break;
                     case "DATETIME":
-                        field_info.type = SoftDateOrNothingType;
+                        field_type = SoftDateOrNothingType;
                         break;
                     case "DURATION":
-                        field_info.type = SoftStringOrNothingType;
+                        field_type = SoftStringOrNothingType;
                         break;
                     case "PICKLIST":
-                        field_info.type = SoftStringOrNothingType;
-                        # Add allowed values from column options
+                        field_type = SoftStringOrNothingType;
                         if (col.options) {
-                            field_info.allowed_values = map <AllowedValueInfo>{
+                            field_allowed_values = map <AllowedValueInfo>{
                                 "display_name": $1,
                                 "value": $1,
                             }, col.options;
                         }
                         break;
                     case "CHECKBOX":
-                        field_info.type = SoftBoolOrNothingType;
+                        field_type = SoftBoolOrNothingType;
                         break;
                     case "ABSTRACT_DATETIME":
-                        field_info.type = SoftDateOrNothingType;
+                        field_type = SoftDateOrNothingType;
                         break;
                     case "PREDECESSOR":
-                        field_info.type = SoftStringOrNothingType;
+                        field_type = SoftStringOrNothingType;
                         break;
                     case "MULTI_CONTACT_LIST":
-                        field_info.type = SoftAutoListOrNothingType;
+                        field_type = SoftAutoListOrNothingType;
+                        if (col.contactOptions) {
+                            field_allowed_values = map <AllowedValueInfo>{
+                                "display_name": $1.name ?? $1.email,
+                                "value": $1.email,
+                            }, col.contactOptions;
+                        }
                         break;
                     case "MULTI_PICKLIST":
-                        field_info.type = SoftAutoListOrNothingType;
+                        field_type = SoftAutoListOrNothingType;
                         if (col.options) {
-                            field_info.allowed_values = map <AllowedValueInfo>{
+                            field_allowed_values = map <AllowedValueInfo>{
                                 "display_name": $1,
                                 "value": $1,
                             }, col.options;
                         }
                         break;
                     default:
-                        field_info.type = SoftStringOrNothingType;
+                        field_type = SoftStringOrNothingType;
                         break;
+                }
+
+                # Build field info with mixed types in the initial literal
+                hash<auto> field_info = {
+                    "name": col_name,
+                    "display_name": col_name,
+                    "short_desc": col.description ?? col_name,
+                    "desc": col.description
+                        ? sprintf("%s — %s", col_name, col.description)
+                        : sprintf("Column `%s`", col_name),
+                    "type": field_type,
+                };
+                if (col.primary) {
+                    field_info.preselected = True;
+                }
+                if (field_allowed_values) {
+                    field_info.allowed_values = field_allowed_values;
                 }
 
                 record_info.record_type{col_name} = new QoreDataField(field_info);

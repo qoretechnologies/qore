@@ -49,7 +49,6 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         #! Custom command-line options
         const MyOpts = Opts + {
             "conn": "c,connection=s",
-            "token": "t,token=s",
         };
 
         #! IDs of test resources to clean up
@@ -68,9 +67,11 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTests());
 
         # Integration tests (require Smartsheet credentials)
+        addTestCase("connection ping tests", \connectionPingTests());
         addTestCase("list sheets tests", \listSheetsTests());
         addTestCase("sheet CRUD tests", \sheetCrudTests());
         addTestCase("row CRUD tests", \rowCrudTests());
+        addTestCase("row action tests", \rowActionTests());
         addTestCase("workspace CRUD tests", \workspaceCrudTests());
         addTestCase("folder CRUD tests", \folderCrudTests());
         addTestCase("reports tests", \reportsTests());
@@ -103,9 +104,15 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
             return;
         }
 
-        *string token = m_options.token ?? ENV.SMARTSHEET_ACCESS_TOKEN;
+        # Allow direct token for testing without Qorus (matching Gorgias pattern)
+        *string token = ENV.SMARTSHEET_TOKEN;
         if (token) {
-            client = new SmartSheetRestClient::SmartSheetRestClientIo({"token": token});
+            client = new SmartSheetRestClient::SmartSheetRestClientIo({
+                "headers": {
+                    "Accept": MimeTypeJson,
+                    "Authorization": "Bearer " + token,
+                },
+            });
         }
     }
 
@@ -162,13 +169,17 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         assertEq("smartsheetrest", app.scheme);
 
         list<hash<auto>> actions = DataProviderActionCatalog::getActions("Smartsheet");
-        assertEq(True, actions.size() >= 20, "at least 20 actions registered");
+        assertEq(True, actions.size() >= 24, "at least 24 actions registered");
 
         bool found_create_sheet = False;
         bool found_list_sheets = False;
         bool found_create_workspace = False;
         bool found_list_users = False;
         bool found_row_created_event = False;
+        bool found_create_row = False;
+        bool found_find_rows = False;
+        bool found_update_rows = False;
+        bool found_delete_rows = False;
         foreach hash<auto> action in (actions) {
             if (action.action == "create-sheet") {
                 found_create_sheet = True;
@@ -190,11 +201,31 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
                 found_row_created_event = True;
                 assertEq(DPAT_EVENT, action.action_code);
             }
+            if (action.action == "create-row") {
+                found_create_row = True;
+                assertEq(DPAT_CREATE, action.action_code);
+            }
+            if (action.action == "find-rows") {
+                found_find_rows = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "update-rows") {
+                found_update_rows = True;
+                assertEq(DPAT_UPDATE, action.action_code);
+            }
+            if (action.action == "delete-rows") {
+                found_delete_rows = True;
+                assertEq(DPAT_DELETE, action.action_code);
+            }
         }
         assertEq(True, found_create_sheet, "create-sheet action registered");
         assertEq(True, found_list_sheets, "list-sheets action registered");
         assertEq(True, found_create_workspace, "create-workspace action registered");
         assertEq(True, found_list_users, "list-users action registered");
+        assertEq(True, found_create_row, "create-row action registered");
+        assertEq(True, found_find_rows, "find-rows action registered");
+        assertEq(True, found_update_rows, "update-rows action registered");
+        assertEq(True, found_delete_rows, "delete-rows action registered");
         assertEq(True, found_row_created_event, "row-created event registered");
     }
 
@@ -203,6 +234,8 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         hash<auto> fields = sheet_type.getFields();
         assertEq(True, fields.hasKey("id"), "sheet type has id field");
         assertEq(True, fields.hasKey("name"), "sheet type has name field");
+        assertEq(True, fields.hasKey("owner"), "sheet type has owner field");
+        assertEq(True, fields.hasKey("ownerId"), "sheet type has ownerId field");
         assertEq(True, fields.hasKey("accessLevel"), "sheet type has accessLevel field");
         assertEq(True, fields.hasKey("permalink"), "sheet type has permalink field");
         assertEq(True, fields.hasKey("createdAt"), "sheet type has createdAt field");
@@ -219,6 +252,12 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         assertEq(True, user_fields.hasKey("email"), "user type has email field");
         assertEq(True, user_fields.hasKey("firstName"), "user type has firstName field");
         assertEq(True, user_fields.hasKey("lastName"), "user type has lastName field");
+        assertEq(True, user_fields.hasKey("groupAdmin"), "user type has groupAdmin field");
+        assertEq(True, user_fields.hasKey("resourceViewer"),
+            "user type has resourceViewer field");
+        assertEq(True, user_fields.hasKey("company"), "user type has company field");
+        assertEq(True, user_fields.hasKey("department"), "user type has department field");
+        assertEq(True, user_fields.hasKey("lastLogin"), "user type has lastLogin field");
 
         SmartSheetDataProvider::SmartSheetGroupDataType group_type();
         hash<auto> group_fields = group_type.getFields();
@@ -243,9 +282,37 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         assertEq("Smartsheet REST Connection", scheme.display_name);
         assertEq(True, scheme.options.hasKey("domain"), "scheme has domain option");
         assertEq(True, scheme.required_options.val(), "scheme has required_options");
+
+        # Verify domain allowed_values
+        assertEq(True, scheme.options.domain.allowed_values.val(),
+            "domain option has allowed_values");
+
+        # Verify ref_data on ID fields in request type Fields constants
+        assertEq("sheets",
+            SmartSheetDataProvider::SmartSheetUpdateSheetRequestDataType::Fields.sheetId.ref_data,
+            "update-sheet sheetId has ref_data");
+        assertEq("sheets",
+            SmartSheetDataProvider::SmartSheetDeleteSheetRequestDataType::Fields.sheetId.ref_data,
+            "delete-sheet sheetId has ref_data");
+        assertEq("users",
+            SmartSheetDataProvider::SmartSheetUpdateUserRequestDataType::Fields.userId.ref_data,
+            "update-user userId has ref_data");
+        assertEq("groups",
+            SmartSheetDataProvider::SmartSheetUpdateGroupRequestDataType::Fields.groupId.ref_data,
+            "update-group groupId has ref_data");
     }
 
     # ========== INTEGRATION TESTS ==========
+
+    connectionPingTests() {
+        *string conn_name = m_options.conn ?? ENV.SMARTSHEET_CONNECTION;
+        if (!conn_name) {
+            testSkip("no connection name available for ping test");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<auto> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeded");
+    }
 
     listSheetsTests() {
         skipIfNoCredentials();
@@ -269,7 +336,6 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
                 printf("No sheets found in account\n");
             }
         }
-        assertEq(True, True, "sheets listing endpoint accessible");
     }
 
     sheetCrudTests() {
@@ -312,18 +378,11 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         AbstractDataProvider update_dp = provider.getChildProvider("sheets")
             .getChildProvider("update");
         string new_name = "QoreTest_Updated_" + now_us().toString();
-        hash<auto> updated = update_dp.doRequest({
+        hash<auto> update_result = update_dp.doRequest({
             "sheetId": testSheetId.toInt(),
             "name": new_name,
         });
-
-        # Verify update persisted
-        sleep(1s);
-        iter = provider.getChildProvider("sheets")
-            .searchRecords(NOTHING, {"sheetId": testSheetId});
-        assertEq(True, iter.next());
-        hash<auto> re_read = iter.getValue();
-        assertEq(new_name, re_read.name, "sheet name updated and persisted");
+        assertEq(new_name, update_result.name, "sheet name updated and persisted");
 
         if (m_options.verbose) {
             printf("Updated sheet name to: %s\n", new_name);
@@ -399,6 +458,78 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
 
         if (m_options.verbose) {
             printf("Row CRUD test passed\n");
+        }
+    }
+
+    rowActionTests() {
+        skipIfNoCredentials();
+        if (!testSheetId) {
+            testSkip("no test sheet created");
+        }
+
+        SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
+
+        # Navigate to the sheet via the action catalog path: /sheets/{sheet}
+        AbstractDataProvider sheet_dp = provider.getChildProvider("sheets")
+            .getChildProvider(testSheetId);
+        assertEq(True, sheet_dp.val(), "sheet provider via action path");
+
+        # Verify dynamic record type (data_dependent_options)
+        *hash<string, AbstractDataField> record_type = sheet_dp.getRecordType();
+        assertEq(True, record_type.hasKey("Primary"), "dynamic type has Primary column");
+        assertEq(True, record_type.hasKey("Status"), "dynamic type has Status column");
+
+        # Verify create record type excludes system fields
+        *hash<string, AbstractDataField> create_type = sheet_dp.getCreateRecordType();
+        assertEq(False, create_type.hasKey("id"), "create type excludes id");
+        assertEq(False, create_type.hasKey("rowNumber"), "create type excludes rowNumber");
+        assertEq(False, create_type.hasKey("createdAt"), "create type excludes createdAt");
+        assertEq(True, create_type.hasKey("Primary"), "create type has Primary column");
+
+        # DPAT_CREATE: create a row via the table provider
+        hash<auto> new_row = sheet_dp.createRecord({
+            "Primary": "Action Test Row",
+            "Status": "Active",
+        });
+        assertEq(True, new_row.hasKey("id"), "action create returned id");
+        int row_id = new_row.id;
+
+        if (m_options.verbose) {
+            printf("Action test created row ID: %d\n", row_id);
+        }
+
+        # DPAT_FIND: find the row
+        sleep(1s);
+        AbstractDataProviderRecordIterator iter = sheet_dp.searchRecords(
+            NOTHING, {"rowId": row_id});
+        assertEq(True, iter.next(), "action find found row");
+        hash<auto> found = iter.getValue();
+        assertEq("Action Test Row", found."Primary", "action find Primary matches");
+        assertEq("Active", found."Status", "action find Status matches");
+
+        # DPAT_UPDATE: update the row
+        int updated = sheet_dp.updateRecords(
+            {"Primary": "Action Test Updated", "Status": "Inactive"},
+            {"id": row_id},
+        );
+        assertEq(1, updated, "action update count");
+
+        # Verify update persisted
+        sleep(1s);
+        iter = sheet_dp.searchRecords(NOTHING, {"rowId": row_id});
+        assertEq(True, iter.next());
+        hash<auto> updated_row = iter.getValue();
+        assertEq("Action Test Updated", updated_row."Primary",
+            "action update Primary persisted");
+        assertEq("Inactive", updated_row."Status",
+            "action update Status persisted");
+
+        # DPAT_DELETE: delete the row
+        int deleted = sheet_dp.deleteRecords({"id": row_id});
+        assertEq(1, deleted, "action delete count");
+
+        if (m_options.verbose) {
+            printf("Row action tests passed\n");
         }
     }
 
@@ -490,7 +621,6 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
                 printf("No reports found\n");
             }
         }
-        assertEq(True, True, "reports endpoint accessible");
     }
 
     usersTests() {
@@ -511,7 +641,6 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
                         user.lastName ?? "", user.email);
                 }
             }
-            assertEq(True, True, "users endpoint accessible");
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg.status_code == 403) {
                 testSkip("user listing requires admin permissions");
@@ -524,23 +653,56 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
         skipIfNoCredentials();
 
         SmartSheetDataProvider::SmartSheetDataProvider provider = getProvider();
-        AbstractDataProvider groups_dp = provider.getChildProvider("groups");
 
         try {
-            AbstractDataProviderRecordIterator iter = groups_dp.searchRecords();
-            if (iter.next()) {
-                hash<auto> group = iter.getValue();
-                assertEq(True, group.hasKey("id"), "group has id");
-                assertEq(True, group.hasKey("name"), "group has name");
+            # Create a test group
+            AbstractDataProvider create_dp = provider.getChildProvider("groups")
+                .getChildProvider("create");
+            string group_name = "QoreTest_Group_" + now_us().toString();
+            hash<auto> result = create_dp.doRequest({
+                "name": group_name,
+                "description": "Test group created by QoreTest",
+            });
+            assertEq(True, result.hasKey("id"), "created group has id");
+            assertEq(group_name, result.name, "created group name matches");
+            testGroupId = string(result.id);
 
-                if (m_options.verbose) {
-                    printf("Found group: %s (ID: %s)\n", group.name, group.id);
-                }
+            if (m_options.verbose) {
+                printf("Created group: %s (ID: %s)\n", group_name, testGroupId);
             }
-            assertEq(True, True, "groups endpoint accessible");
+
+            # List and verify
+            sleep(1s);
+            AbstractDataProvider groups_dp = provider.getChildProvider("groups");
+            AbstractDataProviderRecordIterator iter = groups_dp.searchRecords(NOTHING, {
+                "groupId": testGroupId,
+            });
+            assertEq(True, iter.next(), "group found after create");
+            hash<auto> fetched = iter.getValue();
+            assertEq(group_name, fetched.name, "group name matches");
+
+            # Update group
+            AbstractDataProvider update_dp = provider.getChildProvider("groups")
+                .getChildProvider("update");
+            string new_desc = "Updated description";
+            update_dp.doRequest({
+                "groupId": testGroupId.toInt(),
+                "description": new_desc,
+            });
+
+            # Verify update persisted
+            sleep(1s);
+            iter = groups_dp.searchRecords(NOTHING, {"groupId": testGroupId});
+            assertEq(True, iter.next());
+            hash<auto> updated = iter.getValue();
+            assertEq(new_desc, updated.description, "group description updated and persisted");
+
+            if (m_options.verbose) {
+                printf("Group CRUD test passed\n");
+            }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.arg.status_code == 403) {
-                testSkip("group listing requires admin permissions");
+                testSkip("group management requires admin permissions");
             }
             rethrow;
         }
@@ -568,6 +730,14 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
                 event_name + " example has objectType field");
             assertEq(True, example.hasKey("action"),
                 event_name + " example has action field");
+            assertEq(True, example.hasKey("eventId"),
+                event_name + " example has eventId field");
+            assertEq(True, example.hasKey("objectId"),
+                event_name + " example has objectId field");
+            assertEq(True, example.hasKey("eventTimestamp"),
+                event_name + " example has eventTimestamp field");
+            assertEq(True, example.hasKey("source"),
+                event_name + " example has source field");
 
             if (m_options.verbose) {
                 printf("Example event data for %s: %y\n", event_name, example);
@@ -629,6 +799,24 @@ public class SmartSheetDataProviderTest inherits QUnit::Test {
             } catch (hash<ExceptionInfo> ex) {
                 if (m_options.verbose) {
                     printf("Failed to delete folder %s: %s: %s\n", testFolderId,
+                        ex.err, ex.desc);
+                }
+            }
+        }
+
+        # Delete test group
+        if (testGroupId) {
+            try {
+                AbstractDataProvider delete_dp = provider.getChildProvider("groups")
+                    .getChildProvider("delete");
+                delete_dp.doRequest({"groupId": testGroupId.toInt()});
+
+                if (m_options.verbose) {
+                    printf("Deleted test group: %s\n", testGroupId);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Failed to delete group %s: %s: %s\n", testGroupId,
                         ex.err, ex.desc);
                 }
             }

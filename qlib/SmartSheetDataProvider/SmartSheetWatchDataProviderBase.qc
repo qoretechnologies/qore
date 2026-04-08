@@ -83,12 +83,12 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
     #! Polls for new events once
     private pollOnce() {
         try {
-            hash<auto> params = {
-                "since": stream_position
-                    ?? format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 5m),
-            };
+            hash<auto> params;
+            # since and streamPosition are mutually exclusive per Smartsheet API docs
             if (stream_position) {
                 params.streamPosition = stream_position;
+            } else {
+                params.since = format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 5m);
             }
 
             hash<auto> response = doGet("events", params);
@@ -109,7 +109,7 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
                     }
                     # Enrich the event with full object data if possible
                     hash<auto> enriched = enrichEvent(event);
-                    raiseEvent(event_type, enriched);
+                    notifyObservers(event_type, enriched);
                 }
             }
         } catch (hash<ExceptionInfo> ex) {
@@ -122,9 +122,24 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
     }
 
     #! Returns whether an event matches this provider's filter
-    /** Override in subclasses to filter by specific event/object types
+    /** Override in subclasses to filter by specific event/object types.
+        Subclasses should call this base method first to check the sheet_id filter.
     */
     private bool matchesEvent(hash<auto> event) {
+        # Filter by sheet ID if configured
+        if (sheet_id) {
+            # For row-level events, sheetId is in additionalDetails
+            *string event_sheet_id = event.additionalDetails.sheetId
+                ? string(event.additionalDetails.sheetId)
+                : NOTHING;
+            # For sheet-level events, objectId is the sheet ID
+            if (event.objectType == "SHEET") {
+                event_sheet_id = string(event.objectId);
+            }
+            if (event_sheet_id != sheet_id) {
+                return False;
+            }
+        }
         return True;
     }
 

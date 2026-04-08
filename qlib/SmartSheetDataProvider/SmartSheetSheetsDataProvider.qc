@@ -54,7 +54,6 @@ public class SmartSheetSheetsDataProvider inherits SmartSheetDataProviderBase {
             "supports_children": True,
             "children_can_support_records": True,
             "children_can_support_apis": True,
-            "children_identical": True,
             "search_options": SearchOptions,
         };
 
@@ -147,6 +146,7 @@ public class SmartSheetSheetsDataProvider inherits SmartSheetDataProviderBase {
             foreach hash<auto> sheet in (sheets) {
                 rv += <DataProviderSummaryInfo>{
                     "name": string(sheet.id),
+                    "short_desc": sheet.name,
                     "desc": sprintf("Smartsheet sheet '%s' (ID: %s)", sheet.name, sheet.id),
                     "type": "SmartSheetSheetDataProvider",
                     "supports_read": True,

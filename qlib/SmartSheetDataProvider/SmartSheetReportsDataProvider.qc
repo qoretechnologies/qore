@@ -43,6 +43,7 @@ public class SmartSheetReportsDataProvider inherits SmartSheetDataProviderBase {
                 "short_desc": "Get a specific report by ID",
                 "type": AbstractDataProviderType::get(SoftStringOrNothingType),
                 "desc": "The report ID to retrieve. When provided, returns a single report",
+                "ref_data": "reports",
             },
         };
     }

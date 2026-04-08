@@ -185,7 +185,19 @@ public class SmartSheetDeleteUserDataProvider inherits SmartSheetDataProviderBas
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        return doDelete("users/" + string(req.userId));
+        string user_id = string(remove req.userId);
+        # Remaining fields are query parameters
+        *hash<auto> params;
+        if (exists req.transferTo) {
+            params.transferTo = req.transferTo;
+        }
+        if (exists req.transferSheets) {
+            params.transferSheets = req.transferSheets;
+        }
+        if (exists req.removeFromSharing) {
+            params.removeFromSharing = req.removeFromSharing;
+        }
+        return doDelete("users/" + user_id, params);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

@@ -63,11 +63,59 @@ public class SmartSheetUserDataType inherits DataProvider::HashDataType {
                 "short_desc": "Whether user can create sheets",
                 "desc": "Whether the user is a licensed sheet creator",
             },
+            "groupAdmin": {
+                "display_name": "Group Admin",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is group admin",
+                "desc": "Whether the user is a group admin",
+            },
+            "resourceViewer": {
+                "display_name": "Resource Viewer",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is resource viewer",
+                "desc": "Whether the user is a resource viewer",
+            },
             "status": {
                 "display_name": "Status",
                 "type": SoftStringOrNothingType,
                 "short_desc": "User status",
                 "desc": "The status of the user account (e.g., `ACTIVE`, `PENDING`, `DECLINED`)",
+            },
+            "company": {
+                "display_name": "Company",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's company name",
+                "desc": "The company name associated with the user",
+            },
+            "department": {
+                "display_name": "Department",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's department",
+                "desc": "The department the user belongs to",
+            },
+            "role": {
+                "display_name": "Role",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's role",
+                "desc": "The role of the user",
+            },
+            "title": {
+                "display_name": "Title",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's job title",
+                "desc": "The job title of the user",
+            },
+            "lastLogin": {
+                "display_name": "Last Login",
+                "type": SoftDateOrNothingType,
+                "short_desc": "Last login time",
+                "desc": "The date and time the user last logged in",
+            },
+            "sheetCount": {
+                "display_name": "Sheet Count",
+                "type": SoftIntOrNothingType,
+                "short_desc": "Number of sheets owned",
+                "desc": "The number of sheets owned by the user",
             },
         };
     }
@@ -100,17 +148,31 @@ public class SmartSheetCreateUserRequestDataType inherits DataProvider::HashData
                 "short_desc": "Whether user can create sheets",
                 "desc": "Whether the user should be a licensed sheet creator",
             },
+            "groupAdmin": {
+                "display_name": "Group Admin",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is group admin",
+                "desc": "Whether the user should be a group admin",
+            },
+            "resourceViewer": {
+                "display_name": "Resource Viewer",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is resource viewer",
+                "desc": "Whether the user should be a resource viewer",
+            },
             "firstName": {
                 "display_name": "First Name",
                 "type": SoftStringOrNothingType,
                 "short_desc": "User's first name",
                 "desc": "The first name of the new user",
+                "preselected": True,
             },
             "lastName": {
                 "display_name": "Last Name",
                 "type": SoftStringOrNothingType,
                 "short_desc": "User's last name",
                 "desc": "The last name of the new user",
+                "preselected": True,
             },
         };
     }
@@ -130,6 +192,21 @@ public class SmartSheetUpdateUserRequestDataType inherits DataProvider::HashData
                 "short_desc": "ID of the user to update",
                 "desc": "The unique identifier of the user to update",
                 "required": True,
+                "ref_data": "users",
+            },
+            "firstName": {
+                "display_name": "First Name",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's first name",
+                "desc": "The new first name for the user",
+                "preselected": True,
+            },
+            "lastName": {
+                "display_name": "Last Name",
+                "type": SoftStringOrNothingType,
+                "short_desc": "User's last name",
+                "desc": "The new last name for the user",
+                "preselected": True,
             },
             "admin": {
                 "display_name": "Admin",
@@ -142,6 +219,18 @@ public class SmartSheetUpdateUserRequestDataType inherits DataProvider::HashData
                 "type": SoftBoolOrNothingType,
                 "short_desc": "Whether user can create sheets",
                 "desc": "Whether the user should be a licensed sheet creator",
+            },
+            "groupAdmin": {
+                "display_name": "Group Admin",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is group admin",
+                "desc": "Whether the user should be a group admin",
+            },
+            "resourceViewer": {
+                "display_name": "Resource Viewer",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Whether user is resource viewer",
+                "desc": "Whether the user should be a resource viewer",
             },
         };
     }
@@ -161,6 +250,31 @@ public class SmartSheetDeleteUserRequestDataType inherits DataProvider::HashData
                 "short_desc": "ID of the user to delete",
                 "desc": "The unique identifier of the user to delete",
                 "required": True,
+                "ref_data": "users",
+            },
+            "transferTo": {
+                "display_name": "Transfer To",
+                "type": SoftIntOrNothingType,
+                "short_desc": "User ID to transfer ownership to",
+                "desc": "The ID of the user to whom ownership of groups (and optionally "
+                    "sheets) will be transferred. If omitted, group ownership is "
+                    "transferred to the organization's main contact",
+                "ref_data": "users",
+                "preselected": True,
+            },
+            "transferSheets": {
+                "display_name": "Transfer Sheets",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Transfer sheets to the target user",
+                "desc": "If `True`, transfers ownership of all the removed user's assets "
+                    "and groups to the user specified in `transferTo`",
+            },
+            "removeFromSharing": {
+                "display_name": "Remove From Sharing",
+                "type": SoftBoolOrNothingType,
+                "short_desc": "Revoke access to shared assets",
+                "desc": "If `True`, removes the user from your organization and revokes "
+                    "their access to all organization and plan assets",
             },
         };
     }

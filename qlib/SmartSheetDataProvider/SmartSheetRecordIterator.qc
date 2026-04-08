@@ -158,13 +158,7 @@ public class SmartSheetRecordIterator inherits DataProvider::AbstractDataProvide
 
     #! Builds a query string from params
     private string buildQS(hash<auto> params) {
-        list<string> parts;
-        foreach string key in (keys params) {
-            if (exists params{key}) {
-                parts += sprintf("%s=%s", key, string(params{key}));
-            }
-        }
-        return parts.join("&");
+        return SmartSheetDataProviderBase::buildQueryString(params);
     }
 }
 

@@ -302,6 +302,7 @@ module SmartSheetDataProvider {
                     "display_name": "Report ID",
                     "short_desc": "Get a specific report",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "reports",
                     "preselected": True,
                 },
             },
@@ -463,56 +464,152 @@ module SmartSheetDataProvider {
             },
         });
 
+        # ========== ROW ACTIONS ==========
+
+        # Create Row
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "create-row",
+            "groups": "Rows",
+            "display_name": "Create Row",
+            "short_desc": "Create a row in a sheet",
+            "desc": "Create a new row in a Smartsheet sheet with values for the sheet's "
+                "columns. Column fields are determined dynamically from the selected "
+                "sheet's column definitions",
+            "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to create a row in",
+                    "desc": "Select the Smartsheet sheet where the new row will be created",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Find Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "find-rows",
+            "groups": "Rows",
+            "display_name": "Find Rows",
+            "short_desc": "Find rows in a sheet",
+            "desc": "Search for rows in a Smartsheet sheet by column values. Column "
+                "fields are determined dynamically from the selected sheet's column "
+                "definitions",
+            "action_code": DPAT_FIND,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to search",
+                    "desc": "Select the Smartsheet sheet to search for rows",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Update Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "update-rows",
+            "groups": "Rows",
+            "display_name": "Update Rows",
+            "short_desc": "Update rows in a sheet",
+            "desc": "Update matching rows in a Smartsheet sheet with new column values. "
+                "Column fields are determined dynamically from the selected sheet's "
+                "column definitions",
+            "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to update rows in",
+                    "desc": "Select the Smartsheet sheet where rows will be updated",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Delete Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "delete-rows",
+            "groups": "Rows",
+            "display_name": "Delete Rows",
+            "short_desc": "Delete rows from a sheet",
+            "desc": "Delete matching rows from a Smartsheet sheet",
+            "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to delete rows from",
+                    "desc": "Select the Smartsheet sheet where rows will be deleted",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
         # ========== EVENT TRIGGERS ==========
 
-        # Sheet Updated Event
+        # Sheet Updated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SmartSheetDataProvider::AppName,
             "path": "/events/" + EVENT_SHEET_UPDATED,
             "action": EVENT_SHEET_UPDATED,
             "groups": "Events",
-            "display_name": "Sheet Updated Event",
-            "short_desc": "Watch for sheet update events",
-            "desc": "Poll for sheet update events in the Smartsheet account",
+            "display_name": "Sheet Updated",
+            "short_desc": "Trigger when a sheet is updated",
+            "desc": "Fires when a sheet is updated in the Smartsheet account",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_SHEET_UPDATED,
         });
 
-        # Row Created Event
+        # Row Created
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SmartSheetDataProvider::AppName,
             "path": "/events/" + EVENT_ROW_CREATED,
             "action": EVENT_ROW_CREATED,
             "groups": "Events",
-            "display_name": "Row Created Event",
-            "short_desc": "Watch for new row creation",
-            "desc": "Poll for new row creation events in Smartsheet sheets",
+            "display_name": "Row Created",
+            "short_desc": "Trigger when a new row is created",
+            "desc": "Fires when a new row is created in a Smartsheet sheet",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ROW_CREATED,
         });
 
-        # Row Updated Event
+        # Row Updated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SmartSheetDataProvider::AppName,
             "path": "/events/" + EVENT_ROW_UPDATED,
             "action": EVENT_ROW_UPDATED,
             "groups": "Events",
-            "display_name": "Row Updated Event",
-            "short_desc": "Watch for row updates",
-            "desc": "Poll for row update events in Smartsheet sheets",
+            "display_name": "Row Updated",
+            "short_desc": "Trigger when a row is updated",
+            "desc": "Fires when a row is updated in a Smartsheet sheet",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ROW_UPDATED,
         });
 
-        # Row Deleted Event
+        # Row Deleted
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": SmartSheetDataProvider::AppName,
             "path": "/events/" + EVENT_ROW_DELETED,
             "action": EVENT_ROW_DELETED,
             "groups": "Events",
-            "display_name": "Row Deleted Event",
-            "short_desc": "Watch for row deletions",
-            "desc": "Poll for row deletion events in Smartsheet sheets",
+            "display_name": "Row Deleted",
+            "short_desc": "Trigger when a row is deleted",
+            "desc": "Fires when a row is deleted from a Smartsheet sheet",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_ROW_DELETED,
         });

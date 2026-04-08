@@ -174,16 +174,16 @@ public class SmartSheetRestClientBase {
             rv.url = DomainUrlMap{domain} ?? DefaultUrl;
         }
 
-        if (opts.oauth2_client_id) {
-            # Build OAuth2 URLs from domain
-            rv.oauth2_auth_url = DomainAuthUrlMap{domain} ?? DefaultAuthUrl;
-            rv.oauth2_token_url = DomainTokenUrlMap{domain} ?? DefaultTokenUrl;
-            if (!rv.oauth2_grant_type) {
-                rv.oauth2_grant_type = DefaultGrantType;
-            }
-        } else if (opts.token) {
-            # API token / Bearer token mode
-            rv.headers.Authorization = "Bearer " + opts.token;
+        # Build OAuth2 URLs from domain
+        rv.oauth2_auth_url = DomainAuthUrlMap{domain} ?? DefaultAuthUrl;
+        rv.oauth2_token_url = DomainTokenUrlMap{domain} ?? DefaultTokenUrl;
+        if (!rv.oauth2_grant_type) {
+            rv.oauth2_grant_type = DefaultGrantType;
+        }
+
+        # Ensure the /2.0 path is set for RestClientIo which needs default_path
+        if (!rv.default_path) {
+            rv.default_path = "/2.0";
         }
 
         # Remove domain from options passed to RestClient
@@ -194,12 +194,10 @@ public class SmartSheetRestClientBase {
 }
 
 #! This class provides the REST client API for communication with Smartsheet servers
-/** Smartsheet uses a REST API at https://api.smartsheet.com/2.0 with OAuth2 or Bearer token
-    authentication.
+/** Smartsheet uses a REST API at https://api.smartsheet.com/2.0 with OAuth2 authentication.
 
     @par Authentication:
     - OAuth2 with Bearer tokens (authorization code grant)
-    - API access token via Authorization header
 
     @par Regional Support:
     - US: api.smartsheet.com
@@ -212,7 +210,6 @@ public class SmartSheetRestClient inherits RestClient::RestClient, SmartSheetRes
     /** @param opts valid options are all the options for the @ref RestClient::RestClient "RestClient"
         class plus:
         - \c domain: the Smartsheet regional domain (".com", ".eu", ".au", ".gov")
-        - \c token: the Smartsheet API access token (alternative to OAuth2)
 
         @param do_not_connect if \c False (the default), then a connection will be immediately
         established to the remote server
@@ -375,8 +372,8 @@ public class SmartSheetRestConnection inherits RestClient::RestConnection {
         string domain = config.opts.domain ?? SmartSheetRestClientBase::DefaultDomain;
         # Build URL from domain
         *string api_url = SmartSheetRestClientBase::DomainUrlMap{domain};
-        config.url = sprintf("smartsheetrest://%s", (api_url ?? SmartSheetRestClientBase::DefaultUrl)
-            .regex_subst("^https://", ""));
+        config.url = sprintf("smartsheetrest://%s",
+            replace(api_url ?? SmartSheetRestClientBase::DefaultUrl, "https://", ""));
         return config;
     }
 
@@ -444,8 +441,8 @@ public class SmartSheetRestConnection inherits RestClient::RestConnection {
             string domain = opts.domain ?? SmartSheetRestClientBase::DefaultDomain;
             *string correct_api_url = SmartSheetRestClientBase::DomainUrlMap{domain};
             string correct_url = sprintf("smartsheetrest://%s",
-                (correct_api_url ?? SmartSheetRestClientBase::DefaultUrl)
-                .regex_subst("^https://", ""));
+                replace(correct_api_url ?? SmartSheetRestClientBase::DefaultUrl,
+                    "https://", ""));
             if (url != correct_url) {
                 update.url = correct_url;
             }

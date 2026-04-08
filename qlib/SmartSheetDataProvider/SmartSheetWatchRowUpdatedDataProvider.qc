@@ -46,24 +46,47 @@ public class SmartSheetWatchRowUpdatedDataProvider inherits SmartSheetWatchDataP
         return {
             EVENT_ROW_UPDATED: <DataProviderMessageInfo>{
                 "desc": "Fires when a row is updated in a sheet",
-                "type": AbstractDataProviderType::get(AutoHashType),
+                "type": new SmartSheetEventDataType(),
             },
         };
     }
 
     private auto getExampleEventDataImpl(string event_id) {
+        try {
+            hash<auto> response = doGet("events", {
+                "since": format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 24h),
+                "maxCount": 100,
+            });
+            if (response.data) {
+                foreach hash<auto> event in (response.data) {
+                    if (event.objectType == "ROW" && event.action == "UPDATE") {
+                        return event;
+                    }
+                }
+            }
+        } catch () {}
+        return getFakeExampleData();
+    }
+
+    private hash<auto> getFakeExampleData() {
         return {
+            "eventId": "2.1.0abcDEFghijKLMnopQRStuv",
             "objectType": "ROW",
             "action": "UPDATE",
-            "id": 1234567890,
-            "additionalDetails": {"sheetId": 9876543210},
+            "objectId": 1234567890,
+            "eventTimestamp": format_date("YYYY-MM-DDTHH:mm:ssZ", now_us()),
             "userId": 1111111111,
-            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:SSZ"),
+            "requestUserId": 1111111111,
+            "source": "WEB_APP",
+            "additionalDetails": {
+                "sheetId": 9876543210,
+            },
         };
     }
 
     private bool matchesEvent(hash<auto> event) {
-        return event.objectType == "ROW" && event.action == "UPDATE";
+        return event.objectType == "ROW" && event.action == "UPDATE"
+            && SmartSheetWatchDataProviderBase::matchesEvent(event);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

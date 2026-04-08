@@ -88,12 +88,14 @@ public class SmartSheetUpdateWorkspaceRequestDataType inherits DataProvider::Has
                 "short_desc": "ID of the workspace to update",
                 "desc": "The unique identifier of the workspace to update",
                 "required": True,
+                "ref_data": "workspaces",
             },
             "name": {
                 "display_name": "Name",
                 "type": SoftStringOrNothingType,
                 "short_desc": "New workspace name",
                 "desc": "The new name for the workspace",
+                "preselected": True,
             },
         };
     }
@@ -113,6 +115,7 @@ public class SmartSheetDeleteWorkspaceRequestDataType inherits DataProvider::Has
                 "short_desc": "ID of the workspace to delete",
                 "desc": "The unique identifier of the workspace to delete",
                 "required": True,
+                "ref_data": "workspaces",
             },
         };
     }

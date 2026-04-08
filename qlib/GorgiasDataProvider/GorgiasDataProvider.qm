@@ -569,30 +569,28 @@ module GorgiasDataProvider {
 
         # ========== EVENT TRIGGERS ==========
 
-        # New Ticket Event
+        # New Ticket
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GorgiasDataProvider::AppName,
             "path": "/events/" + EVENT_NEW_TICKET,
             "action": EVENT_NEW_TICKET,
             "groups": "Events",
-            "display_name": "New Ticket Event",
-            "short_desc": "Watch for new tickets",
-            "desc": "Poll for new Gorgias tickets. "
-                "Emits events when new tickets are created",
+            "display_name": "New Ticket",
+            "short_desc": "Trigger when a new ticket is created",
+            "desc": "Fires when a new ticket is created in Gorgias",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_NEW_TICKET,
         });
 
-        # Ticket Update Event
+        # Ticket Updated
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": GorgiasDataProvider::AppName,
             "path": "/events/" + EVENT_TICKET_UPDATE,
             "action": EVENT_TICKET_UPDATE,
             "groups": "Events",
-            "display_name": "Ticket Update Event",
-            "short_desc": "Watch for ticket updates",
-            "desc": "Poll for updated Gorgias tickets. "
-                "Emits events when tickets are modified",
+            "display_name": "Ticket Updated",
+            "short_desc": "Trigger when a ticket is updated",
+            "desc": "Fires when a ticket is modified in Gorgias",
             "action_code": DPAT_EVENT,
             "action_val": EVENT_TICKET_UPDATE,
         });

@@ -46,23 +46,45 @@ public class SmartSheetWatchSheetUpdatedDataProvider inherits SmartSheetWatchDat
         return {
             EVENT_SHEET_UPDATED: <DataProviderMessageInfo>{
                 "desc": "Fires when a sheet is updated",
-                "type": AbstractDataProviderType::get(AutoHashType),
+                "type": new SmartSheetEventDataType(),
             },
         };
     }
 
     private auto getExampleEventDataImpl(string event_id) {
+        try {
+            hash<auto> response = doGet("events", {
+                "since": format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 24h),
+                "maxCount": 100,
+            });
+            if (response.data) {
+                foreach hash<auto> event in (response.data) {
+                    if (event.objectType == "SHEET" && event.action == "UPDATE") {
+                        return event;
+                    }
+                }
+            }
+        } catch () {}
+        return getFakeExampleData();
+    }
+
+    private hash<auto> getFakeExampleData() {
         return {
+            "eventId": "2.1.0abcDEFghijKLMnopQRStuv",
             "objectType": "SHEET",
             "action": "UPDATE",
-            "id": 1234567890,
+            "objectId": 1234567890,
+            "eventTimestamp": format_date("YYYY-MM-DDTHH:mm:ssZ", now_us()),
             "userId": 9876543210,
-            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:SSZ"),
+            "requestUserId": 9876543210,
+            "source": "WEB_APP",
+            "additionalDetails": {},
         };
     }
 
     private bool matchesEvent(hash<auto> event) {
-        return event.objectType == "SHEET" && event.action == "UPDATE";
+        return event.objectType == "SHEET" && event.action == "UPDATE"
+            && SmartSheetWatchDataProviderBase::matchesEvent(event);
     }
 
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }

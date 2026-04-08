@@ -77,6 +77,30 @@ public class SmartSheetGroupDataType inherits DataProvider::HashDataType {
     }
 }
 
+#! Data type for a group member when creating a group
+public class SmartSheetGroupMemberDataType inherits DataProvider::HashDataType {
+    public {
+        const Fields = {
+            "email": {
+                "display_name": "Email",
+                "type": SoftStringType,
+                "short_desc": "Member's email address",
+                "desc": "The email address of the group member to add",
+                "required": True,
+                "example_value": "user@example.com",
+            },
+        };
+    }
+
+    constructor() {
+        addQoreFields(Fields);
+    }
+
+    constructor(Type base_type) : HashDataType(base_type) {
+        addQoreFields(Fields);
+    }
+}
+
 #! Data type for creating a group
 public class SmartSheetCreateGroupRequestDataType inherits DataProvider::HashDataType {
     public {
@@ -93,13 +117,15 @@ public class SmartSheetCreateGroupRequestDataType inherits DataProvider::HashDat
                 "type": SoftStringOrNothingType,
                 "short_desc": "Group description",
                 "desc": "A description of the new group",
+                "preselected": True,
             },
             "members": {
                 "display_name": "Members",
-                "type": SoftAutoListOrNothingType,
+                "type": new ListDataType("GroupMembers",
+                    new SmartSheetGroupMemberDataType(), True),
                 "short_desc": "Initial group members",
-                "desc": "A list of member hashes. Each member hash should contain an "
-                    "`email` field with the member's email address",
+                "desc": "A list of members to add to the group. Each member requires an "
+                    "`email` address",
             },
         };
     }
@@ -119,18 +145,21 @@ public class SmartSheetUpdateGroupRequestDataType inherits DataProvider::HashDat
                 "short_desc": "ID of the group to update",
                 "desc": "The unique identifier of the group to update",
                 "required": True,
+                "ref_data": "groups",
             },
             "name": {
                 "display_name": "Name",
                 "type": SoftStringOrNothingType,
                 "short_desc": "New group name",
                 "desc": "The new name for the group",
+                "preselected": True,
             },
             "description": {
                 "display_name": "Description",
                 "type": SoftStringOrNothingType,
                 "short_desc": "New group description",
                 "desc": "The new description for the group",
+                "preselected": True,
             },
         };
     }
@@ -150,6 +179,7 @@ public class SmartSheetDeleteGroupRequestDataType inherits DataProvider::HashDat
                 "short_desc": "ID of the group to delete",
                 "desc": "The unique identifier of the group to delete",
                 "required": True,
+                "ref_data": "groups",
             },
         };
     }
