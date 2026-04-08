@@ -2570,8 +2570,9 @@ ws.setEventQueue();
     }
 
     #! Performs the HTTP socket connection to the WebSocket server
-    /** All TLS connections use the fully async HttpClientIo path.
-        Plain ws:// uses H1 via HTTPClient until Phase 4 adds PROTOCOL_SWITCHED.
+    /** All connections use the HttpClientIo path. TLS connections with "auto" or
+        explicit H2/H3 race protocols via the HCIO manager; all other connections
+        (plain ws:// or explicit H1) use the H1 PROTOCOL_SWITCHED path.
     */
     private hash<auto> connectUnlocked(*hash<auto> hdr0, *reference<hash<auto>> info, *bool reconnect) {
         # in case hdr0 is hash<string, int> or similar
@@ -5942,13 +5943,13 @@ public class WebSocketSendPollOperation inherits Qore::AbstractPollOperation {
     }
 }
 
-#! Poll operation for non-blocking WebSocket connection establishment
-/** Performs the HTTP/1.1 WebSocket upgrade handshake asynchronously using
-    \c HTTPClient.startPollSendRecv().
+#! Poll operation for WebSocket connection establishment
+/** When created via @ref WebSocketClient::startPollConnect(), the handshake is
+    performed synchronously through HttpClientIo (supporting H1/H2/H3 protocol
+    negotiation) and this operation is returned pre-completed.
 
-    After the poll operation completes successfully, the caller should use
-    \c WebSocketClient.startEventLoop() with the output to start the background
-    receive thread.
+    A legacy constructor accepting an \c HTTPClient is retained for backward
+    compatibility but is no longer used by the default connect path.
 
     @since WebSocketClient 2.4
 */
