@@ -6359,8 +6359,48 @@ load_local_done:
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
-                if (is_remove) {
-                    // Navigate with for_remove=true, then use LValueHelper::removeValue/remove
+                if (is_remove && path_inst->path.size() >= 2) {
+                    // For multi-step paths, navigate to the PARENT container, then
+                    // remove/delete the key/element. LValueHelper::remove() only clears
+                    // the value without removing the hash key; we need container-level removal.
+                    LValueHelper lvh(xsink);
+                    // Navigate to parent (all steps except the last)
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size() - 1, false)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    // Now remove/delete the final key/element from the container
+                    const LVPathStep& last_step = path_inst->path.back();
+                    lvh.ensureUnique();
+                    if (last_step.kind == LVPathStepKind::HashKeyConst
+                            || last_step.kind == LVPathStepKind::HashKey) {
+                        QoreValue container = lvh.getValue();
+                        if (container.getType() == NT_HASH) {
+                            QoreHashNode* h = container.get<QoreHashNode>();
+                            res = h->takeKeyValue(last_step.name.c_str());
+                            if (path_inst->unary_op == LVUnaryOp::Delete) {
+                                res.discard(xsink);
+                                res = QoreValue();
+                            }
+                        }
+                    } else if (last_step.kind == LVPathStepKind::ListIndex) {
+                        QoreValue container = lvh.getValue();
+                        if (container.getType() == NT_LIST) {
+                            QoreListNode* l = container.get<QoreListNode>();
+                            size_t idx = static_cast<size_t>(last_step.slot_id);
+                            if (idx < l->size()) {
+                                // For remove: take the value. For delete: just set to NOTHING
+                                if (path_inst->unary_op == LVUnaryOp::Remove) {
+                                    // Get value before clearing
+                                    res = l->retrieveEntry(idx).refSelf();
+                                }
+                                l->setEntry(idx, QoreValue(), xsink);
+                            }
+                        }
+                    }
+                } else if (is_remove) {
+                    // Single-step path: navigate to the variable itself and clear
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), true)) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
@@ -6371,7 +6411,7 @@ load_local_done:
                         bool static_assignment = false;
                         res = lvh.remove(static_assignment);
                     } else {
-                        res = lvh.removeValue(true);  // for_del=true
+                        res = lvh.removeValue(true);
                     }
                 } else {
                     LValueHelper lvh(xsink);
