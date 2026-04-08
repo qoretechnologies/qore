@@ -412,7 +412,7 @@ static_assert(
 //! Get opcode info by opcode enum value
 //! Returns pointer to registry entry, or nullptr for invalid opcode
 inline const OpcodeInfo* getOpcodeInfo(int opcode_id) {
-    if (opcode_id >= 0 && opcode_id < 355) {
+    if (opcode_id >= 0 && static_cast<size_t>(opcode_id) < std::extent<decltype(OPCODE_REGISTRY)>::value) {
         const OpcodeInfo* info = &OPCODE_REGISTRY[opcode_id];
         // Check for null entry (removed opcode IDs: 134, 141, 142)
         if (info->name == nullptr) {

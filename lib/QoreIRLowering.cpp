@@ -7880,10 +7880,9 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (lv_path.empty()) {
         return QoreIRValue();
     }
-    // For 1-step non-SelfMember paths, block compound ops — they cause regressions
-    // in DataProvider module code where type-specific handling differs between
-    // LValuePathCompound (doPlusEqualsOnLValue) and the AST fallback
-    // (QorePlusEqualsOperatorNode::evalImpl). Unary and BinaryMut 1-step work correctly.
+    // Block 1-step non-SelfMember compound ops — list += hash through LValuePathCompound
+    // produces wrong results vs QorePlusEqualsOperatorNode AST path in Util.qm scan_exp().
+    // Unary and BinaryMut 1-step work correctly.
     if (lv_path.size() == 1 && lv_path[0].kind != LVPathStepKind::SelfMember
             && opcode == QoreIROpcode::LValuePathCompound) {
         return QoreIRValue();
