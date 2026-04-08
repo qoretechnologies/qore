@@ -15,6 +15,13 @@ class RegexTest inherits QUnit::Test {
         addTestCase("$0 full match backreference", \testDollarZero());
         addTestCase("ungreedy modifier", \testUngreedy());
         addTestCase("brace delimiters", \testBraceDelimiters());
+        addTestCase("new regex constants", \testNewConstants());
+        addTestCase("regex_count function", \testRegexCount());
+        addTestCase("regex_escape function", \testRegexEscape());
+        addTestCase("regex_extract_named function", \testRegexExtractNamed());
+        addTestCase("regex_extract_detailed function", \testRegexExtractDetailed());
+        addTestCase("callback substitution", \testCallbackSubst());
+        addTestCase("splitRegex limit", \testSplitRegexLimit());
         set_return_value(main());
     }
 
@@ -797,5 +804,292 @@ class RegexTest inherits QUnit::Test {
         s = "abc";
         s =~ s/abc/xyz/;
         assertEq("xyz", s);
+    }
+
+    testNewConstants() {
+        # RE_DollarEndOnly: $ matches only at true end of string, not before final newline
+        assertTrue(regex("hello\n", "hello$"));           # default: $ matches before \n
+        assertTrue(regex("hello\n", "hello$", RE_MultiLine));
+        assertFalse(regex("hello\n", "hello$", RE_DollarEndOnly));  # $ only at true end
+        assertTrue(regex("hello", "hello$", RE_DollarEndOnly));     # no trailing \n: still matches
+
+        # RE_Anchored: pattern must match at start of string
+        assertTrue(regex("hello world", "hello", RE_Anchored));
+        assertFalse(regex("say hello", "hello", RE_Anchored));  # doesn't start with "hello"
+
+        # RE_DupNames: allows duplicate named subpatterns
+        # without RE_DupNames, duplicate names cause compilation error
+        assertThrows("REGEX-COMPILATION-ERROR", \regex(), ("test", "(?<name>a)|(?<name>b)"));
+        # with RE_DupNames, it compiles and matches
+        assertTrue(regex("a", "(?<name>a)|(?<name>b)", RE_DupNames));
+        assertTrue(regex("b", "(?<name>a)|(?<name>b)", RE_DupNames));
+    }
+
+    testRegexCount() {
+        # basic counting
+        assertEq(2, regex_count("abc 123 def 456", "\\d+"));
+        assertEq(3, regex_count("aaa", "a"));
+        assertEq(0, regex_count("hello", "\\d+"));
+        assertEq(0, regex_count("", "\\w+"));
+
+        # with options
+        assertEq(2, regex_count("Hello hello", "hello", RE_Caseless));
+        assertEq(1, regex_count("Hello hello", "hello"));
+
+        # multiline
+        assertEq(3, regex_count("a\nb\nc", "^\\w$", RE_MultiLine));
+
+        # string pseudo-method
+        assertEq(2, "abc 123 def 456".regexCount("\\d+"));
+        assertEq(0, "hello".regexCount("\\d+"));
+
+        # class method
+        Regex r("\\d+");
+        assertEq(2, r.count("abc 123 def 456"));
+        assertEq(0, r.count("no digits here"));
+
+        # RegexExtract class method
+        RegexExtract re("(\\d+)");
+        assertEq(2, re.count("abc 123 def 456"));
+    }
+
+    testRegexEscape() {
+        # basic escaping
+        assertEq("hello", regex_escape("hello"));  # alphanumeric unchanged
+        assertEq("\\.", regex_escape("."));
+        assertEq("\\*", regex_escape("*"));
+        assertEq("\\+", regex_escape("+"));
+        assertEq("\\?", regex_escape("?"));
+        assertEq("\\(", regex_escape("("));
+        assertEq("\\)", regex_escape(")"));
+        assertEq("\\[", regex_escape("["));
+        assertEq("\\]", regex_escape("]"));
+        assertEq("\\{", regex_escape("{"));
+        assertEq("\\}", regex_escape("}"));
+        assertEq("\\^", regex_escape("^"));
+        assertEq("\\$", regex_escape("$"));
+        assertEq("\\|", regex_escape("|"));
+        assertEq("\\\\", regex_escape("\\"));
+
+        # complex string
+        assertEq("price\\:\\ \\$100\\ \\(USD\\)", regex_escape("price: $100 (USD)"));
+
+        # escaped string is safe as a literal regex pattern
+        string special = "hello.world*test";
+        assertTrue(regex(special, regex_escape(special)));
+        assertFalse(regex("helloXworldYtest", regex_escape(special)));
+
+        # empty string
+        assertEq("", regex_escape(""));
+
+        # string pseudo-method
+        assertEq("\\.", ".".regexEscape());
+        assertEq("hello", "hello".regexEscape());
+    }
+
+    testRegexExtractNamed() {
+        # basic named groups
+        auto h = regex_extract_named("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+        assertEq("2026", h.year);
+        assertEq("04", h.month);
+        assertEq("08", h.day);
+
+        # no match returns NOTHING
+        assertNothing(regex_extract_named("no match", "(?<num>\\d+)"));
+
+        # no named groups returns NOTHING
+        assertNothing(regex_extract_named("hello", "(\\w+)"));
+
+        # optional named group not matched
+        h = regex_extract_named("abc", "(?<first>\\w+)(?<second>-\\w+)?");
+        assertEq("abc", h.first);
+        assertNothing(h.second);
+
+        # global extraction
+        auto l = regex_extract_named("a:1 b:2 c:3", "(?<key>\\w):(?<val>\\d)", RE_Global);
+        assertEq(3, l.size());
+        assertEq("a", l[0].key);
+        assertEq("1", l[0].val);
+        assertEq("b", l[1].key);
+        assertEq("c", l[2].key);
+
+        # duplicate names with RE_DupNames
+        h = regex_extract_named("b", "(?<name>a)|(?<name>b)", RE_DupNames);
+        assertEq("b", h.name);
+
+        # string pseudo-method
+        h = "2026-04-08".regexExtractNamed("(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+        assertEq("2026", h.year);
+
+        # Regex class method
+        Regex r("(?<host>[\\w.]+):(?<port>\\d+)");
+        h = r.extractNamedGroups("example.com:8080");
+        assertEq("example.com", h.host);
+        assertEq("8080", h.port);
+
+        # RegexExtract class method
+        RegexExtract re("(?<word>\\w+)", RE_Global);
+        l = re.extractNamedGroups("hello world");
+        assertEq(2, l.size());
+        assertEq("hello", l[0].word);
+        assertEq("world", l[1].word);
+
+        # (?P<name>...) syntax also works
+        h = regex_extract_named("test123", "(?P<letters>[a-z]+)(?P<digits>\\d+)");
+        assertEq("test", h.letters);
+        assertEq("123", h.digits);
+    }
+
+    testRegexExtractDetailed() {
+        # basic detailed extraction
+        *list<hash<RegexMatchInfo>> matches = regex_extract_detailed("abc 123 def 456", "\\d+", RE_Global);
+        assertEq(2, matches.size());
+
+        # first match
+        assertEq("123", matches[0].match);
+        assertEq(4, matches[0].offset);
+        assertEq(3, matches[0].length);
+
+        # second match
+        assertEq("456", matches[1].match);
+        assertEq(12, matches[1].offset);
+        assertEq(3, matches[1].length);
+
+        # no match returns NOTHING
+        assertNothing(regex_extract_detailed("hello", "\\d+"));
+
+        # with capture groups
+        matches = regex_extract_detailed("key:value", "(\\w+):(\\w+)");
+        assertEq(1, matches.size());
+        assertEq("key:value", matches[0].match);
+        assertEq(0, matches[0].offset);
+        assertEq(9, matches[0].length);
+        assertEq(list("key", "value"), matches[0].groups);
+
+        # with named groups
+        matches = regex_extract_detailed("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+        assertEq(1, matches.size());
+        assertEq("2026-04-08", matches[0].match);
+        assertEq("2026", matches[0].named_groups.year);
+        assertEq("04", matches[0].named_groups.month);
+        assertEq("08", matches[0].named_groups.day);
+        # positional groups also present
+        assertEq("2026", matches[0].groups[0]);
+
+        # no captures: groups is NOTHING
+        matches = regex_extract_detailed("hello", "hello");
+        assertEq(1, matches.size());
+        assertEq("hello", matches[0].match);
+        assertNothing(matches[0].groups);
+        assertNothing(matches[0].named_groups);
+
+        # string pseudo-method
+        matches = "abc 123".regexExtractDetailed("(\\d+)");
+        assertEq(1, matches.size());
+        assertEq("123", matches[0].match);
+        assertEq(4, matches[0].offset);
+
+        # Regex class method
+        Regex r("\\w+", RE_Global);
+        matches = r.extractDetailed("hello world");
+        assertEq(2, matches.size());
+        assertEq("hello", matches[0].match);
+        assertEq(0, matches[0].offset);
+        assertEq(5, matches[0].length);
+        assertEq("world", matches[1].match);
+        assertEq(6, matches[1].offset);
+
+        # RegexExtract class method
+        RegexExtract re("(\\d+)", RE_Global);
+        matches = re.extractDetailed("a1 b22 c333");
+        assertEq(3, matches.size());
+        assertEq("1", matches[0].match);
+        assertEq("22", matches[1].match);
+        assertEq("333", matches[2].match);
+    }
+
+    testCallbackSubst() {
+        # basic callback substitution
+        string result = regex_subst("hello world", "\\w+", string sub (hash<RegexMatchInfo> m) {
+            return m.match.upr();
+        }, RE_Global);
+        assertEq("HELLO WORLD", result);
+
+        # callback receives correct match info
+        result = regex_subst("abc123", "([a-z]+)(\\d+)", string sub (hash<RegexMatchInfo> m) {
+            assertEq("abc123", m.match);
+            assertEq(0, m.offset);
+            assertEq(6, m.length);
+            assertEq("abc", m.groups[0]);
+            assertEq("123", m.groups[1]);
+            return "ok";
+        });
+        assertEq("ok", result);
+
+        # callback with named groups
+        result = regex_subst("2026-04-08", "(?<y>\\d{4})-(?<m>\\d{2})-(?<d>\\d{2})",
+            string sub (hash<RegexMatchInfo> m) {
+                return m.named_groups.d + "/" + m.named_groups.m + "/" + m.named_groups.y;
+            });
+        assertEq("08/04/2026", result);
+
+        # global callback
+        result = regex_subst("1 2 3", "\\d+", string sub (hash<RegexMatchInfo> m) {
+            return string(int(m.match) * 10);
+        }, RE_Global);
+        assertEq("10 20 30", result);
+
+        # single (non-global) callback
+        result = regex_subst("abc def ghi", "\\w+", string sub (hash<RegexMatchInfo> m) {
+            return "[" + m.match + "]";
+        });
+        assertEq("[abc] def ghi", result);
+
+        # RegexSubst class callback
+        RegexSubst rs("\\d+", "UNUSED", RE_Global);
+        result = rs.subst("a1 b2 c3", string sub (hash<RegexMatchInfo> m) {
+            return string(int(m.match) + 10);
+        });
+        assertEq("a11 b12 c13", result);
+
+        # callback exception propagates
+        assertThrows("TEST-ERROR", \regex_subst(), ("hello", "\\w+",
+            string sub (hash<RegexMatchInfo> m) { throw "TEST-ERROR", "test"; }));
+    }
+
+    testSplitRegexLimit() {
+        # basic limit
+        list<string> l = "a:b:c:d".splitRegex(":");
+        assertEq(4, l.size());
+
+        l = "a:b:c:d".splitRegex(":", 0, False, 2);
+        assertEq(2, l.size());
+        assertEq("a", l[0]);
+        assertEq("b:c:d", l[1]);
+
+        # limit = 1 returns whole string
+        l = "a:b:c".splitRegex(":", 0, False, 1);
+        assertEq(1, l.size());
+        assertEq("a:b:c", l[0]);
+
+        # limit = -1 (default) means no limit
+        l = "a:b:c".splitRegex(":", 0, False, -1);
+        assertEq(3, l.size());
+
+        # limit larger than splits
+        l = "a:b".splitRegex(":", 0, False, 10);
+        assertEq(2, l.size());
+
+        # limit with regex separator
+        l = "abc123def456ghi".splitRegex("\\d+", 0, False, 2);
+        assertEq(2, l.size());
+        assertEq("abc", l[0]);
+        assertEq("def456ghi", l[1]);
+
+        # second overload (without options)
+        l = "a:b:c:d".splitRegex(":", False, 2);
+        assertEq(2, l.size());
+        assertEq("a", l[0]);
+        assertEq("b:c:d", l[1]);
     }
 }

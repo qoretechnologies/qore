@@ -21,6 +21,9 @@ public class RegexExtractTest inherits QUnit::Test {
         addTestCase("corner cases test", \cornerCasesTest());
         addTestCase("optional groups test", \optionalGroupsTest());
         addTestCase("ungreedy test", \ungreedyTest());
+        addTestCase("count test", \countTest());
+        addTestCase("named groups test", \namedGroupsTest());
+        addTestCase("detailed extraction test", \detailedExtractionTest());
 
         set_return_value(main());
     }
@@ -217,5 +220,43 @@ public class RegexExtractTest inherits QUnit::Test {
 
         # getOptions reflects RE_Ungreedy
         assertEq(RE_Ungreedy, ungreedy.getOptions() & RE_Ungreedy);
+    }
+
+    private countTest() {
+        RegexExtract r("(\\d+)");
+        assertEq(3, r.count("1 22 333"));
+        assertEq(0, r.count("no digits"));
+    }
+
+    private namedGroupsTest() {
+        RegexExtract r("(?<host>[\\w.]+):(?<port>\\d+)");
+        auto h = r.extractNamedGroups("example.com:8080");
+        assertEq("example.com", h.host);
+        assertEq("8080", h.port);
+
+        # no match
+        assertNothing(r.extractNamedGroups("no host here"));
+
+        # global named extraction
+        RegexExtract rg("(?<n>\\d+)", RE_Global);
+        auto l = rg.extractNamedGroups("a1 b2 c3");
+        assertEq(3, l.size());
+        assertEq("1", l[0].n);
+        assertEq("3", l[2].n);
+    }
+
+    private detailedExtractionTest() {
+        RegexExtract r("(\\w+)", RE_Global);
+        *list<hash<RegexMatchInfo>> matches = r.extractDetailed("hi there");
+        assertEq(2, matches.size());
+        assertEq("hi", matches[0].match);
+        assertEq(0, matches[0].offset);
+        assertEq(2, matches[0].length);
+        assertEq(list("hi"), matches[0].groups);
+        assertEq("there", matches[1].match);
+        assertEq(3, matches[1].offset);
+
+        # no match
+        assertNothing(r.extractDetailed(""));
     }
 }
