@@ -258,6 +258,11 @@ class StringTest inherits QUnit::Test {
         assertEq("і", "І".lwr(), "Ukrainian І -> і");
         assertEq("ї", "Ї".lwr(), "Ukrainian Ї -> ї");
 
+        # 1-to-many uppercase mappings
+        assertEq("STRASSE", "straße".upr(), "German ß -> SS");
+        assertEq("FIND", "ﬁnd".upr(), "ligature ﬁ -> FI");
+        assertEq("FLOOR", "ﬂoor".upr(), "ligature ﬂ -> FL");
+
         # Greek case conversion
         assertEq("ΑΒΓΔ", "αβγδ".upr(), "Greek upr()");
         assertEq("αβγδ", "ΑΒΓΔ".lwr(), "Greek lwr()");
