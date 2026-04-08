@@ -975,15 +975,13 @@ ws.connect();
         return connectIntern(opts, \info);
     }
 
-    #! Starts a non-blocking WebSocket connection
-    /** Returns a poll operation that performs the WebSocket handshake asynchronously.
-        After the poll operation completes successfully, call startEventLoop() to start
-        the background receive thread.
+    #! Starts a WebSocket connection and returns a pre-completed poll operation
+    /** Performs the WebSocket handshake synchronously (including H1/H2/H3
+        protocol negotiation via HttpClientIo), then returns a pre-completed
+        poll operation that can be used in poll-based workflows.
 
         @param opts optional connection options; the \c hdr key can provide additional headers
-        @return a @ref WebSocketConnectPollOperation for the async connect
-
-        @note Only supports HTTP/1.1 WebSocket connections in async mode
+        @return a pre-completed @ref WebSocketConnectPollOperation
 
         @since WebSocketClient 2.4
     */
