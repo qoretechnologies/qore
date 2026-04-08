@@ -49,11 +49,14 @@ module Diff {
 
     Functions:
     - @ref Diff::diff()
+    - @ref Diff::diff_chars()
     - @ref Diff::diff_data()
     - @ref Diff::diff_data_text()
     - @ref Diff::diff_stats()
     - @ref Diff::diff_text()
     - @ref Diff::diff_unified()
+    - @ref Diff::diff_words()
+    - @ref Diff::patch_apply()
 
     Hashdecls:
     - @ref Diff::DiffInfo
@@ -64,6 +67,8 @@ module Diff {
     @subsection diff_1_1 Diff 1.1
     - replaced the diff algorithm with the Myers diff algorithm for optimal
       (shortest) edit scripts and better performance with scattered changes
+    - added @ref Diff::diff_chars() and @ref Diff::diff_words() for intra-line diffing
+    - added @ref Diff::patch_apply() for applying unified diffs
     - added @ref Diff::diff_data() for recursive structured data comparison
     - added @ref Diff::diff_data_text() for human-readable data diff output
     - added @ref Diff::diff_stats() for line-level change statistics
@@ -467,6 +472,130 @@ printf("%s\n", diff_data_text(old_cfg, new_cfg));
         return output;
     }
 
+    #! compares two strings character-by-character and returns a formatted diff
+    /** Highlights individual character changes between two strings.  Useful for
+        showing exactly what changed within a line.
+
+        @par Example:
+        @code{.py}
+string result = diff_chars("hello world", "hello there");
+# result (no color): "hello {-world-}{+there+}"
+        @endcode
+
+        @param s1 the original string
+        @param s2 the modified string
+        @param enable_color if @ref True "True", use ANSI red/green colors when stdout is a
+        terminal; if @ref False "False", use text markers \c "{-...-}" and \c "{+...+}"
+
+        @return a string showing character-level differences; returns \a s1 unchanged if strings
+        are identical
+
+        @since Diff 1.1
+    */
+    public string sub diff_chars(string s1, string s2, bool enable_color = True) {
+        if (s1 == s2) {
+            return s1;
+        }
+
+        list<auto> chars1 = split_chars(s1);
+        list<auto> chars2 = split_chars(s2);
+        list<auto> result = diff(chars1, chars2);
+        return format_inline_diff(result, enable_color);
+    }
+
+    #! Splits a string into a list of individual characters
+    list<string> sub split_chars(string s) {
+        list<string> result = ();
+        for (int i = 0; i < s.length(); ++i) {
+            push result, s[i];
+        }
+        return result;
+    }
+
+    #! compares two strings word-by-word and returns a formatted diff
+    /** Highlights word-level changes between two strings.  Words are split on
+        whitespace boundaries, preserving whitespace in the output.
+
+        @par Example:
+        @code{.py}
+string result = diff_words("the quick brown fox", "the slow brown dog");
+# result (no color): "the {-quick-}{+slow+} brown {-fox-}{+dog+}"
+        @endcode
+
+        @param s1 the original string
+        @param s2 the modified string
+        @param enable_color if @ref True "True", use ANSI red/green colors when stdout is a
+        terminal; if @ref False "False", use text markers \c "{-...-}" and \c "{+...+}"
+
+        @return a string showing word-level differences; returns \a s1 unchanged if strings
+        are identical
+
+        @since Diff 1.1
+    */
+    public string sub diff_words(string s1, string s2, bool enable_color = True) {
+        if (s1 == s2) {
+            return s1;
+        }
+
+        # Split into word and whitespace tokens
+        list<auto> tokens1 = tokenize_words(s1);
+        list<auto> tokens2 = tokenize_words(s2);
+        list<auto> result = diff(tokens1, tokens2);
+        return format_inline_diff(result, enable_color);
+    }
+
+    #! Splits a string into alternating word and whitespace tokens
+    list<string> sub tokenize_words(string s) {
+        list<string> tokens = ();
+        string current = "";
+        bool in_space = False;
+        for (int i = 0; i < s.length(); ++i) {
+            string ch = s[i];
+            bool is_space = (ch == " " || ch == "\t");
+            if (tokens || current != "") {
+                if (is_space != in_space) {
+                    push tokens, current;
+                    current = "";
+                }
+            }
+            in_space = is_space;
+            current += ch;
+        }
+        if (current != "") {
+            push tokens, current;
+        }
+        return tokens;
+    }
+
+    #! Formats an inline diff result with color or text markers
+    string sub format_inline_diff(list<auto> result, bool enable_color) {
+        TerminalColor color(enable_color);
+        string output = "";
+        foreach auto item in (result) {
+            if (item.typeCode() == NT_HASH) {
+                string del_text = join("", item.d);
+                string ins_text = join("", item.i);
+                if (del_text != "") {
+                    if (color.enabled) {
+                        output += color.red(del_text);
+                    } else {
+                        output += "{-" + del_text + "-}";
+                    }
+                }
+                if (ins_text != "") {
+                    if (color.enabled) {
+                        output += color.green(ins_text);
+                    } else {
+                        output += "{+" + ins_text + "+}";
+                    }
+                }
+            } else {
+                output += string(item);
+            }
+        }
+        return output;
+    }
+
     #! shows differences between two strings considering lines as elementary unit
     /** This function produces output in the standard Unix diff format.
 
@@ -667,6 +796,123 @@ string result = diff_unified(old_text, new_text, "a/file.txt", "b/file.txt");
                         break;
                 }
             }
+        }
+        return output;
+    }
+
+    #! applies a unified diff patch to a source string
+    /** Parses the unified diff format produced by @ref diff_unified() and applies
+        the changes to the original string.
+
+        @par Example:
+        @code{.py}
+string original = "line1\nline2\nline3\n";
+string modified = "line1\nchanged\nline3\nnew\n";
+string patch = diff_unified(original, modified);
+string result = patch_apply(original, patch);
+# result == modified
+        @endcode
+
+        @param source the original string to patch
+        @param patch the unified diff string (as produced by @ref diff_unified())
+
+        @return the patched string
+
+        @throw PATCH-ERROR context line mismatch — the patch does not match the source
+
+        @since Diff 1.1
+    */
+    public string sub patch_apply(string source, string patch) {
+        if (patch.empty()) {
+            return source;
+        }
+
+        list<string> src_lines = source.split("\n");
+        list<string> patch_lines = patch.split("\n");
+        # Track whether the patched result should end with a newline;
+        # default to matching the source unless the patch changes it
+        bool trailing_nl = source.size() > 0 && source[source.size() - 1] == "\n";
+
+        # Parse hunks from the patch
+        list<hash<auto>> hunks = ();
+        hash<auto> current_hunk;
+        foreach string pline in (patch_lines) {
+            if (pline =~ /^@@\s/) {
+                # Parse hunk header: @@ -old_start,old_count +new_start,new_count @@
+                if (current_hunk) {
+                    push hunks, current_hunk;
+                }
+                *list<*string> m = regex_extract(pline, "^@@\\s+-([0-9]+)(?:,([0-9]+))?\\s+\\+([0-9]+)(?:,([0-9]+))?\\s+@@");
+                int old_start = int(m[0]);
+                current_hunk = {
+                    "old_start": old_start,
+                    "ops": (),
+                };
+            } else if (current_hunk) {
+                if (pline =~ /^ /) {
+                    push current_hunk.ops, {"type": "context", "text": pline.substr(1)};
+                } else if (pline =~ /^-/) {
+                    push current_hunk.ops, {"type": "delete", "text": pline.substr(1)};
+                } else if (pline =~ /^\+/) {
+                    push current_hunk.ops, {"type": "insert", "text": pline.substr(1)};
+                }
+                # Skip other lines (e.g., "\ No newline at end of file")
+            }
+            # Skip --- and +++ header lines
+        }
+        if (current_hunk) {
+            push hunks, current_hunk;
+        }
+
+        # Apply hunks in forward order, building the result line by line
+        list<string> result = ();
+        int src_pos = 0;
+
+        foreach hash<auto> hunk in (hunks) {
+            int hunk_start = hunk.old_start > 0 ? hunk.old_start - 1 : 0;
+
+            # Copy unchanged lines before this hunk
+            while (src_pos < hunk_start && src_pos < src_lines.size()) {
+                push result, src_lines[src_pos];
+                ++src_pos;
+            }
+
+            # Process hunk operations
+            foreach hash<auto> op in (hunk.ops) {
+                switch (op.type) {
+                    case "context":
+                        if (src_pos < src_lines.size() && src_lines[src_pos] != op.text) {
+                            throw "PATCH-ERROR",
+                                sprintf("context mismatch at line %d: expected %y, got %y",
+                                    src_pos + 1, op.text, src_lines[src_pos]);
+                        }
+                        push result, src_lines[src_pos];
+                        ++src_pos;
+                        break;
+                    case "delete":
+                        if (src_pos < src_lines.size() && src_lines[src_pos] != op.text) {
+                            throw "PATCH-ERROR",
+                                sprintf("delete mismatch at line %d: expected %y, got %y",
+                                    src_pos + 1, op.text, src_lines[src_pos]);
+                        }
+                        ++src_pos;
+                        break;
+                    case "insert":
+                        push result, op.text;
+                        break;
+                }
+            }
+        }
+
+        # Copy remaining lines after the last hunk
+        while (src_pos < src_lines.size()) {
+            push result, src_lines[src_pos];
+            ++src_pos;
+        }
+
+        string output = result.join("\n");
+        if (trailing_nl && (output.empty() || output[output.size() - 1] != "\n")) {
+            output += "\n";
         }
         return output;
     }

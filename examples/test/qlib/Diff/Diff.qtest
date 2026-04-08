@@ -16,6 +16,8 @@ public class DiffTest inherits QUnit::Test {
         addTestCase("Test edge cases", \edgeCaseDiff(), NOTHING);
         addTestCase("Test data diff", \dataDiff(), NOTHING);
         addTestCase("Test stats and data text", \statsAndDataText(), NOTHING);
+        addTestCase("Test chars and words diff", \charsAndWordsDiff(), NOTHING);
+        addTestCase("Test patch apply", \patchApply(), NOTHING);
         addTestCase("Test performance", \perfTest(), NOTHING);
 
         # Return for compatibility with test harness that checks return value.
@@ -392,6 +394,162 @@ h";
         {
             string out = diff_data_text({"a": 1}, {"a": 2}, False);
             assertFalse(regex(out, "\033"), "data_text no color: no ANSI codes");
+        }
+    }
+
+    charsAndWordsDiff() {
+        # diff_chars: identical
+        assertEq("same", diff_chars("same", "same", False), "chars identical");
+
+        # diff_chars: single char change
+        {
+            string r = diff_chars("cat", "bat", False);
+            assertTrue(regex(r, "\\{-c-\\}"), "chars: delete c");
+            assertTrue(regex(r, "\\{\\+b\\+\\}"), "chars: insert b");
+            assertTrue(regex(r, "at"), "chars: 'at' unchanged");
+        }
+
+        # diff_chars: prefix append
+        assertEq("abc{+def+}", diff_chars("abc", "abcdef", False), "chars: prefix append");
+
+        # diff_chars: suffix prepend
+        assertEq("{+abc+}def", diff_chars("def", "abcdef", False), "chars: suffix prepend");
+
+        # diff_chars: middle change
+        {
+            string r = diff_chars("the cat sat", "the bat sat", False);
+            assertTrue(regex(r, "the "), "chars middle: prefix");
+            assertTrue(regex(r, "at sat"), "chars middle: suffix");
+        }
+
+        # diff_chars: empty strings
+        assertEq("", diff_chars("", "", False), "chars: both empty");
+        assertEq("{+abc+}", diff_chars("", "abc", False), "chars: old empty");
+        assertEq("{-abc-}", diff_chars("abc", "", False), "chars: new empty");
+
+        # diff_chars: no color produces no ANSI codes
+        {
+            string r = diff_chars("old", "new", False);
+            assertFalse(regex(r, "\033"), "chars: no ANSI codes when disabled");
+        }
+
+        # diff_words: identical
+        assertEq("same text", diff_words("same text", "same text", False), "words identical");
+
+        # diff_words: single word change
+        {
+            string r = diff_words("the quick fox", "the slow fox", False);
+            assertTrue(regex(r, "the "), "words: 'the ' unchanged");
+            assertTrue(regex(r, "\\{-quick-\\}"), "words: delete quick");
+            assertTrue(regex(r, "\\{\\+slow\\+\\}"), "words: insert slow");
+            assertTrue(regex(r, " fox"), "words: ' fox' unchanged");
+        }
+
+        # diff_words: insertion
+        {
+            string r = diff_words("a b", "a new b", False);
+            assertTrue(regex(r, "\\{\\+new \\+\\}"), "words insert: new added");
+        }
+
+        # diff_words: deletion
+        {
+            string r = diff_words("a old b", "a b", False);
+            assertTrue(regex(r, "\\{-old -\\}"), "words delete: old removed");
+        }
+
+        # diff_words: multiple changes
+        {
+            string r = diff_words("the quick brown fox", "the slow brown dog", False);
+            assertTrue(regex(r, "\\{-quick-\\}"), "words multi: delete quick");
+            assertTrue(regex(r, "\\{\\+slow\\+\\}"), "words multi: insert slow");
+            assertTrue(regex(r, "\\{-fox-\\}"), "words multi: delete fox");
+            assertTrue(regex(r, "\\{\\+dog\\+\\}"), "words multi: insert dog");
+            assertTrue(regex(r, " brown "), "words multi: brown unchanged");
+        }
+
+        # diff_words: empty strings
+        assertEq("", diff_words("", "", False), "words: both empty");
+
+        # diff_words: no color
+        {
+            string r = diff_words("old text", "new text", False);
+            assertFalse(regex(r, "\033"), "words: no ANSI codes when disabled");
+        }
+    }
+
+    patchApply() {
+        # Roundtrip: diff_unified → patch_apply
+        {
+            string orig = "line1\nline2\nline3\n";
+            string mod = "line1\nchanged\nline3\nnew\n";
+            string patch = diff_unified(orig, mod);
+            assertEq(mod, patch_apply(orig, patch), "roundtrip: basic change");
+        }
+
+        # Multiple hunks
+        {
+            string s1 = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n";
+            string s2 = "1\nX\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\nY\n";
+            string patch = diff_unified(s1, s2, "a", "b", 1);
+            assertEq(s2, patch_apply(s1, patch), "roundtrip: multiple hunks");
+        }
+
+        # Insertion only
+        {
+            string s1 = "a\nb\n";
+            string s2 = "a\nnew\nb\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: insert only");
+        }
+
+        # Deletion only
+        {
+            string s1 = "a\nold\nb\n";
+            string s2 = "a\nb\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: delete only");
+        }
+
+        # All lines changed
+        {
+            string s1 = "old\n";
+            string s2 = "new\n";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: all changed");
+        }
+
+        # Empty patch (identical strings)
+        assertEq("hello\n", patch_apply("hello\n", ""), "empty patch: no change");
+
+        # No trailing newline
+        {
+            string s1 = "abc";
+            string s2 = "def";
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: no trailing nl");
+        }
+
+        # Patch mismatch throws PATCH-ERROR
+        {
+            string patch = "--- a\n+++ b\n@@ -1,1 +1,1 @@\n-wrong\n+new\n";
+            bool caught = False;
+            try {
+                patch_apply("actual\n", patch);
+            } catch (hash<auto> ex) {
+                caught = ex.err == "PATCH-ERROR";
+            }
+            assertTrue(caught, "mismatch throws PATCH-ERROR");
+        }
+
+        # Large roundtrip
+        {
+            string s1 = "";
+            string s2 = "";
+            for (int i = 1; i <= 50; ++i) {
+                s1 += sprintf("line%d\n", i);
+                if (i % 10 == 0) {
+                    s2 += sprintf("CHANGED%d\n", i);
+                } else {
+                    s2 += sprintf("line%d\n", i);
+                }
+            }
+            assertEq(s2, patch_apply(s1, diff_unified(s1, s2)), "roundtrip: 50 lines");
         }
     }
 
