@@ -1905,6 +1905,11 @@ public class HttpAsyncSocketIoController {
     */
     handleConnectionResult(hash<SocketPollResultInfo> result, string uh,
             string orig_state) {
+        if (!result) {
+            log(LoggerLevel::ERROR, "handleConnectionResult: null result for %s state=%y", uh,
+                orig_state);
+            return;
+        }
         if (result.canceled) {
             log(LoggerLevel::DEBUG, "connection op canceled: %s state=%y", uh, orig_state);
             # Close the socket so the remote peer detects the disconnection
