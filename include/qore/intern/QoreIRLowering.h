@@ -225,6 +225,10 @@ private:
     QoreIRValue lowerListNode(const QoreValue& expr, std::string& error);
     bool guardVarLValue(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
     bool guardLValueBase(const QoreValue& exp, std::string& error, bool allow_maybe_nothing = false);
+    QoreIRValue tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
+        const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
+        bool weak, LVCompoundOp compound_op = LVCompoundOp::AddAssign,
+        LVUnaryOp unary_op = LVUnaryOp::PreInc);
     bool getAnalysis(const QoreValue& expr, QoreParseAnalysis& analysis) const;
     bool isNeverNothingInt(const QoreParseAnalysis& analysis) const;
     bool isNeverNothingFloat(const QoreParseAnalysis& analysis) const;

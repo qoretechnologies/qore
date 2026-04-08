@@ -88,6 +88,15 @@ include_directories(BEFORE ${CMAKE_BINARY_DIR})
 # for add the source dir include for cmake runs that refuse to add it in some environments for an unknown reason
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I${CMAKE_SOURCE_DIR}/include")
 
+# NaN-boxing in QoreValue stores doubles, integers, and pointers in a single uint64_t field using
+# bit-pattern manipulation. GCC/Clang strict aliasing optimizations can miscompile reads and writes
+# through QoreValue pointers, causing incorrect behavior (e.g., member variable increments by 2
+# instead of 1). This flag is required for correctness with NaN-boxing type-punning.
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
+endif()
+
 find_package(Java)
 
 if (DEFINED ENV{DOXYGEN_EXECUTABLE})
