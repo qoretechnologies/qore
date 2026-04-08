@@ -7853,11 +7853,8 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
         return QoreIRValue();
     }
-    // Only use path-based ops for SelfMember-rooted paths with at least 1 navigation step.
-    // Local/closure/global variable paths have known issues in the LValuePath handler
-    // (double-increment for inc/dec, missing remove semantics for list subscripts).
-    // These cases are already well-handled by existing fast paths and guardLValueBase.
-    if (lv_path.size() < 2 || lv_path[0].kind != LVPathStepKind::SelfMember) {
+    // Only use path-based ops for paths with at least root + 1 navigation step.
+    if (lv_path.size() < 2) {
         return QoreIRValue();
     }
     // Lower dynamic key/index operands
@@ -7880,8 +7877,9 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
             }
         }
     }
-    // Create the instruction
+    // Create the instruction with a properly allocated result value ID
     auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(opcode);
+    path_inst->result = builder.getFunction()->createValue();
     path_inst->path = std::move(lv_path);
     path_inst->weak = weak;
     path_inst->compound_op = compound_op;
