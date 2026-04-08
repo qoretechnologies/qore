@@ -20,6 +20,7 @@ public class RegexExtractTest inherits QUnit::Test {
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner cases test", \cornerCasesTest());
         addTestCase("optional groups test", \optionalGroupsTest());
+        addTestCase("ungreedy test", \ungreedyTest());
 
         set_return_value(main());
     }
@@ -194,5 +195,27 @@ public class RegexExtractTest inherits QUnit::Test {
         result = alt.extractGroups("I have a dog");
         assertEq(1, result.size());
         assertEq("dog", result[0]);
+    }
+
+    private ungreedyTest() {
+        # RE_Ungreedy makes quantifiers lazy
+        RegexExtract greedy("(a.*X)");
+        *list<*string> result = greedy.extractGroups("aXbXc");
+        assertEq(list("aXbX"), result);  # greedy: .* matches as much as possible
+
+        RegexExtract ungreedy("(a.*X)", RE_Ungreedy);
+        result = ungreedy.extractGroups("aXbXc");
+        assertEq(list("aX"), result);  # ungreedy: .* matches as little as possible
+
+        # RE_Ungreedy with global extraction
+        RegexExtract ug_global("(<.*>)", RE_Ungreedy | RE_Global);
+        result = ug_global.extractGroups("<b>bold</b>");
+        assertEq(list("<b>", "</b>"), result);
+
+        # match still works with RE_Ungreedy
+        assertTrue(ungreedy.match("aXbXc"));
+
+        # getOptions reflects RE_Ungreedy
+        assertEq(RE_Ungreedy, ungreedy.getOptions() & RE_Ungreedy);
     }
 }

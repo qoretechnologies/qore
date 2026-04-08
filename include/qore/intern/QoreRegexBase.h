@@ -43,7 +43,7 @@
 //! Size of error buffer for PCRE2 error messages
 constexpr size_t qore_pcre2_errorbuf_size = 512;
 
-#define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP))
+#define check_re_options(a) (a & ~(PCRE2_CASELESS|PCRE2_DOTALL|PCRE2_EXTENDED|PCRE2_MULTILINE|PCRE2_UTF|PCRE2_UCP|PCRE2_UNGREEDY|PCRE2_DOLLAR_ENDONLY|PCRE2_ANCHORED|PCRE2_DUPNAMES))
 
 class QoreRegexBase {
 public:
@@ -68,6 +68,7 @@ public:
     DLLLOCAL void setExtended();
     DLLLOCAL void setMultiline();
     DLLLOCAL void setUnicode();
+    DLLLOCAL void setUngreedy();
 
 protected:
     pcre2_code* p = nullptr;

@@ -12,6 +12,8 @@ class RegexTest inherits QUnit::Test {
         addTestCase("replacement test", \replacementTest());
         addTestCase("Test", \test());
         addTestCase("bug329", \test329());
+        addTestCase("$0 full match backreference", \testDollarZero());
+        addTestCase("ungreedy modifier", \testUngreedy());
         set_return_value(main());
     }
 
@@ -589,5 +591,66 @@ class RegexTest inherits QUnit::Test {
     test329() {
         string str = "hi|hi";
         assertThrows("REGEX-SUBST-ERROR", sub () {str =~ s/|/\//g;});
+    }
+
+    testDollarZero() {
+        # $0 references the full match
+        assertEq("[hello] world", regex_subst("hello world", "hello", "[$0]"));
+        assertEq("[hello] [world]", regex_subst("hello world", "\\w+", "[$0]", RE_Global));
+
+        # $0 with capture groups: $0 is full match, $1 is first group
+        assertEq("[abc:a] [def:d]", regex_subst("abc def", "(\\w)\\w+", "[$0:$1]", RE_Global));
+
+        # $0 in operator syntax
+        string s = "foo";
+        s =~ s/foo/[$0]/;
+        assertEq("[foo]", s);
+
+        # $0 with global substitution
+        s = "cat bat hat";
+        s =~ s/[cbh]at/($0)/g;
+        assertEq("(cat) (bat) (hat)", s);
+
+        # non-existent high backreference still produces nothing
+        assertEq("x", regex_subst("abc", "abc", "x$9"));
+    }
+
+    testUngreedy() {
+        # /U modifier makes quantifiers lazy by default
+        *list<*string> l = ("abc" =~ x/(a.*c)/);
+        assertEq(list("abc"), l);
+
+        # with /U, .* is ungreedy
+        l = ("abc" =~ x/(a.*c)/U);
+        assertEq(list("abc"), l);
+
+        # meaningful test: /U makes .* stop at first match
+        l = ("aXbXc" =~ x/(a.*X)/);
+        assertEq(list("aXbX"), l);  # greedy: matches as much as possible
+        l = ("aXbXc" =~ x/(a.*X)/U);
+        assertEq(list("aX"), l);    # ungreedy: matches as little as possible
+
+        # RE_Ungreedy constant with regex_extract function
+        l = regex_extract("aXbXc", "(a.*X)");
+        assertEq(list("aXbX"), l);  # greedy (default)
+        l = regex_extract("aXbXc", "(a.*X)", RE_Ungreedy);
+        assertEq(list("aX"), l);    # ungreedy
+
+        # RE_Ungreedy with regex() match function
+        assertTrue(regex("abc", "a.*c"));
+        assertTrue(regex("abc", "a.*c", RE_Ungreedy));
+
+        # RE_Ungreedy with substitution
+        assertEq("[]c", regex_subst("aXbXc", "a.*X", "[]"));           # greedy: matches aXbX
+        assertEq("[]bXc", regex_subst("aXbXc", "a.*X", "[]", RE_Ungreedy)); # ungreedy: matches aX
+
+        # /U in substitution operator
+        string s = "<b>bold</b> and <i>italic</i>";
+        s =~ s/<.*>/[]/g;
+        assertEq("[]", s);  # greedy: matches everything between first < and last >
+
+        s = "<b>bold</b> and <i>italic</i>";
+        s =~ s/<.*>/[]/gU;
+        assertEq("[]bold[] and []italic[]", s);  # ungreedy: matches each <...> separately
     }
 }

@@ -69,6 +69,8 @@
     |\c u|extends Posix character matching to Unicode characters
     |\c g|makes global substitutions or global extractions (only applicable with the substitution and extraction \
         operators)
+    |\c U|makes quantifiers ungreedy by default; individual quantifiers can be made greedy by appending \c ? \
+        (since %Qore 2.3)
 
     @section qore_regex_functions Qore Regular Expression Functions
 
@@ -78,9 +80,15 @@
     <b>Regular Expression Functions</b>
     |!Function|!Description
     |regex()|Returns @ref True "True" if the regular expression matches a string
-    |regex_subst()|Substitutes a pattern in a string based on regular expressions and returns the new string
+    |regex_subst()|Substitutes a pattern in a string based on regular expressions and returns the new string; \
+        also supports a callback variant for dynamic replacements (since %Qore 2.3)
     |regex_extract()|Returns a list of substrings in a string based on matching patterns defined by a regular \
         expression
+    |regex_extract_named()|Returns named capture groups as a hash (since %Qore 2.3)
+    |regex_extract_detailed()|Returns detailed match info including positions, groups, and named groups as a \
+        list of @ref Qore::RegexMatchInfo "RegexMatchInfo" hashes (since %Qore 2.3)
+    |regex_count()|Returns the number of non-overlapping matches (since %Qore 2.3)
+    |regex_escape()|Escapes all non-alphanumeric characters for use as a literal regex pattern (since %Qore 2.3)
 
     @section qore_regex_escape_patterns Qore Regular Expression Escape Codes
 
@@ -113,7 +121,7 @@
     @section qore_regex_backreferences Qore Regular Expression Backreferences
 
     Qore uses <tt>$</tt><i>num</i> for backreferences in regular expression substitution expressions.  The first
-    backreference is \c $1, the second $2, and so on.
+    backreference is \c $1, the second $2, and so on.  \c $0 refers to the entire match (since %Qore 2.3).
 
     @par Example
     @code{.py}
@@ -124,4 +132,57 @@
     # remove parentheses from string at the beginning of the line
     str =~ s/^\((.*)\)/$1/;
     @endcode
+    @code{.py}
+    # wrap matched text using $0 (full match backreference)
+    str =~ s/\w+/[$0]/g;  # "hello world" -> "[hello] [world]"
+    @endcode
+
+    @section qore_regex_named_groups Named Capture Groups
+
+    %Qore supports PCRE2 named capture groups using \c (?<name>...) or \c (?P<name>...) syntax.  Named groups
+    can be extracted as hash values using regex_extract_named(), the @ref Qore::Regex::extractNamedGroups()
+    "Regex::extractNamedGroups()" method, or the @ref Qore::RegexExtract::extractNamedGroups()
+    "RegexExtract::extractNamedGroups()" method.
+
+    @par Example:
+    @code{.py}
+    auto h = regex_extract_named("2026-04-08", "(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})");
+    # h = {"year": "2026", "month": "04", "day": "08"}
+    @endcode
+
+    Use the @ref RE_DupNames constant to allow duplicate named subpatterns in the same regex.
+
+    @since %Qore 2.3
+
+    @section qore_regex_detailed_extraction Detailed Match Extraction
+
+    The @ref Qore::RegexMatchInfo "RegexMatchInfo" hashdecl provides detailed information about each match including
+    the full match text, byte offset, length, captured groups, and named groups.  Use regex_extract_detailed(),
+    @ref Qore::Regex::extractDetailed() "Regex::extractDetailed()", or
+    <tt>\<string\>::regexExtractDetailed()</tt> to get this information.
+
+    @par Example:
+    @code{.py}
+    *list<hash<RegexMatchInfo>> matches = regex_extract_detailed("abc 123 def 456", "\\d+", RE_Global);
+    # matches[0] = {"match": "123", "offset": 4, "length": 3}
+    # matches[1] = {"match": "456", "offset": 12, "length": 3}
+    @endcode
+
+    @since %Qore 2.3
+
+    @section qore_regex_callback_subst Callback-Based Substitution
+
+    The regex_subst() function and the @ref Qore::RegexSubst::subst() "RegexSubst::subst()" method support a
+    callback variant where a closure or call reference computes the replacement string for each match.  The
+    callback receives a @ref Qore::RegexMatchInfo "RegexMatchInfo" hash.
+
+    @par Example:
+    @code{.py}
+    string result = regex_subst("abc 123 def 456", "\\d+", string sub (hash<RegexMatchInfo> m) {
+        return string(int(m.match) * 2);
+    }, RE_Global);
+    # result = "abc 246 def 912"
+    @endcode
+
+    @since %Qore 2.3
 */

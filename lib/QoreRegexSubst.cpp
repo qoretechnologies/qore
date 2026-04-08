@@ -186,7 +186,7 @@ int QoreRegexSubst::concat(ExceptionSink& xsink, QoreString* cstr, PCRE2_SIZE* o
             int pos = num * 2;
             //printd(5, "QoreRegexSubst::concat() pos: %d olen: %d ovector[%d]: %d ovector[%d]: %d rc: %d\n", pos,
             //  olen, pos, ovector[pos], pos + 1, ovector[pos + 1], rc);
-            if (pos > 0 && pos < olen && num < rc && ovector[pos] != -1) {
+            if (pos >= 0 && pos < olen && num < rc && ovector[pos] != -1) {
                 cstr->concat(target + ovector[pos], ovector[pos + 1] - ovector[pos]);
             }
         } else {
@@ -278,6 +278,129 @@ QoreStringNode* QoreRegexSubst::exec(const QoreString* target, const QoreString*
 // called for run-time evaluation of parse-time-created objects
 QoreStringNode* QoreRegexSubst::exec(const QoreString* target, ExceptionSink* xsink) const {
     return exec(target, newstr, xsink);
+}
+
+QoreStringNode* QoreRegexSubst::execWithCallback(const QoreString* target,
+        const ResolvedCallReferenceNode* callback, ExceptionSink* xsink) const {
+    TempEncodingHelper t(target, QCS_UTF8, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // get named capture group info
+    uint32_t namecount = 0;
+    uint32_t name_entry_size = 0;
+    PCRE2_SPTR nametable = nullptr;
+    pcre2_pattern_info(p, PCRE2_INFO_NAMECOUNT, &namecount);
+    if (namecount) {
+        pcre2_pattern_info(p, PCRE2_INFO_NAMEENTRYSIZE, &name_entry_size);
+        pcre2_pattern_info(p, PCRE2_INFO_NAMETABLE, &nametable);
+    }
+
+    SimpleRefHolder<QoreStringNode> tstr(new QoreStringNode);
+    const char* ptr = t->c_str();
+    PCRE2_SIZE last_match = (PCRE2_SIZE)-1;
+
+    pcre2_match_data* md = pcre2_match_data_create_from_pattern(p, nullptr);
+    ON_BLOCK_EXIT(pcre2_match_data_free, md);
+
+    while (true) {
+        PCRE2_SIZE offset = ptr - t->c_str();
+        if (offset >= t->size()) {
+            break;
+        }
+        int rc = pcre2_match(p, reinterpret_cast<PCRE2_SPTR8>(t->c_str()), t->size(), offset, 0, md, nullptr);
+        if (rc < 1) {
+            break;
+        }
+
+        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
+
+        // detect infinite recursion
+        if (ovector[0] == last_match) {
+            xsink->raiseException("REGEX-SUBST-ERROR", "Infinite recursion detected in regex substitution with "
+                "callback; this normally happens with an empty pattern with use with the global option (RE_GLOBAL)");
+            return nullptr;
+        }
+        last_match = ovector[0];
+
+        // copy text before match
+        if (ovector[0] > offset) {
+            tstr->concat(ptr, ovector[0] - offset);
+        }
+
+        // build RegexMatchInfo hash for callback
+        ReferenceHolder<QoreHashNode> match_info(new QoreHashNode(hashdeclRegexMatchInfo, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        match_info->setKeyValue("match", new QoreStringNode(t->c_str() + ovector[0],
+            ovector[1] - ovector[0]), xsink);
+        match_info->setKeyValue("offset", static_cast<int64>(ovector[0]), xsink);
+        match_info->setKeyValue("length", static_cast<int64>(ovector[1] - ovector[0]), xsink);
+
+        // captured groups
+        if (rc > 1) {
+            ReferenceHolder<QoreListNode> groups(new QoreListNode(stringOrNothingTypeInfo), xsink);
+            for (int x = 1; x < rc; ++x) {
+                int pos = x * 2;
+                if (ovector[pos] == (PCRE2_SIZE)-1) {
+                    groups->push(QoreValue(), xsink);
+                } else {
+                    groups->push(new QoreStringNode(t->c_str() + ovector[pos],
+                        ovector[pos + 1] - ovector[pos]), xsink);
+                }
+            }
+            match_info->setKeyValue("groups", groups.release(), xsink);
+        }
+
+        // named groups
+        if (namecount) {
+            ReferenceHolder<QoreHashNode> named(new QoreHashNode(stringOrNothingTypeInfo), xsink);
+            PCRE2_SPTR tabptr = nametable;
+            for (uint32_t i = 0; i < namecount; ++i) {
+                int n = (tabptr[0] << 8) | tabptr[1];
+                const char* name = reinterpret_cast<const char*>(tabptr + 2);
+                if (n < rc && ovector[2 * n] != (PCRE2_SIZE)-1) {
+                    named->setKeyValue(name, new QoreStringNode(t->c_str() + ovector[2 * n],
+                        ovector[2 * n + 1] - ovector[2 * n]), xsink);
+                } else {
+                    named->setKeyValue(name, QoreValue(), xsink);
+                }
+                tabptr += name_entry_size;
+            }
+            match_info->setKeyValue("named_groups", named.release(), xsink);
+        }
+
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // call the callback
+        ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+        args->push(match_info.release(), xsink);
+        ValueHolder rv(const_cast<ResolvedCallReferenceNode*>(callback)->execValue(*args, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+
+        // use the callback's return value as the replacement
+        QoreStringValueHelper replacement(*rv);
+        tstr->concat(replacement->c_str());
+
+        ptr = t->c_str() + ovector[1];
+
+        if (!global) {
+            break;
+        }
+    }
+
+    if (*ptr) {
+        tstr->concat(ptr);
+    }
+
+    return tstr.release();
 }
 
 void QoreRegexSubst::setGlobal() {

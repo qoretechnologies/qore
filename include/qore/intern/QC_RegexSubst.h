@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -80,6 +80,11 @@ public:
 
     DLLLOCAL QoreStringNode* subst(const QoreString* target, const QoreString* repl, ExceptionSink* xsink) const {
         return regex ? regex->exec(target, repl, xsink) : nullptr;
+    }
+
+    DLLLOCAL QoreStringNode* substCallback(const QoreString* target,
+            const ResolvedCallReferenceNode* callback, ExceptionSink* xsink) const {
+        return regex ? regex->execWithCallback(target, callback, xsink) : nullptr;
     }
 
     DLLLOCAL const QoreString* getPattern() const {

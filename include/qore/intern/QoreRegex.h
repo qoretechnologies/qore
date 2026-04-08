@@ -71,7 +71,10 @@ public:
     DLLLOCAL bool exec(const char* str, size_t len) const;
     DLLLOCAL QoreListNode* extractSubstrings(const QoreString* target, ExceptionSink* xsink) const;
     DLLLOCAL QoreListNode* extractWithPattern(const QoreString& target, bool include_pattern,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, int limit = -1) const;
+    DLLLOCAL int64 countMatches(const QoreString* target, ExceptionSink* xsink) const;
+    DLLLOCAL QoreValue extractNamedGroups(const QoreString* target, ExceptionSink* xsink) const;
+    DLLLOCAL QoreListNode* extractDetailed(const QoreString* target, ExceptionSink* xsink) const;
     // caller owns QoreString returned
     DLLLOCAL QoreString* getString();
 

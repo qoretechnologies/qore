@@ -2278,7 +2278,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                                     QoreSocketObject* so =
                                         static_cast<QoreSocketObject*>(
                                             poll_sock->getReferencedPrivateData(
-                                                CID_ABSTRACTPOLLABLEIOOBJECTBASE, &uring_xsink));
+                                                CID_SOCKET, &uring_xsink));
                                     if (so) {
                                         Http2SessionPtr h2s =
                                             so->priv->socket->priv->h2_session;

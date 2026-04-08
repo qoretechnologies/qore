@@ -20,6 +20,7 @@ public class RegexTest inherits QUnit::Test {
         addTestCase("getter methods test", \getterMethodsTest());
         addTestCase("negative tests", \negativeTests());
         addTestCase("corner cases test", \cornerCasesTest());
+        addTestCase("ungreedy test", \ungreedyTest());
 
         set_return_value(main());
     }
@@ -219,5 +220,23 @@ public class RegexTest inherits QUnit::Test {
         Regex negLookahead("foo(?!bar)");
         assertFalse(negLookahead.match("foobar"));
         assertTrue(negLookahead.match("foobaz"));
+    }
+
+    private ungreedyTest() {
+        # RE_Ungreedy makes quantifiers lazy by default
+        Regex greedy("a(.*)X");
+        *list<*string> l = greedy.extractGroups("aXbXc");
+        assertEq(list("Xb"), l);  # greedy: .* matches Xb (full match is aXbX)
+
+        Regex ungreedy("a(.*)X", RE_Ungreedy);
+        l = ungreedy.extractGroups("aXbXc");
+        # ungreedy: .* matches "" (empty), full match is "aX"; empty-only capture returns NOTHING
+        assertNothing(l);
+
+        # RE_Ungreedy with match
+        assertTrue(ungreedy.match("aXbXc"));
+
+        # getOptions reflects RE_Ungreedy
+        assertEq(RE_Ungreedy, ungreedy.getOptions() & RE_Ungreedy);
     }
 }

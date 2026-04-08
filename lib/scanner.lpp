@@ -633,6 +633,8 @@ static bool isRegexModifier(QoreRegex* qr, int c) {
         qr->setMultiline();
     } else if (c == 'u') {
         qr->setUnicode();
+    } else if (c == 'U') {
+        qr->setUngreedy();
     } else {
         return false;
     }
@@ -664,6 +666,8 @@ static bool isRegexSubstModifier(QoreRegexSubst* qr, int c) {
         qr->setMultiline();
     } else if (c == 'u') {
         qr->setUnicode();
+    } else if (c == 'U') {
+        qr->setUngreedy();
     } else {
         return false;
     }
