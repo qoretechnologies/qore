@@ -495,6 +495,23 @@ Known failure modes include:
   private data (and all its indirect data: sockets, SSL sessions, H2 streams).  Fixed by adding
   `current_op->deref(xsink)` before nulling.  Any new wrapper that uses `getReferencedPrivateData()`
   must follow this pattern.
+- **`SocketPollOperationBase(self)` tRef rule**: The `QoreObjectWeakRefHolder self` member already
+  calls `tRef()` in its constructor, so subclass constructors using the
+  `SocketPollOperationBase(QoreObject* self)` form must NOT call `self->tRef()` again — that
+  double-tRef is never matched by a second tDeref and leaks the QoreObject's C++ memory.
+  The `setSelf()` method is safe because `QoreObjectWeakRefHolder::reset()` stores the pointer
+  without tRef, then adds exactly one tRef in the body.
+- **`setValue` vs `setMemberValue` in QPP constructors**: Use `self->setValue("member", val, xsink)`
+  (not `self->setMemberValue("member", cls, val, xsink)`) when initializing Qore members from a
+  QPP constructor body.  `setMemberValue` goes through class-context member access with DGC
+  object-counting that can produce a leaked ref when the object is later destroyed.  `setValue`
+  performs a simple member assignment that matches the pattern used by `SocketPollOperation` and
+  other working poll operations.
+- **Avoid duplicate Qore member refs to the same object**: If a composite poll operation wraps an
+  inner operation that already holds a Qore "sock" member pointing to a Socket, the outer operation
+  must NOT also store the same Socket as its own "sock" member.  During member hash cleanup,
+  `doDelete` on the Socket from the outer object sets status to `OS_DELETED` before the inner
+  operation releases its ref, leaving the Socket with a non-zero ref count.
 - **Inline handler dispatch**: `onHttpRequest()` must never run inline on a `call_dispatcher` worker.
   Body-reading requests call `processNativeRequest()` which does synchronous socket I/O — this
   interferes with the async I/O model when run on the wrong thread.  All requests without an inline

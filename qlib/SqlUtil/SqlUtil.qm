@@ -117,6 +117,9 @@ module SqlUtil {
     @subsection sqlutilv2_3_0 SqlUtil v2.3.0
     - implemented support for specifying the columns to use for upserts separately from the row data
       (<a href="https://github.com/qoretechnologies/qore/issues/4997">issue 4997</a>)
+    - implemented support for \c NULLS \c FIRST / \c NULLS \c LAST qualifiers in the
+      @ref select_option_orderby "orderby" option using a new hash format, as well as per-column
+      \c DESC support for column operator expressions
 
     @subsection sqlutilv1_9_3 SqlUtil v1.9.3
     - fixed support for orderby with a matching unique index
@@ -603,7 +606,28 @@ hash<auto> sh = {
     - a simple string with a column name preceded by a \c "-" sign; ex: \c "-name", meaning that that column should be sorted in descending order
     - a string giving a table or table alias and a column name in dot notation (for use with @ref select_option_join "joins"); ex: \c "q.name"
     - a positive integer giving the column number for the ordering
+    - a hash with the following keys:
+      - \c "column" (required): a column name (string) or a column operator hash (e.g. from @ref cop_coalesce())
+      - \c "desc" (optional, bool): if @ref True "True", sort this column in descending order
+      - \c "nulls" (optional, string): \c "first" or \c "last" to specify \c NULLS \c FIRST / \c NULLS \c LAST ordering
+
+    <b>Orderby Example with NULLS LAST:</b>
+    @code{.py}
+hash<auto> sh = {
+    "where": {"status": "published"},
+    "orderby": (
+        {"column": "avg_rating", "desc": True, "nulls": "last"},
+        "id",
+    ),
+    "limit": 100,
+};
+*list<auto> rows = table.selectRows(sh);
+    @endcode
+
     @note
+    - \c NULLS \c FIRST / \c NULLS \c LAST is standard SQL (SQL:2003) and is supported natively by PostgreSQL,
+      Oracle, SQLite, Firebird, and MariaDB 10.3+. MySQL does not support this syntax; use @ref cop_coalesce()
+      as a workaround for MySQL.
     - By using the @ref select_option_offset "offset option" the results will be automatically ordered according to the primary key of the table
 
     @subsubsection select_option_desc Select Option "desc"

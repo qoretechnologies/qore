@@ -114,6 +114,24 @@ public class Http2PollOperation inherits Http2PollOperationBase, HttpConnectionP
         }
     }
 
+    #! Notifies all registered stream listeners that the connection is closed
+    /** Called when the H2 connection dies (TCP reset, GOAWAY, error). Each
+        listener's notifyIo() will detect the closed stream context and clean up,
+        unblocking handler threads waiting on stream_done.waitForZero().
+
+        @since HttpServerAsyncIo 1.2
+    */
+    notifyStreamListenersClosed() {
+        AutoLock al(stream_listener_mutex);
+        foreach hash<auto> i in (stream_listeners.pairIterator()) {
+            try {
+                i.value.notifyIo();
+            } catch () {
+                # Ignore errors from already-destroyed listeners
+            }
+        }
+    }
+
     #! Creates the poll operation
     /** @param sock the client socket with an established HTTP/2 connection
         @param headers_only if True, dispatch requests as soon as headers arrive

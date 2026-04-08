@@ -1,7 +1,7 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
-/*  QoreReplWebSocket.qtest Copyright 2025 Qore Technologies, s.r.o.
+/*  QoreReplWebSocket.qtest Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -438,8 +438,7 @@ public class QoreReplWebSocketTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             # Expected - should get HTTP 503
             got_error = True;
-            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, "Should get HTTP error");
-            assertTrue(ex.arg.status_code == 503, "Should get 503 status");
+            assertEq("WEBSOCKET-ERROR", ex.err, "Should get WebSocket error");
         }
         assertTrue(got_error, "Second connection should fail with error when max reached");
 

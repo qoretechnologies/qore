@@ -130,6 +130,7 @@ public class DataProvider {
             "flyway": "FlywayDataProvider",
 
             "freshbooks": "FreshBooksDataProvider",
+            "freshsales": "FreshsalesDataProvider",
             "ftpclient": "FtpClientDataProvider",
             "gemini": "GeminiDataProvider",
             "gorgias": "GorgiasDataProvider",

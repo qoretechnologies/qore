@@ -1453,6 +1453,63 @@ public class SqlTestBase inherits QUnit::Test {
         soh = ("columns": (cop_as ("id", "alias"),), "orderby": ("alias",));
         rows = table.selectRows (soh, \sql);
         assertEq((("alias": 1), ("alias": 2)), rows, "checking order by alias");
+
+        # test orderby qualifier hash with "desc" only (no nulls) — works on all databases
+        soh = {"columns": ("id",), "orderby": ({"column": "id", "desc": True},)};
+        rows = table.selectRows(soh, \sql);
+        assertRegex("desc", sql, "checking desc in SQL via hash format");
+        assertEq((("id": 2), ("id": 1)), rows, "checking order by id desc via hash format");
+
+        # test orderby qualifier hash with column operator and desc — works on all databases
+        soh = {"columns": ("id",), "orderby": ({"column": cop_plus("id", cop_value(0)), "desc": True},)};
+        rows = table.selectRows(soh, \sql);
+        assertRegex("desc", sql, "checking desc with column operator in SQL");
+        assertEq((("id": 2), ("id": 1)), rows, "checking order by cop desc via hash format");
+
+        # NULLS FIRST/LAST tests — not supported on all databases (e.g., MySQL);
+        # probe with a test query first
+        bool nulls_supported = True;
+        try {
+            table.selectRows({"columns": ("id",), "orderby": ({"column": "id", "nulls": "last"},),
+                "limit": 1}, \sql);
+        } catch (hash<ExceptionInfo> ex) {
+            nulls_supported = False;
+        }
+
+        if (nulls_supported) {
+            soh = {"columns": ("id",), "orderby": ({"column": "id", "nulls": "last"},)};
+            rows = table.selectRows(soh, \sql);
+            assertRegex("nulls last", sql, "checking nulls last in SQL");
+            assertEq((("id": 1), ("id": 2)), rows, "checking order by id nulls last");
+
+            soh = {"columns": ("id",), "orderby": ({"column": "id", "nulls": "first"},)};
+            rows = table.selectRows(soh, \sql);
+            assertRegex("nulls first", sql, "checking nulls first in SQL");
+            assertEq((("id": 1), ("id": 2)), rows, "checking order by id nulls first");
+
+            soh = {"columns": ("id",), "orderby": ({"column": "id", "desc": True, "nulls": "last"},)};
+            rows = table.selectRows(soh, \sql);
+            assertRegex("desc nulls last", sql, "checking desc nulls last in SQL");
+            assertEq((("id": 2), ("id": 1)), rows, "checking order by id desc nulls last");
+
+            soh = {"columns": ("id",), "orderby": ({"column": cop_plus("id", cop_value(0)), "nulls": "last"},)};
+            rows = table.selectRows(soh, \sql);
+            assertRegex("nulls last", sql, "checking nulls last with column operator in SQL");
+
+            soh = {"columns": ("id",), "orderby": ({"column": "id", "nulls": "last"}, "id")};
+            rows = table.selectRows(soh, \sql);
+            assertRegex("nulls last", sql, "checking nulls last with mixed orderby in SQL");
+        }
+
+        # negative test: invalid "nulls" value — tests SqlUtil validation, not DB syntax
+        assertThrows("ORDERBY-ERROR", sub () {
+            table.selectRows({"columns": ("id",), "orderby": ({"column": "id", "nulls": "invalid"},)});
+        }, NOTHING, "invalid nulls value");
+
+        # negative test: missing "column" key
+        assertThrows("ORDERBY-ERROR", sub () {
+            table.selectRows({"columns": ("id",), "orderby": ({"desc": True, "nulls": "last"},)});
+        }, NOTHING, "missing column key");
     }
 
     offsetLimitTest() {

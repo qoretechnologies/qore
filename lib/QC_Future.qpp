@@ -98,3 +98,17 @@ abstract bool Future::isDone();
 /** @return @ref True if an error has been set
  */
 abstract bool Future::isError();
+
+//! Cancels the pending operation associated with this Future
+/** If the Future is still \c PENDING, transitions to \c REJECTED with
+    \c "FUTURE-CANCELLED". If already resolved or rejected, this is a no-op.
+
+    @note The default implementation (in @ref FutureImpl) only rejects the
+    Future. Subclasses (e.g., \c HttpCancellableFuture) override this to also
+    cancel the underlying I/O operation.
+
+    @return @ref True if the Future was cancelled, @ref False if already complete
+
+    @since %Qore 2.4
+ */
+abstract bool Future::cancel();

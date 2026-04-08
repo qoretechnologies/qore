@@ -806,6 +806,14 @@ void QoreSocketObject::cancelHttp2Stream(int32_t stream_id, ExceptionSink* xsink
     priv->socket->cancelHttp2Stream(stream_id, xsink);
 }
 
+void QoreSocketObject::setHttp2StreamStreaming(int32_t stream_id) {
+    AutoLocker al(priv->m);
+    auto h2s = priv->socket->priv->h2_session;
+    if (h2s) {
+        h2s->setStreamStreaming(stream_id);
+    }
+}
+
 void QoreSocketObject::setHttp2ConnectProtocolEnabled(bool enable) {
     AutoLocker al(priv->m);
     priv->socket->setHttp2ConnectProtocolEnabled(enable);
@@ -836,6 +844,14 @@ int QoreSocketObject::sendHttp2Trailers(int32_t stream_id, const QoreHashNode* t
         ExceptionSink* xsink) {
     AutoLocker al(priv->m);
     return priv->socket->sendHttp2Trailers(stream_id, trailers, xsink);
+}
+
+int QoreSocketObject::flushHttp2PendingData(ExceptionSink* xsink) {
+    AutoLocker al(priv->m);
+    if (!priv->socket->priv->h2_session) {
+        return 0;
+    }
+    return priv->socket->priv->h2_session->sendPendingData(0, xsink);
 }
 
 int QoreSocketObject::submitHttp2StreamingResponseHeaders(int32_t stream_id, int status_code,

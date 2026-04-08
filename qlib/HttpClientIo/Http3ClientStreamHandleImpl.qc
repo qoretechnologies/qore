@@ -263,6 +263,20 @@ public class Http3ClientStreamHandle inherits HttpClientStreamHandle {
             sid = stream_id;
         }
 
+        # Check connection state (lock-free atomic read) AFTER the stream-level
+        # checks.  The underlying H3 connection may have been closed while the
+        # stream handle's state is still Open.  Catching this here produces a
+        # clean HTTPCLIENT-STREAM-CLOSED instead of an opaque protocol-level
+        # error from sendStreamData().
+        if (!h3conn.isReady()) {
+            if (end_stream && data.empty()) {
+                return;
+            }
+            throw "HTTPCLIENT-STREAM-CLOSED",
+                sprintf("cannot send data: H3 connection closed (state: %y)",
+                    h3conn.getConnectionState());
+        }
+
         log(LoggerLevel::DEBUG, "sending data on stream %d (end_stream=%y)", sid, end_stream);
         h3conn.sendStreamData(sid, data, end_stream);
     }

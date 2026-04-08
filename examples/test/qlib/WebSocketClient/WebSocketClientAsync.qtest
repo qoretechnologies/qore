@@ -234,13 +234,12 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
             wsc.disconnect();
         }
 
-        # connect asynchronously
+        # connect via startPollConnect (blocking HCIO connect, returns pre-completed)
         WebSocketConnectPollOperation poller = wsc.startPollConnect();
         assertEq("ws-connect", poller.getGoal());
-        assertFalse(poller.goalReached());
-
-        hash<auto> result = drivePoll(poller);
         assertTrue(poller.goalReached());
+
+        hash<auto> result = poller.getOutput();
         assertEq(101, result.status_code);
 
         # start the event loop for receiving messages
@@ -262,15 +261,11 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
 
         WebSocketConnectPollOperation poller = wsc.startPollConnect();
         assertEq("ws-connect", poller.getGoal());
-        assertFalse(poller.goalReached());
-
-        # check initial state contains "connecting"
-        string initial_state = poller.getState();
-        assertTrue(initial_state.find("connecting") >= 0, "initial state contains 'connecting'");
-
-        hash<auto> result = drivePoll(poller);
         assertTrue(poller.goalReached());
         assertEq("complete", poller.getState());
+
+        hash<auto> result = poller.getOutput();
+        assertEq(101, result.status_code);
 
         wsc.startEventLoop(result);
     }
@@ -287,10 +282,10 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
             wsc.disconnect();
         }
 
-        # async connect
+        # async connect (blocking HCIO, returns pre-completed)
         WebSocketConnectPollOperation connect_poller = wsc.startPollConnect();
-        hash<auto> result = drivePoll(connect_poller);
         assertTrue(connect_poller.goalReached());
+        hash<auto> result = connect_poller.getOutput();
         wsc.startEventLoop(result);
 
         # async send after async connect
@@ -316,11 +311,11 @@ public class WebSocketClientAsyncTest inherits QUnit::Test {
     }
 
     asyncConnectErrorTest() {
-        # test connection to a port that will reject
+        # test connection to a port that will reject — startPollConnect() now
+        # does the full HCIO connect and throws on failure
         WebSocketClient wsc(sub (auto msg) {}, {
             "url": "ws://127.0.0.1:1",
         });
-        WebSocketConnectPollOperation poller = wsc.startPollConnect();
-        assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", \wsc.startPollConnect());
     }
 }

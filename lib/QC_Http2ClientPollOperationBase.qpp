@@ -761,7 +761,13 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
 
 void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
     for (auto& [stream_id, info] : stream_queues) {
-        info.queue->push(xsink, QoreValue());
+        // Push an error marker instead of NOTHING so consumers (e.g.,
+        // WebSocketClientHcioPollOp) can distinguish "connection closed"
+        // from "no data available" (timeout).
+        ReferenceHolder<QoreHashNode> err_hash(new QoreHashNode(autoTypeInfo), xsink);
+        err_hash->setKeyValue("error", true, xsink);
+        err_hash->setKeyValue("end_stream", true, xsink);
+        info.queue->push(xsink, err_hash.release());
         if (info.notifier) {
             info.notifier->notify();
         }
@@ -848,6 +854,15 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
     if (*xsink || stream_id < 0) {
         action->deref(xsink);
         return -1;
+    }
+
+    // If the action is a streaming consumer (ChannelAction), mark the stream
+    // for incremental response body delivery.  This enables the existing
+    // hasStreamingData()/takeStreamData() mechanism in continuePoll() to
+    // deliver DATA chunks to the Channel as they arrive, instead of waiting
+    // for END_STREAM (which never comes for SSE streams).
+    if (action->isStreaming()) {
+        sock_obj->setHttp2StreamStreaming(stream_id);
     }
 
     // Register action (take ownership — action was created with refcount 1 by caller)

@@ -34,6 +34,11 @@ class FutureTest inherits QUnit::Test {
         addTestCase("WaitGroup reuse", \testWaitGroupReuse());
         addTestCase("WaitGroup add with invalid value throws", \testWaitGroupAddInvalid());
         addTestCase("WaitGroup copy is independent", \testWaitGroupCopy());
+        addTestCase("FutureImpl cancel pending", \testCancelPending());
+        addTestCase("FutureImpl cancel resolved is no-op", \testCancelResolved());
+        addTestCase("FutureImpl cancel rejected is no-op", \testCancelRejected());
+        addTestCase("FutureImpl cancel wakes blocked getter", \testCancelWakesGetter());
+        addTestCase("Custom Future subclass must implement cancel", \testCustomFutureCancel());
         set_return_value(main());
     }
 
@@ -304,5 +309,99 @@ class FutureTest inherits QUnit::Test {
         # Copy starts fresh at 0, independent of original
         assertEq(0, wg2.getCount());
         assertEq(5, wg.getCount());
+    }
+
+    testCancelPending() {
+        Promise p();
+        Future f = p.getFuture();
+        assertFalse(f.isDone());
+        assertTrue(f.cancel());
+        assertTrue(f.isDone());
+        assertTrue(f.isError());
+        assertThrows("FUTURE-CANCELLED", "Future was cancelled", sub() { f.get(); });
+    }
+
+    testCancelResolved() {
+        Promise p();
+        Future f = p.getFuture();
+        p.set(42);
+        assertTrue(f.isDone());
+        assertFalse(f.cancel());
+        # Value is still retrievable
+        assertEq(42, f.get());
+    }
+
+    testCancelRejected() {
+        Promise p();
+        Future f = p.getFuture();
+        p.setError("MY-ERROR", "desc");
+        assertTrue(f.isDone());
+        assertFalse(f.cancel());
+        assertThrows("MY-ERROR", sub() { f.get(); });
+    }
+
+    testCancelWakesGetter() {
+        Promise p();
+        Future f = p.getFuture();
+        Counter c(1);
+        *hash<ExceptionInfo> caught_ex;
+        background sub() {
+            on_exit c.dec();
+            try {
+                f.get();
+            } catch (hash<ExceptionInfo> ex) {
+                caught_ex = ex;
+            }
+        }();
+        # Give background thread time to block on get()
+        usleep(50ms);
+        assertTrue(f.cancel());
+        c.waitForZero();
+        assertEq("FUTURE-CANCELLED", caught_ex.err);
+        assertEq("Future was cancelled", caught_ex.desc);
+    }
+
+    testCustomFutureCancel() {
+        # A custom Future subclass that implements cancel()
+        Promise p();
+        Future real = p.getFuture();
+        CancellableWrapper w(real);
+        assertFalse(w.isDone());
+        assertTrue(w.cancel());
+        assertTrue(w.isDone());
+        assertTrue(w.isError());
+        assertTrue(w.cancel_called);
+        assertThrows("FUTURE-CANCELLED", sub() { w.get(); });
+    }
+}
+
+class CancellableWrapper inherits Future {
+    private {
+        Future real;
+    }
+
+    public {
+        bool cancel_called = False;
+    }
+
+    constructor(Future real) {
+        self.real = real;
+    }
+
+    auto get(timeout timeout_ms = 0) {
+        return real.get(timeout_ms);
+    }
+
+    bool isDone() {
+        return real.isDone();
+    }
+
+    bool isError() {
+        return real.isError();
+    }
+
+    bool cancel() {
+        cancel_called = True;
+        return real.cancel();
     }
 }

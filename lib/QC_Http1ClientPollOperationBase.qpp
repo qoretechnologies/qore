@@ -108,6 +108,10 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         response_body->deref(xsink);
         response_body = nullptr;
     }
+    if (protocol_switched_listener) {
+        protocol_switched_listener->deref(xsink);
+        protocol_switched_listener = nullptr;
+    }
     connection_priv = nullptr;  // raw pointer — Qore data member (connection_ref) holds the ref
     if (current_op) {
         current_op->deref(xsink);
@@ -127,6 +131,7 @@ const char* Http1ClientPollOperationPriv::getStateImpl() const {
         case H1State::PROXY_CONNECT_RECV: return "proxy_connect_recv";
         case H1State::READING: return "reading";
         case H1State::WAIT_READ: return "wait_read";
+        case H1State::PROTOCOL_SWITCHED: return "protocol_switched";
         case H1State::CLOSED: return "closed";
         default: return "unknown";
     }
@@ -175,6 +180,9 @@ QoreHashNode* Http1ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
             case H1State::WAIT_READ:
                 h1_state.store(H1State::READING, std::memory_order_release);
                 continue;
+
+            case H1State::PROTOCOL_SWITCHED:
+                return handleReading(xsink);
 
             case H1State::CLOSED: {
                 // If an error caused the close, raise it so the controller
@@ -438,6 +446,8 @@ QoreHashNode* Http1ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             return handleRecvChunkCrlf(xsink);
         case ReqState::RECV_BODY_CLOSE:
             return handleRecvBodyClose(xsink);
+        case ReqState::PROTOCOL_SWITCHED:
+            return handleProtocolSwitched(xsink);
     }
     setError("HTTP1-INTERNAL-ERROR", "unknown request sub-state", xsink);
     return nullptr;
@@ -759,6 +769,31 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             AutoLocker al(stream_lock);
             method = active_method;
         }
+
+        // 101 Switching Protocols: the HTTP framing layer is done;
+        // the socket transitions to raw bidirectional I/O (e.g., WebSocket).
+        if (response_status_code == 101) {
+            if (streaming_active_io) {
+                // Deliver the 101 response headers to the Channel so the
+                // stream handle caller can validate the upgrade.
+                dispatchStreamingHeaders(xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            } else {
+                // Non-streaming: dispatch as a normal response with no body
+                return dispatchResponse(xsink);
+            }
+            // Enter PROTOCOL_SWITCHED state — continuePoll() will now
+            // use separate send/recv ops for full-duplex raw I/O.
+            protocol_switched = true;
+            req_state = ReqState::PROTOCOL_SWITCHED;
+            h1_state.store(H1State::PROTOCOL_SWITCHED, std::memory_order_release);
+            ASYNC_IO_TRACE("H1 handleRecvHeader: 101 → PROTOCOL_SWITCHED\n");
+            releaseCurrentOp(xsink);
+            return handleProtocolSwitched(xsink);
+        }
+
         bool no_body = (method == "HEAD")
             || (response_status_code >= 100 && response_status_code < 200)
             || response_status_code == 204
@@ -1184,6 +1219,18 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvBodyClose(ExceptionSink* x
 
     // Read operation ended without goalReached (likely EOF)
     return streaming_active_io ? dispatchStreamingEnd(xsink) : dispatchResponse(xsink);
+}
+
+// --- Protocol-switched (101) raw bidirectional handler ---
+
+QoreHashNode* Http1ClientPollOperationPriv::handleProtocolSwitched(ExceptionSink* xsink) {
+    // After 101 Switching Protocols, the H1 poll op's job is done.
+    // The socket will be extracted by the WebSocket client and used with
+    // WebSocketClientPollOperationBase (the existing C++ WS frame codec).
+    // Return nullptr to signal goal reached — the controller will deliver
+    // the result and the caller can extract the socket.
+    ASYNC_IO_TRACE("H1 PROTOCOL_SWITCHED: goal reached, socket ready for extraction\n");
+    return nullptr;
 }
 
 // --- Response dispatch ---
@@ -1770,6 +1817,25 @@ bool Http1ClientPollOperationBase::isClosed() [flags=RET_VALUE_ONLY] {
 */
 bool Http1ClientPollOperationBase::isReady() [flags=RET_VALUE_ONLY] {
     return priv->isReady();
+}
+
+//! Returns True if the connection is in protocol-switched state (after 101)
+/** @return True if the HTTP protocol has been switched (e.g., WebSocket upgrade)
+    @since %Qore 2.3
+*/
+bool Http1ClientPollOperationBase::isProtocolSwitched() [flags=RET_VALUE_ONLY] {
+    return priv->isProtocolSwitched();
+}
+
+//! Registers a listener object for protocol-switched data notifications
+/** The listener's \c notifyIo() method will be called from the I/O thread
+    whenever raw data is dispatched in PROTOCOL_SWITCHED state (after 101).
+
+    @param listener an object with a \c notifyIo() method
+    @since %Qore 2.3
+*/
+nothing Http1ClientPollOperationBase::setProtocolSwitchedListener(object listener) {
+    priv->setProtocolSwitchedListener(const_cast<QoreObject*>(listener), xsink);
 }
 
 //! Returns True if an error occurred

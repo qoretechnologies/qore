@@ -2061,6 +2061,9 @@ public class HttpAsyncSocketIoController {
                     }
                 } else if (h3op.isClosed() || h3op.hasError()) {
                     log(LoggerLevel::DEBUG, "HTTP/3 connection closed: %y", uh);
+                    # Notify stream listeners (e.g., WebSocketStreamProcessor) so
+                    # handler threads blocked in stream_done.waitForZero() wake up
+                    h3op.notifyStreamListenersClosed();
                     {
                         AutoWriteLock al(m);
                         remove connections{uh};
@@ -3185,6 +3188,12 @@ public class HttpAsyncSocketIoController {
         }
 
         signalPersistentQueuesForConnection(uh);
+
+        # Notify all registered stream listeners (e.g., WebSocketStreamProcessor)
+        # that the connection is dead. Without this, handler threads block forever
+        # in stream_done.waitForZero() because no onStreamData() fires for a
+        # closed connection.
+        h2op.notifyStreamListenersClosed();
 
         {
             AutoWriteLock al(m);

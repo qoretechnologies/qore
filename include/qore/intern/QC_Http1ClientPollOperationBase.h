@@ -67,6 +67,7 @@ public:
         PROXY_CONNECT_RECV,
         READING,
         WAIT_READ,
+        PROTOCOL_SWITCHED,  //!< 101 Switching Protocols received; raw bidirectional I/O
         CLOSED
     };
 
@@ -79,7 +80,8 @@ public:
         RECV_CHUNK_SIZE,
         RECV_CHUNK_DATA,
         RECV_CHUNK_CRLF,
-        RECV_BODY_CLOSE
+        RECV_BODY_CLOSE,
+        PROTOCOL_SWITCHED   //!< raw bidirectional data after 101
     };
 
     //! Creates the poll operation with an initial TCP connect operation
@@ -93,7 +95,10 @@ public:
     // --- SocketPollOperationBase overrides ---
 
     DLLLOCAL bool goalReached() const override {
-        return false;  // long-running serial connection
+        // Long-running serial connection — never "done" during normal HTTP.
+        // After 101 Switching Protocols, the HTTP layer IS done — the socket
+        // transfers to a WebSocket poll operation.
+        return protocol_switched;
     }
 
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;
@@ -119,7 +124,22 @@ public:
 
     DLLLOCAL bool isReady() const {
         H1State s = h1_state.load(std::memory_order_acquire);
-        return s == H1State::READING || s == H1State::WAIT_READ;
+        return s == H1State::READING || s == H1State::WAIT_READ
+            || s == H1State::PROTOCOL_SWITCHED;
+    }
+
+    DLLLOCAL bool isProtocolSwitched() const {
+        return h1_state.load(std::memory_order_acquire) == H1State::PROTOCOL_SWITCHED;
+    }
+
+    DLLLOCAL void setProtocolSwitchedListener(QoreObject* listener, ExceptionSink* xsink) {
+        if (protocol_switched_listener) {
+            protocol_switched_listener->deref(xsink);
+        }
+        if (listener) {
+            listener->ref();
+        }
+        protocol_switched_listener = listener;
     }
 
     DLLLOCAL bool hasError() const {
@@ -213,6 +233,9 @@ private:
     //! Whether the current request is in streaming mode (copied from shared state)
     bool streaming_active_io = false;
 
+    //! True after a 101 Switching Protocols response has been received
+    bool protocol_switched = false;
+
     //! Timestamp (epoch microseconds) when recv-header started on a reused
     //! connection, or 0 if stale detection is inactive.
     int64_t stale_detect_start_us = 0;
@@ -248,6 +271,13 @@ private:
     //! Error info (ref'd or nullptr)
     QoreHashNode* error_info = nullptr;
 
+    //! Protocol-switched notifier object (ref'd or nullptr)
+    /** Called from the I/O thread after raw data is dispatched in
+        PROTOCOL_SWITCHED state.  Used by WebSocketClientHcioPollOp to
+        trigger drainAndParseFrames() when data arrives.
+    */
+    QoreObject* protocol_switched_listener = nullptr;
+
     static constexpr int MAX_EMPTY_READS = 100;
     static constexpr size_t STREAMING_CHUNK_SIZE = 16384;
 
@@ -279,6 +309,7 @@ private:
     DLLLOCAL QoreHashNode* handleRecvChunkData(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvChunkCrlf(ExceptionSink* xsink);
     DLLLOCAL QoreHashNode* handleRecvBodyClose(ExceptionSink* xsink);
+    DLLLOCAL QoreHashNode* handleProtocolSwitched(ExceptionSink* xsink);
 
     // Response dispatch
     DLLLOCAL QoreHashNode* dispatchResponse(ExceptionSink* xsink);

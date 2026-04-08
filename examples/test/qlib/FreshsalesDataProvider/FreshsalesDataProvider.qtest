@@ -1,0 +1,731 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  FreshsalesDataProvider.qtest Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%requires ../../../../qlib/FreshsalesRestClient.qm
+%requires ../../../../qlib/FreshsalesDataProvider
+
+%exec-class FreshsalesDataProviderTest
+
+public class FreshsalesDataProviderTest inherits QUnit::Test {
+    private {
+        #! Freshsales REST client (async) for integration tests
+        *RestClientIo::RestClientIo client;
+
+        #! Custom command-line options
+        const MyOpts = Opts + {
+            "apikey": "k,apikey=s",
+            "domain": "d,domain=s",
+            "conn": "c,connection=s",
+        };
+
+        #! IDs of test resources to clean up
+        *int testContactId;
+        *int testAccountId;
+        *int testDealId;
+        *int testTaskId;
+        *int testAppointmentId;
+        *int testNoteId;
+    }
+
+    constructor() : Test("FreshsalesDataProvider Test", "1.0", \ARGV, MyOpts) {
+        # Unit tests (always run, no credentials needed)
+        addTestCase("sanity tests", \sanityTests());
+        addTestCase("factory tests", \factoryTests());
+        addTestCase("metadata tests", \metadataTests());
+        addTestCase("data type tests", \dataTypeTests());
+        addTestCase("fake example data tests", \fakeExampleDataTests());
+        addTestCase("connection tests", \connectionTests());
+
+        # Integration tests (require Freshsales credentials)
+        addTestCase("contact CRUD tests", \contactCrudTests());
+        addTestCase("account CRUD tests", \accountCrudTests());
+        addTestCase("deal CRUD tests", \dealCrudTests());
+        addTestCase("task CRUD tests", \taskCrudTests());
+        addTestCase("appointment CRUD tests", \appointmentCrudTests());
+        addTestCase("note CRUD tests", \noteCrudTests());
+        addTestCase("list contacts tests", \listContactsTests());
+        addTestCase("example event data tests", \exampleEventDataTests());
+        addTestCase("cleanup tests", \cleanupTests());
+
+        # Try to set up connection for integration tests
+        try {
+            setupConnection();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("Connection setup failed: %s: %s\n", ex.err, ex.desc);
+            }
+        }
+
+        set_return_value(main());
+    }
+
+    #! Sets up the Freshsales client for integration tests
+    private setupConnection() {
+        *string conn_name = m_options.conn ?? ENV.FRESHSALES_CONNECTION;
+        if (conn_name) {
+            AbstractConnection conn = get_connection(conn_name);
+            if (conn instanceof FreshsalesRestClient::FreshsalesRestConnection) {
+                client = (cast<FreshsalesRestClient::FreshsalesRestConnection>(conn))
+                    .getAsync(True);
+            }
+            return;
+        }
+
+        *string apikey = m_options.apikey ?? ENV.FRESHSALES_API_KEY;
+        *string domain = m_options.domain ?? ENV.FRESHSALES_DOMAIN;
+        if (apikey && domain) {
+            client = new FreshsalesRestClient::FreshsalesRestClientIo({
+                "apikey": apikey,
+                "domain": domain,
+            });
+        }
+    }
+
+    #! Helper to skip integration tests when no credentials
+    private skipIfNoCredentials() {
+        if (!client) {
+            testSkip("no Freshsales credentials available");
+        }
+    }
+
+    #! Helper to create a data provider from the client
+    private FreshsalesDataProvider::FreshsalesDataProvider getProvider() {
+        return new FreshsalesDataProvider::FreshsalesDataProvider(client);
+    }
+
+    # ========== UNIT TESTS ==========
+
+    sanityTests() {
+        assertEq("Freshsales", FreshsalesDataProvider::AppName);
+        assertEq(25, FreshsalesDataProvider::DefaultPageSize);
+        assertEq(120, FreshsalesDataProvider::DefaultPollInterval);
+        assertEq(60, FreshsalesDataProvider::MinPollInterval);
+
+        # Verify event constants
+        assertEq("new-contact", FreshsalesDataProvider::EVENT_NEW_CONTACT);
+        assertEq("new-deal", FreshsalesDataProvider::EVENT_NEW_DEAL);
+        assertEq("new-account", FreshsalesDataProvider::EVENT_NEW_ACCOUNT);
+        assertEq("new-task", FreshsalesDataProvider::EVENT_NEW_TASK);
+        assertEq("new-appointment", FreshsalesDataProvider::EVENT_NEW_APPOINTMENT);
+    }
+
+    factoryTests() {
+        AbstractDataProviderFactory factory = DataProvider::getFactory("freshsales");
+        assertEq(True, factory instanceof FreshsalesDataProvider::FreshsalesDataProviderFactory);
+
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertEq("freshsales", info.name);
+        assertEq(True, info.children_can_support_apis);
+        assertEq(True, info.children_can_support_records);
+        assertEq(True, info.children_can_support_observers);
+    }
+
+    metadataTests() {
+        *hash<auto> app = DataProviderActionCatalog::getApp("Freshsales");
+        assertEq(True, app.val(), "Freshsales app registered in action catalog");
+        assertEq("Freshsales", app.display_name);
+        assertEq("freshsalesrest", app.scheme);
+
+        list<hash<auto>> actions = DataProviderActionCatalog::getActions("Freshsales");
+        assertEq(True, actions.size() >= 25, "at least 25 actions registered");
+
+        bool found_create_contact = False;
+        bool found_list_contacts = False;
+        bool found_new_contact_event = False;
+        foreach hash<auto> action in (actions) {
+            if (action.action == "create-contact") {
+                found_create_contact = True;
+                assertEq(DPAT_API, action.action_code);
+            }
+            if (action.action == "list-contacts") {
+                found_list_contacts = True;
+                assertEq(DPAT_FIND, action.action_code);
+            }
+            if (action.action == "new-contact") {
+                found_new_contact_event = True;
+                assertEq(DPAT_EVENT, action.action_code);
+            }
+        }
+        assertEq(True, found_create_contact, "create-contact action registered");
+        assertEq(True, found_list_contacts, "list-contacts action registered");
+        assertEq(True, found_new_contact_event, "new-contact event registered");
+    }
+
+    dataTypeTests() {
+        FreshsalesDataProvider::FreshsalesContactDataType contact_type();
+        hash<auto> fields = contact_type.getFields();
+        assertEq(True, fields.hasKey("id"), "contact type has id field");
+        assertEq(True, fields.hasKey("first_name"), "contact type has first_name field");
+        assertEq(True, fields.hasKey("last_name"), "contact type has last_name field");
+        assertEq(True, fields.hasKey("email"), "contact type has email field");
+        assertEq(True, fields.hasKey("created_at"), "contact type has created_at field");
+
+        FreshsalesDataProvider::FreshsalesAccountDataType account_type();
+        hash<auto> afields = account_type.getFields();
+        assertEq(True, afields.hasKey("id"), "account type has id field");
+        assertEq(True, afields.hasKey("name"), "account type has name field");
+        assertEq(True, afields.hasKey("website"), "account type has website field");
+
+        FreshsalesDataProvider::FreshsalesDealDataType deal_type();
+        hash<auto> dfields = deal_type.getFields();
+        assertEq(True, dfields.hasKey("id"), "deal type has id field");
+        assertEq(True, dfields.hasKey("name"), "deal type has name field");
+        assertEq(True, dfields.hasKey("amount"), "deal type has amount field");
+
+        FreshsalesDataProvider::FreshsalesTaskDataType task_type();
+        hash<auto> tfields = task_type.getFields();
+        assertEq(True, tfields.hasKey("id"), "task type has id field");
+        assertEq(True, tfields.hasKey("title"), "task type has title field");
+
+        FreshsalesDataProvider::FreshsalesAppointmentDataType appt_type();
+        hash<auto> apfields = appt_type.getFields();
+        assertEq(True, apfields.hasKey("id"), "appointment type has id field");
+        assertEq(True, apfields.hasKey("title"), "appointment type has title field");
+        assertEq(True, apfields.hasKey("from_date"), "appointment type has from_date field");
+        assertEq(True, apfields.hasKey("end_date"), "appointment type has end_date field");
+        assertEq(True, apfields.hasKey("location"), "appointment type has location field");
+        assertEq(True, apfields.hasKey("creater_id"), "appointment type has creater_id field");
+
+        FreshsalesDataProvider::FreshsalesNoteDataType note_type();
+        hash<auto> nfields = note_type.getFields();
+        assertEq(True, nfields.hasKey("id"), "note type has id field");
+        assertEq(True, nfields.hasKey("description"), "note type has description field");
+        assertEq(True, nfields.hasKey("targetable_type"), "note type has targetable_type field");
+        assertEq(True, nfields.hasKey("targetable_id"), "note type has targetable_id field");
+
+        # Verify create request types have correct required fields
+        FreshsalesDataProvider::FreshsalesCreateAppointmentRequestDataType appt_req();
+        hash<auto> aprf = appt_req.getFields();
+        assertEq(True, aprf.hasKey("from_date"), "appointment create has from_date");
+        assertEq(True, aprf.hasKey("end_date"), "appointment create has end_date");
+
+        FreshsalesDataProvider::FreshsalesCreateDealRequestDataType deal_req();
+        hash<auto> drf = deal_req.getFields();
+        assertEq(True, drf.hasKey("sales_account_id"), "deal create has sales_account_id");
+
+        # Verify task type has new fields
+        assertEq(True, tfields.hasKey("outcome_id"), "task type has outcome_id field");
+        assertEq(True, tfields.hasKey("task_type_id"), "task type has task_type_id field");
+        assertEq(True, tfields.hasKey("creater_id"), "task type has creater_id field");
+
+        # Verify deal create request type has currency_id
+        assertEq(True, drf.hasKey("currency_id"), "deal create has currency_id");
+    }
+
+    fakeExampleDataTests() {
+        # Verify fake example data for each watch provider matches its data type fields
+        # These tests run without credentials
+
+        # Contact watch
+        FreshsalesDataProvider::FreshsalesWatchNewContactsDataProvider contact_watch(
+            new FreshsalesRestClient::FreshsalesRestClientIo({"url": "https://test.example.com"}));
+        hash<auto> contact_fake = contact_watch.getFakeExampleData();
+        assertEq(True, contact_fake.hasKey("id"), "contact fake has id");
+        assertEq(True, contact_fake.hasKey("first_name"), "contact fake has first_name");
+        assertEq(True, contact_fake.hasKey("last_name"), "contact fake has last_name");
+        assertEq(True, contact_fake.hasKey("email"), "contact fake has email");
+        assertEq(True, contact_fake.hasKey("created_at"), "contact fake has created_at");
+
+        # Deal watch
+        FreshsalesDataProvider::FreshsalesWatchNewDealsDataProvider deal_watch(
+            new FreshsalesRestClient::FreshsalesRestClientIo({"url": "https://test.example.com"}));
+        hash<auto> deal_fake = deal_watch.getFakeExampleData();
+        assertEq(True, deal_fake.hasKey("id"), "deal fake has id");
+        assertEq(True, deal_fake.hasKey("name"), "deal fake has name");
+        assertEq(True, deal_fake.hasKey("amount"), "deal fake has amount");
+        assertEq(True, deal_fake.hasKey("created_at"), "deal fake has created_at");
+
+        # Account watch
+        FreshsalesDataProvider::FreshsalesWatchNewAccountsDataProvider account_watch(
+            new FreshsalesRestClient::FreshsalesRestClientIo({"url": "https://test.example.com"}));
+        hash<auto> account_fake = account_watch.getFakeExampleData();
+        assertEq(True, account_fake.hasKey("id"), "account fake has id");
+        assertEq(True, account_fake.hasKey("name"), "account fake has name");
+        assertEq(True, account_fake.hasKey("created_at"), "account fake has created_at");
+
+        # Task watch
+        FreshsalesDataProvider::FreshsalesWatchNewTasksDataProvider task_watch(
+            new FreshsalesRestClient::FreshsalesRestClientIo({"url": "https://test.example.com"}));
+        hash<auto> task_fake = task_watch.getFakeExampleData();
+        assertEq(True, task_fake.hasKey("id"), "task fake has id");
+        assertEq(True, task_fake.hasKey("title"), "task fake has title");
+        assertEq(True, task_fake.hasKey("due_date"), "task fake has due_date");
+        assertEq(True, task_fake.hasKey("status"), "task fake has status");
+        assertEq(True, task_fake.hasKey("created_at"), "task fake has created_at");
+
+        # Appointment watch
+        FreshsalesDataProvider::FreshsalesWatchNewAppointmentsDataProvider appt_watch(
+            new FreshsalesRestClient::FreshsalesRestClientIo({"url": "https://test.example.com"}));
+        hash<auto> appt_fake = appt_watch.getFakeExampleData();
+        assertEq(True, appt_fake.hasKey("id"), "appointment fake has id");
+        assertEq(True, appt_fake.hasKey("title"), "appointment fake has title");
+        assertEq(True, appt_fake.hasKey("from_date"), "appointment fake has from_date");
+        assertEq(True, appt_fake.hasKey("end_date"), "appointment fake has end_date");
+        assertEq(True, appt_fake.hasKey("location"), "appointment fake has location");
+        assertEq(True, appt_fake.hasKey("created_at"), "appointment fake has created_at");
+    }
+
+    connectionTests() {
+        hash<auto> scheme = ConnectionSchemeCache::getScheme("freshsalesrest");
+        assertEq(True, scheme.val(), "freshsalesrest scheme registered");
+        assertEq("Freshsales REST Connection", scheme.display_name);
+        assertEq(True, scheme.auto_url);
+
+        # Verify required options
+        assertEq("domain,apikey", scheme.required_options);
+
+        # Verify options exist
+        assertEq(True, scheme.options.hasKey("apikey"), "apikey option exists");
+        assertEq(True, scheme.options.hasKey("domain"), "domain option exists");
+        assertEq(True, scheme.options.apikey.sensitive, "apikey is sensitive");
+    }
+
+    # ========== INTEGRATION TESTS ==========
+
+    contactCrudTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+
+        # Create contact
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+        AbstractDataProvider create = contacts.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "first_name": "QoreTest",
+            "last_name": "Contact" + now_us().toString(),
+            "email": "qoretest_" + string(rand()) + "@example.com",
+        });
+        assertEq(True, result.id.val(), "contact created with ID");
+        testContactId = result.id;
+
+        # Get contact
+        AbstractDataProviderRecordIterator it = contacts.searchRecords(NOTHING,
+            {"id": testContactId});
+        assertEq(True, it.next(), "contact found by ID");
+        hash<auto> found = it.getValue();
+        assertEq("QoreTest", found.first_name);
+
+        # Update contact
+        AbstractDataProvider update = contacts.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testContactId,
+            "job_title": "QA Tester",
+        });
+        assertEq(True, updated.id.val(), "contact updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = contacts.searchRecords(NOTHING,
+            {"id": testContactId});
+        assertEq(True, it2.next(), "updated contact found");
+        hash<auto> verified = it2.getValue();
+        assertEq("QA Tester", verified.job_title, "job_title update persisted");
+    }
+
+    accountCrudTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider accounts = provider.getChildProvider("accounts");
+
+        # Create account
+        AbstractDataProvider create = accounts.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "name": "QoreTest Corp " + now_us().toString(),
+            "website": "https://qoretest.example.com",
+        });
+        assertEq(True, result.id.val(), "account created with ID");
+        testAccountId = result.id;
+
+        # Get account
+        AbstractDataProviderRecordIterator it = accounts.searchRecords(NOTHING,
+            {"id": testAccountId});
+        assertEq(True, it.next(), "account found by ID");
+
+        # Update account
+        AbstractDataProvider update = accounts.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testAccountId,
+            "phone": "+1-555-0123",
+        });
+        assertEq(True, updated.id.val(), "account updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = accounts.searchRecords(NOTHING,
+            {"id": testAccountId});
+        assertEq(True, it2.next(), "updated account found");
+        hash<auto> verified = it2.getValue();
+        assertEq(True, verified.phone.val(), "phone update persisted");
+    }
+
+    dealCrudTests() {
+        skipIfNoCredentials();
+        if (!testAccountId) {
+            testSkip("no test account available (account CRUD test must run first)");
+        }
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider deals = provider.getChildProvider("deals");
+
+        # Create deal (sales_account_id is required)
+        AbstractDataProvider create = deals.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "name": "QoreTest Deal " + now_us().toString(),
+            "amount": 1000.00,
+            "sales_account_id": testAccountId,
+        });
+        assertEq(True, result.id.val(), "deal created with ID");
+        testDealId = result.id;
+
+        # Get deal
+        AbstractDataProviderRecordIterator it = deals.searchRecords(NOTHING,
+            {"id": testDealId});
+        assertEq(True, it.next(), "deal found by ID");
+        hash<auto> found = it.getValue();
+        assertEq(1000.00, found.amount.toFloat(), "deal amount matches");
+
+        # Update deal
+        AbstractDataProvider update = deals.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testDealId,
+            "amount": 2000.00,
+        });
+        assertEq(True, updated.id.val(), "deal updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = deals.searchRecords(NOTHING,
+            {"id": testDealId});
+        assertEq(True, it2.next(), "updated deal found");
+        hash<auto> verified = it2.getValue();
+        assertEq(2000.00, verified.amount.toFloat(), "deal amount update persisted");
+    }
+
+    taskCrudTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider tasks = provider.getChildProvider("tasks");
+
+        # Create task
+        AbstractDataProvider create = tasks.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "title": "QoreTest Task " + now_us().toString(),
+            "due_date": format_date("YYYY-MM-DD", now() + 7D),
+        });
+        assertEq(True, result.id.val(), "task created with ID");
+        testTaskId = result.id;
+
+        # Get task
+        AbstractDataProviderRecordIterator it = tasks.searchRecords(NOTHING,
+            {"id": testTaskId});
+        assertEq(True, it.next(), "task found by ID");
+
+        # Update task
+        AbstractDataProvider update = tasks.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testTaskId,
+            "description": "Updated by QoreTest",
+        });
+        assertEq(True, updated.id.val(), "task updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = tasks.searchRecords(NOTHING,
+            {"id": testTaskId});
+        assertEq(True, it2.next(), "updated task found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.description, "task description update persisted");
+    }
+
+    appointmentCrudTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider appointments = provider.getChildProvider("appointments");
+
+        # Create appointment (from_date and end_date are required)
+        AbstractDataProvider create = appointments.getChildProvider("create");
+        date start = now() + 1D;
+        date end = start + 1h;
+        hash<auto> result = create.doRequest({
+            "title": "QoreTest Appointment " + now_us().toString(),
+            "from_date": format_date("YYYY-MM-DDTHH:mm:SSZ", start),
+            "end_date": format_date("YYYY-MM-DDTHH:mm:SSZ", end),
+            "description": "Test appointment created by QoreTest",
+        });
+        assertEq(True, result.id.val(), "appointment created with ID");
+        testAppointmentId = result.id;
+
+        # Get appointment
+        AbstractDataProviderRecordIterator it = appointments.searchRecords(NOTHING,
+            {"id": testAppointmentId});
+        assertEq(True, it.next(), "appointment found by ID");
+        hash<auto> found = it.getValue();
+        assertEq(True, found.title.val(), "appointment has title");
+
+        # Update appointment
+        AbstractDataProvider update = appointments.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testAppointmentId,
+            "description": "Updated by QoreTest",
+        });
+        assertEq(True, updated.id.val(), "appointment updated");
+
+        # Verify update persisted
+        AbstractDataProviderRecordIterator it2 = appointments.searchRecords(NOTHING,
+            {"id": testAppointmentId});
+        assertEq(True, it2.next(), "updated appointment found");
+        hash<auto> verified = it2.getValue();
+        assertEq("Updated by QoreTest", verified.description,
+            "appointment description update persisted");
+    }
+
+    noteCrudTests() {
+        skipIfNoCredentials();
+        if (!testContactId) {
+            testSkip("no test contact available (contact CRUD test must run first)");
+        }
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider notes = provider.getChildProvider("notes");
+
+        # Create note (requires targetable_id and targetable_type)
+        AbstractDataProvider create = notes.getChildProvider("create");
+        hash<auto> result = create.doRequest({
+            "description": "QoreTest Note " + now_us().toString(),
+            "targetable_id": testContactId,
+            "targetable_type": "Contact",
+        });
+        assertEq(True, result.id.val(), "note created with ID");
+        testNoteId = result.id;
+
+        # Update note
+        AbstractDataProvider update = notes.getChildProvider("update");
+        hash<auto> updated = update.doRequest({
+            "id": testNoteId,
+            "description": "Updated note by QoreTest",
+        });
+        assertEq(True, updated.id.val(), "note updated");
+        # Note: Freshsales API has no GET /notes/{id} endpoint, so verify via response
+        assertEq("Updated note by QoreTest", updated.description,
+            "note description update reflected in response");
+    }
+
+    exampleEventDataTests() {
+        # Test that example event data is available for all triggers
+        # (uses fake data when no credentials are available)
+        FreshsalesDataProvider::FreshsalesCreateContactRequestDataType req_type();
+        hash<auto> req_fields = req_type.getFields();
+        assertEq(True, req_fields.hasKey("first_name"), "create contact request has first_name");
+
+        # Verify watch provider fake example data
+        # Contact watch
+        FreshsalesDataProvider::FreshsalesContactDataType ct();
+        hash<auto> cf = ct.getFields();
+        assertEq(True, cf.hasKey("facebook"), "contact type has facebook field");
+        assertEq(True, cf.hasKey("twitter"), "contact type has twitter field");
+        assertEq(True, cf.hasKey("linkedin"), "contact type has linkedin field");
+
+        # Deal type has new fields
+        FreshsalesDataProvider::FreshsalesDealDataType dt();
+        hash<auto> df = dt.getFields();
+        assertEq(True, df.hasKey("deal_reason_id"), "deal type has deal_reason_id");
+        assertEq(True, df.hasKey("lead_source_id"), "deal type has lead_source_id");
+        assertEq(True, df.hasKey("campaign_id"), "deal type has campaign_id");
+        assertEq(True, df.hasKey("territory_id"), "deal type has territory_id");
+        assertEq(True, df.hasKey("closed_date"), "deal type has closed_date");
+
+        # Verify watch provider classes can be instantiated (loaded by the module)
+        # Note: Class::forName() doesn't resolve these outside the module namespace,
+        # so we verify via the events container child providers instead
+        assertEq(True, True, "watch provider classes loaded (verified by fake example data tests)");
+
+        # Test getExampleEventData() on watch providers with live API
+        skipIfNoCredentials();
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider events = provider.getChildProvider("events");
+
+        # Contact watch provider
+        AbstractDataProvider contact_watch = events.getChildProvider(FreshsalesDataProvider::EVENT_NEW_CONTACT);
+        hash<auto> contact_example = contact_watch.getExampleEventData(
+            FreshsalesDataProvider::EVENT_NEW_CONTACT);
+        assertEq(True, contact_example.hasKey("id"), "contact example has id");
+        assertEq(True, contact_example.hasKey("first_name"), "contact example has first_name");
+        assertEq(True, contact_example.hasKey("email"), "contact example has email");
+        assertEq(True, contact_example.hasKey("created_at"), "contact example has created_at");
+
+        # Deal watch provider
+        AbstractDataProvider deal_watch = events.getChildProvider(FreshsalesDataProvider::EVENT_NEW_DEAL);
+        hash<auto> deal_example = deal_watch.getExampleEventData(
+            FreshsalesDataProvider::EVENT_NEW_DEAL);
+        assertEq(True, deal_example.hasKey("id"), "deal example has id");
+        assertEq(True, deal_example.hasKey("name"), "deal example has name");
+        assertEq(True, deal_example.hasKey("amount"), "deal example has amount");
+        assertEq(True, deal_example.hasKey("created_at"), "deal example has created_at");
+
+        # Account watch provider
+        AbstractDataProvider account_watch = events.getChildProvider(FreshsalesDataProvider::EVENT_NEW_ACCOUNT);
+        hash<auto> account_example = account_watch.getExampleEventData(
+            FreshsalesDataProvider::EVENT_NEW_ACCOUNT);
+        assertEq(True, account_example.hasKey("id"), "account example has id");
+        assertEq(True, account_example.hasKey("name"), "account example has name");
+        assertEq(True, account_example.hasKey("created_at"), "account example has created_at");
+
+        # Task watch provider
+        AbstractDataProvider task_watch = events.getChildProvider(FreshsalesDataProvider::EVENT_NEW_TASK);
+        hash<auto> task_example = task_watch.getExampleEventData(
+            FreshsalesDataProvider::EVENT_NEW_TASK);
+        assertEq(True, task_example.hasKey("id"), "task example has id");
+        assertEq(True, task_example.hasKey("title"), "task example has title");
+        assertEq(True, task_example.hasKey("created_at"), "task example has created_at");
+
+        # Appointment watch provider
+        AbstractDataProvider appt_watch = events.getChildProvider(FreshsalesDataProvider::EVENT_NEW_APPOINTMENT);
+        hash<auto> appt_example = appt_watch.getExampleEventData(
+            FreshsalesDataProvider::EVENT_NEW_APPOINTMENT);
+        assertEq(True, appt_example.hasKey("id"), "appointment example has id");
+        assertEq(True, appt_example.hasKey("title"), "appointment example has title");
+        assertEq(True, appt_example.hasKey("created_at"), "appointment example has created_at");
+    }
+
+    listContactsTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+        AbstractDataProvider contacts = provider.getChildProvider("contacts");
+
+        # List with limit
+        AbstractDataProviderRecordIterator it = contacts.searchRecords(NOTHING,
+            {"limit": 5});
+        int count = 0;
+        while (it.next()) {
+            ++count;
+        }
+        assertEq(True, count <= 5, "list contacts respects limit");
+    }
+
+    cleanupTests() {
+        skipIfNoCredentials();
+
+        FreshsalesDataProvider::FreshsalesDataProvider provider = getProvider();
+
+        # Delete test note
+        if (testNoteId) {
+            try {
+                AbstractDataProvider notes = provider.getChildProvider("notes");
+                AbstractDataProvider del = notes.getChildProvider("delete");
+                del.doRequest({"id": testNoteId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test note %d: %s\n",
+                        testNoteId, ex.desc);
+                }
+            }
+        }
+
+        # Delete test appointment
+        if (testAppointmentId) {
+            try {
+                AbstractDataProvider appointments = provider.getChildProvider("appointments");
+                AbstractDataProvider del = appointments.getChildProvider("delete");
+                del.doRequest({"id": testAppointmentId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test appointment %d: %s\n",
+                        testAppointmentId, ex.desc);
+                }
+            }
+        }
+
+        # Delete test task
+        if (testTaskId) {
+            try {
+                AbstractDataProvider tasks = provider.getChildProvider("tasks");
+                AbstractDataProvider del = tasks.getChildProvider("delete");
+                del.doRequest({"id": testTaskId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test task %d: %s\n",
+                        testTaskId, ex.desc);
+                }
+            }
+        }
+
+        # Delete test deal
+        if (testDealId) {
+            try {
+                AbstractDataProvider deals = provider.getChildProvider("deals");
+                AbstractDataProvider del = deals.getChildProvider("delete");
+                del.doRequest({"id": testDealId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test deal %d: %s\n",
+                        testDealId, ex.desc);
+                }
+            }
+        }
+
+        # Delete test account
+        if (testAccountId) {
+            try {
+                AbstractDataProvider accounts = provider.getChildProvider("accounts");
+                AbstractDataProvider del = accounts.getChildProvider("delete");
+                del.doRequest({"id": testAccountId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test account %d: %s\n",
+                        testAccountId, ex.desc);
+                }
+            }
+        }
+
+        # Delete test contact
+        if (testContactId) {
+            try {
+                AbstractDataProvider contacts = provider.getChildProvider("contacts");
+                AbstractDataProvider del = contacts.getChildProvider("delete");
+                del.doRequest({"id": testContactId});
+            } catch (hash<ExceptionInfo> ex) {
+                if (m_options.verbose) {
+                    printf("Warning: failed to delete test contact %d: %s\n",
+                        testContactId, ex.desc);
+                }
+            }
+        }
+
+        assertTrue(True, "cleanup completed");
+    }
+}

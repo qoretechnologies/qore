@@ -1276,6 +1276,15 @@ cargo install tree-sitter-cli@0.26.5
     - @ref freshbooksdataproviderintro "FreshBooksDataProvider" module
       - new module providing a data provider API for <a href="https://www.freshbooks.com/">FreshBooks</a> accounting and invoicing services
       - connection support with \c freshbooks:// URL scheme
+    - @ref freshsalesrestclientintro "FreshsalesRestClient" module
+      - new module providing a REST client for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM API
+      - supports API key token authentication
+      - provides FreshsalesRestConnection for connection management with \c freshsalesrest:// URL scheme
+    - @ref freshsalesdataproviderintro "FreshsalesDataProvider" module
+      - new module providing a data provider API for <a href="https://www.freshworks.com/crm/sales/">Freshsales</a> CRM
+      - supports contacts, accounts, deals, tasks, appointments, and notes
+      - includes polling-based triggers for new contacts, deals, and accounts
+      - connection support with \c freshsalesrest:// URL scheme
     - @ref generatordataproviderintro "GeneratorDataProvider" module
       - new module providing a data provider API for generating configurable test record streams for data
         pipeline testing with no external dependencies

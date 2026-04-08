@@ -61,6 +61,16 @@ public:
     //! Non-blocking check if the future was rejected
     DLLEXPORT bool isError() const;
 
+    //! Cancels the future if still pending
+    /** If the future is PENDING, transitions to REJECTED with "FUTURE-CANCELLED"
+        and wakes all waiting threads. If already resolved or rejected, returns false.
+
+        @return true if cancelled, false if already complete
+
+        @since Qore 2.4
+    */
+    DLLEXPORT bool cancel();
+
     //! Called in the destructor to clean up
     DLLEXPORT void destructor(ExceptionSink* xsink);
 

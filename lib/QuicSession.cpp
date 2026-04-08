@@ -2307,10 +2307,11 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
         auto it = streams_.find(stream_id);
         if (it != streams_.end()) {
             has_completed_streams_.store(!completed_streams_.empty(), std::memory_order_release);
-            if (it->second->connect_tunnel_active) {
-                // RFC 9220: CONNECT tunnel streams must stay in streams_ so that
-                // h3RecvDataCallback can detect is_connect and route tunnel data
-                // to connect_stream_data_.  Clone essential fields for the caller.
+            if (it->second->connect_tunnel_active || it->second->streaming) {
+                // CONNECT tunnel streams and streaming response streams must stay
+                // in streams_ for continued DATA accumulation.  Clone essential
+                // fields for the caller; move body and clear the original so the
+                // next DATA chunk starts fresh.
                 auto result = std::make_unique<QuicStreamInfo>();
                 result->stream_id = it->second->stream_id;
                 result->method = it->second->method;
@@ -2323,8 +2324,9 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
                 result->body_complete = it->second->body_complete;
                 result->connect_protocol = it->second->connect_protocol;
                 result->is_connect = it->second->is_connect;
-                result->connect_tunnel_active = true;
-                // Move body for incremental tunnel data delivery (client side)
+                result->connect_tunnel_active = it->second->connect_tunnel_active;
+                result->streaming = it->second->streaming;
+                // Move body for incremental data delivery (client side)
                 result->body = std::move(it->second->body);
                 it->second->body.clear();
                 return result;
@@ -2345,6 +2347,14 @@ bool QuicSession::hasCompletedStreams() const {
 void QuicSession::setHeadersOnlyMode(bool v) {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     headers_only_mode_ = v;
+}
+
+void QuicSession::setStreamStreaming(int64_t stream_id) {
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto it = streams_.find(stream_id);
+    if (it != streams_.end()) {
+        it->second->streaming = true;
+    }
 }
 
 std::unique_ptr<QuicStreamInfo> QuicSession::takeHeadersReadyStreamCopy() {
@@ -3510,6 +3520,23 @@ int QuicSession::h3RecvDataCallback(nghttp3_conn* /* conn */, int64_t stream_id,
                 session->stream_data_gen_.fetch_add(1, std::memory_order_release);
             }
             session->stream_data_cv_.notify_all();
+            return 0;
+        }
+
+        // Client-side streaming responses (SSE, etc.): incremental delivery
+        // to ChannelAction via completed_streams_ — same pattern as CONNECT
+        // tunnel (lines above).  Each DATA chunk is accumulated in body, then
+        // the stream is pushed to completed_streams_.  takeCompletedStream()
+        // moves the body and clears the original, keeping the stream in the
+        // map for the next chunk.
+        if (stream->streaming && !session->is_server_) {
+            stream->body.insert(stream->body.end(), data, data + datalen);
+            session->completed_streams_.push(stream_id);
+            session->has_completed_streams_.store(true, std::memory_order_release);
+            // Extend flow control
+            ngtcp2_conn_extend_max_stream_offset(session->conn_, stream_id,
+                                                  static_cast<uint64_t>(datalen));
+            ngtcp2_conn_extend_max_offset(session->conn_, static_cast<uint64_t>(datalen));
             return 0;
         }
 
