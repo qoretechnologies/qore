@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file Diff.qm Qore user module for generally useful routines
+#! @file Diff.qm Qore user module for comparing data
 
-/*  Diff.qm Copyright 2014 - 2024 Qore Technologies, s.r.o.
+/*  Diff.qm Copyright 2014 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,7 +28,7 @@
 %requires Util
 
 module Diff {
-    version = "1.0";
+    version = "1.1";
     desc    = "looking for differences between various data";
     author  = "Jiri Vaclavik <jiri.vaclavik@qoretechnologies.com>";
     url     = "http://qore.org";
@@ -41,7 +41,7 @@ module Diff {
 
     @section diffintro Diff Module Introduction
 
-    The %Diff module provides some routines for comparing data structures.
+    The %Diff module provides routines for comparing data structures and text.
 
     To use this module, use \c "%requires Diff" in your code.
 
@@ -49,107 +49,477 @@ module Diff {
 
     Functions:
     - @ref Diff::diff()
+    - @ref Diff::diff_data()
+    - @ref Diff::diff_data_text()
+    - @ref Diff::diff_stats()
+    - @ref Diff::diff_text()
+    - @ref Diff::diff_unified()
+
+    Hashdecls:
+    - @ref Diff::DiffInfo
+    - @ref Diff::DiffStats
 
     @section diffrelnotes Release Notes
 
-    @subsection diff_1_0
+    @subsection diff_1_1 Diff 1.1
+    - replaced the diff algorithm with the Myers diff algorithm for optimal
+      (shortest) edit scripts and better performance with scattered changes
+    - added @ref Diff::diff_data() for recursive structured data comparison
+    - added @ref Diff::diff_data_text() for human-readable data diff output
+    - added @ref Diff::diff_stats() for line-level change statistics
+    - added @ref Diff::diff_unified()
+
+    @subsection diff_1_0 Diff 1.0
     - the initial version of the Diff module
 */
 
 #! the Diff namespace contains all the objects in the Diff module
 public namespace Diff {
-    #! returns differences in two lists
+    #! returns differences in two lists using the Myers diff algorithm
     /** @par Example:
         @code{.py}
-list diff = diff((1, 2, 3, 4), (2, 3, 5));
+list<auto> d = diff((1, 2, 3, 4), (2, 3, 5));
         @endcode
-        @param old some list
-        @param neww another list
+
+        The return value is a list where equal elements appear as-is and changes
+        are represented as hashes with \c "d" (deleted from \a old) and \c "i"
+        (inserted from \a neww) keys containing lists of the respective elements.
+
+        @param old the original list
+        @param neww the modified list
+
+        @return a list of equal elements interspersed with change hashes
+
+        @note Uses the Myers diff algorithm which runs in O((N+M)D) time where
+        D is the edit distance, producing optimal (shortest) edit scripts.
     */
     public list<auto> sub diff(softlist<auto> old, softlist<auto> neww) {
-        list<auto> matrix = ();
-        int maxlen = 0;
-        int old_max;
-        int new_max;
-        if (!old.empty() && !neww.empty()) {
-            foreach int old_index in (xrange(0, old.size())) {
-                auto old_value = old[old_index];
-                list<auto> nkeys = select xrange(0, neww.size()), neww[$1] == old_value;
-                foreach int new_index in (nkeys) {
-                    matrix[old_index][new_index] = exists matrix[old_index - 1][new_index - 1] ? matrix[old_index - 1][new_index - 1] + 1 : 1;
-                    if (matrix[old_index][new_index] > maxlen) {
-                        maxlen = matrix[old_index][new_index];
-                        old_max = old_index + 1 - maxlen;
-                        new_max = new_index + 1 - maxlen;
-                    }
+        int n = old.size();
+        int m = neww.size();
+
+        if (n == 0 && m == 0) {
+            return ();
+        }
+        if (n == 0) {
+            return list({"d": (), "i": neww});
+        }
+        if (m == 0) {
+            return list({"d": old, "i": ()});
+        }
+
+        # Run the Myers diff algorithm
+        list<hash<auto>> trace = myers_trace(old, neww, n, m);
+        list<hash<auto>> edits = myers_backtrack(trace, old, neww, n, m);
+        return group_edits(edits);
+    }
+
+    #! Myers diff forward pass: compute trace of V arrays for backtracking
+    /** Each V array maps diagonal number (as string key) to the furthest x
+        position reached on that diagonal. The trace stores a snapshot of V
+        at the start of each round for use during backtracking.
+    */
+    list<hash<auto>> sub myers_trace(softlist<auto> old, softlist<auto> neww,
+            int n, int m) {
+        hash<auto> v = {"1": 0};
+        list<hash<auto>> trace = ();
+
+        for (int d = 0; d <= n + m; ++d) {
+            push trace, v;
+            hash<auto> nv = v;
+            for (int k = -d; k <= d; k += 2) {
+                string km1 = string(k - 1);
+                string kp1 = string(k + 1);
+                int x;
+                if (k == -d || (k != d && (v{km1} ?? -1) < (v{kp1} ?? -1))) {
+                    x = v{kp1} ?? 0;
+                } else {
+                    x = (v{km1} ?? 0) + 1;
+                }
+                int y = x - k;
+                while (x < n && y < m && old[x] == neww[y]) {
+                    ++x;
+                    ++y;
+                }
+                nv{string(k)} = x;
+                if (x >= n && y >= m) {
+                    return trace;
+                }
+            }
+            v = nv;
+        }
+        return trace;
+    }
+
+    #! Backtrack through Myers trace to recover the edit script
+    /** Walks the trace from the final round back to round 0, reconstructing
+        each edit operation (equal, insert, delete) in reverse order, then
+        reverses the result.
+    */
+    list<hash<auto>> sub myers_backtrack(list<hash<auto>> trace,
+            softlist<auto> old, softlist<auto> neww, int n, int m) {
+        int x = n;
+        int y = m;
+        list<hash<auto>> edits = ();
+
+        for (int d = trace.size() - 1; d >= 0; --d) {
+            hash<auto> tv = trace[d];
+            int k = x - y;
+            string km1 = string(k - 1);
+            string kp1 = string(k + 1);
+            int prev_k;
+            if (k == -d || (k != d && (tv{km1} ?? -1) < (tv{kp1} ?? -1))) {
+                prev_k = k + 1;
+            } else {
+                prev_k = k - 1;
+            }
+            int prev_x = tv{string(prev_k)} ?? 0;
+            int prev_y = prev_x - prev_k;
+
+            # Diagonal moves (equal elements)
+            while (x > prev_x && y > prev_y) {
+                --x;
+                --y;
+                push edits, {"t": "e", "v": old[x]};
+            }
+
+            if (d > 0) {
+                if (prev_k == k + 1) {
+                    # Insert (moved down)
+                    --y;
+                    push edits, {"t": "i", "v": neww[y]};
+                } else {
+                    # Delete (moved right)
+                    --x;
+                    push edits, {"t": "d", "v": old[x]};
                 }
             }
         }
-        if (old.empty() && neww.empty()) {
+
+        # Reverse since backtracking builds the list in reverse order
+        list<hash<auto>> result = ();
+        for (int i = edits.size() - 1; i >= 0; --i) {
+            push result, edits[i];
+        }
+        return result;
+    }
+
+    #! Group consecutive edit operations into the diff output format
+    /** Converts a flat edit script into the legacy format: equal elements
+        appear as-is, and consecutive delete/insert operations are grouped
+        into \c {d: [...], i: [...]} hashes.
+    */
+    list<auto> sub group_edits(list<hash<auto>> edits) {
+        list<auto> result = ();
+        int i = 0;
+        while (i < edits.size()) {
+            if (edits[i].t == "e") {
+                push result, edits[i].v;
+                ++i;
+            } else {
+                list<auto> dels = ();
+                list<auto> ins = ();
+                while (i < edits.size() && edits[i].t != "e") {
+                    if (edits[i].t == "d") {
+                        push dels, edits[i].v;
+                    } else {
+                        push ins, edits[i].v;
+                    }
+                    ++i;
+                }
+                push result, {"d": dels, "i": ins};
+            }
+        }
+        return result;
+    }
+
+    #! describes a single difference found by @ref diff_data()
+    /** @see diff_data()
+
+        @since Diff 1.1
+    */
+    public hashdecl DiffInfo {
+        #! dot-notation path to the changed element (e.g., \c "config.timeout", \c "items[2].name")
+        string path;
+        #! type of change: \c "added", \c "removed", or \c "changed"
+        string type;
+        #! the old value (\c NOTHING for \c "added" entries)
+        auto old_value;
+        #! the new value (\c NOTHING for \c "removed" entries)
+        auto new_value;
+    }
+
+    #! recursively compares two data values and returns a list of differences
+    /** Supports hashes, lists, and scalar values. Hashes are compared by key,
+        lists are compared element-by-element by index, and scalars are compared
+        by value.
+
+        @par Example:
+        @code{.py}
+hash<auto> old_config = {"host": "localhost", "port": 8080, "debug": True};
+hash<auto> new_config = {"host": "localhost", "port": 9090, "tls": True};
+list<hash<DiffInfo>> changes = diff_data(old_config, new_config);
+# changes = (
+#   {"path": "port", "type": "changed", "old_value": 8080, "new_value": 9090},
+#   {"path": "debug", "type": "removed", "old_value": True},
+#   {"path": "tls", "type": "added", "new_value": True},
+# )
+        @endcode
+
+        @param old the original data value
+        @param neww the modified data value
+        @param path the base path prefix for reported differences (default: empty string for root)
+
+        @return a list of @ref DiffInfo hashes describing each difference; empty list if values
+        are identical
+
+        @since Diff 1.1
+    */
+    public list<hash<DiffInfo>> sub diff_data(auto old, auto neww, string path = "") {
+        # Both NOTHING/NULL
+        if (!exists old && !exists neww) {
             return ();
         }
 
-        if (maxlen == 0) {
-            return list({'d': old, 'i': neww});
+        # One is NOTHING
+        if (!exists old) {
+            return (<DiffInfo>{"path": path, "type": "added", "new_value": neww},);
+        }
+        if (!exists neww) {
+            return (<DiffInfo>{"path": path, "type": "removed", "old_value": old},);
         }
 
-        list<auto> e1_old = slice(old, old_max != 0 ? range(0, old_max) : ());
-        list<auto> e1_new = slice(neww, new_max != 0 ? range(0, new_max) : ());
-        list<auto> e_eq   = slice(neww, maxlen > 0 ? range(new_max, new_max + maxlen) : ());
-        list<auto> e2_old = slice(old, old.size() > old_max + maxlen ? range(old_max + maxlen, old.size()) : ());
-        list<auto> e2_new = slice(neww, neww.size() > new_max + maxlen ? range(new_max + maxlen, neww.size()) : ());
-        return
-            diff(e1_old, e1_new)
-            + e_eq
-            + diff(e2_old, e2_new);
+        # Different types
+        if (old.typeCode() != neww.typeCode()) {
+            return (<DiffInfo>{"path": path, "type": "changed",
+                "old_value": old, "new_value": neww},);
+        }
+
+        # Both hashes
+        if (old.typeCode() == NT_HASH) {
+            return diff_data_hash(old, neww, path);
+        }
+
+        # Both lists
+        if (old.typeCode() == NT_LIST) {
+            return diff_data_list(old, neww, path);
+        }
+
+        # Scalars
+        if (old != neww) {
+            return (<DiffInfo>{"path": path, "type": "changed",
+                "old_value": old, "new_value": neww},);
+        }
+
+        return ();
     }
 
-    #! shows differences between two strings considering lines as elementary unit. This function clones standard unix diff
+    #! compares two hashes recursively and returns differences
+    list<hash<DiffInfo>> sub diff_data_hash(hash<auto> old, hash<auto> neww, string path) {
+        list<hash<DiffInfo>> result = ();
+
+        # Check keys in old
+        foreach string key in (keys old) {
+            string cp = path.empty() ? key : path + "." + key;
+            if (!neww.hasKey(key)) {
+                push result, <DiffInfo>{"path": cp, "type": "removed", "old_value": old{key}};
+            } else {
+                result += diff_data(old{key}, neww{key}, cp);
+            }
+        }
+
+        # Check for new keys
+        foreach string key in (keys neww) {
+            if (!old.hasKey(key)) {
+                string cp = path.empty() ? key : path + "." + key;
+                push result, <DiffInfo>{"path": cp, "type": "added", "new_value": neww{key}};
+            }
+        }
+
+        return result;
+    }
+
+    #! compares two lists element-by-element and returns differences
+    list<hash<DiffInfo>> sub diff_data_list(list<auto> old, list<auto> neww, string path) {
+        list<hash<DiffInfo>> result = ();
+        int max_len = old.size() > neww.size() ? old.size() : neww.size();
+
+        for (int i = 0; i < max_len; ++i) {
+            string cp = path.empty() ? sprintf("[%d]", i) : sprintf("%s[%d]", path, i);
+            if (i >= old.size()) {
+                push result, <DiffInfo>{"path": cp, "type": "added", "new_value": neww[i]};
+            } else if (i >= neww.size()) {
+                push result, <DiffInfo>{"path": cp, "type": "removed", "old_value": old[i]};
+            } else {
+                result += diff_data(old[i], neww[i], cp);
+            }
+        }
+
+        return result;
+    }
+
+    #! statistics from comparing two strings or diff results
+    /** @see diff_stats()
+
+        @since Diff 1.1
+    */
+    public hashdecl DiffStats {
+        #! number of lines/elements added
+        int added = 0;
+        #! number of lines/elements removed
+        int removed = 0;
+        #! number of lines/elements unchanged
+        int unchanged = 0;
+    }
+
+    #! returns statistics about the differences between two strings
     /** @par Example:
         @code{.py}
-string diff = diff_text(str1, str2);
+hash<DiffStats> stats = diff_stats("line1\nline2\nline3\n", "line1\nmodified\nline3\nnew\n");
+# stats = {added: 2, removed: 1, unchanged: 2}
         @endcode
-        @param s1 some string
-        @param s2 another string
+
+        @param s1 the original string
+        @param s2 the modified string
+
+        @return a @ref DiffStats hash with counts of added, removed, and unchanged lines
+
+        @since Diff 1.1
+    */
+    public hash<DiffStats> sub diff_stats(string s1, string s2) {
+        list<auto> lines1 = split("\n", s1);
+        list<auto> lines2 = split("\n", s2);
+        list<auto> results = diff(lines1, lines2);
+        return diff_stats_from_result(results);
+    }
+
+    #! returns statistics from a diff result list
+    /** @par Example:
+        @code{.py}
+list<auto> d = diff(old_list, new_list);
+hash<DiffStats> stats = diff_stats_from_result(d);
+        @endcode
+
+        @param results the return value from @ref diff()
+
+        @return a @ref DiffStats hash with counts of added, removed, and unchanged elements
+
+        @since Diff 1.1
+    */
+    public hash<DiffStats> sub diff_stats_from_result(list<auto> results) {
+        hash<DiffStats> stats();
+        foreach auto item in (results) {
+            if (item.typeCode() == NT_HASH) {
+                stats.removed += item.d.size();
+                stats.added += item.i.size();
+            } else {
+                ++stats.unchanged;
+            }
+        }
+        return stats;
+    }
+
+    #! formats diff_data() output as human-readable text
+    /** Produces a summary of changes with optional ANSI color output using
+        @ref Util::TerminalColor "TerminalColor".
+
+        @par Example:
+        @code{.py}
+hash<auto> old_cfg = {"host": "localhost", "port": 8080};
+hash<auto> new_cfg = {"host": "example.com", "port": 8080, "tls": True};
+printf("%s\n", diff_data_text(old_cfg, new_cfg));
+# Output:
+#   ~ host: "localhost" -> "example.com"
+#   + tls: True
+        @endcode
+
+        @param old the original data value
+        @param neww the modified data value
+        @param enable_color if @ref True "True", use ANSI colors when stdout is a terminal
+        (default: @ref True "True")
+
+        @return a formatted string showing all differences; empty string if values are identical
+
+        @since Diff 1.1
+    */
+    public string sub diff_data_text(auto old, auto neww, bool enable_color = True) {
+        list<hash<DiffInfo>> changes = diff_data(old, neww);
+        if (!changes) {
+            return "";
+        }
+
+        TerminalColor color(enable_color);
+        string output = "";
+        foreach hash<DiffInfo> c in (changes) {
+            string path_str = c.path.empty() ? "(root)" : c.path;
+            switch (c.type) {
+                case "added":
+                    output += color.green(sprintf("  + %s: %y", path_str, c.new_value)) + "\n";
+                    break;
+                case "removed":
+                    output += color.red(sprintf("  - %s: %y", path_str, c.old_value)) + "\n";
+                    break;
+                case "changed":
+                    output += color.yellow(sprintf("  ~ %s: %y -> %y", path_str,
+                        c.old_value, c.new_value)) + "\n";
+                    break;
+            }
+        }
+        return output;
+    }
+
+    #! shows differences between two strings considering lines as elementary unit
+    /** This function produces output in the standard Unix diff format.
+
+        @par Example:
+        @code{.py}
+string d = diff_text(str1, str2);
+        @endcode
+        @param s1 the original string
+        @param s2 the modified string
+
+        @return diff output in standard Unix diff format
     */
     public string sub diff_text(string s1, string s2) {
-        list lines1 = split("\n", s1);
-        list lines2 = split("\n", s2);
+        list<auto> lines1 = split("\n", s1);
+        list<auto> lines2 = split("\n", s2);
 
-        list results = diff(lines1, lines2);
-        string diff = '';
+        list<auto> results = diff(lines1, lines2);
+        string output = '';
 
-        int line1 = 1;
-        int line2 = 1;
-        foreach any line in (results) {
+        int old_pos = 1;
+        int new_pos = 1;
+        foreach auto line in (results) {
             if (line.type() == 'hash') {
-                list insert = line.i;
-                list del = line.d;
-                if (insert.size() && del.size()) {
-                    diff += line_range(line2, line2 + del.size() - 1) + 'c' + line_range(line1, line1 + insert.size() - 1) + "\n";
-                } else if (insert.size()) {
-                    diff += (line2 - 1) + "a" + line_range(line1, line1 + insert.size() - 1) + "\n";
+                list<auto> del = line.d;
+                list<auto> ins = line.i;
+                if (ins.size() && del.size()) {
+                    output += line_range(old_pos, old_pos + del.size() - 1) + 'c'
+                        + line_range(new_pos, new_pos + ins.size() - 1) + "\n";
+                } else if (ins.size()) {
+                    output += (old_pos - 1) + "a"
+                        + line_range(new_pos, new_pos + ins.size() - 1) + "\n";
                 } else if (del.size()) {
-                    diff += line_range(line2, line2 + del.size() - 1) + "d" + (line1 - 1) + "\n";
+                    output += line_range(old_pos, old_pos + del.size() - 1) + "d"
+                        + (new_pos - 1) + "\n";
                 }
 
                 if (del.size()) {
-                    diff += join("\n", map "< " + $1, del) + "\n";
+                    output += join("\n", map "< " + $1, del) + "\n";
                 }
-                if (insert.size() && del.size()) {
-                    diff += "---\n";
+                if (ins.size() && del.size()) {
+                    output += "---\n";
                 }
-                if (insert.size()) {
-                    diff += join("\n", map "> " + $1, insert) + "\n";
+                if (ins.size()) {
+                    output += join("\n", map "> " + $1, ins) + "\n";
                 }
-                line1 += insert.size();
-                line2 += del.size();
+                old_pos += del.size();
+                new_pos += ins.size();
             } else {
-                ++line1;
-                ++line2;
+                ++old_pos;
+                ++new_pos;
             }
         }
-        return diff;
+        return output;
     }
 
     string sub line_range(int from, int to) {
