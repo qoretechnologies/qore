@@ -53,6 +53,7 @@
 #include "qore/intern/qore_list_private.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_program_private.h"
+#include "qore/intern/QoreIR.h"
 
 typedef std::set<int64, std::greater<int64>> ind_set_t;
 
@@ -1105,6 +1106,189 @@ bool LValueHelper::getAsBool() const {
 double LValueHelper::getAsFloat() const {
     if (val) return val->getAsFloat();
     return qv->getAsFloat();
+}
+
+int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool for_remove) {
+    assert(num_steps > 0);
+
+    // Step 0: resolve root variable
+    const LVPathStep& root = steps[0];
+    switch (root.kind) {
+        case LVPathStepKind::LocalVar: {
+            auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            assert(lv);
+            if (lv->getLValue(*this, for_remove, false)) {
+                // issue #2891: clear object pointer on complex reference failure
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::ClosureVar: {
+            auto* lv = reinterpret_cast<const LocalVar*>(root.ref_ptr);
+            assert(lv);
+            ClosureVarValue* cvv = thread_get_runtime_closure_var(lv);
+            if (!cvv) {
+                cvv = thread_find_closure_var(root.name.c_str());
+            }
+            if (!cvv) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "cannot find closure variable '%s'", root.name.c_str());
+                return -1;
+            }
+            if (cvv->getLValue(*this, for_remove)) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::GlobalVar:
+        case LVPathStepKind::ThreadLocalVar: {
+            auto* var = reinterpret_cast<const Var*>(root.ref_ptr);
+            assert(var);
+            if (const_cast<Var*>(var)->getLValue(*this, for_remove)) {
+                clearPtr();
+                return -1;
+            }
+            break;
+        }
+        case LVPathStepKind::SelfMember: {
+            QoreObject* obj = runtime_get_stack_object();
+            if (!obj) {
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "no object context for self member access");
+                return -1;
+            }
+            ocvec.clear();
+            clearPtr();
+            if (qore_object_private::getLValue(*obj, root.name.c_str(), *this,
+                    runtime_get_class(), for_remove, vl.xsink)) {
+                // object already cleared above
+                return -1;
+            }
+            robj = qore_object_private::get(*obj);
+            ocvec.push_back(ObjCountRec(obj));
+            break;
+        }
+        case LVPathStepKind::StaticVar: {
+            auto* svar = reinterpret_cast<const StaticClassVarRefNode*>(root.ref_ptr);
+            if (svar) {
+                if (svar->getLValue(*this)) {
+                    clearPtr();
+                    return -1;
+                }
+            }
+            break;
+        }
+        default:
+            vl.xsink->raiseException("LVALUE-ERROR",
+                "invalid root step kind %d in lvalue path", (int)root.kind);
+            return -1;
+    }
+
+    if (*vl.xsink) {
+        return -1;
+    }
+
+    // Check if root resolved to a reference — if so, follow it via AST path
+    {
+        const ReferenceNode* ref = getReference();
+        if (ref) {
+            if (val) {
+                val = nullptr;
+            } else if (qv) {
+                qv = nullptr;
+            }
+            if (typeInfo) {
+                typeInfo = nullptr;
+            }
+            if (doLValue(ref, for_remove)) {
+                return -1;
+            }
+        }
+    }
+
+    // Steps 1..N: navigate hash/list members
+    for (uint32_t i = 1; i < num_steps; ++i) {
+        const LVPathStep& step = steps[i];
+        qore_type_t t = val ? val->getType() : qv->getType();
+        switch (step.kind) {
+            case LVPathStepKind::HashKeyConst: {
+                if (doHashLValue(t, step.name.c_str(), for_remove)) {
+                    return -1;
+                }
+                break;
+            }
+            case LVPathStepKind::HashKey: {
+                // Dynamic key — the caller must have set up the key string
+                // The key is passed as a string in step.name (resolved by the caller)
+                if (doHashLValue(t, step.name.c_str(), for_remove)) {
+                    return -1;
+                }
+                break;
+            }
+            case LVPathStepKind::ListIndex: {
+                // For list index, we need to ensure unique and access the element
+                if (t != NT_LIST) {
+                    if (for_remove) {
+                        return -1;
+                    }
+                    // create list if needed
+                    if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_LIST)) {
+                        vl.xsink->raiseException("LVALUE-ERROR",
+                            "cannot convert to list for index access");
+                        return -1;
+                    }
+                }
+                ensureUnique();
+                QoreListNode* l = getValue().get<QoreListNode>();
+                if (!l) {
+                    if (for_remove) {
+                        return -1;
+                    }
+                    l = new QoreListNode(autoTypeInfo);
+                    assignNodeIntern(l);
+                }
+                // step.slot_id holds the index value (set by caller from operand)
+                int64_t idx = step.slot_id;  // Temporary: index passed via slot_id
+                if (idx < 0) {
+                    idx = 0;
+                }
+                ocvec.push_back(ObjCountRec(l));
+                if (qore_list_private::get(*l)->getLValue(
+                        static_cast<size_t>(idx), *this, for_remove, vl.xsink)) {
+                    return -1;
+                }
+                break;
+            }
+            default:
+                vl.xsink->raiseException("LVALUE-ERROR",
+                    "invalid navigation step kind %d in lvalue path", (int)step.kind);
+                return -1;
+        }
+
+        if (*vl.xsink) {
+            return -1;
+        }
+
+        // Check for reference at this level too
+        const ReferenceNode* ref = getReference();
+        if (ref) {
+            if (val) {
+                val = nullptr;
+            } else if (qv) {
+                qv = nullptr;
+            }
+            if (typeInfo) {
+                typeInfo = nullptr;
+            }
+            if (doLValue(ref, for_remove)) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {

@@ -35,7 +35,7 @@ struct OpcodeInfo {
 };
 
 //! Registry of all IR opcodes (in enum ID order, accounting for removed IDs 134, 141, 142)
-constexpr OpcodeInfo OPCODE_REGISTRY[356] = {
+constexpr OpcodeInfo OPCODE_REGISTRY[361] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 2
@@ -392,12 +392,17 @@ constexpr OpcodeInfo OPCODE_REGISTRY[356] = {
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 353
     { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 354
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 355
+    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", false, false, false, false }, // 356
+    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", false, false, false, false }, // 357
+    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", false, false, false, false }, // 358
+    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", false, false, false, false }, // 359
+    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", false, false, false, false }, // 360
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 356,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 356"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 361,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 361"
 );
 
 //! ============================================================================

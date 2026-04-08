@@ -570,7 +570,15 @@ enum class QoreIROpcode : uint16_t {
     //! Like HashKeyStore but key is a pre-evaluated IR value instead of constant string
     HashKeyStoreDynamic = 355,
 
-    // NOTE: When adding new opcodes, assign the next sequential ID (356, 357, ...)
+    //! Lvalue path operations — structured path replaces AST EXPR_TREE for lvalue access
+    //! All use LValueHelper::navigatePath() for correct locking/COW/DGC/deferred-deref
+    LValuePathAssign    = 356,  //!< lvalue = val (simple assignment via path)
+    LValuePathCompound  = 357,  //!< lvalue OP= val (compound assignment: +=, -=, *=, /=, etc.)
+    LValuePathUnary     = 358,  //!< unary lvalue op: ++, --, remove, delete, shift, pop, trim, chomp
+    LValuePathBinaryMut = 359,  //!< binary mutation: push, unshift, regex subst, transliterate
+    LValuePathTernary   = 360,  //!< ternary: splice, extract
+
+    // NOTE: When adding new opcodes, assign the next sequential ID (361, 362, ...)
     // QORE_IR_MAX_OPCODE is derived automatically from the last enum value below.
 };
 
@@ -578,8 +586,8 @@ enum class QoreIROpcode : uint16_t {
 //! NOTE: Both QoreIRInterpreter.cpp and QoreIRToLLVM.cpp have matching
 //! static_assert guards that will break when this value changes, forcing
 //! review of their dispatch switches.
-constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::HashKeyStoreDynamic);
-static_assert(QORE_IR_MAX_OPCODE == 355, "QORE_IR_MAX_OPCODE changed — update this assertion and "
+constexpr uint16_t QORE_IR_MAX_OPCODE = static_cast<uint16_t>(QoreIROpcode::LValuePathTernary);
+static_assert(QORE_IR_MAX_OPCODE == 360, "QORE_IR_MAX_OPCODE changed — update this assertion and "
     "verify binary format compatibility");
 
 //! Include the central opcode registry (must come after QoreIROpcode enum definition)
@@ -977,6 +985,103 @@ public:
     // operands[0] = hash value (from LoadLocal on container)
     // operands[1] = new element value to store
     // operands[2] = key value (converted to string at runtime)
+};
+
+//! ============================================================================
+//! Lvalue Path Types — structured encoding of lvalue navigation for IR
+//! ============================================================================
+
+//! Kind of step in an lvalue navigation path
+enum class LVPathStepKind : uint8_t {
+    LocalVar       = 0,  //!< Direct local variable (no lock for simple locals)
+    ClosureVar     = 1,  //!< Closure-captured variable (needs rml write lock)
+    GlobalVar      = 2,  //!< Global variable (needs rwl write lock)
+    ThreadLocalVar = 3,  //!< Thread-local global variable (no lock)
+    SelfMember     = 4,  //!< Object member via self (needs object lock + handoff)
+    StaticVar      = 5,  //!< Static class variable (needs rwl write lock)
+    HashKeyConst   = 6,  //!< Navigate hash by constant string key
+    HashKey        = 7,  //!< Navigate hash by dynamic key (IR operand)
+    ListIndex      = 8,  //!< Navigate list by index (IR operand)
+};
+
+//! A single step in an lvalue navigation path
+struct LVPathStep {
+    LVPathStepKind kind;
+
+    // Root step references (used for LocalVar/ClosureVar/GlobalVar/ThreadLocalVar/StaticVar)
+    const void* ref_ptr = nullptr;  //!< LocalVar*/Var*/QoreVarInfo* (JIT mode, null for AOT)
+    uint32_t slot_id = UINT32_MAX;  //!< AOT slot index for this variable
+
+    // Name for named steps (SelfMember, HashKeyConst, ClosureVar name, GlobalVar name, etc.)
+    std::string name;
+
+    // Operand index for dynamic navigation (HashKey, ListIndex)
+    // References an operand in the instruction's operands vector
+    uint32_t operand_idx = UINT32_MAX;
+
+    // Type info for type checking at this step
+    const QoreTypeInfo* type_info = nullptr;
+};
+
+//! Sub-operation type for LValuePathCompound
+enum class LVCompoundOp : uint8_t {
+    AddAssign = 0, SubAssign, MulAssign, DivAssign, ModAssign,
+    AndAssign, OrAssign, XorAssign, ShlAssign, ShrAssign,
+};
+
+//! Sub-operation type for LValuePathUnary
+enum class LVUnaryOp : uint8_t {
+    PreInc = 0, PreDec, PostInc, PostDec,
+    Remove, Delete, Shift, Pop, Trim, Chomp,
+};
+
+//! Sub-operation type for LValuePathBinaryMut
+enum class LVBinaryMutOp : uint8_t {
+    Push = 0, Unshift, RegexSubst, Transliterate,
+};
+
+//! Sub-operation type for LValuePathTernary
+enum class LVTernaryOp : uint8_t {
+    Splice = 0, Extract,
+};
+
+//! Lvalue path instruction — replaces AST-based StoreLValue/AddAssignLValue/etc.
+//! The path encodes the lvalue navigation as structured steps instead of an AST
+//! expression tree, enabling compact AOT serialization (no EXPR_TREE blob).
+//! At runtime, LValueHelper::navigatePath() walks the steps to acquire locks,
+//! handle COW, and set up the lvalue target using the same protocol as doLValue().
+class QoreIRLValuePathInstruction : public QoreIRInstruction {
+public:
+    QoreIRLValuePathInstruction(QoreIROpcode op)
+            : QoreIRInstruction(op) {
+    }
+
+    std::vector<LVPathStep> path;  //!< Root step + navigation steps
+
+    //! For LValuePathAssign
+    bool weak = false;             //!< Weak (:=) assignment
+
+    //! For LValuePathCompound
+    LVCompoundOp compound_op = LVCompoundOp::AddAssign;
+
+    //! For LValuePathUnary
+    LVUnaryOp unary_op = LVUnaryOp::PreInc;
+
+    //! For LValuePathBinaryMut
+    LVBinaryMutOp binary_mut_op = LVBinaryMutOp::Push;
+
+    //! For LValuePathTernary
+    LVTernaryOp ternary_op = LVTernaryOp::Splice;
+
+    //! For RegexSubst/Transliterate — pattern info
+    const QoreValue pattern_expr;   //!< Regex/transliteration pattern (for runtime eval)
+
+    // Operands layout depends on opcode:
+    // LValuePathAssign:    operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathCompound:  operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathUnary:     dynamic key/index operands only (no RHS)
+    // LValuePathBinaryMut: operands[0] = RHS value; dynamic key/index operands follow
+    // LValuePathTernary:   operands[0..2] = offset, length, replacement; dynamic key/index follow
 };
 
 //! List index access instruction - loads list[index] directly (no AST delegation)

@@ -100,6 +100,8 @@ DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& l
 class LValueHelper;
 class LValueRemoveHelper;
 class RSetHelper;
+struct LVPathStep;
+enum class LVPathStepKind : uint8_t;
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {
@@ -466,6 +468,13 @@ public:
     DLLLOCAL void saveTempRef(QoreValue& n);
 
     DLLLOCAL int doLValue(const QoreValue& exp, bool for_remove);
+
+    //! Navigate an lvalue using a structured path (IR-based alternative to AST-based doLValue)
+    //! @param steps array of LVPathStep describing the navigation
+    //! @param num_steps number of steps in the array
+    //! @param for_remove true if navigating for a remove operation
+    //! @return 0 on success, -1 on error (exception raised in vl.xsink)
+    DLLLOCAL int navigatePath(const struct LVPathStep* steps, uint32_t num_steps, bool for_remove);
 
     DLLLOCAL int doLValue(const ReferenceNode* ref, bool for_remove);
     DLLLOCAL int doLValue(const QoreValue& exp, RuntimeConfig& rc, bool for_remove);
