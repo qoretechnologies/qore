@@ -853,18 +853,22 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     if (!var) {
         return;
     }
-    // Use the thread-local cvstack lookup (by name) to find the topmost closure
-    // variable, which is the current function's own variable.  This is critical
-    // when a function with closure-use variables is called from within a closure:
-    // thread_get_runtime_closure_var() would return the calling closure's variable
-    // (wrong scope), while thread_try_find_closure_var() returns the current function's
-    // own cvstack variable (correct scope).
-    // NOTE: Use thread_try_find_closure_var() (not thread_find_closure_var()) because
-    // closures running on background threads may not have the variable on the cvstack —
-    // it may only exist in the ThreadSafeLocalVarRuntimeEnvironment.
-    ClosureVarValue* cv = thread_try_find_closure_var(var->getName());
-    if (!cv) {
+    // When executing inside a closure body (closure_rt_env is set), prefer the
+    // closure's captured variable (from rtenv) over the cvstack. The cvstack may
+    // have entries from an enclosing recursive call that shadow the closure's
+    // captured variable. When NOT inside a closure body, use the cvstack to find
+    // the current function's own variable.
+    ClosureVarValue* cv = nullptr;
+    if (thread_has_runtime_closure_env()) {
+        // Inside closure body: prefer the closure's captured variable binding
         cv = thread_try_get_runtime_closure_var(var);
+    }
+    if (!cv) {
+        // Regular function body or closure variable not in rtenv: use cvstack
+        cv = thread_try_find_closure_var(var->getName());
+        if (!cv) {
+            cv = thread_try_get_runtime_closure_var(var);
+        }
     }
     if (!cv) {
         // Closure variable not found — fall back to local stack assignment.
@@ -3439,16 +3443,6 @@ load_local_done:
             case QoreIROpcode::LoadClosure: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
                 QoreValue out;
-                static bool debug_closure = [] {
-                    const char* debug_env = getenv("QORE_IR_DEBUG");
-                    return debug_env && strstr(debug_env, "closure");
-                }();
-                if (debug_closure) {
-                    fprintf(stderr, "[CLOSURE-LOAD] var='%s', has_operands=%d, has_closure=%d\n",
-                            local_inst->local ? local_inst->local->getName() : "<unknown>",
-                            (int)!inst->operands.empty(), (int)(closure != nullptr));
-                    fflush(stderr);
-                }
                 if (!inst->operands.empty() && closure) {
                     QoreValue idx_val = getIRValue(values, inst->operands[0]);
                     int64 idx = idx_val.getAsBigInt();
@@ -3478,42 +3472,23 @@ load_local_done:
                                 locals_instantiated[local_inst->slot_id] = true;
                             }
                         }
-                        // Read closure variable: prefer cvstack (topmost = current
-                        // function's own variable) over runtime closure env (which
-                        // may point to the calling closure's variable in recursive
-                        // scenarios).
-                        static bool debug_closure = [] {
-                            const char* debug_env = getenv("QORE_IR_DEBUG");
-                            return debug_env && strstr(debug_env, "closure");
-                        }();
-                        const char* var_name = local_inst->local->getName();
-                        if (debug_closure) {
-                            fprintf(stderr, "[CLOSURE-LOOKUP-ATTEMPT] Trying to find var='%s' in cvstack\n", var_name);
-                            fflush(stderr);
-                        }
-                        // NOTE: Use thread_try_find_closure_var() (not thread_find_closure_var())
-                        // because closures running on background threads may not have the
-                        // variable on the cvstack — it may only exist in the
-                        // ThreadSafeLocalVarRuntimeEnvironment (accessed via
-                        // thread_get_runtime_closure_var).
-                        ClosureVarValue* cv = thread_try_find_closure_var(var_name);
-                        if (!cv) {
-                            if (debug_closure) {
-                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-FAILED] thread_try_find_closure_var returned NULL for '%s', trying thread_get_runtime_closure_var\n", var_name);
-                                fflush(stderr);
-                            }
+                        // When executing inside a closure body (runtime closure env
+                        // is set), prefer the closure's captured variable binding
+                        // (rtenv) over the cvstack.  ensureLocalInstantiated() may
+                        // have pushed a new (empty) CVV that shadows the captured
+                        // one.  When NOT in a closure body, prefer the cvstack
+                        // (topmost = current function's own variable).
+                        ClosureVarValue* cv = nullptr;
+                        if (thread_has_runtime_closure_env()) {
                             cv = thread_try_get_runtime_closure_var(local_inst->local);
-                        } else {
-                            if (debug_closure) {
-                                fprintf(stderr, "[CLOSURE-LOOKUP-CVSTACK-SUCCESS] Found '%s' in cvstack\n", var_name);
-                                fflush(stderr);
+                        }
+                        if (!cv) {
+                            cv = thread_try_find_closure_var(local_inst->local->getName());
+                            if (!cv) {
+                                cv = thread_try_get_runtime_closure_var(local_inst->local);
                             }
                         }
                         if (cv) {
-                            if (debug_closure) {
-                                fprintf(stderr, "[CLOSURE-LOAD-SUCCESS] Evaluating found closure var '%s'\n", var_name);
-                                fflush(stderr);
-                            }
                             QoreValue val = cv->eval(xsink);
                             if (xsink && *xsink) {
                                 cleanupValues(values, cleanup, xsink, true, cleanup_log);
