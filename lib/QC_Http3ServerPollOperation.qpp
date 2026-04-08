@@ -963,3 +963,28 @@ list<string> Http3ServerPollOperation::getAndClearDataReadyStreams() [flags=RET_
     }
     return rv.release();
 }
+
+//! Notifies all registered stream listeners that the connection is closed
+/** Called when the H3 connection dies. Each listener's notifyIo() detects
+    the closed stream context and cleans up, unblocking handler threads.
+
+    @since %Qore 2.3
+*/
+nothing Http3ServerPollOperation::notifyStreamListenersClosed() {
+    ValueHolder listeners(self->getReferencedMemberNoMethod("stream_listeners", xsink), xsink);
+    if (*xsink || listeners->isNullOrNothing()) {
+        return QoreValue();
+    }
+    QoreHashNode* lhash = listeners->get<QoreHashNode>();
+    ConstHashIterator hi(lhash);
+    while (hi.next()) {
+        QoreValue val = hi.get();
+        if (val.getType() == NT_OBJECT) {
+            QoreObject* lobj = val.get<QoreObject>();
+            ExceptionSink notify_xsink;
+            lobj->evalMethod("notifyIo", nullptr, &notify_xsink);
+            // Ignore errors from already-destroyed listeners
+            notify_xsink.clear();
+        }
+    }
+}

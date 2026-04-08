@@ -1253,6 +1253,20 @@ class WebSocketStreamProcessor {
         }
     }
 
+    #! Forces the stream closed from the handler thread
+    /** Called when the timed wait detects the underlying connection is dead
+        but no onStreamData() fired to trigger a normal close.
+
+        @since WebSocketHandler 2.7
+    */
+    forceClose() {
+        AutoLock al(process_mutex);
+        if (!closed) {
+            closed = True;
+            done.dec();
+        }
+    }
+
     #! Sends a heartbeat ping if needed
     /** Called by a timer callback.
     */
@@ -1912,7 +1926,11 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
         # via the sendHeartbeat() method, triggered by the I/O controller's
         # worker pool dispatch (onStreamData)
 
-        # Block until stream closes
+        # Block until stream closes. The stream_done counter is decremented by
+        # WebSocketStreamProcessor::notifyIo() when it detects the close. When
+        # the H2/H3 connection dies, the poll op notifies all registered stream
+        # listeners via notifyStreamListenersClosed(), which calls notifyIo()
+        # on each listener — triggering the close detection.
         stream_done.waitForZero();
         logDebug("WebSocketHandler::startImpl() cid: %y H2/H3 stream closed", cx.id);
         return False;

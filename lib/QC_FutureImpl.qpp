@@ -87,3 +87,15 @@ bool FutureImpl::isDone() [flags=CONSTANT] {
 bool FutureImpl::isError() [flags=CONSTANT] {
     return f->isError();
 }
+
+//! Cancels the Future if still pending
+/** If the Future is still \c PENDING, transitions to \c REJECTED with
+    \c "FUTURE-CANCELLED" and wakes all waiting threads.
+
+    @return True if cancelled, False if already resolved or rejected
+
+    @since %Qore 2.4
+ */
+bool FutureImpl::cancel() {
+    return f->cancel();
+}

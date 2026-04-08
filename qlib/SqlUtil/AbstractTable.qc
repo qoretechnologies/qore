@@ -4859,11 +4859,35 @@ string sql = table.getSelectSql(sh, \args);
         }
 
         if (info.query_hash.orderby) {
-            # process minuses to generate the "orderbydesc" keys
+            # process minuses and orderby qualifier hashes to generate
+            # "orderbydesc", "orderbydescidx", and "orderbynulls" keys
             foreach auto k in (\info.query_hash.orderby) {
                 if (k.typeCode() == NT_STRING && k =~ /^-/) {
                     k = k.substr(1);
                     info.query_hash.orderbydesc{k} = True;
+                } else if (k.typeCode() == NT_HASH && !k.hasKey("cop")) {
+                    # orderby qualifier hash: {"column": ..., "desc": ..., "nulls": ...}
+                    if (!k.hasKey("column")) {
+                        throw "ORDERBY-ERROR", sprintf("%s: orderby hash missing required \"column\" "
+                            "key; got keys: %y", getDesc(), keys k);
+                    }
+                    if (k.desc) {
+                        if (k.column.typeCode() == NT_STRING) {
+                            info.query_hash.orderbydesc{k.column} = True;
+                        } else {
+                            # column operator — use position-based index
+                            info.query_hash.orderbydescidx{$#} = True;
+                        }
+                    }
+                    if (k.nulls) {
+                        string nv = k.nulls.lwr();
+                        if (nv != "first" && nv != "last") {
+                            throw "ORDERBY-ERROR", sprintf("%s: invalid \"nulls\" value %y; "
+                                "expected \"first\" or \"last\"", getDesc(), k.nulls);
+                        }
+                        info.query_hash.orderbynulls{$#} = nv;
+                    }
+                    k = k.column;
                 }
             }
             if (info.query_hash.offset || info.query_hash.limit) {
@@ -5327,9 +5351,19 @@ string sql = table.getSelectSql(sh, \args);
 
     private doSelectOrderBySqlIntern(hash<QueryInfo> info, reference<string> sql, list<auto> coll) {
         list<auto> ce = getOrderByListIntern(info, coll);
-        sql += " order by " + (foldl $1 + ", " + $2, (
-            map $1 + (info.query_hash.desc || info.query_hash.orderbydesc.$1 ? " desc" : ""), ce
-        ));
+        list<string> ol;
+        for (int i = 0; i < ce.size(); ++i) {
+            string entry = ce[i];
+            if (info.query_hash.desc || info.query_hash.orderbydesc{entry}
+                    || info.query_hash.orderbydescidx{i}) {
+                entry += " desc";
+            }
+            if (info.query_hash.orderbynulls{i}) {
+                entry += " nulls " + info.query_hash.orderbynulls{i};
+            }
+            ol += entry;
+        }
+        sql += " order by " + (foldl $1 + ", " + $2, ol);
     }
 
     #! deletes rows in the table matching the condition and returns the count of rows deleted; the transaction is committed if successful, if an error occurs then it is rolled back

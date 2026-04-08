@@ -537,6 +537,18 @@ QoreListNode* Http3ClientPollOperationPriv::registerStream(int64_t stream_id,
     stream_actions[sid] = action;
     ++active_stream_count;
 
+    // If the action is a streaming consumer (ChannelAction), mark the QUIC
+    // stream for incremental response body delivery.  This enables
+    // h3RecvDataCallback to push each DATA chunk to completed_streams_
+    // (like CONNECT tunnels) so the ChannelAction receives data as it
+    // arrives, instead of waiting for END_STREAM (which never comes for SSE).
+    if (action->isStreaming() && inner_op) {
+        auto session = inner_op->getSession();
+        if (session) {
+            session->setStreamStreaming(stream_id);
+        }
+    }
+
     // Check for buffered responses
     auto pr_it = pending_responses.find(sid);
     if (pr_it != pending_responses.end() && !pr_it->second.empty()) {

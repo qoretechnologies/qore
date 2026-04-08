@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file DiscordWebSocketClient.qm Qore user module for calling Discord WebSocket services
 
-/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2025 Qore Technologies, s.r.o.
+/*  DiscordWebSocketClient.qm Copyright (C) 2020 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -407,35 +407,12 @@ hash<auto> h = ws.getInfo();
         return opts + DefaultOptions;
     }
 
-    #! Processes WebSocket events
-    private eventLoop() {
-        on_exit stopHeartbeatThread();
-        try {
-            WebSocketClient::eventLoop();
-        } catch (hash<ExceptionInfo> ex) {
-            logError("WebSocket event loop error: %y", get_exception_string(ex));
-        }
-    }
-
-    #! Handles WebSocket protocol messages
-    private int handleMessage(hash<WsMsgInfo> h, reference<data> buf, reference<hash<auto>> first_frame_rsv) {
-        if (h.op == WSOP_Close) {
-            if (!h.close) {
-                logDebug("Server sent OpClose without code; closing immediately");
-                return WSEDC_BREAK;
-            }
-            # check for Discord close codes
-            bool reconnect = CloseReconnectMap{h.close} ?? True;
-            logDebug("Server sent WSOP_Close code %d (%s): %y; reconnect: %y", h.close,
-                WSCCMap{h.close} ?? CloseDescMap{h.close}, h.msg, reconnect);
-            sendClose(h.close, h.msg);
-            if (!reconnect) {
-                reconnect = False;
-            }
-            return WSEDC_BREAK;
-        }
-
-        return WebSocketClientWithSerialization::handleMessage(h, \buf, \first_frame_rsv);
+    #! Called when the WebSocket connection is closing
+    /** Stops the heartbeat thread when the connection is closed.
+        @since DiscordWebSocketClient 1.2
+    */
+    private closingConnection() {
+        stopHeartbeatThread();
     }
 
     #! Handles deserialized event data
@@ -510,7 +487,7 @@ hash<auto> h = ws.getInfo();
             url = setupUrl(resume_gateway_url);
             string http_url = url;
             http_url =~ s/^ws/http/;
-            hc.setURL(http_url);
+            http_opts.url = http_url;
         }
     }
 

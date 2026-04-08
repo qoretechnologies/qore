@@ -448,6 +448,81 @@ public class HttpClientConnectionManager {
         }
     }
 
+    #! Submits an async request and returns a cancellable Future
+    /** Unlike @ref submitRequestAsync(), this method returns an
+        @ref HttpCancellableFuture that the caller can cancel to abort the
+        in-flight HTTP request at the protocol level.
+
+        @param url the target URL; only scheme, host, and port are used for connection
+        management — the URL's path is \b not prepended to \c path
+        @param method HTTP method
+        @param path the full request path to send (must include any base path from the URL)
+        @param headers request headers (optional)
+        @param body request body (optional)
+
+        @return a @ref HttpCancellableFuture that resolves to the raw response hash and
+        supports cancel()
+
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
+        @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
+        @throw HTTPCLIENT-TIMEOUT if the connection establishment times out
+
+        @since %HttpClientIo 1.3
+    */
+    HttpCancellableFuture requestAsync(string url, string method, string path,
+            *hash<auto> headers, *data body) {
+        # Inject cookies from jar into request headers
+        hash<UrlInfo> url_info;
+        if (cookie_jar) {
+            url_info = parse_url(url);
+            *string cookie_hdr = cookie_jar.getCookieHeader(
+                url_info.host, path, url_info.protocol == "https");
+            if (cookie_hdr) {
+                headers = headers ?? {};
+                if (headers.Cookie) {
+                    headers.Cookie += "; " + cookie_hdr;
+                } else {
+                    headers.Cookie = cookie_hdr;
+                }
+            }
+        }
+
+        int retries = 0;
+        while (True) {
+            *HttpClientStreamHandle stream;
+            try {
+                stream = acquireStream(url);
+                hash<auto> result = stream.submitAsync(method, path, headers, body);
+                Future raw_future = result.future;
+                # Wrap with cookie extraction if needed
+                if (cookie_jar) {
+                    if (!url_info) {
+                        url_info = parse_url(url);
+                    }
+                    raw_future = new CookieExtractingFuture(raw_future,
+                        cookie_jar, url_info.host, path,
+                        url_info.protocol == "https");
+                }
+                return new HttpCancellableFuture(raw_future, stream);
+            } catch (hash<ExceptionInfo> ex) {
+                if ((isCapacityError(ex.err) || isConnectionError(ex.err))
+                        && ++retries <= MaxRequestRetries) {
+                    if (isConnectionError(ex.err)) {
+                        log(LoggerLevel::DEBUG, "connection error %s, evicting and retrying (%d/%d)",
+                            ex.err, retries, MaxRequestRetries);
+                        evictDeadConnections(url);
+                        handleProtocolFallback(url, ex.err);
+                    } else {
+                        log(LoggerLevel::DEBUG, "capacity error %s (retry %d/3)", ex.err, retries);
+                    }
+                    continue;
+                }
+                rethrow;
+            }
+        }
+    }
+
     #! Performs a synchronous request
     /** @param url the target URL; only scheme, host, and port are used for connection
         management — the URL's path is \b not prepended to \c path
@@ -863,7 +938,11 @@ public class HttpClientConnectionManager {
             return "h2";
         }
 
-        # No cache: start with HTTP/2 and discover H3 capability via Alt-Svc
+        # No cache and no proxy: happy eyeballs — try H3 + H2 in parallel
+        if (!proxy_info) {
+            return "happy-eyeballs";
+        }
+        # Proxy: H3 (QUIC) can't tunnel through proxies, use H2
         return "h2";
     }
 
@@ -1019,7 +1098,12 @@ public class HttpClientConnectionManager {
             # Create connection outside the write lock — constructor may do DNS
             # resolution (getaddrinfo) which can block and would stall all pool
             # operations if done under the lock
-            HttpClientConnection conn = createConnection(url_info, key, protocol);
+            HttpClientConnection conn;
+            if (protocol == "happy-eyeballs") {
+                conn = createConnectionHappyEyeballs(url_info, key);
+            } else {
+                conn = createConnection(url_info, key, protocol);
+            }
 
             # For plain HTTP h2c in auto mode: probe BEFORE adding to the pool
             # to prevent other threads from acquiring the H2 connection during
@@ -1120,6 +1204,161 @@ public class HttpClientConnectionManager {
         return new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
             proxy_info);
+    }
+
+    #! Internal: happy eyeballs parallel H3 + H2 connection race
+    /** Tries H3 (QUIC/UDP) and H2 (TCP/TLS) in parallel. H3 starts first;
+        if it doesn't connect within the stagger delay, H2 starts alongside.
+        The first connection to become ready wins; the loser is cancelled.
+
+        @param url_info parsed URL info
+        @param key the host:port pool key
+        @return the winning connection (H3 or H2)
+
+        @since HttpClientIo 1.3
+    */
+    private HttpClientConnection createConnectionHappyEyeballs(hash<auto> url_info, string key) {
+        # Stagger delay: H3 gets a head start before H2 begins
+        int HappyEyeballsStaggerMs = 100;
+
+        log(LoggerLevel::DEBUG, "happy eyeballs: starting H3 + H2 race for %s", key);
+
+        # Record H3 probe time
+        h3_probe_times{key} = now_us();
+
+        # Create H3 connection (non-blocking — constructor sets up QUIC poll op)
+        *Http3ClientConnection h3conn;
+        try {
+            h3conn = new Http3ClientConnection(url_info, opts.connect_timeout, logger,
+                opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+                opts.client_cert, opts.client_pk);
+            h3conn.setControllerRef(controller);
+            h3conn.setManagerContext(self, key);
+            submitConnectionToController(key, h3conn);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "happy eyeballs: H3 creation failed (%s: %s), using H2", key, ex.err, ex.desc);
+            # H3 not available — just return H2
+            {
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h2");
+            }
+            return createConnection(url_info, key, "h2");
+        }
+
+        # Wait for H3 with stagger timeout using poll on the connection's notifier
+        EventNotifier h3_notifier();
+        bool h3_queued = h3conn.registerReadyNotifier(h3_notifier);
+        if (!h3_queued) {
+            # Already decided (ready or failed)
+            if (h3conn.isReady()) {
+                log(LoggerLevel::DEBUG, "happy eyeballs: H3 connected immediately for %s", key);
+                {
+                    AutoWriteLock al(pool_lock);
+                    cacheProtocol(key, "h3");
+                }
+                return h3conn;
+            }
+            # H3 failed immediately — fall through to start H2
+        } else {
+            # Poll the notifier fd for the stagger period
+            Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": h3_notifier},),
+                HappyEyeballsStaggerMs);
+            h3_notifier.acknowledge();
+            if (h3conn.isReady()) {
+                log(LoggerLevel::DEBUG, "happy eyeballs: H3 won within stagger for %s", key);
+                {
+                    AutoWriteLock al(pool_lock);
+                    cacheProtocol(key, "h3");
+                }
+                return h3conn;
+            }
+        }
+
+        # H3 didn't connect yet — start H2 in parallel
+        log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
+        Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
+            opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
+            proxy_info);
+        h2conn.setControllerRef(controller);
+        h2conn.setManagerContext(self, key);
+        submitConnectionToController(key, h2conn);
+
+        # Race: register notifier and check if either already connected
+        EventNotifier race_notifier();
+        bool h3_pending = h3conn.registerReadyNotifier(race_notifier);
+        bool h2_pending = h2conn.registerReadyNotifier(race_notifier);
+
+        # If either already decided (ready or failed), check immediately
+        if (!h3_pending || !h2_pending) {
+            if (h3conn.isReady()) {
+                log(LoggerLevel::DEBUG, "happy eyeballs: H3 already ready for %s", key);
+                try { controller.cancel(h2conn.getSocket()); } catch () {}
+                try { h2conn.close(); } catch () {}
+                {
+                    AutoWriteLock al(pool_lock);
+                    cacheProtocol(key, "h3");
+                }
+                return h3conn;
+            }
+            if (h2conn.isReady()) {
+                log(LoggerLevel::DEBUG, "happy eyeballs: H2 already ready for %s", key);
+                try { controller.cancel(h3conn.getSocket()); } catch () {}
+                try { h3conn.close(); } catch () {}
+                {
+                    AutoWriteLock al(pool_lock);
+                    cacheProtocol(key, "h2");
+                }
+                return h2conn;
+            }
+            # Both already failed but neither is ready — fall through to poll
+        }
+
+        timeout remaining = opts.connect_timeout - HappyEyeballsStaggerMs;
+        if (remaining <= 0ms) {
+            remaining = opts.connect_timeout;
+        }
+        Socket::poll((<SocketPollInfo>{"events": SOCK_POLLIN, "socket": race_notifier},),
+            remaining);
+        race_notifier.acknowledge();
+
+        # Determine winner
+        if (h3conn.isReady()) {
+            log(LoggerLevel::DEBUG, "happy eyeballs: H3 won for %s", key);
+            try { controller.cancel(h2conn.getSocket()); } catch () {}
+            try { h2conn.close(); } catch () {}
+            {
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h3");
+            }
+            return h3conn;
+        }
+        if (h2conn.isReady()) {
+            log(LoggerLevel::DEBUG, "happy eyeballs: H2 won for %s", key);
+            try { controller.cancel(h3conn.getSocket()); } catch () {}
+            try { h3conn.close(); } catch () {}
+            {
+                AutoWriteLock al(pool_lock);
+                cacheProtocol(key, "h2");
+            }
+            return h2conn;
+        }
+
+        # Neither connected — collect error details and clean up both
+        *hash<auto> h3_err = h3conn.getPollOperation().getError();
+        *hash<auto> h2_err = h2conn.getPollOperation().getError();
+        try { controller.cancel(h3conn.getSocket()); } catch () {}
+        try { h3conn.close(); } catch () {}
+        try { controller.cancel(h2conn.getSocket()); } catch () {}
+        try { h2conn.close(); } catch () {}
+
+        # Build a user-friendly error message with the underlying failure reasons
+        string desc = sprintf("could not connect to %s", key);
+        # Use the most informative underlying error (prefer H2 as it's TCP-based)
+        *string detail = h2_err.desc ?? h3_err.desc;
+        if (detail) {
+            desc += sprintf(": %s", detail);
+        }
+        throw "HTTPCLIENT-CONNECT-ERROR", desc;
     }
 
     #! Internal: submits a connection poll operation to the controller
@@ -1647,6 +1886,10 @@ class CookieExtractingFuture inherits Future {
 
     bool isError() {
         return real_future.isError();
+    }
+
+    bool cancel() {
+        return real_future.cancel();
     }
 }
 

@@ -4,7 +4,7 @@ stages:
 
 default:
   services:
-    - name: mariadb:lts
+    - name: mariadb:11.4
       alias: mysql
     - name: pgvector/pgvector:pg18
       alias: pgsql

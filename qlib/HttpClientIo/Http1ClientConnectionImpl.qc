@@ -41,6 +41,9 @@ public class Http1ClientConnection inherits HttpClientConnection {
     private {
         #! Poll operation for this connection
         Http1ClientPollOperation poll_op;
+        #! Cached socket reference — must return the same object on every call
+        #! so the AsyncIoController's obj_to_sock_hash lookup works correctly
+        Socket cached_socket;
     }
 
     #! Copying is not supported
@@ -91,9 +94,12 @@ public class Http1ClientConnection inherits HttpClientConnection {
         return poll_op;
     }
 
-    #! Returns the underlying socket
+    #! Returns the underlying socket (cached for stable identity)
     Socket getSocket() {
-        return poll_op.getSocket();
+        if (!cached_socket) {
+            cached_socket = poll_op.getSocket();
+        }
+        return cached_socket;
     }
 
     #! Submits a request on this connection (protocol-specific)

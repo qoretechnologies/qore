@@ -53,6 +53,10 @@ bool QoreFuture::isError() const {
     return priv->isError();
 }
 
+bool QoreFuture::cancel() {
+    return priv->cancel();
+}
+
 void QoreFuture::destructor(ExceptionSink* xsink) {
     priv->futureDestroyed(xsink);
 }
