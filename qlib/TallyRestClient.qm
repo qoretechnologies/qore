@@ -196,18 +196,30 @@ public class TallyRestConnection inherits RestClient::RestConnection {
                 },
             },
             "required_options": "apikey",
+            "messages": (
+                <UiMessageInfo>{
+                    "title": "How to Get Your Tally API Key",
+                    "intent": "info",
+                    "content": "To connect to Tally, you need an API key:\n\n"
+                        "1. Sign in to your [Tally account](https://tally.so/)\n"
+                        "2. Go to **Settings** → **API**\n"
+                        "3. Click **Create API key**\n"
+                        "4. Copy the key and paste it in the `apikey` field above\n\n"
+                        "**Note**: API access requires a Tally Pro or Business plan",
+                },
+            ),
         };
     }
 
     #! creates the TallyRestConnection object
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, url, attributes, options) {
+            : RestConnection(name, description, DefaultUrl, attributes, options) {
     }
 
     #! creates the TallyRestConnection object
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
+            : RestConnection(config + {"url": DefaultUrl}, attr) {
     }
 
     #! returns \c "tally"
@@ -226,6 +238,22 @@ public class TallyRestConnection inherits RestClient::RestConnection {
         # object dynamically
         load_module("TallyDataProvider");
         return create_object("TallyDataProvider", getAsync());
+    }
+
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            hash<auto> update;
+            if (url != DefaultUrl) {
+                update.url = DefaultUrl;
+            }
+            if (opts.ping_path =~ /^\//) {
+                update.ping_path = opts.ping_path.substr(1);
+            }
+            if (update) {
+                doUpdateOptions(self, update);
+            }
+        }
     }
 
     #! Sets child data provider capabilities

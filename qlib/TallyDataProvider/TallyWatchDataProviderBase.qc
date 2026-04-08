@@ -59,6 +59,9 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
 
         #! Set of seen record IDs for deduplication
         hash<string, bool> seen_ids;
+
+        #! Flag to track first poll (seed cursor without firing events)
+        bool first_poll = True;
     }
 
     #! Creates the object from a RestClientIo client
@@ -92,6 +95,17 @@ public class TallyWatchDataProviderBase inherits TallyDataProviderBase,
         }
         try {
             list<hash<auto>> records = fetchRecords();
+            if (first_poll) {
+                # on first poll, seed the cursor and seen IDs without firing events
+                first_poll = False;
+                foreach hash<auto> record in (records) {
+                    seen_ids{record.id ?? ""} = True;
+                }
+                if (records.size()) {
+                    last_submission_id = records.last().id;
+                }
+                return;
+            }
             foreach hash<auto> record in (records) {
                 string record_id = record.id ?? "";
                 if (seen_ids{record_id}) {

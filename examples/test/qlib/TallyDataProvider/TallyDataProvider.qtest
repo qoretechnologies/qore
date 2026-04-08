@@ -29,6 +29,7 @@
 %requires ../../../../qlib/Logger.qm
 %requires ../../../../qlib/DataProvider
 %requires ../../../../qlib/TallyDataProvider
+%requires uuid
 
 %try-module json
 %define NoJson
@@ -96,7 +97,12 @@ public class TallyDataProviderTest inherits QUnit::Test {
         addTestCase("search forms", \searchFormsTest());
         addTestCase("search submissions", \searchSubmissionsTest());
         addTestCase("get submission", \getSubmissionTest());
+        addTestCase("update form", \updateFormTest());
+        addTestCase("delete submission", \deleteSubmissionTest());
+        addTestCase("search questions", \searchQuestionsTest());
         addTestCase("create webhook", \createWebhookTest());
+        addTestCase("update webhook", \updateWebhookTest());
+        addTestCase("search webhooks", \searchWebhooksTest());
         addTestCase("get current user", \getCurrentUserTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
@@ -149,7 +155,8 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("/create-form", action.path);
         assertEq(DPAT_API, action.action_code);
         assertEq(("Forms",), action.groups);
-        assertEq(True, action.options.blocks.required);
+        assertEq(True, action.options.title.required);
+        assertFalse(action.options.blocks.required);
         assertEq(True, action.options.status.required);
         assertTrue(action.output_type instanceof TallyDataProvider::TallyFormDataType);
 
@@ -297,6 +304,7 @@ public class TallyDataProviderTest inherits QUnit::Test {
         TallyDataProvider::TallyDataProvider prov(rest);
         AbstractDataProvider dp = prov.getChildProvider("create-form");
         hash<auto> resp = dp.doRequest({
+            "title": "Test Form",
             "blocks": ({"uuid": "abc", "type": "INPUT_TEXT", "groupUuid": "g1", "groupType": "INPUT_TEXT"},),
             "status": "DRAFT",
         });
@@ -304,7 +312,12 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("POST", rest.last_method);
         assertEq("forms", rest.last_path);
         assertEq("DRAFT", rest.last_request.status);
-        assertTrue(rest.last_request.blocks.lsize() > 0);
+        # verify FORM_TITLE block was auto-prepended
+        assertTrue(rest.last_request.blocks.lsize() >= 2, "blocks includes auto-generated FORM_TITLE");
+        assertEq("FORM_TITLE", rest.last_request.blocks[0].type, "first block is FORM_TITLE");
+        assertEq("Test Form", rest.last_request.blocks[0].payload.title, "title mapped correctly");
+        assertEq("INPUT_TEXT", rest.last_request.blocks[1].type, "user block follows FORM_TITLE");
+        assertFalse(exists rest.last_request.title, "title field removed from request body");
         assertEq("newform456", resp.id);
 %endif
     }
@@ -405,6 +418,101 @@ public class TallyDataProviderTest inherits QUnit::Test {
 %endif
     }
 
+    updateFormTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "form123",
+            "name": "Updated Form",
+            "status": "PUBLISHED",
+            "numberOfSubmissions": 42,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-04-07T12:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-form");
+        hash<auto> resp = dp.doRequest({
+            "id": "form123",
+            "name": "Updated Form",
+            "status": "PUBLISHED",
+        });
+
+        assertEq("PATCH", rest.last_method);
+        assertEq("forms/form123", rest.last_path);
+        # verify id is stripped from body
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from PATCH body");
+        assertEq("Updated Form", rest.last_request.name);
+        assertEq("PUBLISHED", rest.last_request.status);
+        assertEq("form123", resp.id);
+        assertEq("Updated Form", resp.name);
+%endif
+    }
+
+    deleteSubmissionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-submission");
+        hash<auto> resp = dp.doRequest({"form_id": "f1", "submission_id": "s1"});
+
+        assertEq("DELETE", rest.last_method);
+        assertEq("forms/f1/submissions/s1", rest.last_path);
+        assertEq("deleted", resp.status);
+        assertEq("f1", resp.form_id);
+        assertEq("s1", resp.submission_id);
+%endif
+    }
+
+    searchQuestionsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "questions": (
+                {
+                    "id": "q1",
+                    "type": "INPUT_TEXT",
+                    "title": "Your Name",
+                    "formId": "f1",
+                    "isDeleted": False,
+                    "numberOfResponses": 10,
+                    "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-04-07T00:00:00Z",
+                    "fields": (),
+                },
+                {
+                    "id": "q2",
+                    "type": "MULTIPLE_CHOICE",
+                    "title": "Favorite Color",
+                    "formId": "f1",
+                    "isDeleted": False,
+                    "numberOfResponses": 8,
+                    "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-04-07T00:00:00Z",
+                    "fields": (),
+                },
+            ),
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("questions");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"form_id": "f1"});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(2, recs.lsize());
+        assertEq("q1", recs[0].id);
+        assertEq("INPUT_TEXT", recs[0].type);
+        assertEq("Your Name", recs[0].title);
+        assertEq("q2", recs[1].id);
+        assertTrue(rest.last_path.regex("forms/f1/questions"));
+%endif
+    }
+
     createWebhookTest() {
         checkModule();
 %ifndef NoJson
@@ -430,6 +538,77 @@ public class TallyDataProviderTest inherits QUnit::Test {
         assertEq("f1", rest.last_request.formId);
         assertEq("wh1", resp.id);
         assertEq(True, resp.isEnabled);
+%endif
+    }
+
+    updateWebhookTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-webhook");
+        hash<auto> resp = dp.doRequest({
+            "id": "wh1",
+            "formId": "f1",
+            "url": "https://example.com/updated",
+            "eventTypes": ("FORM_RESPONSE",),
+            "isEnabled": False,
+        });
+
+        assertEq("PATCH", rest.last_method);
+        assertEq("webhooks/wh1", rest.last_path);
+        # verify id is stripped from body
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from PATCH body");
+        assertEq("f1", rest.last_request.formId);
+        assertEq("https://example.com/updated", rest.last_request.url);
+        assertEq(False, rest.last_request.isEnabled);
+        assertEq("updated", resp.status);
+        assertEq("wh1", resp.id);
+%endif
+    }
+
+    searchWebhooksTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "webhooks": (
+                {
+                    "id": "wh1",
+                    "formId": "f1",
+                    "url": "https://example.com/hook1",
+                    "eventTypes": ("FORM_RESPONSE",),
+                    "isEnabled": True,
+                    "createdAt": "2026-04-07T00:00:00Z",
+                },
+                {
+                    "id": "wh2",
+                    "formId": "f2",
+                    "url": "https://example.com/hook2",
+                    "eventTypes": ("FORM_RESPONSE",),
+                    "isEnabled": False,
+                    "createdAt": "2026-04-06T00:00:00Z",
+                },
+            ),
+            "page": 1,
+            "limit": 25,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("webhooks");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"limit": 25});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(2, recs.lsize());
+        assertEq("wh1", recs[0].id);
+        assertEq(True, recs[0].isEnabled);
+        assertEq("wh2", recs[1].id);
+        assertEq(False, recs[1].isEnabled);
+        assertTrue(rest.last_path.regex("webhooks\\?.*limit=25"));
 %endif
     }
 
@@ -551,14 +730,17 @@ public class TallyDataProviderTest inherits QUnit::Test {
         AbstractConnection conn = get_connection(m_options.conn);
         TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
 
-        # create a test form
+        # create a test form using the title convenience field
         AbstractDataProvider create_dp = prov.getChildProvider("create-form");
+        string block_uuid = UUID::get();
+        string block_group_uuid = UUID::get();
         hash<auto> created = create_dp.doRequest({
+            "title": "Claude Code Test Form",
             "blocks": (
                 {
-                    "uuid": "test-block-1",
+                    "uuid": block_uuid,
                     "type": "INPUT_TEXT",
-                    "groupUuid": "test-group-1",
+                    "groupUuid": block_group_uuid,
                     "groupType": "INPUT_TEXT",
                     "payload": {
                         "isRequired": False,
@@ -667,10 +849,13 @@ public class TallyDataProviderTest inherits QUnit::Test {
         }
         assertTrue(found, "created webhook found in list");
 
-        # update the webhook
+        # update the webhook (API requires formId, url, eventTypes, isEnabled)
         AbstractDataProvider update_dp = prov.getChildProvider("update-webhook");
         hash<auto> updated = update_dp.doRequest({
             "id": webhook_id,
+            "formId": form_id,
+            "url": created.url,
+            "eventTypes": ("FORM_RESPONSE",),
             "isEnabled": False,
         });
         # verify update result

@@ -30,6 +30,7 @@
 %requires(reexport) DataProvider
 %requires(reexport) TallyRestClient
 %requires RestClientIo
+%requires uuid
 
 module TallyDataProvider {
     version = "1.0";
@@ -74,16 +75,17 @@ module TallyDataProvider {
             "action_code": DPAT_API,
             "groups": ("Forms",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                TallyCreateFormRequestDataType::Fields{"blocks", "status"}, {
+                TallyCreateFormRequestDataType::Fields{"title", "status"}, {
                     "preselected": True,
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyCreateFormRequestDataType::Fields{"workspaceId", "templateId",}, {
+                TallyCreateFormRequestDataType::Fields{"blocks", "workspaceId", "templateId",}, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyCreateFormRequestDataType::Fields - ("blocks", "status", "workspaceId", "templateId")
+                TallyCreateFormRequestDataType::Fields - ("title", "blocks", "status", "workspaceId",
+                    "templateId")
             ),
             "output_type": TallyCreateFormDataProvider::ResponseType,
         });
@@ -170,6 +172,7 @@ module TallyDataProvider {
                     "short_desc": "Page number",
                     "type": AbstractDataProviderTypeMap."*int",
                     "desc": "Page number for pagination (default `1`)",
+                    "preselected": True,
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -201,7 +204,13 @@ module TallyDataProvider {
             "action_code": DPAT_API,
             "groups": ("Submissions",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                TallyGetSubmissionRequestDataType::Fields, {
+                TallyGetSubmissionRequestDataType::Fields{"form_id",}, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyGetSubmissionRequestDataType::Fields{"submission_id",}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -220,7 +229,13 @@ module TallyDataProvider {
             "action_code": DPAT_API,
             "groups": ("Submissions",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                TallyDeleteSubmissionRequestDataType::Fields, {
+                TallyDeleteSubmissionRequestDataType::Fields{"form_id",}, {
+                    "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyDeleteSubmissionRequestDataType::Fields{"submission_id",}, {
                     "preselected": True,
                     "required": True,
                 }
@@ -276,14 +291,14 @@ module TallyDataProvider {
                 "startDate": <ActionOptionInfo>{
                     "display_name": "Start Date",
                     "short_desc": "Filter by start date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter submissions submitted on or after this ISO 8601 date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Filter submissions submitted on or after this date",
                 },
                 "endDate": <ActionOptionInfo>{
                     "display_name": "End Date",
                     "short_desc": "Filter by end date",
-                    "type": AbstractDataProviderTypeMap."*string",
-                    "desc": "Filter submissions submitted on or before this ISO 8601 date",
+                    "type": AbstractDataProviderTypeMap."*date",
+                    "desc": "Filter submissions submitted on or before this date",
                 },
                 "afterId": <ActionOptionInfo>{
                     "display_name": "After ID",
@@ -366,11 +381,20 @@ module TallyDataProvider {
                     "required": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyUpdateWebhookRequestDataType::Fields{"url", "isEnabled"}, {
+                TallyUpdateWebhookRequestDataType::Fields{"formId",}, {
                     "preselected": True,
+                    "required": True,
+                    "ref_data": "forms",
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
-                TallyUpdateWebhookRequestDataType::Fields - ("id", "url", "isEnabled")
+                TallyUpdateWebhookRequestDataType::Fields{"url", "eventTypes", "isEnabled"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                TallyUpdateWebhookRequestDataType::Fields - (
+                    "id", "formId", "url", "eventTypes", "isEnabled",
+                )
             ),
             "output_type": TallyUpdateWebhookDataProvider::ResponseType,
         });
@@ -410,6 +434,7 @@ module TallyDataProvider {
                     "short_desc": "Page number",
                     "type": AbstractDataProviderTypeMap."*int",
                     "desc": "Page number for pagination (default `1`)",
+                    "preselected": True,
                 },
                 "limit": <ActionOptionInfo>{
                     "display_name": "Limit",
@@ -445,10 +470,11 @@ module TallyDataProvider {
             "app": TallyDataProvider::AppName,
             "path": "/events/" + EVENT_FORM_SUBMISSION,
             "action": EVENT_FORM_SUBMISSION,
-            "display_name": "Watch Form Submissions",
-            "short_desc": "Watch for new form submissions",
-            "desc": "Polls for new form submissions and fires an event for each new submission received",
+            "display_name": "New Form Submission",
+            "short_desc": "Trigger when a new form submission is received",
+            "desc": "Fires when a new form submission is received for the specified form",
             "action_code": DPAT_EVENT,
+            "action_val": EVENT_FORM_SUBMISSION,
             "groups": ("Events",),
             "options": {
                 "form_id": <ActionOptionInfo>{

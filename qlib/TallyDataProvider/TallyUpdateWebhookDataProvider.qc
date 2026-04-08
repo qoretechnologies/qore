@@ -35,18 +35,34 @@ public class TallyUpdateWebhookRequestDataType inherits HashDataType {
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
             },
+            "formId": {
+                "display_name": "Form ID",
+                "short_desc": "The form this webhook is attached to",
+                "desc": "The ID of the form that triggers this webhook",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
             "url": {
                 "display_name": "URL",
                 "short_desc": "Updated endpoint URL",
-                "desc": "The updated destination URL for webhook events",
-                "type": AbstractDataProviderTypeMap."*string",
+                "desc": "The destination URL where webhook events will be delivered",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
             },
             "eventTypes": {
                 "display_name": "Event Types",
-                "short_desc": "Updated event types",
-                "desc": "Updated list of event types to subscribe to; the only valid value is "
+                "short_desc": "Event types to subscribe to",
+                "desc": "List of event types to subscribe to; the only valid value is "
                     "`FORM_RESPONSE`",
-                "type": AbstractDataProviderType::get(SoftListOrNothingType),
+                "type": AbstractDataProviderType::get(SoftListType),
+                "required": True,
+            },
+            "isEnabled": {
+                "display_name": "Is Enabled",
+                "short_desc": "Enable or disable the webhook",
+                "desc": "Set to `True` to enable or `False` to disable the webhook",
+                "type": AbstractDataProviderTypeMap."bool",
+                "required": True,
             },
             "signingSecret": {
                 "display_name": "Signing Secret",
@@ -59,12 +75,6 @@ public class TallyUpdateWebhookRequestDataType inherits HashDataType {
                 "short_desc": "Updated HTTP headers",
                 "desc": "Updated list of custom HTTP header objects",
                 "type": new ListDataType(new TallyHttpHeaderDataType(), True),
-            },
-            "isEnabled": {
-                "display_name": "Is Enabled",
-                "short_desc": "Enable or disable the webhook",
-                "desc": "Set to `True` to enable or `False` to disable the webhook",
-                "type": AbstractDataProviderTypeMap."*bool",
             },
         };
     }

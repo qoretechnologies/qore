@@ -61,14 +61,14 @@ public const TallySubmissionsSearchOptions = {
     "startDate": <DataProviderOptionInfo>{
         "display_name": "Start Date",
         "short_desc": "Filter by start date",
-        "type": AbstractDataProviderTypeMap."*string",
-        "desc": "Filter submissions submitted on or after this ISO 8601 date",
+        "type": AbstractDataProviderTypeMap."*date",
+        "desc": "Filter submissions submitted on or after this date",
     },
     "endDate": <DataProviderOptionInfo>{
         "display_name": "End Date",
         "short_desc": "Filter by end date",
-        "type": AbstractDataProviderTypeMap."*string",
-        "desc": "Filter submissions submitted on or before this ISO 8601 date",
+        "type": AbstractDataProviderTypeMap."*date",
+        "desc": "Filter submissions submitted on or before this date",
     },
     "afterId": <DataProviderOptionInfo>{
         "display_name": "After ID",
@@ -110,8 +110,10 @@ public class TallySubmissionsDataProvider inherits TallyDataProviderBase {
         if (search_options.page) params.page = search_options.page;
         if (search_options.limit) params.limit = search_options.limit;
         if (search_options.filter) params.filter = search_options.filter;
-        if (search_options.startDate) params.startDate = search_options.startDate;
-        if (search_options.endDate) params.endDate = search_options.endDate;
+        if (search_options.startDate) params.startDate = format_date("YYYY-MM-DDTHH:mm:SSZ",
+            search_options.startDate);
+        if (search_options.endDate) params.endDate = format_date("YYYY-MM-DDTHH:mm:SSZ",
+            search_options.endDate);
         if (search_options.afterId) params.afterId = search_options.afterId;
 
         string path = "forms/" + search_options.form_id + "/submissions";

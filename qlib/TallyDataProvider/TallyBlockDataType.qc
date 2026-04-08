@@ -104,19 +104,31 @@ public class TallyBlockDataType inherits HashDataType {
             "groupType": {
                 "display_name": "Group Type",
                 "short_desc": "The group type for this block",
-                "desc": "The group type identifier that determines how blocks are grouped; varies per "
-                    "block type (e.g., `InputTextBlock`, `MultipleChoiceBlock`, `FormTitleBlock`)",
+                "desc": "The group type identifier; for standalone blocks, this should match the block "
+                    "`type`; for child blocks (e.g., dropdown options), use the parent block's type",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "example_value": "InputTextBlock",
             },
             "payload": {
                 "display_name": "Payload",
                 "short_desc": "Block-specific configuration",
-                "desc": "Type-specific configuration object; common fields include `isRequired` (boolean), "
-                    "`isHidden` (boolean), `placeholder` (string), `html` (string for rich text content), "
-                    "and `hasDefaultAnswer` (boolean). Option-type blocks also use `index` (number), "
-                    "`isFirst` (boolean), and `isLast` (boolean)",
+                "desc": "Type-specific configuration object whose structure depends on the block `type`.\n\n"
+                    "**Common fields** (most input blocks): `isRequired` (boolean), `isHidden` (boolean), "
+                    "`placeholder` (string), `hasDefaultAnswer` (boolean), `defaultAnswer`, `name` (string)\n\n"
+                    "**Text blocks** (`INPUT_TEXT`, `TEXTAREA`): `hasMinCharacters`, `minCharacters`, "
+                    "`hasMaxCharacters`, `maxCharacters`\n\n"
+                    "**Choice blocks** (`MULTIPLE_CHOICE`, `CHECKBOX`, `DROPDOWN`): `index` (number), "
+                    "`isFirst` (boolean), `isLast` (boolean), `allowMultiple`, `hasOtherOption`, "
+                    "`randomize`, `image`, `text`\n\n"
+                    "**Rating/Scale** (`RATING`): `stars`; (`LINEAR_SCALE`): `start`, `end`, `step`, "
+                    "`leftLabel`, `rightLabel`\n\n"
+                    "**File upload** (`FILE_UPLOAD`): `hasMultipleFiles`, `maxFiles`, `maxFileSize`, "
+                    "`allowedFiles`\n\n"
+                    "**Rich text** (`TEXT`, `TITLE`, headings): `html` (string with rich text content)\n\n"
+                    "**Example** (`INPUT_TEXT`):\n"
+                    "```json\n"
+                    "{\"isRequired\": false, \"isHidden\": false, \"placeholder\": \"Enter your name\"}\n"
+                    "```",
                 "type": AbstractDataProviderTypeMap."auto",
                 "required": True,
             },

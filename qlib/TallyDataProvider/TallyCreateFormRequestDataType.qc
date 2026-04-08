@@ -28,12 +28,21 @@ public namespace TallyDataProvider {
 public class TallyCreateFormRequestDataType inherits HashDataType {
     public {
         const Fields = {
+            "title": {
+                "display_name": "Form Title",
+                "short_desc": "The title of the form",
+                "desc": "The title displayed at the top of the form; automatically creates the required "
+                    "`FORM_TITLE` block as the first block",
+                "type": AbstractDataProviderTypeMap."string",
+                "required": True,
+            },
             "blocks": {
                 "display_name": "Blocks",
                 "short_desc": "Form content blocks",
-                "desc": "List of form content blocks defining the form structure (questions, text, images, etc.)",
-                "type": new ListDataType(new TallyBlockDataType(), False),
-                "required": True,
+                "desc": "List of form content blocks defining the form structure (questions, text, images, "
+                    "etc.); a `FORM_TITLE` block is automatically prepended from the `title` field",
+                "type": new ListDataType("TallyBlockList", new TallyBlockDataType(), True),
+                "required": False,
             },
             "status": {
                 "display_name": "Status",

@@ -85,8 +85,10 @@ public class TallyQuestionDataType inherits HashDataType {
             "fields": {
                 "display_name": "Fields",
                 "short_desc": "Question fields",
-                "desc": "List of question field objects with metadata",
-                "type": AbstractDataProviderType::get(AutoListOrNothingType),
+                "desc": "List of question field objects with metadata including `uuid`, `type`, "
+                    "`blockGroupUuid`, and `title`",
+                "type": new ListDataType("TallyQuestionFieldList",
+                    new TallyQuestionFieldDataType(AutoHashOrNothingType), True),
             },
         };
     }

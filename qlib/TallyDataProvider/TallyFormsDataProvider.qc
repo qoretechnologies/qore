@@ -31,6 +31,7 @@ public const TallyFormsSearchOptions = {
         "short_desc": "Page number",
         "type": AbstractDataProviderTypeMap."*int",
         "desc": "Page number for pagination (default `1`)",
+        "preselected": True,
     },
     "limit": <DataProviderOptionInfo>{
         "display_name": "Limit",
