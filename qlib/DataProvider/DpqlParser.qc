@@ -928,54 +928,74 @@ public class DpqlParser {
 
             case DPQL_TOK_IDENTIFIER: {
                 string kw = tok.value.lwr();
-                if (kw == "between") {
-                    nextToken();  # consume 'between'
-                    skipWhitespace();
-                    auto low = parseAdditiveExpr();
-                    skipWhitespace();
-                    # Expect 'and'
-                    hash<DpqlTokenInfo> and_tok = peek();
-                    if (and_tok.type != DPQL_TOK_IDENTIFIER || and_tok.value.lwr() != "and") {
-                        addError("Expected 'and' in between expression", "DPQL-E001", and_tok);
-                        throw "DPQL-PARSE-ERROR", "Expected 'and'";
+                if (kw == "between" || kw == "in"
+                        || (kw == "not" && tokenizer.peekAheadSkipWhitespace() == "in")
+                        || (kw == "not" && tokenizer.peekAheadSkipWhitespace() == "between")) {
+                    # Handle "not in" and "not between" keyword pairs
+                    bool negated = kw == "not";
+                    if (negated) {
+                        nextToken();  # consume 'not'
+                        skipWhitespace();
+                        kw = peek().value.lwr();
                     }
-                    nextToken();  # consume 'and'
-                    skipWhitespace();
-                    auto high = parseAdditiveExpr();
-                    return <DataProviderExpression>{
-                        "exp": DP_SEARCH_OP_BETWEEN,
-                        "args": (left, low, high),
-                    };
-                }
-                if (kw == "in") {
-                    nextToken();  # consume 'in'
-                    skipWhitespace();
-                    list<auto> values = ();
-                    if (!atEnd() && peek().type == DPQL_TOK_LIST) {
-                        auto parsed = parseStructuredLiteral();
-                        if (parsed.typeCode() != NT_LIST) {
-                            addError("Expected list literal after 'in'", "DPQL-E013", line, column, line, column);
-                            throw "DPQL-PARSE-ERROR", "Expected list literal";
+                    if (kw == "in") {
+                        nextToken();  # consume 'in'
+                        skipWhitespace();
+                        list<auto> values = ();
+                        if (!atEnd() && peek().type == DPQL_TOK_LIST) {
+                            auto parsed = parseStructuredLiteral();
+                            if (parsed.typeCode() != NT_LIST) {
+                                addError("Expected list literal after 'in'", "DPQL-E013",
+                                    line, column, line, column);
+                                throw "DPQL-PARSE-ERROR", "Expected list literal";
+                            }
+                            values = parsed;
+                        } else {
+                            expect(DPQL_TOK_LPAREN, "'('");
+                            skipWhitespace();
+                            values = parseValueList();
+                            skipWhitespace();
+                            expect(DPQL_TOK_RPAREN, "')'");
                         }
-                        values = parsed;
-                    } else {
-                        expect(DPQL_TOK_LPAREN, "'('");
-                        skipWhitespace();
-                        values = parseValueList();
-                        skipWhitespace();
-                        expect(DPQL_TOK_RPAREN, "')'");
+                        return <DataProviderExpression>{
+                            "exp": negated ? DP_OP_NOT_IN : DP_SEARCH_OP_IN,
+                            "args": (left,) + values,
+                        };
                     }
-                    return <DataProviderExpression>{
-                        "exp": DP_SEARCH_OP_IN,
-                        "args": (left,) + values,
-                    };
+                    if (kw == "between") {
+                        nextToken();  # consume 'between'
+                        skipWhitespace();
+                        auto low = parseAdditiveExpr();
+                        skipWhitespace();
+                        hash<DpqlTokenInfo> and_tok = peek();
+                        if (and_tok.type != DPQL_TOK_IDENTIFIER || and_tok.value.lwr() != "and") {
+                            addError("Expected 'and' in between expression", "DPQL-E001", and_tok);
+                            throw "DPQL-PARSE-ERROR", "Expected 'and'";
+                        }
+                        nextToken();  # consume 'and'
+                        skipWhitespace();
+                        auto high = parseAdditiveExpr();
+                        if (negated) {
+                            return <DataProviderExpression>{
+                                "exp": DP_SEARCH_OP_NOT,
+                                "args": (<DataProviderExpression>{
+                                    "exp": DP_SEARCH_OP_BETWEEN,
+                                    "args": (left, low, high),
+                                },),
+                            };
+                        }
+                        return <DataProviderExpression>{
+                            "exp": DP_SEARCH_OP_BETWEEN,
+                            "args": (left, low, high),
+                        };
+                    }
                 }
                 # Check for provider-specific infix comparison operators (e.g. "like")
                 *string exp_name = symbol_to_name{kw};
                 if (exp_name && expressions{exp_name}) {
                     hash<DataProviderExpressionInfo> info = expressions{exp_name};
                     if (info.type == DET_Operator && inlist("Comparison", info.groups)
-                            && info.args.size() == 2) {
+                            && info.args.size() >= 2) {
                         nextToken();  # consume the operator keyword
                         skipWhitespace();
                         return <DataProviderExpression>{

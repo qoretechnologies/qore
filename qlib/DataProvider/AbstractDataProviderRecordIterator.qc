@@ -389,6 +389,9 @@ public const DP_OP_NOT_IN = "notIn";
 #! Modulus operator: returns the remainder of dividing the first argument by the second
 public const DP_OP_MOD = "mod";
 
+#! SQL LIKE operator: pattern matching with % and _ wildcards
+public const DP_OP_LIKE = "like";
+
 #! Serialize value to YAML string
 public const DP_FUNC_MAKE_YAML = "make_yaml";
 

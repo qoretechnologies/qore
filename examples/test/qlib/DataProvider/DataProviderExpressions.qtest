@@ -42,6 +42,7 @@ class DataProviderExpressionsTest inherits QUnit::Test {
         addTestCase("math function tests", \mathTests());
         addTestCase("string function tests (new)", \newStringTests());
         addTestCase("map/hash_map tests", \mapTests());
+        addTestCase("like operator tests", \likeTests());
         set_return_value(main());
     }
 
@@ -691,5 +692,36 @@ class DataProviderExpressionsTest inherits QUnit::Test {
                 ),
             });
         assertEq((), result);
+    }
+
+    likeTests() {
+        # % wildcard
+        assertTrue(eval_expr("like", ("Hello World", "%World")));
+        assertTrue(eval_expr("like", ("Hello World", "Hello%")));
+        assertTrue(eval_expr("like", ("Hello World", "%lo Wo%")));
+        assertFalse(eval_expr("like", ("Hello World", "%xyz%")));
+
+        # _ wildcard
+        assertTrue(eval_expr("like", ("ABC", "A_C")));
+        assertTrue(eval_expr("like", ("A1C", "A_C")));
+        assertFalse(eval_expr("like", ("ABBC", "A_C")));
+
+        # exact match (no wildcards)
+        assertTrue(eval_expr("like", ("hello", "hello")));
+        assertFalse(eval_expr("like", ("hello", "world")));
+
+        # case sensitivity (default: case-sensitive)
+        assertFalse(eval_expr("like", ("HELLO", "hello")));
+        # case-insensitive with third arg
+        assertTrue(eval_expr("like", ("HELLO", "hello", True)));
+
+        # regex metacharacters in pattern must be escaped
+        assertTrue(eval_expr("like", ("user@example.com", "%@example.com")));
+        assertFalse(eval_expr("like", ("user@exampleXcom", "%@example.com")));
+
+        # empty string
+        assertTrue(eval_expr("like", ("", "")));
+        assertTrue(eval_expr("like", ("", "%")));
+        assertFalse(eval_expr("like", ("", "_")));
     }
 }

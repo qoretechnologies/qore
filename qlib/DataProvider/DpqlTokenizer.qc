@@ -289,6 +289,33 @@ public class DpqlTokenizer {
         return "";
     }
 
+    #! Peeks at the next identifier value after the current peeked token, skipping whitespace
+    /** Scans the raw input without consuming tokens to check what identifier follows.
+        Used by the parser for multi-keyword lookahead (e.g., "not in", "not between").
+
+        @return the lowercase identifier string, or "" if no identifier follows
+
+        @since DataProvider 3.3
+    */
+    string peekAheadSkipWhitespace() {
+        # pos is already past the peeked token (scanToken advances pos)
+        int scan_pos = pos;
+        # Skip whitespace
+        while (scan_pos < len && input[scan_pos] =~ /[ \t\r\n]/) {
+            ++scan_pos;
+        }
+        if (scan_pos >= len) {
+            return "";
+        }
+        # Read identifier
+        string result = "";
+        while (scan_pos < len && input[scan_pos] =~ /[a-zA-Z_]/) {
+            result += input[scan_pos];
+            ++scan_pos;
+        }
+        return result.lwr();
+    }
+
     #! Returns all tokens as a list (for syntax highlighting)
     /** @return a list of all tokens in the input
     */

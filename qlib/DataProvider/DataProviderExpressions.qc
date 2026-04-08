@@ -634,6 +634,63 @@ public const ExtendedExpressionImplementations = {
         },
     },
 
+    # --- Like operator ---
+    DP_OP_LIKE: {
+        "exp": <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": DP_OP_LIKE,
+            "display_name": "like",
+            "short_desc": "Returns True if the string matches the SQL LIKE pattern",
+            "desc": "Returns `True` if the first argument matches the second using SQL LIKE pattern matching. "
+                "`%` matches any sequence of characters, `_` matches any single character. "
+                "An optional third argument controls case sensitivity (default: case-sensitive)",
+            "symbol": "like",
+            "render_template": "$arg[0] like $arg[1]",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                DataProviderSignatureOptionalBoolType),
+            "arg_info": (
+                <DataProviderArgInfo>{
+                    "display_name": "String Value",
+                    "short_desc": "The string to match",
+                    "desc": "The string value to match against the pattern",
+                    "label_after": "like",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Pattern",
+                    "short_desc": "LIKE pattern (% and _ wildcards)",
+                    "desc": "The LIKE pattern; `%` matches any sequence of characters, `_` matches any "
+                        "single character",
+                    "example_value": "%example%",
+                },
+                <DataProviderArgInfo>{
+                    "display_name": "Ignore Case?",
+                    "short_desc": "If True then case is ignored (default: False)",
+                    "desc": "If `True` then case will be ignored; default: `False`",
+                    "default_value": False,
+                },
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        },
+        "impl": auto sub (hash<auto> rec, hash<DataProviderExpression> exp, *hash<auto> tc) {
+            string str = dp_eval_arg(rec, exp, 0, tc);
+            string pattern = dp_eval_arg(rec, exp, 1, tc);
+            # Convert LIKE pattern to regex: escape regex metacharacters, then convert % and _
+            # First escape all regex-special chars except % and _
+            string re = regex_subst(pattern, "([.^$+?{}\\[\\]|()\\\\])", "\\\\$1", RE_Global);
+            # Convert LIKE wildcards to regex equivalents
+            re = regex_subst(re, "%", ".*", RE_Global);
+            re = regex_subst(re, "_", ".", RE_Global);
+            # Anchor the pattern
+            re = "^" + re + "$";
+            int opts;
+            if (dp_eval_arg(rec, exp, 2, tc)) {
+                opts = RE_Caseless;
+            }
+            return regex(str, re, opts);
+        },
+    },
+
     # --- Regex ---
     DP_OP_REGEX_MATCH: {
         "exp": <DataProviderExpressionInfo>{

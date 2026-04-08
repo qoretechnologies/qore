@@ -81,6 +81,7 @@ public class DpqlSerializer {
             DP_SEARCH_OP_GE: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_BETWEEN: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_IN: DPQL_PREC_COMPARISON,
+            DP_OP_NOT_IN: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_REGEX: DPQL_PREC_COMPARISON,
             DP_SEARCH_OP_NOT: DPQL_PREC_UNARY,
             DP_OP_PLUS: DPQL_PREC_ADDITIVE,
@@ -186,7 +187,11 @@ public class DpqlSerializer {
                 break;
 
             case DP_SEARCH_OP_IN:
-                result = serializeInOp(exp.args);
+                result = serializeInOp(exp.args, False);
+                break;
+
+            case DP_OP_NOT_IN:
+                result = serializeInOp(exp.args, True);
                 break;
 
             case DP_SEARCH_OP_REGEX:
@@ -306,8 +311,8 @@ public class DpqlSerializer {
             serializeArg(args[2], DPQL_PREC_COMPARISON);
     }
 
-    #! Serializes the IN operator
-    private string serializeInOp(list<auto> args) {
+    #! Serializes the IN / NOT IN operator
+    private string serializeInOp(list<auto> args, bool negated = False) {
         if (!args) {
             return "";
         }
@@ -316,7 +321,7 @@ public class DpqlSerializer {
         for (int i = 1; i < args.size(); ++i) {
             values += serializeArg(args[i], DPQL_PREC_PRIMARY);
         }
-        return field + " in (" + values.join(", ") + ")";
+        return field + (negated ? " not in (" : " in (") + values.join(", ") + ")";
     }
 
     #! Serializes the REGEX operator

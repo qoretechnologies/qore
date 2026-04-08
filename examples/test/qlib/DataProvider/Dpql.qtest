@@ -6503,6 +6503,64 @@ public class DpqlTest inherits QUnit::Test {
             assertTrue(AbstractDataProvider::evalGenericExpression(rec, exp));
         }
 
+        # --- like operator ---
+        {
+            # like with % wildcard
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@name like "%Alice%"');
+            assertEq(DP_OP_LIKE, exp.exp);
+            assertTrue(AbstractDataProvider::evalGenericExpression({"name": "Alice Smith"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"name": "Bob Jones"}, exp));
+
+            # like with _ wildcard
+            exp = DataProvider::parseDpqlExpression('@code like "A_C"');
+            assertTrue(AbstractDataProvider::evalGenericExpression({"code": "ABC"}, exp));
+            assertTrue(AbstractDataProvider::evalGenericExpression({"code": "A1C"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"code": "ABBC"}, exp));
+
+            # like suffix match with . in pattern (must escape regex metachar)
+            exp = DataProvider::parseDpqlExpression('@email like "%@example.com"');
+            assertTrue(AbstractDataProvider::evalGenericExpression({"email": "a@example.com"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"email": "a@exampleXcom"}, exp));
+
+            # round-trip
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@email like "%@example.com"', serialized);
+        }
+
+        # --- "not in" and "not between" syntax ---
+        {
+            # "not in" parses to DP_OP_NOT_IN
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@status not in ("active", "pending")');
+            assertEq(DP_OP_NOT_IN, exp.exp);
+            assertEq(3, exp.args.size());
+            assertEq("status", exp.args[0].field);
+
+            # evaluates correctly
+            assertTrue(AbstractDataProvider::evalGenericExpression({"status": "inactive"}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"status": "active"}, exp));
+
+            # round-trips
+            string serialized = DataProvider::serializeDpqlExpression(exp);
+            assertEq('@status not in ("active", "pending")', serialized);
+            hash<DataProviderExpression> reparsed = DataProvider::parseDpqlExpression(serialized);
+            assertEq(DP_OP_NOT_IN, reparsed.exp);
+            assertEq(exp.args.size(), reparsed.args.size());
+        }
+
+        {
+            # "not between" parses to !(between)
+            hash<DataProviderExpression> exp = DataProvider::parseDpqlExpression(
+                '@age not between 18 and 65');
+            assertEq(DP_SEARCH_OP_NOT, exp.exp);
+            assertEq(DP_SEARCH_OP_BETWEEN, exp.args[0].exp);
+
+            # evaluates correctly
+            assertTrue(AbstractDataProvider::evalGenericExpression({"age": 70}, exp));
+            assertFalse(AbstractDataProvider::evalGenericExpression({"age": 30}, exp));
+        }
+
         # --- Regex end-to-end evaluation ---
         {
             # case-insensitive regex match
