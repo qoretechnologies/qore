@@ -4620,6 +4620,15 @@ QoreIRValue QoreIRLowering::lowerPlusEquals(const QoreValue& expr, std::string& 
                 arith_op, right, expr, op->loc, error);
         }
 
+        // Path-based compound assignment for complex lvalues (member chains, nested subscripts)
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AddAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for plus-equals IR lowering";
             return QoreIRValue();
@@ -4781,6 +4790,15 @@ QoreIRValue QoreIRLowering::lowerMinusEquals(const QoreValue& expr, std::string&
                 arith_op, right, expr, op->loc, error);
         }
 
+        // Path-based compound assignment for complex lvalues (member chains, nested subscripts)
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::SubAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for minus-equals IR lowering";
             return QoreIRValue();
@@ -4925,6 +4943,15 @@ QoreIRValue QoreIRLowering::lowerMultiplyEquals(const QoreValue& expr, std::stri
                 QoreIROpcode::MulAssignAny, right, expr, op->loc, error);
         }
 
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::MulAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for multiply-equals IR lowering";
             return QoreIRValue();
@@ -5030,6 +5057,15 @@ QoreIRValue QoreIRLowering::lowerDivideEquals(const QoreValue& expr, std::string
                 QoreIROpcode::DivAssignAny, right, expr, op->loc, error);
         }
 
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::DivAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for divide-equals IR lowering";
             return QoreIRValue();
@@ -5112,6 +5148,15 @@ QoreIRValue QoreIRLowering::lowerModuloEquals(const QoreValue& expr, std::string
         left_var = nullptr;
     }
     if (!left_var) {
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::ModAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for modulo-equals IR lowering";
             return QoreIRValue();
@@ -5189,6 +5234,15 @@ QoreIRValue QoreIRLowering::lowerAndEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     if (!left_var) {
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::AndAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for and-equals IR lowering";
             return QoreIRValue();
@@ -5266,6 +5320,15 @@ QoreIRValue QoreIRLowering::lowerOrEquals(const QoreValue& expr, std::string& er
         left_var = nullptr;
     }
     if (!left_var) {
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::OrAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for or-equals IR lowering";
             return QoreIRValue();
@@ -5343,6 +5406,15 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
         left_var = nullptr;
     }
     if (!left_var) {
+        // Path-based compound assignment for complex lvalues
+        {
+            QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathCompound,
+                op->getLeft(), &right, op->loc, error, false, LVCompoundOp::XorAssign);
+            if (path_result.isValid()) {
+                return path_result;
+            }
+        }
+
         if (!op->getLeft().hasNode()) {
             error = "unsupported lvalue for xor-equals IR lowering";
             return QoreIRValue();
@@ -5455,6 +5527,14 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
     }
+    // Path-based unary for complex lvalues (member chains, nested subscripts)
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvexp, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PreInc);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
@@ -5523,6 +5603,14 @@ QoreIRValue QoreIRLowering::lowerPostIncrement(const QoreValue& expr, std::strin
     }
     // Post-inc/dec on hash keys deferred — needs old value which emitHashKeyCompoundOp
     // doesn't currently expose. The pre-inc/dec case is handled in lowerPreIncrement/Decrement.
+    // Path-based unary for complex lvalues
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvexp, nullptr, base_op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PostInc);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
@@ -5611,6 +5699,14 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
         }
     }
+    // Path-based unary for complex lvalues
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvexp, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PreDec);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
     }
@@ -5676,6 +5772,14 @@ QoreIRValue QoreIRLowering::lowerPostDecrement(const QoreValue& expr, std::strin
     if (isRangeLValue(lvexp)) {
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, base_op->loc, error);
+    }
+    // Path-based unary for complex lvalues
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvexp, nullptr, base_op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PostDec);
+        if (path_result.isValid()) {
+            return path_result;
+        }
     }
     if (!guardLValueBase(lvexp, error)) {
         return QoreIRValue();
@@ -7719,12 +7823,21 @@ QoreIRValue QoreIRLowering::emitHashKeyDynamicStore(
 
 // Try to emit a LValuePath instruction for any lvalue expression that can be path-encoded.
 // Returns valid QoreIRValue on success, invalid on failure (lvalue not path-encodable).
+// Only applies to lvalues that benefit from path-based access: member variable chains
+// (SelfVarref root) or multi-step paths. Simple local variable subscripts are handled
+// by existing fast paths (emitHashKeyCompoundOp, etc.) or guardLValueBase fallback.
 QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreValue& lvalue,
         const QoreIRValue* rhs, const QoreProgramLocation* loc, std::string& error,
         bool weak, LVCompoundOp compound_op, LVUnaryOp unary_op) {
     std::vector<LVPathStep> lv_path;
     std::vector<QoreValue> dynamic_operands;
     if (!extractLValuePath(lvalue, lv_path, dynamic_operands)) {
+        return QoreIRValue();
+    }
+    // Only use path-based ops for multi-step paths (root + 2+ navigation steps),
+    // e.g. self.obj.member, self.hash.key[idx]. Simple single-step lvalues
+    // (local[idx], self.member) are handled by existing fast paths or guardLValueBase.
+    if (lv_path.size() < 3) {
         return QoreIRValue();
     }
     // Lower dynamic key/index operands
