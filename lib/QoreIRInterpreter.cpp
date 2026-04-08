@@ -6224,10 +6224,7 @@ load_local_done:
                     return false;
                 }
 
-                // NOTE: do NOT call cleanupLocalCaches() here — it destroys IR-only
-                // Targeted cache invalidation: only the root variable's slot cache entry.
-                // Must NOT call cleanupLocalCaches() — it destroys IR-only locals
-                // (loop counters etc.) that only exist in locals_slot_cache.
+                // Targeted cache invalidation for the root variable
                 if (path_inst->hasLocalTarget()) {
                     if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                         locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);

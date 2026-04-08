@@ -4460,7 +4460,9 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
         {
             std::vector<LVPathStep> lv_path;
             std::vector<QoreValue> dynamic_operands;
-            if (extractLValuePath(assign->getLeft(), lv_path, dynamic_operands)) {
+            if (extractLValuePath(assign->getLeft(), lv_path, dynamic_operands)
+                    && !lv_path.empty()
+                    && !(lv_path[0].type_info && QoreTypeInfo::isReference(lv_path[0].type_info))) {
                 // Lower dynamic key/index operands
                 std::vector<QoreIRValue> dyn_vals;
                 for (auto& dop : dynamic_operands) {
@@ -4481,7 +4483,8 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                         }
                     }
                 }
-                // Create LValuePathAssign instruction
+                // Create LValuePathAssign instruction (no result value — assignment
+                // returns the RHS directly, no need for the instruction to produce one)
                 auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
                     QoreIROpcode::LValuePathAssign);
                 path_inst->path = std::move(lv_path);
@@ -7878,6 +7881,12 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
         return QoreIRValue();
     }
     if (lv_path.empty()) {
+        return QoreIRValue();
+    }
+    // Skip reference-typed root variables — navigatePath resolves the reference
+    // target at runtime but the IR slot cache can't track the write-through
+    // (the target variable's cache won't be invalidated)
+    if (lv_path[0].type_info && QoreTypeInfo::isReference(lv_path[0].type_info)) {
         return QoreIRValue();
     }
     // Lower dynamic key/index operands
