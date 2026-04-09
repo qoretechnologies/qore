@@ -4000,7 +4000,7 @@ static void registerAOTFunctionsFromSlotMaps(
                         }
                         var_sig.append(")");
 
-                        if (var_sig == target_sig) {
+                        if (normalizeTypePaths(var_sig) == target_sig) {
                             uvb = candidate;
                             break;
                         }
@@ -4056,7 +4056,7 @@ static void registerAOTFunctionsFromSlotMaps(
                                 }
                             }
                             var_sig.append(")");
-                            if (var_sig == target_sig) {
+                            if (normalizeTypePaths(var_sig) == target_sig) {
                                 return candidate;
                             }
                         }
@@ -4667,7 +4667,7 @@ static void registerFallbackFunctionsOnMainVariants(
                                 }
                             }
                             var_sig.append(")");
-                            if (var_sig == target_sig) {
+                            if (normalizeTypePaths(var_sig) == target_sig) {
                                 main_uvb = candidate;
                                 break;
                             }
