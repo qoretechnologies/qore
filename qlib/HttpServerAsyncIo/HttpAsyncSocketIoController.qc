@@ -1429,10 +1429,21 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
+                # Materialize non-I/O-thread-safe InputStreams into memory.
+                # Handler threads must NEVER do blocking socket I/O on multiplexed
+                # connections — the I/O thread needs the socket/session mutex to
+                # process incoming data, and blocking sends cause deadlock.
+                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+                    result.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    result.input_stream.unassignThread();
+                    result.input_stream = new BinaryInputStream(buf);
+                }
+
                 if (result.input_stream) {
-                    # Try to submit to I/O thread; C++ enforces isIoThreadSafe() and
-                    # returns 1 if not safe (no headers sent yet), so we fall through
-                    # to handler-thread streaming
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
@@ -1440,49 +1451,8 @@ public class HttpAsyncSocketIoController {
                     if (!rv) {
                         controller.wakeSocket(cinfo.sock);
                     } else {
-                        # Not I/O-thread-safe (rv == 1): handler thread reads chunks and
-                        # submits them incrementally to the QUIC session with backpressure
-                        cinfo.sock.submitQuicResponseStreaming(
-                            session_id, stream_id, result.code, resp_hdr);
-                        controller.wakeSocket(cinfo.sock);
-
-                        result.input_stream.reassignThread();
-                        on_exit result.input_stream.unassignThread();
-                        bool stream_ok = True;
-                        try {
-                            while (*binary chunk = result.input_stream.read(65536)) {
-                                int retries = 0;
-                                while (cinfo.sock.submitQuicStreamData(
-                                        session_id, stream_id, chunk) == 1) {
-                                    if (++retries > 200) {
-                                        throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                            "not draining after %d retries", stream_id, retries);
-                                    }
-                                    controller.wakeSocket(cinfo.sock);
-                                    # CV-based wait: wakes immediately when I/O thread drains
-                                    # the buffer, falls back to 50ms timeout otherwise
-                                    int drain_rv = cinfo.sock.waitForQuicStreamDrain(
-                                        session_id, stream_id, 50ms);
-                                    if (drain_rv == -1) {
-                                        throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
-                                            "removed while waiting for drain", stream_id);
-                                    }
-                                }
-                                controller.wakeSocket(cinfo.sock);
-                            }
-                            cinfo.sock.submitQuicStreamData(
-                                session_id, stream_id, NOTHING, True);
-                            controller.wakeSocket(cinfo.sock);
-                        } catch (hash<ExceptionInfo> ex) {
-                            stream_ok = False;
-                            log(LoggerLevel::ERROR,
-                                "HTTP/3 non-pollable stream error session=%d stream=%d on "
-                                "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
-                            try {
-                                cinfo.sock.cancelQuicStream(session_id, stream_id);
-                                controller.wakeSocket(cinfo.sock);
-                            } catch () {}
-                        }
+                        log(LoggerLevel::WARN, "HTTP/3 stream %d: InputStream submit "
+                            "failed (rv=%d) after materialization", stream_id, rv);
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
@@ -3064,54 +3034,40 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Try to submit InputStream to I/O thread; C++ enforces isIoThreadSafe()
-                # and returns 1 if not safe (no headers sent yet), so we fall through
-                # to handler-thread streaming
+                # Materialize non-I/O-thread-safe InputStreams into memory.
+                # Handler threads must NEVER do blocking socket I/O on multiplexed
+                # connections — the I/O thread needs the socket/session mutex to
+                # process incoming ACKs, and blocking sends cause deadlock.
+                # Read the full body here (on the handler thread), wrap in
+                # BinaryInputStream (I/O-thread-safe), then the submit path below
+                # hands it to the I/O thread for non-blocking send.
+                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+                    result.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    result.input_stream.unassignThread();
+                    result.input_stream = new BinaryInputStream(buf);
+                }
+
+                # Submit InputStream to I/O thread for non-blocking streaming
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
-                        log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe "
+                        log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting "
                             "InputStream response (CL=%y)",
                             stream_id, result.hdr."Content-Length");
                         controller.wakeSocket(cinfo.sock);
                         return;
                     }
-
-                    # Not I/O-thread-safe (rv == 1): the handler thread reads chunks and
-                    # submits them incrementally to the H2 session
-                    cinfo.sock.submitHttp2StreamingResponseHeaders(
-                        stream_id, result.code, resp_hdr);
-                    controller.wakeSocket(cinfo.sock);
-
-                    result.input_stream.reassignThread();
-                    on_exit result.input_stream.unassignThread();
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        while (True) {
-                            try {
-                                cinfo.sock.sendHttp2StreamData(stream_id, chunk);
-                                controller.wakeSocket(cinfo.sock);
-                                break;
-                            } catch (hash<ExceptionInfo> ex) {
-                                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                                    # Buffer full — wake I/O thread to drain, then wait
-                                    # deterministically for the CV signal
-                                    controller.wakeSocket(cinfo.sock);
-                                    if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
-                                        # Timed out or stream gone — give up
-                                        rethrow;
-                                    }
-                                    continue;
-                                }
-                                rethrow;
-                            }
-                        }
-                    }
-                    cinfo.sock.sendHttp2StreamData(stream_id, NOTHING, True);
-                    controller.wakeSocket(cinfo.sock);
-                    return;
+                    # submitHttp2StreamingResponseWithStream failed — fall through
+                    # to in-memory body path (should not happen after materialization)
+                    log(LoggerLevel::WARN, "HTTP/2 stream %d: InputStream submit "
+                        "failed (rv=%d) after materialization", stream_id, rv);
                 }
 
                 # In-memory response body

@@ -2602,6 +2602,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # HTTP/2: no 100-continue mechanism; the body is already being sent
                             # by the client on the stream — nothing to do
                         } else {
+                            # TODO: convert to async — handler threads should not do sync
+                            # socket I/O; queue via I/O controller poll operation instead
                             s.send("HTTP/1.1 100 Continue\r\n\r\n");
                         }
                     } else {
@@ -3296,6 +3298,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
                     if (async_response_out) {
+                        # TODO: convert to async — use startPollSendHttpResponse() +
+                        # register WS poll op on completion via I/O controller
                         s.sendHTTPResponse(async_response_out."code",
                             HttpServer::HttpCodes{async_response_out."code"}, "1.1",
                             async_response_out.hdr ?? {}, async_response_out.body);
@@ -5056,39 +5060,29 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 auto sub() { return cb(); }, s);
         }
 
+        # Materialize non-I/O-thread-safe InputStreams into memory.
+        # Handler threads must NEVER do blocking socket I/O on multiplexed
+        # connections — the I/O thread needs the socket/session mutex to
+        # process incoming data, and blocking sends cause deadlock.
+        if (response.input_stream && !response.input_stream.isIoThreadSafe()) {
+            response.input_stream.reassignThread();
+            binary buf;
+            while (*binary chunk = response.input_stream.read(65536)) {
+                buf += chunk;
+            }
+            response.input_stream.unassignThread();
+            response.input_stream = new BinaryInputStream(buf);
+        }
+
         if (header_info.http3) {
             int session_id = header_info.session_id;
             if (response.input_stream) {
-                # Try I/O-thread-safe streaming first
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
-                if (!rv) {
-                    io_wake();
-                    logResponse(response.cx, response);
-                    return;
+                if (rv) {
+                    log("HTTP/3 stream %d: InputStream submit failed (rv=%d) "
+                        "after materialization", stream_id, rv);
                 }
-                # Fall back to handler-thread chunking
-                s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
-                io_wake();
-                response.input_stream.reassignThread();
-                on_exit response.input_stream.unassignThread();
-                while (*binary chunk = response.input_stream.read(65536)) {
-                    int retries = 0;
-                    while (s.submitQuicStreamData(session_id, stream_id, chunk) == 1) {
-                        if (++retries > 200) {
-                            throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer not draining "
-                                "after %d retries", stream_id, retries);
-                        }
-                        io_wake();
-                        int drain_rv = s.waitForQuicStreamDrain(session_id, stream_id, 50ms);
-                        if (drain_rv == -1) {
-                            throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream removed "
-                                "while waiting for drain", stream_id);
-                        }
-                    }
-                    io_wake();
-                }
-                s.submitQuicStreamData(session_id, stream_id, NOTHING, True);
                 io_wake();
             } else {
                 s.submitQuicResponse(session_id, stream_id, response.code, hdr, response.body);
@@ -5097,41 +5091,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         } else {
             # HTTP/2
             if (response.input_stream) {
-                # Try I/O-thread-safe streaming first
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
-                if (!rv) {
-                    io_wake();
-                    logResponse(response.cx, response);
-                    return;
+                if (rv) {
+                    log("HTTP/2 stream %d: InputStream submit failed (rv=%d) "
+                        "after materialization", stream_id, rv);
                 }
-                # Fall back to handler-thread chunking
-                s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
-                io_wake();
-                response.input_stream.reassignThread();
-                on_exit response.input_stream.unassignThread();
-                while (*binary chunk = response.input_stream.read(65536)) {
-                    while (True) {
-                        try {
-                            s.sendHttp2StreamData(stream_id, chunk);
-                            io_wake();
-                            break;
-                        } catch (hash<ExceptionInfo> ex) {
-                            if (ex.err == "HTTP2-FLOW-CONTROL") {
-                                # Buffer full — wake I/O thread to drain, then wait
-                                # deterministically for the CV signal
-                                io_wake();
-                                if (s.waitForHttp2StreamDrain(stream_id, 10s)) {
-                                    # Timed out or stream gone — give up
-                                    rethrow;
-                                }
-                                continue;
-                            }
-                            rethrow;
-                        }
-                    }
-                }
-                s.sendHttp2StreamData(stream_id, NOTHING, True);
                 io_wake();
             } else {
                 s.submitHttp2Response(stream_id, response.code, hdr, response.body);
