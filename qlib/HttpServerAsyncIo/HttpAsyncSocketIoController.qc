@@ -2113,15 +2113,32 @@ public class HttpAsyncSocketIoController {
                 break;
             }
             case HttpConnectionState::SendStreamResponse: {
-                # Non-fused InputStream stream send (close on completion)
+                # Async response send completed
                 AbstractPollOperation send_op = result.spop;
                 string state = send_op.getState();
-                if (state == "stream-complete") {
-                    # Send complete — close connection as requested
-                    try { cinfo.sock.close(); } catch () {}
-                    {
-                        AutoWriteLock al(m);
-                        remove connections{uh};
+                if (state == "stream-complete" || state == "sent") {
+                    # Check if there's a pending streaming operation to start
+                    # (SSE/WS headers were sent; now start the streaming op)
+                    if (cinfo.pending_stream_op) {
+                        hash<HttpActiveConnectionInfo> new_cinfo;
+                        {
+                            AutoWriteLock al(m);
+                            hash<HttpActiveConnectionInfo> upd =
+                                cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                            upd.state = cinfo.pending_stream_type;
+                            upd.stream_op = cinfo.pending_stream_op;
+                            remove upd.pending_stream_type;
+                            remove upd.pending_stream_op;
+                            new_cinfo = connections{uh} = upd;
+                        }
+                        submitConnectionOp(uh, new_cinfo);
+                    } else {
+                        # No pending streaming — close connection
+                        try { cinfo.sock.close(); } catch () {}
+                        {
+                            AutoWriteLock al(m);
+                            remove connections{uh};
+                        }
                     }
                 } else {
                     # Error or unexpected state — close connection
@@ -2421,15 +2438,29 @@ public class HttpAsyncSocketIoController {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
+                    # send_callback must run on handler thread (user code callback)
                     sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
                         status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
-                } else if (result.input_stream) {
-                    result.input_stream.reassignThread();
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {}, result.input_stream);
                 } else {
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {}, result.body);
+                    # Use async poll operation for all other H1 responses
+                    AbstractPollOperation send_op = sock.startPollSendHttpResponse(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.body);
+                    hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                        "sock": sock,
+                        "listener": linfo.listener,
+                        "cx": cx,
+                        "target": target,
+                        "state": HttpConnectionState::SendStreamResponse,
+                        "stream_op": send_op,
+                    };
+                    hash<HttpActiveConnectionInfo> cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        cinfo = connections{uh} = new_cinfo;
+                    }
+                    submitConnectionOp(uh, cinfo);
+                    return;
                 }
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "Error sending HTTP/1.x response for %y: %s: %s",
@@ -2445,33 +2476,54 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.streaming) {
-            # For H1 SSE: send HTTP response headers before entering streaming mode
+            # For H1 SSE/WS: send HTTP response headers via async poll operation
+            # before entering streaming mode
+            string stream_state = result.stream_type;
             if (result.code) {
                 try {
                     string status_msg = result.status_message ?? HttpServer::HttpCodes{result.code} ?? "OK";
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {});
+                    AbstractPollOperation send_op = sock.startPollSendHttpResponse(
+                        result.code, status_msg, "1.1", result.hdr ?? {});
+                    # Store the streaming op info — handleConnectionResult will
+                    # transition to streaming state after the header send completes
+                    hash<HttpActiveConnectionInfo> cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                            "sock": sock,
+                            "listener": linfo.listener,
+                            "cx": cx,
+                            "target": target,
+                            "state": HttpConnectionState::SendStreamResponse,
+                            "stream_op": send_op,
+                            "ttl": result.ttl ?? DefaultIdleTimeout,
+                            # Store pending streaming info for transition after header send
+                            "pending_stream_type": stream_state,
+                            "pending_stream_op": result.stream_operation,
+                        };
+                    }
+                    submitConnectionOp(uh, cinfo);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error sending SSE response for %y: %s: %s",
                         uh, ex.err, ex.desc);
                     try { sock.close(); } catch () {}
-                    return;
                 }
+            } else {
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoWriteLock al(m);
+                    cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                        "sock": sock,
+                        "listener": linfo.listener,
+                        "cx": cx,
+                        "target": target,
+                        "state": stream_state,
+                        "stream_op": result.stream_operation,
+                        "ttl": result.ttl ?? DefaultIdleTimeout,
+                    };
+                }
+                submitConnectionOp(uh, cinfo);
             }
-            hash<HttpActiveConnectionInfo> cinfo;
-            {
-                AutoWriteLock al(m);
-                cinfo = connections{uh} = <HttpActiveConnectionInfo>{
-                    "sock": sock,
-                    "listener": linfo.listener,
-                    "cx": cx,
-                    "target": target,
-                    "state": result.stream_type,
-                    "stream_op": result.stream_operation,
-                    "ttl": result.ttl ?? DefaultIdleTimeout,
-                };
-            }
-            submitConnectionOp(uh, cinfo);
             return;
         }
 
@@ -3333,6 +3385,12 @@ hashdecl HttpActiveConnectionInfo {
 
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
+
+    #! Pending streaming state type (set during header send before SSE/WS transition)
+    *string pending_stream_type;
+
+    #! Pending streaming operation (set during header send before SSE/WS transition)
+    *AbstractPollOperation pending_stream_op;
 
 }
 

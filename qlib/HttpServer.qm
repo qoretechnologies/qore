@@ -2602,8 +2602,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # HTTP/2: no 100-continue mechanism; the body is already being sent
                             # by the client on the stream — nothing to do
                         } else {
-                            # TODO: convert to async — handler threads should not do sync
-                            # socket I/O; queue via I/O controller poll operation instead
+                            # HTTP/1.x: handler thread owns socket exclusively (removed
+                            # from I/O controller at header dispatch). sendIntern handles
+                            # EAGAIN on non-blocking sockets. Fully async 100-Continue
+                            # requires the I/O controller to handle body reading for H1.
                             s.send("HTTP/1.1 100 Continue\r\n\r\n");
                         }
                     } else {
@@ -3297,21 +3299,25 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    if (async_response_out) {
-                        # TODO: convert to async — use startPollSendHttpResponse() +
-                        # register WS poll op on completion via I/O controller
-                        s.sendHTTPResponse(async_response_out."code",
-                            HttpServer::HttpCodes{async_response_out."code"}, "1.1",
-                            async_response_out.hdr ?? {}, async_response_out.body);
-                        delete async_response_out;
-                    }
-
                     # Create WebSocket poll operation (submitted by startImpl after
                     # setConnection/registered, ensuring echo mode is set before any
                     # frames arrive on the I/O thread)
                     *HttpServerAsyncIo::HttpWebSocketPollOperation ws_poll_op;
                     if (asyncIo) {
                         ws_poll_op = new HttpServerAsyncIo::HttpWebSocketPollOperation(s);
+                    }
+
+                    if (async_response_out) {
+                        # H1 WebSocket upgrade: handler thread exclusively owns the
+                        # socket (removed from I/O controller at header dispatch).
+                        # The 101 response MUST be sent before the WS poll op is
+                        # registered (protocol requirement — client expects 101 before
+                        # switching to WS framing).  sendIntern handles EAGAIN on
+                        # non-blocking sockets via poll().
+                        s.sendHTTPResponse(async_response_out."code",
+                            HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                            async_response_out.hdr ?? {}, async_response_out.body);
+                        delete async_response_out;
                     }
                     on_exit {
                         if (ws_poll_op) {
