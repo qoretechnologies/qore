@@ -238,6 +238,7 @@ public class DataProvider {
             "kit": "KitDataProvider",
             "apollo": "ApolloDataProvider",
             "constantcontact": "ConstantContactDataProvider",
+            "smartsheet": "SmartSheetDataProvider",
             "square": "SquareDataProvider",
             "squarespace": "SquarespaceDataProvider",
             "tableau": "TableauDataProvider",

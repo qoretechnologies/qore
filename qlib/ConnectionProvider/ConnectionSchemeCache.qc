@@ -241,6 +241,8 @@ public class ConnectionSchemeCache {
             "apollorest": "ApolloRestClient",
 
             "constantcontactres": "ConstantContactRestClient",
+            "smartsheetrest": "SmartSheetRestClient",
+
             "squareres": "SquareRestClient",
             "squarespaceres": "SquarespaceRestClient",
 
