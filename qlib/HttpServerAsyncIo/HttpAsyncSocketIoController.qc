@@ -2142,6 +2142,9 @@ public class HttpAsyncSocketIoController {
                             new_cinfo = connections{uh} = upd;
                         }
                         submitConnectionOp(uh, new_cinfo);
+                        # Wake the socket to flush any data queued during
+                        # header send (SSE events, WS frames)
+                        controller.wakeSocket(cinfo.sock);
                     } else {
                         # No pending streaming — close connection
                         try { cinfo.sock.close(); } catch () {}
