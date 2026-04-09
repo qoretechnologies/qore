@@ -6665,6 +6665,27 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         rcid.is_negated = dynamic_cast<const CaseNodeNegRegex*>(cnode) != nullptr;
     }
 
+    // Extract LValuePath instruction identities
+    out.lv_path_insts.resize(slots.lv_path_slots.size());
+    for (auto& [ptr, slot] : slots.lv_path_slots) {
+        const auto* pi = reinterpret_cast<const QoreIRLValuePathInstruction*>(ptr);
+        AOTLVPathSlotId& lvid = out.lv_path_insts[slot];
+        lvid.opcode = static_cast<uint16_t>(pi->opcode);
+        lvid.weak = pi->weak ? 1 : 0;
+        lvid.compound_op = static_cast<uint8_t>(pi->compound_op);
+        lvid.unary_op = static_cast<uint8_t>(pi->unary_op);
+        lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);
+        lvid.ternary_op = static_cast<uint8_t>(pi->ternary_op);
+        for (const auto& step : pi->path) {
+            AOTLVPathStepId sid;
+            sid.kind = static_cast<uint8_t>(step.kind);
+            sid.slot_id = step.slot_id;
+            sid.name = step.name;
+            sid.operand_idx = step.operand_idx;
+            lvid.steps.push_back(std::move(sid));
+        }
+    }
+
     // stmt_slots (on_block_exit handlers) are resolved from the function's AST at
     // runtime in buildContextFromSlotMap(), so they no longer require source fallback.
 }

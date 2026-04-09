@@ -126,6 +126,10 @@ struct QoreAOTContext {
     //! outlive the context so that lv_path_insts[] pointers remain valid.
     std::unique_ptr<QoreIRFunction> lv_path_ir_func;
 
+    //! Owned LValuePath instructions reconstructed from binary deserialization.
+    //! The raw pointers in lv_path_insts[] point into these objects.
+    std::vector<std::unique_ptr<QoreIRLValuePathInstruction>> owned_lv_path_insts;
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();

@@ -852,6 +852,25 @@ struct AOTRegexCaseSlotId {
     bool is_negated = false; //!< true for CaseNodeNegRegex (~! match)
 };
 
+//! Identity for a single step in an LValuePath instruction
+struct AOTLVPathStepId {
+    uint8_t kind;              //!< LVPathStepKind
+    uint32_t slot_id;          //!< local/global slot for variable resolution
+    std::string name;          //!< key name for HashKeyConst/SelfMember/GlobalVar etc.
+    uint32_t operand_idx;      //!< dynamic operand index (UINT32_MAX if static)
+};
+
+//! Identity for a LValuePath instruction slot
+struct AOTLVPathSlotId {
+    uint16_t opcode;           //!< QoreIROpcode (LValuePathAssign etc.)
+    uint8_t weak;              //!< weak assignment flag
+    uint8_t compound_op;       //!< LVCompoundOp
+    uint8_t unary_op;          //!< LVUnaryOp
+    uint8_t binary_mut_op;     //!< LVBinaryMutOp
+    uint8_t ternary_op;        //!< LVTernaryOp
+    std::vector<AOTLVPathStepId> steps;
+};
+
 //! Complete slot identity set for a single compiled function
 struct AOTSlotIdentities {
     std::vector<AOTLocalSlotId> locals;   //!< indexed by local slot index
@@ -859,6 +878,7 @@ struct AOTSlotIdentities {
     std::vector<AOTExprSlotId> exprs;     //!< indexed by expression slot index
     std::vector<AOTBodyLocalId> body_locals; //!< body locals in order
     std::vector<AOTRegexCaseSlotId> regex_cases; //!< indexed by regex case slot index
+    std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression is GENERIC_EVAL
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
 };

@@ -2279,6 +2279,45 @@ static QoreAOTContext* buildContextFromSlotMap(
         }
     }
 
+    // Deserialize LValuePath instructions
+    if (num_lv_path_insts > 0) {
+        for (int i = 0; i < num_lv_path_insts; ++i) {
+            uint16_t opcode = QoreAOTBinaryReader::readU16(ptr);
+            auto pi = std::make_unique<QoreIRLValuePathInstruction>(
+                static_cast<QoreIROpcode>(opcode));
+            pi->weak = QoreAOTBinaryReader::readU8(ptr) != 0;
+            pi->compound_op = static_cast<LVCompoundOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
+            for (uint8_t s = 0; s < num_steps; ++s) {
+                LVPathStep step;
+                step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ptr));
+                step.slot_id = QoreAOTBinaryReader::readU32(ptr);
+                const char* sname = reader.readStringRef(ptr);
+                step.name = sname ? sname : "";
+                step.operand_idx = QoreAOTBinaryReader::readU32(ptr);
+                // Resolve ref_ptr from context locals/globals
+                if ((step.kind == LVPathStepKind::LocalVar
+                        || step.kind == LVPathStepKind::ClosureVar)
+                        && step.slot_id != UINT32_MAX
+                        && step.slot_id < static_cast<uint32_t>(num_locals)) {
+                    step.ref_ptr = ctx->locals[step.slot_id];
+                } else if ((step.kind == LVPathStepKind::GlobalVar
+                        || step.kind == LVPathStepKind::ThreadLocalVar)
+                        && !step.name.empty()) {
+                    const qore_ns_private* vns = nullptr;
+                    step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
+                        *pp->RootNS, step.name.c_str(), vns);
+                }
+                pi->path.push_back(std::move(step));
+            }
+            ctx->lv_path_insts[i] = pi.get();
+            ctx->owned_lv_path_insts.push_back(std::move(pi));
+        }
+    }
+
     // Read handler IR for statement slots
     // For each stmt slot, read the handler IR flag and optionally deserialize the IR function
     bool all_stmt_slots_have_ir = true;
