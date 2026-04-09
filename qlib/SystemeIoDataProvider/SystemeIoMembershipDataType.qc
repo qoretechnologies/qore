@@ -101,6 +101,7 @@ public class SystemeIoDeleteMembershipRequestDataType inherits HashDataType {
                 "short_desc": "The membership ID to delete",
                 "desc": "The unique identifier of the membership to delete",
                 "required": True,
+                "ref_data": "memberships",
             },
         };
     }

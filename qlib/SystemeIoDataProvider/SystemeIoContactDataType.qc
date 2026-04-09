@@ -195,6 +195,7 @@ public class SystemeIoUpdateContactRequestDataType inherits HashDataType {
                 "short_desc": "The contact ID to update",
                 "desc": "The unique identifier of the contact to update",
                 "required": True,
+                "ref_data": "contacts",
             },
         } + SystemeIoDataProviderBase::makeFieldsOptional(
             SystemeIoCreateContactRequestDataType::Fields);
@@ -216,6 +217,7 @@ public class SystemeIoDeleteContactRequestDataType inherits HashDataType {
                 "short_desc": "The contact ID to delete",
                 "desc": "The unique identifier of the contact to delete",
                 "required": True,
+                "ref_data": "contacts",
             },
         };
     }

@@ -99,9 +99,13 @@ public class SystemeIoRestClientBase {
             "Accept": MimeTypeJson,
         };
 
+        #! Default API path
+        const DefaultApiPath = "/api";
+
         #! Default constructor options
         const DefaultOptions = {
             "data": DefaultData,
+            "default_path": DefaultApiPath,
             "headers": DefaultHeaders,
             "ping_headers": DefaultPingHeaders,
             "ping_method": DefaultPingMethod,

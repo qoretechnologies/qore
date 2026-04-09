@@ -85,6 +85,7 @@ public class SystemeIoUpdateTagRequestDataType inherits HashDataType {
                 "short_desc": "The tag ID to update",
                 "desc": "The unique identifier of the tag to update",
                 "required": True,
+                "ref_data": "tags",
             },
             "name": {
                 "type": StringType,
@@ -112,6 +113,7 @@ public class SystemeIoDeleteTagRequestDataType inherits HashDataType {
                 "short_desc": "The tag ID to delete",
                 "desc": "The unique identifier of the tag to delete",
                 "required": True,
+                "ref_data": "tags",
             },
         };
     }
@@ -131,6 +133,7 @@ public class SystemeIoAssignContactTagRequestDataType inherits HashDataType {
                 "short_desc": "The contact ID",
                 "desc": "The unique identifier of the contact to assign the tag to",
                 "required": True,
+                "ref_data": "contacts",
             },
             "tagId": {
                 "type": IntType,
@@ -158,6 +161,7 @@ public class SystemeIoRemoveContactTagRequestDataType inherits HashDataType {
                 "short_desc": "The contact ID",
                 "desc": "The unique identifier of the contact to remove the tag from",
                 "required": True,
+                "ref_data": "contacts",
             },
             "tagId": {
                 "type": IntType,

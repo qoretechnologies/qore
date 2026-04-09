@@ -129,6 +129,7 @@ public class SystemeIoDeleteEnrollmentRequestDataType inherits HashDataType {
                 "short_desc": "The enrollment ID to delete",
                 "desc": "The unique identifier of the enrollment to delete",
                 "required": True,
+                "ref_data": "enrollments",
             },
         };
     }
