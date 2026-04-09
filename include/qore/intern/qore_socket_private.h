@@ -3607,9 +3607,6 @@ struct qore_socket_private {
         ssize_t rc;
         size_t bs = 0;
 
-        // set the non-blocking flag (for use with non-ssl connections)
-        bool nb = (timeout_ms >= 0);
-
         while (true) {
             if (ssl) {
                 // SSL_MODE_ENABLE_PARTIAL_WRITE is enabled so we can get finer-grained socket events for do_send_event() below
@@ -3622,12 +3619,14 @@ struct qore_socket_private {
                     if (rc >= 0)
                         break;
                     sock_get_error();
-                    // check that the send finishes before the timeout if we are using non-blocking I/O
-                    if (nb && (errno == EAGAIN
+                    // Handle EAGAIN/EWOULDBLOCK: the socket may be in non-blocking mode
+                    // even when timeout_ms is -1 (e.g., HTTP/2 server handler threads
+                    // flushing responses while the I/O controller has set O_NONBLOCK)
+                    if (errno == EAGAIN
 #ifdef EWOULDBLOCK
                         || errno == EWOULDBLOCK
 #endif
-                        )) {
+                        ) {
                         if (!isWriteFinished(timeout_ms, mname, xsink)) {
                             if (*xsink)
                                 return -1;

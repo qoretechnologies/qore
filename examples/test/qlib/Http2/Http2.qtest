@@ -199,6 +199,8 @@ public class Http2Test inherits QUnit::Test {
             \testHttp2RstStreamDuringInputStreamStreaming());
         addTestCase("HTTP/2 ALPN via HttpAcceptPollOperation auto-SSL test",
             \testAlpnViaAcceptPollAutoSsl());
+        addTestCase("HTTP/2 concurrent connections test",
+            \testHttp2ConcurrentConnections());
 
         set_return_value(main());
     }
@@ -4873,5 +4875,78 @@ public class Http2Test inherits QUnit::Test {
             "client should see HTTP/2 response");
         assertEq(200, test_results.client_status,
             "response should be 200 OK");
+    }
+
+    #! Tests that multiple concurrent HTTP/2 connections are handled correctly
+    /** Regression test for a race condition where the I/O controller sets the socket
+        to non-blocking mode (for multiplexed reading) while the handler thread tries
+        to flush the response with sendIntern(timeout=-1). When send() returns EAGAIN
+        on a non-blocking socket, sendIntern must handle it rather than raising
+        SOCKET-SEND-ERROR.
+    */
+    testHttp2ConcurrentConnections() {
+        if (skip_complex_tests) {
+            testSkip("Skipping complex HTTP/2 test on Alpine");
+            return;
+        }
+
+        # Start a local HTTPS server with HTTP/2 (ALPN negotiation)
+        SSLCertificate cert(CertPem);
+        SSLPrivateKey key(KeyPem);
+        HttpServer server();
+        server.setHandler("test", "/test", MimeTypeText, new Http2TestHandler());
+        server.setDefaultHandler("test", new Http2TestHandler());
+        hash<auto> linfo = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": cert,
+            "key": key,
+        });
+        int test_port = linfo.port;
+        on_exit delete server;
+
+        string base_url = sprintf("https://localhost:%d", test_port);
+
+        # Run multiple rounds with 5 concurrent connections each to stress the race
+        # window between I/O controller setting O_NONBLOCK and handler thread flushing
+        int concurrency = 5;
+        int rounds = 10;
+        int total_errors = 0;
+
+        for (int round = 0; round < rounds; ++round) {
+            Counter cnt(concurrency);
+            list<hash<auto>> results = ();
+            list<hash<auto>> errors = ();
+            Mutex lck();
+
+            for (int i = 0; i < concurrency; ++i) {
+                background sub() {
+                    on_exit cnt.dec();
+                    try {
+                        HTTPClient hc({
+                            "url": base_url,
+                            "timeout": 30s,
+                            "ssl_verify_cert": False,
+                        });
+                        hc.setHttp2Enabled(True);
+                        string resp = hc.get("/test");
+                        lck.lock();
+                        on_exit lck.unlock();
+                        results += {"resp": resp};
+                    } catch (hash<ExceptionInfo> ex) {
+                        lck.lock();
+                        on_exit lck.unlock();
+                        errors += {"err": ex.err, "desc": ex.desc};
+                    }
+                }();
+            }
+            cnt.waitForZero(60s);
+            total_errors += errors.size();
+
+            assertEq(concurrency, results.size(),
+                sprintf("round %d: all %d concurrent HTTP/2 requests should succeed"
+                    + (errors ? sprintf(" (errors: %y)", errors) : ""), round, concurrency));
+        }
+
+        assertEq(0, total_errors, "no errors across all rounds");
     }
 }
