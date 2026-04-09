@@ -176,6 +176,7 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("map or_nothing from wildcard iterator", \testMapOrNothingFromWildcardIterator());
         addTestCase("self.member += on uninitialized list", \testSelfMemberListAppend());
         addTestCase("exception callstack regression", \testExceptionCallstack());
+        addTestCase("hash/list auto-vivification from NOTHING", \testAutoVivification());
         set_return_value(main());
     }
 
@@ -6462,6 +6463,44 @@ printf(\"%s:%s:%s:%d\\n\", ex.err, ex.desc, ex.callstack[0].function, ex.callsta
         # Verify exception shows throwingFunc in callstack (not corrupted)
         assertRegex("TEST-ERROR:throw from sub:throwingFunc:\\d+", result,
             "throw from sub shows correct function in callstack");
+    }
+
+    testAutoVivification() {
+        # Hash and list subscript assignment on uninitialized (NOTHING) variables
+        # must auto-vivify the container, not silently discard the assignment
+        string code = "%modern
+hash<auto> h;
+h{\"id\"} = 1;
+h{\"name\"} = \"test\";
+
+# dot syntax
+hash<auto> h2;
+h2.x = 42;
+
+# dynamic key
+hash<auto> h3;
+string k = \"key\";
+h3{k} = \"val\";
+
+# list auto-vivify
+list<auto> l;
+l[0] = \"first\";
+
+# *hash<auto> parameter auto-vivify (Mapper regression pattern)
+auto sub vivify(*hash<auto> ch, string kk, auto val) {
+    ch{kk} = val;
+    return ch;
+}
+auto r = vivify(NOTHING, \"a\", 1);
+
+printf(\"%d %s %d %s %s %d\\n\",
+    h{\"id\"}, h{\"name\"}, h2.x, h3{\"key\"}, l[0], r{\"a\"});
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("1 test 42 val first 1", result,
+                sprintf("hash/list auto-vivification from NOTHING (%s)", mode));
+        }
     }
 
     testSelfMemberListAppend() {

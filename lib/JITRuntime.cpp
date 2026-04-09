@@ -1598,6 +1598,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         if (had_caller_ref) {
             h->refSelf();
         }
+    } else if (hv.isNothing()) {
+        // Auto-vivify: create new hash from NOTHING, set key, assign to variable
+        QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
+        new_h->setKeyValue(key, val.refSelf(), xsink);
+        if (!*xsink) {
+            qore_rt_assign_local(var, toBits(QoreValue(new_h)), xsink);
+        }
+        if (*xsink) {
+            new_h->deref(xsink);
+            return toBits(QoreValue());
+        }
+        new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1637,6 +1649,18 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
         if (had_caller_ref) {
             h->refSelf();
         }
+    } else if (hv.isNothing()) {
+        // Auto-vivify: create new hash from NOTHING, set key, assign to variable
+        QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
+        new_h->setKeyValue(key, val.refSelf(), xsink);
+        if (!*xsink) {
+            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_h)), xsink);
+        }
+        if (*xsink) {
+            new_h->deref(xsink);
+            return toBits(QoreValue());
+        }
+        new_h->deref(nullptr);
     } else if (hv.getType() == NT_OBJECT) {
         const_cast<QoreObject*>(hv.get<const QoreObject>())->setValue(key, val.refSelf(), xsink);
     }
@@ -1699,6 +1723,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (had_caller_ref) {
             l->refSelf();
         }
+    } else if (lv.isNothing()) {
+        // Auto-vivify: create new list from NOTHING, set element, assign to variable
+        QoreListNode* new_l = new QoreListNode(autoTypeInfo);
+        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        new_l->setEntry(index, entry, xsink);
+        if (!*xsink) {
+            qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
+        }
+        if (*xsink) {
+            new_l->deref(xsink);
+            return toBits(QoreValue());
+        }
+        new_l->deref(nullptr);
     }
     return val_bits;
 }
@@ -1738,6 +1775,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         if (had_caller_ref) {
             l->refSelf();
         }
+    } else if (lv.isNothing()) {
+        // Auto-vivify: create new list from NOTHING, set element, assign to variable
+        QoreListNode* new_l = new QoreListNode(autoTypeInfo);
+        QoreValue entry = val.hasNode() ? val.refSelf() : val;
+        new_l->setEntry(index, entry, xsink);
+        if (!*xsink) {
+            qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
+        }
+        if (*xsink) {
+            new_l->deref(xsink);
+            return toBits(QoreValue());
+        }
+        new_l->deref(nullptr);
     }
     return val_bits;
 }
