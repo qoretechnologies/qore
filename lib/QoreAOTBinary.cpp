@@ -2096,7 +2096,10 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         } else {
             writer.writeStringRef("");
         }
-        writer.writeStringRef(call->getName());
+        // Strip class prefix from method name if present (e.g., "LoggerWrapper::debug" → "debug")
+        const char* mname = call->getName();
+        const char* last_sep = strrchr(mname, ':');
+        writer.writeStringRef((last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname);
         return true;
     }
 

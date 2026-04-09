@@ -106,7 +106,12 @@ static const QoreClass* en_resolveClass(QoreProgram* pgm, const std::string& nam
     if (name.empty()) return nullptr;
     qore_program_private* pp = qore_program_private::get(*pgm);
     const qore_ns_private* found_ns = nullptr;
-    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, name.c_str(), found_ns);
+    // Strip leading :: from class path (compile vs runtime namespace prefix)
+    const char* path = name.c_str();
+    if (path[0] == ':' && path[1] == ':') {
+        path += 2;
+    }
+    return qore_root_ns_private::runtimeFindClass(*pp->RootNS, path, found_ns);
 }
 
 // ============================================================================

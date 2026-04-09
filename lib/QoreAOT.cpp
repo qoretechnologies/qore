@@ -5363,7 +5363,11 @@ class ExprTreeSerializer {
             } else {
                 writeStr("");
             }
-            writeStr(sfc->getName());
+            // Strip class prefix from method name if present
+            // (e.g., "LoggerWrapper::debug" → "debug")
+            const char* mname = sfc->getName();
+            const char* last_sep = strrchr(mname, ':');
+            writeStr((last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname);
             // Args
             size_t count_pos = buf.size();
             writeU16(0);
@@ -6229,7 +6233,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
                 id.ref1 = qc->getPath();
             }
         }
-        id.ref2 = call->getName();
+        // Strip class prefix from method name if present (e.g., "LoggerWrapper::debug" → "debug")
+        const char* mname = call->getName();
+        const char* last_sep = strrchr(mname, ':');
+        id.ref2 = (last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname;
         return id;
     }
 

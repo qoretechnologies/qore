@@ -242,7 +242,9 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             const QoreClass* qc = nullptr;
             if (ref1 && *ref1) {
                 const qore_ns_private* found_ns = nullptr;
-                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, ref1, found_ns);
+                // Strip leading :: from class path (compile vs runtime namespace prefix)
+                const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
+                qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
             }
             if (!qc) {
                 printd(1, "AOT SLOT: cannot resolve class '%s' for self method '%s'\n",
