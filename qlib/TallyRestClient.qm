@@ -214,12 +214,12 @@ public class TallyRestConnection inherits RestClient::RestConnection {
     #! creates the TallyRestConnection object
     constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
-            : RestConnection(name, description, DefaultUrl, attributes, options) {
+            : RestConnection(name, description, url, attributes, options) {
     }
 
     #! creates the TallyRestConnection object
     constructor(hash<auto> config, *hash<auto> attr)
-            : RestConnection(config + {"url": DefaultUrl}, attr) {
+            : RestConnection(config + (exists config.url ? {} : {"url": DefaultUrl}), attr) {
     }
 
     #! returns \c "tally"
