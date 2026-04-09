@@ -278,9 +278,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !*ref1) {
                 return 0;
             }
+            // Strip leading :: from class path (compile vs runtime namespace prefix)
+            const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, ref1, found_ns);
+                *pp->RootNS, class_path, found_ns);
             if (!qc) {
                 printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
                 return 0;
@@ -387,9 +389,11 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref1 || !ref2) {
                 return 0;
             }
+            // Strip leading :: from class path (compile vs runtime namespace prefix)
+            const char* class_path = (ref1[0] == ':' && ref1[1] == ':') ? ref1 + 2 : ref1;
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                *pp->RootNS, ref1, found_ns);
+                *pp->RootNS, class_path, found_ns);
             if (!qc) {
                 printd(0, "AOT v2: cannot resolve class '%s' for static var '%s'\n", ref1, ref2);
                 return 0;
@@ -3498,6 +3502,36 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         slot_to_local[sid] = const_cast<LocalVar*>(lv);
     }
 
+    // 4b. Build a locals array from slot_to_local for EXPR_TREE deserialization.
+    // During serialization, EXPR_TREE blobs inside closure/handler IR use slot
+    // indices from the function's own local variables (not the parent's).
+    // The readExpr callback passed in may reference the parent's locals, which
+    // causes "invalid local slot" errors for closure parameters.
+    // Build this function's own locals array and override the readExpr callback.
+    AOTExprReadFunc funcReadExpr;
+    std::vector<LocalVar*> func_locals_arr;
+    const AOTExprReadFunc* effectiveReadExpr = &readExpr;
+    if (!slot_to_local.empty()) {
+        int func_max_slot = 0;
+        for (auto& [sid, lv] : slot_to_local) {
+            if ((int)sid + 1 > func_max_slot) {
+                func_max_slot = (int)sid + 1;
+            }
+        }
+        func_locals_arr.resize(func_max_slot, nullptr);
+        for (auto& [sid, lv] : slot_to_local) {
+            func_locals_arr[sid] = lv;
+        }
+        funcReadExpr = [pgm, &func_locals_arr]
+                (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
+                const uint8_t* e, std::string& err) -> QoreValue {
+            return readOneExpr(rdr, p, e, err, pgm,
+                func_locals_arr.data(), static_cast<int>(func_locals_arr.size()),
+                nullptr, 0);
+        };
+        effectiveReadExpr = &funcReadExpr;
+    }
+
     // 5. Pre-create all blocks (needed for forward references)
     func->blocks.reserve(num_blocks);
     for (int i = 0; i < num_blocks; ++i) {
@@ -3515,7 +3549,7 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
 
         for (int j = 0; j < num_insts; ++j) {
             auto inst = deserializeIRInstruction(reader, ptr, end, func->blocks, local_map,
-                func.get(), &slot_to_local, readExpr, pgm, error);
+                func.get(), &slot_to_local, *effectiveReadExpr, pgm, error);
             if (!inst) {
                 error = "failed to deserialize instruction " + std::to_string(j)
                     + " in block " + std::to_string(i) + ": " + error;

@@ -175,7 +175,9 @@ const QoreAOTExprKindInfo AOT_EXPR_KIND_REGISTRY[256] = {
 
     // 34-253: Unused/Reserved
     {nullptr, 34, false, nullptr, nullptr, nullptr},
-    {nullptr, 35, false, nullptr, nullptr, nullptr},
+
+    // 35: DOT_EVAL_TARGET (classifyAndWriteExpr writes this for inline dot-eval expressions)
+    {"DOT_EVAL_TARGET", 35, true, write_expr_dot_eval_target, read_expr_dot_eval_target, "Dot-eval method target (inline)"},
     {nullptr, 36, false, nullptr, nullptr, nullptr},
     {nullptr, 37, false, nullptr, nullptr, nullptr},
     {nullptr, 38, false, nullptr, nullptr, nullptr},

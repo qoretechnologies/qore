@@ -905,6 +905,15 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             const void* key = reinterpret_cast<const void*>(pre_sig->lv[pi]);
                             slots.getLocalSlot(key);
                         }
+                        // Also register selfid and argvid so that expressions
+                        // referencing self (e.g., constructor args) can resolve
+                        // the local variable correctly during deserialization
+                        if (pre_sig->selfid) {
+                            slots.getLocalSlot(reinterpret_cast<const void*>(pre_sig->selfid));
+                        }
+                        if (pre_sig->argvid) {
+                            slots.getLocalSlot(reinterpret_cast<const void*>(pre_sig->argvid));
+                        }
                     }
                 }
 
@@ -1100,6 +1109,12 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             for (unsigned pi = 0; pi < pre_sig->numParams(); ++pi) {
                                 const void* key = reinterpret_cast<const void*>(pre_sig->lv[pi]);
                                 slots.getLocalSlot(key);
+                            }
+                            if (pre_sig->selfid) {
+                                slots.getLocalSlot(reinterpret_cast<const void*>(pre_sig->selfid));
+                            }
+                            if (pre_sig->argvid) {
+                                slots.getLocalSlot(reinterpret_cast<const void*>(pre_sig->argvid));
                             }
                         }
                     }
@@ -5355,14 +5370,10 @@ class ExprTreeSerializer {
         if (auto* sfc = dynamic_cast<const SelfFunctionCallNode*>(node)) {
             writeU8(static_cast<uint8_t>(AOTExprNodeKind::EN_SELF_CALL));
             const QoreMethod* method = sfc->getMethod();
-            if (method) {
-                const QoreClass* qc = method->getClass();
-                // Use getPath() for namespace-qualified name to avoid ambiguity
-                // (e.g., "Test" could match user class or QUnit::Test base class)
-                writeStr(qc ? qc->getPath() : "");
-            } else {
-                writeStr("");
-            }
+            const QoreClass* qc = method ? method->getClass() : sfc->getClass();
+            // Use getPath() for namespace-qualified name to avoid ambiguity
+            // (e.g., "Test" could match user class or QUnit::Test base class)
+            writeStr(qc ? qc->getPath() : "");
             // Strip class prefix from method name if present
             // (e.g., "LoggerWrapper::debug" → "debug")
             const char* mname = sfc->getName();
@@ -6227,11 +6238,10 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     if (auto* call = dynamic_cast<const SelfFunctionCallNode*>(node)) {
         id.kind = AOTExprKind::SELF_METHOD_CALL;
         const QoreMethod* method = call->getMethod();
-        if (method) {
-            const QoreClass* qc = method->getClass();
-            if (qc) {
-                id.ref1 = qc->getPath();
-            }
+        // For copy() methods, method is null; use getClass() as fallback
+        const QoreClass* qc = method ? method->getClass() : call->getClass();
+        if (qc) {
+            id.ref1 = qc->getPath();
         }
         // Strip class prefix from method name if present (e.g., "LoggerWrapper::debug" → "debug")
         const char* mname = call->getName();

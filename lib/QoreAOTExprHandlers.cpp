@@ -1569,6 +1569,28 @@ static QoreValue read_expr_list_literal(AOTExprReadCtx& ctx) {
 }
 
 // ============================================================================
+// DOT_EVAL_TARGET (35)
+// ============================================================================
+
+static bool write_expr_dot_eval_target(AOTExprWriteCtx& ctx) {
+    // Written by classifyAndWriteExpr when encountering QoreDotEvalOperatorNode
+    // in constructor/method arg contexts. The slot map handles this separately.
+    ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
+    return true;
+}
+
+static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
+    // Read and skip the DOT_EVAL_TARGET fields: class_path, method_name, is_pseudo
+    // This expression cannot be fully reconstructed inline (missing object expression),
+    // but consuming the bytes correctly prevents cascading parse errors.
+    ctx.reader.readStringRef(ctx.ptr);  // class_path
+    ctx.reader.readStringRef(ctx.ptr);  // method_name
+    QoreAOTBinaryReader::readU8(ctx.ptr);  // is_pseudo flag
+    ctx.error = "DOT_EVAL_TARGET not supported as inline expression";
+    return QoreValue();
+}
+
+// ============================================================================
 // EXPR_TREE (254)
 // ============================================================================
 

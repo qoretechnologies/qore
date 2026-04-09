@@ -285,6 +285,20 @@ static QoreValue read_node_EN_CONST_REF(AOTExprNodeReadCtx& ctx) {
         const qore_ns_private* cns = nullptr;
         const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
             *pp->RootNS, name.c_str(), cns);
+        if (!ce) {
+            // Try class constant lookup: path format "ClassName::ConstName"
+            size_t sep = name.rfind("::");
+            if (sep != std::string::npos && sep > 0) {
+                std::string class_path = name.substr(0, sep);
+                std::string const_name = name.substr(sep + 2);
+                const qore_ns_private* found_ns = nullptr;
+                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    *pp->RootNS, class_path.c_str(), found_ns);
+                if (qc) {
+                    ce = qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str());
+                }
+            }
+        }
         if (ce) {
             return ce->getReferencedValue();
         }
