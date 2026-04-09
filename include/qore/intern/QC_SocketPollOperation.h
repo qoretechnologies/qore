@@ -957,26 +957,31 @@ public:
     */
     DLLLOCAL QoreHashNode* flushAndReturnPollInfo(ExceptionSink* xsink, bool do_flush = true);
 
-    // NOTE: intentionally does NOT call SocketPollSocketOperationBase::abort() because:
-    //  1. The base class closes the socket (abortNeedsClose()), but QUIC uses a shared
-    //     UDP socket that must stay open for other sessions
-    //  2. poll_state is never used by QUIC operations (QUIC manages its own state)
-    //  3. QUIC uses qcs_state, not the base class 'state' member
+    // Client QUIC: clean up session and close the dedicated UDP socket.
+    // Unlike SocketQuicServerPollOperation (shared socket, many sessions),
+    // client connections own their UDP socket — it must be closed to prevent
+    // fd leaks.
     DLLLOCAL virtual void abort(ExceptionSink* xsink) override {
-        // Hold socket lock for the entire abort to prevent races with
-        // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
-        AutoLocker al(sock->priv->m);
-        // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
-        // BEFORE removing the session from the socket map
-        if (quic_session) {
-            quic_session->markClosed();
-            sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
-            quic_session.reset();
+        {
+            // Hold socket lock for session cleanup (lock ordering: priv->m →
+            // quic_sessions_lock). Released before closeIo() which also takes
+            // priv->m.
+            AutoLocker al(sock->priv->m);
+            // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
+            // BEFORE removing the session from the socket map
+            if (quic_session) {
+                quic_session->markClosed();
+                sock->priv->socket->priv->removeQuicSession(quic_session->getSessionId());
+                quic_session.reset();
+            }
+            if (set_non_block) {
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+            }
         }
-        if (set_non_block) {
-            sock->priv->clearNonBlock();
-            set_non_block = false;
-        }
+        // Close the dedicated client UDP socket to prevent fd leak.
+        // Must be called outside the socket lock — closeIo() acquires it.
+        sock->closeIo(xsink);
     }
 
     //! Submit an HTTP/3 request on this connection
@@ -1051,7 +1056,11 @@ private:
     DLLLOCAL QoreHashNode* trySetupEarlyHttp3(ExceptionSink* xsink);
 
     DLLLOCAL virtual bool abortNeedsClose() const override {
-        return false;  // UDP is connectionless
+        return true;  // Client QUIC owns a dedicated UDP socket
+    }
+
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        return true;  // Close the dedicated UDP fd after the request completes
     }
 };
 
