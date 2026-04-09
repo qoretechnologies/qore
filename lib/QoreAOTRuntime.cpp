@@ -1086,6 +1086,11 @@ static QoreAOTContext* buildContextFromSlotMap(
         } else {
             printd(0, "AOT v2: '%s' unresolved local slot %d ('%s' flags=0x%x param_idx=%d)\n",
                 name, i, lname ? lname : "", lflags, param_idx);
+            // If this is a param and we have LValuePath instructions, mark unsupported
+            // to prevent crash from null locals in LValuePath navigation
+            if ((lflags & 0x01) && num_lv_path_insts > 0) {
+                has_unsupported = true;
+            }
         }
     }
 
@@ -3806,6 +3811,28 @@ struct AOTInitFuncExecInfo {
     std::string name;
 };
 
+//! Strip root-absolute namespace prefixes (leading ::) from type paths in a signature
+/** Compile-time type paths may include leading :: (root-absolute) but runtime paths don't.
+    e.g. "(hash<::DataProvider::Foo>,*hash<auto>)" → "(hash<DataProvider::Foo>,*hash<auto>)"
+*/
+static std::string normalizeTypePaths(const std::string& sig) {
+    std::string out;
+    out.reserve(sig.size());
+    for (size_t i = 0; i < sig.size(); ++i) {
+        if (sig[i] == ':' && i + 1 < sig.size() && sig[i + 1] == ':') {
+            // Check if this :: is at the start of a type name (after <, (, ,, or *)
+            if (i > 0 && (sig[i - 1] == '<' || sig[i - 1] == '(' || sig[i - 1] == ','
+                    || sig[i - 1] == '*')) {
+                // Skip the leading ::
+                i += 1;  // loop will advance past second :
+                continue;
+            }
+        }
+        out.push_back(sig[i]);
+    }
+    return out;
+}
+
 //! Register AOT functions using slot maps from deserialized metadata (V2 — no IR re-lowering)
 /** Walks the SLOT_MAPS section, finds matching functions in the namespace tree,
     and builds context from slot identities.
@@ -3940,7 +3967,7 @@ static void registerAOTFunctionsFromSlotMaps(
                     {
                         size_t p = std::string(func_name).find('(');
                         if (p != std::string::npos) {
-                            target_sig = std::string(func_name).substr(p);
+                            target_sig = normalizeTypePaths(std::string(func_name).substr(p));
                         } else {
                             target_sig = "()";
                         }
@@ -4002,7 +4029,7 @@ static void registerAOTFunctionsFromSlotMaps(
                         {
                             size_t p = std::string(func_name).find('(');
                             if (p != std::string::npos) {
-                                target_sig = std::string(func_name).substr(p);
+                                target_sig = normalizeTypePaths(std::string(func_name).substr(p));
                             } else {
                                 target_sig = "()";
                             }
@@ -4612,7 +4639,7 @@ static void registerFallbackFunctionsOnMainVariants(
                         {
                             size_t p = variant_key.find('(');
                             if (p != std::string::npos) {
-                                target_sig = variant_key.substr(p);
+                                target_sig = normalizeTypePaths(variant_key.substr(p));
                             } else {
                                 target_sig = "()";
                             }

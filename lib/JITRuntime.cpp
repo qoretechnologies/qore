@@ -5074,28 +5074,48 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath assign: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
     return qore_rt_lv_path_assign(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
     return qore_rt_lv_path_compound(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
     return qore_rt_lv_path_unary(ctx->lv_path_insts[slot], dyn_vals, xsink);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t rhs_bits, ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
     return qore_rt_lv_path_binary_mut(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
 }
 
@@ -5103,7 +5123,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
         QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
         ExceptionSink* xsink) {
-    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    if (!ctx || slot < 0 || slot >= ctx->num_lv_path_insts) {
+        xsink->raiseException("AOT-INTERNAL-ERROR",
+            "LValuePath op: slot %d out of range (num_lv_path_insts=%d)",
+            slot, ctx ? ctx->num_lv_path_insts : -1);
+        return toBits(QoreValue());
+    }
     return qore_rt_lv_path_ternary(ctx->lv_path_insts[slot], dyn_vals, a_bits, b_bits, c_bits, xsink);
 }
 
