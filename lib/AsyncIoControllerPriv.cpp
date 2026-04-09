@@ -1926,11 +1926,19 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     continue;
                 }
 
-                // Protocol-level poll timeout (QUIC timers, heartbeat)
+                // Protocol-level poll timeout (QUIC timers, heartbeat, stale detect)
                 if (pinfo.poll_timeout_deadline_us > 0
                         && pinfo.poll_timeout_deadline_us <= now_us) {
-                    pinfo.poll_timeout_deadline_us = 0;
-                    try_queue(te.key, false);
+                    if (try_queue(te.key, false)) {
+                        pinfo.poll_timeout_deadline_us = 0;
+                    } else {
+                        // Could not queue (continuePoll in flight or already queued).
+                        // Re-push with short delay so we retry on the next iteration
+                        // instead of losing the timeout permanently.
+                        int64 retry_us = now_us + 10000;  // 10ms retry
+                        pinfo.poll_timeout_deadline_us = retry_us;
+                        t.timeout_heap.push({retry_us, te.key});
+                    }
                     continue;
                 }
 
