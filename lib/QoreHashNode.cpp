@@ -367,11 +367,11 @@ QoreHashNode* qore_hash_private::newComplexHash(const QoreTypeInfo* typeInfo, co
         init = a.takeReferencedNode<QoreHashNode>();
     }
 
-    return newComplexHashFromHash(typeInfo, init, xsink);
+    return newComplexHashFromHash(typeInfo, init, xsink, true);
 }
 
 QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init_hash,
-        ExceptionSink* xsink) {
+        ExceptionSink* xsink, bool coerce_values) {
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
     if (!init) {
@@ -390,7 +390,8 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
 
     // Apply value type coercion if the hash has a typed value type
     // (e.g. hash<string, softint> converts "23" → 23)
-    const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
+    // Only for constructor calls, not for cast<> which is intentionally type-unsafe for values
+    const QoreTypeInfo* vti = coerce_values ? QoreTypeInfo::getUniqueReturnComplexHash(typeInfo) : nullptr;
     if (QoreTypeInfo::hasType(vti)) {
         for (auto& m : init->priv->member_list) {
             if (!QoreTypeInfo::superSetOf(vti, m->val.getTypeInfo())) {

@@ -3708,6 +3708,12 @@ load_local_done:
                         new_h->deref(xsink);
                         h = new_h;
                     }
+                    // Check hashdecl key validity before assignment
+                    if (qore_hash_private::get(*h)->checkKey(key_str->c_str(), xsink)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
                     clearLoadSlots(hksd_inst->container_slot_id);
                     uint32_t csid = hksd_inst->container_slot_id;
@@ -6401,7 +6407,13 @@ load_local_done:
                         // For other compound ops (mul, div, mod, and, or, xor, shl, shr),
                         // use type-specific LValueHelper methods
                         qore_type_t vtype = lvh.getType();
-                        if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                        if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+                            switch (path_inst->compound_op) {
+                                case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
+                                case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
+                                default: res = QoreValue(); break;
+                            }
+                        } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
                             double rv = rhs.getAsFloat();
                             switch (path_inst->compound_op) {
                                 case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
@@ -6538,7 +6550,16 @@ load_local_done:
                         bool static_assignment = false;
                         res = lvh.remove(static_assignment);
                     } else {
+                        // Delete: remove the value and call doDelete on objects
                         res = lvh.removeValue(true);
+                        if (res.getType() == NT_OBJECT) {
+                            QoreObject* o = res.get<QoreObject>();
+                            if (!o->isSystemObject()) {
+                                o->doDelete(xsink);
+                            }
+                            res.discard(xsink);
+                            res = QoreValue();
+                        }
                     }
                 } else {
                     LValueHelper lvh(xsink);

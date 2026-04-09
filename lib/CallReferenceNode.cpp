@@ -539,8 +539,11 @@ RunTimeObjectMethodReferenceNode::~RunTimeObjectMethodReferenceNode() {
 }
 
 QoreValue RunTimeObjectMethodReferenceNode::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
-    //printd(5, "RunTimeObjectMethodReferenceNode::exec() this: %p obj: %p %s::%s() qc: %p (%s)\n", this, obj,
-    //    obj->getClassName(), method.c_str(), qc, qc ? qc->name.c_str() : "n/a");
+    if (obj && !obj->isValid()) {
+        xsink->raiseException("OBJECT-ALREADY-DELETED", "cannot call a method on an object that has already been "
+            "deleted");
+        return QoreValue();
+    }
     // issue #2145: set class context after evaluating arguments
     RuntimeConfig& rc = rc_get_current_ref();
     return qore_class_private::get(*obj->getClass())->evalMethod(obj, method.c_str(), args, qc, rc, xsink);

@@ -637,7 +637,7 @@ public:
             ExceptionSink* xsink);
 
     DLLLOCAL static QoreHashNode* newComplexHashFromHash(const QoreTypeInfo* typeInfo, QoreHashNode* init,
-            ExceptionSink* xsink);
+            ExceptionSink* xsink, bool coerce_values = false);
 
     DLLLOCAL static unsigned getScanCount(const QoreHashNode& h) {
         assert(!h.priv->is_obj);
