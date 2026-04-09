@@ -3355,9 +3355,6 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
         }
 
         // These groups hold AST pointers; encountering them is a serialization error
-        case static_cast<QoreIRInstGroup>(44):  // Foreach (removed)
-        case static_cast<QoreIRInstGroup>(50):  // Debug (removed)
-        case static_cast<QoreIRInstGroup>(51):  // Assert (removed)
         case QoreIRInstGroup::Context:
         case QoreIRInstGroup::Summarize:
             error = "unsupported AST-delegation instruction group " + std::to_string(group_byte);

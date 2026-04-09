@@ -1208,22 +1208,19 @@ enum class QoreIRInstGroup : uint8_t {
     FusedIncLocal = 41,     //!< QoreIRIncrementLocalIntInstruction
     FusedBrLtLocal = 42,    //!< QoreIRBranchIfLtLocalIntInstruction
     MapHashKey = 43,        //!< QoreIRMapHashKeyInstruction
-    // Foreach = 44,        // REMOVED: fully lowered to iterators
-    OnBlockExit = 45,       //!< QoreIROnBlockExitInstruction
-    IteratorCreate = 46,    //!< QoreIRIteratorCreateInstruction
-    IteratorNext = 47,      //!< QoreIRIteratorNextInstruction
-    SwitchRegexMatch = 48,  //!< QoreIRSwitchRegexMatchInstruction
-    RefForeachInit = 49,    //!< QoreIRRefForeachInitInstruction
-    // Debug = 50,          // REMOVED: fully lowered inline
-    // Assert = 51,         // REMOVED: fully lowered inline
-    MakeHashConstKeys = 52, //!< QoreIRMakeHashConstKeysInstruction
-    SwitchCaseMatch = 53,   //!< QoreIRSwitchCaseMatchInstruction
-    Context = 54,           //!< QoreIRContextInstruction
-    Summarize = 55,         //!< QoreIRSummarizeInstruction
-    ListIndexAccess = 56,   //!< QoreIRListIndexAccessInstruction
-    NewHashDeclFromHash = 57, //!< QoreIRNewHashDeclFromHashInstruction
-    HashKeyStoreDynamic = 58, //!< QoreIRHashKeyStoreDynamicInstruction
-    LValuePath = 59,        //!< QoreIRLValuePathInstruction
+    OnBlockExit = 44,       //!< QoreIROnBlockExitInstruction
+    IteratorCreate = 45,    //!< QoreIRIteratorCreateInstruction
+    IteratorNext = 46,      //!< QoreIRIteratorNextInstruction
+    SwitchRegexMatch = 47,  //!< QoreIRSwitchRegexMatchInstruction
+    RefForeachInit = 48,    //!< QoreIRRefForeachInitInstruction
+    MakeHashConstKeys = 49, //!< QoreIRMakeHashConstKeysInstruction
+    SwitchCaseMatch = 50,   //!< QoreIRSwitchCaseMatchInstruction
+    Context = 51,           //!< QoreIRContextInstruction
+    Summarize = 52,         //!< QoreIRSummarizeInstruction
+    ListIndexAccess = 53,   //!< QoreIRListIndexAccessInstruction
+    NewHashDeclFromHash = 54, //!< QoreIRNewHashDeclFromHashInstruction
+    HashKeyStoreDynamic = 55, //!< QoreIRHashKeyStoreDynamicInstruction
+    LValuePath = 56,        //!< QoreIRLValuePathInstruction
     Unsupported = 0xFF,     //!< Instruction cannot be serialized
 };
 

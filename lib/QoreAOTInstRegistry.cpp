@@ -2208,56 +2208,49 @@ const QoreIRInstGroupInfo AOT_INST_GROUP_REGISTRY[AOT_INST_GROUP_TABLE_SIZE] = {
     // Index 43: MapHashKey
     { "MapHashKey", 43, true, false, writeMapHashKey, readMapHashKey, "Hash key mapping operation" },
 
-    // Index 44: Foreach was removed - preserved as gap for binary compatibility
     #define UNUSED_ENTRY(idx) { nullptr, idx, false, false, nullptr, nullptr, nullptr }
-    UNUSED_ENTRY(44),
 
-    // Index 45: OnBlockExit
-    { "OnBlockExit", 45, true, true, writeOnBlockExit, readOnBlockExit, "Exception handler with nested IR function" },
+    // Index 44: OnBlockExit
+    { "OnBlockExit", 44, true, true, writeOnBlockExit, readOnBlockExit, "Exception handler with nested IR function" },
 
-    // Index 46: IteratorCreate
-    { "IteratorCreate", 46, true, false, writeIteratorCreate, readIteratorCreate, "Iterator creation from iterable" },
+    // Index 45: IteratorCreate
+    { "IteratorCreate", 45, true, false, writeIteratorCreate, readIteratorCreate, "Iterator creation from iterable" },
 
-    // Index 47: IteratorNext
-    { "IteratorNext", 47, true, false, writeIteratorNext, readIteratorNext, "Iterator advance with targets" },
+    // Index 46: IteratorNext
+    { "IteratorNext", 46, true, false, writeIteratorNext, readIteratorNext, "Iterator advance with targets" },
 
-    // Index 48: SwitchRegexMatch
-    { "SwitchRegexMatch", 48, true, false, writeSwitchRegexMatch, readSwitchRegexMatch, "Regex pattern matching" },
+    // Index 47: SwitchRegexMatch
+    { "SwitchRegexMatch", 47, true, false, writeSwitchRegexMatch, readSwitchRegexMatch, "Regex pattern matching" },
 
-    // Index 49: RefForeachInit
-    { "RefForeachInit", 49, true, false, writeRefForeachInit, readRefForeachInit, "Reference foreach initialization" },
+    // Index 48: RefForeachInit
+    { "RefForeachInit", 48, true, false, writeRefForeachInit, readRefForeachInit, "Reference foreach initialization" },
 
-    // Index 50: Debug was removed - preserved as gap for binary compatibility
-    UNUSED_ENTRY(50),
+    // Index 49: MakeHashConstKeys
+    { "MakeHashConstKeys", 49, true, false, writeMakeHashConstKeys, readMakeHashConstKeys, "Create hash with constant keys" },
 
-    // Index 51: Assert was removed - preserved as gap for binary compatibility
+    // Index 50: SwitchCaseMatch
+    { "SwitchCaseMatch", 50, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
+
+    // Index 51: Context holds raw ContextStatement* pointer - no serialization
     UNUSED_ENTRY(51),
 
-    // Index 52: MakeHashConstKeys
-    { "MakeHashConstKeys", 52, true, false, writeMakeHashConstKeys, readMakeHashConstKeys, "Create hash with constant keys" },
+    // Index 52: Summarize holds raw SummarizeStatement* pointer - no serialization
+    UNUSED_ENTRY(52),
 
-    // Index 53: SwitchCaseMatch
-    { "SwitchCaseMatch", 53, true, false, writeSwitchCaseMatch, readSwitchCaseMatch, "Switch case matching" },
+    // Index 53: ListIndexAccess
+    { "ListIndexAccess", 53, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
 
-    // Index 54: Context holds raw ContextStatement* pointer - no serialization
-    UNUSED_ENTRY(54),
+    // Index 54: NewHashDeclFromHash
+    { "NewHashDeclFromHash", 54, true, false, writeNewHashDeclFromHash, readNewHashDeclFromHash, "Hashdecl from hash" },
 
-    // Index 55: Summarize holds raw SummarizeStatement* pointer - no serialization
-    UNUSED_ENTRY(55),
+    // Index 55: HashKeyStoreDynamic
+    { "HashKeyStoreDynamic", 55, true, false, writeHashKeyStoreDynamic, readHashKeyStoreDynamic, "Hash key storage with dynamic key" },
 
-    // Index 56: ListIndexAccess
-    { "ListIndexAccess", 56, true, false, writeListIndexAccess, readListIndexAccess, "List index access" },
+    // Index 56: LValuePath
+    { "LValuePath", 56, true, false, writeLValuePath, readLValuePath, "Structured lvalue path operations" },
 
-    // Index 57: NewHashDeclFromHash
-    { "NewHashDeclFromHash", 57, true, false, writeNewHashDeclFromHash, readNewHashDeclFromHash, "Hashdecl from hash" },
-
-    // Index 58: HashKeyStoreDynamic
-    { "HashKeyStoreDynamic", 58, true, false, writeHashKeyStoreDynamic, readHashKeyStoreDynamic, "Hash key storage with dynamic key" },
-
-    // Index 59: LValuePath
-    { "LValuePath", 59, true, false, writeLValuePath, readLValuePath, "Structured lvalue path operations" },
-
-    // Remaining 60-255: Unsupported/undefined
+    // Remaining 57-255: Unsupported/undefined
+    UNUSED_ENTRY(57), UNUSED_ENTRY(58), UNUSED_ENTRY(59),
     UNUSED_ENTRY(60), UNUSED_ENTRY(61), UNUSED_ENTRY(62), UNUSED_ENTRY(63),
     UNUSED_ENTRY(64), UNUSED_ENTRY(65), UNUSED_ENTRY(66), UNUSED_ENTRY(67),
     UNUSED_ENTRY(68), UNUSED_ENTRY(69), UNUSED_ENTRY(70), UNUSED_ENTRY(71),
