@@ -219,47 +219,6 @@ static QoreValue evalAndRef(const QoreValue& val, ExceptionSink* xsink) {
     return evalAndRef(const_cast<AbstractQoreNode*>(val.getInternalNode()), xsink);
 }
 
-// Instrumentation: track AST node types evaluated via evalExprNode
-// #define QORE_IR_PROFILE_AST_FALLBACK
-#ifdef QORE_IR_PROFILE_AST_FALLBACK
-#include <atomic>
-#include <map>
-#include <mutex>
-static std::mutex ast_fallback_mutex;
-static std::map<std::string, uint64_t> ast_fallback_counts;
-static std::atomic<uint64_t> total_ast_fallback_count{0};
-
-static void record_ast_fallback(const QoreValue& expr) {
-    const char* type_name = "unknown";
-    if (expr.hasNode()) {
-        type_name = expr.getInternalNode()->getTypeName();
-    }
-    std::lock_guard<std::mutex> lock(ast_fallback_mutex);
-    ast_fallback_counts[type_name]++;
-    total_ast_fallback_count.fetch_add(1, std::memory_order_relaxed);
-}
-
-__attribute__((destructor))
-static void dump_ast_fallback_stats() {
-    std::lock_guard<std::mutex> lock(ast_fallback_mutex);
-    if (ast_fallback_counts.empty()) {
-        return;
-    }
-    // Sort by count descending
-    std::vector<std::pair<std::string, uint64_t>> sorted(
-        ast_fallback_counts.begin(), ast_fallback_counts.end());
-    std::sort(sorted.begin(), sorted.end(),
-        [](const auto& a, const auto& b) { return a.second > b.second; });
-    fprintf(stderr, "\n=== IR AST Fallback Profile ===\n");
-    fprintf(stderr, "Total evalExprNode calls: %llu\n", total_ast_fallback_count.load());
-    for (const auto& [name, count] : sorted) {
-        fprintf(stderr, "  %-40s %8llu (%5.1f%%)\n", name.c_str(), count,
-            100.0 * count / total_ast_fallback_count.load());
-    }
-    fprintf(stderr, "===============================\n");
-}
-#endif
-
 static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
     if (!expr.hasNode()) {
         if (xsink) {
@@ -267,9 +226,6 @@ static QoreValue evalExprNode(const QoreValue& expr, ExceptionSink* xsink) {
         }
         return QoreValue();
     }
-#ifdef QORE_IR_PROFILE_AST_FALLBACK
-    record_ast_fallback(expr);
-#endif
     bool needs_deref = true;
     ValueHolder node(expr.refSelf(), xsink);
     if (xsink && *xsink) {
@@ -1714,9 +1670,7 @@ static int executeOnBlockExitHandlers(std::vector<IROnBlockExitHandler>& handler
 // because QoreIRStackLocation was in the stack location chain at the time the exception was
 // created, capturing the throw statement's location instead of letting the AST evaluator
 // handle the exception location correctly.
-class QoreIRStackLocation {
-    // Unused stub - kept to avoid breaking anything that might reference this class
-};
+// QoreIRStackLocation removed — see comment above for rationale.
 
 bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_value, ExceptionSink* xsink,
         std::vector<std::string>* cleanup_log, const std::vector<QoreValue>* args,
