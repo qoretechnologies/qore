@@ -75,15 +75,15 @@ constexpr uint16_t QORE_AOT_FLAG_HAS_TOPLEVEL = 0x0001;
 constexpr uint16_t QORE_AOT_FLAG_IS_MODULE    = 0x0002;
 
 //! Feature flags for binary compatibility (64-bit bitmask in header.feature_flags)
-constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (325-330)
-constexpr uint64_t QORE_AOT_FEAT_NATIVE_CAST     = 1ULL << 1;  //!< Cast* opcodes (252-256)
+constexpr uint64_t QORE_AOT_FEAT_FOREACH_REF    = 1ULL << 0;  //!< RefForeach* opcodes (323-328)
+constexpr uint64_t QORE_AOT_FEAT_NATIVE_CAST     = 1ULL << 1;  //!< Cast* opcodes (249-254)
 constexpr uint64_t QORE_AOT_FEAT_BLOCK_EXIT      = 1ULL << 2;  //!< OnBlockExit opcode
 constexpr uint64_t QORE_AOT_FEAT_DIRECT_INDEX    = 1ULL << 3;  //!< ListGet* opcodes (13-15)
 constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_ACCESS = 1ULL << 4;  //!< HashKeyAccess opcodes
 constexpr uint64_t QORE_AOT_FEAT_FAST_CALL       = 1ULL << 5;  //!< CallMethodDirect/CallStaticDirect
 constexpr uint64_t QORE_AOT_FEAT_COMPLEX_RETURN  = 1ULL << 6;  //!< reserved, set to 0 for now
-constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_STORE  = 1ULL << 7;  //!< HashKeyStore opcode (335)
-constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexStore opcode (337)
+constexpr uint64_t QORE_AOT_FEAT_HASH_KEY_STORE  = 1ULL << 7;  //!< HashKeyStore opcode (333)
+constexpr uint64_t QORE_AOT_FEAT_LIST_INDEX_STORE = 1ULL << 8;  //!< ListIndexStore opcode (335)
 //! Mask of all currently supported features
 constexpr uint64_t QORE_AOT_SUPPORTED_FEATURES   = 0x1FFULL;
 

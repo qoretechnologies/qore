@@ -34,8 +34,8 @@ struct OpcodeInfo {
     bool is_binary_invoke;              //! Binary computation op (Invoke dispatches via qore_rt_binary_op)
 };
 
-//! Registry of all IR opcodes (in enum ID order, accounting for removed IDs 134, 141, 142)
-constexpr OpcodeInfo OPCODE_REGISTRY[361] = {
+//! Registry of all IR opcodes (in enum ID order)
+constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "ConstInt"                      , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 0
     { "ConstFloat"                    , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 1
     { "ConstBool"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 2
@@ -170,239 +170,236 @@ constexpr OpcodeInfo OPCODE_REGISTRY[361] = {
     { "MapSelectList"                 , false, false, false,  3, "MapSelectList", false, true , "ParseNode", true , false, false, false }, // 131
     { "HashMap"                       , false, false, false,  3, "HashMap", false, true , "ParseNode", true , false, false, false }, // 132
     { "HashMapSelect"                 , false, false, false,  4, "HashMapSelect", false, true , "ParseNode", true , false, false, false }, // 133
-    { nullptr, false, false, false, 0, nullptr, false, false, nullptr, false, false, false, false }, // ID 134 REMOVED
-    { "IteratorCreate"                , false, false, false,  0, "IteratorCreate", false, true , "ParseNode", true , false, false, false }, // 135
-    { "IteratorNext"                  , false, false, true ,  0, "IteratorNext", false, true , "ParseNode", true , false, false, false }, // 136
-    { "OnBlockExit"                   , false, false, false,  0, "OnBlockExit", false, true , "ParseNode", false, false, false, false }, // 137
-    { "ScopeEnter"                    , false, false, false,  0, "ScopeEnter", false, true , "ParseNode", false, false, false, false }, // 138
-    { "ScopeExit"                     , false, false, false,  0, "ScopeExit", false, true , "ParseNode", false, false, false, false }, // 139
-    { "ThreadExit"                    , false, false, true ,  0, "ThreadExit", false, true , "ParseNode", false, false, false, false }, // 140
-    { nullptr, false, false, false, 0, nullptr, false, false, nullptr, false, false, false, false }, // ID 141 REMOVED
-    { nullptr, false, false, false, 0, nullptr, false, false, nullptr, false, false, false, false }, // ID 142 REMOVED
-    { "Context"                       , false, false, false,  0, "Context", false, true , "ParseNode", false, false, false, false }, // 143
-    { "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false }, // 144
-    { "EqInt"                         , false, true , false,  2, "EqInt", false, true , "ParseNode", true , true , false, true  }, // 145
-    { "EqFloat"                       , false, true , false,  2, "EqFloat", false, true , "ParseNode", true , true , false, true  }, // 146
-    { "EqString"                      , false, false, false,  2, "EqString", false, true , "ParseNode", true , false, false, false }, // 147
-    { "EqAny"                         , false, true , false,  2, "EqAny", false, true , "ParseNode", true , true , false, true  }, // 148
-    { "NeInt"                         , false, true , false,  2, "NeInt", false, true , "ParseNode", true , true , false, true  }, // 149
-    { "NeFloat"                       , false, true , false,  2, "NeFloat", false, true , "ParseNode", true , true , false, true  }, // 150
-    { "NeString"                      , false, false, false,  2, "NeString", false, true , "ParseNode", true , false, false, false }, // 151
-    { "NeAny"                         , false, true , false,  2, "NeAny", false, true , "ParseNode", true , true , false, true  }, // 152
-    { "EqHard"                        , false, true , false,  2, "EqHard", false, true , "ParseNode", true , true , false, true  }, // 153
-    { "NeHard"                        , false, true , false,  2, "NeHard", false, true , "ParseNode", true , true , false, true  }, // 154
-    { "LtInt"                         , false, true , false,  2, "LtInt", false, true , "ParseNode", true , true , false, true  }, // 155
-    { "LtFloat"                       , false, true , false,  2, "LtFloat", false, true , "ParseNode", true , true , false, true  }, // 156
-    { "LtString"                      , false, false, false,  2, "LtString", false, true , "ParseNode", true , false, false, false }, // 157
-    { "LtAny"                         , false, true , false,  2, "LtAny", false, true , "ParseNode", true , true , false, true  }, // 158
-    { "LeInt"                         , false, true , false,  2, "LeInt", false, true , "ParseNode", true , true , false, true  }, // 159
-    { "LeFloat"                       , false, true , false,  2, "LeFloat", false, true , "ParseNode", true , true , false, true  }, // 160
-    { "LeString"                      , false, false, false,  2, "LeString", false, true , "ParseNode", true , false, false, false }, // 161
-    { "LeAny"                         , false, true , false,  2, "LeAny", false, true , "ParseNode", true , true , false, true  }, // 162
-    { "GtInt"                         , false, true , false,  2, "GtInt", false, true , "ParseNode", true , true , false, true  }, // 163
-    { "GtFloat"                       , false, true , false,  2, "GtFloat", false, true , "ParseNode", true , true , false, true  }, // 164
-    { "GtString"                      , false, false, false,  2, "GtString", false, true , "ParseNode", true , false, false, false }, // 165
-    { "GtAny"                         , false, true , false,  2, "GtAny", false, true , "ParseNode", true , true , false, true  }, // 166
-    { "GeInt"                         , false, true , false,  2, "GeInt", false, true , "ParseNode", true , true , false, true  }, // 167
-    { "GeFloat"                       , false, true , false,  2, "GeFloat", false, true , "ParseNode", true , true , false, true  }, // 168
-    { "GeString"                      , false, false, false,  2, "GeString", false, true , "ParseNode", true , false, false, false }, // 169
-    { "GeAny"                         , false, true , false,  2, "GeAny", false, true , "ParseNode", true , true , false, true  }, // 170
-    { "CmpInt"                        , false, true , false,  2, "CmpInt", false, true , "ParseNode", true , true , false, true  }, // 171
-    { "CmpFloat"                      , false, true , false,  2, "CmpFloat", false, true , "ParseNode", true , true , false, true  }, // 172
-    { "CmpString"                     , false, false, false,  2, "CmpString", false, true , "ParseNode", true , false, false, false }, // 173
-    { "CmpAny"                        , false, true , false,  2, "CmpAny", false, true , "ParseNode", true , true , false, true  }, // 174
-    { "ToBool"                        , false, true , false,  1, "ToBool", false, true , "ParseNode", true , true , true , false }, // 175
-    { "Not"                           , false, true , false,  1, "Not", false, true , "ParseNode", true , true , true , false }, // 176
-    { "IsNullOrNothing"               , false, true , false,  1, "IsNullOrNothing", false, true , "ParseNode", true , true , true , false }, // 177
-    { "Phi"                           , false, false, false, -1, "Phi", false, true , "ParseNode", true , false, false, false }, // 178
-    { "UnaryPlusAny"                  , false, false, false,  1, "UnaryPlusAny", false, true , "ParseNode", true , true , true , false }, // 179
-    { "UnaryMinusInt"                 , false, true , false,  1, "UnaryMinusInt", false, true , "ParseNode", true , true , true , false }, // 180
-    { "UnaryMinusFloat"               , false, true , false,  1, "UnaryMinusFloat", false, true , "ParseNode", true , true , true , false }, // 181
-    { "UnaryMinusAny"                 , false, false, false,  1, "UnaryMinusAny", false, true , "ParseNode", true , true , true , false }, // 182
-    { "FoldlAny"                      , false, false, false,  2, "FoldlAny", false, true , "ParseNode", true , true , false, true  }, // 183
-    { "FoldlInt"                      , false, false, false,  2, "FoldlInt", false, true , "ParseNode", true , true , false, true  }, // 184
-    { "FoldlFloat"                    , false, false, false,  2, "FoldlFloat", false, true , "ParseNode", true , true , false, true  }, // 185
-    { "FoldrAny"                      , false, false, false,  2, "FoldrAny", false, true , "ParseNode", true , true , false, true  }, // 186
-    { "FoldrInt"                      , false, false, false,  2, "FoldrInt", false, true , "ParseNode", true , true , false, true  }, // 187
-    { "FoldrFloat"                    , false, false, false,  2, "FoldrFloat", false, true , "ParseNode", true , true , false, true  }, // 188
-    { "FoldlSumInt"                   , false, false, false,  2, "FoldlSumInt", false, true , "ParseNode", true , true , false, true  }, // 189
-    { "FoldlSumFloat"                 , false, false, false,  2, "FoldlSumFloat", false, true , "ParseNode", true , true , false, true  }, // 190
-    { "FoldlProdInt"                  , false, false, false,  2, "FoldlProdInt", false, true , "ParseNode", true , true , false, true  }, // 191
-    { "FoldlProdFloat"                , false, false, false,  2, "FoldlProdFloat", false, true , "ParseNode", true , true , false, true  }, // 192
-    { "FoldlDiffInt"                  , false, false, false,  2, "FoldlDiffInt", false, true , "ParseNode", true , true , false, true  }, // 193
-    { "FoldlDiffFloat"                , false, false, false,  2, "FoldlDiffFloat", false, true , "ParseNode", true , true , false, true  }, // 194
-    { "FoldlMinInt"                   , false, false, false,  2, "FoldlMinInt", false, true , "ParseNode", true , true , false, true  }, // 195
-    { "FoldlMinFloat"                 , false, false, false,  2, "FoldlMinFloat", false, true , "ParseNode", true , true , false, true  }, // 196
-    { "FoldlMaxInt"                   , false, false, false,  2, "FoldlMaxInt", false, true , "ParseNode", true , true , false, true  }, // 197
-    { "FoldlMaxFloat"                 , false, false, false,  2, "FoldlMaxFloat", false, true , "ParseNode", true , true , false, true  }, // 198
-    { "FoldrSumInt"                   , false, false, false,  2, "FoldrSumInt", false, true , "ParseNode", true , true , false, true  }, // 199
-    { "FoldrSumFloat"                 , false, false, false,  2, "FoldrSumFloat", false, true , "ParseNode", true , true , false, true  }, // 200
-    { "FoldrProdInt"                  , false, false, false,  2, "FoldrProdInt", false, true , "ParseNode", true , true , false, true  }, // 201
-    { "FoldrProdFloat"                , false, false, false,  2, "FoldrProdFloat", false, true , "ParseNode", true , true , false, true  }, // 202
-    { "FoldrDiffInt"                  , false, false, false,  2, "FoldrDiffInt", false, true , "ParseNode", true , true , false, true  }, // 203
-    { "FoldrDiffFloat"                , false, false, false,  2, "FoldrDiffFloat", false, true , "ParseNode", true , true , false, true  }, // 204
-    { "FoldrMinInt"                   , false, false, false,  2, "FoldrMinInt", false, true , "ParseNode", true , true , false, true  }, // 205
-    { "FoldrMinFloat"                 , false, false, false,  2, "FoldrMinFloat", false, true , "ParseNode", true , true , false, true  }, // 206
-    { "FoldrMaxInt"                   , false, false, false,  2, "FoldrMaxInt", false, true , "ParseNode", true , true , false, true  }, // 207
-    { "FoldrMaxFloat"                 , false, false, false,  2, "FoldrMaxFloat", false, true , "ParseNode", true , true , false, true  }, // 208
-    { "MapAny"                        , false, false, false,  2, "MapAny", false, true , "ParseNode", true , true , false, true  }, // 209
-    { "MapInt"                        , false, false, false,  2, "MapInt", false, true , "ParseNode", true , true , false, true  }, // 210
-    { "MapFloat"                      , false, false, false,  2, "MapFloat", false, true , "ParseNode", true , true , false, true  }, // 211
-    { "MapScaleInt"                   , false, false, false,  2, "MapScaleInt", false, true , "ParseNode", true , false, false, false }, // 212
-    { "MapScaleFloat"                 , false, false, false,  2, "MapScaleFloat", false, true , "ParseNode", true , false, false, false }, // 213
-    { "MapOffsetInt"                  , false, false, false,  2, "MapOffsetInt", false, true , "ParseNode", true , false, false, false }, // 214
-    { "MapOffsetFloat"                , false, false, false,  2, "MapOffsetFloat", false, true , "ParseNode", true , false, false, false }, // 215
-    { "MapSquareInt"                  , false, false, false,  2, "MapSquareInt", false, true , "ParseNode", true , false, false, false }, // 216
-    { "MapSquareFloat"                , false, false, false,  2, "MapSquareFloat", false, true , "ParseNode", true , false, false, false }, // 217
-    { "MapHashKeyValue"               , false, false, false,  1, "MapHashKeyValue", false, true , "ParseNode", true , false, false, false }, // 218
-    { "MapHashKeyInt"                 , false, false, false,  1, "MapHashKeyInt", false, true , "ParseNode", true , false, false, false }, // 219
-    { "MapHashKeyOffsetInt"           , false, false, false,  2, "MapHashKeyOffsetInt", false, true , "ParseNode", true , false, false, false }, // 220
-    { "MapHashKeyScaleInt"            , false, false, false,  2, "MapHashKeyScaleInt", false, true , "ParseNode", true , false, false, false }, // 221
-    { "HashMapTwoKeys"                , false, false, false,  1, "HashMapTwoKeys", false, true , "ParseNode", true , false, false, false }, // 222
-    { "SelectAny"                     , false, false, false,  2, "SelectAny", false, true , "ParseNode", true , true , false, true  }, // 223
-    { "SelectInt"                     , false, false, false,  2, "SelectInt", false, true , "ParseNode", true , true , false, true  }, // 224
-    { "SelectFloat"                   , false, false, false,  2, "SelectFloat", false, true , "ParseNode", true , true , false, true  }, // 225
-    { "SelectPositiveInt"             , false, false, false,  2, "SelectPositiveInt", false, true , "ParseNode", true , false, false, false }, // 226
-    { "SelectPositiveFloat"           , false, false, false,  2, "SelectPositiveFloat", false, true , "ParseNode", true , false, false, false }, // 227
-    { "SelectNonZeroInt"              , false, false, false,  2, "SelectNonZeroInt", false, true , "ParseNode", true , false, false, false }, // 228
-    { "SelectNonZeroFloat"            , false, false, false,  2, "SelectNonZeroFloat", false, true , "ParseNode", true , false, false, false }, // 229
-    { "FusedMapSelectScalePositiveInt", false, false, false,  2, "FusedMapSelectScalePositiveInt", false, true , "ParseNode", true , false, false, false }, // 230
-    { "FusedMapSelectScalePositiveFloat", false, false, false,  2, "FusedMapSelectScalePositiveFloat", false, true , "ParseNode", true , false, false, false }, // 231
-    { "FusedMapSelectOffsetPositiveInt", false, false, false,  2, "FusedMapSelectOffsetPositiveInt", false, true , "ParseNode", true , false, false, false }, // 232
-    { "FusedMapSelectOffsetPositiveFloat", false, false, false,  2, "FusedMapSelectOffsetPositiveFloat", false, true , "ParseNode", true , false, false, false }, // 233
-    { "FusedMapSelectSquarePositiveInt", false, false, false,  2, "FusedMapSelectSquarePositiveInt", false, true , "ParseNode", true , false, false, false }, // 234
-    { "FusedMapSelectSquarePositiveFloat", false, false, false,  2, "FusedMapSelectSquarePositiveFloat", false, true , "ParseNode", true , false, false, false }, // 235
-    { "FusedMapFoldlSumScaleInt"      , false, false, false,  2, "FusedMapFoldlSumScaleInt", false, true , "ParseNode", true , true , false, true  }, // 236
-    { "FusedMapFoldlSumScaleFloat"    , false, false, false,  2, "FusedMapFoldlSumScaleFloat", false, true , "ParseNode", true , true , false, true  }, // 237
-    { "FusedMapFoldlSumSquareInt"     , false, false, false,  2, "FusedMapFoldlSumSquareInt", false, true , "ParseNode", true , true , false, true  }, // 238
-    { "FusedMapFoldlSumSquareFloat"   , false, false, false,  2, "FusedMapFoldlSumSquareFloat", false, true , "ParseNode", true , true , false, true  }, // 239
-    { "FusedMapFoldlProdScaleInt"     , false, false, false,  2, "FusedMapFoldlProdScaleInt", false, true , "ParseNode", true , true , false, true  }, // 240
-    { "FusedMapFoldlProdScaleFloat"   , false, false, false,  2, "FusedMapFoldlProdScaleFloat", false, true , "ParseNode", true , true , false, true  }, // 241
-    { "MapSelectAny"                  , false, false, false, -1, "MapSelectAny", false, true , "ParseNode", true , false, false, false }, // 242
-    { "HashMapAny"                    , false, false, false, -1, "HashMapAny", false, true , "ParseNode", true , false, false, false }, // 243
-    { "HashMapSelectAny"              , false, false, false, -1, "HashMapSelectAny", false, true , "ParseNode", true , false, false, false }, // 244
-    { "RangeAny"                      , false, false, false,  2, "RangeAny", false, true , "ParseNode", true , true , false, true  }, // 245
-    { "RangeInt"                      , false, false, false,  2, "RangeInt", false, true , "ParseNode", true , true , false, true  }, // 246
-    { "RangeFloat"                    , false, false, false,  2, "RangeFloat", false, true , "ParseNode", true , true , false, true  }, // 247
-    { "RangeDate"                     , false, false, false,  2, "RangeDate", false, true , "ParseNode", true , true , false, true  }, // 248
-    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , false, false, false }, // 249
-    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , false, false, false }, // 250
-    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , false, false, false }, // 251
-    { "CastAny"                       , false, false, false,  1, "CastAny", false, true , "ParseNode", true , true , false, false }, // 252
-    { "CastList"                      , false, false, false,  1, "CastList", false, true , "ParseNode", true , true , false, false }, // 253
-    { "CastHash"                      , false, false, false,  1, "CastHash", false, true , "ParseNode", true , true , false, false }, // 254
-    { "CastObject"                    , false, false, false,  1, "CastObject", false, true , "ParseNode", true , true , false, false }, // 255
-    { "CastEnum"                      , false, false, false,  1, "CastEnum", false, true , "ParseNode", true , true , false, false }, // 256
-    { "CastComplexHash"               , false, false, false,  1, "CastComplexHash", false, true , "ParseNode", true , false, false, false }, // 257
-    { "Br"                            , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 258
-    { "BrIf"                          , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 259
-    { "SwitchInt"                     , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 260
-    { "SwitchString"                  , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 261
-    { "Return"                        , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 262
-    { "ReturnNothing"                 , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 263
-    { "LoadLocal"                     , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 264
-    { "StoreLocal"                    , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 265
-    { "UninstantiateLocal"            , false, false, false,  0, "UninstantiateLocal", false, true , "ParseNode", false, false, false, false }, // 266
-    { "LoadArg"                       , false, false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 267
-    { "LoadClosure"                   , true , false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 268
-    { "StoreClosure"                  , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 269
-    { "LoadGlobal"                    , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 270
-    { "StoreGlobal"                   , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 271
-    { "LoadThreadLocal"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 272
-    { "StoreThreadLocal"              , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 273
-    { "LoadImplicitArg"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 274
-    { "LoadImplicitArgv"              , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 275
-    { "LoadImplicitElement"           , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 276
-    { "PushImplicitArg"               , false, false, false,  1, "PushImplicitArg", false, true , "ParseNode", true , false, false, false }, // 277
-    { "SetImplicitArgv"               , false, false, false,  1, "SetImplicitArgv", false, true , "ParseNode", true , false, false, false }, // 278
-    { "PopImplicitArg"                , false, false, false,  1, "PopImplicitArg", false, true , "ParseNode", false, false, false, false }, // 279
-    { "PushImplicitElement"           , false, false, false,  1, "PushImplicitElement", false, true , "ParseNode", true , false, false, false }, // 280
-    { "PopImplicitElement"            , false, false, false,  1, "PopImplicitElement", false, true , "ParseNode", false, false, false, false }, // 281
-    { "HashKeyAccess"                 , true , false, false,  1, "HashKeyAccess", false, true , "ParseNode", true , true , false, false }, // 282
-    { "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , true , false, false }, // 283
-    { "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 284
-    { "LoadStaticVar"                 , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 285
-    { "NewObject"                     , false, false, false,  0, "NewObject", false, true , "ParseNode", true , false, false, false }, // 286
-    { "LoadConstant"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 287
-    { "CreateClosure"                 , false, false, false,  0, "CreateClosure", false, true , "ParseNode", true , false, false, false }, // 288
-    { "CreateCallRef"                 , false, false, false,  0, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 289
-    { "CreateMethodRef"               , false, false, false,  0, "CreateMethodRef", false, true , "ParseNode", true , false, false, false }, // 290
-    { "CreateParseRef"                , false, false, false,  0, "CreateParseRef", false, true , "ParseNode", true , false, false, false }, // 291
-    { "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false }, // 292
-    { "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false }, // 293
-    { "NewComplexList"                , false, false, false,  0, "NewComplexList", false, true , "ParseNode", true , false, false, false }, // 294
-    { "VrnConstruct"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 295
-    { "HashSetKeyValue"               , false, false, false,  3, "HashSetKeyValue", false, true , "ParseNode", false, false, false, false }, // 296
-    { "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false }, // 297
-    { "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 298
-    { "CallDirect"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 299
-    { "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 300
-    { "CallMethod"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 301
-    { "CallMethodDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 302
-    { "InvokeMethodDirect"            , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 303
-    { "CallStatic"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 304
-    { "CallStaticDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 305
-    { "DotEvalMethodDirect"           , true , false, false, -1, "DotEvalMethodDirect", false, true , "ParseNode", true , false, false, false }, // 306
-    { "InvokeDotEvalMethodDirect"     , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 307
-    { "CallClosureDirect"             , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , true , false, false }, // 308
-    { "Invoke"                        , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 309
-    { "GuardInt"                      , false, false, false,  1, "GuardInt", false, true , "ParseNode", false, false, false, false }, // 310
-    { "GetObjectClass"                , false, false, false,  1, "GetObjectClass", false, true , "ParseNode", true , false, false, false }, // 311
-    { "GuardFloat"                    , false, false, false,  1, "GuardFloat", false, true , "ParseNode", false, false, false, false }, // 312
-    { "GuardType"                     , false, false, false,  1, "GuardType", false, true , "ParseNode", false, false, false, false }, // 313
-    { "GuardNotNothing"               , false, false, false,  1, "GuardNotNothing", false, true , "ParseNode", false, false, false, false }, // 314
-    { "LandingPad"                    , false, false, false,  0, "LandingPad", false, true , "ParseNode", false, false, false, false }, // 315
-    { "CatchException"                , true , false, false,  0, "CatchException", false, true , "ParseNode", true , false, false, false }, // 316
-    { "CatchCleanup"                  , false, false, false,  0, "CatchCleanup", false, true , "ParseNode", false, false, false, false }, // 317
-    { "Rethrow"                       , false, false, true , -1, "Rethrow", false, true , "ParseNode", false, false, false, false }, // 318
-    { "Throw"                         , false, false, true ,  1, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 319
-    { "InvokeSimError"                , false, false, true ,  0, "Call function or method", true , true , "FunctionCallNode", false, false, false, false }, // 320
-    { "Incref"                        , false, false, false,  1, "Incref", false, true , "ParseNode", false, false, false, false }, // 321
-    { "Decref"                        , false, false, false,  1, "Decref", false, true , "ParseNode", false, false, false, false }, // 322
-    { "DecrefNoThrow"                 , false, false, false,  1, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 323
-    { "SwitchRegexMatch"              , false, false, false,  1, "Control flow", false, false, "ControlFlowNode", true , false, false, false }, // 324
-    { "ListPush"                      , false, false, false,  2, "ListPush", false, true , "ParseNode", true , false, false, false }, // 325
-    { "RefForeachInit"                , false, false, false,  0, "RefForeachInit", false, true , "ParseNode", true , false, false, false }, // 326
-    { "RefForeachSize"                , false, false, false,  1, "RefForeachSize", false, true , "ParseNode", true , false, false, false }, // 327
-    { "RefForeachGetEntry"            , false, false, false,  2, "RefForeachGetEntry", false, true , "ParseNode", true , false, false, false }, // 328
-    { "RefForeachRecord"              , false, false, false,  2, "RefForeachRecord", false, true , "ParseNode", false, false, false, false }, // 329
-    { "RefForeachFinalize"            , false, false, false,  2, "RefForeachFinalize", false, true , "ParseNode", false, false, false, false }, // 330
-    { "RefForeachCleanup"             , false, false, false,  1, "RefForeachCleanup", false, true , "ParseNode", false, false, false, false }, // 331
-    { "AddNumber"                     , false, false, false,  2, "AddNumber", false, true , "ParseNode", true , true , false, true  }, // 332
-    { "SubNumber"                     , false, false, false,  2, "SubNumber", false, true , "ParseNode", true , true , false, true  }, // 333
-    { "MulNumber"                     , false, false, false,  2, "MulNumber", false, true , "ParseNode", true , true , false, true  }, // 334
-    { "DivNumber"                     , false, false, false,  2, "DivNumber", false, true , "ParseNode", true , true , false, true  }, // 335
-    { "HashKeyStore"                  , false, false, false,  2, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 336
-    { "ListIndexAccess"               , true , false, false,  2, "ListIndexAccess", false, true , "ParseNode", true , false, false, false }, // 337
-    { "ListIndexStore"                , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 338
-    { "AddAssignLocalInt"             , false, false, false,  0, "AddAssignLocalInt", false, true , "ParseNode", true , false, false, false }, // 339
-    { "IncrementLocalInt"             , false, false, false,  0, "IncrementLocalInt", false, true , "ParseNode", true , false, false, false }, // 340
-    { "BranchIfLtLocalInt"            , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 341
-    { "ConstEnum"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 342
-    { "ListGetValueNoRef"             , false, false, false,  2, "ListGetValueNoRef", false, true , "ParseNode", true , false, false, false }, // 343
-    { "SwitchCaseMatch"               , false, false, false,  1, "Control flow", false, false, "ControlFlowNode", true , false, false, false }, // 344
-    { "IsCollectionType"              , false, false, false,  1, "IsCollectionType", false, true , "ParseNode", true , true , true , false }, // 345
-    { "MakeHashConstKeys"             , false, false, false, -1, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 346
-    { "ToString"                      , false, false, false, -1, "ToString", false, true , "ParseNode", true , false, false, false }, // 347
-    { "Sprintf"                       , false, false, false, -1, "Sprintf", false, true , "ParseNode", true , false, false, false }, // 348
-    { "NewHashDeclFromHash"           , false, false, false,  1, "NewHashDeclFromHash", false, true , "ParseNode", true , false, false, false }, // 349
-    { "InstantiateLocal"              , false, false, false,  0, "InstantiateLocal", false, true , "ParseNode", false, false, false, false }, // 350
-    { "AddTimeout"                    , false, false, false,  2, "AddTimeout", false, true , "ParseNode", true , true , false, false }, // 351
-    { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , true , false, false }, // 352
-    { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 353
-    { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 354
-    { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 355
-    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 356
-    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 357
-    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 358
-    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 359
-    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 360
+    { "IteratorCreate"                , false, false, false,  0, "IteratorCreate", false, true , "ParseNode", true , false, false, false }, // 134
+    { "IteratorNext"                  , false, false, true ,  0, "IteratorNext", false, true , "ParseNode", true , false, false, false }, // 135
+    { "OnBlockExit"                   , false, false, false,  0, "OnBlockExit", false, true , "ParseNode", false, false, false, false }, // 136
+    { "ScopeEnter"                    , false, false, false,  0, "ScopeEnter", false, true , "ParseNode", false, false, false, false }, // 137
+    { "ScopeExit"                     , false, false, false,  0, "ScopeExit", false, true , "ParseNode", false, false, false, false }, // 138
+    { "ThreadExit"                    , false, false, true ,  0, "ThreadExit", false, true , "ParseNode", false, false, false, false }, // 139
+    { "Context"                       , false, false, false,  0, "Context", false, true , "ParseNode", false, false, false, false }, // 140
+    { "Summarize"                     , false, false, false,  0, "Summarize", false, true , "ParseNode", false, false, false, false }, // 141
+    { "EqInt"                         , false, true , false,  2, "EqInt", false, true , "ParseNode", true , true , false, true  }, // 142
+    { "EqFloat"                       , false, true , false,  2, "EqFloat", false, true , "ParseNode", true , true , false, true  }, // 143
+    { "EqString"                      , false, false, false,  2, "EqString", false, true , "ParseNode", true , false, false, false }, // 144
+    { "EqAny"                         , false, true , false,  2, "EqAny", false, true , "ParseNode", true , true , false, true  }, // 145
+    { "NeInt"                         , false, true , false,  2, "NeInt", false, true , "ParseNode", true , true , false, true  }, // 146
+    { "NeFloat"                       , false, true , false,  2, "NeFloat", false, true , "ParseNode", true , true , false, true  }, // 147
+    { "NeString"                      , false, false, false,  2, "NeString", false, true , "ParseNode", true , false, false, false }, // 148
+    { "NeAny"                         , false, true , false,  2, "NeAny", false, true , "ParseNode", true , true , false, true  }, // 149
+    { "EqHard"                        , false, true , false,  2, "EqHard", false, true , "ParseNode", true , true , false, true  }, // 150
+    { "NeHard"                        , false, true , false,  2, "NeHard", false, true , "ParseNode", true , true , false, true  }, // 151
+    { "LtInt"                         , false, true , false,  2, "LtInt", false, true , "ParseNode", true , true , false, true  }, // 152
+    { "LtFloat"                       , false, true , false,  2, "LtFloat", false, true , "ParseNode", true , true , false, true  }, // 153
+    { "LtString"                      , false, false, false,  2, "LtString", false, true , "ParseNode", true , false, false, false }, // 154
+    { "LtAny"                         , false, true , false,  2, "LtAny", false, true , "ParseNode", true , true , false, true  }, // 155
+    { "LeInt"                         , false, true , false,  2, "LeInt", false, true , "ParseNode", true , true , false, true  }, // 156
+    { "LeFloat"                       , false, true , false,  2, "LeFloat", false, true , "ParseNode", true , true , false, true  }, // 157
+    { "LeString"                      , false, false, false,  2, "LeString", false, true , "ParseNode", true , false, false, false }, // 158
+    { "LeAny"                         , false, true , false,  2, "LeAny", false, true , "ParseNode", true , true , false, true  }, // 159
+    { "GtInt"                         , false, true , false,  2, "GtInt", false, true , "ParseNode", true , true , false, true  }, // 160
+    { "GtFloat"                       , false, true , false,  2, "GtFloat", false, true , "ParseNode", true , true , false, true  }, // 161
+    { "GtString"                      , false, false, false,  2, "GtString", false, true , "ParseNode", true , false, false, false }, // 162
+    { "GtAny"                         , false, true , false,  2, "GtAny", false, true , "ParseNode", true , true , false, true  }, // 163
+    { "GeInt"                         , false, true , false,  2, "GeInt", false, true , "ParseNode", true , true , false, true  }, // 164
+    { "GeFloat"                       , false, true , false,  2, "GeFloat", false, true , "ParseNode", true , true , false, true  }, // 165
+    { "GeString"                      , false, false, false,  2, "GeString", false, true , "ParseNode", true , false, false, false }, // 166
+    { "GeAny"                         , false, true , false,  2, "GeAny", false, true , "ParseNode", true , true , false, true  }, // 167
+    { "CmpInt"                        , false, true , false,  2, "CmpInt", false, true , "ParseNode", true , true , false, true  }, // 168
+    { "CmpFloat"                      , false, true , false,  2, "CmpFloat", false, true , "ParseNode", true , true , false, true  }, // 169
+    { "CmpString"                     , false, false, false,  2, "CmpString", false, true , "ParseNode", true , false, false, false }, // 170
+    { "CmpAny"                        , false, true , false,  2, "CmpAny", false, true , "ParseNode", true , true , false, true  }, // 171
+    { "ToBool"                        , false, true , false,  1, "ToBool", false, true , "ParseNode", true , true , true , false }, // 172
+    { "Not"                           , false, true , false,  1, "Not", false, true , "ParseNode", true , true , true , false }, // 173
+    { "IsNullOrNothing"               , false, true , false,  1, "IsNullOrNothing", false, true , "ParseNode", true , true , true , false }, // 174
+    { "Phi"                           , false, false, false, -1, "Phi", false, true , "ParseNode", true , false, false, false }, // 175
+    { "UnaryPlusAny"                  , false, false, false,  1, "UnaryPlusAny", false, true , "ParseNode", true , true , true , false }, // 176
+    { "UnaryMinusInt"                 , false, true , false,  1, "UnaryMinusInt", false, true , "ParseNode", true , true , true , false }, // 177
+    { "UnaryMinusFloat"               , false, true , false,  1, "UnaryMinusFloat", false, true , "ParseNode", true , true , true , false }, // 178
+    { "UnaryMinusAny"                 , false, false, false,  1, "UnaryMinusAny", false, true , "ParseNode", true , true , true , false }, // 179
+    { "FoldlAny"                      , false, false, false,  2, "FoldlAny", false, true , "ParseNode", true , true , false, true  }, // 180
+    { "FoldlInt"                      , false, false, false,  2, "FoldlInt", false, true , "ParseNode", true , true , false, true  }, // 181
+    { "FoldlFloat"                    , false, false, false,  2, "FoldlFloat", false, true , "ParseNode", true , true , false, true  }, // 182
+    { "FoldrAny"                      , false, false, false,  2, "FoldrAny", false, true , "ParseNode", true , true , false, true  }, // 183
+    { "FoldrInt"                      , false, false, false,  2, "FoldrInt", false, true , "ParseNode", true , true , false, true  }, // 184
+    { "FoldrFloat"                    , false, false, false,  2, "FoldrFloat", false, true , "ParseNode", true , true , false, true  }, // 185
+    { "FoldlSumInt"                   , false, false, false,  2, "FoldlSumInt", false, true , "ParseNode", true , true , false, true  }, // 186
+    { "FoldlSumFloat"                 , false, false, false,  2, "FoldlSumFloat", false, true , "ParseNode", true , true , false, true  }, // 187
+    { "FoldlProdInt"                  , false, false, false,  2, "FoldlProdInt", false, true , "ParseNode", true , true , false, true  }, // 188
+    { "FoldlProdFloat"                , false, false, false,  2, "FoldlProdFloat", false, true , "ParseNode", true , true , false, true  }, // 189
+    { "FoldlDiffInt"                  , false, false, false,  2, "FoldlDiffInt", false, true , "ParseNode", true , true , false, true  }, // 190
+    { "FoldlDiffFloat"                , false, false, false,  2, "FoldlDiffFloat", false, true , "ParseNode", true , true , false, true  }, // 191
+    { "FoldlMinInt"                   , false, false, false,  2, "FoldlMinInt", false, true , "ParseNode", true , true , false, true  }, // 192
+    { "FoldlMinFloat"                 , false, false, false,  2, "FoldlMinFloat", false, true , "ParseNode", true , true , false, true  }, // 193
+    { "FoldlMaxInt"                   , false, false, false,  2, "FoldlMaxInt", false, true , "ParseNode", true , true , false, true  }, // 194
+    { "FoldlMaxFloat"                 , false, false, false,  2, "FoldlMaxFloat", false, true , "ParseNode", true , true , false, true  }, // 195
+    { "FoldrSumInt"                   , false, false, false,  2, "FoldrSumInt", false, true , "ParseNode", true , true , false, true  }, // 196
+    { "FoldrSumFloat"                 , false, false, false,  2, "FoldrSumFloat", false, true , "ParseNode", true , true , false, true  }, // 197
+    { "FoldrProdInt"                  , false, false, false,  2, "FoldrProdInt", false, true , "ParseNode", true , true , false, true  }, // 198
+    { "FoldrProdFloat"                , false, false, false,  2, "FoldrProdFloat", false, true , "ParseNode", true , true , false, true  }, // 199
+    { "FoldrDiffInt"                  , false, false, false,  2, "FoldrDiffInt", false, true , "ParseNode", true , true , false, true  }, // 200
+    { "FoldrDiffFloat"                , false, false, false,  2, "FoldrDiffFloat", false, true , "ParseNode", true , true , false, true  }, // 201
+    { "FoldrMinInt"                   , false, false, false,  2, "FoldrMinInt", false, true , "ParseNode", true , true , false, true  }, // 202
+    { "FoldrMinFloat"                 , false, false, false,  2, "FoldrMinFloat", false, true , "ParseNode", true , true , false, true  }, // 203
+    { "FoldrMaxInt"                   , false, false, false,  2, "FoldrMaxInt", false, true , "ParseNode", true , true , false, true  }, // 204
+    { "FoldrMaxFloat"                 , false, false, false,  2, "FoldrMaxFloat", false, true , "ParseNode", true , true , false, true  }, // 205
+    { "MapAny"                        , false, false, false,  2, "MapAny", false, true , "ParseNode", true , true , false, true  }, // 206
+    { "MapInt"                        , false, false, false,  2, "MapInt", false, true , "ParseNode", true , true , false, true  }, // 207
+    { "MapFloat"                      , false, false, false,  2, "MapFloat", false, true , "ParseNode", true , true , false, true  }, // 208
+    { "MapScaleInt"                   , false, false, false,  2, "MapScaleInt", false, true , "ParseNode", true , false, false, false }, // 209
+    { "MapScaleFloat"                 , false, false, false,  2, "MapScaleFloat", false, true , "ParseNode", true , false, false, false }, // 210
+    { "MapOffsetInt"                  , false, false, false,  2, "MapOffsetInt", false, true , "ParseNode", true , false, false, false }, // 211
+    { "MapOffsetFloat"                , false, false, false,  2, "MapOffsetFloat", false, true , "ParseNode", true , false, false, false }, // 212
+    { "MapSquareInt"                  , false, false, false,  2, "MapSquareInt", false, true , "ParseNode", true , false, false, false }, // 213
+    { "MapSquareFloat"                , false, false, false,  2, "MapSquareFloat", false, true , "ParseNode", true , false, false, false }, // 214
+    { "MapHashKeyValue"               , false, false, false,  1, "MapHashKeyValue", false, true , "ParseNode", true , false, false, false }, // 215
+    { "MapHashKeyInt"                 , false, false, false,  1, "MapHashKeyInt", false, true , "ParseNode", true , false, false, false }, // 216
+    { "MapHashKeyOffsetInt"           , false, false, false,  2, "MapHashKeyOffsetInt", false, true , "ParseNode", true , false, false, false }, // 217
+    { "MapHashKeyScaleInt"            , false, false, false,  2, "MapHashKeyScaleInt", false, true , "ParseNode", true , false, false, false }, // 218
+    { "HashMapTwoKeys"                , false, false, false,  1, "HashMapTwoKeys", false, true , "ParseNode", true , false, false, false }, // 219
+    { "SelectAny"                     , false, false, false,  2, "SelectAny", false, true , "ParseNode", true , true , false, true  }, // 220
+    { "SelectInt"                     , false, false, false,  2, "SelectInt", false, true , "ParseNode", true , true , false, true  }, // 221
+    { "SelectFloat"                   , false, false, false,  2, "SelectFloat", false, true , "ParseNode", true , true , false, true  }, // 222
+    { "SelectPositiveInt"             , false, false, false,  2, "SelectPositiveInt", false, true , "ParseNode", true , false, false, false }, // 223
+    { "SelectPositiveFloat"           , false, false, false,  2, "SelectPositiveFloat", false, true , "ParseNode", true , false, false, false }, // 224
+    { "SelectNonZeroInt"              , false, false, false,  2, "SelectNonZeroInt", false, true , "ParseNode", true , false, false, false }, // 225
+    { "SelectNonZeroFloat"            , false, false, false,  2, "SelectNonZeroFloat", false, true , "ParseNode", true , false, false, false }, // 226
+    { "FusedMapSelectScalePositiveInt", false, false, false,  2, "FusedMapSelectScalePositiveInt", false, true , "ParseNode", true , false, false, false }, // 227
+    { "FusedMapSelectScalePositiveFloat", false, false, false,  2, "FusedMapSelectScalePositiveFloat", false, true , "ParseNode", true , false, false, false }, // 228
+    { "FusedMapSelectOffsetPositiveInt", false, false, false,  2, "FusedMapSelectOffsetPositiveInt", false, true , "ParseNode", true , false, false, false }, // 229
+    { "FusedMapSelectOffsetPositiveFloat", false, false, false,  2, "FusedMapSelectOffsetPositiveFloat", false, true , "ParseNode", true , false, false, false }, // 230
+    { "FusedMapSelectSquarePositiveInt", false, false, false,  2, "FusedMapSelectSquarePositiveInt", false, true , "ParseNode", true , false, false, false }, // 231
+    { "FusedMapSelectSquarePositiveFloat", false, false, false,  2, "FusedMapSelectSquarePositiveFloat", false, true , "ParseNode", true , false, false, false }, // 232
+    { "FusedMapFoldlSumScaleInt"      , false, false, false,  2, "FusedMapFoldlSumScaleInt", false, true , "ParseNode", true , true , false, true  }, // 233
+    { "FusedMapFoldlSumScaleFloat"    , false, false, false,  2, "FusedMapFoldlSumScaleFloat", false, true , "ParseNode", true , true , false, true  }, // 234
+    { "FusedMapFoldlSumSquareInt"     , false, false, false,  2, "FusedMapFoldlSumSquareInt", false, true , "ParseNode", true , true , false, true  }, // 235
+    { "FusedMapFoldlSumSquareFloat"   , false, false, false,  2, "FusedMapFoldlSumSquareFloat", false, true , "ParseNode", true , true , false, true  }, // 236
+    { "FusedMapFoldlProdScaleInt"     , false, false, false,  2, "FusedMapFoldlProdScaleInt", false, true , "ParseNode", true , true , false, true  }, // 237
+    { "FusedMapFoldlProdScaleFloat"   , false, false, false,  2, "FusedMapFoldlProdScaleFloat", false, true , "ParseNode", true , true , false, true  }, // 238
+    { "MapSelectAny"                  , false, false, false, -1, "MapSelectAny", false, true , "ParseNode", true , false, false, false }, // 239
+    { "HashMapAny"                    , false, false, false, -1, "HashMapAny", false, true , "ParseNode", true , false, false, false }, // 240
+    { "HashMapSelectAny"              , false, false, false, -1, "HashMapSelectAny", false, true , "ParseNode", true , false, false, false }, // 241
+    { "RangeAny"                      , false, false, false,  2, "RangeAny", false, true , "ParseNode", true , true , false, true  }, // 242
+    { "RangeInt"                      , false, false, false,  2, "RangeInt", false, true , "ParseNode", true , true , false, true  }, // 243
+    { "RangeFloat"                    , false, false, false,  2, "RangeFloat", false, true , "ParseNode", true , true , false, true  }, // 244
+    { "RangeDate"                     , false, false, false,  2, "RangeDate", false, true , "ParseNode", true , true , false, true  }, // 245
+    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , false, false, false }, // 246
+    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , false, false, false }, // 247
+    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , false, false, false }, // 248
+    { "CastAny"                       , false, false, false,  1, "CastAny", false, true , "ParseNode", true , true , false, false }, // 249
+    { "CastList"                      , false, false, false,  1, "CastList", false, true , "ParseNode", true , true , false, false }, // 250
+    { "CastHash"                      , false, false, false,  1, "CastHash", false, true , "ParseNode", true , true , false, false }, // 251
+    { "CastObject"                    , false, false, false,  1, "CastObject", false, true , "ParseNode", true , true , false, false }, // 252
+    { "CastEnum"                      , false, false, false,  1, "CastEnum", false, true , "ParseNode", true , true , false, false }, // 253
+    { "CastComplexHash"               , false, false, false,  1, "CastComplexHash", false, true , "ParseNode", true , false, false, false }, // 254
+    { "Br"                            , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 255
+    { "BrIf"                          , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 256
+    { "SwitchInt"                     , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 257
+    { "SwitchString"                  , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 258
+    { "Return"                        , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 259
+    { "ReturnNothing"                 , false, false, true ,  0, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 260
+    { "LoadLocal"                     , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 261
+    { "StoreLocal"                    , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 262
+    { "UninstantiateLocal"            , false, false, false,  0, "UninstantiateLocal", false, true , "ParseNode", false, false, false, false }, // 263
+    { "LoadArg"                       , false, false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 264
+    { "LoadClosure"                   , true , false, false, -1, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 265
+    { "StoreClosure"                  , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 266
+    { "LoadGlobal"                    , true , false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 267
+    { "StoreGlobal"                   , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 268
+    { "LoadThreadLocal"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 269
+    { "StoreThreadLocal"              , false, false, false,  1, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 270
+    { "LoadImplicitArg"               , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 271
+    { "LoadImplicitArgv"              , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 272
+    { "LoadImplicitElement"           , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 273
+    { "PushImplicitArg"               , false, false, false,  1, "PushImplicitArg", false, true , "ParseNode", true , false, false, false }, // 274
+    { "SetImplicitArgv"               , false, false, false,  1, "SetImplicitArgv", false, true , "ParseNode", true , false, false, false }, // 275
+    { "PopImplicitArg"                , false, false, false,  1, "PopImplicitArg", false, true , "ParseNode", false, false, false, false }, // 276
+    { "PushImplicitElement"           , false, false, false,  1, "PushImplicitElement", false, true , "ParseNode", true , false, false, false }, // 277
+    { "PopImplicitElement"            , false, false, false,  1, "PopImplicitElement", false, true , "ParseNode", false, false, false, false }, // 278
+    { "HashKeyAccess"                 , true , false, false,  1, "HashKeyAccess", false, true , "ParseNode", true , true , false, false }, // 279
+    { "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , true , false, false }, // 280
+    { "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 281
+    { "LoadStaticVar"                 , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 282
+    { "NewObject"                     , false, false, false,  0, "NewObject", false, true , "ParseNode", true , false, false, false }, // 283
+    { "LoadConstant"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 284
+    { "CreateClosure"                 , false, false, false,  0, "CreateClosure", false, true , "ParseNode", true , false, false, false }, // 285
+    { "CreateCallRef"                 , false, false, false,  0, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 286
+    { "CreateMethodRef"               , false, false, false,  0, "CreateMethodRef", false, true , "ParseNode", true , false, false, false }, // 287
+    { "CreateParseRef"                , false, false, false,  0, "CreateParseRef", false, true , "ParseNode", true , false, false, false }, // 288
+    { "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false }, // 289
+    { "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false }, // 290
+    { "NewComplexList"                , false, false, false,  0, "NewComplexList", false, true , "ParseNode", true , false, false, false }, // 291
+    { "VrnConstruct"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 292
+    { "HashSetKeyValue"               , false, false, false,  3, "HashSetKeyValue", false, true , "ParseNode", false, false, false, false }, // 293
+    { "IteratorCreateReverse"         , false, false, false,  1, "IteratorCreateReverse", false, true , "ParseNode", true , false, false, false }, // 294
+    { "Call"                          , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 295
+    { "CallDirect"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 296
+    { "CallIndirect"                  , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 297
+    { "CallMethod"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 298
+    { "CallMethodDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 299
+    { "InvokeMethodDirect"            , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 300
+    { "CallStatic"                    , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 301
+    { "CallStaticDirect"              , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 302
+    { "DotEvalMethodDirect"           , true , false, false, -1, "DotEvalMethodDirect", false, true , "ParseNode", true , false, false, false }, // 303
+    { "InvokeDotEvalMethodDirect"     , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 304
+    { "CallClosureDirect"             , true , false, false, -1, "Call function or method", true , true , "FunctionCallNode", true , true , false, false }, // 305
+    { "Invoke"                        , true , false, true , -1, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 306
+    { "GuardInt"                      , false, false, false,  1, "GuardInt", false, true , "ParseNode", false, false, false, false }, // 307
+    { "GetObjectClass"                , false, false, false,  1, "GetObjectClass", false, true , "ParseNode", true , false, false, false }, // 308
+    { "GuardFloat"                    , false, false, false,  1, "GuardFloat", false, true , "ParseNode", false, false, false, false }, // 309
+    { "GuardType"                     , false, false, false,  1, "GuardType", false, true , "ParseNode", false, false, false, false }, // 310
+    { "GuardNotNothing"               , false, false, false,  1, "GuardNotNothing", false, true , "ParseNode", false, false, false, false }, // 311
+    { "LandingPad"                    , false, false, false,  0, "LandingPad", false, true , "ParseNode", false, false, false, false }, // 312
+    { "CatchException"                , true , false, false,  0, "CatchException", false, true , "ParseNode", true , false, false, false }, // 313
+    { "CatchCleanup"                  , false, false, false,  0, "CatchCleanup", false, true , "ParseNode", false, false, false, false }, // 314
+    { "Rethrow"                       , false, false, true , -1, "Rethrow", false, true , "ParseNode", false, false, false, false }, // 315
+    { "Throw"                         , false, false, true ,  1, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 316
+    { "InvokeSimError"                , false, false, true ,  0, "Call function or method", true , true , "FunctionCallNode", false, false, false, false }, // 317
+    { "Incref"                        , false, false, false,  1, "Incref", false, true , "ParseNode", false, false, false, false }, // 318
+    { "Decref"                        , false, false, false,  1, "Decref", false, true , "ParseNode", false, false, false, false }, // 319
+    { "DecrefNoThrow"                 , false, false, false,  1, "Control transfer", false, true , "ControlFlowNode", false, false, false, false }, // 320
+    { "SwitchRegexMatch"              , false, false, false,  1, "Control flow", false, false, "ControlFlowNode", true , false, false, false }, // 321
+    { "ListPush"                      , false, false, false,  2, "ListPush", false, true , "ParseNode", true , false, false, false }, // 322
+    { "RefForeachInit"                , false, false, false,  0, "RefForeachInit", false, true , "ParseNode", true , false, false, false }, // 323
+    { "RefForeachSize"                , false, false, false,  1, "RefForeachSize", false, true , "ParseNode", true , false, false, false }, // 324
+    { "RefForeachGetEntry"            , false, false, false,  2, "RefForeachGetEntry", false, true , "ParseNode", true , false, false, false }, // 325
+    { "RefForeachRecord"              , false, false, false,  2, "RefForeachRecord", false, true , "ParseNode", false, false, false, false }, // 326
+    { "RefForeachFinalize"            , false, false, false,  2, "RefForeachFinalize", false, true , "ParseNode", false, false, false, false }, // 327
+    { "RefForeachCleanup"             , false, false, false,  1, "RefForeachCleanup", false, true , "ParseNode", false, false, false, false }, // 328
+    { "AddNumber"                     , false, false, false,  2, "AddNumber", false, true , "ParseNode", true , true , false, true  }, // 329
+    { "SubNumber"                     , false, false, false,  2, "SubNumber", false, true , "ParseNode", true , true , false, true  }, // 330
+    { "MulNumber"                     , false, false, false,  2, "MulNumber", false, true , "ParseNode", true , true , false, true  }, // 331
+    { "DivNumber"                     , false, false, false,  2, "DivNumber", false, true , "ParseNode", true , true , false, true  }, // 332
+    { "HashKeyStore"                  , false, false, false,  2, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 333
+    { "ListIndexAccess"               , true , false, false,  2, "ListIndexAccess", false, true , "ParseNode", true , false, false, false }, // 334
+    { "ListIndexStore"                , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 335
+    { "AddAssignLocalInt"             , false, false, false,  0, "AddAssignLocalInt", false, true , "ParseNode", true , false, false, false }, // 336
+    { "IncrementLocalInt"             , false, false, false,  0, "IncrementLocalInt", false, true , "ParseNode", true , false, false, false }, // 337
+    { "BranchIfLtLocalInt"            , false, false, true ,  0, "Control flow", false, false, "ControlFlowNode", false, false, false, false }, // 338
+    { "ConstEnum"                     , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 339
+    { "ListGetValueNoRef"             , false, false, false,  2, "ListGetValueNoRef", false, true , "ParseNode", true , false, false, false }, // 340
+    { "SwitchCaseMatch"               , false, false, false,  1, "Control flow", false, false, "ControlFlowNode", true , false, false, false }, // 341
+    { "IsCollectionType"              , false, false, false,  1, "IsCollectionType", false, true , "ParseNode", true , true , true , false }, // 342
+    { "MakeHashConstKeys"             , false, false, false, -1, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 343
+    { "ToString"                      , false, false, false, -1, "ToString", false, true , "ParseNode", true , false, false, false }, // 344
+    { "Sprintf"                       , false, false, false, -1, "Sprintf", false, true , "ParseNode", true , false, false, false }, // 345
+    { "NewHashDeclFromHash"           , false, false, false,  1, "NewHashDeclFromHash", false, true , "ParseNode", true , false, false, false }, // 346
+    { "InstantiateLocal"              , false, false, false,  0, "InstantiateLocal", false, true , "ParseNode", false, false, false, false }, // 347
+    { "AddTimeout"                    , false, false, false,  2, "AddTimeout", false, true , "ParseNode", true , true , false, false }, // 348
+    { "SubTimeout"                    , false, false, false,  2, "SubTimeout", false, true , "ParseNode", true , true , false, false }, // 349
+    { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 350
+    { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 351
+    { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 352
+    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 353
+    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 354
+    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 355
+    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 356
+    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 357
 };
 
 //! Static assertion to verify registry completeness
 static_assert(
-    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 361,
-    "OPCODE_REGISTRY has incorrect entry count - should be exactly 361"
+    sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]) == 358,
+    "OPCODE_REGISTRY has incorrect entry count - should be exactly 358"
 );
 
 //! ============================================================================
@@ -415,10 +412,6 @@ inline const OpcodeInfo* getOpcodeInfo(int opcode_id) {
     constexpr int REGISTRY_SIZE = sizeof(OPCODE_REGISTRY) / sizeof(OPCODE_REGISTRY[0]);
     if (opcode_id >= 0 && opcode_id < REGISTRY_SIZE) {
         const OpcodeInfo* info = &OPCODE_REGISTRY[opcode_id];
-        // Check for null entry (removed opcode IDs: 134, 141, 142)
-        if (info->name == nullptr) {
-            return nullptr;
-        }
         return info;
     }
     return nullptr;
