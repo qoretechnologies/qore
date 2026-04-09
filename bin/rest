@@ -404,9 +404,7 @@ class RestCmd {
     #! Performs a request using AbstractRestClient with literal request/response info
     private doLiteralRequest(AbstractRestClient rest, string meth, string request_path, auto body,
             string rest_url) {
-        if (rest instanceof Logger::LoggerWrapper) {
-            cast<Logger::LoggerWrapper>(rest).setLogger(getLogger());
-        }
+        rest.setLogger(getLogger());
 
         hash<RestClient::RestResponseInfo> h;
         try {
