@@ -1060,7 +1060,12 @@ private:
     }
 
     DLLLOCAL bool needsCloseOnComplete() const override {
-        return true;  // Close the dedicated UDP fd after the request completes
+        // Only close when the QUIC connection is truly terminal (CLOSED).
+        // RESPONSE_READY means a single request/response completed — the
+        // operation will be re-submitted for subsequent requests on the
+        // same connection.  Closing on RESPONSE_READY kills the socket
+        // before the next request can be sent.
+        return qcs_state == QCS::CLOSED;
     }
 };
 

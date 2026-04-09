@@ -88,6 +88,12 @@ public:
         return false;  // long-running multiplexed operation
     }
 
+    DLLLOCAL bool needsCloseOnComplete() const override {
+        // Client QUIC connections use a dedicated UDP socket per connection;
+        // close it when the connection reaches terminal state to prevent fd leak
+        return h3_state.load(std::memory_order_acquire) == H3State::CLOSED;
+    }
+
     DLLLOCAL QoreHashNode* continuePoll(ExceptionSink* xsink) override;
     DLLLOCAL void abort(ExceptionSink* xsink) override;
     DLLLOCAL QoreValue getOutput() const override;

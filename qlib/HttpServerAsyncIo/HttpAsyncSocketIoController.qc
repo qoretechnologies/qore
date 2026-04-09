@@ -3120,16 +3120,18 @@ public class HttpAsyncSocketIoController {
                 # Submit response to nghttp2 session (thread-safe)
                 cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr, body);
 
-                # Flush response frames to the socket inline from this worker thread.
-                # We cannot rely on wakeSocket() → continuePoll() because the H2 poll
-                # operation may have already been removed from the controller's cache
-                # (Phase3 REMOVE fires before onComplete dispatch reaches this point).
-                # This follows nginx's pattern: the filter flushes inline via
-                # ngx_http_v2_send_output_queue() rather than deferring to the event loop.
-                cinfo.sock.flushHttp2(-1);
-
-                # Wake the I/O controller so it re-registers the socket for the next
-                # request's incoming frames
+                # Re-submit the H2 poll operation to the controller so the I/O
+                # thread can flush the response frames non-blockingly via
+                # continuePoll() → sendPendingData(0).
+                #
+                # We must NOT call flushHttp2(-1) here — that does a blocking
+                # send (sendPendingDataBlocking) while holding Http2Session::m.
+                # If the socket is non-blocking (set by the I/O controller) and
+                # the send buffer is full, sendIntern blocks in poll(-1) while
+                # holding the mutex.  The I/O thread needs that same mutex to
+                # process incoming ACKs that would unblock the send — deadlock.
+                resumeMultiplexedReading(cinfo.stream_op, uh,
+                    HttpConnectionState::Http2);
                 controller.wakeSocket(cinfo.sock);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,

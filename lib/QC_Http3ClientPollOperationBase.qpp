@@ -421,9 +421,8 @@ void Http3ClientPollOperationPriv::setError(const char* err, const char* desc, E
         }
     }
     h3_state.store(H3State::CLOSED, std::memory_order_release);
-    // NOTE: do NOT close the socket here — HTTP/3 uses a shared UDP socket
-    // across all QUIC sessions.  Closing it would break other sessions' I/O.
-    // The QUIC session cleanup handles fd lifecycle.
+    // Socket cleanup is handled by the I/O controller's Phase3 close logic
+    // via needsCloseOnComplete() returning true when h3_state == CLOSED.
     notifyPendingStreams(err, desc, xsink);
     if (connection_priv) {
         connection_priv->setClosed();
