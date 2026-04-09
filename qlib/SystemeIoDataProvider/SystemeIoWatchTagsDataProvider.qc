@@ -56,8 +56,14 @@ public class SystemeIoWatchTagsDataProvider inherits SystemeIoWatchDataProviderB
         return new SystemeIoTagDataType();
     }
 
-    list<hash<auto>> fetchRecords() {
-        return doPaginatedGet("tags", {"order": "desc"});
+    string getTimestampField() {
+        return "createdAt";
+    }
+
+    list<hash<auto>> fetchRecords(date since) {
+        # Tags API has no date filter; fetch one page sorted newest-first
+        # and let the base class filter by createdAt client-side
+        return doPaginatedGet("tags", {"order": "desc"}, DefaultPageSize);
     }
 
     hash<auto> getFakeExampleData() {

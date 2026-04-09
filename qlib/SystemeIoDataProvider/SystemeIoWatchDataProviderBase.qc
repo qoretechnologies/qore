@@ -38,10 +38,20 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
                 "desc": "Polling interval in seconds (minimum " + MinPollInterval + ")",
                 "default_value": DefaultPollInterval,
             },
+            "start_date": <DataProviderOptionInfo>{
+                "display_name": "Start Date",
+                "short_desc": "Only detect records created after this date",
+                "type": AbstractDataProviderType::get(SoftDateOrNothingType),
+                "desc": "Only detect records created after this date/time; if not set, only "
+                    "new records created after the provider starts will be detected",
+            },
         };
     }
 
     private {
+        #! Timestamp of last successful poll for filtering
+        date last_check;
+
         #! Set of seen IDs to avoid duplicates
         hash<string, bool> seen_ids;
     }
@@ -51,6 +61,7 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
             : SystemeIoDataProviderBase(rest),
               AbstractWatchDataProviderBase(max(options.poll_interval ?? DefaultPollInterval,
                   MinPollInterval)) {
+        last_check = options.start_date ?? now_us();
     }
 
     #! Destructor - stops the polling thread
@@ -66,7 +77,8 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
     #! Polls for new records once
     private pollOnce() {
         try {
-            list<hash<auto>> records = fetchRecords();
+            list<hash<auto>> records = fetchRecords(last_check);
+            date new_last_check = last_check;
 
             foreach hash<auto> record in (records) {
                 if (isStopping()) {
@@ -79,9 +91,23 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
                     continue;
                 }
 
+                # Check record timestamp against last_check
+                *string ts = record{getTimestampField()};
+                if (ts) {
+                    date record_time = date(ts);
+                    if (record_time <= last_check) {
+                        continue;
+                    }
+                    if (record_time > new_last_check) {
+                        new_last_check = record_time;
+                    }
+                }
+
                 seen_ids{id} = True;
                 notifyObservers(getEventName(), record);
             }
+
+            last_check = new_last_check;
 
             # Prune oldest half of seen_ids if it gets too large
             if (seen_ids.size() > 10000) {
@@ -110,7 +136,7 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
     #! Returns example event data for documentation/testing
     private auto getExampleEventDataImpl(string event_id) {
         try {
-            list<hash<auto>> records = fetchRecords();
+            list<hash<auto>> records = fetchRecords(last_check);
             if (records) {
                 return records[0];
             }
@@ -128,8 +154,11 @@ public class SystemeIoWatchDataProviderBase inherits SystemeIoDataProviderBase,
     #! Returns the data type for event records
     abstract AbstractDataProviderType getRecordDataType();
 
+    #! Returns the timestamp field name for filtering records
+    abstract string getTimestampField();
+
     #! Fetches recent records for polling
-    abstract list<hash<auto>> fetchRecords();
+    abstract list<hash<auto>> fetchRecords(date since);
 }
 
 } # namespace SystemeIoDataProvider

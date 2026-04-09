@@ -274,9 +274,7 @@ public class SystemeIoDataProviderTest inherits QUnit::Test {
         hash<auto> contact_fake = contact_watch.getFakeExampleData();
         assertEq(True, contact_fake.hasKey("id"), "contact fake has id");
         assertEq(True, contact_fake.hasKey("email"), "contact fake has email");
-        assertEq(True, contact_fake.hasKey("firstName"), "contact fake has firstName");
-        assertEq(True, contact_fake.hasKey("lastName"), "contact fake has lastName");
-        assertEq(True, contact_fake.hasKey("createdAt"), "contact fake has createdAt");
+        assertEq(True, contact_fake.hasKey("registeredAt"), "contact fake has registeredAt");
 
         # Tag watch
         SystemeIoDataProvider::SystemeIoWatchTagsDataProvider tag_watch(

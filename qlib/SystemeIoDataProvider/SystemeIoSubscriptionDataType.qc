@@ -65,7 +65,6 @@ public class SystemeIoCancelSubscriptionRequestDataType inherits HashDataType {
                 "short_desc": "The subscription ID to cancel",
                 "desc": "The unique identifier of the subscription to cancel",
                 "required": True,
-                "ref_data": "subscriptions",
             },
         };
     }

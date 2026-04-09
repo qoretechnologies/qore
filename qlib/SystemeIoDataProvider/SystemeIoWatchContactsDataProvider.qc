@@ -56,20 +56,23 @@ public class SystemeIoWatchContactsDataProvider inherits SystemeIoWatchDataProvi
         return new SystemeIoContactDataType();
     }
 
-    list<hash<auto>> fetchRecords() {
-        return doPaginatedGet("contacts", {"order": "desc"});
+    string getTimestampField() {
+        return "registeredAt";
+    }
+
+    list<hash<auto>> fetchRecords(date since) {
+        return doPaginatedGet("contacts", {
+            "order": "desc",
+            "registeredAfter": format_date("YYYY-MM-DDTHH:mm:ssZ", since),
+        });
     }
 
     hash<auto> getFakeExampleData() {
         return {
             "id": 100001,
             "email": "jane.smith@example.com",
-            "firstName": "Jane",
-            "lastName": "Smith",
-            "phoneNumber": "+1-555-0199",
             "locale": "en",
-            "createdAt": "2026-04-01T10:30:00Z",
-            "updatedAt": "2026-04-01T10:30:00Z",
+            "registeredAt": "2026-04-01T10:30:00Z",
         };
     }
 

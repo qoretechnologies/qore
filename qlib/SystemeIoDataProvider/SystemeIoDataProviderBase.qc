@@ -159,10 +159,12 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
     #! Returns supported reference data types
     *hash<string, bool> getSupportedReferenceData() {
         return {
-            "contacts": True,
-            "tags": True,
-            "courses": True,
             "communities": True,
+            "contacts": True,
+            "courses": True,
+            "enrollments": True,
+            "memberships": True,
+            "tags": True,
         };
     }
 
@@ -170,10 +172,12 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type,
             *hash<auto> action_opts) {
         switch (type) {
-            case "contacts": return getReferenceContacts();
-            case "tags": return getReferenceTags();
-            case "courses": return getReferenceCourses();
             case "communities": return getReferenceCommunities();
+            case "contacts": return getReferenceContacts();
+            case "courses": return getReferenceCourses();
+            case "enrollments": return getReferenceEnrollments();
+            case "memberships": return getReferenceMemberships();
+            case "tags": return getReferenceTags();
         }
     }
 
@@ -250,6 +254,56 @@ public class SystemeIoDataProviderBase inherits DataProvider::AbstractDataProvid
             }
         } catch (hash<ExceptionInfo> ex) {
             log(LoggerLevel::WARN, "Failed to fetch communities reference data: %s: %s",
+                ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available enrollments for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceEnrollments() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<auto> enrollments = doPaginatedGet("school/enrollments");
+            foreach hash<auto> enrollment in (enrollments) {
+                string display = sprintf("Enrollment %d", enrollment.id);
+                *string course_name = enrollment.course.name;
+                *string contact_email = enrollment.contact.email;
+                if (course_name || contact_email) {
+                    display = sprintf("%s (%s)", course_name ?? sprintf("Course %d",
+                        enrollment.course.id), contact_email ?? "unknown");
+                }
+                rv += <AllowedValueInfo>{
+                    "display_name": display,
+                    "value": int(enrollment.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN, "Failed to fetch enrollments reference data: %s: %s",
+                ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns available memberships for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceMemberships() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<auto> memberships = doPaginatedGet("community/memberships");
+            foreach hash<auto> membership in (memberships) {
+                string display = sprintf("Membership %d", membership.id);
+                *string community_name = membership.community.name;
+                *string contact_email = membership.contact.email;
+                if (community_name || contact_email) {
+                    display = sprintf("%s (%s)", community_name ?? sprintf("Community %d",
+                        membership.community.id), contact_email ?? "unknown");
+                }
+                rv += <AllowedValueInfo>{
+                    "display_name": display,
+                    "value": int(membership.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN, "Failed to fetch memberships reference data: %s: %s",
                 ex.err, ex.desc);
         }
         return rv;
