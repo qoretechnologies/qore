@@ -2185,10 +2185,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
                     // Close the socket when the operation indicates the connection
                     // is dead (error, or C++ operation declares needsCloseOnComplete).
-                    // This prevents CLOSE-WAIT fd accumulation when the remote closes
-                    // and the Qore-level cleanup forgets to call close().
+                    // This prevents fd accumulation when the remote closes and the
+                    // Qore-level cleanup forgets to call close().
                     //
-                    // Skip for SOCK_DGRAM (HTTP/3 QUIC shared UDP socket).
+                    // For QUIC (UDP) sockets: client operations return
+                    // needsCloseOnComplete()=true (dedicated socket per connection);
+                    // server operations return false (shared socket, many sessions).
                     bool should_close = false;
                     if (result.ex_hash) {
                         // Error path: always close
@@ -2200,14 +2202,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     if (should_close && pinfo.sock) {
                         int fd = pinfo.sock->getPollableDescriptor();
                         if (fd >= 0) {
-                            int sock_type = 0;
-                            socklen_t optlen = sizeof(sock_type);
-                            if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &sock_type, &optlen) == 0
-                                    && sock_type != SOCK_DGRAM) {
-                                ASYNC_IO_TRACE("Phase3 CLOSE fd=%d key='%s'\n", fd,
-                                    result.key.c_str());
-                                pinfo.sock->closeIo(xsink);
-                            }
+                            ASYNC_IO_TRACE("Phase3 CLOSE fd=%d key='%s'\n", fd,
+                                result.key.c_str());
+                            pinfo.sock->closeIo(xsink);
                         }
                     }
 

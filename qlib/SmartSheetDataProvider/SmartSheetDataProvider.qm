@@ -1,0 +1,634 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore SmartSheetDataProvider module definition
+
+/*  SmartSheetDataProvider.qm Copyright (C) 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+
+%requires(reexport) DataProvider
+%requires(reexport) SmartSheetRestClient
+%requires RestClientIo
+
+module SmartSheetDataProvider {
+    version = "1.0";
+    desc = "User module providing a data provider API for Smartsheet spreadsheet and work "
+        "management";
+    author = "Qore Technologies <info@qoretechnologies.com>";
+    url = "https://qore.org";
+    license = "MIT";
+    init = sub () {
+        # Register the data provider factory
+        DataProvider::registerFactory(new SmartSheetDataProviderFactory());
+
+        # Register the application
+        DataProviderActionCatalog::registerApp(<DataProviderAppInfo>{
+            "name": SmartSheetDataProvider::AppName,
+            "display_name": "Smartsheet",
+            "short_desc": "Smartsheet spreadsheet and work management platform",
+            "desc": "Smartsheet is a platform for work execution, providing spreadsheet-like "
+                "interfaces for managing projects, tasks, and data.\n\n"
+                "This integration supports managing sheets, rows, columns, workspaces, "
+                "folders, reports, users, and groups. Sheets are modeled as dynamic tables "
+                "with typed columns for structured data access",
+            "scheme": "smartsheetrest",
+            "logo": SmartSheetLogo,
+            "logo_file_name": "smartsheet-logo.svg",
+            "logo_mime_type": MimeTypeSvg,
+            "groups": (DataProvider::AppGroup::Spreadsheets,
+                DataProvider::AppGroup::ProjectManagement),
+        });
+
+        # ========== SHEET ACTIONS ==========
+
+        # Create Sheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/create",
+            "action": "create-sheet",
+            "groups": "Sheets",
+            "display_name": "Create a Sheet",
+            "short_desc": "Create a new sheet",
+            "desc": "Create a new Smartsheet sheet with the given name and column definitions",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetCreateSheetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetSheetDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetCreateSheetRequestDataType::Fields),
+        });
+
+        # Update Sheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/update",
+            "action": "update-sheet",
+            "groups": "Sheets",
+            "display_name": "Update a Sheet",
+            "short_desc": "Update a sheet's properties",
+            "desc": "Update a Smartsheet sheet's properties such as its name",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetUpdateSheetDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetSheetDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetUpdateSheetRequestDataType::Fields),
+        });
+
+        # Delete Sheet
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/delete",
+            "action": "delete-sheet",
+            "groups": "Sheets",
+            "display_name": "Delete a Sheet",
+            "short_desc": "Delete a sheet",
+            "desc": "Permanently delete a Smartsheet sheet",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetDeleteSheetDataProvider::ProviderInfo,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetDeleteSheetRequestDataType::Fields),
+        });
+
+        # List Sheets
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets",
+            "action": "list-sheets",
+            "groups": "Sheets",
+            "display_name": "List Sheets",
+            "short_desc": "List all sheets",
+            "desc": "List all sheets accessible to the authenticated user",
+            "action_code": DPAT_FIND,
+            "options": {
+                "sheetId": <ActionOptionInfo>{
+                    "display_name": "Sheet ID",
+                    "short_desc": "Get a specific sheet",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "sheets",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== WORKSPACE ACTIONS ==========
+
+        # Create Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/workspaces/create",
+            "action": "create-workspace",
+            "groups": "Workspaces",
+            "display_name": "Create a Workspace",
+            "short_desc": "Create a new workspace",
+            "desc": "Create a new Smartsheet workspace",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetCreateWorkspaceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetWorkspaceDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetCreateWorkspaceRequestDataType::Fields),
+        });
+
+        # Update Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/workspaces/update",
+            "action": "update-workspace",
+            "groups": "Workspaces",
+            "display_name": "Update a Workspace",
+            "short_desc": "Update a workspace",
+            "desc": "Update a Smartsheet workspace's properties",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetUpdateWorkspaceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetWorkspaceDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetUpdateWorkspaceRequestDataType::Fields),
+        });
+
+        # Delete Workspace
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/workspaces/delete",
+            "action": "delete-workspace",
+            "groups": "Workspaces",
+            "display_name": "Delete a Workspace",
+            "short_desc": "Delete a workspace",
+            "desc": "Permanently delete a Smartsheet workspace",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetDeleteWorkspaceDataProvider::ProviderInfo,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetDeleteWorkspaceRequestDataType::Fields),
+        });
+
+        # List Workspaces
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/workspaces",
+            "action": "list-workspaces",
+            "groups": "Workspaces",
+            "display_name": "List Workspaces",
+            "short_desc": "List all workspaces",
+            "desc": "List all workspaces accessible to the authenticated user",
+            "action_code": DPAT_FIND,
+            "options": {
+                "workspaceId": <ActionOptionInfo>{
+                    "display_name": "Workspace ID",
+                    "short_desc": "Get a specific workspace",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "workspaces",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== FOLDER ACTIONS ==========
+
+        # Create Folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/folders/create",
+            "action": "create-folder",
+            "groups": "Folders",
+            "display_name": "Create a Folder",
+            "short_desc": "Create a new folder",
+            "desc": "Create a new folder in the home location",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetCreateFolderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetFolderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetCreateFolderRequestDataType::Fields),
+        });
+
+        # Update Folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/folders/update",
+            "action": "update-folder",
+            "groups": "Folders",
+            "display_name": "Update a Folder",
+            "short_desc": "Update a folder",
+            "desc": "Update a Smartsheet folder's name",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetUpdateFolderDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetFolderDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetUpdateFolderRequestDataType::Fields),
+        });
+
+        # Delete Folder
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/folders/delete",
+            "action": "delete-folder",
+            "groups": "Folders",
+            "display_name": "Delete a Folder",
+            "short_desc": "Delete a folder",
+            "desc": "Permanently delete a Smartsheet folder",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetDeleteFolderDataProvider::ProviderInfo,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetDeleteFolderRequestDataType::Fields),
+        });
+
+        # List Folders
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/folders",
+            "action": "list-folders",
+            "groups": "Folders",
+            "display_name": "List Folders",
+            "short_desc": "List home folders",
+            "desc": "List all folders in the home location",
+            "action_code": DPAT_FIND,
+            "options": {
+                "folderId": <ActionOptionInfo>{
+                    "display_name": "Folder ID",
+                    "short_desc": "Get a specific folder",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "folders",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== REPORT ACTIONS ==========
+
+        # List Reports
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/reports",
+            "action": "list-reports",
+            "groups": "Reports",
+            "display_name": "List Reports",
+            "short_desc": "List all reports",
+            "desc": "List all reports accessible to the authenticated user (read-only)",
+            "action_code": DPAT_FIND,
+            "options": {
+                "reportId": <ActionOptionInfo>{
+                    "display_name": "Report ID",
+                    "short_desc": "Get a specific report",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "reports",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== USER ACTIONS ==========
+
+        # Create User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/users/create",
+            "action": "create-user",
+            "groups": "Users",
+            "display_name": "Add a User",
+            "short_desc": "Add a user to the organization",
+            "desc": "Add a new user to the Smartsheet organization",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetCreateUserDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetUserDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetCreateUserRequestDataType::Fields),
+        });
+
+        # Update User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/users/update",
+            "action": "update-user",
+            "groups": "Users",
+            "display_name": "Update a User",
+            "short_desc": "Update a user's settings",
+            "desc": "Update a Smartsheet user's account settings",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetUpdateUserDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetUserDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetUpdateUserRequestDataType::Fields),
+        });
+
+        # Delete User
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/users/delete",
+            "action": "delete-user",
+            "groups": "Users",
+            "display_name": "Remove a User",
+            "short_desc": "Remove a user from the organization",
+            "desc": "Remove a user from the Smartsheet organization",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetDeleteUserDataProvider::ProviderInfo,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetDeleteUserRequestDataType::Fields),
+        });
+
+        # List Users
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/users",
+            "action": "list-users",
+            "groups": "Users",
+            "display_name": "List Users",
+            "short_desc": "List all users",
+            "desc": "List all users in the Smartsheet organization",
+            "action_code": DPAT_FIND,
+            "options": {
+                "userId": <ActionOptionInfo>{
+                    "display_name": "User ID",
+                    "short_desc": "Get a specific user",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "users",
+                    "preselected": True,
+                },
+                "email": <ActionOptionInfo>{
+                    "display_name": "Email",
+                    "short_desc": "Filter by email",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== GROUP ACTIONS ==========
+
+        # Create Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/groups/create",
+            "action": "create-group",
+            "groups": "Groups",
+            "display_name": "Create a Group",
+            "short_desc": "Create a new group",
+            "desc": "Create a new Smartsheet group with optional initial members",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetCreateGroupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetGroupDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetCreateGroupRequestDataType::Fields),
+        });
+
+        # Update Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/groups/update",
+            "action": "update-group",
+            "groups": "Groups",
+            "display_name": "Update a Group",
+            "short_desc": "Update a group",
+            "desc": "Update a Smartsheet group's name or description",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetUpdateGroupDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new SmartSheetGroupDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetUpdateGroupRequestDataType::Fields),
+        });
+
+        # Delete Group
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/groups/delete",
+            "action": "delete-group",
+            "groups": "Groups",
+            "display_name": "Delete a Group",
+            "short_desc": "Delete a group",
+            "desc": "Permanently delete a Smartsheet group",
+            "action_code": DPAT_API,
+            "data_provider_info": SmartSheetDeleteGroupDataProvider::ProviderInfo,
+            "output_type": AbstractDataProviderType::get(AutoHashType),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                SmartSheetDeleteGroupRequestDataType::Fields),
+        });
+
+        # List Groups
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/groups",
+            "action": "list-groups",
+            "groups": "Groups",
+            "display_name": "List Groups",
+            "short_desc": "List all groups",
+            "desc": "List all groups in the Smartsheet organization",
+            "action_code": DPAT_FIND,
+            "options": {
+                "groupId": <ActionOptionInfo>{
+                    "display_name": "Group ID",
+                    "short_desc": "Get a specific group",
+                    "type": AbstractDataProviderTypeMap."*string",
+                    "ref_data": "groups",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # ========== ROW ACTIONS ==========
+
+        # Create Row
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "create-row",
+            "groups": "Rows",
+            "display_name": "Create Row",
+            "short_desc": "Create a row in a sheet",
+            "desc": "Create a new row in a Smartsheet sheet with values for the sheet's "
+                "columns. Column fields are determined dynamically from the selected "
+                "sheet's column definitions",
+            "action_code": DPAT_CREATE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to create a row in",
+                    "desc": "Select the Smartsheet sheet where the new row will be created",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Find Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "find-rows",
+            "groups": "Rows",
+            "display_name": "Find Rows",
+            "short_desc": "Find rows in a sheet",
+            "desc": "Search for rows in a Smartsheet sheet by column values. Column "
+                "fields are determined dynamically from the selected sheet's column "
+                "definitions",
+            "action_code": DPAT_FIND,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to search",
+                    "desc": "Select the Smartsheet sheet to search for rows",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Update Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "update-rows",
+            "groups": "Rows",
+            "display_name": "Update Rows",
+            "short_desc": "Update rows in a sheet",
+            "desc": "Update matching rows in a Smartsheet sheet with new column values. "
+                "Column fields are determined dynamically from the selected sheet's "
+                "column definitions",
+            "action_code": DPAT_UPDATE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to update rows in",
+                    "desc": "Select the Smartsheet sheet where rows will be updated",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # Delete Rows
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/sheets/{sheet}",
+            "action": "delete-rows",
+            "groups": "Rows",
+            "display_name": "Delete Rows",
+            "short_desc": "Delete rows from a sheet",
+            "desc": "Delete matching rows from a Smartsheet sheet",
+            "action_code": DPAT_DELETE,
+            "data_dependent_options": True,
+            "path_vars": {
+                "sheet": <DataProviderPathVarInfo>{
+                    "display_name": "Sheet",
+                    "short_desc": "The Smartsheet sheet to delete rows from",
+                    "desc": "Select the Smartsheet sheet where rows will be deleted",
+                    "example_value": "8042968322625412",
+                },
+            },
+            "data_provider_info": SmartSheetSheetDataProvider::ProviderInfo,
+        });
+
+        # ========== EVENT TRIGGERS ==========
+
+        # Sheet Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/events/" + EVENT_SHEET_UPDATED,
+            "action": EVENT_SHEET_UPDATED,
+            "groups": "Events",
+            "display_name": "Sheet Updated",
+            "short_desc": "Trigger when a sheet is updated",
+            "desc": "Fires when a sheet is updated in the Smartsheet account",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_SHEET_UPDATED,
+        });
+
+        # Row Created
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/events/" + EVENT_ROW_CREATED,
+            "action": EVENT_ROW_CREATED,
+            "groups": "Events",
+            "display_name": "Row Created",
+            "short_desc": "Trigger when a new row is created",
+            "desc": "Fires when a new row is created in a Smartsheet sheet",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ROW_CREATED,
+        });
+
+        # Row Updated
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/events/" + EVENT_ROW_UPDATED,
+            "action": EVENT_ROW_UPDATED,
+            "groups": "Events",
+            "display_name": "Row Updated",
+            "short_desc": "Trigger when a row is updated",
+            "desc": "Fires when a row is updated in a Smartsheet sheet",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ROW_UPDATED,
+        });
+
+        # Row Deleted
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": SmartSheetDataProvider::AppName,
+            "path": "/events/" + EVENT_ROW_DELETED,
+            "action": EVENT_ROW_DELETED,
+            "groups": "Events",
+            "display_name": "Row Deleted",
+            "short_desc": "Trigger when a row is deleted",
+            "desc": "Fires when a row is deleted from a Smartsheet sheet",
+            "action_code": DPAT_EVENT,
+            "action_val": EVENT_ROW_DELETED,
+        });
+    };
+}
+
+/** @mainpage SmartSheetDataProvider Module
+
+    @tableofcontents
+
+    @section smartsheetdataproviderintro SmartSheetDataProvider Introduction
+
+    The %SmartSheetDataProvider module provides a data provider API for the Smartsheet
+    spreadsheet and work management platform.
+
+    To use this module, use \c "%requires SmartSheetDataProvider" in your code.
+
+    @section smartsheetdataproviderrelnotes Release Notes
+
+    @subsection smartsheetdataproviderv1_0 SmartSheetDataProvider v1.0
+    - the initial version of the %SmartSheetDataProvider module
+*/

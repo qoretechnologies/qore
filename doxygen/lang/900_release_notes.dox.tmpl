@@ -1218,6 +1218,18 @@ cargo install tree-sitter-cli@0.26.5
       - custom bitlink support
       - polling-based event triggers for bitlink click activity
       - action catalog integration with 21 actions and 1 trigger
+    - @ref smartsheetrestclientintro "SmartSheetRestClient" module
+      - new module providing a REST client for <a href="https://www.smartsheet.com/">Smartsheet</a>'s spreadsheet and work management API
+      - supports OAuth2 authentication with regional endpoint support (US, EU, AU, Gov)
+      - uses the new async RestClientIo pattern for HTTP/2 and HTTP/3 multiplexed connections
+      - provides SmartSheetRestConnection for connection management with \c smartsheetrest:// URL scheme
+    - @ref smartsheetdataproviderintro "SmartSheetDataProvider" module
+      - new module providing a data provider API for <a href="https://www.smartsheet.com/">Smartsheet</a>
+      - dynamic table modeling: sheets are exposed as tables with typed columns built from sheet metadata
+      - sheet management (create, update, delete, list)
+      - row CRUD with column-name-based records (automatic column ID translation)
+      - workspace, folder, report, user, and group management
+      - polling-based event triggers for sheet updates and row changes
     - @ref gorgiasrestclientintro "GorgiasRestClient" module
       - new module providing a REST client for <a href="https://www.gorgias.com/">Gorgias</a>'s customer support API
       - supports OAuth2 authentication with subdomain-based URL configuration
