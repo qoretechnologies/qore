@@ -6347,9 +6347,22 @@ void SocketReadHttpBodyPollOperation::startBodyRead(ExceptionSink* xsink) {
         current_op->deref(xsink);
         current_op = nullptr;
     }
+    // Share parent's QoreObject self with inner op so getSocketPollInfoHash()
+    // can access the "sock" member for SocketPollInfo creation.
+    // Inner ops are raw C++ objects (not wrapped in their own QoreObject),
+    // so they need the parent's self to produce valid poll info.
+    if (current_op && self) {
+        current_op->setSelf(*self);
+    }
 }
 
 QoreHashNode* SocketReadHttpBodyPollOperation::continuePoll(ExceptionSink* xsink) {
+    // Ensure current inner op has self set for getSocketPollInfoHash().
+    // Inner ops created in the constructor don't have self yet (it's set after
+    // construction via setSelf()), so propagate it on first continuePoll() call.
+    if (current_op && self && !current_op->self) {
+        current_op->setSelf(*self);
+    }
     if (body_state == BodyState::DONE) {
         return nullptr;
     }

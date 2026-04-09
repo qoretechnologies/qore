@@ -2750,14 +2750,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         body = body_data.toString();
                     }
                 }
-            } else if ((cx."header-info".http2 || cx."header-info".http3) && cx."header-info".body) {
-                # For HTTP/2 and HTTP/3, body is already read by poll operation and stored in header-info
-                # Check body size against limit (body was already read by the C++
-                # layer; this is a secondary check in case the C++ limit was not set)
+            } else if (cx."header-info".body) {
+                # Body pre-read by I/O controller (H1 async, H2, or H3)
+                # Check body size against limit (body was already read by the
+                # async I/O layer; this is a secondary check)
                 if (max_body > 0 && cx."header-info".body.size() > max_body) {
+                    string proto = cx."header-info".http3 ? "HTTP/3"
+                        : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
                     string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
-                        cx."header-info".body.size(), max_body);
+                        proto, cx."header-info".body.size(), max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
@@ -2768,7 +2769,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     # Save pre-read body for the stream handler; don't pass to REST handler
                     cx."stream-body" = cx."header-info".body;
                 } else {
-                    # HTTP/2 and HTTP/3 body is always binary - convert to string if text content type
+                    # Body is always binary from the I/O layer — convert to string if text content type
                     if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
                             || hdr."content-type" =~ /^application\/connect\+/) {
                         body = cx."header-info".body;
@@ -3308,15 +3309,27 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
 
                     if (async_response_out) {
-                        # H1 WebSocket upgrade: handler thread exclusively owns the
-                        # socket (removed from I/O controller at header dispatch).
-                        # The 101 response MUST be sent before the WS poll op is
-                        # registered (protocol requirement — client expects 101 before
-                        # switching to WS framing).  sendIntern handles EAGAIN on
-                        # non-blocking sockets via poll().
-                        s.sendHTTPResponse(async_response_out."code",
-                            HttpServer::HttpCodes{async_response_out."code"}, "1.1",
-                            async_response_out.hdr ?? {}, async_response_out.body);
+                        if (asyncIo) {
+                            # Async mode: send 101 response via the I/O controller
+                            # before entering startImpl(). This must happen BEFORE
+                            # registered() because registered() may throw (e.g., bad
+                            # handler), and the client expects the 101 response
+                            # regardless. Uses the global async I/O controller since
+                            # the socket was removed from the HTTP server's controller
+                            # at header dispatch.
+                            AbstractPollOperation send_op = s.startPollSendHttpResponse(
+                                async_response_out."code",
+                                HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                                async_response_out.hdr ?? {}, async_response_out.body);
+                            execAsyncPollOperation(s, send_op);
+                        } else {
+                            # Non-async mode: send 101 response synchronously on
+                            # handler thread (sendIntern handles EAGAIN on non-blocking
+                            # sockets via poll())
+                            s.sendHTTPResponse(async_response_out."code",
+                                HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                                async_response_out.hdr ?? {}, async_response_out.body);
+                        }
                         delete async_response_out;
                     }
                     on_exit {

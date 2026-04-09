@@ -1411,6 +1411,44 @@ AbstractPollOperation Socket::startPollRecvData() {
     return rv.release();
 }
 
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP request body
+/** Reads the HTTP request body in non-blocking mode using the appropriate strategy based on the
+    transfer parameters:
+    - Fixed-length body: reads exactly \c content_length bytes
+    - Chunked encoding: reads chunk-size + data pairs until the terminal chunk
+    - Connection close: reads until EOF
+
+    @param content_length Content-Length value; -1 if not present (use chunked or connection close)
+    @param chunked true if Transfer-Encoding is "chunked"
+    @param connection_close true if Connection is "close" (read until EOF when no Content-Length/chunked)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached,
+    \c getOutput() returns the accumulated body as a binary value
+
+    @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+    // Use status_code=200 and is_head=false since this reads request bodies (not responses)
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketReadHttpBodyPollOperation(xsink, s, 200, (int64_t)content_length, chunked, connection_close, false),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("read-http-body"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read data in non-blocking mode
 /** @param pattern the pattern to use to signify the end of the socket data to read
 

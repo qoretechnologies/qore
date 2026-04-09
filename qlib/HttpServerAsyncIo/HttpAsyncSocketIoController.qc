@@ -55,6 +55,8 @@ public enum HttpConnectionState : string {
     SendStreamAndReadHeader = "send_stream_and_read_header",
     #! Sending HTTP/1.x InputStream response (no keep-alive, close after send)
     SendStreamResponse = "send_stream_response",
+    #! Reading HTTP/1.x request body (Content-Length or chunked)
+    ReadBody = "read_body",
 }
 
 #! HTTP poll operation type
@@ -639,7 +641,10 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Registers an HTTP/1.1 WebSocket connection with the async I/O controller
-    /** @param sock the WebSocket socket (after upgrade handshake)
+    /** The 101 Switching Protocols response must already have been sent before
+        calling this method. The socket transitions directly to WebSocket frame I/O.
+
+        @param sock the WebSocket socket (after upgrade handshake)
         @param poll_op the WebSocket poll operation to drive
         @param target the target for callbacks
         @param listener the listener interface for logging
@@ -1822,6 +1827,12 @@ public class HttpAsyncSocketIoController {
                 timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
+            case HttpConnectionState::ReadBody: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                break;
+            }
             default:
                 log(LoggerLevel::ERROR, "Unknown connection state %y for %s", cinfo.state, uh);
                 return;
@@ -2164,6 +2175,20 @@ public class HttpAsyncSocketIoController {
                 }
                 break;
             }
+            case HttpConnectionState::ReadBody: {
+                # Async H1 body read completed
+                AbstractPollOperation body_op = result.spop;
+                string state = body_op.getState();
+                if (state == "done") {
+                    # Body read complete — dispatch to handler with full request
+                    *binary body_data = body_op.getOutput();
+                    handleBodyComplete(uh, cinfo, body_data);
+                } else {
+                    # Error reading body — close connection
+                    handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
             default: {
                 log(LoggerLevel::ERROR, "Unhandled connection state %y for %y", orig_state, uh);
                 handleConnectionClosed(uh, cinfo);
@@ -2226,6 +2251,45 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
 
+        # Check if H1 request body should be read by I/O controller
+        # For requests with body (Content-Length or chunked) and no Expect header,
+        # read the body via async I/O before dispatching to the handler.
+        # Expect: 100-continue requests fall through to the handler (which sends
+        # 100-continue and reads the body synchronously) to avoid a round-trip.
+        if (!output.info.http2 && !output.info.http3) {
+            auto content_length = output.hdr."content-length";
+            bool chunked = (output.hdr."transfer-encoding" =~ /chunked/i);
+            bool has_expect = (output.hdr.expect =~ /100-continue/i);
+            bool has_body = (content_length > 0 || chunked);
+
+            if (has_body && !has_expect) {
+                try {
+                    int cl = content_length ?? -1;
+                    bool conn_close = (output.hdr.connection =~ /close/i);
+                    AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, chunked,
+                        conn_close);
+                    # Stay in controller tracking — socket is managed during body read
+                    hash<HttpActiveConnectionInfo> new_cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        hash<HttpActiveConnectionInfo> upd =
+                            cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                        upd.state = HttpConnectionState::ReadBody;
+                        upd.stream_op = body_op;
+                        upd.pending_hdr = output.hdr;
+                        upd.pending_header_info = output.info;
+                        new_cinfo = connections{uh} = upd;
+                    }
+                    submitConnectionOp(uh, new_cinfo);
+                    return;
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error starting body read for %y: %s: %s",
+                        uh, ex.err, ex.desc);
+                    # Fall through to normal dispatch — handler will read body
+                }
+            }
+        }
+
         # Remove from our tracking
         {
             AutoWriteLock al(m);
@@ -2278,6 +2342,62 @@ public class HttpAsyncSocketIoController {
                     && cinfo.state != HttpConnectionState::Http3Sending) {
                 try { cinfo.sock.close(); } catch () {}
             }
+        }
+    }
+
+    #! Handles completion of H1 async body reading
+    /** Dispatches the request to the handler with the pre-read body stored in
+        \c cx."header-info".body (same convention as H2/H3 paths).
+
+        @param uh unique hash of the socket
+        @param cinfo the connection info (must have pending_hdr/pending_header_info set)
+        @param body_data the body data read by the I/O controller (may be NOTHING for empty body)
+    */
+    private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
+        # Build the connection info from saved headers (same as handleHeaderComplete)
+        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
+            "sock": cinfo.sock,
+            "hdr": cinfo.pending_hdr,
+            "header_info": cinfo.pending_header_info,
+            "listener": cinfo.listener,
+            "cx": cinfo.cx,
+            "keep_alive": True,
+            "ssl": cinfo.sock.isSecure(),
+        };
+
+        # Store the pre-read body for the handler (same convention as H2/H3)
+        if (body_data) {
+            conn_info.header_info.body = body_data;
+        }
+
+        log(LoggerLevel::DEBUG, "Body read complete for %y: %d bytes", uh,
+            body_data ? body_data.size() : 0);
+
+        # Remove from our tracking — handler thread owns the socket now
+        {
+            AutoWriteLock al(m);
+            remove connections{uh};
+        }
+
+        # Dispatch to handler pool (same as handleHeaderComplete)
+        code request_handler = sub () {
+            try {
+                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error handling request after body read: %s: %s",
+                    ex.err, ex.desc);
+                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                try { cinfo.sock.close(); } catch () {}
+            }
+        };
+
+        try {
+            handler_pool.submit(request_handler);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
+                uh, ex.err, ex.desc);
+            try { cinfo.sock.close(); } catch () {}
         }
     }
 
@@ -3490,6 +3610,12 @@ hashdecl HttpActiveConnectionInfo {
 
     #! Pending streaming operation (set during header send before SSE/WS transition)
     *AbstractPollOperation pending_stream_op;
+
+    #! Parsed headers (saved during ReadBody state for dispatch after body is read)
+    *hash<auto> pending_hdr;
+
+    #! Header parsing info (saved during ReadBody state for dispatch after body is read)
+    *hash<auto> pending_header_info;
 
 }
 

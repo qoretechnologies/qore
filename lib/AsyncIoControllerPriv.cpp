@@ -2002,6 +2002,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             it->second.continue_poll_in_flight = true;
                         }
                     }
+                    // Remove socket from epoll while the worker is processing.
+                    // Without this, level-triggered epoll keeps firing on the
+                    // socket fd every iteration, causing a CPU busy loop until
+                    // the worker returns.  Re-registration happens in
+                    // ContinuePollResult handler (updateEventLoopRegistration).
+                    unregisterFromEventLoop(t, op.key, xsink);
                     this->ref();
                     op.spop_obj->ref();
                     call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
@@ -2119,6 +2125,9 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                         it->second.continue_poll_in_flight = true;
                     }
                 }
+                // Remove socket from epoll while the worker is processing
+                // (same rationale as the C++ needsWorkerDispatch path above)
+                unregisterFromEventLoop(t, op.key, xsink);
                 this->ref();  // keep controller alive until worker delivers result
                 op.spop_obj->ref();
                 call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
@@ -3216,9 +3225,10 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             }
 
                             ASYNC_IO_TRACE("cache.erase IO_CMD_CONTINUE_POLL_RESULT key='%s' "
-                                "owner='%s' ex=%p completed=%d\n",
+                                "owner='%s' ex=%p completed=%d has_on_complete=%d queue=%p\n",
                                 cmd.key.c_str(), pinfo.owner.c_str(),
-                                (void*)cmd.continue_poll_ex, (int)cmd.continue_poll_completed);
+                                (void*)cmd.continue_poll_ex, (int)cmd.continue_poll_completed,
+                                (int)pinfo.has_qore_on_complete, (void*)pinfo.queue);
                             pinfo.cleanup(xsink);
                             t.cache.erase(it);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
@@ -3861,6 +3871,13 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         }
         queue->push(xsink, result);
     } else {
+        // No onComplete callback and no queue — result is dropped.
+        // This should not happen: submit() creates a safety-net queue when
+        // has_qore_on_complete is false.  Log for diagnostics.
+        ASYNC_IO_TRACE("deliverResult: DROPPING result=%p spop=%p (no onComplete, no queue)\n",
+            (void*)result, (void*)spop_obj);
+        log(QORE_LOG_LEVEL_ERROR, "deliverResult: dropping result for %s — no onComplete "
+            "and no queue", spop_obj ? spop_obj->getClassName() : "null");
         if (spop_obj) {
             spop_obj->deref(xsink);
         }

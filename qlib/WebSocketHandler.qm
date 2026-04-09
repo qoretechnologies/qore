@@ -1855,7 +1855,10 @@ public class WebSocketHandler inherits HttpServer::AbstractHttpSocketHandler, Lo
             # Register with async I/O AFTER setConnection + registered() —
             # this ensures echo mode (and any other connection state) is set
             # before the I/O thread can process frames, eliminating the race
-            # between handler initialization and frame dispatch
+            # between handler initialization and frame dispatch.
+            # NOTE: the 101 response was already sent via execAsyncPollOperation
+            # before startImpl() was called — this is required because
+            # registered() may throw and the client needs the 101 regardless.
             *auto ws_async_io = cx."header-info".async_io_controller;
             *auto ws_async_target = cx."header-info".async_target;
             if (ws_async_io) {
