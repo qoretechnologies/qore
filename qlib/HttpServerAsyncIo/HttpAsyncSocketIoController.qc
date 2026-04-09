@@ -2283,23 +2283,19 @@ public class HttpAsyncSocketIoController {
         }
 
         # Materialize non-I/O-safe InputStreams into memory on the handler thread.
-        # These InputStreams (CallbackInputStream etc.) cannot be read on the I/O thread
-        # because InputStreamWrapper::read() calls evalMethod() (Qore user code).
-        # I/O-safe InputStreams skip this and use the fused I/O-thread paths below.
+        # These InputStreams (CallbackInputStream, StringInputStream etc.) cannot
+        # be read on the I/O thread because their read() calls evalMethod().
+        # Replace with BinaryInputStream (I/O-safe) so the fused paths below
+        # can handle them — preserving chunked encoding semantics.
         if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
             InputStream is = result.input_stream;
-            remove result.input_stream;
             is.reassignThread();
             binary buf;
             while (*binary chunk = is.read(65536)) {
                 buf += chunk;
             }
             is.unassignThread();
-            result.body = buf;
-            # Remove chunked encoding — body is now materialized with known size,
-            # so Content-Length will be used instead
-            remove result.hdr."Transfer-Encoding";
-            remove result.chunked;
+            result.input_stream = new BinaryInputStream(buf);
         }
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
