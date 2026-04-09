@@ -1140,6 +1140,10 @@ private:
 
     //! Dispatcher for CID-based packet routing (server only, may be nullptr)
     QoreDatagramDispatcher* dispatcher_ = nullptr;
+    //! Client's original DCID registered with dispatcher during handshake;
+    //! must be explicitly unregistered since ngtcp2_conn_get_scid() may not
+    //! include it after ngtcp2 retires it post-handshake
+    std::string odcid_registered_;
     std::atomic<bool> handshake_completed_{false};   //!< true when handshake completes
     std::atomic<bool> pending_write_{false};         //!< true when data queued for writing
     std::atomic<bool> has_completed_streams_{false};  //!< true when completed streams are queued (lock-free check)

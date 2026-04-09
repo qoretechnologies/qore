@@ -2271,27 +2271,35 @@ public class HttpAsyncSocketIoController {
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
 
-        # Convert non-I/O-safe InputStreams for sync handler-thread send.
+        # Convert send_callback to CallbackInputStream so it can be materialized
+        # and sent asynchronously — same pattern as the H2 multiplexed path.
+        # Handler threads must not do sync socket I/O in async mode.
+        if (result.send_callback && !result.input_stream) {
+            auto cb = result.send_callback;
+            result.input_stream = new HttpServer::CallbackInputStream(
+                auto sub() { return cb(); }, sock);
+            remove result.send_callback;
+            remove result.hdr."Transfer-Encoding";
+        }
+
+        # Materialize non-I/O-safe InputStreams into memory on the handler thread.
         # These InputStreams (CallbackInputStream etc.) cannot be read on the I/O thread
         # because InputStreamWrapper::read() calls evalMethod() (Qore user code).
         # I/O-safe InputStreams skip this and use the fused I/O-thread paths below.
         if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
             InputStream is = result.input_stream;
             remove result.input_stream;
-            if (result.chunked) {
-                # Chunked: convert to send_callback for sendHTTPResponseWithCallback
-                is.reassignThread();
-                result.send_callback = auto sub() { return is.read(65536); };
-            } else {
-                # Content-Length: read entire body into memory on handler thread
-                is.reassignThread();
-                binary buf;
-                while (*binary chunk = is.read(65536)) {
-                    buf += chunk;
-                }
-                is.unassignThread();
-                result.body = buf;
+            is.reassignThread();
+            binary buf;
+            while (*binary chunk = is.read(65536)) {
+                buf += chunk;
             }
+            is.unassignThread();
+            result.body = buf;
+            # Remove chunked encoding — body is now materialized with known size,
+            # so Content-Length will be used instead
+            remove result.hdr."Transfer-Encoding";
+            remove result.chunked;
         }
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
@@ -2332,14 +2340,20 @@ public class HttpAsyncSocketIoController {
 
         # Opt #3b: InputStream + close → non-fused stream send (I/O-thread-safe only)
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
-                && result.close && result.hdr."Content-Length"
-                && result.input_stream.isIoThreadSafe()) {
+                && result.close && result.input_stream.isIoThreadSafe()) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
-                AbstractPollOperation send_op =
-                    sock.startPollSendHttpResponseWithStream(
+                AbstractPollOperation send_op;
+                if (result.hdr."Content-Length") {
+                    send_op = sock.startPollSendHttpResponseWithStream(
                         result.code, status_msg, "1.1", result.hdr ?? {},
                         result.input_stream, int(result.hdr."Content-Length"));
+                } else {
+                    # Chunked stream + close
+                    send_op = sock.startPollSendHttpChunkedResponseWithStream(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.input_stream);
+                }
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
                     "listener": linfo.listener,
@@ -2433,15 +2447,13 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Send HTTP/1.x response if response data is present and not streaming
+        # Send HTTP/1.x response if response data is present and not streaming.
+        # send_callback was already converted to InputStream → materialized to body
+        # above, so only the async poll path is needed here.
         if (result.code && !result.streaming) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
-                if (result.send_callback) {
-                    # send_callback must run on handler thread (user code callback)
-                    sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
-                        status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
-                } else {
+                {
                     # Use async poll operation for all other H1 responses
                     AbstractPollOperation send_op = sock.startPollSendHttpResponse(
                         result.code, status_msg, "1.1", result.hdr ?? {},
