@@ -3653,6 +3653,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_globals = cf.num_globals;
                 fws.num_exprs = cf.num_exprs;
                 fws.num_stmts = cf.num_stmts;
+                fws.num_regex_cases = cf.num_regex_cases;
+                fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
                 // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
                 for (auto& hir : cf.handler_irs) {
@@ -3670,6 +3672,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_exprs = cif.num_exprs;
                 fws.num_stmts = cif.num_stmts;
                 fws.num_regex_cases = cif.num_regex_cases;
+                fws.num_lv_path_insts = cif.num_lv_path_insts;
                 fws.slot_ids = cif.slot_ids;
                 func_slots.push_back(std::move(fws));
             }

@@ -951,7 +951,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
     uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
-    printd(5, "AOT buildCtx '%s': has_unsupported=%d (from binary)\n", name, has_unsupported);
+    printd(5, "AOT buildCtx '%s': num_lv_path=%d (from binary)\n", name, num_lv_path_insts);
 
     if (debug > 1 && has_unsupported) {
         printd(5, "AOT buildCtx: '%s' has_unsupported=1 FROM BINARY (pre-flagged)\n", name);
