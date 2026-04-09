@@ -2312,7 +2312,11 @@ public class HttpAsyncSocketIoController {
             if (buf.size() > 0) {
                 result.input_stream = new BinaryInputStream(buf);
             } else {
+                # Empty stream — remove InputStream and Transfer-Encoding so
+                # the plain body path sends a response (empty body → 200/204)
                 remove result.input_stream;
+                remove result.hdr."Transfer-Encoding";
+                remove result.chunked;
             }
         }
 
