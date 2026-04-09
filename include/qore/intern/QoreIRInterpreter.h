@@ -87,4 +87,8 @@ public:
             std::vector<QoreValue>* parent_slot_cache = nullptr);
 };
 
+//! Compound +=/-= helpers — shared between IR interpreter and JIT runtime
+DLLLOCAL QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+DLLLOCAL QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+
 #endif

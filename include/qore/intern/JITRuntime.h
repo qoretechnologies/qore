@@ -36,6 +36,7 @@
 
 class ExceptionSink;
 class QoreIRFunction;
+class QoreIRLValuePathInstruction;
 class UserVariantBase;
 
 // C ABI helpers called by JIT-generated code.
@@ -535,6 +536,28 @@ uint64_t qore_rt_lvalue_binary_aot(int op, QoreAOTContext* ctx, int32_t idx, uin
 //! LValue ternary op (splice) via AOT context slot
 uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext* ctx, int32_t idx, uint64_t first, uint64_t second,
     uint64_t third, ExceptionSink* xsink);
+
+//! LValuePath runtime helpers — navigate structured lvalue path and execute operation
+uint64_t qore_rt_lv_path_assign(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_compound(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_unary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_binary_mut(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_ternary(QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+    uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_assign_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_compound_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_unary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_binary_mut_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t rhs_bits, ExceptionSink* xsink);
+uint64_t qore_rt_lv_path_ternary_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+    uint64_t a_bits, uint64_t b_bits, uint64_t c_bits, ExceptionSink* xsink);
 
 //! Invoke a DotEval expression with a pre-evaluated base value.
 //! expr_bits is the NaN-boxed expression node (QoreDotEvalOperatorNode).

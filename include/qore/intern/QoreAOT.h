@@ -53,6 +53,7 @@ class LocalVar;
 class QoreClass;
 class QoreFunction;
 class QoreIRFunction;
+class QoreIRLValuePathInstruction;
 class QoreMethod;
 class QoreNamespace;
 class QoreProgram;
@@ -91,6 +92,8 @@ struct QoreAOTContext {
     int num_stmts = 0;
     CaseNodeRegex** regex_cases = nullptr;       //!< Regex case objects for SwitchRegexMatch
     int num_regex_cases = 0;
+    QoreIRLValuePathInstruction** lv_path_insts = nullptr;  //!< LValuePath instruction pointers
+    int num_lv_path_insts = 0;
 
     //! All body locals from the fresh IR (needed by evalTiered for instantiation)
     std::vector<LocalVar*> all_body_locals;
@@ -118,6 +121,11 @@ struct QoreAOTContext {
     //! Used in strip-source mode where AST-based stmts[] are not available.
     std::vector<std::unique_ptr<QoreIRFunction>> handler_irs;
 
+    //! Owned IR function kept alive for LValuePath instruction pointers.
+    //! LValuePath instructions reference path data in the IR function; the function must
+    //! outlive the context so that lv_path_insts[] pointers remain valid.
+    std::unique_ptr<QoreIRFunction> lv_path_ir_func;
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
@@ -141,6 +149,10 @@ struct QoreAOTContext {
         if (num_regex_cases > 0) {
             regex_cases = static_cast<CaseNodeRegex**>(calloc(num_regex_cases, sizeof(CaseNodeRegex*)));
         }
+        if (num_lv_path_insts > 0) {
+            lv_path_insts = static_cast<QoreIRLValuePathInstruction**>(
+                calloc(num_lv_path_insts, sizeof(QoreIRLValuePathInstruction*)));
+        }
     }
 };
 
@@ -156,6 +168,7 @@ struct AOTSlotMap {
     std::unordered_map<uint64_t, int32_t> expr_slots;       //!< NaN-boxed expr bits -> slot index
     std::unordered_map<const void*, int32_t> stmt_slots;    //!< StatementBlock* -> slot index (OnBlockExit)
     std::unordered_map<const void*, int32_t> regex_case_slots;  //!< CaseNodeRegex* -> slot index
+    std::unordered_map<const void*, int32_t> lv_path_slots;  //!< QoreIRLValuePathInstruction* -> slot
     std::unordered_set<uint64_t> dot_eval_direct_bits;  //!< expr bits from DotEvalMethodDirect (classify as DOT_EVAL_TARGET)
 
     //! Check if a slot already exists for a LocalVar*
@@ -204,6 +217,17 @@ struct AOTSlotMap {
         }
         int32_t slot = static_cast<int32_t>(stmt_slots.size());
         stmt_slots[stmt] = slot;
+        return slot;
+    }
+
+    //! Get or assign a slot for a QoreIRLValuePathInstruction*
+    int32_t getLVPathSlot(const void* inst) {
+        auto it = lv_path_slots.find(inst);
+        if (it != lv_path_slots.end()) {
+            return it->second;
+        }
+        int32_t slot = static_cast<int32_t>(lv_path_slots.size());
+        lv_path_slots[inst] = slot;
         return slot;
     }
 

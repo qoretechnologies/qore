@@ -4787,6 +4787,272 @@ extern "C" DLLEXPORT uint64_t qore_rt_lvalue_ternary_aot(int op, QoreAOTContext*
     return qore_rt_lvalue_ternary(op, ctx->exprs[idx], first, second, third, xsink);
 }
 
+// --- LValuePath runtime helpers ---
+// Copy path steps and patch dynamic operands from NaN-boxed array
+static void patchLVPath(std::vector<LVPathStep>& path_copy,
+        const QoreIRLValuePathInstruction* inst,
+        const uint64_t* dyn_vals) {
+    path_copy = inst->path;
+    int dyn_idx = 0;
+    for (auto& step : path_copy) {
+        if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+            QoreValue key_val = fromBits(dyn_vals[dyn_idx++]);
+            QoreStringValueHelper key_str(key_val);
+            step.name = key_str->c_str();
+        } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+            QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
+            step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+        }
+    }
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    std::vector<LVPathStep> path_copy;
+    patchLVPath(path_copy, inst, dyn_vals);
+
+    QoreValue val = fromBits(rhs_bits);
+    ValueHolder val_holder(val.refSelf(), xsink);
+
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        return toBits(QoreValue());
+    }
+    if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, inst->weak)) {
+        return toBits(QoreValue());
+    }
+    return toBits(val.refSelf());
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    std::vector<LVPathStep> path_copy;
+    patchLVPath(path_copy, inst, dyn_vals);
+
+    QoreValue rhs = fromBits(rhs_bits);
+    ValueHolder rhs_holder(rhs.refSelf(), xsink);
+
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        return toBits(QoreValue());
+    }
+    QoreValue res;
+    switch (inst->compound_op) {
+        case LVCompoundOp::AddAssign:
+            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+            break;
+        case LVCompoundOp::SubAssign:
+            res = doMinusEqualsOnLValue(lvh, rhs, xsink);
+            break;
+        default: {
+            qore_type_t vtype = lvh.getType();
+            if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                double rv = rhs.getAsFloat();
+                switch (inst->compound_op) {
+                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
+                    default: break;
+                }
+            } else {
+                int64 rv = rhs.getAsBigInt();
+                switch (inst->compound_op) {
+                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
+                    case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
+                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
+                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
+                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
+                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
+                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                    default: break;
+                }
+            }
+            break;
+        }
+    }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    std::vector<LVPathStep> path_copy;
+    patchLVPath(path_copy, inst, dyn_vals);
+
+    bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
+    QoreValue res;
+
+    if (is_remove) {
+        LValueHelper lvh(xsink);
+        if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
+            return toBits(QoreValue());
+        }
+        if (inst->unary_op == LVUnaryOp::Remove) {
+            bool static_assignment = false;
+            res = lvh.remove(static_assignment);
+        } else {
+            res = lvh.removeValue(true);
+        }
+    } else {
+        LValueHelper lvh(xsink);
+        if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+            return toBits(QoreValue());
+        }
+        switch (inst->unary_op) {
+            case LVUnaryOp::PreInc: res = lvh.preIncrementBigInt(); break;
+            case LVUnaryOp::PreDec: res = lvh.preDecrementBigInt(); break;
+            case LVUnaryOp::PostInc: res = lvh.postIncrementBigInt(); break;
+            case LVUnaryOp::PostDec: res = lvh.postDecrementBigInt(); break;
+            case LVUnaryOp::Shift:
+                if (lvh.getType() == NT_LIST) {
+                    lvh.ensureUnique();
+                    QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                    if (l && l->size() > 0) {
+                        res = l->shift();
+                    }
+                }
+                break;
+            case LVUnaryOp::Pop:
+                if (lvh.getType() == NT_LIST) {
+                    lvh.ensureUnique();
+                    QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                    if (l && l->size() > 0) {
+                        res = l->pop();
+                    }
+                }
+                break;
+            case LVUnaryOp::Trim:
+                if (lvh.checkType(NT_STRING)) {
+                    lvh.ensureUnique();
+                    QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                    if (str) {
+                        str->trim();
+                    }
+                }
+                break;
+            case LVUnaryOp::Chomp:
+                if (lvh.checkType(NT_STRING)) {
+                    lvh.ensureUnique();
+                    QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                    if (str) {
+                        qore_size_t len = str->size();
+                        if (len > 0 && str->c_str()[len - 1] == '\n') {
+                            str->terminate(len > 1 && str->c_str()[len - 2] == '\r'
+                                ? len - 2 : len - 1);
+                        }
+                    }
+                }
+                break;
+            default: break;
+        }
+    }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    std::vector<LVPathStep> path_copy;
+    patchLVPath(path_copy, inst, dyn_vals);
+
+    QoreValue rhs = fromBits(rhs_bits);
+
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        return toBits(QoreValue());
+    }
+    QoreValue res;
+    switch (inst->binary_mut_op) {
+        case LVBinaryMutOp::Push:
+            lvh.ensureUnique();
+            if (lvh.getType() == NT_LIST) {
+                lvh.getValue().get<QoreListNode>()->push(rhs.refSelf(), xsink);
+            }
+            break;
+        case LVBinaryMutOp::Unshift:
+            lvh.ensureUnique();
+            if (lvh.getType() == NT_LIST) {
+                lvh.getValue().get<QoreListNode>()->insert(rhs.refSelf(), xsink);
+            }
+            break;
+        case LVBinaryMutOp::RegexSubst:
+        case LVBinaryMutOp::Transliterate:
+            // Pattern operations require AST evaluation — not supported in JIT path
+            xsink->raiseException("JIT-ERROR", "regex subst/transliterate not supported in LValuePath JIT");
+            return toBits(QoreValue());
+    }
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(res);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
+        QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
+        uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
+        ExceptionSink* xsink) {
+    // Ternary (splice/extract) not yet implemented for LValuePath
+    xsink->raiseException("JIT-ERROR", "LValuePath ternary operations not yet implemented");
+    return toBits(QoreValue());
+}
+
+// AOT wrappers
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    return qore_rt_lv_path_assign(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_compound_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    return qore_rt_lv_path_compound(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    return qore_rt_lv_path_unary(ctx->lv_path_insts[slot], dyn_vals, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t rhs_bits, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    return qore_rt_lv_path_binary_mut(ctx->lv_path_insts[slot], dyn_vals, rhs_bits, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary_aot(
+        QoreAOTContext* ctx, int32_t slot, uint64_t* dyn_vals,
+        uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
+        ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_lv_path_insts);
+    return qore_rt_lv_path_ternary(ctx->lv_path_insts[slot], dyn_vals, a_bits, b_bits, c_bits, xsink);
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_call_with_args_aot(QoreAOTContext* ctx, int32_t slot, uint64_t* args, int nargs,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);

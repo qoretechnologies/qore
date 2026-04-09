@@ -871,6 +871,7 @@ struct AOTCompiledFuncWithSlots {
     int num_exprs = 0;               //!< number of expression slots
     int num_stmts = 0;               //!< number of statement slots (OnBlockExit)
     int num_regex_cases = 0;         //!< number of regex case slots (SwitchRegexMatch)
+    int num_lv_path_insts = 0;       //!< number of LValuePath instruction slots
     AOTSlotIdentities slot_ids;      //!< extracted slot identities
     //! Handler IR functions for each statement slot (indexed by stmt slot index).
     //! Non-null entries have serializable handler IR; null entries need AST fallback.
@@ -894,6 +895,7 @@ struct AOTCompiledInitFunc {
     int num_exprs = 0;
     int num_stmts = 0;
     int num_regex_cases = 0;
+    int num_lv_path_insts = 0;
     AOTSlotIdentities slot_ids;
     uint64_t feature_flags = 0;
 

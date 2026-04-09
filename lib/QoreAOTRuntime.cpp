@@ -950,7 +950,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(ptr);
     uint16_t num_body_locals = QoreAOTBinaryReader::readU16(ptr);
     uint8_t has_unsupported = QoreAOTBinaryReader::readU8(ptr);
-    QoreAOTBinaryReader::readU8(ptr); // padding
+    uint8_t num_lv_path_insts = QoreAOTBinaryReader::readU8(ptr); // was: padding byte
 
     if (debug > 1 && has_unsupported) {
         printd(5, "AOT buildCtx: '%s' has_unsupported=1 FROM BINARY (pre-flagged)\n", name);
@@ -976,6 +976,7 @@ static QoreAOTContext* buildContextFromSlotMap(
     ctx->num_exprs = num_exprs;
     ctx->num_stmts = num_stmts;
     ctx->num_regex_cases = num_regex_cases;
+    ctx->num_lv_path_insts = num_lv_path_insts;
     ctx->allocate();
 
     qore_program_private* pp = qore_program_private::get(*pgm);
@@ -3547,7 +3548,12 @@ static QoreAOTContext* buildContextForVariant(UserVariantBase* uvb, const char* 
 
     // Build the context from the fresh IR (same walk order → same slot indices)
     QoreAOTContext* ctx = buildAOTContext(*ir_func, aot_func.num_locals, aot_func.num_globals, aot_func.num_exprs, aot_func.num_stmts, aot_func.num_regex_cases);
-    delete ir_func;
+    if (ctx && ctx->num_lv_path_insts > 0) {
+        // Keep IR function alive — LValuePath instructions reference path data in it
+        ctx->lv_path_ir_func.reset(ir_func);
+    } else {
+        delete ir_func;
+    }
 
     return ctx;
 }
@@ -4825,6 +4831,10 @@ extern "C" DLLEXPORT int qore_aot_run(
                                 sb.registerPrecompiledAOTTopLevel(toplevel_func->fn_ptr, ctx);
                                 ++registered;
                                 ctx_ok = true;
+                                if (ctx->num_lv_path_insts > 0) {
+                                    ctx->lv_path_ir_func.reset(ir_func);
+                                    ir_func = nullptr;
+                                }
                                 printd(2, "AOT: registered pre-compiled _toplevel with context "
                                     "(locals=%d, globals=%d, exprs=%d, stmts=%d)\n",
                                     toplevel_func->num_locals, toplevel_func->num_globals,
@@ -5160,6 +5170,10 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                                 pp->sb.setLVarsFromAOTContext(ctx);
                                 ++registered;
                                 ctx_ok = true;
+                                if (ctx->num_lv_path_insts > 0) {
+                                    ctx->lv_path_ir_func.reset(ir_func);
+                                    ir_func = nullptr;
+                                }
                                 printd(2, "AOT v2: registered _toplevel via fallback IR\n");
                             }
                         } else {
@@ -5851,6 +5865,10 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                                 pp->sb.setLVarsFromAOTContext(ctx);
                                 ++registered;
                                 ctx_ok = true;
+                                if (ctx->num_lv_path_insts > 0) {
+                                    ctx->lv_path_ir_func.reset(ir_func);
+                                    ir_func = nullptr;
+                                }
                                 printd(2, "AOT v3: registered _toplevel via fallback IR\n");
                             }
                         } else {

@@ -337,6 +337,7 @@ QoreAOTContext::~QoreAOTContext() {
     free(call_targets);
     free(stmts);
     free(regex_cases);
+    free(lv_path_insts);
     free(locs);
 }
 
@@ -349,6 +350,7 @@ struct AOTCompiledFunc {
     int num_exprs = 0;              //!< number of expression slots in AOT context
     int num_stmts = 0;              //!< number of statement slots in AOT context (OnBlockExit)
     int num_regex_cases = 0;        //!< number of regex case slots (SwitchRegexMatch)
+    int num_lv_path_insts = 0;      //!< number of LValuePath instruction slots
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Owned handler IR functions indexed by stmt slot; null = no IR (Foreach, or lowering failed)
@@ -951,6 +953,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+                    cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                         const_reverse_map);
@@ -1109,6 +1112,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+                        cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                             const_reverse_map);
@@ -1216,6 +1220,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             cif.num_exprs = static_cast<int>(slots.expr_slots.size());
             cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
             cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+            cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
             extractAOTSlotIdentities(*ir_func, slots, nullptr, cif.slot_ids,
                 const_reverse_map);
             // Sync counts: ExprTreeSerializer may have grown expr_slots during extraction
@@ -2017,6 +2022,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_exprs = static_cast<int>(slots.expr_slots.size());
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+                    cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
                     // Extract slot identities (no uvb for toplevel)
                     extractAOTSlotIdentities(*ir_func, slots, nullptr, cf.slot_ids,
                         &const_reverse_map);
@@ -2127,6 +2133,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_exprs = cf.num_exprs;
             fws.num_stmts = cf.num_stmts;
             fws.num_regex_cases = cf.num_regex_cases;
+            fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
             for (auto& hir : cf.handler_irs) {
@@ -2144,6 +2151,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_exprs = cif.num_exprs;
             fws.num_stmts = cif.num_stmts;
             fws.num_regex_cases = cif.num_regex_cases;
+            fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -4152,6 +4160,8 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                             step.slot_id = static_cast<uint32_t>(sid);
                         }
                     }
+                    // Register LValuePath slot for AOT codegen
+                    slots.getLVPathSlot(reinterpret_cast<const void*>(pi));
                     break;
                 }
                 case QoreIROpcode::ConstEnum: {
@@ -4180,11 +4190,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int expr_count = 0;
     int stmt_count = 0;
     int regex_count = 0;
+    int lv_path_count = 0;
     std::unordered_set<const void*> seen_locals;
     std::unordered_set<const void*> seen_globals;
     std::unordered_set<uint64_t> seen_exprs;
     std::unordered_set<const void*> seen_stmts;
     std::unordered_set<const void*> seen_regex_cases;
+    std::unordered_set<const void*> seen_lv_paths;
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -4537,6 +4549,17 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                     }
                     break;
                 }
+                case QoreIROpcode::LValuePathAssign:
+                case QoreIROpcode::LValuePathCompound:
+                case QoreIROpcode::LValuePathUnary:
+                case QoreIROpcode::LValuePathBinaryMut:
+                case QoreIROpcode::LValuePathTernary: {
+                    const void* key = reinterpret_cast<const void*>(inst.get());
+                    if (seen_lv_paths.insert(key).second) {
+                        ++lv_path_count;
+                    }
+                    break;
+                }
                 case QoreIROpcode::ConstEnum: {
                     auto* cinst = static_cast<QoreIRConstInstruction*>(inst.get());
                     QoreValue enum_val = QoreValue::makeEnum(cinst->constant.enum_member);
@@ -4575,6 +4598,7 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     ctx->num_exprs = num_exprs;
     ctx->num_stmts = num_stmts;
     ctx->num_regex_cases = num_regex_cases;
+    ctx->num_lv_path_insts = lv_path_count;
     ctx->owns_regex_cases = false;  // borrowed pointers from IR function's SwitchStatement
     ctx->allocate();
 
@@ -4590,11 +4614,13 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
     int expr_idx = 0;
     int stmt_idx = 0;
     int regex_idx = 0;
+    int lv_path_idx = 0;
     seen_locals.clear();
     seen_globals.clear();
     seen_exprs.clear();
     seen_stmts.clear();
     seen_regex_cases.clear();
+    seen_lv_paths.clear();
 
     for (auto& block : func.blocks) {
         for (auto& inst : block->instructions) {
@@ -5005,6 +5031,18 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                         if (seen_regex_cases.insert(key).second) {
                             ctx->regex_cases[regex_idx++] = const_cast<CaseNodeRegex*>(ri->regex_case);
                         }
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathAssign:
+                case QoreIROpcode::LValuePathCompound:
+                case QoreIROpcode::LValuePathUnary:
+                case QoreIROpcode::LValuePathBinaryMut:
+                case QoreIROpcode::LValuePathTernary: {
+                    const void* key = reinterpret_cast<const void*>(inst.get());
+                    if (seen_lv_paths.insert(key).second) {
+                        ctx->lv_path_insts[lv_path_idx++] =
+                            static_cast<QoreIRLValuePathInstruction*>(inst.get());
                     }
                     break;
                 }

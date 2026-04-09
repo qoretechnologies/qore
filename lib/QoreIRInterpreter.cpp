@@ -831,8 +831,8 @@ static void cleanupInstantiatedLocals(const std::vector<const LocalVar*>& locals
 
 // Forward declarations — defined after execute() with other evalXxxEquals helpers
 static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right, ExceptionSink* xsink);
-static QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
-static QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
+QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink);
 
 static void assignLocalVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
     if (!var) {
@@ -9959,7 +9959,7 @@ QoreValue QoreIRInterpreter::evalLValueUnary(QoreIROpcode op, const QoreValue& l
 // Direct compound assignment helpers — avoid allocating temporary AST operator nodes
 // Inner function: perform += on an already-navigated LValueHelper.
 // Used by both evalPlusEquals (AST path) and LValuePathCompound (path-based).
-static QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+QoreValue doPlusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     // values requiring dereferencing must be dereferenced outside the lock
     SafeDerefHelper sdh(xsink);
 
@@ -10072,7 +10072,7 @@ static QoreValue evalPlusEquals(const QoreValue& lvalue, const QoreValue& right,
 }
 
 // Inner function: perform -= on an already-navigated LValueHelper.
-static QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
+QoreValue doMinusEqualsOnLValue(LValueHelper& v, const QoreValue& right, ExceptionSink* xsink) {
     if (right.isNothing()) {
         return v.getReferencedValue();
     }

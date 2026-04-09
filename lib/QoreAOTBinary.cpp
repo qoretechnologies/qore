@@ -2697,7 +2697,7 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.regex_cases.size()));
         writer.writeU16(static_cast<uint16_t>(func.slot_ids.body_locals.size()));
         writer.writeU8(func.slot_ids.has_unsupported_exprs ? 1 : 0);
-        writer.writeU8(0); // padding for alignment
+        writer.writeU8(static_cast<uint8_t>(func.num_lv_path_insts)); // was: padding byte
 
         // Local slot entries (in slot order)
         for (auto& local : func.slot_ids.locals) {

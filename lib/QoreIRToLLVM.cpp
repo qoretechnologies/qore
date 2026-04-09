@@ -9866,14 +9866,224 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return false;
         }
 
-        // LValuePath opcodes: not yet lowered to LLVM; function falls back to IR interpreter
+        // LValuePath opcodes: call runtime helpers with instruction pointer + dynamic operands
         case QoreIROpcode::LValuePathAssign:
         case QoreIROpcode::LValuePathCompound:
         case QoreIROpcode::LValuePathUnary:
         case QoreIROpcode::LValuePathBinaryMut:
-        case QoreIROpcode::LValuePathTernary:
-            error = "LValuePath opcodes not yet supported in LLVM backend";
-            return false;
+        case QoreIROpcode::LValuePathTernary: {
+            const auto* path_inst = static_cast<const QoreIRLValuePathInstruction*>(inst);
+
+            // Count dynamic operands (steps with operand_idx != UINT32_MAX)
+            int num_dyn = 0;
+            for (const auto& step : path_inst->path) {
+                if (step.operand_idx != UINT32_MAX) {
+                    ++num_dyn;
+                }
+            }
+
+            // Build dynamic operands array (alloca in entry block)
+            llvm::Value* dyn_array;
+            if (num_dyn > 0) {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                dyn_array = ab.CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, num_dyn));
+                int dyn_idx = 0;
+                for (const auto& step : path_inst->path) {
+                    if (step.operand_idx != UINT32_MAX) {
+                        auto* dyn_val = getVal(step.operand_idx, error);
+                        if (!dyn_val) { return false; }
+                        llvm::Value* boxed = boxValue(dyn_val, step.operand_idx);
+                        llvm::Value* gep = builder->CreateGEP(i64_type, dyn_array,
+                                llvm::ConstantInt::get(i32_type, dyn_idx++));
+                        builder->CreateStore(boxed, gep);
+                    }
+                }
+            } else {
+                dyn_array = llvm::ConstantPointerNull::get(llvm::PointerType::get(ctx, 0));
+            }
+
+            // Pre-decref old result if result is used
+            if (inst->result.isValid()) {
+                // Find root local key from path
+                const void* local_key = nullptr;
+                if (!path_inst->path.empty()
+                        && path_inst->path[0].kind == LVPathStepKind::LocalVar) {
+                    local_key = path_inst->path[0].ref_ptr;
+                }
+                // Create or reuse cleanup alloca
+                llvm::AllocaInst* ca;
+                auto it = invoke_alloca_map.find(inst->result.id);
+                if (it != invoke_alloca_map.end()) {
+                    ca = static_cast<llvm::AllocaInst*>(it->second);
+                } else {
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                            llvm_func->getEntryBlock().begin());
+                    ca = ab.CreateAlloca(i64_type, nullptr, "lvp_cleanup");
+                    ab.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+                    invoke_result_allocas.push_back(ca);
+                    invoke_alloca_map[inst->result.id] = ca;
+                }
+                auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                        llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+                llvm::Value* old_val = builder->CreateLoad(i64_type, ca);
+                builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), ca);
+                builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                if (local_key) {
+                    clearLocalReloadTracker(local_key, module, llvm_func);
+                }
+            }
+
+            // Get instruction pointer (JIT: ConstantInt, AOT: slot lookup)
+            llvm::Value* inst_ptr_val;
+            int32_t aot_slot = -1;
+            if (aot_slots) {
+                aot_slot = const_cast<AOTSlotMap*>(aot_slots)->getLVPathSlot(
+                    reinterpret_cast<const void*>(path_inst));
+            }
+
+            if (aot_slots) {
+                // AOT mode: pass ctx + slot
+                inst_ptr_val = nullptr;  // not used directly
+            } else {
+                // JIT mode: embed instruction pointer
+                inst_ptr_val = builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type,
+                        reinterpret_cast<uintptr_t>(path_inst)),
+                    ptr_type);
+            }
+
+            // Emit the call based on opcode
+            llvm::Value* result_val;
+            switch (inst->opcode) {
+                case QoreIROpcode::LValuePathAssign: {
+                    auto* rhs_val = getVal(inst->operands[0].id, error);
+                    if (!rhs_val) { return false; }
+                    llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    if (aot_slots) {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             dyn_array, rhs_boxed, xsink_arg});
+                    } else {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_assign",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg});
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathCompound: {
+                    auto* rhs_val = getVal(inst->operands[0].id, error);
+                    if (!rhs_val) { return false; }
+                    llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    if (aot_slots) {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_compound_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             dyn_array, rhs_boxed, xsink_arg});
+                    } else {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_compound",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg});
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathUnary: {
+                    if (aot_slots) {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_unary_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             dyn_array, xsink_arg});
+                    } else {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_unary",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {inst_ptr_val, dyn_array, xsink_arg});
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathBinaryMut: {
+                    auto* rhs_val = getVal(inst->operands[0].id, error);
+                    if (!rhs_val) { return false; }
+                    llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    if (aot_slots) {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_binary_mut_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             dyn_array, rhs_boxed, xsink_arg});
+                    } else {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_binary_mut",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {inst_ptr_val, dyn_array, rhs_boxed, xsink_arg});
+                    }
+                    break;
+                }
+                case QoreIROpcode::LValuePathTernary: {
+                    // Ternary not yet implemented — emit error helper call
+                    if (aot_slots) {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_ternary_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
+                             dyn_array,
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             xsink_arg});
+                    } else {
+                        auto fn = module.getOrInsertFunction("qore_rt_lv_path_ternary",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
+                        result_val = builder->CreateCall(fn,
+                            {inst_ptr_val, dyn_array,
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                             xsink_arg});
+                    }
+                    break;
+                }
+                default:
+                    error = "unexpected LValuePath opcode";
+                    return false;
+            }
+
+            // Store result and track for cleanup
+            if (inst->result.isValid()) {
+                values[inst->result.id] = result_val;
+                nanboxed_values.insert(inst->result.id);
+                // Store in cleanup alloca
+                auto it = invoke_alloca_map.find(inst->result.id);
+                if (it != invoke_alloca_map.end()) {
+                    builder->CreateStore(result_val,
+                        static_cast<llvm::AllocaInst*>(it->second));
+                }
+            }
+
+            // Reload all locals (conservative: lvalue ops can modify any local via references)
+            reloadAllLocalsFromRuntime(module, llvm_func);
+
+            // Exception check
+            emitExceptionCheck(module, llvm_func, inst);
+            return true;
+        }
 
         default:
             error = "unsupported IR opcode for LLVM lowering: " + std::to_string(static_cast<int>(inst->opcode));

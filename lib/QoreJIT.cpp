@@ -337,6 +337,16 @@ bool QoreJIT::registerRuntimeSymbols(std::string& error) {
     addSymbol("qore_rt_lvalue_unary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_unary_aot));
     addSymbol("qore_rt_lvalue_binary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_binary_aot));
     addSymbol("qore_rt_lvalue_ternary_aot", reinterpret_cast<void*>(&qore_rt_lvalue_ternary_aot));
+    addSymbol("qore_rt_lv_path_assign", reinterpret_cast<void*>(&qore_rt_lv_path_assign));
+    addSymbol("qore_rt_lv_path_compound", reinterpret_cast<void*>(&qore_rt_lv_path_compound));
+    addSymbol("qore_rt_lv_path_unary", reinterpret_cast<void*>(&qore_rt_lv_path_unary));
+    addSymbol("qore_rt_lv_path_binary_mut", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut));
+    addSymbol("qore_rt_lv_path_ternary", reinterpret_cast<void*>(&qore_rt_lv_path_ternary));
+    addSymbol("qore_rt_lv_path_assign_aot", reinterpret_cast<void*>(&qore_rt_lv_path_assign_aot));
+    addSymbol("qore_rt_lv_path_compound_aot", reinterpret_cast<void*>(&qore_rt_lv_path_compound_aot));
+    addSymbol("qore_rt_lv_path_unary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_unary_aot));
+    addSymbol("qore_rt_lv_path_binary_mut_aot", reinterpret_cast<void*>(&qore_rt_lv_path_binary_mut_aot));
+    addSymbol("qore_rt_lv_path_ternary_aot", reinterpret_cast<void*>(&qore_rt_lv_path_ternary_aot));
     addSymbol("qore_rt_push_on_block_exit_aot", reinterpret_cast<void*>(&qore_rt_push_on_block_exit_aot));
 
     // Fast call with explicit target (multi-function module compilation)
