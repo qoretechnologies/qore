@@ -90,6 +90,7 @@ public class DataProvider {
             "bcrest": "CdsRestDataProvider",
             "bigcommerce": "BigCommerceDataProvider",
             "bitly": "BitlyDataProvider",
+            "circle": "CircleDataProvider",
 
             # provided by the jni module
             "busylight": "BusyLightDataProvider",
