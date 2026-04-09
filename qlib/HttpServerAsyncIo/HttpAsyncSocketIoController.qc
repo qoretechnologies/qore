@@ -2807,21 +2807,34 @@ public class HttpAsyncSocketIoController {
         if (!body_streaming) {
             # Normal path: resume h2op immediately for multiplexing.
             # The handler thread sends responses via submitHttp2Response().
-            h2op.continueReading();
-            hash<HttpActiveConnectionInfo> new_cinfo;
-            {
-                AutoWriteLock al(m);
-                if (!connections.hasKey(uh)) {
-                    try { cinfo.sock.close(); } catch () {}
-                    return;
+            #
+            # Race condition: a previous handler's handleHttp2MultiplexedResult may
+            # have already called resumeMultiplexedReading() → continueReading() on
+            # this h2op, transitioning it from REQUEST_READY → READING and re-submitting
+            # it to the controller.  In that case, our continueReading() throws because
+            # the h2op is already in READING state.  This is benign — the h2op is already
+            # active, so we skip re-registration and proceed to dispatch the handler.
+            try {
+                h2op.continueReading();
+                hash<HttpActiveConnectionInfo> new_cinfo;
+                {
+                    AutoWriteLock al(m);
+                    if (!connections.hasKey(uh)) {
+                        try { cinfo.sock.close(); } catch () {}
+                        return;
+                    }
+                    hash<HttpActiveConnectionInfo> conn_info_upd =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    conn_info_upd.stream_op = h2op;
+                    conn_info_upd.state = HttpConnectionState::Http2;
+                    new_cinfo = connections{uh} = conn_info_upd;
                 }
-                hash<HttpActiveConnectionInfo> conn_info_upd =
-                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                conn_info_upd.stream_op = h2op;
-                conn_info_upd.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh} = conn_info_upd;
+                submitConnectionOp(uh, new_cinfo);
+            } catch () {
+                # Already in READING state (resumed by a concurrent handler's
+                # resumeMultiplexedReading) — h2op is already on the controller,
+                # proceed to dispatch the request handler below
             }
-            submitConnectionOp(uh, new_cinfo);
         }
 
         # Convert HTTP/2 request to HttpConnectionInfo format
