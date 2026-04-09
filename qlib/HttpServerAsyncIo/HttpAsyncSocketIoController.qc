@@ -1423,6 +1423,16 @@ public class HttpAsyncSocketIoController {
 
         if (result.code && !result.streaming) {
             try {
+                # Convert send_callback to InputStream for HTTP/3 (send_callback is
+                # HTTP/1.x chunked-only; HTTP/3 uses QUIC DATA frames via InputStream)
+                if (result.send_callback && !result.input_stream) {
+                    auto cb = result.send_callback;
+                    result.input_stream = new HttpServer::CallbackInputStream(
+                        auto sub() { return cb(); }, cinfo.sock);
+                    remove result.send_callback;
+                    remove result.hdr."Transfer-Encoding";
+                }
+
                 if (result.input_stream) {
                     # Try to submit to I/O thread; C++ enforces isIoThreadSafe() and
                     # returns 1 if not safe (no headers sent yet), so we fall through

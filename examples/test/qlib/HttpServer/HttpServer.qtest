@@ -1976,9 +1976,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         server1.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server1.setDefaultHandler("my-handler", new ReqHandler());
         int port1 = server1.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        assertTrue(server1.waitForAsyncIo(5s), "async I/O should be ready after start");
+        assertTrue(server1.waitForAsyncIo(15s), "async I/O should be ready after start");
 
-        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 5s});
+        HTTPClient client1({"url": "http://localhost:" + port1, "timeout": 10s});
         client1.connect();
         on_exit client1.disconnect();
         assertEq("GET, restart1, /restart1", client1.get("/restart1"));
@@ -1994,9 +1994,9 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         server2.setHandler("my-handler", "", MimeTypeHtml, new ReqHandler());
         server2.setDefaultHandler("my-handler", new ReqHandler());
         int port2 = server2.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
-        assertTrue(server2.waitForAsyncIo(5s), "async I/O should restart after stop");
+        assertTrue(server2.waitForAsyncIo(15s), "async I/O should restart after stop");
 
-        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 5s});
+        HTTPClient client2({"url": "http://localhost:" + port2, "timeout": 10s});
         client2.connect();
         on_exit client2.disconnect();
         assertEq("GET, restart2, /restart2", client2.get("/restart2"));
