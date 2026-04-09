@@ -1546,9 +1546,9 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
             unlink(paths.out);
         }
 
-        # Compile with --strip-source
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
-            libqore_dir, qore_bin, paths.src, paths.out);
+        # Compile with --strip-source (LD_LIBRARY_PATH ensures the build libqore is used)
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
         # Parse pre-compile stats
@@ -1590,8 +1590,8 @@ printf(\"%d\\n\", AOTSplitSlash::slash_val());
             unlink(paths.src);
         }
 
-        string compile_cmd = sprintf("QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
-            libqore_dir, qore_bin, paths.src, paths.out);
+        string compile_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s %s -b --compile --strip-source %s --output %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, paths.src, paths.out);
         string compile_out = backquote(compile_cmd);
 
         return {
