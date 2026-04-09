@@ -5086,8 +5086,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
-                    log("HTTP/3 stream %d: InputStream submit failed (rv=%d) "
-                        "after materialization", stream_id, rv);
+                    # C++ gate rejected — materialize and send as body
+                    response.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = response.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    response.input_stream.unassignThread();
+                    s.submitQuicResponse(session_id, stream_id, response.code, hdr, buf);
                 }
                 io_wake();
             } else {
@@ -5100,8 +5106,14 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
-                    log("HTTP/2 stream %d: InputStream submit failed (rv=%d) "
-                        "after materialization", stream_id, rv);
+                    # C++ gate rejected — materialize and send as body
+                    response.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = response.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    response.input_stream.unassignThread();
+                    s.submitHttp2Response(stream_id, response.code, hdr, buf);
                 }
                 io_wake();
             } else {

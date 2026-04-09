@@ -1451,8 +1451,18 @@ public class HttpAsyncSocketIoController {
                     if (!rv) {
                         controller.wakeSocket(cinfo.sock);
                     } else {
-                        log(LoggerLevel::WARN, "HTTP/3 stream %d: InputStream submit "
-                            "failed (rv=%d) after materialization", stream_id, rv);
+                        # C++ gate rejected — materialize and fall through to body path
+                        log(LoggerLevel::DEBUG, "HTTP/3 stream %d: InputStream submit "
+                            "rejected (rv=%d), materializing", stream_id, rv);
+                        result.input_stream.reassignThread();
+                        binary buf;
+                        while (*binary chunk = result.input_stream.read(65536)) {
+                            buf += chunk;
+                        }
+                        result.input_stream.unassignThread();
+                        cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
+                            result.hdr, buf);
+                        controller.wakeSocket(cinfo.sock);
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
@@ -3124,10 +3134,20 @@ public class HttpAsyncSocketIoController {
                         controller.wakeSocket(cinfo.sock);
                         return;
                     }
-                    # submitHttp2StreamingResponseWithStream failed — fall through
-                    # to in-memory body path (should not happen after materialization)
-                    log(LoggerLevel::WARN, "HTTP/2 stream %d: InputStream submit "
-                        "failed (rv=%d) after materialization", stream_id, rv);
+                    # C++ gate rejected the stream (e.g., lying isIoThreadSafe).
+                    # Materialize to binary on the handler thread and fall through
+                    # to the in-memory body path.
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: InputStream submit "
+                        "rejected (rv=%d), materializing on handler thread",
+                        stream_id, rv);
+                    result.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    result.input_stream.unassignThread();
+                    result.body = buf;
+                    remove result.input_stream;
                 }
 
                 # In-memory response body
