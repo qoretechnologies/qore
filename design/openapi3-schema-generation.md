@@ -45,13 +45,16 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx, *hash<auto> ah) {
 | `@REST` | HTTP method and path (e.g., `GET /users/{id}`) | Yes |
 | `@SCHEMA` | Marks the start of schema documentation | Yes |
 | `@summary` | Brief one-line description | No |
-| `@desc` | Detailed description (can be multi-line) | No |
+| `@desc` | Detailed description (can be multi-line with `\` continuation) | No |
 | `@params` | Parameter definitions | No |
 | `@return` | Return type and field descriptions | No |
 | `@error` | Error response codes and descriptions | No |
 | `@perms` | Required permissions | No |
 | `@since` | Version when endpoint was added | No |
 | `@see` | Related endpoints or references | No |
+| `@examples` | Usage examples as a bullet list (output as `x-examples` extension) | No |
+| `@note` | Behavioral notes/caveats (appended to description; multi-line with `\`) | No |
+| `@x-ai-summary` | AI-specific summary override for embedding text (output as `x-ai-summary` extension) | No |
 | `@ENDSCHEMA` | Marks the end of schema documentation | Yes |
 
 ### Parameter Definitions
@@ -453,3 +456,71 @@ components:
 6. **Version your API** - Use `@since` to track when endpoints were introduced.
 
 7. **Keep documentation in sync** - Update `@SCHEMA` blocks whenever you change endpoint behavior.
+
+8. **Add usage examples** - Use `@examples` to provide concrete request examples that help
+   both human readers and AI tools understand how to use the endpoint.
+
+9. **Use notes for caveats** - Use `@note` for behavioral nuances, side effects, or edge
+   cases that users should be aware of. Multiple `@note` blocks are supported.
+
+10. **Use AI summary for embeddings** - If `@summary` is constrained by backward
+    compatibility but doesn't provide good semantic signal for AI tool selection, add
+    `@x-ai-summary` with a richer description optimized for embedding similarity search.
+
+## Examples and Notes Tags
+
+### @examples
+
+Provide concrete usage examples as a bullet list. Output as the `x-examples` OpenAPI
+extension on the operation:
+
+```qore
+/** @REST GET /services
+    @SCHEMA
+    @summary List services with runtime status, threads, and configuration
+
+    @examples
+    - GET /api/v9/services — list all services
+    - GET /api/v9/services?status=loaded — only loaded/running services
+    - GET /api/v9/services?search=http&limit=10 — search by name with pagination
+    - GET /api/v9/services?details=true — include full metadata per service
+
+    @ENDSCHEMA
+*/
+```
+
+### @note
+
+Add behavioral notes that are appended to the operation description. Supports multi-line
+with backslash (`\`) continuation. Multiple `@note` blocks accumulate:
+
+```qore
+/** @REST PUT /services/{id}/enable
+    @SCHEMA
+    @summary Enable a service
+
+    @note Enabling a service does not automatically load it. Use the load \
+    action to also load the service into memory.
+    @note This action is idempotent — enabling an already-enabled service returns success.
+
+    @ENDSCHEMA
+*/
+```
+
+### @x-ai-summary
+
+Override the summary text used for AI embedding generation. The standard `@summary` appears
+in human documentation; `@x-ai-summary` provides a richer description optimized for
+semantic search without changing the public API docs:
+
+```qore
+/** @REST GET /system
+    @SCHEMA
+    @summary Returns system information
+
+    @x-ai-summary Returns Qorus system health, cluster status, resource counts, \
+    instance key, version, and node information for monitoring and diagnostics
+
+    @ENDSCHEMA
+*/
+```

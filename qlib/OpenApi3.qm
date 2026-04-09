@@ -5235,6 +5235,13 @@ public hashdecl SchemaBlockInfo {
     *string since;
     #! See also references
     *list<string> see;
+    #! Usage examples from \@examples blocks
+    *list<string> examples;
+    #! Behavioral notes from \@note blocks
+    *list<string> notes;
+    #! AI-specific summary override from \@x-ai-summary (used for embedding text when
+    #! \@summary cannot be changed for backward compatibility)
+    *string ai_summary;
 }
 
 #! REST method information parsed from source
@@ -5262,6 +5269,9 @@ public class OpenApi3SchemaTokenizer {
         const TokenPerms = "@perms";
         const TokenSince = "@since";
         const TokenSee = "@see";
+        const TokenExamples = "@examples";
+        const TokenNote = "@note";
+        const TokenAiSummary = "@x-ai-summary";
 
         #! Pattern to match \@REST method declarations with optional path
         const RestMethodPattern = "@REST\\s+(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)\\s*(/\\S+)?";
@@ -5349,6 +5359,26 @@ public class OpenApi3SchemaTokenizer {
                 rv.see = ();
                 continue;
             }
+            if (trimmed =~ /^@examples/) {
+                state = "examples";
+                rv.examples = ();
+                continue;
+            }
+            if (trimmed =~ /^@note\s+/) {
+                string val = regex_subst(trimmed, "^@note\\s+", "");
+                if (!rv.notes) {
+                    rv.notes = ();
+                }
+                rv.notes += val;
+                state = "note";
+                continue;
+            }
+            if (trimmed =~ /^@x-ai-summary\s+/) {
+                string val = regex_subst(trimmed, "^@x-ai-summary\\s+", "");
+                rv.ai_summary = val;
+                state = "ai_summary";
+                continue;
+            }
 
             # Process content based on current state
             switch (state) {
@@ -5402,6 +5432,36 @@ public class OpenApi3SchemaTokenizer {
                     if (trimmed =~ /^-\s+/) {
                         string ref = regex_subst(trimmed, "^-\\s+", "");
                         rv.see += ref;
+                    }
+                    break;
+
+                case "examples":
+                    if (trimmed =~ /^-\s+/) {
+                        string example = regex_subst(trimmed, "^-\\s+", "");
+                        rv.examples += example;
+                    }
+                    break;
+
+                case "note":
+                    # Continue note with backslash continuation character
+                    if (rv.notes) {
+                        int last_idx = rv.notes.size() - 1;
+                        if (rv.notes[last_idx] =~ /\\$/) {
+                            rv.notes[last_idx] =
+                                rtrim(rv.notes[last_idx].substr(0,
+                                    rv.notes[last_idx].length() - 1))
+                                + " " + trimmed;
+                        }
+                    }
+                    break;
+
+                case "ai_summary":
+                    # Continue ai_summary with backslash continuation character
+                    if (rv.ai_summary =~ /\\$/) {
+                        rv.ai_summary =
+                            rtrim(rv.ai_summary.substr(0,
+                                rv.ai_summary.length() - 1))
+                            + " " + trimmed;
                     }
                     break;
             }
@@ -5753,6 +5813,25 @@ public class OpenApi3SchemaGenerator {
 
         # Add responses
         operation.responses = generateResponses(method_info);
+
+        # Add x-permissions extension if permissions are defined
+        if (method_info.schema.perms) {
+            operation."x-permissions" = method_info.schema.perms;
+        }
+        # Add x-examples extension if examples are defined
+        if (method_info.schema.examples) {
+            operation."x-examples" = method_info.schema.examples;
+        }
+        # Add x-ai-summary extension if AI summary override is defined
+        if (method_info.schema.ai_summary) {
+            operation."x-ai-summary" = method_info.schema.ai_summary;
+        }
+        # Append notes to description if present
+        if (method_info.schema.notes) {
+            list<string> note_strs = map sprintf("**Note:** %s", $1),
+                method_info.schema.notes;
+            operation.description += "\n\n" + note_strs.join("\n\n");
+        }
 
         # Add to paths
         if (!paths{path}) {
