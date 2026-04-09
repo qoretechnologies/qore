@@ -2284,16 +2284,12 @@ public class HttpAsyncSocketIoController {
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
 
-        # Convert send_callback to CallbackInputStream so it can be materialized
-        # and sent asynchronously — same pattern as the H2 multiplexed path.
-        # Handler threads must not do sync socket I/O in async mode.
-        if (result.send_callback && !result.input_stream) {
-            auto cb = result.send_callback;
-            result.input_stream = new HttpServer::CallbackInputStream(
-                auto sub() { return cb(); }, sock);
-            remove result.send_callback;
-            remove result.hdr."Transfer-Encoding";
-        }
+        # NOTE: send_callback responses are NOT converted to InputStream here.
+        # send_callback is a streaming producer (may block waiting for data)
+        # that must run on the handler thread.  For H1, the handler thread
+        # owns the socket exclusively and sendHTTPResponseWithCallback streams
+        # correctly.  For H2/H3 multiplexed paths, the conversion happens in
+        # handleHttp2MultiplexedResult / handleHttp3MultiplexedResult.
 
         # Materialize non-I/O-safe InputStreams into memory on the handler thread.
         # These InputStreams (CallbackInputStream, StringInputStream etc.) cannot
@@ -2456,13 +2452,18 @@ public class HttpAsyncSocketIoController {
             return;
         }
 
-        # Send HTTP/1.x response if response data is present and not streaming.
-        # send_callback was already converted to InputStream → materialized to body
-        # above, so only the async poll path is needed here.
+        # Send HTTP/1.x response if response data is present and not streaming
         if (result.code && !result.streaming) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
-                {
+                if (result.send_callback) {
+                    # send_callback is a streaming producer that runs on the
+                    # handler thread.  For H1, the handler owns the socket
+                    # exclusively — sendHTTPResponseWithCallback streams
+                    # correctly via chunked transfer encoding.
+                    sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
+                        status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
+                } else {
                     # Use async poll operation for all other H1 responses
                     AbstractPollOperation send_op = sock.startPollSendHttpResponse(
                         result.code, status_msg, "1.1", result.hdr ?? {},
