@@ -3808,9 +3808,24 @@ load_local_done:
                         l = new_l;
                     }
 
-                    // Make the update with already-referenced value.
+                    // Apply element type coercion if the list has a typed value type
+                    // (e.g. list<softint> converts "50" → 50 before storing)
+                    const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+                    QoreValue entry = val.refSelf();
+                    if (QoreTypeInfo::hasType(vti)
+                            && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                        QoreTypeInfo::acceptAssignment(vti,
+                            "<list element assignment>", entry, xsink);
+                        if (xsink && *xsink) {
+                            entry.discard(xsink);
+                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                            cleanupLocalCaches();
+                            return false;
+                        }
+                    }
+                    // Make the update with already-referenced (and potentially coerced) value.
                     // (list is already in TLS and will be cleaned up normally)
-                    l->setEntry(index, val.refSelf(), xsink);
+                    l->setEntry(index, entry, xsink);
 
                     // Cleanup must happen AFTER modification completes and locks are released.
                     // Defer clearing refs that may trigger destructors.
@@ -3828,8 +3843,26 @@ load_local_done:
                     values[lis_inst->operands[0].id] = QoreValue();
                 } else if (list_val.isNothing()) {
                     // Auto-vivify: create new list, set element, assign to variable
-                    QoreListNode* new_l = new QoreListNode(autoTypeInfo);
-                    new_l->setEntry(index, val.refSelf(), xsink);
+                    // Use the container variable's declared type to derive the proper
+                    // element type (e.g. softlist<bool> → list<bool>, not list<auto>)
+                    const QoreTypeInfo* varTI = lis_inst->container->getTypeInfo();
+                    const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
+                    QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
+                    // Apply element type coercion if the list has a typed value type
+                    {
+                        const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
+                        QoreValue entry = val.refSelf();
+                        if (QoreTypeInfo::hasType(vti)
+                                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+                            QoreTypeInfo::acceptAssignment(vti,
+                                "<list element assignment>", entry, xsink);
+                        }
+                        if (!(xsink && *xsink)) {
+                            new_l->setEntry(index, entry, xsink);
+                        } else {
+                            entry.discard(xsink);
+                        }
+                    }
                     if (!(xsink && *xsink)) {
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));

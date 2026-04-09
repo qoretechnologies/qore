@@ -1717,17 +1717,44 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (had_caller_ref) {
             l->deref(nullptr);
         }
+        // Apply element type coercion if the list has a typed value type
+        // (e.g. list<softint> converts "50" → 50 before storing)
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
-        l->setEntry(index, entry, xsink);
+        const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+        if (QoreTypeInfo::hasType(vti)
+                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+            QoreTypeInfo::acceptAssignment(vti,
+                "<list element assignment>", entry, xsink);
+        }
+        if (!*xsink) {
+            l->setEntry(index, entry, xsink);
+        } else {
+            entry.discard(xsink);
+        }
         // Restore caller's reference if we borrowed it
         if (had_caller_ref) {
             l->refSelf();
         }
     } else if (lv.isNothing()) {
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
-        QoreListNode* new_l = new QoreListNode(autoTypeInfo);
+        // Use variable's declared type to derive proper element type
+        // (e.g. softlist<bool> → list<bool>, not list<auto>)
+        const QoreTypeInfo* varTI = var->getTypeInfo();
+        const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
+        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
-        new_l->setEntry(index, entry, xsink);
+        // Apply element type coercion if needed
+        const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
+        if (QoreTypeInfo::hasType(vti)
+                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+            QoreTypeInfo::acceptAssignment(vti,
+                "<list element assignment>", entry, xsink);
+        }
+        if (!*xsink) {
+            new_l->setEntry(index, entry, xsink);
+        } else {
+            entry.discard(xsink);
+        }
         if (!*xsink) {
             qore_rt_assign_local(var, toBits(QoreValue(new_l)), xsink);
         }
@@ -1769,17 +1796,44 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         if (had_caller_ref) {
             l->deref(nullptr);
         }
+        // Apply element type coercion if the list has a typed value type
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
-        l->setEntry(index, entry, xsink);
+        const QoreTypeInfo* vti = qore_list_private::get(*l)->getValueTypeInfo();
+        if (QoreTypeInfo::hasType(vti)
+                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+            QoreTypeInfo::acceptAssignment(vti,
+                "<list element assignment>", entry, xsink);
+        }
+        if (!*xsink) {
+            l->setEntry(index, entry, xsink);
+        } else {
+            entry.discard(xsink);
+        }
         // Restore caller's reference if we borrowed it
         if (had_caller_ref) {
             l->refSelf();
         }
     } else if (lv.isNothing()) {
         // Auto-vivify: create new list from NOTHING, set element, assign to variable
-        QoreListNode* new_l = new QoreListNode(autoTypeInfo);
+        // Use variable's declared type to derive proper element type
+        assert(local_slot < (uint32_t)ctx->num_locals);
+        LocalVar* var = ctx->locals[local_slot];
+        const QoreTypeInfo* varTI = var->getTypeInfo();
+        const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
+        QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
         QoreValue entry = val.hasNode() ? val.refSelf() : val;
-        new_l->setEntry(index, entry, xsink);
+        // Apply element type coercion if needed
+        const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
+        if (QoreTypeInfo::hasType(vti)
+                && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
+            QoreTypeInfo::acceptAssignment(vti,
+                "<list element assignment>", entry, xsink);
+        }
+        if (!*xsink) {
+            new_l->setEntry(index, entry, xsink);
+        } else {
+            entry.discard(xsink);
+        }
         if (!*xsink) {
             qore_rt_assign_local_aot(ctx, local_slot, toBits(QoreValue(new_l)), xsink);
         }

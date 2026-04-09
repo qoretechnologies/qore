@@ -374,8 +374,6 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> init(init_hash, xsink);
 
-    // for complex hashes, the values are already correctly typed from the source hash
-    // no additional validation is needed
     if (!init) {
         init = new QoreHashNode;
     } else if (!init->is_unique()) {
@@ -389,6 +387,22 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     if (init->priv->hashdecl) {
         init->priv->setHashDecl(nullptr);
     }
+
+    // Apply value type coercion if the hash has a typed value type
+    // (e.g. hash<string, softint> converts "23" → 23)
+    const QoreTypeInfo* vti = QoreTypeInfo::getUniqueReturnComplexHash(typeInfo);
+    if (QoreTypeInfo::hasType(vti)) {
+        for (auto& m : init->priv->member_list) {
+            if (!QoreTypeInfo::superSetOf(vti, m->val.getTypeInfo())) {
+                QoreTypeInfo::acceptAssignment(vti,
+                    "<hash value assignment>", m->val, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+            }
+        }
+    }
+
     return init.release();
 }
 

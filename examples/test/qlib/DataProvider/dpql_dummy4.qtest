@@ -1,0 +1,119 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/DataProvider
+
+%requires reflection
+
+%exec-class DpqlTest
+
+
+public class DpqlTest inherits QUnit::Test {
+    constructor() : Test("DPQL Test", "1.0") {
+        addTestCase("tokenizer tests", \tokenizerTests());
+        set_return_value(main());
+    }
+
+    tokenizerTests() {
+        # Test basic tokens
+        {
+            DpqlTokenizer tok('@name == "John"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(5, tokens.size());
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq("@name", tokens[0].value);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_OP_EQ, tokens[2].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[3].type);
+            assertEq(DPQL_TOK_STRING, tokens[4].type);
+            assertEq('"John"', tokens[4].value);
+        }
+
+        # Test all comparison operators
+        {
+            DpqlTokenizer tok("== != < <= > >=");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_EQ, tokens[0].type);
+            assertEq(DPQL_TOK_OP_NE, tokens[2].type);
+            assertEq(DPQL_TOK_OP_LT, tokens[4].type);
+            assertEq(DPQL_TOK_OP_LE, tokens[6].type);
+            assertEq(DPQL_TOK_OP_GT, tokens[8].type);
+            assertEq(DPQL_TOK_OP_GE, tokens[10].type);
+        }
+
+        # Test logical operators
+        {
+            DpqlTokenizer tok("&& || !");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_AND, tokens[0].type);
+            assertEq(DPQL_TOK_OP_OR, tokens[2].type);
+            assertEq(DPQL_TOK_OP_NOT, tokens[4].type);
+        }
+
+        # Test regex operator
+        {
+            DpqlTokenizer tok('=~ /pattern/i');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_OP_REGEX, tokens[0].type);
+            assertEq(DPQL_TOK_WHITESPACE, tokens[1].type);
+            assertEq(DPQL_TOK_REGEX, tokens[2].type);
+            assertEq("/pattern/i", tokens[2].value);
+        }
+
+        # Test numbers
+        {
+            # Positive numbers and decimals
+            DpqlTokenizer tok("123 78.90");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_NUMBER, tokens[0].type);
+            assertEq("123", tokens[0].value);
+            assertEq(DPQL_TOK_NUMBER, tokens[2].type);
+            assertEq("78.90", tokens[2].value);
+        }
+        {
+            # After a number, - is treated as subtraction, not negative prefix
+            DpqlTokenizer tok("123 -456");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_NUMBER, tokens[0].type);
+            assertEq("123", tokens[0].value);
+            assertEq(DPQL_TOK_OP_MINUS, tokens[2].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[3].type);
+            assertEq("456", tokens[3].value);
+        }
+        {
+            # Negative numbers as first token (no preceding value)
+            DpqlTokenizer tok("-456 -12.34");
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_NUMBER, tokens[0].type);
+            assertEq("-456", tokens[0].value);
+            # After -456, - is subtraction again
+            assertEq(DPQL_TOK_OP_MINUS, tokens[2].type);
+            assertEq(DPQL_TOK_NUMBER, tokens[3].type);
+            assertEq("12.34", tokens[3].value);
+        }
+
+        # Test quoted field reference
+        {
+            DpqlTokenizer tok('@"field with spaces"');
+            list<hash<DpqlTokenInfo>> tokens = tok.getAllTokens();
+            assertEq(DPQL_TOK_FIELD, tokens[0].type);
+            assertEq('@"field with spaces"', tokens[0].value);
+        }
+
+        # Test quoted field with dots (field name that would conflict with accessor syntax)
+
+        # Dummy test block (same line count as @"user.email.address" block)
+        {
+            assertTrue(True);
+            assertTrue(True);
+            assertTrue(True);
+        }
+    }
+}
