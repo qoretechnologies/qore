@@ -563,9 +563,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 setContentEncoding(opts.content_encoding);
             }
 
-            # Connection path
+            # Connection path: use explicit default_path if provided, otherwise extract from URL
             if (opts.default_path) {
                 connection_path = opts.default_path;
+            } else {
+                *string url_path = parse_url(url).path;
+                if (url_path.val() && url_path != "/") {
+                    connection_path = url_path;
+                }
             }
 
             # OAuth2 options

@@ -392,6 +392,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("connection path no double", \testConnectionPathNoDouble());
         addTestCase("connection path clear", \testConnectionPathClear());
         addTestCase("connection path constructor", \testConnectionPathConstructor());
+        addTestCase("connection path from url", \testConnectionPathFromUrl());
         addTestCase("connection path trailing slash", \testConnectionPathTrailingSlash());
         addTestCase("connection path empty vs NOTHING", \testConnectionPathEmptyVsNothing());
         addTestCase("connection path h1", \testConnectionPathH1());
@@ -1926,6 +1927,45 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
         assertEq(200, resp.status_code);
         assertRegex("api/test", resp.body.path);
+%endif
+    }
+
+    testConnectionPathFromUrl() {
+%ifndef NoJson
+        # URL with path should auto-extract connection_path
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d/api/v2", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+        });
+        on_exit rest.close();
+
+        assertEq("/api/v2", rest.getConnectionPath());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/test");
+        assertEq(200, resp.status_code);
+        assertRegex("api/v2/test", resp.body.path);
+
+        # URL with no path should not set connection_path
+        RestClientIo::RestClientIo rest2 = createClient();
+        on_exit rest2.close();
+
+        assertEq(True, !rest2.getConnectionPath().val());
+
+        # Explicit default_path should take precedence over URL path
+        RestClientIo::RestClientIo rest3 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d/api/v2", port),
+            "data": "json",
+            "error_passthru": True,
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "default_path": "/custom",
+        });
+        on_exit rest3.close();
+
+        assertEq("/custom", rest3.getConnectionPath());
 %endif
     }
 
