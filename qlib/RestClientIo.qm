@@ -861,6 +861,37 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 prepared.serialized_body);
         }
 
+        #! Sends a REST request — API-compatible with @ref RestClient::RestClient::doRequest()
+        /** Delegates to @ref restDoRequest() and populates the \a info reference
+            with request/response metadata for compatibility with code that expects
+            the @ref RestClient::RestClient::doRequest() signature.
+
+            @param m HTTP method
+            @param path request path
+            @param body request body (optional)
+            @param info output hash with request/response metadata
+            @param decode_errors if True (default), error responses are decoded and
+                thrown as exceptions; if False, error responses are returned as-is
+            @param hdr request headers (optional)
+
+            @return a hash with \c body, \c status_code, \c hdr, and other response fields
+
+            @since %RestClientIo 1.4
+        */
+        hash<auto> doRequest(string m, string path, auto body, *reference<hash<auto>> info,
+                softbool decode_errors = True, *hash<auto> hdr) {
+            bool saved_passthru = error_passthru;
+            if (!decode_errors) {
+                error_passthru = True;
+            }
+            on_exit error_passthru = saved_passthru;
+            hash<RestClient::RestResponseInfo> resp = restDoRequest(m, path, body, hdr);
+            if (info) {
+                info = resp - "body";
+            }
+            return resp;
+        }
+
         #! Sends an async generic REST request and returns a RestFuture
         /** The returned @ref RestFuture wraps a raw HTTP response Future and
             deserializes the response when \c get() is called.
