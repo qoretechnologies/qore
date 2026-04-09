@@ -1580,8 +1580,20 @@ static bool write_expr_expr_tree(AOTExprWriteCtx& ctx) {
 }
 
 static QoreValue read_expr_expr_tree(AOTExprReadCtx& ctx) {
-    // Handled inline in buildContextFromSlotMap via ExprTreeDeserializer
-    return QoreValue();
+    // Read length-prefixed EXPR_TREE blob and deserialize
+    uint32_t blob_size = QoreAOTBinaryReader::readU32(ctx.ptr);
+    if (blob_size == 0 || ctx.ptr + blob_size > ctx.end) {
+        ctx.error = "invalid EXPR_TREE blob size";
+        return QoreValue();
+    }
+    const uint8_t* blob_data = ctx.ptr;
+    ctx.ptr += blob_size;
+    QoreValue result = deserializeExprTreeFromBlob(
+        blob_data, blob_size, ctx.pgm, ctx.locals, ctx.num_locals);
+    if (result.isNothing()) {
+        ctx.error = "EXPR_TREE deserialization failed";
+    }
+    return result;
 }
 
 // ============================================================================

@@ -2669,6 +2669,23 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
+    // Try EXPR_TREE serialization for operator/complex expressions
+    {
+        AOTSlotMap temp_slots;
+        for (size_t j = 0; j < parent_locals.size(); ++j) {
+            if (parent_locals[j].local_var_ptr) {
+                temp_slots.local_slots[parent_locals[j].local_var_ptr] = j;
+            }
+        }
+        std::vector<uint8_t> blob;
+        if (serializeExprTreeToBlob(expr, temp_slots, blob, false, const_reverse_map)) {
+            writer.writeU8(static_cast<uint8_t>(AOTExprKind::EXPR_TREE));
+            writer.writeU32(static_cast<uint32_t>(blob.size()));
+            writer.writeBytes(blob.data(), static_cast<uint32_t>(blob.size()));
+            return true;
+        }
+    }
+
     // Unsupported — write GENERIC_EVAL placeholder
     printd(3, "AOT: handler IR unsupported expr type '%s' for serialization\n",
         node->getTypeName());
