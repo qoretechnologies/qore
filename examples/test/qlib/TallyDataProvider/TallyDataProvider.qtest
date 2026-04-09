@@ -1,0 +1,879 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/** TallyDataProvider.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/TallyDataProvider
+%requires uuid
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class TallyDataProviderTest
+
+class FakeTallyRestClientIo inherits RestClientIo::RestClientIo {
+    public {
+        *hash<auto> last_request;
+        string last_method;
+        string last_path;
+        *hash<auto> last_headers;
+        hash<auto> response_body;
+    }
+
+    constructor() : RestClientIo({"url": "https://api.tally.so", "apikey": "x", "data": "json"}) {
+    }
+
+    private hash<RestClient::RestResponseInfo> doRequest(string method, string path, auto body,
+            *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_request = body;
+        last_headers = hdr;
+        return <RestClient::RestResponseInfo>{
+            "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
+        return doRequest("GET", path, NOTHING, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
+        return doRequest("POST", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restPatch(string path, auto body, *hash<auto> hdr) {
+        return doRequest("PATCH", path, body, hdr);
+    }
+
+    hash<RestClient::RestResponseInfo> restDel(string path, auto body, *hash<auto> hdr) {
+        return doRequest("DELETE", path, body, hdr);
+    }
+}
+
+public class TallyDataProviderTest inherits QUnit::Test {
+    public {
+        Logger logger;
+
+        # command-line options
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+    }
+
+    constructor() : Test("TallyDataProvider Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("sanity test", \sanityTest());
+        addTestCase("action catalog", \actionCatalogTest());
+        addTestCase("data types", \dataTypesTest());
+        addTestCase("get form", \getFormTest());
+        addTestCase("create form", \createFormTest());
+        addTestCase("delete form", \deleteFormTest());
+        addTestCase("search forms", \searchFormsTest());
+        addTestCase("search submissions", \searchSubmissionsTest());
+        addTestCase("get submission", \getSubmissionTest());
+        addTestCase("update form", \updateFormTest());
+        addTestCase("delete submission", \deleteSubmissionTest());
+        addTestCase("search questions", \searchQuestionsTest());
+        addTestCase("create webhook", \createWebhookTest());
+        addTestCase("update webhook", \updateWebhookTest());
+        addTestCase("search webhooks", \searchWebhooksTest());
+        addTestCase("get current user", \getCurrentUserTest());
+        addTestCase("example event data", \exampleEventDataTest());
+        addTestCase("live connection ping", \liveConnectionPingTest());
+        addTestCase("live get current user", \liveGetCurrentUserTest());
+        addTestCase("live search forms", \liveSearchFormsTest());
+        addTestCase("live form CRUD lifecycle", \liveFormCrudTest());
+        addTestCase("live webhook CRUD lifecycle", \liveWebhookCrudTest());
+
+        set_return_value(main());
+    }
+
+    checkModule() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+    }
+
+    sanityTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        TallyDataProvider::TallyDataProvider prov(rest);
+        assertEq("tally", prov.getName());
+
+        *list<string> children = prov.getChildProviderNames();
+        assertTrue(children.size() > 0, "has child providers");
+        assertTrue(inlist("forms", children), "has forms child");
+        assertTrue(inlist("submissions", children), "has submissions child");
+        assertTrue(inlist("questions", children), "has questions child");
+        assertTrue(inlist("webhooks", children), "has webhooks child");
+        assertTrue(inlist("create-form", children), "has create-form child");
+        assertTrue(inlist("get-form", children), "has get-form child");
+        assertTrue(inlist("update-form", children), "has update-form child");
+        assertTrue(inlist("delete-form", children), "has delete-form child");
+        assertTrue(inlist("get-submission", children), "has get-submission child");
+        assertTrue(inlist("delete-submission", children), "has delete-submission child");
+        assertTrue(inlist("create-webhook", children), "has create-webhook child");
+        assertTrue(inlist("update-webhook", children), "has update-webhook child");
+        assertTrue(inlist("delete-webhook", children), "has delete-webhook child");
+        assertTrue(inlist("get-current-user", children), "has get-current-user child");
+        assertTrue(inlist("events", children), "has events child");
+%endif
+    }
+
+    actionCatalogTest() {
+        # test create-form action
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "create-form"
+        );
+        assertEq("/create-form", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("Forms",), action.groups);
+        assertEq(True, action.options.title.required);
+        assertFalse(action.options.blocks.required);
+        assertEq(True, action.options.status.required);
+        assertTrue(action.output_type instanceof TallyDataProvider::TallyFormDataType);
+
+        # test search-forms action
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "search-forms"
+        );
+        assertEq("/forms", action.path);
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq(("Forms",), action.groups);
+        assertTrue(action.options.hasKey("limit"));
+        assertTrue(action.options.limit.preselected);
+
+        # test search-submissions action
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "search-submissions"
+        );
+        assertEq(DPAT_FIND, action.action_code);
+        assertEq(True, action.options.form_id.required);
+        assertEq("forms", action.options.form_id.ref_data);
+
+        # test create-webhook action
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "create-webhook"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertEq(True, action.options.formId.required);
+        assertEq("forms", action.options.formId.ref_data);
+        assertEq(True, action.options.url.required);
+        assertEq(True, action.options.eventTypes.required);
+
+        # test get-current-user action
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, "get-current-user"
+        );
+        assertEq(DPAT_API, action.action_code);
+        assertTrue(action.output_type instanceof TallyDataProvider::TallyUserDataType);
+
+        # test form-submission event
+        action = DataProviderActionCatalog::getAppAction(
+            TallyDataProvider::TallyDataProvider::AppName, TallyDataProvider::EVENT_FORM_SUBMISSION
+        );
+        assertEq(DPAT_EVENT, action.action_code);
+        assertEq(True, action.options.form_id.required);
+    }
+
+    dataTypesTest() {
+        # form data type
+        auto form_type = new TallyDataProvider::TallyFormDataType();
+        hash<string, AbstractDataField> fields = form_type.getFields();
+        assertTrue(fields.hasKey("id"), "form has id field");
+        assertTrue(fields.hasKey("name"), "form has name field");
+        assertTrue(fields.hasKey("status"), "form has status field");
+        assertTrue(fields.hasKey("blocks"), "form has blocks field");
+
+        # verify status allowed values
+        *list<auto> status_av = fields.status.getAllowedValues();
+        assertEq(4, status_av.lsize(), "form status has 4 allowed values");
+
+        # submission data type
+        auto sub_type = new TallyDataProvider::TallySubmissionDataType();
+        fields = sub_type.getFields();
+        assertTrue(fields.hasKey("id"), "submission has id field");
+        assertTrue(fields.hasKey("formId"), "submission has formId field");
+        assertTrue(fields.hasKey("responses"), "submission has responses field");
+
+        # webhook data type
+        auto wh_type = new TallyDataProvider::TallyWebhookDataType();
+        fields = wh_type.getFields();
+        assertTrue(fields.hasKey("id"), "webhook has id field");
+        assertTrue(fields.hasKey("url"), "webhook has url field");
+        assertTrue(fields.hasKey("eventTypes"), "webhook has eventTypes field");
+
+        # user data type - verify new fields from API
+        auto user_type = new TallyDataProvider::TallyUserDataType();
+        fields = user_type.getFields();
+        assertTrue(fields.hasKey("id"), "user has id field");
+        assertTrue(fields.hasKey("firstName"), "user has firstName field");
+        assertTrue(fields.hasKey("lastName"), "user has lastName field");
+        assertTrue(fields.hasKey("fullName"), "user has fullName field");
+        assertTrue(fields.hasKey("email"), "user has email field");
+        assertTrue(fields.hasKey("avatarUrl"), "user has avatarUrl field");
+        assertTrue(fields.hasKey("organizationId"), "user has organizationId field");
+        assertTrue(fields.hasKey("subscriptionPlan"), "user has subscriptionPlan field");
+
+        # verify subscriptionPlan allowed values
+        *list<auto> plan_av = fields.subscriptionPlan.getAllowedValues();
+        assertEq(3, plan_av.lsize(), "subscriptionPlan has 3 allowed values");
+
+        # form settings data type - verify typed sub-type
+        auto settings_type = new TallyDataProvider::TallyFormSettingsDataType();
+        fields = settings_type.getFields();
+        assertTrue(fields.hasKey("isClosed"), "settings has isClosed field");
+        assertTrue(fields.hasKey("redirectOnCompletion"), "settings has redirectOnCompletion field");
+        assertTrue(fields.hasKey("language"), "settings has language field");
+        assertTrue(fields.hasKey("hasProgressBar"), "settings has hasProgressBar field");
+        assertTrue(fields.hasKey("hasSelfEmailNotifications"), "settings has hasSelfEmailNotifications field");
+
+        # submission response data type
+        auto resp_type = new TallyDataProvider::TallySubmissionResponseDataType();
+        fields = resp_type.getFields();
+        assertTrue(fields.hasKey("id"), "response has id field");
+        assertTrue(fields.hasKey("questionId"), "response has questionId field");
+        assertTrue(fields.hasKey("answer"), "response has answer field");
+        assertTrue(fields.hasKey("formattedAnswer"), "response has formattedAnswer field");
+        assertTrue(fields.hasKey("respondentId"), "response has respondentId field");
+    }
+
+    getFormTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "form123",
+            "name": "Test Form",
+            "status": "PUBLISHED",
+            "numberOfSubmissions": 42,
+            "isClosed": False,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-04-07T00:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-form");
+        hash<auto> resp = dp.doRequest({"id": "form123"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("forms/form123", rest.last_path);
+        assertEq("form123", resp.id);
+        assertEq("Test Form", resp.name);
+        assertEq("PUBLISHED", resp.status);
+%endif
+    }
+
+    createFormTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "newform456",
+            "name": "",
+            "status": "DRAFT",
+            "numberOfSubmissions": 0,
+            "createdAt": "2026-04-07T12:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-form");
+        hash<auto> resp = dp.doRequest({
+            "title": "Test Form",
+            "blocks": ({"uuid": "abc", "type": "INPUT_TEXT", "groupUuid": "g1", "groupType": "INPUT_TEXT"},),
+            "status": "DRAFT",
+        });
+
+        assertEq("POST", rest.last_method);
+        assertEq("forms", rest.last_path);
+        assertEq("DRAFT", rest.last_request.status);
+        # verify FORM_TITLE block was auto-prepended
+        assertTrue(rest.last_request.blocks.lsize() >= 2, "blocks includes auto-generated FORM_TITLE");
+        assertEq("FORM_TITLE", rest.last_request.blocks[0].type, "first block is FORM_TITLE");
+        assertEq("Test Form", rest.last_request.blocks[0].payload.title, "title mapped correctly");
+        assertEq("INPUT_TEXT", rest.last_request.blocks[1].type, "user block follows FORM_TITLE");
+        assertFalse(exists rest.last_request.title, "title field removed from request body");
+        assertEq("newform456", resp.id);
+%endif
+    }
+
+    deleteFormTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-form");
+        hash<auto> resp = dp.doRequest({"id": "form789"});
+
+        assertEq("DELETE", rest.last_method);
+        assertEq("forms/form789", rest.last_path);
+        assertEq("deleted", resp.status);
+        assertEq("form789", resp.id);
+%endif
+    }
+
+    searchFormsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "items": (
+                {"id": "f1", "name": "Form 1", "status": "PUBLISHED"},
+                {"id": "f2", "name": "Form 2", "status": "DRAFT"},
+            ),
+            "page": 1,
+            "limit": 50,
+            "total": 2,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("forms");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"limit": 50});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(2, recs.lsize());
+        assertEq("f1", recs[0].id);
+        assertEq("f2", recs[1].id);
+        assertTrue(rest.last_path.regex("forms\\?.*limit=50"));
+%endif
+    }
+
+    searchSubmissionsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "submissions": (
+                {"id": "s1", "formId": "f1", "isCompleted": True, "submittedAt": "2026-04-07T10:00:00Z"},
+            ),
+            "page": 1,
+            "limit": 50,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("submissions");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"form_id": "f1"});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(1, recs.lsize());
+        assertEq("s1", recs[0].id);
+        assertTrue(rest.last_path.regex("forms/f1/submissions"));
+%endif
+    }
+
+    getSubmissionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "submission": {
+                "id": "s1",
+                "formId": "f1",
+                "isCompleted": True,
+                "responses": (
+                    {"id": "r1", "questionId": "q1", "answer": "Hello"},
+                ),
+            },
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-submission");
+        hash<auto> resp = dp.doRequest({"form_id": "f1", "submission_id": "s1"});
+
+        assertEq("GET", rest.last_method);
+        assertEq("forms/f1/submissions/s1", rest.last_path);
+        assertEq("s1", resp.id);
+        assertEq(1, resp.responses.lsize());
+%endif
+    }
+
+    updateFormTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "form123",
+            "name": "Updated Form",
+            "status": "PUBLISHED",
+            "numberOfSubmissions": 42,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-04-07T12:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-form");
+        hash<auto> resp = dp.doRequest({
+            "id": "form123",
+            "name": "Updated Form",
+            "status": "PUBLISHED",
+        });
+
+        assertEq("PATCH", rest.last_method);
+        assertEq("forms/form123", rest.last_path);
+        # verify id is stripped from body
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from PATCH body");
+        assertEq("Updated Form", rest.last_request.name);
+        assertEq("PUBLISHED", rest.last_request.status);
+        assertEq("form123", resp.id);
+        assertEq("Updated Form", resp.name);
+%endif
+    }
+
+    deleteSubmissionTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("delete-submission");
+        hash<auto> resp = dp.doRequest({"form_id": "f1", "submission_id": "s1"});
+
+        assertEq("DELETE", rest.last_method);
+        assertEq("forms/f1/submissions/s1", rest.last_path);
+        assertEq("deleted", resp.status);
+        assertEq("f1", resp.form_id);
+        assertEq("s1", resp.submission_id);
+%endif
+    }
+
+    searchQuestionsTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "questions": (
+                {
+                    "id": "q1",
+                    "type": "INPUT_TEXT",
+                    "title": "Your Name",
+                    "formId": "f1",
+                    "isDeleted": False,
+                    "numberOfResponses": 10,
+                    "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-04-07T00:00:00Z",
+                    "fields": (),
+                },
+                {
+                    "id": "q2",
+                    "type": "MULTIPLE_CHOICE",
+                    "title": "Favorite Color",
+                    "formId": "f1",
+                    "isDeleted": False,
+                    "numberOfResponses": 8,
+                    "createdAt": "2026-01-01T00:00:00Z",
+                    "updatedAt": "2026-04-07T00:00:00Z",
+                    "fields": (),
+                },
+            ),
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("questions");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"form_id": "f1"});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(2, recs.lsize());
+        assertEq("q1", recs[0].id);
+        assertEq("INPUT_TEXT", recs[0].type);
+        assertEq("Your Name", recs[0].title);
+        assertEq("q2", recs[1].id);
+        assertTrue(rest.last_path.regex("forms/f1/questions"));
+%endif
+    }
+
+    createWebhookTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "wh1",
+            "formId": "f1",
+            "url": "https://example.com/webhook",
+            "eventTypes": ("FORM_RESPONSE",),
+            "isEnabled": True,
+            "createdAt": "2026-04-07T12:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("create-webhook");
+        hash<auto> resp = dp.doRequest({
+            "formId": "f1",
+            "url": "https://example.com/webhook",
+            "eventTypes": ("FORM_RESPONSE",),
+        });
+
+        assertEq("POST", rest.last_method);
+        assertEq("webhooks", rest.last_path);
+        assertEq("f1", rest.last_request.formId);
+        assertEq("wh1", resp.id);
+        assertEq(True, resp.isEnabled);
+%endif
+    }
+
+    updateWebhookTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("update-webhook");
+        hash<auto> resp = dp.doRequest({
+            "id": "wh1",
+            "formId": "f1",
+            "url": "https://example.com/updated",
+            "eventTypes": ("FORM_RESPONSE",),
+            "isEnabled": False,
+        });
+
+        assertEq("PATCH", rest.last_method);
+        assertEq("webhooks/wh1", rest.last_path);
+        # verify id is stripped from body
+        assertFalse(rest.last_request.hasKey("id"), "id stripped from PATCH body");
+        assertEq("f1", rest.last_request.formId);
+        assertEq("https://example.com/updated", rest.last_request.url);
+        assertEq(False, rest.last_request.isEnabled);
+        assertEq("updated", resp.status);
+        assertEq("wh1", resp.id);
+%endif
+    }
+
+    searchWebhooksTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "webhooks": (
+                {
+                    "id": "wh1",
+                    "formId": "f1",
+                    "url": "https://example.com/hook1",
+                    "eventTypes": ("FORM_RESPONSE",),
+                    "isEnabled": True,
+                    "createdAt": "2026-04-07T00:00:00Z",
+                },
+                {
+                    "id": "wh2",
+                    "formId": "f2",
+                    "url": "https://example.com/hook2",
+                    "eventTypes": ("FORM_RESPONSE",),
+                    "isEnabled": False,
+                    "createdAt": "2026-04-06T00:00:00Z",
+                },
+            ),
+            "page": 1,
+            "limit": 25,
+            "hasMore": False,
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("webhooks");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"limit": 25});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertEq(2, recs.lsize());
+        assertEq("wh1", recs[0].id);
+        assertEq(True, recs[0].isEnabled);
+        assertEq("wh2", recs[1].id);
+        assertEq(False, recs[1].isEnabled);
+        assertTrue(rest.last_path.regex("webhooks\\?.*limit=25"));
+%endif
+    }
+
+    getCurrentUserTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        rest.response_body = {
+            "id": "user1",
+            "firstName": "Test",
+            "lastName": "User",
+            "fullName": "Test User",
+            "email": "test@example.com",
+            "organizationId": "org1",
+            "isDeleted": False,
+            "hasTwoFactorEnabled": True,
+            "subscriptionPlan": "PRO",
+            "createdAt": "2026-01-01T00:00:00Z",
+            "updatedAt": "2026-04-07T00:00:00Z",
+        };
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider dp = prov.getChildProvider("get-current-user");
+        hash<auto> resp = dp.doRequest({});
+
+        assertEq("GET", rest.last_method);
+        assertEq("users/me", rest.last_path);
+        assertEq("user1", resp.id);
+        assertEq("Test", resp.firstName);
+        assertEq("Test User", resp.fullName);
+        assertEq("test@example.com", resp.email);
+        assertEq("org1", resp.organizationId);
+        assertEq("PRO", resp.subscriptionPlan);
+%endif
+    }
+
+    exampleEventDataTest() {
+        checkModule();
+%ifndef NoJson
+        FakeTallyRestClientIo rest();
+        # simulate no real data available (empty response)
+        rest.response_body = {};
+        TallyDataProvider::TallyDataProvider prov(rest);
+        AbstractDataProvider events = prov.getChildProvider("events");
+        AbstractDataProvider watch = events.getChildProvider(TallyDataProvider::EVENT_FORM_SUBMISSION);
+
+        auto example = watch.getExampleEventData(TallyDataProvider::EVENT_FORM_SUBMISSION);
+        assertTrue(example.typeCode() == NT_HASH, "example data is a hash");
+        assertTrue(example.hasKey("id"), "example has id");
+        assertTrue(example.hasKey("formId"), "example has formId");
+        assertTrue(example.hasKey("isCompleted"), "example has isCompleted");
+        assertTrue(example.hasKey("submittedAt"), "example has submittedAt");
+        assertTrue(example.hasKey("createdAt"), "example has createdAt");
+        assertTrue(example.hasKey("responses"), "example has responses");
+        assertTrue(example.responses.lsize() > 0, "example has response items");
+        assertTrue(example.responses[0].hasKey("questionId"), "response has questionId");
+        assertTrue(example.responses[0].hasKey("answer"), "response has answer");
+        assertTrue(example.responses[0].hasKey("formattedAnswer"), "response has formattedAnswer");
+%endif
+    }
+
+    liveConnectionPingTest() {
+        if (!m_options.conn) {
+            testSkip("no connection specified; use -c <connection_name>");
+        }
+%ifndef NoJson
+        AbstractConnection conn = get_connection(m_options.conn);
+        hash<PingInfo> ping_result = conn.ping(True);
+        assertEq(True, ping_result.ok, "connection ping succeeds");
+%endif
+    }
+
+    liveGetCurrentUserTest() {
+        if (!m_options.conn) {
+            testSkip("no connection specified; use -c <connection_name>");
+        }
+%ifndef NoJson
+        AbstractConnection conn = get_connection(m_options.conn);
+        TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
+        AbstractDataProvider dp = prov.getChildProvider("get-current-user");
+        hash<auto> resp = dp.doRequest({});
+
+        assertTrue(resp.id.val(), "user has id");
+        assertTrue(resp.email.val(), "user has email");
+        assertTrue(resp.hasKey("firstName"), "user has firstName");
+        assertTrue(resp.hasKey("lastName"), "user has lastName");
+        assertTrue(resp.hasKey("fullName"), "user has fullName");
+        assertTrue(resp.hasKey("organizationId"), "user has organizationId");
+%endif
+    }
+
+    liveSearchFormsTest() {
+        if (!m_options.conn) {
+            testSkip("no connection specified; use -c <connection_name>");
+        }
+%ifndef NoJson
+        AbstractConnection conn = get_connection(m_options.conn);
+        TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
+        AbstractDataProvider dp = prov.getChildProvider("forms");
+        AbstractDataProviderRecordIterator it = dp.searchRecords(NOTHING, {"limit": 5});
+
+        list<hash<auto>> recs = ();
+        while (it.next()) {
+            recs += it.getValue();
+        }
+        assertTrue(recs.lsize() >= 0, "forms search returns results (may be empty)");
+        if (recs.lsize() > 0) {
+            assertTrue(recs[0].hasKey("id"), "form record has id");
+            assertTrue(recs[0].hasKey("name"), "form record has name");
+            assertTrue(recs[0].hasKey("status"), "form record has status");
+        }
+%endif
+    }
+
+    liveFormCrudTest() {
+        if (!m_options.conn) {
+            testSkip("no connection specified; use -c <connection_name>");
+        }
+%ifndef NoJson
+        AbstractConnection conn = get_connection(m_options.conn);
+        TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
+
+        # create a test form using the title convenience field
+        AbstractDataProvider create_dp = prov.getChildProvider("create-form");
+        string block_uuid = UUID::get();
+        string block_group_uuid = UUID::get();
+        hash<auto> created = create_dp.doRequest({
+            "title": "Claude Code Test Form",
+            "blocks": (
+                {
+                    "uuid": block_uuid,
+                    "type": "INPUT_TEXT",
+                    "groupUuid": block_group_uuid,
+                    "groupType": "INPUT_TEXT",
+                    "payload": {
+                        "isRequired": False,
+                        "placeholder": "Test input",
+                    },
+                },
+            ),
+            "status": "DRAFT",
+        });
+
+        assertTrue(created.id.val(), "created form has id");
+        string form_id = created.id;
+
+        on_exit {
+            # clean up: delete the form
+            try {
+                AbstractDataProvider del_dp = prov.getChildProvider("delete-form");
+                del_dp.doRequest({"id": form_id});
+            } catch () {
+                # ignore cleanup errors
+            }
+        };
+
+        # verify the form persisted by fetching it back
+        AbstractDataProvider get_dp = prov.getChildProvider("get-form");
+        hash<auto> fetched = get_dp.doRequest({"id": form_id});
+
+        assertEq(form_id, fetched.id, "fetched form matches created form");
+        assertEq("DRAFT", fetched.status, "form status is DRAFT");
+
+        # update the form
+        AbstractDataProvider update_dp = prov.getChildProvider("update-form");
+        hash<auto> updated = update_dp.doRequest({
+            "id": form_id,
+            "status": "PUBLISHED",
+        });
+        assertEq(form_id, updated.id, "updated form ID matches");
+
+        # verify update persisted
+        fetched = get_dp.doRequest({"id": form_id});
+        assertEq("PUBLISHED", fetched.status, "form status updated to PUBLISHED");
+
+        # list questions for the form
+        AbstractDataProvider q_dp = prov.getChildProvider("questions");
+        AbstractDataProviderRecordIterator it = q_dp.searchRecords(NOTHING, {"form_id": form_id});
+        list<hash<auto>> questions = ();
+        while (it.next()) {
+            questions += it.getValue();
+        }
+        assertTrue(questions.lsize() >= 0, "questions endpoint returns results");
+%endif
+    }
+
+    liveWebhookCrudTest() {
+        if (!m_options.conn) {
+            testSkip("no connection specified; use -c <connection_name>");
+        }
+%ifndef NoJson
+        AbstractConnection conn = get_connection(m_options.conn);
+        TallyDataProvider::TallyDataProvider prov(cast<RestClientIo::RestClientIo>(conn.getAsync()));
+
+        # first, get a form to attach the webhook to
+        AbstractDataProvider forms_dp = prov.getChildProvider("forms");
+        AbstractDataProviderRecordIterator it = forms_dp.searchRecords(NOTHING, {"limit": 1});
+        *hash<auto> first_form;
+        if (it.next()) {
+            first_form = it.getValue();
+        }
+        if (!first_form) {
+            testSkip("no forms available for webhook test");
+        }
+
+        string form_id = first_form.id;
+
+        # create a webhook
+        AbstractDataProvider create_dp = prov.getChildProvider("create-webhook");
+        hash<auto> created = create_dp.doRequest({
+            "formId": form_id,
+            "url": "https://example.com/test-webhook-" + now_us().toString(),
+            "eventTypes": ("FORM_RESPONSE",),
+        });
+
+        assertTrue(created.id.val(), "created webhook has id");
+        string webhook_id = created.id;
+
+        on_exit {
+            # clean up: delete the webhook
+            try {
+                AbstractDataProvider del_dp = prov.getChildProvider("delete-webhook");
+                del_dp.doRequest({"id": webhook_id});
+            } catch () {
+                # ignore cleanup errors
+            }
+        };
+
+        # verify webhook appears in list
+        AbstractDataProvider wh_dp = prov.getChildProvider("webhooks");
+        it = wh_dp.searchRecords(NOTHING, {"limit": 100});
+        bool found = False;
+        while (it.next()) {
+            hash<auto> wh = it.getValue();
+            if (wh.id == webhook_id) {
+                found = True;
+                break;
+            }
+        }
+        assertTrue(found, "created webhook found in list");
+
+        # update the webhook (API requires formId, url, eventTypes, isEnabled)
+        AbstractDataProvider update_dp = prov.getChildProvider("update-webhook");
+        hash<auto> updated = update_dp.doRequest({
+            "id": webhook_id,
+            "formId": form_id,
+            "url": created.url,
+            "eventTypes": ("FORM_RESPONSE",),
+            "isEnabled": False,
+        });
+        # verify update result
+        assertEq("updated", updated.status, "update status is updated");
+        assertEq(webhook_id, updated.id, "updated webhook id matches");
+
+        # re-fetch webhook to verify update persisted
+        it = wh_dp.searchRecords(NOTHING, {"limit": 100});
+        *hash<auto> updated_wh;
+        while (it.next()) {
+            hash<auto> wh = it.getValue();
+            if (wh.id == webhook_id) {
+                updated_wh = wh;
+                break;
+            }
+        }
+        assertTrue(updated_wh.val(), "updated webhook found in list");
+        assertEq(False, updated_wh.isEnabled, "webhook isEnabled updated to False");
+%endif
+    }
+}

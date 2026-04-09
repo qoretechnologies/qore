@@ -55,6 +55,8 @@ public enum HttpConnectionState : string {
     SendStreamAndReadHeader = "send_stream_and_read_header",
     #! Sending HTTP/1.x InputStream response (no keep-alive, close after send)
     SendStreamResponse = "send_stream_response",
+    #! Reading HTTP/1.x request body (Content-Length or chunked)
+    ReadBody = "read_body",
 }
 
 #! HTTP poll operation type
@@ -643,7 +645,10 @@ public class HttpAsyncSocketIoController {
     }
 
     #! Registers an HTTP/1.1 WebSocket connection with the async I/O controller
-    /** @param sock the WebSocket socket (after upgrade handshake)
+    /** The 101 Switching Protocols response must already have been sent before
+        calling this method. The socket transitions directly to WebSocket frame I/O.
+
+        @param sock the WebSocket socket (after upgrade handshake)
         @param poll_op the WebSocket poll operation to drive
         @param target the target for callbacks
         @param listener the listener interface for logging
@@ -1433,10 +1438,26 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
+                # Materialize non-I/O-thread-safe InputStreams into memory.
+                # Handler threads must NEVER do blocking socket I/O on multiplexed
+                # connections — the I/O thread needs the socket/session mutex to
+                # process incoming data, and blocking sends cause deadlock.
+                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+                    result.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    result.input_stream.unassignThread();
+                    if (buf.size() > 0) {
+                        result.input_stream = new BinaryInputStream(buf);
+                    } else {
+                        remove result.input_stream;
+                        result.body = NOTHING;
+                    }
+                }
+
                 if (result.input_stream) {
-                    # Try to submit to I/O thread; C++ enforces isIoThreadSafe() and
-                    # returns 1 if not safe (no headers sent yet), so we fall through
-                    # to handler-thread streaming
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
@@ -1444,49 +1465,18 @@ public class HttpAsyncSocketIoController {
                     if (!rv) {
                         controller.wakeSocket(cinfo.sock);
                     } else {
-                        # Not I/O-thread-safe (rv == 1): handler thread reads chunks and
-                        # submits them incrementally to the QUIC session with backpressure
-                        cinfo.sock.submitQuicResponseStreaming(
-                            session_id, stream_id, result.code, resp_hdr);
-                        controller.wakeSocket(cinfo.sock);
-
+                        # C++ gate rejected — materialize and fall through to body path
+                        log(LoggerLevel::DEBUG, "HTTP/3 stream %d: InputStream submit "
+                            "rejected (rv=%d), materializing", stream_id, rv);
                         result.input_stream.reassignThread();
-                        on_exit result.input_stream.unassignThread();
-                        bool stream_ok = True;
-                        try {
-                            while (*binary chunk = result.input_stream.read(65536)) {
-                                int retries = 0;
-                                while (cinfo.sock.submitQuicStreamData(
-                                        session_id, stream_id, chunk) == 1) {
-                                    if (++retries > 200) {
-                                        throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer "
-                                            "not draining after %d retries", stream_id, retries);
-                                    }
-                                    controller.wakeSocket(cinfo.sock);
-                                    # CV-based wait: wakes immediately when I/O thread drains
-                                    # the buffer, falls back to 50ms timeout otherwise
-                                    int drain_rv = cinfo.sock.waitForQuicStreamDrain(
-                                        session_id, stream_id, 50ms);
-                                    if (drain_rv == -1) {
-                                        throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream "
-                                            "removed while waiting for drain", stream_id);
-                                    }
-                                }
-                                controller.wakeSocket(cinfo.sock);
-                            }
-                            cinfo.sock.submitQuicStreamData(
-                                session_id, stream_id, NOTHING, True);
-                            controller.wakeSocket(cinfo.sock);
-                        } catch (hash<ExceptionInfo> ex) {
-                            stream_ok = False;
-                            log(LoggerLevel::ERROR,
-                                "HTTP/3 non-pollable stream error session=%d stream=%d on "
-                                "%y: %s: %s", session_id, stream_id, uh, ex.err, ex.desc);
-                            try {
-                                cinfo.sock.cancelQuicStream(session_id, stream_id);
-                                controller.wakeSocket(cinfo.sock);
-                            } catch () {}
+                        binary buf;
+                        while (*binary chunk = result.input_stream.read(65536)) {
+                            buf += chunk;
                         }
+                        result.input_stream.unassignThread();
+                        cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
+                            result.hdr, buf);
+                        controller.wakeSocket(cinfo.sock);
                     }
                 } else {
                     cinfo.sock.submitQuicResponse(session_id, stream_id, result.code,
@@ -1841,6 +1831,12 @@ public class HttpAsyncSocketIoController {
                 timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
                 break;
             }
+            case HttpConnectionState::ReadBody: {
+                if (!cinfo.stream_op) return;
+                op = cinfo.stream_op;
+                timeout = AsyncSocketIoController::DefaultIoOperationTimeout;
+                break;
+            }
             default:
                 log(LoggerLevel::ERROR, "Unknown connection state %y for %s", cinfo.state, uh);
                 return;
@@ -2147,18 +2143,52 @@ public class HttpAsyncSocketIoController {
                 break;
             }
             case HttpConnectionState::SendStreamResponse: {
-                # Non-fused InputStream stream send (close on completion)
+                # Async response send completed
                 AbstractPollOperation send_op = result.spop;
                 string state = send_op.getState();
-                if (state == "stream-complete") {
-                    # Send complete — close connection as requested
-                    try { cinfo.sock.close(); } catch () {}
-                    {
-                        AutoWriteLock al(m);
-                        remove connections{uh};
+                if (state == "stream-complete" || state == "sent") {
+                    # Check if there's a pending streaming operation to start
+                    # (SSE/WS headers were sent; now start the streaming op)
+                    if (cinfo.pending_stream_op) {
+                        hash<HttpActiveConnectionInfo> new_cinfo;
+                        {
+                            AutoWriteLock al(m);
+                            hash<HttpActiveConnectionInfo> upd =
+                                cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                            upd.state = cinfo.pending_stream_type;
+                            upd.stream_op = cinfo.pending_stream_op;
+                            remove upd.pending_stream_type;
+                            remove upd.pending_stream_op;
+                            new_cinfo = connections{uh} = upd;
+                        }
+                        submitConnectionOp(uh, new_cinfo);
+                        # Wake the socket to flush any data queued during
+                        # header send (SSE events, WS frames)
+                        controller.wakeSocket(cinfo.sock);
+                    } else {
+                        # No pending streaming — close connection
+                        try { cinfo.sock.close(); } catch () {}
+                        {
+                            AutoWriteLock al(m);
+                            remove connections{uh};
+                        }
                     }
                 } else {
                     # Error or unexpected state — close connection
+                    handleConnectionClosed(uh, cinfo);
+                }
+                break;
+            }
+            case HttpConnectionState::ReadBody: {
+                # Async H1 body read completed
+                AbstractPollOperation body_op = result.spop;
+                string state = body_op.getState();
+                if (state == "done") {
+                    # Body read complete — dispatch to handler with full request
+                    *binary body_data = body_op.getOutput();
+                    handleBodyComplete(uh, cinfo, body_data);
+                } else {
+                    # Error reading body — close connection
                     handleConnectionClosed(uh, cinfo);
                 }
                 break;
@@ -2225,6 +2255,45 @@ public class HttpAsyncSocketIoController {
 
         log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
 
+        # Check if H1 request body should be read by I/O controller
+        # For requests with body (Content-Length or chunked) and no Expect header,
+        # read the body via async I/O before dispatching to the handler.
+        # Expect: 100-continue requests fall through to the handler (which sends
+        # 100-continue and reads the body synchronously) to avoid a round-trip.
+        if (!output.info.http2 && !output.info.http3) {
+            auto content_length = output.hdr."content-length";
+            bool chunked = (output.hdr."transfer-encoding" =~ /chunked/i);
+            bool has_expect = (output.hdr.expect =~ /100-continue/i);
+            bool has_body = (content_length > 0 || chunked);
+
+            if (has_body && !has_expect) {
+                try {
+                    int cl = content_length ?? -1;
+                    bool conn_close = (output.hdr.connection =~ /close/i);
+                    AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, chunked,
+                        conn_close);
+                    # Stay in controller tracking — socket is managed during body read
+                    hash<HttpActiveConnectionInfo> new_cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        hash<HttpActiveConnectionInfo> upd =
+                            cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                        upd.state = HttpConnectionState::ReadBody;
+                        upd.stream_op = body_op;
+                        upd.pending_hdr = output.hdr;
+                        upd.pending_header_info = output.info;
+                        new_cinfo = connections{uh} = upd;
+                    }
+                    submitConnectionOp(uh, new_cinfo);
+                    return;
+                } catch (hash<ExceptionInfo> ex) {
+                    log(LoggerLevel::ERROR, "Error starting body read for %y: %s: %s",
+                        uh, ex.err, ex.desc);
+                    # Fall through to normal dispatch — handler will read body
+                }
+            }
+        }
+
         # Remove from our tracking
         {
             AutoWriteLock al(m);
@@ -2280,6 +2349,62 @@ public class HttpAsyncSocketIoController {
         }
     }
 
+    #! Handles completion of H1 async body reading
+    /** Dispatches the request to the handler with the pre-read body stored in
+        \c cx."header-info".body (same convention as H2/H3 paths).
+
+        @param uh unique hash of the socket
+        @param cinfo the connection info (must have pending_hdr/pending_header_info set)
+        @param body_data the body data read by the I/O controller (may be NOTHING for empty body)
+    */
+    private handleBodyComplete(string uh, hash<HttpActiveConnectionInfo> cinfo, *binary body_data) {
+        # Build the connection info from saved headers (same as handleHeaderComplete)
+        hash<HttpConnectionInfo> conn_info = <HttpConnectionInfo>{
+            "sock": cinfo.sock,
+            "hdr": cinfo.pending_hdr,
+            "header_info": cinfo.pending_header_info,
+            "listener": cinfo.listener,
+            "cx": cinfo.cx,
+            "keep_alive": True,
+            "ssl": cinfo.sock.isSecure(),
+        };
+
+        # Store the pre-read body for the handler (same convention as H2/H3)
+        if (body_data) {
+            conn_info.header_info.body = body_data;
+        }
+
+        log(LoggerLevel::DEBUG, "Body read complete for %y: %d bytes", uh,
+            body_data ? body_data.size() : 0);
+
+        # Remove from our tracking — handler thread owns the socket now
+        {
+            AutoWriteLock al(m);
+            remove connections{uh};
+        }
+
+        # Dispatch to handler pool (same as handleHeaderComplete)
+        code request_handler = sub () {
+            try {
+                hash<HttpRequestResultInfo> result = cinfo.target.onHttpRequest(conn_info);
+                handleRequestResult(cinfo.sock, cinfo, cinfo.cx, result, cinfo.target);
+            } catch (hash<ExceptionInfo> ex) {
+                log(LoggerLevel::ERROR, "Error handling request after body read: %s: %s",
+                    ex.err, ex.desc);
+                cinfo.target.onError(cinfo.sock, ex, cinfo.listener, cinfo.cx);
+                try { cinfo.sock.close(); } catch () {}
+            }
+        };
+
+        try {
+            handler_pool.submit(request_handler);
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::ERROR, "Failed to submit handler after body read for %y: %s: %s",
+                uh, ex.err, ex.desc);
+            try { cinfo.sock.close(); } catch () {}
+        }
+    }
+
     #! Handles the result of request processing
     # @param linfo hash<HttpActiveConnectionInfo> — typed as auto to avoid circular
     #   dependency on HttpActiveConnectionInfo (defined in this module); callers always
@@ -2288,26 +2413,34 @@ public class HttpAsyncSocketIoController {
             hash<HttpRequestResultInfo> result, HttpAsyncTarget target) {
         string uh = sock.uniqueHash();
 
-        # Convert non-I/O-safe InputStreams for sync handler-thread send.
-        # These InputStreams (CallbackInputStream etc.) cannot be read on the I/O thread
-        # because InputStreamWrapper::read() calls evalMethod() (Qore user code).
-        # I/O-safe InputStreams skip this and use the fused I/O-thread paths below.
+        # NOTE: send_callback responses are NOT converted to InputStream here.
+        # send_callback is a streaming producer (may block waiting for data)
+        # that must run on the handler thread.  For H1, the handler thread
+        # owns the socket exclusively and sendHTTPResponseWithCallback streams
+        # correctly.  For H2/H3 multiplexed paths, the conversion happens in
+        # handleHttp2MultiplexedResult / handleHttp3MultiplexedResult.
+
+        # Materialize non-I/O-safe InputStreams into memory on the handler thread.
+        # These InputStreams (CallbackInputStream, StringInputStream etc.) cannot
+        # be read on the I/O thread because their read() calls evalMethod().
+        # Replace with BinaryInputStream (I/O-safe) so the fused paths below
+        # can handle them — preserving chunked encoding semantics.
         if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
             InputStream is = result.input_stream;
-            remove result.input_stream;
-            if (result.chunked) {
-                # Chunked: convert to send_callback for sendHTTPResponseWithCallback
-                is.reassignThread();
-                result.send_callback = auto sub() { return is.read(65536); };
+            is.reassignThread();
+            binary buf;
+            while (*binary chunk = is.read(65536)) {
+                buf += chunk;
+            }
+            is.unassignThread();
+            if (buf.size() > 0) {
+                result.input_stream = new BinaryInputStream(buf);
             } else {
-                # Content-Length: read entire body into memory on handler thread
-                is.reassignThread();
-                binary buf;
-                while (*binary chunk = is.read(65536)) {
-                    buf += chunk;
-                }
-                is.unassignThread();
-                result.body = buf;
+                # Empty stream — remove InputStream and Transfer-Encoding so
+                # the plain body path sends a response (empty body → 200/204)
+                remove result.input_stream;
+                remove result.hdr."Transfer-Encoding";
+                remove result.chunked;
             }
         }
 
@@ -2349,14 +2482,20 @@ public class HttpAsyncSocketIoController {
 
         # Opt #3b: InputStream + close → non-fused stream send (I/O-thread-safe only)
         if (result.code && !result.streaming && result.input_stream && !result.send_callback
-                && result.close && result.hdr."Content-Length"
-                && result.input_stream.isIoThreadSafe()) {
+                && result.close && result.input_stream.isIoThreadSafe()) {
             try {
                 string status_msg = result.status_message ?? "Unknown";
-                AbstractPollOperation send_op =
-                    sock.startPollSendHttpResponseWithStream(
+                AbstractPollOperation send_op;
+                if (result.hdr."Content-Length") {
+                    send_op = sock.startPollSendHttpResponseWithStream(
                         result.code, status_msg, "1.1", result.hdr ?? {},
                         result.input_stream, int(result.hdr."Content-Length"));
+                } else {
+                    # Chunked stream + close
+                    send_op = sock.startPollSendHttpChunkedResponseWithStream(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.input_stream);
+                }
                 hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
                     "sock": sock,
                     "listener": linfo.listener,
@@ -2455,15 +2594,68 @@ public class HttpAsyncSocketIoController {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
-                    sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
-                        status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
-                } else if (result.input_stream) {
-                    result.input_stream.reassignThread();
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {}, result.input_stream);
-                } else {
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {}, result.body);
+                    # Drain the send_callback on the handler thread (the
+                    # callback is user code that must run here), then send
+                    # the materialized body via async I/O.
+                    # sendHTTPResponseWithCallback is a blocking call that
+                    # hangs on non-blocking sockets after the EAGAIN fix.
+                    binary buf;
+                    while (True) {
+                        auto chunk = result.send_callback();
+                        if (!exists chunk) {
+                            break;
+                        }
+                        buf += binary(chunk);
+                    }
+                    result.body = buf.size() > 0 ? buf : NOTHING;
+                    remove result.send_callback;
+                    remove result.hdr."Transfer-Encoding";
+
+                    # For keep-alive, use fused send+read (same as Opt #3)
+                    if (result.return_to_idle && !result.close) {
+                        timeout ttl = result.ttl ?? DefaultIdleTimeout;
+                        AbstractPollOperation fused_op =
+                            sock.startPollSendHttpResponseAndReadHeader(
+                                result.code, status_msg, "1.1", result.hdr ?? {},
+                                result.body, ttl);
+                        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                            "sock": sock,
+                            "listener": linfo.listener,
+                            "cx": cx,
+                            "target": target,
+                            "state": HttpConnectionState::SendAndReadHeader,
+                            "stream_op": fused_op,
+                            "ttl": ttl,
+                        };
+                        hash<HttpActiveConnectionInfo> cinfo;
+                        {
+                            AutoWriteLock al(m);
+                            cinfo = connections{uh} = new_cinfo;
+                        }
+                        submitConnectionOp(uh, cinfo);
+                        return;
+                    }
+                }
+                {
+                    # Use async poll operation for all other H1 responses
+                    AbstractPollOperation send_op = sock.startPollSendHttpResponse(
+                        result.code, status_msg, "1.1", result.hdr ?? {},
+                        result.body);
+                    hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                        "sock": sock,
+                        "listener": linfo.listener,
+                        "cx": cx,
+                        "target": target,
+                        "state": HttpConnectionState::SendStreamResponse,
+                        "stream_op": send_op,
+                    };
+                    hash<HttpActiveConnectionInfo> cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        cinfo = connections{uh} = new_cinfo;
+                    }
+                    submitConnectionOp(uh, cinfo);
+                    return;
                 }
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR, "Error sending HTTP/1.x response for %y: %s: %s",
@@ -2479,33 +2671,54 @@ public class HttpAsyncSocketIoController {
         }
 
         if (result.streaming) {
-            # For H1 SSE: send HTTP response headers before entering streaming mode
+            # For H1 SSE/WS: send HTTP response headers via async poll operation
+            # before entering streaming mode
+            string stream_state = result.stream_type;
             if (result.code) {
                 try {
                     string status_msg = result.status_message ?? HttpServer::HttpCodes{result.code} ?? "OK";
-                    sock.sendHTTPResponse(result.code, status_msg, "1.1",
-                        result.hdr ?? {});
+                    AbstractPollOperation send_op = sock.startPollSendHttpResponse(
+                        result.code, status_msg, "1.1", result.hdr ?? {});
+                    # Store the streaming op info — handleConnectionResult will
+                    # transition to streaming state after the header send completes
+                    hash<HttpActiveConnectionInfo> cinfo;
+                    {
+                        AutoWriteLock al(m);
+                        cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                            "sock": sock,
+                            "listener": linfo.listener,
+                            "cx": cx,
+                            "target": target,
+                            "state": HttpConnectionState::SendStreamResponse,
+                            "stream_op": send_op,
+                            "ttl": result.ttl ?? DefaultIdleTimeout,
+                            # Store pending streaming info for transition after header send
+                            "pending_stream_type": stream_state,
+                            "pending_stream_op": result.stream_operation,
+                        };
+                    }
+                    submitConnectionOp(uh, cinfo);
                 } catch (hash<ExceptionInfo> ex) {
                     log(LoggerLevel::ERROR, "Error sending SSE response for %y: %s: %s",
                         uh, ex.err, ex.desc);
                     try { sock.close(); } catch () {}
-                    return;
                 }
+            } else {
+                hash<HttpActiveConnectionInfo> cinfo;
+                {
+                    AutoWriteLock al(m);
+                    cinfo = connections{uh} = <HttpActiveConnectionInfo>{
+                        "sock": sock,
+                        "listener": linfo.listener,
+                        "cx": cx,
+                        "target": target,
+                        "state": stream_state,
+                        "stream_op": result.stream_operation,
+                        "ttl": result.ttl ?? DefaultIdleTimeout,
+                    };
+                }
+                submitConnectionOp(uh, cinfo);
             }
-            hash<HttpActiveConnectionInfo> cinfo;
-            {
-                AutoWriteLock al(m);
-                cinfo = connections{uh} = <HttpActiveConnectionInfo>{
-                    "sock": sock,
-                    "listener": linfo.listener,
-                    "cx": cx,
-                    "target": target,
-                    "state": result.stream_type,
-                    "stream_op": result.stream_operation,
-                    "ttl": result.ttl ?? DefaultIdleTimeout,
-                };
-            }
-            submitConnectionOp(uh, cinfo);
             return;
         }
 
@@ -2718,21 +2931,34 @@ public class HttpAsyncSocketIoController {
         if (!body_streaming) {
             # Normal path: resume h2op immediately for multiplexing.
             # The handler thread sends responses via submitHttp2Response().
-            h2op.continueReading();
-            hash<HttpActiveConnectionInfo> new_cinfo;
-            {
-                AutoWriteLock al(m);
-                if (!connections.hasKey(uh)) {
-                    try { cinfo.sock.close(); } catch () {}
-                    return;
+            #
+            # Race condition: a previous handler's handleHttp2MultiplexedResult may
+            # have already called resumeMultiplexedReading() → continueReading() on
+            # this h2op, transitioning it from REQUEST_READY → READING and re-submitting
+            # it to the controller.  In that case, our continueReading() throws because
+            # the h2op is already in READING state.  This is benign — the h2op is already
+            # active, so we skip re-registration and proceed to dispatch the handler.
+            try {
+                h2op.continueReading();
+                hash<HttpActiveConnectionInfo> new_cinfo;
+                {
+                    AutoWriteLock al(m);
+                    if (!connections.hasKey(uh)) {
+                        try { cinfo.sock.close(); } catch () {}
+                        return;
+                    }
+                    hash<HttpActiveConnectionInfo> conn_info_upd =
+                        cast<hash<HttpActiveConnectionInfo>>(connections{uh});
+                    conn_info_upd.stream_op = h2op;
+                    conn_info_upd.state = HttpConnectionState::Http2;
+                    new_cinfo = connections{uh} = conn_info_upd;
                 }
-                hash<HttpActiveConnectionInfo> conn_info_upd =
-                    cast<hash<HttpActiveConnectionInfo>>(connections{uh});
-                conn_info_upd.stream_op = h2op;
-                conn_info_upd.state = HttpConnectionState::Http2;
-                new_cinfo = connections{uh} = conn_info_upd;
+                submitConnectionOp(uh, new_cinfo);
+            } catch () {
+                # Already in READING state (resumed by a concurrent handler's
+                # resumeMultiplexedReading) — h2op is already on the controller,
+                # proceed to dispatch the request handler below
             }
-            submitConnectionOp(uh, new_cinfo);
         }
 
         # Convert HTTP/2 request to HttpConnectionInfo format
@@ -3068,54 +3294,55 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Try to submit InputStream to I/O thread; C++ enforces isIoThreadSafe()
-                # and returns 1 if not safe (no headers sent yet), so we fall through
-                # to handler-thread streaming
+                # Materialize non-I/O-thread-safe InputStreams into memory.
+                # Handler threads must NEVER do blocking socket I/O on multiplexed
+                # connections — the I/O thread needs the socket/session mutex to
+                # process incoming ACKs, and blocking sends cause deadlock.
+                # Read the full body here (on the handler thread), wrap in
+                # BinaryInputStream (I/O-thread-safe), then the submit path below
+                # hands it to the I/O thread for non-blocking send.
+                if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
+                    result.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = result.input_stream.read(65536)) {
+                        buf += chunk;
+                    }
+                    result.input_stream.unassignThread();
+                    if (buf.size() > 0) {
+                        result.input_stream = new BinaryInputStream(buf);
+                    } else {
+                        remove result.input_stream;
+                        result.body = NOTHING;
+                    }
+                }
+
+                # Submit InputStream to I/O thread for non-blocking streaming
                 if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitHttp2StreamingResponseWithStream(
                         stream_id, result.code, resp_hdr, result.input_stream);
                     if (!rv) {
-                        log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting I/O-thread-safe "
+                        log(LoggerLevel::DEBUG, "HTTP/2 stream %d: submitting "
                             "InputStream response (CL=%y)",
                             stream_id, result.hdr."Content-Length");
                         controller.wakeSocket(cinfo.sock);
                         return;
                     }
-
-                    # Not I/O-thread-safe (rv == 1): the handler thread reads chunks and
-                    # submits them incrementally to the H2 session
-                    cinfo.sock.submitHttp2StreamingResponseHeaders(
-                        stream_id, result.code, resp_hdr);
-                    controller.wakeSocket(cinfo.sock);
-
+                    # C++ gate rejected the stream (e.g., lying isIoThreadSafe).
+                    # Materialize to binary on the handler thread and fall through
+                    # to the in-memory body path.
+                    log(LoggerLevel::DEBUG, "HTTP/2 stream %d: InputStream submit "
+                        "rejected (rv=%d), materializing on handler thread",
+                        stream_id, rv);
                     result.input_stream.reassignThread();
-                    on_exit result.input_stream.unassignThread();
+                    binary buf;
                     while (*binary chunk = result.input_stream.read(65536)) {
-                        while (True) {
-                            try {
-                                cinfo.sock.sendHttp2StreamData(stream_id, chunk);
-                                controller.wakeSocket(cinfo.sock);
-                                break;
-                            } catch (hash<ExceptionInfo> ex) {
-                                if (ex.err == "HTTP2-FLOW-CONTROL") {
-                                    # Buffer full — wake I/O thread to drain, then wait
-                                    # deterministically for the CV signal
-                                    controller.wakeSocket(cinfo.sock);
-                                    if (cinfo.sock.waitForHttp2StreamDrain(stream_id, 10s)) {
-                                        # Timed out or stream gone — give up
-                                        rethrow;
-                                    }
-                                    continue;
-                                }
-                                rethrow;
-                            }
-                        }
+                        buf += chunk;
                     }
-                    cinfo.sock.sendHttp2StreamData(stream_id, NOTHING, True);
-                    controller.wakeSocket(cinfo.sock);
-                    return;
+                    result.input_stream.unassignThread();
+                    result.body = buf;
+                    remove result.input_stream;
                 }
 
                 # In-memory response body
@@ -3124,16 +3351,18 @@ public class HttpAsyncSocketIoController {
                 # Submit response to nghttp2 session (thread-safe)
                 cinfo.sock.submitHttp2Response(stream_id, result.code, result.hdr, body);
 
-                # Flush response frames to the socket inline from this worker thread.
-                # We cannot rely on wakeSocket() → continuePoll() because the H2 poll
-                # operation may have already been removed from the controller's cache
-                # (Phase3 REMOVE fires before onComplete dispatch reaches this point).
-                # This follows nginx's pattern: the filter flushes inline via
-                # ngx_http_v2_send_output_queue() rather than deferring to the event loop.
-                cinfo.sock.flushHttp2(-1);
-
-                # Wake the I/O controller so it re-registers the socket for the next
-                # request's incoming frames
+                # Re-submit the H2 poll operation to the controller so the I/O
+                # thread can flush the response frames non-blockingly via
+                # continuePoll() → sendPendingData(0).
+                #
+                # We must NOT call flushHttp2(-1) here — that does a blocking
+                # send (sendPendingDataBlocking) while holding Http2Session::m.
+                # If the socket is non-blocking (set by the I/O controller) and
+                # the send buffer is full, sendIntern blocks in poll(-1) while
+                # holding the mutex.  The I/O thread needs that same mutex to
+                # process incoming ACKs that would unblock the send — deadlock.
+                resumeMultiplexedReading(cinfo.stream_op, uh,
+                    HttpConnectionState::Http2);
                 controller.wakeSocket(cinfo.sock);
             } catch (hash<ExceptionInfo> ex) {
                 log(LoggerLevel::ERROR,
@@ -3379,6 +3608,18 @@ hashdecl HttpActiveConnectionInfo {
 
     #! True if this is an HTTP/2 connection
     bool is_http2 = False;
+
+    #! Pending streaming state type (set during header send before SSE/WS transition)
+    *string pending_stream_type;
+
+    #! Pending streaming operation (set during header send before SSE/WS transition)
+    *AbstractPollOperation pending_stream_op;
+
+    #! Parsed headers (saved during ReadBody state for dispatch after body is read)
+    *hash<auto> pending_hdr;
+
+    #! Header parsing info (saved during ReadBody state for dispatch after body is read)
+    *hash<auto> pending_header_info;
 
 }
 

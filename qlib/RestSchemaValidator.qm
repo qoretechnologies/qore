@@ -57,7 +57,7 @@
 %define NoJson
 %endtry
 
-%try-module json >= 1.12
+%try-module json >= 1.11
 %define NoCbor
 %endtry
 

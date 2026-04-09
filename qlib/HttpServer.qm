@@ -2602,6 +2602,10 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                             # HTTP/2: no 100-continue mechanism; the body is already being sent
                             # by the client on the stream — nothing to do
                         } else {
+                            # HTTP/1.x: handler thread owns socket exclusively (removed
+                            # from I/O controller at header dispatch). sendIntern handles
+                            # EAGAIN on non-blocking sockets. Fully async 100-Continue
+                            # requires the I/O controller to handle body reading for H1.
                             s.send("HTTP/1.1 100 Continue\r\n\r\n");
                         }
                     } else {
@@ -2746,14 +2750,15 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         body = body_data.toString();
                     }
                 }
-            } else if ((cx."header-info".http2 || cx."header-info".http3) && cx."header-info".body) {
-                # For HTTP/2 and HTTP/3, body is already read by poll operation and stored in header-info
-                # Check body size against limit (body was already read by the C++
-                # layer; this is a secondary check in case the C++ limit was not set)
+            } else if (cx."header-info".body) {
+                # Body pre-read by I/O controller (H1 async, H2, or H3)
+                # Check body size against limit (body was already read by the
+                # async I/O layer; this is a secondary check)
                 if (max_body > 0 && cx."header-info".body.size() > max_body) {
+                    string proto = cx."header-info".http3 ? "HTTP/3"
+                        : (cx."header-info".http2 ? "HTTP/2" : "HTTP/1.x");
                     string etxt = sprintf("%s request body size %d exceeds maximum allowed body size %d",
-                        cx."header-info".http3 ? "HTTP/3" : "HTTP/2",
-                        cx."header-info".body.size(), max_body);
+                        proto, cx."header-info".body.size(), max_body);
                     listener.logError("%s: from %s", etxt, cx."peer-info".address_desc);
                     cx.close = True;
                     sendHttpError(listener, cx, s, 413, etxt, NOTHING, NOTHING,
@@ -2764,7 +2769,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     # Save pre-read body for the stream handler; don't pass to REST handler
                     cx."stream-body" = cx."header-info".body;
                 } else {
-                    # HTTP/2 and HTTP/3 body is always binary - convert to string if text content type
+                    # Body is always binary from the I/O layer — convert to string if text content type
                     if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
                             || hdr."content-type" =~ /^application\/connect\+/) {
                         body = cx."header-info".body;
@@ -3295,19 +3300,37 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                     }
                     AbstractHttpSocketHandlerInterface sockhandler = cast<HttpServer::AbstractHttpSocketHandlerInterface>(handler);
 
-                    if (async_response_out) {
-                        s.sendHTTPResponse(async_response_out."code",
-                            HttpServer::HttpCodes{async_response_out."code"}, "1.1",
-                            async_response_out.hdr ?? {}, async_response_out.body);
-                        delete async_response_out;
-                    }
-
                     # Create WebSocket poll operation (submitted by startImpl after
                     # setConnection/registered, ensuring echo mode is set before any
                     # frames arrive on the I/O thread)
                     *HttpServerAsyncIo::HttpWebSocketPollOperation ws_poll_op;
                     if (asyncIo) {
                         ws_poll_op = new HttpServerAsyncIo::HttpWebSocketPollOperation(s);
+                    }
+
+                    if (async_response_out) {
+                        if (asyncIo) {
+                            # Async mode: send 101 response via the I/O controller
+                            # before entering startImpl(). This must happen BEFORE
+                            # registered() because registered() may throw (e.g., bad
+                            # handler), and the client expects the 101 response
+                            # regardless. Uses the global async I/O controller since
+                            # the socket was removed from the HTTP server's controller
+                            # at header dispatch.
+                            AbstractPollOperation send_op = s.startPollSendHttpResponse(
+                                async_response_out."code",
+                                HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                                async_response_out.hdr ?? {}, async_response_out.body);
+                            execAsyncPollOperation(s, send_op);
+                        } else {
+                            # Non-async mode: send 101 response synchronously on
+                            # handler thread (sendIntern handles EAGAIN on non-blocking
+                            # sockets via poll())
+                            s.sendHTTPResponse(async_response_out."code",
+                                HttpServer::HttpCodes{async_response_out."code"}, "1.1",
+                                async_response_out.hdr ?? {}, async_response_out.body);
+                        }
+                        delete async_response_out;
                     }
                     on_exit {
                         if (ws_poll_op) {
@@ -5056,39 +5079,39 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 auto sub() { return cb(); }, s);
         }
 
+        # Materialize non-I/O-thread-safe InputStreams into memory.
+        # Handler threads must NEVER do blocking socket I/O on multiplexed
+        # connections — the I/O thread needs the socket/session mutex to
+        # process incoming data, and blocking sends cause deadlock.
+        if (response.input_stream && !response.input_stream.isIoThreadSafe()) {
+            response.input_stream.reassignThread();
+            binary buf;
+            while (*binary chunk = response.input_stream.read(65536)) {
+                buf += chunk;
+            }
+            response.input_stream.unassignThread();
+            if (buf.size() > 0) {
+                response.input_stream = new BinaryInputStream(buf);
+            } else {
+                remove response.input_stream;
+            }
+        }
+
         if (header_info.http3) {
             int session_id = header_info.session_id;
             if (response.input_stream) {
-                # Try I/O-thread-safe streaming first
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
-                if (!rv) {
-                    io_wake();
-                    logResponse(response.cx, response);
-                    return;
-                }
-                # Fall back to handler-thread chunking
-                s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
-                io_wake();
-                response.input_stream.reassignThread();
-                on_exit response.input_stream.unassignThread();
-                while (*binary chunk = response.input_stream.read(65536)) {
-                    int retries = 0;
-                    while (s.submitQuicStreamData(session_id, stream_id, chunk) == 1) {
-                        if (++retries > 200) {
-                            throw "HTTP3-FLOW-CONTROL", sprintf("stream %d: buffer not draining "
-                                "after %d retries", stream_id, retries);
-                        }
-                        io_wake();
-                        int drain_rv = s.waitForQuicStreamDrain(session_id, stream_id, 50ms);
-                        if (drain_rv == -1) {
-                            throw "HTTP3-STREAM-ERROR", sprintf("stream %d: stream removed "
-                                "while waiting for drain", stream_id);
-                        }
+                if (rv) {
+                    # C++ gate rejected — materialize and send as body
+                    response.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = response.input_stream.read(65536)) {
+                        buf += chunk;
                     }
-                    io_wake();
+                    response.input_stream.unassignThread();
+                    s.submitQuicResponse(session_id, stream_id, response.code, hdr, buf);
                 }
-                s.submitQuicStreamData(session_id, stream_id, NOTHING, True);
                 io_wake();
             } else {
                 s.submitQuicResponse(session_id, stream_id, response.code, hdr, response.body);
@@ -5097,41 +5120,18 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
         } else {
             # HTTP/2
             if (response.input_stream) {
-                # Try I/O-thread-safe streaming first
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
-                if (!rv) {
-                    io_wake();
-                    logResponse(response.cx, response);
-                    return;
-                }
-                # Fall back to handler-thread chunking
-                s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
-                io_wake();
-                response.input_stream.reassignThread();
-                on_exit response.input_stream.unassignThread();
-                while (*binary chunk = response.input_stream.read(65536)) {
-                    while (True) {
-                        try {
-                            s.sendHttp2StreamData(stream_id, chunk);
-                            io_wake();
-                            break;
-                        } catch (hash<ExceptionInfo> ex) {
-                            if (ex.err == "HTTP2-FLOW-CONTROL") {
-                                # Buffer full — wake I/O thread to drain, then wait
-                                # deterministically for the CV signal
-                                io_wake();
-                                if (s.waitForHttp2StreamDrain(stream_id, 10s)) {
-                                    # Timed out or stream gone — give up
-                                    rethrow;
-                                }
-                                continue;
-                            }
-                            rethrow;
-                        }
+                if (rv) {
+                    # C++ gate rejected — materialize and send as body
+                    response.input_stream.reassignThread();
+                    binary buf;
+                    while (*binary chunk = response.input_stream.read(65536)) {
+                        buf += chunk;
                     }
+                    response.input_stream.unassignThread();
+                    s.submitHttp2Response(stream_id, response.code, hdr, buf);
                 }
-                s.sendHttp2StreamData(stream_id, NOTHING, True);
                 io_wake();
             } else {
                 s.submitHttp2Response(stream_id, response.code, hdr, response.body);

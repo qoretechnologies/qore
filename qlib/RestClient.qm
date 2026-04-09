@@ -53,7 +53,7 @@
 %define NoJson
 %endtry
 
-%try-module json >= 1.12
+%try-module json >= 1.11
 %define NoCbor
 %endtry
 
@@ -479,6 +479,13 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         close connection pools).
     */
     abstract close();
+
+    #! Sets the logger for this client
+    /** @param logger the logger to use; pass @ref nothing to disable logging
+
+        @since %RestClient 2.6
+    */
+    abstract setLogger(*LoggerInterface logger);
 }
 
 #! this class provides the REST client API
@@ -4377,7 +4384,14 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     /** Uses the ping options to make a request to the server
     */
     private pingImpl() {
-        RestClient client = get();
+        # Try async client first (RestClientIo), fall back to sync (RestClient).
+        # Both implement restDoRequest() via AbstractRestClient.
+        AbstractRestClient client;
+        try {
+            client = getAsync();
+        } catch () {
+            client = get();
+        }
         *string ping_path;
         if (!opts.ping_method || !exists (ping_path = getPingPath())) {
             return;
@@ -4388,18 +4402,26 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             ping_body = getPingBody();
         }
 
-        if (ping_path =~ /^http/) {
-            client.setURL(ping_path);
-            ping_path = "";
-        } else if (ping_path[0] == "/") {
-            client.clearConnectionPath();
+        # URL manipulation is RestClient-specific (setURL/clearConnectionPath
+        # don't exist on RestClientIo).  Use cast<> so it works with both.
+        if (client instanceof RestClient) {
+            RestClient rc = cast<RestClient>(client);
+            if (ping_path =~ /^http/) {
+                rc.setURL(ping_path);
+                ping_path = "";
+            } else if (ping_path[0] == "/") {
+                rc.clearConnectionPath();
+            }
         }
 
-        hash<auto> info;
-        hash<auto> h = client.doRequest(opts.ping_method, ping_path, ping_body, \info, NOTHING, opts.ping_headers);
+        # Use restDoRequest (AbstractRestClient API) — works with both
+        # RestClient and RestClientIo
+        hash<RestResponseInfo> h = client.restDoRequest(opts.ping_method, ping_path, ping_body,
+            opts.ping_headers);
         if ((h.status_code / 100) != 2) {
             authFailure();
-            throw "REST-PING-ERROR", sprintf("%y returned from %y", info."response-uri", info."request-uri");
+            throw "REST-PING-ERROR", sprintf("HTTP %d returned from ping %s %s",
+                h.status_code, opts.ping_method, ping_path);
         }
         authSuccess();
     }

@@ -1233,6 +1233,88 @@ AbstractPollOperation Socket::startPollSendHttpResponseWithStream(int status_cod
     return rv.release();
 }
 
+//! Starts a poll operation to send an HTTP chunked response with InputStream body (no keep-alive)
+/** Sends HTTP response headers with Transfer-Encoding: chunked + streams InputStream body
+    as chunked data, then completes. The handler thread returns immediately; all I/O happens
+    on the I/O thread.
+
+    @param status_code the HTTP status code (e.g. 200, 400); must be between 100 and 599
+    @param status_desc the HTTP status description (e.g. "OK", "Bad Request")
+    @param http_version the HTTP version string (e.g. "1.1")
+    @param headers optional HTTP headers to include in the response
+    @param body the InputStream to read the response body from
+
+    @return an @ref AbstractPollOperation object; when goal is reached, getState() returns "stream-complete"
+
+    @throw SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR invalid status code or non-I/O-safe InputStream
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollSendHttpChunkedResponseWithStream(int status_code,
+        string status_desc, string http_version, *hash<auto> headers,
+        InputStream[InputStream] body) {
+    if (status_code < 100 || status_code >= 600) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
+            "expecting valid HTTP status code between 100 and 599, got value %d instead", status_code);
+        return QoreValue();
+    }
+
+    if (!body->isIoThreadSafe()) {
+        xsink->raiseException("SOCKET-STARTPOLLSENDHTTPCHUNKEDRESPONSEWITHSTREAM-ERROR",
+            "InputStream is not I/O thread safe; use handler-thread streaming instead");
+        return QoreValue();
+    }
+
+    // Ensure Transfer-Encoding: chunked is set
+    ReferenceHolder<QoreHashNode> hdr_copy(headers
+        ? headers->copy() : new QoreHashNode(autoTypeInfo), xsink);
+    hdr_copy->setKeyValue("Transfer-Encoding", new QoreStringNode("chunked"), xsink);
+    hdr_copy->removeKey("Content-Length", xsink);
+
+    QoreString hdr_str(s->getEncoding());
+    hdr_str.sprintf("HTTP/%s %03d %s", http_version->c_str(), status_code, status_desc->c_str());
+    hdr_str.concat("\r\n");
+    qore_socket_private::do_headers(hdr_str, *hdr_copy, 0);
+
+    SimpleRefHolder<BinaryNode> result(new BinaryNode);
+    result->append(hdr_str.c_str(), hdr_str.size());
+
+    InputStream* body_ptr = body.release();
+    QoreObject* body_obj = const_cast<QoreObject*>(obj_body);
+    body_obj->ref();
+    s->ref();
+
+    body_ptr->reassignThread(xsink);
+    if (*xsink) {
+        body_obj->deref(xsink);
+        return QoreValue();
+    }
+
+    // Non-fused chunked send: content_length=-1, deadline=0, fused=false, chunked=true
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketSendStreamAndReadHeaderPollOperation(xsink, result.release(), s,
+            body_ptr, body_obj, -1, 0, false, true),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    body_ptr->unassignThread(xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("send-chunked-stream"), xsink);
+    }
+    return rv.release();
+}
+
 //! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
 /** @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to accept a new connection
     connection; the @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
@@ -1325,6 +1407,44 @@ AbstractPollOperation Socket::startPollRecvData() {
     if (!*xsink) {
         rv->setValue("sock", self->objectRefSelf(), xsink);
         rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+//! Returns an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read an HTTP request body
+/** Reads the HTTP request body in non-blocking mode using the appropriate strategy based on the
+    transfer parameters:
+    - Fixed-length body: reads exactly \c content_length bytes
+    - Chunked encoding: reads chunk-size + data pairs until the terminal chunk
+    - Connection close: reads until EOF
+
+    @param content_length Content-Length value; -1 if not present (use chunked or connection close)
+    @param chunked true if Transfer-Encoding is "chunked"
+    @param connection_close true if Connection is "close" (read until EOF when no Content-Length/chunked)
+
+    @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object; when goal is reached,
+    \c getOutput() returns the accumulated body as a binary value
+
+    @throw SOCKET-STARTPOLLREADHTTPBODY-ERROR invalid parameter combination
+
+    @since %Qore 2.3
+*/
+AbstractPollOperation Socket::startPollReadHttpBody(int content_length, bool chunked, bool connection_close) {
+    // Use status_code=200 and is_head=false since this reads request bodies (not responses)
+    s->ref();
+    ReferenceHolder<SocketPollOperationBase> poller(
+        new SocketReadHttpBodyPollOperation(xsink, s, 200, (int64_t)content_length, chunked, connection_close, false),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreObject> rv(new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), *poller), xsink);
+    poller->setSelf(*rv);
+    poller.release();
+
+    if (!*xsink) {
+        rv->setValue("sock", self->objectRefSelf(), xsink);
+        rv->setValue("goal", new QoreStringNode("read-http-body"), xsink);
     }
     return rv.release();
 }

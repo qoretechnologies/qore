@@ -1695,13 +1695,17 @@ public class HttpClientConnectionManager {
                 || err == "HTTP3-ABORT" || err == "QUIC-HTTP3-ERROR"
                 || err == "QUIC-SEND-ERROR" || err == "QUIC-READ-ERROR"
                 || err == "QUIC-RECV-ERROR";
-            # HTTPCLIENT-CONNECT-ERROR is raised when the connection closes with an error
-            # while waiting for readiness (waitForReady()).  When H3 is currently cached
-            # (from a prior Alt-Svc response), this means the QUIC connection failed —
-            # fall back to H2.  Use a read lock to check the cache first to avoid the
-            # write-lock overhead on the common (H2, non-H3) path.
+            # HTTPCLIENT-CONNECT-ERROR is raised when the connection closes with an
+            # error while waiting for readiness (waitForReady()).
+            # HTTPCLIENT-TIMEOUT is raised when the QUIC handshake starts but
+            # never completes (waitForReady() expires).
+            # When H3 is currently cached (from a prior Alt-Svc response), either
+            # error means the QUIC connection failed — fall back to H2.
+            # Use a read lock to check the cache first to avoid the write-lock
+            # overhead on the common (H2, non-H3) path.
             bool is_h3_conn_err = False;
-            if (!is_h3_err && err == "HTTPCLIENT-CONNECT-ERROR") {
+            if (!is_h3_err
+                    && (err == "HTTPCLIENT-CONNECT-ERROR" || err == "HTTPCLIENT-TIMEOUT")) {
                 AutoReadLock al(pool_lock);
                 is_h3_conn_err = protocol_cache{key} == "h3";
             }

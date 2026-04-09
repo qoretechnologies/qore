@@ -72,6 +72,32 @@ public class OpenApi3GeneratorTest inherits QUnit::Test {
 @return (hash<StatusResponse>): status response
 ";
 
+        #! Sample schema block with examples, notes, and AI summary
+        const ExtendedSchemaBlock = "
+@summary List services
+@desc Returns all registered services with runtime status
+
+@examples
+- GET /api/v9/services — list all services
+- GET /api/v9/services?status=loaded — only loaded services
+- GET /api/v9/services?limit=10 — paginated results
+
+@note Unloaded services are included by default. Use status=loaded to \\
+filter to only loaded services.
+@note This endpoint respects RBAC group filtering for sandboxed users.
+
+@x-ai-summary List Qorus services with runtime state (loaded/running/unloaded), \\
+thread count, type, and enabled flag
+
+@params
+- status (*string): filter by service status
+- limit (*int): maximum number of results
+
+@return (list<hash<ServiceInfo>>): list of service information hashes
+@error (403): access or authorization error
+@perms READ_SERVICES
+";
+
         #! Sample source content with field descriptions for auto-registration testing
         const AutoRegSourceContent = '
 /** @REST GET /apps
@@ -189,6 +215,8 @@ hash<HttpHandlerResponseInfo> del(hash<auto> cx, *hash<auto> ah) {
         addTestCase("Test extractSchemaName", \testExtractSchemaName());
         addTestCase("Test path param deduplication", \testPathParamDeduplication());
         addTestCase("Test backslash description continuation", \testBackslashContinuation());
+        addTestCase("Test @examples, @note, @x-ai-summary parsing", \testExamplesNotesAiSummary());
+        addTestCase("Test extended tags in generator output", \testExtendedTagsInGenerator());
 
         set_return_value(main());
     }
@@ -1180,5 +1208,86 @@ hash<HttpHandlerResponseInfo> get(hash<auto> cx) {}';
             "Field description should be joined via backslash continuation");
         assertEq("status code", result.return_info.fields[1].description,
             "Next field should be unaffected");
+    }
+
+    testExamplesNotesAiSummary() {
+        hash<OpenApi3::SchemaBlockInfo> result =
+            OpenApi3::OpenApi3SchemaTokenizer::parseSchemaBlock(ExtendedSchemaBlock);
+
+        # Check basic fields still work
+        assertEq("List services", result.summary);
+        assertEq("Returns all registered services with runtime status", result.desc);
+
+        # Check examples
+        assertEq(3, result.examples.size(), "Should parse 3 examples");
+        assertEq("GET /api/v9/services \u2014 list all services", result.examples[0]);
+        assertEq("GET /api/v9/services?status=loaded \u2014 only loaded services", result.examples[1]);
+        assertEq("GET /api/v9/services?limit=10 \u2014 paginated results", result.examples[2]);
+
+        # Check notes with backslash continuation
+        assertEq(2, result.notes.size(), "Should parse 2 notes");
+        assertEq("Unloaded services are included by default. Use status=loaded to "
+            "filter to only loaded services.", result.notes[0],
+            "First note should be joined via backslash continuation");
+        assertEq("This endpoint respects RBAC group filtering for sandboxed users.",
+            result.notes[1]);
+
+        # Check AI summary with backslash continuation
+        assertEq("List Qorus services with runtime state (loaded/running/unloaded), "
+            "thread count, type, and enabled flag", result.ai_summary,
+            "AI summary should be joined via backslash continuation");
+
+        # Check other fields still parse correctly alongside new tags
+        assertEq(2, result.params.size());
+        assertEq("status", result.params[0].name);
+        assertEq("limit", result.params[1].name);
+        assertEq("list<hash<ServiceInfo>>", result.return_info.type_str);
+        assertEq("403", (keys result.errors)[0]);
+        assertEq(1, result.perms.size());
+        assertEq("READ_SERVICES", result.perms[0]);
+    }
+
+    testExtendedTagsInGenerator() {
+%ifdef NoJson
+        testSkip("no json module available");
+%endif
+%ifdef NoYaml
+        testSkip("no yaml module available");
+%endif
+        OpenApi3::OpenApi3SchemaGenerator gen({
+            "title": "Test API",
+            "version": "1.0.0",
+        });
+
+        hash<OpenApi3::SchemaBlockInfo> schema_info = makeSchemaInfo({
+            "summary": "List services",
+            "desc": "Returns all services",
+            "examples": ("GET /services", "GET /services?status=loaded"),
+            "notes": ("This is a note about behavior",),
+            "ai_summary": "List Qorus services with status and thread info",
+            "perms": ("READ_SERVICES",),
+        });
+
+        gen.addMethod("/services", makeMethodInfo("GET", "/services", schema_info));
+        string yaml_output = gen.toYaml();
+
+        # Verify x-examples appears in output
+        assertRegex("x-examples", yaml_output, "YAML should contain x-examples extension");
+        assertRegex("GET /services\\?status=loaded", yaml_output,
+            "YAML should contain example text");
+
+        # Verify x-ai-summary appears in output
+        assertRegex("x-ai-summary", yaml_output, "YAML should contain x-ai-summary extension");
+        assertRegex("List Qorus services with status and thread info", yaml_output,
+            "YAML should contain AI summary text");
+
+        # Verify notes are appended to description
+        assertRegex("This is a note about behavior", yaml_output,
+            "YAML description should contain note text");
+        assertRegex("\\*\\*Note:\\*\\*", yaml_output,
+            "Notes should be formatted with bold prefix");
+
+        # Verify x-permissions still works
+        assertRegex("x-permissions", yaml_output, "YAML should contain x-permissions");
     }
 }

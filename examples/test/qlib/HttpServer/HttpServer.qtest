@@ -3262,8 +3262,13 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             }
             date elapsed = now_us() - start;
             assertTrue(recovered, "scenario4: retry on fresh connection must succeed");
-            assertTrue(elapsed < 10s,
-                sprintf("scenario4: took %y, expected < 10s", elapsed));
+            # Stale detect fires at 500ms + retry on fresh connection; on slow
+            # CI runners the I/O thread may be delayed by CPU starvation, so
+            # allow generous headroom (the assertion guards against the full
+            # request_timeout of 15s being consumed, which would indicate the
+            # stale detect never fired)
+            assertTrue(elapsed < 12s,
+                sprintf("scenario4: took %y, expected < 12s", elapsed));
         }
     }
 
