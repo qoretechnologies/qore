@@ -1004,6 +1004,24 @@ void QoreIRFunction::computeIROnlyLocals() {
                 }
             }
 
+            // LValuePath operations: locals in path steps are accessed through the
+            // runtime variable stack (via navigatePath), not through LoadLocal/StoreLocal.
+            // They must NOT be classified as IR-only.
+            if (inst->opcode == QoreIROpcode::LValuePathAssign
+                    || inst->opcode == QoreIROpcode::LValuePathCompound
+                    || inst->opcode == QoreIROpcode::LValuePathUnary
+                    || inst->opcode == QoreIROpcode::LValuePathBinaryMut
+                    || inst->opcode == QoreIROpcode::LValuePathTernary) {
+                auto* pi = static_cast<const QoreIRLValuePathInstruction*>(inst.get());
+                for (const auto& step : pi->path) {
+                    if ((step.kind == LVPathStepKind::LocalVar
+                            || step.kind == LVPathStepKind::ClosureVar)
+                            && step.ref_ptr) {
+                        ast_referenced_locals.insert(step.ref_ptr);
+                    }
+                }
+            }
+
             // Lvalue operations: walk the lvalue AST expression for local references
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
