@@ -38,7 +38,7 @@ public class PdfCoConvertImagesToPdfRequestDataType inherits HashDataType {
                 "preselected": True,
             },
             "url": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("UrlList", SoftStringType, True),
                 "display_name": "Source URLs",
                 "short_desc": "URLs of the source image files",
                 "desc": "Source URLs of image files (JPEG, PNG, or TIFF)",

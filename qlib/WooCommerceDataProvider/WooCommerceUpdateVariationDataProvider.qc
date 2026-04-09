@@ -75,7 +75,7 @@ public class WooCommerceUpdateVariationRequestDataType inherits HashDataType {
             },
             "attributes": {
                 "display_name": "Attributes",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Attributes", AutoHashType, True),
                 "desc": "List of variation attributes",
             },
             "weight": {

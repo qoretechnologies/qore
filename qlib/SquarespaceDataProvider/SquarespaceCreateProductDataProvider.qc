@@ -69,7 +69,7 @@ public class SquarespaceCreateProductRequestDataType inherits HashDataType {
                 "desc": "The URL slug for the product (alphanumeric + hyphens, must be unique)",
             },
             "tags": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", SoftStringType, True),
                 "display_name": "Tags",
                 "short_desc": "List of tags for the product",
                 "desc": "List of tags for the product (max 100 tags, each max 100 characters)",
@@ -81,7 +81,7 @@ public class SquarespaceCreateProductRequestDataType inherits HashDataType {
                 "desc": "Whether the product is visible on the store; defaults to hidden if omitted",
             },
             "variantAttributes": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("VariantAttributes", SoftStringType, True),
                 "display_name": "Variant Attributes",
                 "short_desc": "List of variant attribute names",
                 "desc": "List of variant attribute names (e.g., Size, Color); "

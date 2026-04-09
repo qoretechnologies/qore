@@ -226,7 +226,7 @@ public class ChargebeeSubscriptionDataType inherits HashDataType {
                 "desc": "A set of key-value pairs stored as additional information for the subscription",
             },
             "subscription_items": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("SubscriptionItems", AutoHashType, True),
                 "display_name": "Subscription Items",
                 "short_desc": "Items in the subscription",
                 "desc": "The list of subscription items (plan and addon details)",

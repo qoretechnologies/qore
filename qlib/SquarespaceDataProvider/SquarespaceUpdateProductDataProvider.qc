@@ -58,7 +58,7 @@ public class SquarespaceUpdateProductRequestDataType inherits HashDataType {
                 "desc": "The URL slug for the product",
             },
             "tags": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", SoftStringType, True),
                 "display_name": "Tags",
                 "short_desc": "List of tags for the product",
                 "desc": "List of tags for the product",
@@ -76,7 +76,7 @@ public class SquarespaceUpdateProductRequestDataType inherits HashDataType {
                 "desc": "SEO configuration (`title`, `description`)",
             },
             "variantAttributes": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("VariantAttributes", SoftStringType, True),
                 "display_name": "Variant Attributes",
                 "short_desc": "List of variant attribute names",
                 "desc": "List of variant attribute names (e.g., Size, Color)",

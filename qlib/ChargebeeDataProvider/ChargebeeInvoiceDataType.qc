@@ -275,19 +275,19 @@ public class ChargebeeInvoiceDataType inherits HashDataType {
                 "desc": "The shipping address on the invoice",
             },
             "line_items": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LineItems", AutoHashType, True),
                 "display_name": "Line Items",
                 "short_desc": "Invoice line items",
                 "desc": "The list of line items on the invoice",
             },
             "linked_payments": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("LinkedPayments", AutoHashType, True),
                 "display_name": "Linked Payments",
                 "short_desc": "Payments linked to this invoice",
                 "desc": "The list of payments linked to this invoice",
             },
             "notes": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Notes", SoftStringType, True),
                 "display_name": "Notes",
                 "short_desc": "Invoice notes",
                 "desc": "Notes associated with the invoice",

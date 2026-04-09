@@ -132,7 +132,7 @@ public class LinearProjectCreateDataType inherits HashDataType {
                 "example_value": "Launch new product features for Q1 release",
             },
             "teamIds": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("TeamIdList", SoftStringType, True),
                 "display_name": "Team IDs",
                 "short_desc": "The team IDs",
                 "desc": "Array of team IDs to associate with the project",

@@ -59,7 +59,7 @@ public class MailgunRouteDataType inherits HashDataType {
                 "example_value": "match_recipient('support@example.com')",
             },
             "actions": {
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("RouteActions", SoftStringType, True),
                 "display_name": "Actions",
                 "short_desc": "Route actions",
                 "desc": "The actions to execute when the expression matches",

@@ -80,17 +80,17 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
             },
             "categories": {
                 "display_name": "Categories",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Categories", AutoHashType, True),
                 "desc": "List of category objects",
             },
             "tags": {
                 "display_name": "Tags",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Tags", AutoHashType, True),
                 "desc": "List of tag objects",
             },
             "images": {
                 "display_name": "Images",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("Images", AutoHashType, True),
                 "desc": "List of image objects",
             },
             "manage_stock": {
@@ -130,7 +130,7 @@ public class WooCommerceUpdateProductRequestDataType inherits HashDataType {
             },
             "meta_data": {
                 "display_name": "Meta Data",
-                "type": SoftListOrNothingType,
+                "type": new ListDataType("MetaData", AutoHashType, True),
                 "desc": "List of metadata key-value pairs",
             },
         };
