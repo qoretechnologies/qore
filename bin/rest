@@ -607,7 +607,12 @@ class RestCmd {
             AbstractConnection conn = get_connection(ping);
             conn.setLogger(getLogger());
             hash<auto> info = conn.ping();
-            printf("ping result: %y\n", info.info);
+            if (!info.ok && !opt.fullex && !opt.verbose && info.info.length() > 200) {
+                printf("ping result: %y... (%d bytes truncated; use -E or -v for full output)\n",
+                    info.info[0..199], info.info.length() - 200);
+            } else {
+                printf("ping result: %y\n", info.info);
+            }
             if (info.ex && (opt.fullex || opt.verbose)) {
                 printf("%s\n", get_exception_string(info.ex));
             }

@@ -552,6 +552,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.token) {
                 string tt = opts.token_type ?? "Bearer";
                 setToken(tt, opts.token, NOTHING, opts.oauth2_token_expiry);
+                # Clear token_timestamp — the token was loaded from connection options,
+                # not freshly acquired via OAuth2; the MinimumTokenRefresh guard in
+                # canRetryAuth() must not prevent a refresh when the server rejects
+                # this pre-existing token with 401
+                {
+                    AutoWriteLock al(config_lock);
+                    token_timestamp = 1970-01-01Z;
+                }
             }
 
             error_passthru = opts.error_passthru.toBool();
@@ -855,6 +863,10 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
+                # Strip stale authorization from hdr — prepareRequest() merges as
+                # hdr = {} + headers + hdr, so the old value would override the
+                # freshly-refreshed token in headers
+                hdr -= "authorization";
                 # Re-snapshot headers with new token
                 prepared = prepareRequest(method, \path, body, \hdr);
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
@@ -1149,6 +1161,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
+                # Strip stale authorization from hdr (see restDoRequest comment)
+                hdr -= "authorization";
                 # Re-snapshot headers with new token
                 prepared = prepareRequest(method, \path, body, \hdr);
                 sig = signer({"path": path, "body": prepared.serialized_body,
