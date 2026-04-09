@@ -4377,7 +4377,7 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     /** Uses the ping options to make a request to the server
     */
     private pingImpl() {
-        RestClient client = get();
+        AbstractRestClient client = get();
         *string ping_path;
         if (!opts.ping_method || !exists (ping_path = getPingPath())) {
             return;
@@ -4388,18 +4388,26 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             ping_body = getPingBody();
         }
 
-        if (ping_path =~ /^http/) {
-            client.setURL(ping_path);
-            ping_path = "";
-        } else if (ping_path[0] == "/") {
-            client.clearConnectionPath();
+        # URL manipulation is RestClient-specific (setURL/clearConnectionPath
+        # don't exist on RestClientIo).  Use cast<> so it works with both.
+        if (client instanceof RestClient) {
+            RestClient rc = cast<RestClient>(client);
+            if (ping_path =~ /^http/) {
+                rc.setURL(ping_path);
+                ping_path = "";
+            } else if (ping_path[0] == "/") {
+                rc.clearConnectionPath();
+            }
         }
 
-        hash<auto> info;
-        hash<auto> h = client.doRequest(opts.ping_method, ping_path, ping_body, \info, NOTHING, opts.ping_headers);
+        # Use restDoRequest (AbstractRestClient API) so both RestClient and
+        # RestClientIo work — doRequest() only exists on RestClient
+        hash<RestResponseInfo> h = client.restDoRequest(opts.ping_method, ping_path, ping_body,
+            opts.ping_headers);
         if ((h.status_code / 100) != 2) {
             authFailure();
-            throw "REST-PING-ERROR", sprintf("%y returned from %y", info."response-uri", info."request-uri");
+            throw "REST-PING-ERROR", sprintf("HTTP %d returned from ping %s %s",
+                h.status_code, opts.ping_method, ping_path);
         }
         authSuccess();
     }
