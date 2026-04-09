@@ -1440,7 +1440,12 @@ public class HttpAsyncSocketIoController {
                         buf += chunk;
                     }
                     result.input_stream.unassignThread();
-                    result.input_stream = new BinaryInputStream(buf);
+                    if (buf.size() > 0) {
+                        result.input_stream = new BinaryInputStream(buf);
+                    } else {
+                        remove result.input_stream;
+                        result.body = NOTHING;
+                    }
                 }
 
                 if (result.input_stream) {
@@ -2304,7 +2309,11 @@ public class HttpAsyncSocketIoController {
                 buf += chunk;
             }
             is.unassignThread();
-            result.input_stream = new BinaryInputStream(buf);
+            if (buf.size() > 0) {
+                result.input_stream = new BinaryInputStream(buf);
+            } else {
+                remove result.input_stream;
+            }
         }
 
         # Opt #3a: InputStream + keep-alive → fused stream send + idle + read header
@@ -2457,13 +2466,49 @@ public class HttpAsyncSocketIoController {
             try {
                 string status_msg = result.status_message ?? "Unknown";
                 if (result.send_callback) {
-                    # send_callback is a streaming producer that runs on the
-                    # handler thread.  For H1, the handler owns the socket
-                    # exclusively — sendHTTPResponseWithCallback streams
-                    # correctly via chunked transfer encoding.
-                    sock.sendHTTPResponseWithCallback(result.send_callback, result.code,
-                        status_msg, "1.1", result.hdr ?? {}, result.send_timeout ?? -1);
-                } else {
+                    # Drain the send_callback on the handler thread (the
+                    # callback is user code that must run here), then send
+                    # the materialized body via async I/O.
+                    # sendHTTPResponseWithCallback is a blocking call that
+                    # hangs on non-blocking sockets after the EAGAIN fix.
+                    binary buf;
+                    while (True) {
+                        auto chunk = result.send_callback();
+                        if (!exists chunk) {
+                            break;
+                        }
+                        buf += binary(chunk);
+                    }
+                    result.body = buf.size() > 0 ? buf : NOTHING;
+                    remove result.send_callback;
+                    remove result.hdr."Transfer-Encoding";
+
+                    # For keep-alive, use fused send+read (same as Opt #3)
+                    if (result.return_to_idle && !result.close) {
+                        timeout ttl = result.ttl ?? DefaultIdleTimeout;
+                        AbstractPollOperation fused_op =
+                            sock.startPollSendHttpResponseAndReadHeader(
+                                result.code, status_msg, "1.1", result.hdr ?? {},
+                                result.body, ttl);
+                        hash<HttpActiveConnectionInfo> new_cinfo = <HttpActiveConnectionInfo>{
+                            "sock": sock,
+                            "listener": linfo.listener,
+                            "cx": cx,
+                            "target": target,
+                            "state": HttpConnectionState::SendAndReadHeader,
+                            "stream_op": fused_op,
+                            "ttl": ttl,
+                        };
+                        hash<HttpActiveConnectionInfo> cinfo;
+                        {
+                            AutoWriteLock al(m);
+                            cinfo = connections{uh} = new_cinfo;
+                        }
+                        submitConnectionOp(uh, cinfo);
+                        return;
+                    }
+                }
+                {
                     # Use async poll operation for all other H1 responses
                     AbstractPollOperation send_op = sock.startPollSendHttpResponse(
                         result.code, status_msg, "1.1", result.hdr ?? {},
@@ -3122,7 +3167,12 @@ public class HttpAsyncSocketIoController {
                         buf += chunk;
                     }
                     result.input_stream.unassignThread();
-                    result.input_stream = new BinaryInputStream(buf);
+                    if (buf.size() > 0) {
+                        result.input_stream = new BinaryInputStream(buf);
+                    } else {
+                        remove result.input_stream;
+                        result.body = NOTHING;
+                    }
                 }
 
                 # Submit InputStream to I/O thread for non-blocking streaming

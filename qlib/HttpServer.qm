@@ -5077,7 +5077,11 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 buf += chunk;
             }
             response.input_stream.unassignThread();
-            response.input_stream = new BinaryInputStream(buf);
+            if (buf.size() > 0) {
+                response.input_stream = new BinaryInputStream(buf);
+            } else {
+                remove response.input_stream;
+            }
         }
 
         if (header_info.http3) {
