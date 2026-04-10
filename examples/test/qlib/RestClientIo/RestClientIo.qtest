@@ -326,6 +326,11 @@ class RestClientIoTest inherits QUnit::Test {
         HttpServer server;
         int port;
         int h1_port;
+        #! HTTPS listener that requires a client certificate (SSL_VERIFY_PEER
+        #! with SSL_VERIFY_FAIL_IF_NO_PEER_CERT) — used by the Phase 2 mTLS
+        #! integration tests to prove the server actually sees and enforces
+        #! the client cert
+        int mtls_port;
         #! HTTP/1.1-only server (no HTTP/2 support)
         HttpServer h1only_server;
         int h1only_port;
@@ -537,6 +542,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             \testMtlsCertConflict());
         addTestCase("mTLS ssl_key_path + ssl_key_data mutually exclusive",
             \testMtlsKeyConflict());
+        addTestCase("mTLS server enforces client cert (H2 success)", \testMtlsServerEnforceH2Success());
+        addTestCase("mTLS server enforces client cert (H1 success)", \testMtlsServerEnforceH1Success());
+        addTestCase("mTLS server rejects missing client cert (H1)",
+            \testMtlsServerRejectsNoCertH1());
 
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
@@ -570,6 +579,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Plain HTTP listener for HTTP/1.1 tests
         h1_port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
+        }).port;
+        # HTTPS listener that requires client certificates.  get_remote_certs +
+        # SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT: the listener
+        # requests a client cert during handshake and fails the connection if
+        # none is presented.  ssl_accept_all_certs defaults to True so any
+        # well-formed X.509 is accepted (no CA chain validation) — this test
+        # only proves the server side sees and enforces the client cert.
+        mtls_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "get_remote_certs": True,
+            "ssl_verify_flags": SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
         }).port;
         server.waitForAsyncIo();
 
@@ -3140,6 +3162,64 @@ Do+Sl1gfqlpgpszQaOMjR4M=
                     "ssl_key_data": KeyPem,
                 });
             });
+    }
+
+    testMtlsServerEnforceH2Success() {
+%ifndef NoJson
+        # Server requires SSL_VERIFY_PEER + FAIL_IF_NO_PEER_CERT. Present the
+        # client cert via ssl_cert_data/ssl_key_data. The server accepts the
+        # cert (ssl_accept_all_certs=True) and the request succeeds over H2.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsServerEnforceH1Success() {
+%ifndef NoJson
+        # Same flow over H1 — exercises Http1ClientPollOperationImpl's
+        # createAndConfigureSocket cert/key wiring end-to-end against a
+        # cert-requiring server.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsServerRejectsNoCertH1() {
+%ifndef NoJson
+        # Connect to the cert-requiring listener WITHOUT a client cert. The
+        # TLS handshake must fail because the server is configured with
+        # SSL_VERIFY_FAIL_IF_NO_PEER_CERT; openssl reports a TLS fatal
+        # alert.  The HTTP client layer wraps the underlying TLS failure
+        # inside HTTPCLIENT-REQUEST-ERROR, and the message carries the
+        # original "certificate required" openssl string.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+        });
+        on_exit rest.close();
+        assertThrows("HTTPCLIENT-REQUEST-ERROR", "certificate required",
+            sub () { rest.restGet("/api/test"); });
+%endif
     }
 
     # --- Phase 3: custom_token_* tests ---
