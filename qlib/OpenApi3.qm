@@ -70,7 +70,7 @@ module OpenApi3 {
     - @ref OpenApi3::OpenApi3Schema "OpenApi3Schema": the %OpenApi3 schema object for client/server REST API
       validation and example code and message generation
 
-    This class is most often used in the <a href="../../RestClient/html/index.html">RestClient</a> and
+    This class is most often used in the <a href="../../RestClientIo/html/index.html">RestClientIo</a> and
     <a href="../../RestHandler/html/index.html">RestHandler</a> modules to register a
     <a href="https://swagger.io/">OpenApi 3</a> schema for automatic REST API validation.
 
@@ -80,16 +80,16 @@ module OpenApi3 {
 
     @subsection openapi3_client OpenApi3 Client-Side Usage
 
-    Use the \a openapi3 or \a validator options in the \c RestClient::constructor() call to use
-    <a href="https://swagger.io/">OpenApi 3</a> REST schema validation on the client side with the \c RestClient
-    class.
+    Use the \a openapi3 or \a validator options in the \c RestClientIo::constructor() call to use
+    <a href="https://swagger.io/">OpenApi 3</a> REST schema validation on the client side with the
+    \c RestClientIo class.
 
     To override the target URL specified in the <a href="https://swagger.io/">OpenApi3</a> schema, use the \c "url"
-    option in the \c RestClient::constructor() call.
+    option in the \c RestClientIo::constructor() call.
 
     To override the URI base path specified in the <a href="https://swagger.io/">OpenApi3</a> schema,
     get the <a href="https://swagger.io/">OpenApi3</a> schema object by calling
-    \c RestClient::getValidator(), and then call
+    \c RestClientIo::getValidator(), and then call
     @ref RestSchemaValidator::AbstractRestSchemaValidator::setBasePath() "AbstractRestSchemaValidator::setBasePath()"
     on the validator object.
 
@@ -97,32 +97,32 @@ module OpenApi3 {
     @code{.py}
 %modern
 
-# the RestClient module imports and reexports the OpenApi3 module automatically
-%requires RestClient
+# the RestClientIo module imports and reexports the OpenApi3 module automatically
+%requires RestClientIo
 
-# create the RestClient options with an OpenApi3 schema
+# create the RestClientIo options with an OpenApi3 schema
 hash<auto> opts = {
     "openapi3": ENV.SCHEMA_DIR + DirSep + "MySchema.yaml",
 };
 
 # there is no need to add the "url" option if the target URL provided by the schema is valid
 # (otherwise you can override the target URL provided by the OpenApi3 schema by using the
-# "url" option in the RestClient constructor options)
-RestClient rc(opts);
+# "url" option in the RestClientIo constructor options)
+RestClientIo rc(opts);
 
-# afterwards all REST calls made with the RestClient objects with automatic OpenApi3 2.0
+# afterwards all REST calls made with the RestClientIo object apply automatic OpenApi3
 # schema validation; do not include the OpenApi3 schema's basePath in the URI path in the
 # requests
-hash<auto> h = rc.get("get", "/some_api");
+hash<RestResponseInfo> h = rc.restGet("/some_api");
     @endcode
 
     @par Override Base Path Client Example
     @code{.py}
-# create the RestClient options with an OpenApi3 schema
+# create the RestClientIo options with an OpenApi3 schema
 hash<auto> opts = (
     "openapi3": ENV.SCHEMA_DIR + DirSep + "MySchema.yaml",
 );
-RestClient rc(opts);
+RestClientIo rc(opts);
 # get the OpenApi3Schema validator object
 AbstractRestSchemaValidator schema = rc.getValidator();
 # override the base path in requests

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SwaggerRequestDataProvider module definition
 
-/** SwaggerRequestDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** SwaggerRequestDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,7 +61,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     }
 
     #! Creates the object from the arguments
-    constructor(SwaggerSchema schema, *RestClient rest, string uri_path, PathItemObject pio, OperationObject op)
+    constructor(SwaggerSchema schema, *AbstractRestClient rest, string uri_path, PathItemObject pio, OperationObject op)
             : SwaggerDataProviderBase(rest) {
         self.schema = schema;
         self.uri_path = uri_path;
@@ -90,7 +90,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     *string getDesc() {
         return sprintf("Swagger/OpenAPI data provider for URL `%s`, URI path `%s`, and HTTP method `%s`.\n\n"
             "## Summary\n\n%s\n\n## Description\n\n%s",
-            rest.getURL(), uri_path, op.method.upr(), op.summary, op.desc);
+            rest.getUrl(), uri_path, op.method.upr(), op.summary, op.desc);
     }
 
     #! Returns data provider info
@@ -321,7 +321,7 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
 
     #! Makes a REST request and returns the response
     private *hash<auto> doRequestIntern(auto req, *hash<auto> options) {
-        RestClient rest = getRestClient();
+        AbstractRestClient rest = getRestClient();
         # make URI path with any query args
         string uri_path = getUriPath();
         map uri_path = replace(uri_path, "{" + $1.key + "}", $1.value.toString()), options.path_vars.pairIterator();
@@ -345,8 +345,11 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
         auto req_body = req.body ?? req.formData;
         op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
 
-        # make the call
-        hash<auto> info;
+        # make the call — restDoRawRequest skips the client-side validator's
+        # processRequest() step because the data provider has already validated
+        # and serialized the body via op.validateRequest() / op.getRequestBody()
+        # above; the response is still validated via buildResponse's parseResponse
+        hash<RestClient::RestResponseInfo> info;
         try {
             *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
 
@@ -363,18 +366,18 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
                 }
                 uri_path = base_path + uri_path;
             }
-            hash<auto> resp = rest.doValidatedRequest(op.method, uri_path, body, \info, NOTHING, hdr);
+            info = rest.restDoRawRequest(op.method, uri_path, body, hdr);
             *hash<auto> rv;
-            if (resp.body.val()) {
-                rv.body = resp.body;
+            if (info.body.val()) {
+                rv.body = info.body;
             }
             if (options.include_response_headers) {
                 rv += {
-                    "headers": info."response-headers",
-                    "headers-raw": info."response-headers-raw",
+                    "headers": info.headers,
+                    "headers-raw": info.headers,
                 };
             } else if (response_headers) {
-                rv.headers = map {$1: info."response-headers"{$1.lwr()}}, response_headers;
+                rv.headers = map {$1: info.headers{$1.lwr()}}, response_headers;
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
@@ -415,9 +418,9 @@ public class SwaggerRequestDataProvider inherits SwaggerDataProviderBase {
     }
 
     #! Returns a REST client for HTTP operations
-    private RestClient getRestClient() {
+    private AbstractRestClient getRestClient() {
         if (!rest) {
-            rest = new RestClient({
+            rest = new RestClientIo({
                 "url": schema.getTargetUrl(),
                 "validator": schema,
             });

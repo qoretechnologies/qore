@@ -1024,7 +1024,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             is not valid for the new URL, the copy will refresh on the first
             request via the normal 401 retry path.
         */
-        RestClientIo copyWithUrl(string new_url) {
+        RestClient::AbstractRestClient copyWithUrl(string new_url) {
             hash<auto> opts = saved_opts + {
                 "url": new_url,
                 "skip_login": True,

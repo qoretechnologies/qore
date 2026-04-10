@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SwaggerDataProvider module definition
 
-/** SwaggerDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** SwaggerDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -70,10 +70,14 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client object to use",
-                "type": AbstractDataProviderType::get(new Type("RestClient"), NOTHING, {
+                "type": AbstractDataProviderType::get(new Type("AbstractRestClient"), NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "The REST client object to use",
+                "desc": "The REST client object to use for API calls; accepts either a "
+                    "`RestClient` (HTTP/1.1 sync) or a `RestClientIo` (multiplexed HTTP/2 + HTTP/3) — "
+                    "both implement `AbstractRestClient`. If a `url` option is also provided, a sibling "
+                    "client is built via `AbstractRestClient::copyWithUrl()` so the supplied object is "
+                    "not mutated",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
@@ -81,8 +85,8 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                 "type": AbstractDataProviderType::get(AutoHashType, NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "Options to the RestClient constructor; only used if a RestClient object is created for a "
-                    "call",
+                "desc": "Options to the `RestClientIo` constructor; only used if a `RestClientIo` object "
+                    "is created for a call",
             },
             "schema": <DataProviderOptionInfo>{
                 "display_name": "Schema",
@@ -113,8 +117,10 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                 "type": AbstractDataProviderType::get(StringType, NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "The URL to the REST server; overrides any URL in the schema or in any RestClient object "
-                    "passed as an option",
+                "desc": "The URL to the REST server; overrides any URL in the schema or in any REST client "
+                    "object passed as an option. When both `restclient` and `url` are provided, a sibling "
+                    "client is built via `AbstractRestClient::copyWithUrl()` — the supplied client is not "
+                    "mutated",
             },
         };
 
@@ -134,7 +140,7 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
     }
 
     #! Private constructor; used when traversing the tree
-    private constructor(hash<auto> path_tree, string uri_path, SwaggerSchema schema, *RestClient rest)
+    private constructor(hash<auto> path_tree, string uri_path, SwaggerSchema schema, *AbstractRestClient rest)
             : SwaggerDataProviderCommon(rest) {
         self.path_tree = path_tree;
         self.uri_path = uri_path;
@@ -144,7 +150,7 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(SwaggerSchema schema, *RestClient rest) : SwaggerDataProviderCommon(rest) {
+    constructor(SwaggerSchema schema, *AbstractRestClient rest) : SwaggerDataProviderCommon(rest) {
         setSchema(schema);
         setupTree();
     }
@@ -193,10 +199,12 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                 if (copts.url) {
                     opts.url = copts.url;
                 }
-                rest = new RestClient(opts);
+                rest = new RestClientIo(opts);
             }
         } else if (copts.url) {
-            rest.setURL(copts.url);
+            # RestClientIo is immutable by URL — build a sibling pointed at the
+            # new URL via copyWithUrl() instead of mutating the supplied client
+            rest = rest.copyWithUrl(copts.url);
         }
 
         setupTree();
@@ -211,7 +219,7 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
     *string getDesc() {
         string url;
         if (rest) {
-            url = rest.getURL();
+            url = rest.getUrl();
         } else {
             string url;
             if (schema.schemes) {
@@ -236,16 +244,16 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
     }
 
     #! Checks the REST client
-    private checkRestClient(RestClient rest) {
-        *AbstractRestSchemaValidator validator = rest.getValidator();
-        if (validator) {
-            if (validator.getHash() != schema.getHash()) {
-                throw "CONSTRUCTOR-ERROR", sprintf("RestClient provided in %s::constructor() is configured with a "
-                    "different REST validator schema than %y required by this data provider", self.className(),
-                    getName());
-            }
-        } else {
-            rest.setValidator(validator);
+    private checkRestClient(AbstractRestClient rest) {
+        # RestClientIo always has a validator installed (defaults to
+        # NullRestSchemaValidator); treat the null validator as "no schema"
+        AbstractRestSchemaValidator validator = rest.getValidator();
+        if (validator instanceof NullRestSchemaValidator) {
+            rest.setValidator(schema);
+        } else if (validator.getHash() != schema.getHash()) {
+            throw "CONSTRUCTOR-ERROR", sprintf("REST client provided in %s::constructor() is configured with a "
+                "different REST validator schema than %y required by this data provider", self.className(),
+                getName());
         }
     }
 

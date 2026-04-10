@@ -70,12 +70,14 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client object to use",
-                "type": AbstractDataProviderType::get(new Type("RestClientIo"), NOTHING, {
+                "type": AbstractDataProviderType::get(new Type("AbstractRestClient"), NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "The `RestClientIo` object to use for REST API calls; if a `url` option is also provided, "
-                    "a sibling client is built via `RestClientIo::copyWithUrl()` so the supplied object is not "
-                    "mutated",
+                "desc": "The REST client object to use for API calls; accepts either a "
+                    "`RestClient` (HTTP/1.1 sync) or a `RestClientIo` (multiplexed HTTP/2 + HTTP/3) — "
+                    "both implement `AbstractRestClient`. If a `url` option is also provided, a sibling "
+                    "client is built via `AbstractRestClient::copyWithUrl()` so the supplied object is "
+                    "not mutated",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
@@ -83,8 +85,8 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
                 "type": AbstractDataProviderType::get(AutoHashType, NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "Options to the `RestClientIo` constructor; only used if a `RestClientIo` object is "
-                    "created for a call",
+                "desc": "Options to the `RestClientIo` constructor; only used if a `RestClientIo` object "
+                    "is created for a call",
             },
             "schema": <DataProviderOptionInfo>{
                 "display_name": "Schema",
@@ -115,9 +117,10 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
                 "type": AbstractDataProviderType::get(StringType, NOTHING, {
                     DTT_ClientOnly: True,
                 }),
-                "desc": "The URL to the REST server; overrides any URL in the schema or in any `RestClientIo` "
-                    "object passed as an option. When both `restclient` and `url` are provided, a sibling client "
-                    "is built via `RestClientIo::copyWithUrl()` — the supplied client is not mutated",
+                "desc": "The URL to the REST server; overrides any URL in the schema or in any REST client "
+                    "object passed as an option. When both `restclient` and `url` are provided, a sibling "
+                    "client is built via `AbstractRestClient::copyWithUrl()` — the supplied client is not "
+                    "mutated",
             },
         };
 
@@ -138,7 +141,7 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
 
     #! Private constructor; used when traversing the tree
     private constructor(hash<auto> path_tree, string uri_path, AbstractRestSchemaValidator schema,
-            *RestClientIo rest) : RestSchemaDataProviderCommon(rest) {
+            *AbstractRestClient rest) : RestSchemaDataProviderCommon(rest) {
         self.path_tree = path_tree;
         self.uri_path = uri_path;
         self.schema = schema;
@@ -147,7 +150,8 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
     }
 
     #! Creates the object from the arguments
-    constructor(AbstractRestSchemaValidator schema, *RestClientIo rest) : RestSchemaDataProviderCommon(rest) {
+    constructor(AbstractRestSchemaValidator schema, *AbstractRestClient rest)
+            : RestSchemaDataProviderCommon(rest) {
         setSchema(schema);
         setupTree();
     }
@@ -270,14 +274,14 @@ public class RestSchemaDataProvider inherits RestSchemaDataProviderCommon {
     }
 
     #! Checks the REST client
-    private checkRestClient(RestClientIo rest) {
+    private checkRestClient(AbstractRestClient rest) {
         # RestClientIo always has a validator installed (defaults to
         # NullRestSchemaValidator); treat the null validator as "no schema"
         AbstractRestSchemaValidator validator = rest.getValidator();
         if (validator instanceof NullRestSchemaValidator) {
             rest.setValidator(schema);
         } else if (validator.getHash() != schema.getHash()) {
-            throw "CONSTRUCTOR-ERROR", sprintf("RestClientIo provided in %s::constructor() is configured with "
+            throw "CONSTRUCTOR-ERROR", sprintf("REST client provided in %s::constructor() is configured with "
                 "a different REST validator schema than %y required by this data provider", self.className(),
                 getName());
         }

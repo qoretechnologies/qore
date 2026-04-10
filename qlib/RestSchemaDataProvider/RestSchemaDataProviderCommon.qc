@@ -31,7 +31,7 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
         AbstractRestSchemaValidator schema;
 
         #! The REST client object for API calls
-        *RestClientIo::RestClientIo rest;
+        *RestClient::AbstractRestClient rest;
     }
 
     #! Creates the object
@@ -39,7 +39,7 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
     }
 
     #! Creates the object
-    constructor(RestClientIo::RestClientIo rest) {
+    constructor(RestClient::AbstractRestClient rest) {
         self.rest = rest;
     }
 
@@ -56,13 +56,13 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
         return schema;
     }
 
-    #! Returns the RestClientIo
-    *RestClientIo::RestClientIo tryGetRestClient() {
+    #! Returns the REST client
+    *RestClient::AbstractRestClient tryGetRestClient() {
         return rest;
     }
 
-    #! Sets the RestClientIo
-    setRestClient(RestClientIo::RestClientIo rest) {
+    #! Sets the REST client
+    setRestClient(RestClient::AbstractRestClient rest) {
         self.rest = rest;
     }
 

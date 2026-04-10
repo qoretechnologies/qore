@@ -466,6 +466,37 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
     #! Sends a generic REST request and returns the response
     abstract hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr);
 
+    #! Sends a REST request with a pre-serialized body; skips client-side request schema validation
+    /** Mirrors the semantics of @ref RestClient::RestClient::doValidatedRequest(): the caller has
+        already prepared and serialized the request body (and set the \c Content-Type header),
+        so the client-side validator's \c processRequest() step is skipped. Response-side
+        schema validation still runs.
+    */
+    abstract hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr);
+
+    #! Returns the target URL for this client
+    abstract string getUrl();
+
+    #! Returns the target URL with any password masked for safe display/logging
+    abstract string getSafeUrl();
+
+    #! Returns the current REST schema validator (may be a @ref NullRestSchemaValidator)
+    abstract RestSchemaValidator::AbstractRestSchemaValidator getValidator();
+
+    #! Sets the REST schema validator for this client
+    abstract setValidator(RestSchemaValidator::AbstractRestSchemaValidator validator);
+
+    #! Returns a new client pointed at a different URL, with the same configuration as this one
+    /** Non-mutating URL override: the returned instance inherits the caller's configuration
+        (tokens, headers, validator, OAuth2 state) but targets \a new_url. The caller-supplied
+        client is not modified.
+
+        @param new_url the new target URL
+
+        @return a new @ref AbstractRestClient instance with the updated URL
+    */
+    abstract AbstractRestClient copyWithUrl(string new_url);
+
     #! Sets the data serialization format
     abstract setSerialization(string data = "auto");
 
@@ -747,6 +778,12 @@ public class RestClient inherits Qore::HTTPClient, Logger::LoggerWrapper, Connec
     }
 
     private {
+        #! Constructor options hash, kept for @ref copyWithUrl() / @ref getConstructorOptions()
+        /** Captured verbatim in the constructor so that a sibling instance can be built
+            with the same config via @ref copyWithUrl(). Immutable post-construction.
+        */
+        hash<auto> saved_opts;
+
         # headers to send with every request
         hash<auto> headers;
         # data serialization code
@@ -963,6 +1000,8 @@ RestClient rest({"url": "http://localhost:8001/rest"});
     */
     constructor(*hash<auto> opts, *softbool do_not_connect)
             : HTTPClient(opts + ((opts.url || !opts.validator) ? NOTHING : {"url": opts.validator.getTargetUrl()})) {
+        # capture caller options verbatim for copyWithUrl() sibling construction
+        saved_opts = opts ?? {};
         # set logger, if any
         self.logger = remove opts.logger;
         # set update token code, if any
@@ -1699,6 +1738,64 @@ hash<auto> ans = rest.del("/orders/1");
     */
     hash<RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
         return makeRestResponse(doRequest(method, path, body, NOTHING, NOTHING, hdr));
+    }
+
+    #! Sends a REST request with a pre-serialized body; skips client-side request validation
+    /** Mirrors the @ref AbstractRestClient::restDoRawRequest() contract by delegating to the
+        existing @ref doValidatedRequest() method, which sends the body as-is (no
+        \c processRequest() pass) while still running response-side validation.
+    */
+    hash<RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        hash<auto> info;
+        hash<auto> rv = doValidatedRequest(method, path, body, \info, NOTHING, hdr);
+        return <RestResponseInfo>{
+            "status_code": rv.status_code,
+            "headers": info."response-headers" ?? rv.hdr ?? (rv - ("body", "status_code")),
+            "body": rv.body,
+            "content_type": rv."content-type",
+        };
+    }
+
+    #! Returns the target URL for this client (lowercase name for @ref AbstractRestClient parity)
+    /** @return the target URL (delegates to @ref Qore::HTTPClient::getURL())
+    */
+    string getUrl() {
+        return getURL();
+    }
+
+    #! Returns the target URL with any password masked for safe display/logging
+    /** @return the safe URL (delegates to @ref Qore::HTTPClient::getSafeURL())
+    */
+    string getSafeUrl() {
+        return getSafeURL();
+    }
+
+    #! Returns a new RestClient pointed at a different URL with the same configuration
+    /** Constructs a new @ref RestClient instance using the saved constructor options plus
+        the new URL. The caller-supplied client is not modified. The new instance inherits
+        the parent's token (if any) so it does not fire a duplicate OAuth2 login.
+
+        @param new_url the new target URL
+
+        @return a new @ref AbstractRestClient instance with the updated URL
+
+        @note If the current client holds an OAuth2 access token, it is copied to the new
+            client via the \c token / \c token_type options so the child does not re-login.
+    */
+    AbstractRestClient copyWithUrl(string new_url) {
+        hash<auto> opts = saved_opts + {"url": new_url};
+        # Inherit the parent's current token if one is set
+        if (token.val()) {
+            opts.token = token;
+            opts.token_type = token_type;
+            if (oauth2_token_expiry.val()) {
+                opts.oauth2_token_expiry = oauth2_token_expiry;
+            }
+            if (refresh_token.val()) {
+                opts.oauth2_refresh_token = refresh_token;
+            }
+        }
+        return new RestClient(opts, True);
     }
 
     #! Closes the client by disconnecting the underlying HTTP connection

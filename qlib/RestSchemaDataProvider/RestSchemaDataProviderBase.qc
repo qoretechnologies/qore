@@ -31,7 +31,7 @@ public class RestSchemaDataProviderBase inherits RestSchemaDataProviderCommon {
     }
 
     #! Creates the object
-    constructor(RestClientIo::RestClientIo rest) : RestSchemaDataProviderCommon(rest) {
+    constructor(RestClient::AbstractRestClient rest) : RestSchemaDataProviderCommon(rest) {
     }
 
     #! Returns data provider static info

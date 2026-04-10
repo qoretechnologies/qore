@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore SwaggerDataProvider module definition
 
-/*  SwaggerDataProvider.qm Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/*  SwaggerDataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,10 +34,10 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) Swagger
-%requires(reexport) RestClient
+%requires(reexport) RestClientIo
 
 module SwaggerDataProvider {
-    version = "1.3";
+    version = "1.4";
     desc = "user module providing a data provider API for Swagger schemas";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -73,6 +73,14 @@ module SwaggerDataProvider {
     - @ref SwaggerDataProvider::SwaggerRequestDataProvider "SwaggerRequestDataProvider"
 
     @section swaggerdataprovider_relnotes Release Notes
+
+    @subsection swaggerdataprovider_v1_4 SwaggerDataProvider v1.4
+    - migrated from @ref RestClient::RestClient "RestClient" to
+      @ref RestClientIo::RestClientIo "RestClientIo" as the underlying REST transport;
+      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
+      Swagger-validated REST servers, and uses @ref RestClientIo::RestClientIo::restDoRawRequest()
+      "restDoRawRequest()" to pass pre-serialized operation bodies through without
+      triggering double schema validation
 
     @subsection swaggerdataprovider_v1_3 SwaggerDataProvider v1.3
     - implemented the \c lax_parsing option to try to parse invalid Swagger schemas

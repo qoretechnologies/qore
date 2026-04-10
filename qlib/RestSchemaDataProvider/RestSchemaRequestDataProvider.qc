@@ -61,7 +61,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Creates the object from the arguments (Swagger)
-    constructor(AbstractRestSchemaValidator schema, *RestClientIo rest, string uri_path,
+    constructor(AbstractRestSchemaValidator schema, *AbstractRestClient rest, string uri_path,
             Swagger::PathItemObject pio, Swagger::OperationObject op)
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
@@ -84,7 +84,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Creates the object from the arguments (OpenAPI 3.0)
-    constructor(AbstractRestSchemaValidator schema, *RestClientIo rest, string uri_path,
+    constructor(AbstractRestSchemaValidator schema, *AbstractRestClient rest, string uri_path,
             OpenApi3::PathItemObject pio, OpenApi3::OperationObject op)
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
@@ -382,7 +382,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     #! Makes a REST request and returns the response
     private *hash<auto> doRequestIntern(auto req, *hash<auto> options) {
-        RestClientIo rest = getRestClient();
+        AbstractRestClient rest = getRestClient();
         # make URI path with any query args
         string uri_path = getUriPath();
         map uri_path = replace(uri_path, "{" + $1.key + "}", $1.value.toString()), options.path_vars.pairIterator();
@@ -482,7 +482,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Returns a REST client for HTTP operations
-    private RestClientIo getRestClient() {
+    private AbstractRestClient getRestClient() {
         if (!rest) {
             rest = new RestClientIo({
                 "url": schema.getTargetUrl(),
