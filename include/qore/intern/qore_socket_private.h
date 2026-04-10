@@ -3197,6 +3197,26 @@ struct qore_socket_private {
                     if (errno == EINTR) {
                         continue;
                     }
+                    // Handle EAGAIN/EWOULDBLOCK: the socket may be in non-blocking
+                    // mode (the default since the AsyncIoController redesign) even
+                    // when a sync caller expects blocking behavior.  Wait for data
+                    // readability and retry — this mirrors the pattern in sendIntern.
+                    if (errno == EAGAIN
+#ifdef EWOULDBLOCK
+                            || errno == EWOULDBLOCK
+#endif
+                            ) {
+                        if (!isDataAvailable(timeout, meth, xsink)) {
+                            if (*xsink) {
+                                return -1;
+                            }
+                            if (!suppress_exception) {
+                                se_timeout("Socket", meth, timeout, xsink);
+                            }
+                            return QSE_TIMEOUT;
+                        }
+                        continue;
+                    }
 #ifdef ECONNRESET
                     if (errno == ECONNRESET) {
                         if (!suppress_exception) {
