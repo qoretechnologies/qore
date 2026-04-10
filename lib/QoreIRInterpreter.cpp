@@ -6789,14 +6789,128 @@ load_local_done:
                 ++ip;
                 break;
             }
-            // LValuePathTernary — stub handler for future use (splice/extract)
             case QoreIROpcode::LValuePathTernary: {
-                xsink->raiseException("IR-EXEC-ERROR",
-                    "lvalue path ternary not yet implemented (opcode %d)",
-                    (int)inst->opcode);
-                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                cleanupLocalCaches();
-                return false;
+                auto* path_inst = static_cast<QoreIRLValuePathInstruction*>(inst);
+                if (path_inst->path.empty()) {
+                    xsink->raiseException("IR-EXEC-ERROR", "lvalue.path.ternary missing path");
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                // Resolve dynamic key/index operands
+                for (auto& step : path_inst->path) {
+                    if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+                        QoreValue key_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        QoreStringValueHelper key_str(key_val);
+                        step.name = key_str->c_str();
+                    } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+                        QoreValue idx_val = getIRValue(values, QoreIRValue(step.operand_idx));
+                        step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+                    }
+                }
+                // Get the ternary operands: offset, length, replacement
+                QoreValue offset_val = (path_inst->operands.size() > 0)
+                    ? getIRValue(values, path_inst->operands[0]) : QoreValue();
+                QoreValue length_val = (path_inst->operands.size() > 1)
+                    ? getIRValue(values, path_inst->operands[1]) : QoreValue();
+                QoreValue replacement_val = (path_inst->operands.size() > 2)
+                    ? getIRValue(values, path_inst->operands[2]) : QoreValue();
+                // Navigate to lvalue; for extract without replacement, avoid vivification
+                bool no_vivify = (path_inst->ternary_op == LVTernaryOp::Extract
+                    && replacement_val.isNothing());
+                LValueHelper lvh(xsink);
+                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), no_vivify)) {
+                    if (no_vivify && !*xsink) {
+                        // Lvalue doesn't exist — no-op, return NOTHING
+                        if (path_inst->result.isValid()) {
+                            setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                        }
+                        ++ip;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                QoreValue res;
+                qore_type_t vt = lvh.getType();
+                if (vt == NT_NOTHING) {
+                    // Nothing to extract — return NOTHING
+                } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+                    xsink->raiseException("EXTRACT-ERROR",
+                        "first (lvalue) argument to the extract operator is not a list, "
+                        "string, or binary object");
+                } else {
+                    lvh.ensureUnique();
+                    size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
+                    if (vt == NT_LIST) {
+                        QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                        if (length_val.isNothing() && replacement_val.isNothing()) {
+                            res = vl->extract(offset);
+                        } else {
+                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                            if (replacement_val.isNothing()) {
+                                res = vl->extract(offset, length);
+                            } else {
+                                res = vl->extract(offset, length, replacement_val, xsink);
+                            }
+                        }
+                    } else if (vt == NT_STRING) {
+                        QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                        if (length_val.isNothing() && replacement_val.isNothing()) {
+                            res = vs->extract(offset, xsink);
+                        } else {
+                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                            if (replacement_val.isNothing()) {
+                                res = vs->extract(offset, length, xsink);
+                            } else {
+                                res = vs->extract(offset, length, replacement_val, xsink);
+                            }
+                        }
+                    } else { // NT_BINARY
+                        BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                        BinaryNode* bout = new BinaryNode;
+                        if (length_val.isNothing() && replacement_val.isNothing()) {
+                            b->splice(offset, b->size(), bout);
+                        } else {
+                            size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                            if (replacement_val.isNothing()) {
+                                b->splice(offset, length, bout);
+                            } else {
+                                if (replacement_val.getType() == NT_BINARY) {
+                                    const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                                    b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                                } else {
+                                    QoreStringNodeValueHelper sv(replacement_val);
+                                    if (!sv->strlen()) {
+                                        b->splice(offset, length, bout);
+                                    } else {
+                                        b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                                    }
+                                }
+                            }
+                        }
+                        res = bout;
+                    }
+                }
+                if (*xsink) {
+                    res.discard(xsink);
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
+                if (!path_inst->ref_rv) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                }
+                if (path_inst->result.isValid()) {
+                    setValueSlot(values, path_inst->result.id, res, xsink);
+                    if (res.hasNode()) {
+                        cleanup.push_back(path_inst->result.id);
+                    }
+                }
+                ++ip;
+                break;
             }
             case QoreIROpcode::PreIncLValue:
             case QoreIROpcode::PreDecLValue:

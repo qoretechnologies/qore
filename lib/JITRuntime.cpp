@@ -5204,9 +5204,100 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
         QoreIRLValuePathInstruction* inst, uint64_t* dyn_vals,
         uint64_t a_bits, uint64_t b_bits, uint64_t c_bits,
         ExceptionSink* xsink) {
-    // Ternary (splice/extract) not yet implemented for LValuePath
-    xsink->raiseException("JIT-ERROR", "LValuePath ternary operations not yet implemented");
-    return toBits(QoreValue());
+    // Resolve dynamic key/index operands
+    uint32_t dyn_idx = 0;
+    for (auto& step : inst->path) {
+        if (step.kind == LVPathStepKind::HashKey && step.operand_idx != UINT32_MAX) {
+            QoreValue key_val = fromBits(dyn_vals[dyn_idx++]);
+            QoreStringValueHelper key_str(key_val);
+            step.name = key_str->c_str();
+        } else if (step.kind == LVPathStepKind::ListIndex && step.operand_idx != UINT32_MAX) {
+            QoreValue idx_val = fromBits(dyn_vals[dyn_idx++]);
+            step.slot_id = static_cast<uint32_t>(idx_val.getAsBigInt());
+        }
+    }
+    QoreValue offset_val = fromBits(a_bits);
+    QoreValue length_val = fromBits(b_bits);
+    QoreValue replacement_val = fromBits(c_bits);
+    // For extract without replacement, avoid vivification
+    bool no_vivify = (inst->ternary_op == LVTernaryOp::Extract && replacement_val.isNothing());
+    LValueHelper lvh(xsink);
+    if (lvh.navigatePath(inst->path.data(), inst->path.size(), no_vivify)) {
+        if (no_vivify && !*xsink) {
+            return toBits(QoreValue());
+        }
+        return toBits(QoreValue());
+    }
+    QoreValue res;
+    qore_type_t vt = lvh.getType();
+    if (vt == NT_NOTHING) {
+        // Nothing to extract — return NOTHING
+    } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+        xsink->raiseException("EXTRACT-ERROR",
+            "first (lvalue) argument to the extract operator is not a list, "
+            "string, or binary object");
+    } else {
+        lvh.ensureUnique();
+        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
+        if (vt == NT_LIST) {
+            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+            if (length_val.isNothing() && replacement_val.isNothing()) {
+                res = vl->extract(offset);
+            } else {
+                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                if (replacement_val.isNothing()) {
+                    res = vl->extract(offset, length);
+                } else {
+                    res = vl->extract(offset, length, replacement_val, xsink);
+                }
+            }
+        } else if (vt == NT_STRING) {
+            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+            if (length_val.isNothing() && replacement_val.isNothing()) {
+                res = vs->extract(offset, xsink);
+            } else {
+                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                if (replacement_val.isNothing()) {
+                    res = vs->extract(offset, length, xsink);
+                } else {
+                    res = vs->extract(offset, length, replacement_val, xsink);
+                }
+            }
+        } else { // NT_BINARY
+            BinaryNode* b = lvh.getValue().get<BinaryNode>();
+            BinaryNode* bout = new BinaryNode;
+            if (length_val.isNothing() && replacement_val.isNothing()) {
+                b->splice(offset, b->size(), bout);
+            } else {
+                size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                if (replacement_val.isNothing()) {
+                    b->splice(offset, length, bout);
+                } else {
+                    if (replacement_val.getType() == NT_BINARY) {
+                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                        b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                    } else {
+                        QoreStringNodeValueHelper sv(replacement_val);
+                        if (!sv->strlen()) {
+                            b->splice(offset, length, bout);
+                        } else {
+                            b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                        }
+                    }
+                }
+            }
+            res = bout;
+        }
+    }
+    if (*xsink) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    if (!inst->ref_rv) {
+        res.discard(xsink);
+        return toBits(QoreValue());
+    }
+    return toBits(res);
 }
 
 // AOT wrappers

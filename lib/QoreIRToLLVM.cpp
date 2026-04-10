@@ -10313,28 +10313,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     break;
                 }
                 case QoreIROpcode::LValuePathTernary: {
-                    // Ternary not yet implemented — emit error helper call
+                    // operands[0]=offset, [1]=length, [2]=replacement
+                    auto* offset_v = (inst->operands.size() > 0)
+                        ? getVal(inst->operands[0].id, error) : nullptr;
+                    auto* length_v = (inst->operands.size() > 1)
+                        ? getVal(inst->operands[1].id, error) : nullptr;
+                    auto* replace_v = (inst->operands.size() > 2)
+                        ? getVal(inst->operands[2].id, error) : nullptr;
+                    llvm::Value* a_boxed = offset_v
+                        ? boxValue(offset_v, inst->operands[0].id)
+                        : llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    llvm::Value* b_boxed = length_v
+                        ? boxValue(length_v, inst->operands[1].id)
+                        : llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    llvm::Value* c_boxed = replace_v
+                        ? boxValue(replace_v, inst->operands[2].id)
+                        : llvm::ConstantInt::get(i64_type, VAL_NOTHING);
                     if (aot_slots) {
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_ternary_aot",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, i32_type, ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
                         result_val = builder->CreateCall(fn,
                             {aot_ctx_arg, llvm::ConstantInt::get(i32_type, aot_slot),
-                             dyn_array,
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             xsink_arg});
+                             dyn_array, a_boxed, b_boxed, c_boxed, xsink_arg});
                     } else {
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_ternary",
                             llvm::FunctionType::get(i64_type,
                                 {ptr_type, ptr_type, i64_type, i64_type, i64_type, ptr_type}, false));
                         result_val = builder->CreateCall(fn,
-                            {inst_ptr_val, dyn_array,
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                             xsink_arg});
+                            {inst_ptr_val, dyn_array, a_boxed, b_boxed, c_boxed, xsink_arg});
                     }
                     break;
                 }

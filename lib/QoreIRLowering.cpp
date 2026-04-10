@@ -342,14 +342,6 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
                         operands.push_back(replacement);
                         loc = extract->loc;
                         invoked = true;
-                    } else if (auto* remove = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
-                        QoreIRValue operand = lowerExpression(remove->getExp(), error);
-                        if (!operand.isValid()) {
-                            return false;
-                        }
-                        operands.push_back(operand);
-                        loc = remove->loc;
-                        invoked = true;
                     } else if (auto* keys = dynamic_cast<const QoreKeysOperatorNode*>(node)) {
                         QoreIRValue operand = lowerExpression(keys->getExp(), error);
                         if (!operand.isValid()) {
@@ -7077,6 +7069,67 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
     if (!op) {
         return QoreIRValue();
     }
+    // Try LValuePathTernary for complex lvalues (hash member, self member, etc.)
+    {
+        std::vector<LVPathStep> lv_path;
+        std::vector<QoreValue> dynamic_operands;
+        if (extractLValuePath(op->getLValue(), lv_path, dynamic_operands) && !lv_path.empty()) {
+            // Lower the ternary operands: offset, length, replacement
+            QoreIRValue offset_val = lowerExpression(op->getOffset(), error);
+            if (!offset_val.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue length_val = op->getLength().isNothing()
+                ? builder.createConstNothing(op->loc)->result
+                : lowerExpression(op->getLength(), error);
+            if (!length_val.isValid()) {
+                return QoreIRValue();
+            }
+            QoreIRValue replacement_val = op->getNewValue().isNothing()
+                ? builder.createConstNothing(op->loc)->result
+                : lowerExpression(op->getNewValue(), error);
+            if (!replacement_val.isValid()) {
+                return QoreIRValue();
+            }
+            // Lower dynamic key/index operands from the lvalue path
+            std::vector<QoreIRValue> dyn_vals;
+            for (auto& dop : dynamic_operands) {
+                QoreIRValue dv = lowerExpression(dop, error);
+                if (!dv.isValid()) {
+                    return QoreIRValue();
+                }
+                dyn_vals.push_back(dv);
+            }
+            // Assign operand indices to dynamic path steps
+            uint32_t dyn_idx = 0;
+            for (auto& step : lv_path) {
+                if ((step.kind == LVPathStepKind::HashKey || step.kind == LVPathStepKind::ListIndex)
+                        && step.operand_idx == UINT32_MAX) {
+                    if (dyn_idx < dyn_vals.size()) {
+                        step.operand_idx = dyn_vals[dyn_idx].id;
+                        ++dyn_idx;
+                    }
+                }
+            }
+            // Create LValuePathTernary instruction
+            auto* path_inst = builder.getBlock()->appendInstruction<QoreIRLValuePathInstruction>(
+                QoreIROpcode::LValuePathTernary);
+            path_inst->result = builder.getFunction()->createValue();
+            path_inst->path = std::move(lv_path);
+            path_inst->ternary_op = LVTernaryOp::Extract;
+            path_inst->loc = op->loc;
+            // Copy ref_rv flag
+            path_inst->ref_rv = op->needsReturnValue();
+            // Operands: [0]=offset, [1]=length, [2]=replacement, then dynamic key/index operands
+            path_inst->operands.push_back(offset_val);
+            path_inst->operands.push_back(length_val);
+            path_inst->operands.push_back(replacement_val);
+            for (auto& dv : dyn_vals) {
+                path_inst->operands.push_back(dv);
+            }
+            return path_inst->result;
+        }
+    }
     QoreIRValue lvalue = lowerExpression(op->getLValue(), error);
     if (!lvalue.isValid()) {
         return QoreIRValue();
@@ -7421,8 +7474,51 @@ QoreIRValue QoreIRLowering::lowerListAssignment(const QoreValue& expr, std::stri
     if (!op) {
         return QoreIRValue();
     }
-    std::vector<QoreIRValue> operands;
-    return lowerExprOpOrInvoke(QoreIROpcode::ListAssignAny, expr, operands, op->loc, error);
+    // Decompose list assignment into individual ListIndexAccess + StoreLocal/StoreClosure
+    // LHS must be a QoreParseListNode with VarRefNode entries
+    QoreValue lhs = op->getLeft();
+    if (lhs.getType() != NT_PARSE_LIST) {
+        std::vector<QoreIRValue> operands;
+        return lowerExprOpOrInvoke(QoreIROpcode::ListAssignAny, expr, operands, op->loc, error);
+    }
+    const auto* parse_list = lhs.get<const QoreParseListNode>();
+    // Verify all LHS entries are VarRefNode (local, closure, or global)
+    for (size_t i = 0; i < parse_list->size(); ++i) {
+        QoreValue entry = parse_list->get(i);
+        if (!entry.hasNode() || entry.getType() != NT_VARREF) {
+            // Non-variable lvalue (e.g., hash member, list element) — fall back to EXPR_TREE
+            std::vector<QoreIRValue> operands;
+            return lowerExprOpOrInvoke(QoreIROpcode::ListAssignAny, expr, operands, op->loc, error);
+        }
+    }
+    // Lower RHS expression
+    QoreIRValue rhs_val = lowerExpression(op->getRight(), error);
+    if (!rhs_val.isValid()) {
+        return QoreIRValue();
+    }
+    // For each LHS variable, extract element from list and store
+    for (size_t i = 0; i < parse_list->size(); ++i) {
+        QoreValue entry = parse_list->get(i);
+        const auto* var = entry.get<const VarRefNode>();
+        // Create constant index
+        QoreIRValue idx = builder.createConstInt(static_cast<int64_t>(i), op->loc)->result;
+        // ListIndexAccess: safely returns NOTHING for non-list RHS or out-of-bounds
+        auto* access_inst = builder.getBlock()->appendInstruction<QoreIRListIndexAccessInstruction>();
+        access_inst->loc = op->loc;
+        access_inst->result = builder.getFunction()->createValue();
+        access_inst->operands.push_back(rhs_val);
+        access_inst->operands.push_back(idx);
+        QoreIRValue element_val = access_inst->result;
+        // Store to variable with type coercion
+        if (!storeVarRef(var, element_val, error, "list-assignment")) {
+            return QoreIRValue();
+        }
+    }
+    // Return RHS if return value is needed, otherwise NOTHING
+    if (op->needsReturnValue()) {
+        return rhs_val;
+    }
+    return builder.createConstNothing(op->loc)->result;
 }
 
 QoreIRValue QoreIRLowering::lowerRegexSubst(const QoreValue& expr, std::string& error) {
