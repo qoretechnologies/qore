@@ -547,6 +547,18 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("mTLS server rejects missing client cert (H1)",
             \testMtlsServerRejectsNoCertH1());
 
+        # Phase 4: authorization_code / implicit grant flows via RestConnection
+        addTestCase("auth_code: URL generation on RestClientIo-backed connection",
+            \testAuthCodeUrlGeneration());
+        addTestCase("auth_code: URL contains PKCE code_challenge when configured",
+            \testAuthCodeUrlPkce());
+        addTestCase("auth_code: getAsync with pre-set token skips login",
+            \testAuthCodeAsyncWithPresetToken());
+        addTestCase("auth_code: getAsync without token throws OAUTH2-ERROR",
+            \testAuthCodeAsyncNoToken());
+        addTestCase("auth_code: generatePkceChallenge produces valid verifier",
+            \testAuthCodeGeneratePkceChallenge());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -3200,6 +3212,135 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
 %endif
+    }
+
+    # --- Phase 4: authorization_code / implicit grant flows via RestConnection ---
+    #
+    # Design clarification: getAuthorizationCodeRequest() lives on
+    # RestConnection, not on RestClient or RestClientIo. RestConnection owns
+    # the OAuth2 config and the base URL, so the auth URL generation is
+    # transport-agnostic — it works unchanged for both RestClient-backed
+    # get() and RestClientIo-backed getAsync() flows. These tests verify the
+    # flow end-to-end for RestClientIo to close Phase 4 of the option-parity
+    # effort.
+
+    testAuthCodeUrlGeneration() {
+        # Build a RestConnection for authorization_code grant and verify
+        # getAuthorizationCodeRequest() returns a URL with the expected params.
+        # No network calls are made — this is pure URL generation.
+        RestConnection rc("ac-test", "ac-test",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "oauth2_scopes": ("read", "write"),
+            });
+
+        string uri = rc.getAuthorizationCodeRequest(<RestClient::AuthCodeInfo>{
+            "state": "csrf-abc123",
+        });
+        assertRegex("^https://auth.example.com/oauth2/authorize\\?", uri);
+        assertRegex("response_type=code", uri);
+        assertRegex("client_id=test-client-id", uri);
+        assertRegex("redirect_uri=", uri);
+        assertRegex("scope=read(\\+|%20)write", uri);
+        assertRegex("state=csrf-abc123", uri);
+    }
+
+    testAuthCodeUrlPkce() {
+        # PKCE S256: code_verifier in info → code_challenge in URL
+        RestConnection rc("ac-pkce", "ac-pkce",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "oauth2_pkce": "S256",
+            });
+
+        # Generate a PKCE verifier on the caller side (RestConnection doesn't
+        # store it — the caller holds it between the auth URL request and the
+        # code-to-token exchange)
+        string verifier = RestClient::RestConnection::generatePkceChallenge();
+        assertTrue(verifier.length() > 20, "PKCE verifier should be non-trivially long");
+
+        string uri = rc.getAuthorizationCodeRequest(<RestClient::AuthCodeInfo>{
+            "state": "csrf-xyz",
+            "code_verifier": verifier,
+        });
+        assertRegex("code_challenge=", uri);
+        assertRegex("code_challenge_method=S256", uri);
+    }
+
+    testAuthCodeAsyncWithPresetToken() {
+%ifndef NoJson
+        # After the caller has completed the out-of-band code exchange and
+        # stored the resulting access token, getAsync() must successfully
+        # return a RestClientIo that uses the pre-set token without trying
+        # to perform an automatic login (which would throw for auth_code).
+        RestConnection rc("ac-token", "ac-token",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "token": "post-exchange-token",
+                "token_type": "Bearer",
+                "ssl_verify_cert": False,
+            });
+
+        # getAsync() returns a RestClientIo with the pre-set token installed —
+        # no automatic login attempt
+        object client = rc.getAsync();
+        on_exit call_object_method(client, "close");
+
+        # Make a real request to prove the client works end-to-end
+        hash<RestClient::RestResponseInfo> resp = cast<RestClientIo::RestClientIo>(client)
+            .restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer post-exchange-token",
+            resp.body.request_headers.authorization);
+%endif
+    }
+
+    testAuthCodeAsyncNoToken() {
+%ifndef NoJson
+        # Without a pre-set token, constructing via getAsync() triggers
+        # checkLogin() → loginIntern() → getOAuth2LoginInfo(), which must
+        # throw OAUTH2-ERROR explaining that the grant type needs manual
+        # authorization. This matches RestClient's behavior for the same
+        # scenario.
+        RestConnection rc("ac-notoken", "ac-notoken",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "ssl_verify_cert": False,
+            });
+        assertThrows("OAUTH2-ERROR", "must be manually authorized",
+            sub () { rc.getAsync(); });
+%endif
+    }
+
+    testAuthCodeGeneratePkceChallenge() {
+        # The static helper is on RestClient::RestClient — accessible from
+        # RestClientIo flows transparently. Verify it produces a verifier of
+        # the expected length (64 base64url chars from 48 random bytes).
+        string v1 = RestClient::RestConnection::generatePkceChallenge();
+        string v2 = RestClient::RestConnection::generatePkceChallenge();
+        assertEq(64, v1.length());
+        assertEq(64, v2.length());
+        assertNeq(v1, v2, "two successive verifiers must differ");
     }
 
     testMtlsServerRejectsNoCertH1() {
