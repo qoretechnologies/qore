@@ -623,6 +623,61 @@ The canonical bridge from sync to async is `SocketSyncPoll::run(state, timeout_m
 Socket APIs should be implemented as thin wrappers over this helper rather than
 hand-rolled EAGAIN / `WANT_READ` retry loops.
 
+If a poll-state needs to wake on more than just the Socket's primary fd (e.g. a QUIC
+migration candidate watching a second UDP fd), it can override
+`AbstractPollState::getExtraWaitFds()` to return a vector of `ExtraWaitFd` entries.
+`SocketSyncPoll::run()` notices a non-empty vector and calls the internal `waitMultiFd()`
+helper instead of `asyncIoWait()`, building a combined `pollfd` array (primary fd +
+extras) and calling `::poll()` directly so any fd's readiness wakes the wait.
+
+#### Lock-yielding during sync wait phases
+
+The sync I/O helpers in `qore_socket_private` (`brecv`, `sendIntern`, `accept_intern`,
+`doSSLRW`, `doSSLUpgradeNonBlockingIO`) all need to wait for readiness between retries.
+Historically the **outer Socket mutex** (`my_socket_priv::m`) was held during the wait,
+which blocked concurrent async I/O controller operations on the same Socket — a
+long-running sync wait in a handler thread would stall unrelated async ops until it
+returned.
+
+The fix is **Option B**: release the outer mutex during the wait and re-acquire it before
+retrying the syscall.  To detect a racing close/fd swap during the unlocked window, every
+sync helper uses `SocketSyncPoll::waitReleasingLock(sock, outer_lock, ...)`, which:
+
+1. Snapshots `qore_socket_private::fd_generation` and the primary fd under the lock.
+2. Releases the lock via `AutoUnlocker`.
+3. Calls `asyncIoWait()` to wait for readiness on the primary fd (or hits the timeout).
+4. Re-acquires the lock on scope exit.
+5. Checks the snapshotted generation against `pinfo.fd_generation`.  On mismatch, raises
+   `SOCKET-CLOSED` — the fd the caller was waiting on has been closed or swapped
+   (`close_and_reset`, QUIC migration, etc.) and any retry would operate on stale state.
+
+`fd_generation` is bumped in every code path that closes or swaps the fd:
+
+- `qore_socket_private::close_and_reset()` — on every close
+- `SocketQuicClientPollOperation::migrateConnection()` — after the migration fd swap
+
+The back-pointer from `qore_socket_private::outer_lock` to `my_socket_priv::m` is wired by
+the `my_socket_priv` constructors (out-of-line in `lib/QoreSocket.cpp` because the priv
+struct is only forward-declared in `QC_Socket.h`).  Bare `QoreSocket` instances (those
+not wrapped in a `my_socket_priv`) leave `outer_lock == nullptr`; the sync helpers fall
+back to the original non-yielding wait path in that case, which is safe because there is
+no outer mutex to contend for.
+
+**SSL full-yield safety.**  The OpenSSL API forbids concurrent calls on the same `SSL*`.
+The lock-yielding wait preserves this invariant because direction-level exclusion via
+`NB_SEND`/`NB_RECV` is already enforced at the sync Socket API layer — no other thread
+can start a concurrent same-direction SSL operation on the SSL* while we are mid-retry.
+The `SSL_read`/`SSL_write` calls themselves remain under the outer mutex; only the
+between-retry wait phases yield.
+
+**Debug test hook.**  Debug builds expose a `dbg_force_fd_swap_next_wait(Socket)`
+builtin (in `lib/ql_debug.cpp`) that arms a one-shot flag on the Socket.  The next
+lock-yielding wait on that Socket will bump `fd_generation` inside the wait window, so
+the re-acquire detects the simulated swap and the sync I/O operation aborts with
+`SOCKET-CLOSED`.  See `examples/test/qore/classes/Socket/Socket.qtest`
+`fdGenerationTest` for the end-to-end regression test.  The hook is DEBUG-only — the
+builtin is simply not registered in release builds.
+
 ### QUIC Keepalive Policy
 
 QUIC keepalive (`ngtcp2_conn_set_keep_alive_timeout`) must be **gated on active stream count** for
