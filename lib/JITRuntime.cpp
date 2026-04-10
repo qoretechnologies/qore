@@ -5063,8 +5063,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             res = lvh.removeValue(true);
         }
     } else {
+        // Pop, Shift, Trim, Chomp should not vivify containers (use for_remove=true)
+        bool no_vivify = (inst->unary_op == LVUnaryOp::Pop
+            || inst->unary_op == LVUnaryOp::Shift
+            || inst->unary_op == LVUnaryOp::Trim
+            || inst->unary_op == LVUnaryOp::Chomp);
         LValueHelper lvh(xsink);
-        if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
+        if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
@@ -6512,4 +6517,84 @@ extern "C" DLLEXPORT uint64_t qore_rt_pseudo_val(uint64_t val_bits) {
 extern "C" DLLEXPORT uint64_t qore_rt_pseudo_type(uint64_t val_bits) {
     QoreValue v = fromBits(val_bits);
     return toBits(QoreValue(new QoreStringNode(v.getTypeName())));
+}
+
+//! Background self-method call (JIT mode): takes SelfFunctionCallNode* for method identity
+//! and pre-evaluated args — avoids EXPR_TREE serialization in AOT
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
+        const SelfFunctionCallNode* sfcn, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(sfcn);
+
+    // Build QoreListNode from pre-evaluated args
+    QoreListNode* arg_list = nullptr;
+    if (nargs > 0) {
+        arg_list = new QoreListNode(autoTypeInfo);
+        qore_list_private* priv = qore_list_private::get(*arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; i++) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+
+    // Create SetSelfFunctionCallNode which captures current self/class context
+    ReferenceHolder<AbstractQoreNode> call_node(new SetSelfFunctionCallNode(*sfcn, arg_list), xsink);
+    QoreValue call_val(call_node.release());
+    return toBits(do_op_background(call_val, xsink));
+}
+
+//! Background self-method call (AOT mode): takes method name string for runtime resolution
+extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
+        const char* method_name, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(method_name);
+
+    // Get current self + class context
+    QoreObject* self = runtime_get_stack_object();
+    if (!self) {
+        xsink->raiseException("BACKGROUND-ERROR", "no current object for background method call to '%s'",
+            method_name);
+        return toBits(QoreValue());
+    }
+
+    // Resolve method by name on the current class
+    const qore_class_private* cls = runtime_get_class();
+    if (!cls) {
+        cls = qore_class_private::get(*self->getClass());
+    }
+    ClassAccess access = Public;
+    const QoreMethod* method = cls->runtimeFindCommittedMethod(method_name, access, cls);
+    if (!method) {
+        xsink->raiseException("BACKGROUND-ERROR", "cannot resolve method '%s' on class '%s'",
+            method_name, cls->name.c_str());
+        return toBits(QoreValue());
+    }
+
+    // Build QoreListNode from pre-evaluated args
+    QoreListNode* arg_list = nullptr;
+    if (nargs > 0) {
+        arg_list = new QoreListNode(autoTypeInfo);
+        qore_list_private* priv = qore_list_private::get(*arg_list);
+        priv->reserve(nargs);
+        for (int i = 0; i < nargs; i++) {
+            QoreValue val = fromBits(args[i]);
+            if (val.hasNode()) {
+                val.refSelf();
+            }
+            priv->pushIntern(val);
+        }
+    }
+
+    // Create a temporary SelfFunctionCallNode with resolved method identity
+    // strdup gives NamedScope ownership of the name string (del=true)
+    SelfFunctionCallNode temp_sfcn(&loc_builtin, strdup(method_name),
+        nullptr, method, self->getClass(), cls);
+
+    // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
+    ReferenceHolder<AbstractQoreNode> call_node(new SetSelfFunctionCallNode(temp_sfcn, arg_list), xsink);
+
+    QoreValue call_val(call_node.release());
+    return toBits(do_op_background(call_val, xsink));
 }

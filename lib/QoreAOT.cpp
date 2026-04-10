@@ -3825,6 +3825,10 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
             && dynamic_cast<const QoreCastOperatorNode*>(ii->expr.getInternalNode())) {
         return true;
     }
+    // BackgroundInt with pre-evaluated args (method name embedded as string constant)
+    if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
+        return true;
+    }
     // CreateParseRef with simple local lvalue
     if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
         if (auto* prn = dynamic_cast<const ParseReferenceNode*>(

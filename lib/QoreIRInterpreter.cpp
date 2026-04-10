@@ -47,6 +47,7 @@
 #include <qore/intern/QoreDivisionOperatorNode.h>
 #include <qore/intern/QoreBinaryAndOperatorNode.h>
 #include <qore/intern/QoreBinaryOrOperatorNode.h>
+#include <qore/intern/QoreBackgroundOperatorNode.h>
 #include <qore/intern/QoreBinaryXorOperatorNode.h>
 #include <qore/intern/QorePlusEqualsOperatorNode.h>
 #include <qore/intern/QoreMinusEqualsOperatorNode.h>
@@ -1574,6 +1575,39 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::PushAny:
         case QoreIROpcode::ListAssignAny:
             return evalAndRef(inv->expr, xsink);
+
+        // BackgroundInt: decomposed path with pre-evaluated args
+        case QoreIROpcode::BackgroundInt: {
+            if (!inv->operands.empty()) {
+                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (bg_op) {
+                    auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                        bg_op->getExp().getInternalNode());
+                    if (sfcn && sfcn->getMethod()) {
+                        size_t nargs = inv->operands.size();
+                        bool zero_arg_sentinel = (nargs == 1
+                            && getIRValue(values, inv->operands[0]).isNothing());
+                        ReferenceHolder<QoreListNode> arg_list(xsink);
+                        if (!zero_arg_sentinel && nargs > 0) {
+                            arg_list = new QoreListNode(autoTypeInfo);
+                            for (size_t i = 0; i < nargs; i++) {
+                                QoreValue val = getIRValue(values, inv->operands[i]);
+                                if (val.hasNode()) {
+                                    val.refSelf();
+                                }
+                                arg_list->push(val, nullptr);
+                            }
+                        }
+                        ReferenceHolder<AbstractQoreNode> call_node(
+                            new SetSelfFunctionCallNode(*sfcn, arg_list.release()), xsink);
+                        QoreValue call_val(call_node.release());
+                        return do_op_background(call_val, xsink);
+                    }
+                }
+            }
+            return evalAndRef(inv->expr, xsink);
+        }
 
         // Everything else (LoadLValue, expression ops, etc.)
         // evaluated through the original AST expression
@@ -6516,8 +6550,20 @@ load_local_done:
                         }
                     }
                 } else {
+                    // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
+                    // if the target is NOTHING, these should be no-ops rather than creating
+                    // empty containers.  Pre/PostInc/Dec use for_remove=false since they
+                    // legitimately need to create a value if NOTHING.
+                    bool no_vivify = (path_inst->unary_op == LVUnaryOp::Pop
+                        || path_inst->unary_op == LVUnaryOp::Shift
+                        || path_inst->unary_op == LVUnaryOp::Trim
+                        || path_inst->unary_op == LVUnaryOp::Chomp);
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), no_vivify)) {
+                        if (no_vivify && !*xsink) {
+                            // navigatePath failed without error — lvalue doesn't exist, no-op
+                            break;
+                        }
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
@@ -8101,10 +8147,43 @@ load_local_done:
         // Non-modifying AST opcodes: direct eval — no cache invalidation needed
         case QoreIROpcode::BackgroundInt: {
                 auto* expr_inst = static_cast<QoreIRExprInstruction*>(inst);
-                // BackgroundInt spawns a background thread that will access closure-captured
-                // variables, so invalidate external caches (for closure variable access) after
-                // spawning the thread
-                QoreValue res = evalAndRef(expr_inst->expr, xsink);
+                QoreValue res;
+                if (!expr_inst->operands.empty()) {
+                    // Decomposed path: args pre-evaluated, method identity from expr
+                    auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                        expr_inst->expr.getInternalNode());
+                    assert(bg_op);
+                    auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                        bg_op->getExp().getInternalNode());
+                    assert(sfcn && sfcn->getMethod());
+
+                    // Build QoreListNode from pre-evaluated operands
+                    // First operand may be a ConstNothing sentinel for zero-arg calls
+                    size_t nargs = expr_inst->operands.size();
+                    bool zero_arg_sentinel = (nargs == 1
+                        && getIRValue(values, expr_inst->operands[0]).isNothing());
+                    ReferenceHolder<QoreListNode> arg_list(xsink);
+                    if (!zero_arg_sentinel && nargs > 0) {
+                        arg_list = new QoreListNode(autoTypeInfo);
+                        for (size_t i = 0; i < nargs; i++) {
+                            QoreValue val = getIRValue(values, expr_inst->operands[i]);
+                            if (val.hasNode()) {
+                                val.refSelf();
+                            }
+                            arg_list->push(val, nullptr);
+                        }
+                    }
+
+                    // Create a SetSelfFunctionCallNode with the resolved method and pre-evaluated args
+                    // This node captures the current self/class context and passes them to the bg thread
+                    ReferenceHolder<AbstractQoreNode> call_node(
+                        new SetSelfFunctionCallNode(*sfcn, arg_list.release()), xsink);
+                    QoreValue call_val(call_node.release());
+                    res = do_op_background(call_val, xsink);
+                } else {
+                    // Full AST fallback path
+                    res = evalAndRef(expr_inst->expr, xsink);
+                }
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     return false;

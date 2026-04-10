@@ -6841,6 +6841,14 @@ QoreIRValue QoreIRLowering::lowerPop(const QoreValue& expr, std::string& error) 
     if (!op) {
         return QoreIRValue();
     }
+    // Path-based pop for complex lvalues (must be before guardLValueBase)
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Pop);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     if (!guardLValueBase(op->getExp(), error)) {
         return QoreIRValue();
     }
@@ -7092,8 +7100,7 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
     if (!op) {
         return QoreIRValue();
     }
-    // Path-based remove for complex lvalues (must be before lowerExpression to avoid
-    // emitting dead instructions). Only matches multi-step SelfMember paths.
+    // Path-based remove for all lvalue types — avoids EXPR_TREE serialization
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Remove);
@@ -7340,6 +7347,50 @@ QoreIRValue QoreIRLowering::lowerBackground(const QoreValue& expr, std::string& 
     if (!op) {
         return QoreIRValue();
     }
+
+    // Try decomposed path: pre-evaluate args for background self.method(args)
+    QoreValue inner_expr = op->getExp();
+    if (inner_expr.hasNode()) {
+        auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(inner_expr.getInternalNode());
+        if (sfcn && sfcn->getMethod() && !sfcn->getMethod()->isStatic()) {
+            // Pre-evaluate each argument expression
+            std::vector<QoreIRValue> operands;
+            bool can_decompose = true;
+            const QoreParseListNode* parse_args = sfcn->getParseArgs();
+            const QoreListNode* args = sfcn->getArgs();
+            if (parse_args && parse_args->size() > 0) {
+                for (size_t i = 0; i < parse_args->size(); i++) {
+                    QoreIRValue arg_val = lowerExpression(parse_args->get(i), error);
+                    if (!arg_val.isValid()) {
+                        can_decompose = false;
+                        break;
+                    }
+                    operands.push_back(arg_val);
+                }
+            } else if (args && args->size() > 0) {
+                for (size_t i = 0; i < args->size(); i++) {
+                    QoreIRValue arg_val = lowerExpression(args->retrieveEntry(i), error);
+                    if (!arg_val.isValid()) {
+                        can_decompose = false;
+                        break;
+                    }
+                    operands.push_back(arg_val);
+                }
+            }
+            if (can_decompose) {
+                // Non-empty operands (or empty for zero-arg methods) signal decomposed path;
+                // the LLVM/interpreter codegen extracts method identity from expr at codegen time
+                // Use a sentinel operand for zero-arg calls to distinguish from the AST fallback path
+                if (operands.empty()) {
+                    // Add a ConstNothing sentinel to signal decomposed zero-arg call
+                    operands.push_back(builder.createConstNothing(op->loc)->result);
+                }
+                return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr, operands, op->loc, error);
+            }
+        }
+    }
+
+    // Fallback: full AST evaluation path
     std::vector<QoreIRValue> operands;
     return lowerExprOpOrInvoke(QoreIROpcode::BackgroundInt, expr, operands, op->loc, error);
 }

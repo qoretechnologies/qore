@@ -153,7 +153,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "ChompString"                   , false, true , false,  0, "ChompString", false, true , "ParseNode", true , false, false, false }, // 114
     { "TransliterateAny"              , false, true , false,  0, "TransliterateAny", false, true , "ParseNode", true , false, false, false }, // 115
     { "TransliterateString"           , false, true , false,  0, "TransliterateString", false, true , "ParseNode", true , false, false, false }, // 116
-    { "BackgroundInt"                 , false, true , false,  0, "BackgroundInt", false, true , "ParseNode", true , false, false, false }, // 117
+    { "BackgroundInt"                 , false, true , false,  0, "BackgroundInt", false, true , "ParseNode", true , true , false, false }, // 117
     { "ListAssignAny"                 , false, false, false,  0, "ListAssignAny", false, true , "ParseNode", true , false, false, false }, // 118
     { "ExistsAny"                     , false, false, false,  1, "ExistsAny", false, true , "ParseNode", true , true , true , false }, // 119
     { "ExistsBool"                    , false, true , false,  1, "ExistsBool", false, true , "ParseNode", true , true , true , false }, // 120

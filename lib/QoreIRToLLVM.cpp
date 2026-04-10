@@ -56,6 +56,7 @@ static_assert(QORE_IR_MAX_OPCODE == 357,
 #include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
+#include "qore/intern/QoreBackgroundOperatorNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/ParseReferenceNode.h"
@@ -4941,6 +4942,63 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 }
                 // instanceof doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::BackgroundInt
+                    && !inv->operands.empty()) {
+                // BackgroundInt invoke: decomposed path with pre-evaluated args
+                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                    inv->expr.getInternalNode());
+                assert(bg_op);
+                auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                    bg_op->getExp().getInternalNode());
+                assert(sfcn && sfcn->getMethod());
+                const char* method_name = sfcn->getName();
+
+                // Determine actual arg count from SelfFunctionCallNode's parse args
+                const QoreParseListNode* parse_args = sfcn->getParseArgs();
+                const QoreListNode* sfcn_args = sfcn->getArgs();
+                int actual_nargs = 0;
+                if (parse_args && parse_args->size() > 0) {
+                    actual_nargs = (int)parse_args->size();
+                } else if (sfcn_args && sfcn_args->size() > 0) {
+                    actual_nargs = (int)sfcn_args->size();
+                }
+
+                // Build args array on stack
+                llvm::Value* args_array;
+                if (actual_nargs == 0) {
+                    args_array = llvm::ConstantPointerNull::get(
+                        llvm::cast<llvm::PointerType>(ptr_type));
+                } else {
+                    args_array = builder->CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, actual_nargs));
+                    for (int i = 0; i < actual_nargs; i++) {
+                        auto* val = getVal(inv->operands[i].id, error);
+                        if (!val) { return false; }
+                        llvm::Value* boxed = boxValue(val, inv->operands[i].id);
+                        builder->CreateStore(boxed, builder->CreateGEP(i64_type, args_array,
+                            llvm::ConstantInt::get(i32_type, i)));
+                    }
+                }
+
+                if (aot_mode) {
+                    llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
+                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                } else {
+                    llvm::Value* sfcn_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(sfcn)),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {sfcn_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                }
+                // Background call may modify closure-captured vars but not locals
+
             } else if (inv->invoke_opcode == QoreIROpcode::CastList
                     || inv->invoke_opcode == QoreIROpcode::CastHash
                     || inv->invoke_opcode == QoreIROpcode::CastObject
@@ -9269,24 +9327,83 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
 
-        // === Background op (always uses AST) ===
+        // === Background op ===
         case QoreIROpcode::BackgroundInt: {
             const auto* expr_inst = static_cast<const QoreIRExprInstruction*>(inst);
-            QoreValue expr_val = expr_inst->expr;
-            uint64_t expr_bits;
-            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
             llvm::Value* result;
-            if (aot_mode) {
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+            if (!expr_inst->operands.empty()) {
+                // Decomposed path: pre-evaluated args + method identity from expr
+                auto* bg_op = dynamic_cast<const QoreBackgroundOperatorNode*>(
+                    expr_inst->expr.getInternalNode());
+                assert(bg_op);
+                auto* sfcn = dynamic_cast<const SelfFunctionCallNode*>(
+                    bg_op->getExp().getInternalNode());
+                assert(sfcn && sfcn->getMethod());
+                const char* method_name = sfcn->getName();
+
+                // Determine actual arg count from SelfFunctionCallNode's parse args
+                const QoreParseListNode* parse_args = sfcn->getParseArgs();
+                const QoreListNode* sfcn_args = sfcn->getArgs();
+                int actual_nargs = 0;
+                if (parse_args && parse_args->size() > 0) {
+                    actual_nargs = (int)parse_args->size();
+                } else if (sfcn_args && sfcn_args->size() > 0) {
+                    actual_nargs = (int)sfcn_args->size();
+                }
+
+                // Build args array on stack
+                llvm::Value* args_array;
+                if (actual_nargs == 0) {
+                    args_array = llvm::ConstantPointerNull::get(
+                        llvm::cast<llvm::PointerType>(ptr_type));
+                } else {
+                    args_array = builder->CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, actual_nargs));
+                    for (int i = 0; i < actual_nargs; i++) {
+                        auto* val = getVal(expr_inst->operands[i].id, error);
+                        if (!val) { return false; }
+                        llvm::Value* boxed = boxValue(val, expr_inst->operands[i].id);
+                        builder->CreateStore(boxed, builder->CreateGEP(i64_type, args_array,
+                            llvm::ConstantInt::get(i32_type, i)));
+                    }
+                }
+
+                if (aot_mode) {
+                    // AOT: embed method name, resolve at runtime
+                    llvm::Value* name_ptr = builder->CreateGlobalStringPtr(method_name);
+                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {name_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                } else {
+                    // JIT: embed SelfFunctionCallNode pointer directly
+                    llvm::Value* sfcn_ptr = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, reinterpret_cast<uint64_t>(sfcn)),
+                        ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_background_self_call",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {sfcn_ptr, args_array,
+                        llvm::ConstantInt::get(i32_type, actual_nargs), xsink_arg});
+                }
             } else {
-                llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
-                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                // Full AST fallback path
+                QoreValue expr_val = expr_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                if (aot_mode) {
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                } else {
+                    llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {expr_const, xsink_arg});
+                }
             }
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
