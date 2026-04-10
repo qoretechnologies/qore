@@ -5066,7 +5066,8 @@ extern "C" DLLEXPORT int qore_aot_run(
 static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
-    const char* mod_name);
+    const char* mod_name,
+    QoreProgram* shadow_pgm = nullptr);
 
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
@@ -5207,7 +5208,7 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label);
+                            init_descriptors, label, nullptr);
                     }
                 }
             }
@@ -5427,7 +5428,8 @@ extern "C" DLLEXPORT int qore_aot_run_v2(
 static void executeInitFunctions(QoreProgram* pgm,
     const std::vector<AOTInitFuncExecInfo>& exec_infos,
     const std::vector<AOTInitFuncDescriptor>& descriptors,
-    const char* mod_name);
+    const char* mod_name,
+    QoreProgram* shadow_pgm);
 
 struct AotModuleState {
     QoreProgram* pgm = nullptr;
@@ -5898,7 +5900,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
                     ProgramThreadCountContextHelper tch(&xsink, *qpgm, false);
                     if (!xsink.isException()) {
                         executeInitFunctions(*qpgm, init_func_contexts,
-                            init_descriptors, label);
+                            init_descriptors, label, nullptr);
                     }
                 }
             }
@@ -6422,8 +6424,21 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
                 }
             }
 
-            // Build init function contexts from slot maps using the TARGET program
-            // (tpgm) which has properly committed class hierarchies after merge
+            // Build init function contexts from slot maps.
+            //
+            // We pass the MODULE's own program (it->second.pgm) rather than the
+            // target program (tpgm). The module's program has all dependencies
+            // loaded (e.g. reflection — providing Qore::Reflection::IntType),
+            // so RUNTIME_CONST_REF slot resolution for cross-module constants
+            // finds the right ConstantEntry. The target program may not have
+            // those dependencies loaded as top-level namespaces.
+            //
+            // Classes and hashdecls are merged into the target namespace tree
+            // by scanMergeCommittedNamespace above, but the module's own
+            // program still holds references to everything the AOT-compiled
+            // init code was lowered against, so the module program is the
+            // natural context for slot resolution.
+            QoreProgram* init_ctx_pgm = it->second.pgm ? it->second.pgm : tpgm;
             QoreAOTBinaryReader init_reader;
             std::string reader_error;
             if (init_reader.open(it->second.metadata.data(),
@@ -6433,15 +6448,23 @@ extern "C" DLLEXPORT void qore_aot_module_ns_init(QoreNamespace* root_ns, QoreNa
                 std::vector<AOTInitFuncExecInfo> init_func_contexts;
                 int registered = 0;
                 registerAOTFunctionsFromSlotMaps(init_reader, target_root_priv,
-                    tpgm, func_map, registered, &init_func_contexts);
+                    init_ctx_pgm, func_map, registered, &init_func_contexts);
 
                 printd(2, "AOT ns_init '%s': got %d init func contexts\n",
                     mod_name, (int)init_func_contexts.size());
                 if (!init_func_contexts.empty()) {
                     printd(2, "AOT ns_init '%s': executing %d init functions\n",
                         mod_name, (int)init_func_contexts.size());
+                    // Execute against the target program (tpgm) so objects
+                    // constructed during init find committed class hierarchies.
+                    // Pass init_ctx_pgm (the module's own program) as shadow so
+                    // results are also mirrored into the module's own
+                    // ConstantEntries — subsequent init functions built against
+                    // the module program will then read correct values via
+                    // RuntimeConstantRefNode.
                     executeInitFunctions(tpgm, init_func_contexts,
-                        it->second.init_descriptors, mod_name);
+                        it->second.init_descriptors, mod_name,
+                        init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr);
                 }
             }
             // Clear stored metadata
@@ -6655,7 +6678,8 @@ static void executeInitFunctions(
         QoreProgram* pgm,
         const std::vector<AOTInitFuncExecInfo>& exec_infos,
         const std::vector<AOTInitFuncDescriptor>& descriptors,
-        const char* mod_name) {
+        const char* mod_name,
+        QoreProgram* shadow_pgm) {
     if (exec_infos.empty() || descriptors.empty()) {
         return;
     }
@@ -6668,6 +6692,13 @@ static void executeInitFunctions(
 
     qore_program_private* pp = qore_program_private::get(*pgm);
     qore_ns_private* root_ns = qore_ns_private::get(*pp->RootNS);
+    // Shadow program (usually the module's own program): when init functions
+    // are built against the module's namespace tree, subsequent init functions
+    // read cross-constant references through the MODULE program's
+    // ConstantEntry. We mirror each init result into the shadow program as
+    // well as the target program so later init functions see populated values.
+    qore_program_private* shadow_pp = shadow_pgm ? qore_program_private::get(*shadow_pgm) : nullptr;
+    qore_ns_private* shadow_root_ns = shadow_pp ? qore_ns_private::get(*shadow_pp->RootNS) : nullptr;
 
     int executed = 0;
     int failed = 0;
@@ -6724,7 +6755,20 @@ static void executeInitFunctions(
                     break;
                 }
                 // Set both val and saved_val so RuntimeConstantRefNode::evalImpl() works
-                ce->setRuntimeValue(result, &xsink);
+                ce->setRuntimeValue(result.refSelf(), &xsink);
+                // Also mirror into the shadow program's ConstantEntry if one exists,
+                // so subsequent init functions resolving this constant via the
+                // module program see the populated value.
+                if (shadow_root_ns) {
+                    qore_ns_private* sns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
+                    if (sns) {
+                        ConstantEntry* sce = sns->constant.findEntry(desc.item_name.c_str());
+                        if (sce && sce != ce) {
+                            sce->setRuntimeValue(result.refSelf(), &xsink);
+                        }
+                    }
+                }
+                result.discard(&xsink);
                 ++executed;
                 printd(2, "AOT init: initialized namespace constant '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
