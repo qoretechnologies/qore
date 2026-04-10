@@ -72,9 +72,27 @@ if ! grep -q "^qore:x:${QORE_UID}" /etc/passwd; then
     adduser -u ${QORE_UID} -D -G qore -h /home/qore -s /bin/bash qore
 fi
 
-# install gdb for crash diagnostics (captures backtraces on segfault)
+# Install gdb for crash diagnostics (captures backtraces on segfault).  This
+# is strictly optional — gdb is only used to post-process core dumps after a
+# segfault, and the tests themselves do not depend on it.  A failed install
+# must not abort the test run.
+#
+# Alpine has broken apk installs in the past when the pinned base-image musl
+# version (e.g. 1.2.5-r21) skews behind the repo's current musl-dbg
+# dependency pin (e.g. 1.2.5-r22 with [!musl<1.2.5-r22]), causing apk to
+# refuse the install with a long "unable to select packages" dependency
+# chain.  When that happens, attempt an `apk upgrade` first to bring musl
+# into sync; if that still fails, carry on without gdb — tests will just
+# lose backtrace capture on segfault, which is diagnostic, not functional.
 if ! command -v gdb > /dev/null 2>&1; then
-    apk add --no-cache gdb
+    if ! apk add --no-cache gdb 2>/dev/null; then
+        echo "WARNING: initial gdb install failed (likely apk repo drift vs. base image);"
+        echo "WARNING: attempting 'apk upgrade' + retry..."
+        apk upgrade --no-cache 2>/dev/null || true
+        if ! apk add --no-cache gdb 2>/dev/null; then
+            echo "WARNING: gdb install still failing — continuing without crash backtrace support"
+        fi
+    fi
 fi
 
 # Enable core dumps before dropping to qore user (needs root for /proc/sys writes)
