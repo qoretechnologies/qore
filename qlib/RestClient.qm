@@ -508,6 +508,28 @@ public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoo
         @since %RestClient 2.6
     */
     abstract setLogger(*LoggerInterface logger);
+
+    #! Preprocesses the request body before serialization
+    /** The default implementation returns the body unchanged. Subclasses (e.g.,
+        @ref MewsRestClient::MewsRestClient "MewsRestClient",
+        @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo") override this
+        to inject API-specific fields (auth tokens, metadata) into every outgoing
+        request body.
+
+        Transport implementations (@ref RestClient::RestClient "RestClient" and
+        @ref RestClientIo::RestClientIo "RestClientIo") call this hook before
+        running the schema validator's request processing step.
+
+        Called with no argument by @ref RestSchemaValidator::AbstractRestSchemaObject
+        "AbstractRestSchemaObject::getDataTypeIntern()" to extract a default body
+        containing injected fields, which are used as defaults for required body
+        fields in generated data provider types.
+
+        @param request_body the caller-supplied body (may be @ref NOTHING)
+    */
+    auto preprocessRequestBody(auto request_body) {
+        return request_body;
+    }
 }
 
 #! this class provides the REST client API

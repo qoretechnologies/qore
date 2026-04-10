@@ -1809,6 +1809,9 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     # Pre-serialized body: caller owns serialization and Content-Type
                     serialized_body = body;
                 } else {
+                    # Give subclasses a chance to transform the body (e.g.,
+                    # MewsRestClientIo injects auth tokens into every request)
+                    body = preprocessRequestBody(body);
                     hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
                         method, path, body, hdr, req_sct);
                     serialized_body = req.body;

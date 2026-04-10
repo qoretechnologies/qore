@@ -1144,7 +1144,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
     }
 
     #! Returns the data type corresponding to the reference type
-    AbstractDataProviderType getTypeForReference(string rstr, bool required = True, *HTTPClient rest) {
+    AbstractDataProviderType getTypeForReference(string rstr, bool required = True, *object rest) {
         *SchemaObject ref = definitions{rstr};
         if (!ref) {
             throw "INVALID-REFERENCE-TYPE", sprintf("%y is not a known type", rstr);
@@ -1231,13 +1231,13 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
     #! Returns the data type for the given schema
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
-            *HTTPClient rest) {
+            *object rest) {
         return schema.getDataType(required, rest);
     }
 
     #! Returns a field definition from the Swagger parameter
     AbstractDataField getFieldFromSchema(string name, *string desc, SchemaObject schema,
-            bool required = True, *HTTPClient rest) {
+            bool required = True, *object rest) {
         return schema.getField(name, desc, required, rest);
     }
 
@@ -1246,7 +1246,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
         @since Swagger 2.4
     */
     AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
-            bool required = True, *HTTPClient rest) {
+            bool required = True, *object rest) {
         return cast<SchemaObject>(schema).getField(name, desc, required, rest);
     }
 
@@ -1715,7 +1715,7 @@ public class SwaggerSchema inherits ParameterGroup, AbstractRestSchemaValidator 
 
         @return a data provider object for this connection, if supported by any REST schema validator object
     */
-    private AbstractDataProvider getDataProviderImpl(HTTPClient rest) {
+    private AbstractDataProvider getDataProviderImpl(object rest) {
         # to avoid circular dependencies, this object loads the SwaggerDataProvider and creates the data provider
         # object dynamically
         load_module("SwaggerDataProvider");

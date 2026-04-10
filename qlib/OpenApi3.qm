@@ -1596,7 +1596,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
         @return a data provider object for this connection, if supported by any REST schema validator object
     */
-    private AbstractDataProvider getDataProviderImpl(HTTPClient rest) {
+    private AbstractDataProvider getDataProviderImpl(object rest) {
         # to avoid circular dependencies, this object loads the OpenApi3DataProvider and creates the data provider
         # object dynamically
         load_module("OpenApi3DataProvider");
@@ -1702,13 +1702,13 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
 
     #! Returns the data type for the given schema
     AbstractDataProviderType getSchemaDataType(string path, SchemaObject schema, bool required = True,
-            *HTTPClient rest) {
+            *object rest) {
         return schema.getDataType(required, rest);
     }
 
     #! Returns a field definition from the OpenApi3 parameter
     AbstractDataField getFieldFromSchema(string name, *string desc, SchemaObject schema,
-            bool required = True, *HTTPClient rest) {
+            bool required = True, *object rest) {
         return schema.getField(name, desc, required, rest);
     }
 
@@ -1717,7 +1717,7 @@ public class OpenApi3Schema inherits ObjectBase, AbstractRestSchemaValidator {
         @since OpenApi3 2.3
     */
     AbstractDataField getFieldFromSchema(string name, *string desc, RestSchemaValidator::AbstractSchemaObject schema,
-            bool required = True, *HTTPClient rest) {
+            bool required = True, *object rest) {
         return cast<SchemaObject>(schema).getField(name, desc, required, rest);
     }
 
