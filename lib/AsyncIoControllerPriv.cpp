@@ -2008,6 +2008,15 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     // the worker returns.  Re-registration happens in
                     // ContinuePollResult handler (updateEventLoopRegistration).
                     unregisterFromEventLoop(t, op.key, xsink);
+                    // Clear cached state so ContinuePollResult forces a full
+                    // updateEventLoopRegistration (the fast path would skip
+                    // re-registration if hash/events/fd-gen are unchanged)
+                    {
+                        auto cit = t.cache.find(op.key);
+                        if (cit != t.cache.end()) {
+                            cit->second.cached_sock_hash.clear();
+                        }
+                    }
                     this->ref();
                     op.spop_obj->ref();
                     call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
@@ -2128,6 +2137,13 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 // Remove socket from epoll while the worker is processing
                 // (same rationale as the C++ needsWorkerDispatch path above)
                 unregisterFromEventLoop(t, op.key, xsink);
+                // Clear cached state so ContinuePollResult forces re-registration
+                {
+                    auto cit = t.cache.find(op.key);
+                    if (cit != t.cache.end()) {
+                        cit->second.cached_sock_hash.clear();
+                    }
+                }
                 this->ref();  // keep controller alive until worker delivers result
                 op.spop_obj->ref();
                 call_dispatcher.load(std::memory_order_acquire)->dispatchContinuePollAsync(op.spop_obj, this, op.key);
@@ -3233,11 +3249,13 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                             t.cache.erase(it);
                             t.cache_size.fetch_sub(1, std::memory_order_relaxed);
                         } else {
-                            // Still pending — for C++ operations, target the new
-                            // socket for immediate re-poll so the op is included
-                            // in the next Phase 1 even if epoll hasn't fired yet
-                            // (application-level data may be buffered in Http2Session).
-                            if (cmd.continue_poll_result && pinfo.spop_base) {
+                            // Still pending — target the socket for immediate
+                            // re-poll so the op is included in the next Phase 1
+                            // even if epoll hasn't fired yet.  This is essential
+                            // after unregisterFromEventLoop(): application-level
+                            // data may be buffered in SSL/HTTP/2 layers (not the
+                            // kernel buffer), so epoll alone won't trigger.
+                            if (cmd.continue_poll_result) {
                                 std::string sh;
                                 int ev = 0;
                                 ExceptionSink sh_xsink;

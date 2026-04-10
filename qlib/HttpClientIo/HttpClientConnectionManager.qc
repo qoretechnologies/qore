@@ -829,6 +829,11 @@ public class HttpClientConnectionManager {
             }
         }
         foreach HttpClientConnection conn in (to_close) {
+            # Cancel from the I/O controller BEFORE closing to release the
+            # controller's strong references to the socket and poll operation.
+            # Without this, the PollInfo entry keeps the objects alive and the
+            # socket fd leaks until the controller is destroyed.
+            try { controller.cancel(conn.getSocket()); } catch () {}
             try {
                 conn.close();
             } catch () {
@@ -1811,6 +1816,7 @@ public class HttpClientConnectionManager {
         foreach HttpClientConnection conn in (to_close) {
             log(LoggerLevel::DEBUG, "evicting dead %s connection %d",
                 conn.getProtocol(), conn.getConnectionId());
+            try { controller.cancel(conn.getSocket()); } catch () {}
             try { conn.close(); } catch () {}
         }
     }

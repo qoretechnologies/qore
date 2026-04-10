@@ -2765,17 +2765,12 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                         cx."response-encoding", hdr.method == "HEAD");
                     return;
                 }
-                if (want_streaming) {
-                    # Save pre-read body for the stream handler; don't pass to REST handler
-                    cx."stream-body" = cx."header-info".body;
+                # Body is always binary from the I/O layer — convert to string if text content type
+                if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
+                        || hdr."content-type" =~ /^application\/connect\+/) {
+                    body = cx."header-info".body;
                 } else {
-                    # Body is always binary from the I/O layer — convert to string if text content type
-                    if (hdr."content-encoding" || hdr."content-type" == MimeTypeOctetStream
-                            || hdr."content-type" =~ /^application\/connect\+/) {
-                        body = cx."header-info".body;
-                    } else {
-                        body = cx."header-info".body.toString();
-                    }
+                    body = cx."header-info".body.toString();
                 }
             } else if (hdr."content-length") {
                 # Pre-read Content-Length check against max body size limit

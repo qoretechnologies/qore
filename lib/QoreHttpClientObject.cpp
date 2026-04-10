@@ -2327,7 +2327,8 @@ struct qore_httpclient_priv {
     }
 
     // Establish a QUIC/HTTP3 connection to the given server
-    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection);
+    // timeout_override_ms: -1 = use connect_timeout_ms; > 0 = use this timeout
+    DLLLOCAL int connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms = -1);
 
     // Send an HTTP/3 request and get the response
     DLLLOCAL QoreHashNode* sendHttp3MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
@@ -4627,6 +4628,7 @@ int QoreHttpClientObject::setHTTPVersion(const char* version, ExceptionSink* xsi
     } else if (!strcmp(version, "2.0") || !strcmp(version, "2")) {
         http_priv->http11 = true;
         http_priv->http2_mode = HTTP2_MODE_REQUIRED;
+        http_priv->http3_mode = HTTP3_MODE_DISABLED;
         // ALPN protocols are set at connect time based on both object mode and global mode
     } else if (!strcmp(version, "3.0") || !strcmp(version, "3")) {
         http_priv->http11 = true;
@@ -5614,7 +5616,14 @@ QoreHashNode* qore_httpclient_priv::sendMessageAndGetResponse(con_info& connecti
     if (!*xsink && !http3_active && http3_mode != HTTP3_MODE_DISABLED && connection.ssl) {
         auto alt = lookupAltSvc(connection.host.c_str(), connection.port);
         if (alt.has_value() || http3_mode == HTTP3_MODE_REQUIRED) {
-            if (!connectQuic(xsink, connection)) {
+            // In auto mode, use a short timeout (3s) for the speculative QUIC
+            // upgrade.  This is an opportunistic optimization — if the server
+            // supports QUIC, the handshake completes in <100ms.  A long timeout
+            // would block the calling thread (potentially a handler pool worker),
+            // causing latency spikes and pool exhaustion when QUIC is unreachable.
+            // Required mode uses the full connect_timeout_ms.
+            int quic_timeout = http3_mode == HTTP3_MODE_REQUIRED ? -1 : 3000;
+            if (!connectQuic(xsink, connection, quic_timeout)) {
                 return sendHttp3MessageAndGetResponse(mname, meth, msgpath, nh, body, data, size,
                     send_callback, is, max_chunk_size, trailer_callback,
                     info, timeout_ms, code, xsink);
@@ -6424,7 +6433,7 @@ std::optional<qore_httpclient_priv::AltSvcEntry> qore_httpclient_priv::lookupAlt
 // This is analogous to TCP connect + TLS handshake: it blocks under msock->m
 // until the handshake completes or times out.  The asynchronous (poll-based)
 // path uses SocketQuicClientPollOperation instead.
-int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection) {
+int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection, int timeout_override_ms) {
     // Resolve server address
     struct addrinfo hints{};
     hints.ai_family = AF_UNSPEC;
@@ -6547,7 +6556,8 @@ int qore_httpclient_priv::connectQuic(ExceptionSink* xsink, con_info& connection
     quic_local_addrlen = local_addrlen;
 
     // Drive QUIC handshake
-    int64 deadline_ms = connect_timeout_ms < 0 ? -1 : q_clock_getmillis() + connect_timeout_ms;
+    int effective_timeout = timeout_override_ms > 0 ? timeout_override_ms : connect_timeout_ms;
+    int64 deadline_ms = effective_timeout < 0 ? -1 : q_clock_getmillis() + effective_timeout;
 
     while (!quic_session->isHandshakeComplete()) {
         if (quic_session->isClosed()) {

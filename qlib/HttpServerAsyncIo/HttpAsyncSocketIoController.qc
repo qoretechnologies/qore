@@ -2252,21 +2252,22 @@ public class HttpAsyncSocketIoController {
         log(LoggerLevel::DEBUG, "Header complete for keep-alive: %y", uh);
 
         # Check if H1 request body should be read by I/O controller
-        # For requests with body (Content-Length or chunked) and no Expect header,
-        # read the body via async I/O before dispatching to the handler.
+        # Only pre-read Content-Length bodies — NOT chunked. Chunked encoding
+        # is designed for streaming; handlers (AbstractStreamRequest) read
+        # chunked data incrementally via callbacks. Pre-reading would consume
+        # the data before the handler can process it.
         # Expect: 100-continue requests fall through to the handler (which sends
         # 100-continue and reads the body synchronously) to avoid a round-trip.
         if (!output.info.http2 && !output.info.http3) {
             auto content_length = output.hdr."content-length";
-            bool chunked = (output.hdr."transfer-encoding" =~ /chunked/i);
             bool has_expect = (output.hdr.expect =~ /100-continue/i);
-            bool has_body = (content_length > 0 || chunked);
+            bool has_body = (content_length > 0);
 
             if (has_body && !has_expect) {
                 try {
-                    int cl = content_length ?? -1;
+                    int cl = content_length;
                     bool conn_close = (output.hdr.connection =~ /close/i);
-                    AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, chunked,
+                    AbstractPollOperation body_op = cinfo.sock.startPollReadHttpBody(cl, False,
                         conn_close);
                     # Stay in controller tracking — socket is managed during body read
                     hash<HttpActiveConnectionInfo> new_cinfo;
