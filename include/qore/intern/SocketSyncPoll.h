@@ -173,6 +173,33 @@ public:
                                           int timeout_ms,
                                           const char* cname, const char* mname,
                                           ExceptionSink* xsink);
+
+    //! Wait on the primary socket fd plus any extra fds a poll-state surfaces.
+    /** Used by @ref run() when `state.getExtraWaitFds()` is non-empty, so
+        multi-fd poll-states (e.g. QUIC migration candidates) can wake on
+        a readiness event on any of their fds.  Builds a pollfd array with
+        the primary fd (if still open) followed by each extra fd, and
+        calls `::poll()` directly.
+
+        @param sock the Socket whose primary fd is included in the wait
+        @param extras extra fds from @ref AbstractPollState::getExtraWaitFds()
+        @param primary_want_read request POLLIN on the primary fd
+        @param primary_want_write request POLLOUT on the primary fd
+        @param timeout_ms wait budget in ms; negative means "wait forever"
+        @param cname class name for error messages
+        @param mname method name for error messages
+        @param xsink exception sink
+
+        @return `> 0` when at least one fd is ready, `0` on timeout, `< 0`
+            on error (exception raised)
+    */
+    DLLLOCAL static int waitMultiFd(qore_socket_private& sock,
+                                    const std::vector<ExtraWaitFd>& extras,
+                                    bool primary_want_read,
+                                    bool primary_want_write,
+                                    int timeout_ms,
+                                    const char* cname, const char* mname,
+                                    ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_SOCKETSYNCPOLL_H

@@ -35,6 +35,11 @@
 #include "qore/intern/SocketSyncPoll.h"
 
 #include <cassert>
+#include <vector>
+
+#ifdef HAVE_POLL
+#include <poll.h>
+#endif
 
 int SocketSyncPoll::run(qore_socket_private& sock, AbstractPollState& state,
         int timeout_ms, const char* cname, const char* mname, ExceptionSink* xsink) {
@@ -64,8 +69,15 @@ int SocketSyncPoll::run(qore_socket_private& sock, AbstractPollState& state,
         bool want_write = (rc & SOCK_POLLOUT) != 0;
         assert(want_read || want_write);
 
+        // If the poll-state has extra fds to watch (e.g. QUIC migration
+        // candidate), build a combined pollfd array and poll() directly
+        // so a readiness event on any fd wakes us.
+        std::vector<ExtraWaitFd> extras = state.getExtraWaitFds();
         int wait_rc;
-        if (want_read && want_write) {
+        if (!extras.empty()) {
+            wait_rc = waitMultiFd(sock, extras, want_read, want_write,
+                timeout_ms, cname, mname, xsink);
+        } else if (want_read && want_write) {
             // Ambivalent readiness — use the lower-level asyncIoWait()
             // directly to wait for either direction simultaneously.
             wait_rc = sock.asyncIoWait(timeout_ms, true, true, cname, mname, xsink);
@@ -93,6 +105,73 @@ int SocketSyncPoll::run(qore_socket_private& sock, AbstractPollState& state,
 
         // wait_rc > 0 — retry continuePoll()
     }
+}
+
+int SocketSyncPoll::waitMultiFd(qore_socket_private& sock,
+        const std::vector<ExtraWaitFd>& extras,
+        bool primary_want_read, bool primary_want_write,
+        int timeout_ms, const char* cname, const char* mname,
+        ExceptionSink* xsink) {
+    assert(xsink);
+#ifdef HAVE_POLL
+    // Build pollfd array: primary fd (if open) + each extra fd.
+    std::vector<struct pollfd> pfds;
+    pfds.reserve(extras.size() + 1);
+    if (sock.sock != QORE_INVALID_SOCKET) {
+        struct pollfd p = {};
+        p.fd = sock.sock;
+        if (primary_want_read) {
+            p.events |= POLLIN;
+        }
+        if (primary_want_write) {
+            p.events |= POLLOUT;
+        }
+        if (p.events) {
+            pfds.push_back(p);
+        }
+    }
+    for (const auto& e : extras) {
+        if (e.fd < 0) {
+            continue;
+        }
+        struct pollfd p = {};
+        p.fd = e.fd;
+        if (e.want_read) {
+            p.events |= POLLIN;
+        }
+        if (e.want_write) {
+            p.events |= POLLOUT;
+        }
+        if (p.events) {
+            pfds.push_back(p);
+        }
+    }
+    if (pfds.empty()) {
+        se_not_open(cname, mname, xsink, "waitMultiFd");
+        return -1;
+    }
+
+    int pto = (timeout_ms < 0) ? -1 : timeout_ms;
+    int rc;
+    while (true) {
+        rc = ::poll(pfds.data(), pfds.size(), pto);
+        if (rc >= 0) {
+            break;
+        }
+        if (errno == EINTR) {
+            continue;
+        }
+        qore_socket_error(xsink, "SOCKET-SELECT-ERROR",
+            "error in poll() during multi-fd wait", mname);
+        return -1;
+    }
+    return rc;
+#else
+    // Platforms without poll() fall back to the primary fd only.
+    (void)extras;
+    return sock.asyncIoWait(timeout_ms, primary_want_read,
+        primary_want_write, cname, mname, xsink);
+#endif
 }
 
 int SocketSyncPoll::waitReleasingLock(qore_socket_private& sock, QoreThreadLock& outer_lock,
