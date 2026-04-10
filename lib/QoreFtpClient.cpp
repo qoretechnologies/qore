@@ -281,6 +281,11 @@ struct qore_ftp_private {
 
     // unlocked
     DLLLOCAL int checkConnectedUnlocked(ExceptionSink* xsink) {
+        // Single chokepoint — every public sync FtpClient entry point routes
+        // through this helper before touching the control/data sockets, so
+        // one assert here catches any I/O-thread misuse at the FtpClient API
+        // level with a clear class name in the error message.
+        SocketSyncPoll::assertNotOnIoThread("FtpClient", "ftp", xsink);
         return (!loggedin || !control.isOpen()) && connectUnlocked(xsink) ? -1 : 0;
     }
 
@@ -294,6 +299,7 @@ struct qore_ftp_private {
     }
 
     DLLLOCAL int connect(ExceptionSink* xsink) {
+        SocketSyncPoll::assertNotOnIoThread("FtpClient", "connect", xsink);
         SafeLocker sl(m);
         return connectUnlocked(xsink);
     }

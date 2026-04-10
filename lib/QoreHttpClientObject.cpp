@@ -5559,6 +5559,7 @@ bool QoreHttpClientObject::isProxySecure() const {
 }
 
 int QoreHttpClientObject::connect(ExceptionSink* xsink) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "connect", xsink);
     SafeLocker sl(priv->m);
 
     if (priv->checkNonBlock(xsink)) {
@@ -7349,6 +7350,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     assert(!(data && is));
     assert(!(is && send_callback));
     assert(!info || info->is_unique());
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", mname, xsink);
 
     // issue #4841: do not override the connection path when sending
     con_info this_connection = connection;
