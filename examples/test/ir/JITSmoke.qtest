@@ -177,6 +177,8 @@ class JITSmokeTest inherits QUnit::Test {
         addTestCase("self.member += on uninitialized list", \testSelfMemberListAppend());
         addTestCase("exception callstack regression", \testExceptionCallstack());
         addTestCase("hash/list auto-vivification from NOTHING", \testAutoVivification());
+        addTestCase("list assignment decomposition", \testListAssignment());
+        addTestCase("extract via LValuePathTernary", \testExtractLValuePath());
         set_return_value(main());
     }
 
@@ -6500,6 +6502,50 @@ printf(\"%d %s %d %s %s %d\\n\",
             string result = trim(runScript(code, mode));
             assertEq("1 test 42 val first 1", result,
                 sprintf("hash/list auto-vivification from NOTHING (%s)", mode));
+        }
+    }
+
+    testListAssignment() {
+        # List assignment: decomposed into ListIndexAccess + StoreLocal
+        # Regex extract x/pattern/ returns captured groups as a list
+        string code = "%modern
+string t = \"arg[42] ?hello:world\";
+(softint n, *string t0, *string t1) = (t =~ x/arg\\[([0-9]+)\\](?:\\s*\\?([^:]*):(.*))?$/);
+printf(\"%d %s %s\\n\", n, t0, t1);
+
+# Multiple captures from simple list
+list<auto> vals = (10, \"a\", \"b\");
+(softint n2, *string t2a, *string t2b) = vals;
+printf(\"%d %s %s\\n\", n2, t2a, t2b);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("42 hello world\n10 a b", result,
+                sprintf("list assignment decomposition (%s)", mode));
+        }
+    }
+
+    testExtractLValuePath() {
+        # Extract via LValuePathTernary: self.member and hash member paths
+        string code = "%modern
+class ExtractTest {
+    private { hash<auto> data; }
+    constructor() {
+        data = {\"items\": (1, 2, 3, 4, 5), \"name\": \"test\"};
+    }
+    list<auto> extractItems(int offset) {
+        return extract data.items, offset;
+    }
+    hash<auto> getData() { return data; }
+}
+auto obj = new ExtractTest();
+list<auto> extracted = obj.extractItems(2);
+printf(\"%y %y\\n\", extracted, obj.getData().items);
+";
+        foreach string mode in ("ast", "ir", "jit") {
+            string result = trim(runScript(code, mode));
+            assertEq("[3, 4, 5] [1, 2]", result,
+                sprintf("extract via LValuePathTernary (%s)", mode));
         }
     }
 
