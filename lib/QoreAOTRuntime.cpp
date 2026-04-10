@@ -1576,6 +1576,18 @@ static QoreAOTContext* buildContextFromSlotMap(
                         case AOTExprKind::CAST_HASHDECL: {
                             const TypedHashDecl* hd = ti
                                 ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
+                            if (!hd && ref1) {
+                                // Fallback: resolve hashdecl by namespace path directly
+                                if (pgm) {
+                                    const QoreNamespace* pns = nullptr;
+                                    hd = pgm->findHashDecl(ref1, pns);
+                                }
+                                if (!hd) {
+                                    const qore_ns_private* found_ns = nullptr;
+                                    hd = qore_root_ns_private::runtimeFindHashDecl(
+                                        *pp->RootNS, ref1, found_ns);
+                                }
+                            }
                             if (hd) {
                                 cast_node = new QoreHashDeclCastOperatorNode(
                                     &loc_builtin, hd, QoreValue(), or_nothing != 0);

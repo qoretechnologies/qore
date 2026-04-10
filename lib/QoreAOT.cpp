@@ -3797,6 +3797,41 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     return true;
 }
 
+// Returns true if an Invoke instruction's expression slot can be skipped because
+// the LLVM codegen handles it natively without the AST expression.
+static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
+    // Pure computation opcodes with pre-evaluated operands
+    if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
+                static_cast<int>(ii->invoke_opcode))
+                && ii->operands.size() >= 2)
+            || (!ii->operands.empty() && getOpcodeIsUnaryInvoke(
+                static_cast<int>(ii->invoke_opcode))
+                && ii->operands.size() >= 1)
+            || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
+            || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
+            || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
+            || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
+            || (isRegexInvokeOpcode(ii->invoke_opcode)
+                && !ii->operands.empty())) {
+        return true;
+    }
+    // CreateParseRef with simple local lvalue
+    if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
+        if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
+                ii->expr.getInternalNode())) {
+            const QoreValue& lv_expr = prn->getLVExp();
+            if (lv_expr.getType() == NT_VARREF) {
+                auto* vrn = lv_expr.get<VarRefNode>();
+                if (vrn->getType() == VT_LOCAL
+                        || vrn->getType() == VT_LOCAL_TS) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
 // Walk a lvalue expression tree and register all inner VarRefNodes in the slot maps.
 // Required so ExprTreeSerializer can serialize subscript lvalue expressions even when the
 // base variable only appears inside a *LValue instruction and not in any LoadLocal/StoreLocal.
@@ -3858,46 +3893,26 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::Invoke: {
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
-                    // Skip expression slot for pure computation opcodes whose operands
-                    // are already lowered IR values. LLVM codegen dispatches these
-                    // directly via qore_rt_binary_op/qore_rt_unary_op without the expr slot.
-                    // NOTE: This is stricter than the ExprOp skip — only binary/unary
-                    // invoke opcodes and specific special cases skip here, because
-                    // other invoke_opcodes (e.g., Cast*) still need the expr slot
-                    // for type info even when operands are pre-evaluated.
-                    if ((!ii->operands.empty() && getOpcodeIsBinaryInvoke(
-                                static_cast<int>(ii->invoke_opcode))
-                                && ii->operands.size() >= 2)
-                            || (!ii->operands.empty() && getOpcodeIsUnaryInvoke(
-                                static_cast<int>(ii->invoke_opcode))
-                                && ii->operands.size() >= 1)
-                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccess
-                            || ii->invoke_opcode == QoreIROpcode::HashKeyAccessInt
-                            || ii->invoke_opcode == QoreIROpcode::CallClosureDirect
-                            || ii->invoke_opcode == QoreIROpcode::InstanceOfBool
-                            || (isRegexInvokeOpcode(ii->invoke_opcode)
-                                && !ii->operands.empty())) {
-                        break;
-                    }
-                    // CreateParseRef with simple local lvalue: LLVM lowering
-                    // uses qore_rt_create_local_ref_aot(ctx, local_slot) directly,
-                    // no expression slot needed — eliminates EXPR_TREE for \var
-                    if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
-                        if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
-                                ii->expr.getInternalNode())) {
-                            const QoreValue& lv_expr = prn->getLVExp();
-                            if (lv_expr.getType() == NT_VARREF) {
-                                auto* vrn = lv_expr.get<VarRefNode>();
-                                if (vrn->getType() == VT_LOCAL
-                                        || vrn->getType() == VT_LOCAL_TS) {
-                                    // Register the local var (not the expr) so the
-                                    // LLVM lowering can find its slot
-                                    slots.getLocalSlot(
-                                        reinterpret_cast<const void*>(vrn->ref.id));
-                                    break;
+                    // Skip expression slot for opcodes that LLVM codegen handles
+                    // natively without the AST expression
+                    if (shouldSkipInvokeExprSlot(ii)) {
+                        // CreateParseRef with simple local lvalue: register the
+                        // local var so LLVM lowering can find its slot
+                        if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
+                            if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
+                                    ii->expr.getInternalNode())) {
+                                const QoreValue& lv_expr = prn->getLVExp();
+                                if (lv_expr.getType() == NT_VARREF) {
+                                    auto* vrn = lv_expr.get<VarRefNode>();
+                                    if (vrn->getType() == VT_LOCAL
+                                            || vrn->getType() == VT_LOCAL_TS) {
+                                        slots.getLocalSlot(
+                                            reinterpret_cast<const void*>(vrn->ref.id));
+                                    }
                                 }
                             }
                         }
+                        break;
                     }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
@@ -4284,6 +4299,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::Invoke: {
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    if (shouldSkipInvokeExprSlot(ii)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -4708,6 +4726,9 @@ QoreAOTContext* buildAOTContext(const QoreIRFunction& func, int num_locals, int 
                 }
                 case QoreIROpcode::Invoke: {
                     auto* ii = static_cast<QoreIRInvokeInstruction*>(inst.get());
+                    if (shouldSkipInvokeExprSlot(ii)) {
+                        break;
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     if (seen_exprs.insert(bits).second) {
@@ -6470,7 +6491,7 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
     // StaticClassVarRefNode: static class variable reference
     if (auto* sv = dynamic_cast<const StaticClassVarRefNode*>(node)) {
         id.kind = AOTExprKind::STATIC_VARREF;
-        id.ref1 = sv->qc.getName();
+        id.ref1 = sv->qc.getPath();
         id.ref2 = sv->str;
         return id;
     }

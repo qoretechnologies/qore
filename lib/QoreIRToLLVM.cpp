@@ -4915,6 +4915,32 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(push_fn, {list_boxed, val_boxed, xsink_arg});
                 // ListPush doesn't modify locals — no reload needed
 
+            } else if (inv->invoke_opcode == QoreIROpcode::InstanceOfBool) {
+                // InstanceOfBool invoke: native instanceof with pre-evaluated operand
+                auto* val = getVal(inv->operands[0].id, error);
+                if (!val) { return false; }
+                llvm::Value* val_boxed = boxValue(val, inv->operands[0].id);
+                auto* io_node = static_cast<const QoreInstanceOfOperatorNode*>(
+                    inv->expr.getInternalNode());
+                if (!aot_mode) {
+                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                    llvm::Value* ti_ptr = llvm::ConstantInt::get(i64_type,
+                            reinterpret_cast<uint64_t>(ti));
+                    llvm::Value* ti_as_ptr = builder->CreateIntToPtr(ti_ptr, ptr_type);
+                    auto helper = module.getOrInsertFunction("qore_rt_instanceof",
+                            llvm::FunctionType::get(i64_type, {i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {val_boxed, ti_as_ptr});
+                } else {
+                    const QoreTypeInfo* ti = io_node->getInstanceTypeInfo();
+                    std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                    auto helper = module.getOrInsertFunction("qore_rt_instanceof_by_type_path",
+                        llvm::FunctionType::get(i64_type, {i64_type, ptr_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                        {val_boxed, type_path_ptr, xsink_arg});
+                }
+                // instanceof doesn't modify locals — no reload needed
+
             } else if (inv->invoke_opcode == QoreIROpcode::CastList
                     || inv->invoke_opcode == QoreIROpcode::CastHash
                     || inv->invoke_opcode == QoreIROpcode::CastObject
