@@ -32,6 +32,7 @@
 
 %requires(reexport) DataProvider
 %requires(reexport) RestClientIo
+%requires FileLocationHandler
 
 module RestClientDataProvider {
     version = "2.3.0";

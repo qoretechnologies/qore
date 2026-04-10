@@ -297,6 +297,47 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                     },
                 ),
             },
+            "ssl_cert_der": <DataProviderOptionInfo>{
+                "display_name": "SSL Certificate DER",
+                "short_desc": "Indicates if X.509 certificate data is in DER format",
+                "type": AbstractDataProviderTypeMap."bool",
+                "desc": "If `True` then the data represented by `ssl_cert_location` will be assumed to be in binary "
+                    "DER format",
+                "default_value": False,
+            },
+            "ssl_cert_location": <DataProviderOptionInfo>{
+                "display_name": "SSL Certificate Location",
+                "short_desc": "The location of the X.509 client certificate to use",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromFile: True,
+                    DTT_FromLocation: True,
+                }),
+                "desc": "A path or location to an X.509 client certificate file for mutual TLS (mTLS)",
+            },
+            "ssl_key_der": <DataProviderOptionInfo>{
+                "display_name": "SSL Key DER",
+                "short_desc": "Indicates if X.509 private key data is in DER format",
+                "type": AbstractDataProviderTypeMap."bool",
+                "desc": "If `True` then the data represented by `ssl_key_location` will be assumed to be in binary "
+                    "DER format",
+                "default_value": False,
+            },
+            "ssl_key_location": <DataProviderOptionInfo>{
+                "display_name": "SSL Key Location",
+                "short_desc": "The location of the private key file",
+                "type": AbstractDataProviderType::get(StringType, NOTHING, {
+                    DTT_FromFile: True,
+                    DTT_FromLocation: True,
+                }),
+                "desc": "A path or location to a private key file for the X.509 client certificate",
+            },
+            "ssl_key_password": <DataProviderOptionInfo>{
+                "display_name": "SSL Key Password",
+                "short_desc": "The password to the private key",
+                "type": AbstractDataProviderTypeMap."string",
+                "desc": "The password to the private key given with `ssl_key_location` (text PEM format only)",
+                "sensitive": True,
+            },
             "ssl_verify_cert": <DataProviderOptionInfo>{
                 "display_name": "SSL Verify Certificate",
                 "short_desc": "If true then server certificates will be verified",
@@ -428,6 +469,24 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
 
     #! Processes common REST options
     static hash<auto> processRestOptions(hash<auto> options) {
+        if (*string loc = remove options.ssl_cert_location) {
+            if (loc =~ /^[a-z]+:\/\//) {
+                options.ssl_cert_data = options.ssl_cert_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(loc)
+                    : FileLocationHandler::getTextFileFromLocation(loc);
+            } else {
+                options.ssl_cert_path = loc;
+            }
+        }
+        if (*string loc = remove options.ssl_key_location) {
+            if (loc =~ /^[a-z]+:\/\//) {
+                options.ssl_key_data = options.ssl_key_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(loc)
+                    : FileLocationHandler::getTextFileFromLocation(loc);
+            } else {
+                options.ssl_key_path = loc;
+            }
+        }
         if (*string base_path = remove options.validator_base_path) {
             options.swagger_base_path = base_path;
         }

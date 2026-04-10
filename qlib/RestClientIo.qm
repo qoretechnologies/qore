@@ -33,6 +33,7 @@
 %requires Swagger >= 2.0
 %requires OpenApi3 >= 1.0
 %requires Mime >= 1.7
+%requires FileLocationHandler
 
 %try-module yaml >= 0.5
 %define NoYaml
@@ -548,14 +549,16 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "redirect_passthru": True,
                 "enable_cookies": True,
                 "cookie": True,
-                # TLS (verify mode honored; client cert/key accepted but not honored — Phase 2)
+                # TLS (verify mode, mTLS client cert/key all honored)
                 "ssl_verify_mode": True,
                 "ssl_verify_cert": True,
                 "accept_all_certs": True,
                 "ssl_cert_path": True,
                 "ssl_cert_data": True,
+                "ssl_cert_der": True,
                 "ssl_key_path": True,
                 "ssl_key_data": True,
+                "ssl_key_der": True,
                 "ssl_key_password": True,
                 # Logging
                 "logger": True,
@@ -2431,7 +2434,68 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (exists opts.enable_cookies && !opts.enable_cookies) {
                 mgr_opts.enable_cookies = False;
             }
+            # Load TLS client cert + private key for mutual TLS (mTLS)
+            *SSLCertificate client_cert = RestClientIo::loadSslCertificate(opts);
+            *SSLPrivateKey client_pk = RestClientIo::loadSslPrivateKey(opts);
+            if (client_cert) {
+                mgr_opts.client_cert = client_cert;
+            }
+            if (client_pk) {
+                mgr_opts.client_pk = client_pk;
+            }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+
+        #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data
+        /** @param opts the constructor options hash
+            @return a new @ref Qore::SSLCertificate instance, or NOTHING if no cert was
+                configured
+
+            @throw RESTCLIENTIO-OPTION-ERROR if \c ssl_cert_path and \c ssl_cert_data
+                are both set, or if file loading fails
+        */
+        static *SSLCertificate loadSslCertificate(hash<auto> opts) {
+            if (opts.ssl_cert_path && exists opts.ssl_cert_data) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    "options 'ssl_cert_path' and 'ssl_cert_data' are mutually exclusive";
+            }
+            *data cert_data;
+            if (opts.ssl_cert_path) {
+                cert_data = opts.ssl_cert_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(opts.ssl_cert_path)
+                    : FileLocationHandler::getTextFileFromLocation(opts.ssl_cert_path);
+            } else if (exists opts.ssl_cert_data) {
+                cert_data = opts.ssl_cert_data;
+            } else {
+                return;
+            }
+            return new SSLCertificate(cert_data);
+        }
+
+        #! Loads an X.509 private key from \c ssl_key_path or \c ssl_key_data
+        /** @param opts the constructor options hash
+            @return a new @ref Qore::SSLPrivateKey instance, or NOTHING if no key was
+                configured
+
+            @throw RESTCLIENTIO-OPTION-ERROR if \c ssl_key_path and \c ssl_key_data
+                are both set, or if file loading fails
+        */
+        static *SSLPrivateKey loadSslPrivateKey(hash<auto> opts) {
+            if (opts.ssl_key_path && exists opts.ssl_key_data) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    "options 'ssl_key_path' and 'ssl_key_data' are mutually exclusive";
+            }
+            *data key_data;
+            if (opts.ssl_key_path) {
+                key_data = opts.ssl_key_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(opts.ssl_key_path)
+                    : FileLocationHandler::getTextFileFromLocation(opts.ssl_key_path);
+            } else if (exists opts.ssl_key_data) {
+                key_data = opts.ssl_key_data;
+            } else {
+                return;
+            }
+            return new SSLPrivateKey(key_data, opts.ssl_key_password);
         }
     }
 

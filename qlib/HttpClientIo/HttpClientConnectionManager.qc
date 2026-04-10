@@ -1177,7 +1177,8 @@ public class HttpClientConnectionManager {
             log(LoggerLevel::DEBUG, "creating new HTTP/1.1 connection to %s%s", key,
                 proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
             return new Http1ClientConnection(url_info, opts.connect_timeout, logger,
-                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info);
+                1, opts.ssl_verify_mode, opts.accept_all_certs, proxy_info,
+                opts.client_cert, opts.client_pk);
         }
 
         if (protocol == "h3") {
@@ -1208,7 +1209,7 @@ public class HttpClientConnectionManager {
             proxy_info ? sprintf(" via proxy %s:%d", proxy_info.host, proxy_info.port) : "");
         return new Http2ClientConnection(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info);
+            proxy_info, opts.client_cert, opts.client_pk);
     }
 
     #! Internal: happy eyeballs parallel H3 + H2 connection race
@@ -1283,7 +1284,7 @@ public class HttpClientConnectionManager {
         log(LoggerLevel::DEBUG, "happy eyeballs: starting H2 for %s (H3 still pending)", key);
         Http2ClientConnection h2conn(url_info, opts.connect_timeout, logger,
             opts.max_streams_per_connection, opts.ssl_verify_mode, opts.accept_all_certs,
-            proxy_info);
+            proxy_info, opts.client_cert, opts.client_pk);
         h2conn.setControllerRef(controller);
         h2conn.setManagerContext(self, key);
         submitConnectionToController(key, h2conn);

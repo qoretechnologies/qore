@@ -451,6 +451,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("option unsupported OAuth2 Phase 3 accepted silently",
             \testOptionPhase3OAuth2Accepted());
 
+        # Phase 2: TLS client cert / mTLS
+        addTestCase("mTLS client cert via ssl_cert_data/ssl_key_data", \testMtlsInlineData());
+        addTestCase("mTLS client cert via ssl_cert_path/ssl_key_path", \testMtlsFilePath());
+        addTestCase("mTLS client cert via H1", \testMtlsH1());
+        addTestCase("mTLS ssl_cert_path + ssl_cert_data mutually exclusive",
+            \testMtlsCertConflict());
+        addTestCase("mTLS ssl_key_path + ssl_key_data mutually exclusive",
+            \testMtlsKeyConflict());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -2936,6 +2945,102 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         });
         on_exit rest.close();
         assertEq(sprintf("https://127.0.0.1:%d", port), rest.getUrl());
+    }
+
+    # --- Phase 2: mTLS / client cert tests ---
+    #
+    # The test HTTPS server does not require a client cert — these tests verify
+    # the client-side plumbing (option loading, FileLocationHandler path resolution,
+    # SSLCertificate/SSLPrivateKey construction, socket method wiring into H1 and
+    # H2 createAndConfigureSocket).  A client that presents a cert to a server that
+    # doesn't require one is valid TLS behavior: the handshake succeeds and the
+    # server ignores the peer cert.
+
+    testMtlsInlineData() {
+%ifndef NoJson
+        # Pass cert/key as inline PEM strings (ssl_cert_data / ssl_key_data) — H2
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsFilePath() {
+%ifndef NoJson
+        # Write cert/key to temp files, pass via ssl_cert_path / ssl_key_path — H2
+        string cert_file = tmp_location() + "/rci_mtls_cert_" + get_random_string() + ".pem";
+        string key_file = tmp_location() + "/rci_mtls_key_" + get_random_string() + ".pem";
+        File cf();
+        cf.open2(cert_file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        cf.write(CertPem);
+        cf.close();
+        File kf();
+        kf.open2(key_file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        kf.write(KeyPem);
+        kf.close();
+        on_exit {
+            unlink(cert_file);
+            unlink(key_file);
+        }
+
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_path": cert_file,
+            "ssl_key_path": key_file,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsH1() {
+%ifndef NoJson
+        # Same plumbing, H1 path (exercises createAndConfigureSocket in
+        # Http1ClientPollOperationImpl.qc)
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsCertConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "ssl_cert_path": "/tmp/does-not-matter",
+                    "ssl_cert_data": CertPem,
+                });
+            });
+    }
+
+    testMtlsKeyConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "ssl_key_path": "/tmp/does-not-matter",
+                    "ssl_key_data": KeyPem,
+                });
+            });
     }
 }
 

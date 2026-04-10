@@ -68,12 +68,17 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         @param ssl_verify_mode SSL verification mode (optional)
         @param accept_all_certs if True, accept all SSL certificates including self-signed
         @param proxy_info optional proxy configuration
+        @param connection the owning HttpClientConnection
+        @param client_cert X.509 client certificate for mutual TLS (optional)
+        @param client_pk private key matching \a client_cert (optional)
     */
     constructor(hash<auto> url_info, timeout connect_timeout = DefaultConnectTimeout, *LoggerInterface logger,
             *int ssl_verify_mode, bool accept_all_certs = False,
-            *hash<auto> proxy_info, HttpClientConnection connection) :
+            *hash<auto> proxy_info, HttpClientConnection connection,
+            *SSLCertificate client_cert, *SSLPrivateKey client_pk) :
             Http2ClientPollOperationBase(
-                Http2ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode, accept_all_certs),
+                Http2ClientPollOperation::createAndConfigureSocket(url_info, ssl_verify_mode,
+                    accept_all_certs, client_cert, client_pk),
                 Http2ClientPollOperation::computeConnectTarget(url_info, proxy_info),
                 url_info.host, url_info.port,
                 url_info.protocol == "https",
@@ -142,7 +147,7 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
 
     #! Internal: creates and configures a TCP socket for HTTP/2
     private static Socket createAndConfigureSocket(hash<auto> url_info, *int ssl_verify_mode,
-            bool accept_all_certs) {
+            bool accept_all_certs, *SSLCertificate client_cert, *SSLPrivateKey client_pk) {
         Socket sock();
         bool ssl_required = url_info.protocol == "https";
         if (ssl_required) {
@@ -151,6 +156,12 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
             }
             if (accept_all_certs) {
                 sock.acceptAllCertificates(True);
+            }
+            if (client_cert) {
+                sock.setCertificate(client_cert);
+            }
+            if (client_pk) {
+                sock.setPrivateKey(client_pk);
             }
             sock.setAlpnProtocols(("h2",));
         }
