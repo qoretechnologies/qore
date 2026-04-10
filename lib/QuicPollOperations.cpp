@@ -706,6 +706,21 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         break;  // EAGAIN — no more data
                     }
                 }
+
+                // Check if connection closed during handshake (e.g., TLS
+                // rejection via CONNECTION_CLOSE).  ngtcp2_conn_read_pkt()
+                // returns 0 when processing a CONNECTION_CLOSE and silently
+                // enters DRAINING state — without this check the handshake
+                // loop would poll forever.
+                if (quic_session->isClosed()) {
+                    ngtcp2_ccerr ccerr = quic_session->getCloseError();
+                    xsink->raiseException("QUIC-HANDSHAKE-ERROR",
+                        "QUIC handshake failed: connection closed by peer "
+                        "(type=%d, error_code=0x%llx)",
+                        (int)ccerr.type, (long long)ccerr.error_code);
+                    return nullptr;
+                }
+
                 // 0-RTT: set up HTTP/3 early when 0-RTT TX key is installed
                 // (may be detected after receiving server response to Initial)
                 {
@@ -1564,13 +1579,8 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
     if (*xsink) {
         // A single session's packet read failure (e.g., TLS handshake error when
         // client cert is required but not provided) should not abort the entire
-        // server listener.  Log the error and let the session be cleaned up by
-        // cleanupClosedSessions() — the failed session enters the ngtcp2 closing
-        // state, so isClosed() returns true.  We must NOT erase the session from
-        // sessions_ here because:
-        //   1. The caller may hold a raw QuicSession* via target_out
-        //   2. Other iteration loops in continuePoll() may reference the session
-        // Deferring removal to cleanupClosedSessions() avoids use-after-free.
+        // server listener.  Log the error and send a CONNECTION_CLOSE to the
+        // client so it gets a clean error instead of timing out.
         const QoreStringNode* err_str = xsink->getExceptionErr().get<const QoreStringNode>();
         const QoreStringNode* desc_str = xsink->getExceptionDesc().get<const QoreStringNode>();
         qore_async_io_log(QORE_LOG_LEVEL_WARN,
@@ -1579,6 +1589,24 @@ int SocketQuicServerPollOperation::recvAndProcessPacket(ExceptionSink* xsink, Qu
             err_str ? err_str->c_str() : "unknown",
             desc_str ? desc_str->c_str() : "unknown");
         xsink->clear();
+
+        // Send CONNECTION_CLOSE frame so the client gets an immediate error
+        // rather than waiting for a timeout.  The ngtcp2 connection has the
+        // TLS alert set from the failed SSL_do_handshake().
+        {
+            uint8_t close_buf[1280];  // minimum QUIC packet size
+            ssize_t close_len = target_session->writeConnectionClose(
+                close_buf, sizeof(close_buf));
+            if (close_len > 0) {
+                struct sockaddr_storage remote_addr;
+                socklen_t remote_addrlen;
+                target_session->getRemoteAddrCopy(remote_addr, remote_addrlen);
+                int fd = sock->priv->socket->getSocket();
+                (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
+                    reinterpret_cast<const struct sockaddr*>(&remote_addr),
+                    remote_addrlen);
+            }
+        }
 
         // Clear target_out so the caller does not use this failed session
         if (target_out) {

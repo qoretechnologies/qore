@@ -254,6 +254,20 @@ QoreHashNode* Http3ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
             return nullptr;
         }
 
+        // Detect connection close (inner op transitions to "closed" when
+        // ngtcp2 enters DRAINING — e.g., after receiving CONNECTION_CLOSE
+        // from the server, possibly carrying a TLS alert).
+        const char* inner_state = inner_op->getStateImpl();
+        if (inner_state && !strcmp(inner_state, "closed")) {
+            setError("HTTP3-CONNECTION-CLOSED",
+                "QUIC connection closed by peer during read", xsink);
+            cleanupPendingState();
+            if (last_poll_info) {
+                last_poll_info->deref(xsink);
+            }
+            return nullptr;
+        }
+
         if (poll_info) {
             if (last_poll_info) {
                 last_poll_info->deref(xsink);

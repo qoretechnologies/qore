@@ -2560,11 +2560,20 @@ ssize_t QuicSession::writeConnectionClose(uint8_t* buf, size_t buflen) {
     ngtcp2_path_storage ps;
     ngtcp2_path_storage_zero(&ps);
     ngtcp2_pkt_info pi{};
-    ngtcp2_ccerr ccerr;
-    ngtcp2_ccerr_default(&ccerr);
+
+    // Use the connection's actual close error (set by ngtcp2 when
+    // a TLS alert is detected or by the application via set_tls_alert).
+    // This ensures the CONNECTION_CLOSE frame carries the correct error code
+    // (e.g., TLS certificate_required) rather than a generic NO_ERROR.
+    const ngtcp2_ccerr* ccerr = ngtcp2_conn_get_ccerr(conn_);
+    ngtcp2_ccerr default_ccerr;
+    if (!ccerr) {
+        ngtcp2_ccerr_default(&default_ccerr);
+        ccerr = &default_ccerr;
+    }
 
     ngtcp2_ssize nwrite = ngtcp2_conn_write_connection_close(
-        conn_, &ps.path, &pi, buf, buflen, &ccerr, timestamp());
+        conn_, &ps.path, &pi, buf, buflen, ccerr, timestamp());
     return nwrite > 0 ? static_cast<ssize_t>(nwrite) : 0;
 }
 
