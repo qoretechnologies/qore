@@ -6567,6 +6567,17 @@ extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match(const void* case_node_pt
     return toBits(QoreValue(match));
 }
 
+// AOT-safe switch case match: case value embedded directly (no CaseNode pointer)
+extern "C" DLLEXPORT uint64_t qore_rt_switch_case_match_value(uint64_t case_val_bits,
+        uint64_t switch_val_bits, ExceptionSink* xsink) {
+    QoreValue case_val = fromBits(case_val_bits);
+    QoreValue switch_val = fromBits(switch_val_bits);
+    // Unwrap enum values (matches CaseNode::matches semantics)
+    QoreValue lhs = switch_val.isEnum() ? switch_val.getEnumMember()->getValue() : switch_val;
+    QoreValue rhs = case_val.isEnum() ? case_val.getEnumMember()->getValue() : case_val;
+    return toBits(QoreValue(lhs.isEqualHard(rhs)));
+}
+
 // ============================================================================
 // Phase 2: Optimized pseudo-method helpers for LLVM JIT (faster than dispatch)
 // ============================================================================

@@ -10127,15 +10127,35 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* switch_val = getVal(inst->operands[0].id, error);
             if (!switch_val) { return false; }
             llvm::Value* switch_boxed = boxValue(switch_val, inst->operands[0].id);
-            // Pass CaseNode* as an i64 constant (pointer embedded at compile time)
-            auto* case_node_ptr = llvm::ConstantInt::get(i64_type,
-                reinterpret_cast<uint64_t>(case_inst->case_node));
-            auto* case_node_val = builder->CreateIntToPtr(case_node_ptr, ptr_type);
-            auto helper = module.getOrInsertFunction("qore_rt_switch_case_match",
-                    llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
-            auto* result = builder->CreateCall(helper, {case_node_val, switch_boxed, xsink_arg});
-            values[inst->result.id] = result;
-            nanboxed_values.insert(inst->result.id);
+            if (aot_mode) {
+                // AOT: embed the case constant value directly (CaseNode* is process-specific
+                // and doesn't survive serialization). Use isEqualHard comparison.
+                QoreValue case_val = case_inst->case_node->val;
+                // Unwrap enum values at compile time (matches CaseNode::matches semantics)
+                if (case_val.isEnum()) {
+                    case_val = case_val.getEnumMember()->getValue();
+                }
+                uint64_t case_bits;
+                std::memcpy(&case_bits, &case_val, sizeof(case_bits));
+                llvm::Value* case_const = llvm::ConstantInt::get(i64_type, case_bits);
+                auto helper = module.getOrInsertFunction("qore_rt_switch_case_match_value",
+                        llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
+                auto* result = builder->CreateCall(helper,
+                        {case_const, switch_boxed, xsink_arg});
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+            } else {
+                // JIT: embed CaseNode* directly (valid — same process)
+                auto* case_node_ptr = llvm::ConstantInt::get(i64_type,
+                    reinterpret_cast<uint64_t>(case_inst->case_node));
+                auto* case_node_val = builder->CreateIntToPtr(case_node_ptr, ptr_type);
+                auto helper = module.getOrInsertFunction("qore_rt_switch_case_match",
+                        llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type}, false));
+                auto* result = builder->CreateCall(helper,
+                        {case_node_val, switch_boxed, xsink_arg});
+                values[inst->result.id] = result;
+                nanboxed_values.insert(inst->result.id);
+            }
             emitExceptionCheck(module, llvm_func, inst);
             return true;
         }
