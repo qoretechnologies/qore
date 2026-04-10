@@ -1599,10 +1599,12 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                                 arg_list->push(val, nullptr);
                             }
                         }
-                        ReferenceHolder<AbstractQoreNode> call_node(
-                            new SetSelfFunctionCallNode(*sfcn, arg_list.release()), xsink);
-                        QoreValue call_val(call_node.release());
-                        return do_op_background(call_val, xsink);
+                        // do_op_background copies the expression; original must be freed
+                        SetSelfFunctionCallNode* call_node =
+                            new SetSelfFunctionCallNode(*sfcn, arg_list.release());
+                        QoreValue bg_result = do_op_background(QoreValue(call_node), xsink);
+                        call_node->deref(xsink);
+                        return bg_result;
                     }
                 }
             }
@@ -8175,11 +8177,11 @@ load_local_done:
                     }
 
                     // Create a SetSelfFunctionCallNode with the resolved method and pre-evaluated args
-                    // This node captures the current self/class context and passes them to the bg thread
-                    ReferenceHolder<AbstractQoreNode> call_node(
-                        new SetSelfFunctionCallNode(*sfcn, arg_list.release()), xsink);
-                    QoreValue call_val(call_node.release());
-                    res = do_op_background(call_val, xsink);
+                    // do_op_background copies the expression; original must be freed
+                    SetSelfFunctionCallNode* bg_call =
+                        new SetSelfFunctionCallNode(*sfcn, arg_list.release());
+                    res = do_op_background(QoreValue(bg_call), xsink);
+                    bg_call->deref(xsink);
                 } else {
                     // Full AST fallback path
                     res = evalAndRef(expr_inst->expr, xsink);

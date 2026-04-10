@@ -6574,9 +6574,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
     }
 
     // Create SetSelfFunctionCallNode which captures current self/class context
-    ReferenceHolder<AbstractQoreNode> call_node(new SetSelfFunctionCallNode(*sfcn, arg_list), xsink);
-    QoreValue call_val(call_node.release());
-    return toBits(do_op_background(call_val, xsink));
+    // do_op_background copies the expression via copy_value_and_resolve_lvar_refs;
+    // the original must be freed after the call
+    SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(*sfcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    call_node->deref(xsink);
+    return toBits(result);
 }
 
 //! Background self-method call (AOT mode): takes method name string for runtime resolution
@@ -6626,8 +6629,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         nullptr, method, self->getClass(), cls);
 
     // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
-    ReferenceHolder<AbstractQoreNode> call_node(new SetSelfFunctionCallNode(temp_sfcn, arg_list), xsink);
-
-    QoreValue call_val(call_node.release());
-    return toBits(do_op_background(call_val, xsink));
+    // do_op_background copies the expression; the original must be freed after
+    SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
+    QoreValue result = do_op_background(QoreValue(call_node), xsink);
+    call_node->deref(xsink);
+    return toBits(result);
 }
