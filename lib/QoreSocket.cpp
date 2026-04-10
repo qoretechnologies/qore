@@ -5660,6 +5660,10 @@ void SocketConnectPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock();
         }
+        // Release poll_state before deref'ing the socket: the poll state holds a raw
+        // qore_socket_private* and may reference it during destruction (e.g.
+        // SocketConnectInetHappyEyeballsPollState::closeAllFds reads sock->sock).
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5689,6 +5693,7 @@ void SocketSendPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock(NB_SEND);
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5707,6 +5712,7 @@ void SocketRecvPollOperationBase::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock(NB_RECV);
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
@@ -5734,6 +5740,7 @@ void SocketUpgradeClientSslPollOperation::deref(ExceptionSink* xsink) {
         if (set_non_block) {
             sock->clearNonBlock();
         }
+        poll_state.reset();
         sock->deref(xsink);
         delete this;
     }
