@@ -3234,14 +3234,28 @@ struct qore_socket_private {
 
         ssize_t rc;
         if (!ssl) {
-            if (timeout >= 0 && !isDataAvailable(timeout, meth, xsink)) {
+            // Pre-read readiness wait.  If an outer_lock is wired (i.e. this
+            // socket is owned by a my_socket_priv), use the lock-yielding
+            // helper so concurrent async operations on the same Socket are
+            // not blocked for the duration of the wait.  Otherwise fall back
+            // to the direct isDataAvailable() path.
+            if (timeout >= 0) {
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout, "Socket", meth, xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout, meth, xsink) ? 1 : 0;
+                }
                 if (*xsink) {
                     return -1;
                 }
-                if (!suppress_exception) {
-                    se_timeout("Socket", meth, timeout, xsink);
+                if (wait_rc <= 0) {
+                    if (!suppress_exception) {
+                        se_timeout("Socket", meth, timeout, xsink);
+                    }
+                    return QSE_TIMEOUT;
                 }
-                return QSE_TIMEOUT;
             }
 
             while (true) {
@@ -3261,10 +3275,17 @@ struct qore_socket_private {
                             || errno == EWOULDBLOCK
 #endif
                             ) {
-                        if (!isDataAvailable(timeout, meth, xsink)) {
-                            if (*xsink) {
-                                return -1;
-                            }
+                        int wait_rc;
+                        if (outer_lock) {
+                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                                true, false, timeout, "Socket", meth, xsink);
+                        } else {
+                            wait_rc = isDataAvailable(timeout, meth, xsink) ? 1 : 0;
+                        }
+                        if (*xsink) {
+                            return -1;
+                        }
+                        if (wait_rc <= 0) {
                             if (!suppress_exception) {
                                 se_timeout("Socket", meth, timeout, xsink);
                             }
