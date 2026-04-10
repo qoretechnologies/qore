@@ -559,6 +559,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("auth_code: generatePkceChallenge produces valid verifier",
             \testAuthCodeGeneratePkceChallenge());
 
+        # copyWithUrl + restDoRawRequest (Phase RS-1)
+        addTestCase("copyWithUrl returns sibling instance with new URL",
+            \testCopyWithUrl());
+        addTestCase("copyWithUrl inherits token from parent", \testCopyWithUrlInheritsToken());
+        addTestCase("getConstructorOptions returns original caller opts",
+            \testGetConstructorOptions());
+        addTestCase("restDoRawRequest sends pre-serialized body as-is",
+            \testRestDoRawRequest());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -3329,6 +3338,98 @@ Do+Sl1gfqlpgpszQaOMjR4M=
             });
         assertThrows("OAUTH2-ERROR", "must be manually authorized",
             sub () { rc.getAsync(); });
+%endif
+    }
+
+    # --- Phase RS-1: copyWithUrl + restDoRawRequest ---
+
+    testCopyWithUrl() {
+%ifndef NoJson
+        # Parent points at the TLS test server; copy points at the same host —
+        # a realistic use case is the same server, different path prefix
+        RestClientIo::RestClientIo parent = createClient();
+        on_exit parent.close();
+
+        string new_url = sprintf("https://127.0.0.1:%d", port);
+        RestClientIo::RestClientIo child = parent.copyWithUrl(new_url);
+        on_exit child.close();
+
+        assertEq(new_url, child.getUrl());
+        assertEq(parent.getSerialization(), child.getSerialization());
+
+        # The child must be able to make real requests
+        hash<RestClient::RestResponseInfo> resp = child.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testCopyWithUrlInheritsToken() {
+%ifndef NoJson
+        # Parent acquires a token, then copyWithUrl produces a child that
+        # inherits the token — the child should send Authorization: Bearer <token>
+        # without firing its own OAuth2 login
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("inherited-token");
+
+        RestClientIo::RestClientIo parent = createClient({
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        });
+        on_exit parent.close();
+        assertEq(1, token_handler.getRequestCount(),
+            "parent should have fetched its token during construction");
+
+        RestClientIo::RestClientIo child = parent.copyWithUrl(
+            sprintf("https://127.0.0.1:%d", port));
+        on_exit child.close();
+
+        # Child must NOT have fired another token request
+        assertEq(1, token_handler.getRequestCount(),
+            "child should inherit parent's token, not fire a new login");
+
+        hash<RestClient::RestResponseInfo> resp = child.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer inherited-token", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testGetConstructorOptions() {
+        # The returned hash must contain the caller's original options,
+        # preserved verbatim before any internal normalization
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "http_version": "2.0",
+            "token": "foo",
+            "token_type": "Bearer",
+        });
+        on_exit rest.close();
+        hash<auto> opts = rest.getConstructorOptions();
+        assertEq("2.0", opts.http_version,
+            "getConstructorOptions preserves caller's http_version, not the normalized protocol");
+        assertEq("json", opts.data);
+        assertEq("foo", opts.token);
+    }
+
+    testRestDoRawRequest() {
+%ifndef NoJson
+        # Send a pre-serialized body via restDoRawRequest. The JsonEchoHandler
+        # echoes the request headers so we can prove the Content-Type we set is
+        # the one that hit the wire (no validator override, no double-serialization).
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Craft a JSON body ourselves and set Content-Type explicitly
+        string body_str = make_json({"raw": True, "value": 42});
+        hash<RestClient::RestResponseInfo> resp = rest.restDoRawRequest(
+            "POST", "/echo", body_str, {"Content-Type": MimeTypeJson});
+        assertEq(200, resp.status_code);
+        # The echo handler returns the parsed request headers; verify our
+        # explicit Content-Type reached the server untouched
+        assertRegex("application/json", resp.body.request_headers."content-type");
 %endif
     }
 

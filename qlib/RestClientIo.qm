@@ -351,6 +351,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             #! True if this instance owns the connection manager (should close on close())
             bool owns_mgr = True;
 
+            #! Constructor options hash, kept for @ref copyWithUrl() and @ref getConstructorOptions()
+            /** Captured verbatim in the constructor so that a sibling instance can be
+                built with the same config via @ref copyWithUrl(). Immutable post-construction.
+            */
+            hash<auto> saved_opts;
+
             #! Target URL
             string url;
 
@@ -697,6 +703,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
         constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+            # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
+            # validation and normalization below mutate the local 'opts' but saved_opts
+            # preserves the caller's original intent for sibling construction
+            saved_opts = opts;
+
             # Reject HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
             foreach string dep_key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
                 if (opts.hasKey(dep_key)) {
@@ -982,6 +993,64 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return mgr;
         }
 
+        #! Returns a copy of the constructor options this instance was built with
+        /** The returned hash is suitable for passing to the @ref RestClientIo
+            constructor to build a sibling instance — for example with a different
+            target URL. See @ref copyWithUrl() for the common case.
+
+            @return a copy of the options hash the caller passed to the constructor,
+                before any internal normalization (e.g., before \c http_version was
+                translated to \c protocol)
+
+            @since %RestClientIo 1.1
+        */
+        hash<auto> getConstructorOptions() {
+            return saved_opts;
+        }
+
+        #! Returns a new RestClientIo pointed at a different URL, sharing the connection manager
+        /** Builds a new RestClientIo instance with the same configuration as this
+            one (tokens, headers, validator, OAuth2 state, etc.) but with a different
+            target URL. The new instance shares this instance's connection manager,
+            so connections to hosts common to both URLs are reused from the pool.
+
+            This is the correct way to retarget an existing client when the immutable
+            URL design makes in-place mutation impossible.
+
+            @param new_url the new target URL
+
+            @return a new @ref RestClientIo instance with the updated URL
+
+            @note Initial OAuth2 login is skipped for the copy — it inherits the
+            parent's access token via the captured options. If the parent's token
+            is not valid for the new URL, the copy will refresh on the first
+            request via the normal 401 retry path.
+
+            @since %RestClientIo 1.1
+        */
+        RestClientIo copyWithUrl(string new_url) {
+            hash<auto> opts = saved_opts + {
+                "url": new_url,
+                "skip_login": True,
+            };
+            # Inherit the parent's current token (acquired via initial login or
+            # a prior refresh) so the copy doesn't fire a duplicate OAuth2 login
+            {
+                AutoReadLock al(config_lock);
+                if (token_val.val()) {
+                    opts.token = token_val;
+                    opts.token_type = token_type_val;
+                    if (oauth2_token_expiry.val()) {
+                        opts.oauth2_token_expiry = oauth2_token_expiry;
+                    }
+                    if (refresh_token.val()) {
+                        opts.oauth2_refresh_token = refresh_token;
+                    }
+                }
+            }
+            return new RestClientIo(opts, mgr);
+        }
+
         #! Returns the logger for this client
         *LoggerInterface getLogger() {
             return logger;
@@ -1145,23 +1214,57 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
                 *hash<auto> hdr) {
+            return restDoRequestIntern(method, path, body, hdr, False);
+        }
+
+        #! Sends a REST request with a pre-serialized body; skips validator \c processRequest
+        /** Mirrors @ref RestClient::RestClient::doValidatedRequest() semantics: the
+            caller has already prepared and serialized the request body (and set the
+            \c Content-Type header appropriately); this method sends it as-is and
+            still runs response-side validation via the configured validator.
+
+            Use this when integrating with a higher-level request builder — for
+            example @ref RestSchemaDataProvider::RestSchemaRequestDataProvider which
+            validates and serializes against its own @c AbstractRestSchemaOperation
+            and doesn't want the client-side validator to repeat the work.
+
+            @param method HTTP method
+            @param path request path
+            @param body pre-serialized request body (or @ref NOTHING)
+            @param hdr request headers (caller is responsible for setting \c Content-Type)
+
+            @return the deserialized @ref RestClient::RestResponseInfo hash
+
+            @since %RestClientIo 1.1
+        */
+        hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+                *hash<auto> hdr) {
+            return restDoRequestIntern(method, path, body, hdr, True);
+        }
+
+        #! Internal: shared request path for @ref restDoRequest() and @ref restDoRawRequest()
+        private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path,
+                auto body, *hash<auto> hdr, bool raw) {
             ensureToken();
 
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            # 1. Snapshot config state and serialize body (or skip serialization for raw)
+            hash<auto> prepared = raw
+                ? prepareRawRequest(method, \path, body, \hdr)
+                : prepareRequest(method, \path, body, \hdr);
 
-            log(LoggerLevel::DEBUG, "restDoRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
+                method, url, path);
 
             # 2. Make HTTP request via multiplexed connection manager
-            hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+            hash<auto> raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
 
             # 3. If 401 and OAuth2 configured, try to refresh token and retry once
-            if (raw.status_code == 401 && canRetryAuth()) {
+            if (raw_resp.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
                 } catch () {
                     # If refresh fails, return the original 401 response
-                    return buildResponse(raw, prepared.error_passthru,
+                    return buildResponse(raw_resp, prepared.error_passthru,
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
@@ -1170,12 +1273,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 # freshly-refreshed token in headers
                 hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
-                prepared = prepareRequest(method, \path, body, \hdr);
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
             # 4. Deserialize
-            hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
+            hash<RestClient::RestResponseInfo> resp = buildResponse(raw_resp, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
 
@@ -1188,9 +1293,11 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     return resp;
                 }
                 hdr -= getAuthHeaderName();
-                prepared = prepareRequest(method, \path, body, \hdr);
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
-                resp = buildResponse(raw, prepared.error_passthru,
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                resp = buildResponse(raw_resp, prepared.error_passthru,
                     prepared.allow_any_response, method, path, hdr,
                     prepared.serialized_body);
             }
@@ -1635,7 +1742,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return restDoRequestAsync("OPTIONS", path, NOTHING, hdr);
         }
 
-        #! Internal: snapshots config state and serializes the request body
+        #! Internal: snapshots config state and serializes the request body via the validator
         /** @param method HTTP method
             @param path request path
             @param body request body (optional)
@@ -1645,6 +1752,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         */
         private hash<auto> prepareRequest(string method, reference<string> path, auto body,
                 reference<*hash<auto>> hdr) {
+            return prepareRequestIntern(method, \path, body, \hdr, False);
+        }
+
+        #! Internal: snapshots config state; leaves pre-serialized body as-is
+        /** Used by @ref restDoRawRequest() for callers that have already prepared
+            and serialized the request body and want to skip the validator's
+            \c processRequest() step.
+
+            @param method HTTP method
+            @param path request path
+            @param body pre-serialized request body (or @ref NOTHING)
+            @param hdr reference to headers hash (merged with defaults; caller is
+                responsible for setting \c Content-Type)
+
+            @return a hash with \c serialized_body and \c error_passthru keys
+        */
+        private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+                reference<*hash<auto>> hdr) {
+            return prepareRequestIntern(method, \path, body, \hdr, True);
+        }
+
+        #! Internal: shared prep path for @ref prepareRequest() and @ref prepareRawRequest()
+        private hash<auto> prepareRequestIntern(string method, reference<string> path, auto body,
+                reference<*hash<auto>> hdr, bool raw) {
             # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/")
             if (path.val() && path[0] != "/") {
                 path = "/" + path;
@@ -1682,14 +1813,20 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             *data serialized_body;
             if (exists body) {
-                hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
-                    method, path, body, hdr, req_sct);
-                serialized_body = req.body;
-                # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
-                if (!hdr."content-type") {
-                    hdr."content-type" = req.content;
+                if (raw) {
+                    # Pre-serialized body: caller owns serialization and Content-Type
+                    serialized_body = body;
+                } else {
+                    hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
+                        method, path, body, hdr, req_sct);
+                    serialized_body = req.body;
+                    # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
+                    if (!hdr."content-type") {
+                        hdr."content-type" = req.content;
+                    }
                 }
                 if (!req_no_charset && serialized_body.typeCode() == NT_STRING
+                        && hdr."content-type".val()
                         && hdr."content-type" !~ /;charset=/) {
                     hdr."content-type" += ";charset=" + serialized_body.encoding();
                 }
