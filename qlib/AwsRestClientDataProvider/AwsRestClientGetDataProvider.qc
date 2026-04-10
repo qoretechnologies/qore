@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AwsRestClientDataProvider module definition
 
-/** AwsRestGetDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AwsRestGetDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,7 @@ public class AwsRestClientGetDataProvider inherits AwsRestClientDataProviderBase
     }
 
     #! Creates the object from a REST connection
-    constructor(AwsRestClient rest) : AwsRestClientDataProviderBase(rest) {
+    constructor(AwsRestClientIo rest) : AwsRestClientDataProviderBase(rest) {
     }
 
     #! Returns the data provider name

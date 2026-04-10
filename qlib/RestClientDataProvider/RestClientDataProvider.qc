@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RestClientDataProvider class definition
 
-/** RestClientDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** RestClientDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -42,12 +42,6 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
 
         #! Constructor arguments
         const ConstructorOptions = {
-            "assume_encoding": <DataProviderOptionInfo>{
-                "display_name": "Assume Character Encoding",
-                "short_desc": "Sets the character encoding to assume if 'charset' is missing",
-                "type": AbstractDataProviderTypeMap."string",
-                "desc": "Assumes the given encoding if the server does not send a `charset` value",
-            },
             "connect_timeout": <DataProviderOptionInfo>{
                 "display_name": "Connect Timeout",
                 "short_desc": "The connect timeout in milliseconds",
@@ -269,15 +263,6 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                     "and if the `username` option is also used; conflicts with the `token` option",
                 "sensitive": True,
             },
-            "pre_encoded_urls": <DataProviderOptionInfo>{
-                "display_name": "Pre-Encoded URLs",
-                "short_desc": "If true then URLs are assumed to be preencoded",
-                "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `true` then all URI paths in URLs are assumed to be already "
-                    "[percent encoded](https://en.wikipedia.org/wiki/Percent-encoding); if this flag is set and "
-                    "any unencoded characters are sent in a URL with a new request, an exception is raised",
-                "default_value": False,
-            },
             "proxy": <DataProviderOptionInfo>{
                 "display_name": "HTTP Proxy",
                 "short_desc": "The HTTP proxy to use",
@@ -311,47 +296,6 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
                         "desc": "use no content encoding",
                     },
                 ),
-            },
-            "ssl_cert_der": <DataProviderOptionInfo>{
-                "display_name": "SSL Certificate DER",
-                "short_desc": "Indicates if X.509 certificate data is in DER format",
-                "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `True` then the data represented by `ssl_cert_location` will be assumed to be in binary "
-                    "DER format",
-                "default_value": False,
-            },
-            "ssl_cert_location": <DataProviderOptionInfo>{
-                "display_name": "SSL Certificate Location",
-                "short_desc": "The location of the X.509 client certificate to use",
-                "type": AbstractDataProviderType::get(StringType, NOTHING, {
-                    DTT_FromFile: True,
-                    DTT_FromLocation: True,
-                }),
-                "desc": "A path or location to an X.509 client certificate file",
-            },
-            "ssl_key_der": <DataProviderOptionInfo>{
-                "display_name": "SSL Key DER",
-                "short_desc": "Indicates if X.509 private key data is in DER format",
-                "type": AbstractDataProviderTypeMap."bool",
-                "desc": "If `True` then the data represented by `ssl_key_location` will be assumed to be in binary "
-                    "DER format",
-                "default_value": False,
-            },
-            "ssl_key_location": <DataProviderOptionInfo>{
-                "display_name": "SSL Key Location",
-                "short_desc": "The location of the private key file",
-                "type": AbstractDataProviderType::get(StringType, NOTHING, {
-                    DTT_FromFile: True,
-                    DTT_FromLocation: True,
-                }),
-                "desc": "A path or location to a private key file for the X.509 client certificate",
-            },
-            "ssl_key_password": <DataProviderOptionInfo>{
-                "display_name": "SSL Key Password",
-                "short_desc": "The password to the private key",
-                "type": AbstractDataProviderTypeMap."string",
-                "desc": "The password to the private key given with `ssl_key_path` (text PEM format only)",
-                "sensitive": True,
             },
             "ssl_verify_cert": <DataProviderOptionInfo>{
                 "display_name": "SSL Verify Certificate",
@@ -445,7 +389,7 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient rest) : RestClientDataProviderBase(rest) {
+    constructor(RestClientIo rest) : RestClientDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -470,49 +414,20 @@ public class RestClientDataProvider inherits RestClientDataProviderBase {
     }
 
     #! Returns a REST connection
-    static RestClient getRestConnection(hash<auto> options) {
+    static RestClientIo getRestConnection(hash<auto> options) {
         options = RestClientDataProvider::processRestOptions(options);
-        return new RestClient(options);
+        return new RestClientIo(options);
     }
 
     #! Makes a REST request and returns the response
-    static hash<auto> makeRequest(RestClient rest, string meth, auto body, string path, *hash<auto> hdr) {
-        hash<auto> info;
-        hash<auto> resp = rest.doRequest(meth, path, body, \info, NOTHING, hdr);
-        return {
-            "request-headers": info.headers,
-            "request-serialization": info."request-serialization",
-            "request-uri": info."request-uri",
-            "response-body": resp.body,
-            "response-headers": (map {$1.key.lwr(): $1.value}, info."response-headers-raw".pairIterator()),
-            "response-headers-raw": info."response-headers-raw",
-            "response-serialization": info."response-serialization",
-            "response-uri": info."response-uri",
-            "status-code": info."response-code",
-            "status-message": info."response-headers".status_message,
-        };
+    static hash<auto> makeRequest(RestClient::AbstractRestClient rest, string meth, auto body, string path,
+            *hash<auto> hdr) {
+        hash<RestClient::RestResponseInfo> resp = rest.restDoRequest(meth, path, body, hdr);
+        return RestClientDataProviderBase::buildResponseHash(resp);
     }
 
     #! Processes common REST options
     static hash<auto> processRestOptions(hash<auto> options) {
-        if (*string loc = remove options.ssl_cert_location) {
-            if (options.ssl_cert_location =~ /^[a-z]+:\/\//) {
-                options.ssl_cert_data = options.ssl_cert_der
-                    ? FileLocationHandler::getBinaryFileFromLocation(loc)
-                    : FileLocationHandler::getTextFileFromLocation(loc);
-            } else {
-                options.ssl_cert_path = loc;
-            }
-        }
-        if (*string loc = remove options.ssl_key_location) {
-            if (options.ssl_key_location =~ /^[a-z]+:\/\//) {
-                options.ssl_key_data = options.ssl_key_der
-                    ? FileLocationHandler::getBinaryFileFromLocation(loc)
-                    : FileLocationHandler::getTextFileFromLocation(loc);
-            } else {
-                options.ssl_key_path = loc;
-            }
-        }
         if (*string base_path = remove options.validator_base_path) {
             options.swagger_base_path = base_path;
         }

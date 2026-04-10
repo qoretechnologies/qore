@@ -28,7 +28,7 @@ public namespace RestClientDataProvider {
 public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
         #! The REST client object
-        RestClient::RestClient rest;
+        RestClientIo::RestClientIo rest;
     }
 
     #! Creates the object
@@ -36,7 +36,7 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest) {
+    constructor(RestClientIo::RestClientIo rest) {
         self.rest = rest;
     }
 
@@ -58,48 +58,59 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
     */
     private hash<auto> makeRequestWithDebug(string meth, auto body, string path, *hash<auto> hdr) {
         date start_time = now_us();
-        hash<auto> info;
         *string error_msg;
-        hash<auto> resp;
+        hash<RestClient::RestResponseInfo> resp;
 
         try {
-            resp = rest.doRequest(meth, path, body, \info, NOTHING, hdr);
+            resp = rest.restDoRequest(meth, path, body, hdr);
         } catch (hash<ExceptionInfo> ex) {
             error_msg = sprintf("%s: %s", ex.err, ex.desc);
             # Collect debug info even on error if collector is registered
             if (debugCollectionEnabled()) {
-                collectRestDebugInfo(meth, path, body, hdr, info, NOTHING, start_time, error_msg);
+                # On REST-RESPONSE-ERROR the arg1 is a RestResponseInfo hash; reuse it
+                *hash<RestClient::RestResponseInfo> err_resp;
+                if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH) {
+                    err_resp = cast<hash<RestClient::RestResponseInfo>>(ex.arg);
+                }
+                collectRestDebugInfo(meth, path, body, hdr, err_resp, start_time, error_msg);
             }
             rethrow;
         }
 
         # Collect debug info if collector is registered
         if (debugCollectionEnabled()) {
-            collectRestDebugInfo(meth, path, body, hdr, info, resp, start_time);
+            collectRestDebugInfo(meth, path, body, hdr, resp, start_time);
         }
 
+        return RestClientDataProviderBase::buildResponseHash(resp);
+    }
+
+    #! Converts a @ref RestClient::RestResponseInfo hash to the REST data provider response shape
+    static hash<auto> buildResponseHash(hash<RestClient::RestResponseInfo> resp) {
         return {
-            "request-headers": info.headers,
-            "request-serialization": info."request-serialization",
-            "request-uri": info."request-uri",
+            "request-headers": resp.request_headers,
+            "request-serialization": NOTHING,
+            "request-uri": resp.request_path,
             "response-body": resp.body,
-            "response-headers": (map {$1.key.lwr(): $1.value}, info."response-headers-raw".pairIterator()),
-            "response-headers-raw": info."response-headers-raw",
-            "response-serialization": info."response-serialization",
-            "response-uri": info."response-uri",
-            "status-code": info."response-code",
-            "status-message": info."response-headers".status_message,
+            "response-headers": resp.headers
+                ? (map {$1.key.lwr(): $1.value}, resp.headers.pairIterator())
+                : NOTHING,
+            "response-headers-raw": resp.headers,
+            "response-serialization": NOTHING,
+            "response-uri": resp.request_path,
+            "status-code": resp.status_code,
+            "status-message": resp.headers.status_message,
         };
     }
 
     #! Collects REST request/response debug info
     private collectRestDebugInfo(string meth, string path, auto body, *hash<auto> req_hdr,
-            hash<auto> info, *hash<auto> resp, date start_time, *string error_msg) {
+            *hash<RestClient::RestResponseInfo> resp, date start_time, *string error_msg) {
         date end_time = now_us();
         int duration_ms = (end_time - start_time).durationMilliseconds();
 
         # Build full URL
-        string url = rest.getURL();
+        string url = rest.getUrl();
         if (path) {
             if (!url.endsWith("/") && !path.startsWith("/")) {
                 url += "/";
@@ -107,12 +118,18 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
             url += path;
         }
 
-        # Determine protocol
+        # Determine protocol from RestResponseInfo (h1/h2/h3 → HTTP/1.1/HTTP/2/HTTP/3)
         string protocol = "HTTP/1.1";
-        if (info."response-headers"."x-http2-status") {
-            protocol = "HTTP/2";
+        switch (resp.protocol) {
+            case "h2":
+                protocol = "HTTP/2";
+                break;
+            case "h3":
+                protocol = "HTTP/3";
+                break;
         }
 
+        *hash<auto> req_headers = resp.request_headers ?? req_hdr;
         hash<DataProviderDebugInfo> debug_info = <DataProviderDebugInfo>{
             "operation": DPDI_OP_RESPONSE,
             "start_time": start_time,
@@ -121,14 +138,14 @@ public class RestClientDataProviderBase inherits DataProvider::AbstractDataProvi
             "url": url,
             "method": meth,
             "protocol": protocol,
-            "status_code": info."response-code",
-            "status_message": info."response-headers".status_message,
-            "request_headers": info.headers ?? req_hdr,
-            "response_headers": info."response-headers-raw",
+            "status_code": resp.status_code,
+            "status_message": resp.headers.status_message,
+            "request_headers": req_headers,
+            "response_headers": resp.headers,
             "request_body": body,
             "response_body": resp.body,
-            "request_content_type": info.headers."Content-Type" ?? req_hdr."Content-Type",
-            "response_content_type": info."response-headers"."content-type",
+            "request_content_type": req_headers."Content-Type" ?? req_headers."content-type",
+            "response_content_type": resp.content_type,
             "request_size": body.typeCode() == NT_BINARY ? body.size() :
                 (body.typeCode() == NT_STRING ? body.length() : NOTHING),
             "response_size": resp.body.typeCode() == NT_BINARY ? resp.body.size() :

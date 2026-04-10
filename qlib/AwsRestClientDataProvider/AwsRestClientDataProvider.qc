@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AwsRestClientDataProvider class definition
 
-/** AwsRestClientDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AwsRestClientDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated doContent-Typecumentation files (the "Software"),
@@ -115,7 +115,7 @@ public class AwsRestClientDataProvider inherits AwsRestClientDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(AwsRestClient rest) : AwsRestClientDataProviderBase(rest) {
+    constructor(AwsRestClientIo rest) : AwsRestClientDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -140,9 +140,9 @@ public class AwsRestClientDataProvider inherits AwsRestClientDataProviderBase {
     }
 
     #! Returns a REST connection
-    static AwsRestClient getAwsRestConnection(hash<auto> options) {
+    static AwsRestClientIo getAwsRestConnection(hash<auto> options) {
         options = RestClientDataProvider::processRestOptions(options);
-        return new AwsRestClient(options);
+        return new AwsRestClientIo(options);
     }
 
     #! Returns a list of child data provider names, if any

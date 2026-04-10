@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RestClientDataProvider module definition
 
-/** RestPostDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** RestPostDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,7 @@ public class RestClientPostDataProvider inherits RestClientDataProviderBase {
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient rest) : RestClientDataProviderBase(rest) {
+    constructor(RestClientIo rest) : RestClientDataProviderBase(rest) {
     }
 
     #! Returns the data provider name

@@ -199,16 +199,27 @@ public class RestClientDataProviderTest inherits QUnit::Test {
             assertEq("put", prov.getName());
         }
 
+        # http_version alias (RestClient legacy → RestClientIo protocol)
         {
             RestClientDataProvider parent({
                 "url": "http://localhost:" + port,
-                "pre_encoded_urls": True,
+                "http_version": "1.1",
             });
-            AbstractDataProvider prov = parent.getChildProviderEx("put");
-            hash<DataProviderSummaryInfo> sinfo = prov.getSummaryInfo();
-            assertEq("put", sinfo.name);
-            assertEq(Type::String, sinfo.desc.type());
-            assertEq("put", prov.getName());
+            AbstractDataProvider prov = parent.getChildProviderEx("get");
+            assertEq("get", prov.getName());
+            hash<auto> h = prov.doRequest({"path": "/api_text"});
+            assertEq(VALUE_TEXT.output, h."response-body");
         }
+
+        # strict unknown-option rejection now happens at the data provider layer via
+        # checkOptions(), so the user sees CONSTRUCTOR-ERROR rather than the underlying
+        # RESTCLIENTIO-OPTION-ERROR
+        assertThrows("CONSTRUCTOR-ERROR", "pre_encoded_urls",
+            sub () {
+                RestClientDataProvider parent({
+                    "url": "http://localhost:" + port,
+                    "pre_encoded_urls": True,
+                });
+            });
     }
 }

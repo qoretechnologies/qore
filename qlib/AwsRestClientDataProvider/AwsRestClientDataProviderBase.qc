@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AwsRestClientDataProvider class definition
 
-/** AwsRestClientDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** AwsRestClientDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated doContent-Typecumentation files (the "Software"),
@@ -27,7 +27,7 @@ public namespace AwsRestClientDataProvider {
 #! The AWS REST client base data provider class
 public class AwsRestClientDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
-        AwsRestClient rest;
+        AwsRestClientIo rest;
     }
 
     #! Creates the object
@@ -35,7 +35,7 @@ public class AwsRestClientDataProviderBase inherits DataProvider::AbstractDataPr
     }
 
     #! Creates the object from a REST connection
-    constructor(AwsRestClient rest) {
+    constructor(AwsRestClientIo rest) {
         self.rest = rest;
     }
 

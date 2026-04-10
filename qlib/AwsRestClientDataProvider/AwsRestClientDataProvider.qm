@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AwsRestClientDataProvider module definition
 
-/*  AwsRestClientDataProvider.qm Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/*  AwsRestClientDataProvider.qm Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,7 +36,7 @@
 %requires FileLocationHandler
 
 module AwsRestClientDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for AWS REST servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -73,6 +73,12 @@ module AwsRestClientDataProvider {
     - @ref AwsRestClientDataProvider::AwsRestClientPutDataProvider "AwsRestClientPutDataProvider"
 
     @section awsrestclientdataprovider_relnotes Release Notes
+
+    @subsection awsrestclientdataprovider_v1_1 AwsRestClientDataProvider v1.1
+    - migrated from @ref AwsRestClient::AwsRestClient "AwsRestClient" to
+      @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" as the underlying REST transport;
+      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
+      the same AWS endpoint
 
     @subsection awsrestclientdataprovider_v1_0 AwsRestClientDataProvider v1.0
     - initial release of the module

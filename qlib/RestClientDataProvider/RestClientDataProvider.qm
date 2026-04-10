@@ -31,11 +31,10 @@
 # enable all warnings
 
 %requires(reexport) DataProvider
-%requires(reexport) RestClient
-%requires FileLocationHandler
+%requires(reexport) RestClientIo
 
 module RestClientDataProvider {
-    version = "2.2.0";
+    version = "2.3.0";
     desc = "user module providing a data provider API for REST servers";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -145,6 +144,12 @@ foreach hash<DataProviderDebugInfo> debug in (info) {
     See @ref dataprovider_debugging "Debugging Data Providers" in the DataProvider module for more information.
 
     @section restclientdataprovider_relnotes Release Notes
+
+    @subsection restclientdataprovider_v2_3 RestClientDataProvider v2.3
+    - migrated from @ref RestClient::RestClient "RestClient" to
+      @ref RestClientIo::RestClientIo "RestClientIo" as the underlying REST transport;
+      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
+      the same host
 
     @subsection restclientdataprovider_v2_2 RestClientDataProvider v2.2
     - added debug info collection support via @ref DataProvider::AbstractDataProvider::setDebugCollector()
