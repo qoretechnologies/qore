@@ -472,6 +472,47 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Key/value pattern that marks a 200-OK body as an auth failure (triggers token refresh)
             *hash<auto> rest_body_auth_error_check;
+
+            #! URL substitution info applied to oauth2_alt_token_url by external tooling
+            /** Config-level pass-through; mirrors @ref RestClient::RestClient's field of the
+                same name.  Returned by @ref getOAuth2Options() for external programs (Qorus
+                connection management, etc.) to read.  Not consumed internally.
+            */
+            *hash<auto> oauth2_alt_url_subst;
+
+            #! OAuth2 PKCE (Proof Key for Code Exchange) method: @c "plain", @c "S256", or @c "none"
+            /** Validated at construction time against @ref PkceValueSet.  Consumed during
+                @c authorization_code grant flow when generating the authorization URL and
+                trading the code for a token.  RestClientIo does not yet implement
+                interactive @c authorization_code grant flows (see
+                @ref getOAuth2LoginInfo()); until that feature lands the PKCE value is
+                stored but no PKCE exchange is performed.
+            */
+            *string oauth2_pkce;
+
+            #! Whether the OAuth2 @c state parameter is sent via the @c redirect_uri or as a separate query arg
+            /** Config-level pass-through consumed by @c authorization_code / @c implicit
+                grant authorization URL generation; RestClientIo does not yet implement
+                those flows.  Stored so that external tooling that introspects via
+                @ref getOAuth2Options() sees the configured value.
+            */
+            *bool oauth2_redirect_passthrough_state;
+
+            #! External OAuth2 app name hint for external configuration tooling
+            /** Pure hint passed through via @ref getOAuth2Options() for external
+                programs that resolve OAuth2 configuration out-of-band.  Not consumed
+                internally.
+            */
+            *string oauth2_app;
+
+            #! Custom token refresh: authentication method (e.g., \c "body-user-pass")
+            *string custom_token_auth;
+            #! Custom token refresh: response location (\c "body-direct" or \c "body-plain")
+            *string custom_token_location;
+            #! Custom token refresh: HTTP method (\c "GET", \c "POST", etc.)
+            *string custom_token_method;
+            #! Custom token refresh: URI path relative to the client URL
+            *string custom_token_path;
         }
 
         public {
@@ -519,6 +560,24 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "1.1": "h1",
                 "2.0": "h2",
                 "3.0": "h3",
+            };
+
+            #! Valid @c oauth2_pkce option values
+            /** Mirrors @ref RestClient::RestClient::PkceValueSet.
+            */
+            const PkceValueSet = {
+                "plain": True,
+                "S256": True,
+                "none": True,
+            };
+
+            #! Custom token refresh options (all-or-nothing); mirrors
+            #! @ref RestClient::RestClient::CustomTokenOptions
+            const CustomTokenOptions = {
+                "custom_token_auth": True,
+                "custom_token_method": True,
+                "custom_token_path": True,
+                "custom_token_location": True,
             };
 
             #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
@@ -603,12 +662,14 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "oauth2_token_expiry": True,
                 "oauth2_token_expiry_hint": True,
                 "oauth2_refresh_token": True,
-                # OAuth2 (accepted but not honored — Phase 3)
+                # OAuth2 (stored + exposed via getOAuth2Options; authorization_code /
+                # implicit grant consumers not yet implemented in RestClientIo)
                 "oauth2_pkce": True,
                 "oauth2_alt_url_subst": True,
                 "oauth2_redirect_passthrough_state": True,
                 "oauth2_app": True,
-                # Custom token refresh (accepted but not honored — Phase 3)
+                # Custom token refresh — honored via customGetTokenIntern() during
+                # initial login and 401 retry; all-or-nothing validation at construction
                 "custom_token_auth": True,
                 "custom_token_location": True,
                 "custom_token_method": True,
@@ -825,6 +886,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.oauth2_refresh_token) {
                 refresh_token = opts.oauth2_refresh_token;
             }
+            if (opts.oauth2_alt_url_subst) {
+                oauth2_alt_url_subst = opts.oauth2_alt_url_subst;
+            }
+            if (opts.oauth2_app) {
+                oauth2_app = opts.oauth2_app;
+            }
+            if (exists opts.oauth2_redirect_passthrough_state) {
+                oauth2_redirect_passthrough_state = opts.oauth2_redirect_passthrough_state.toBool();
+            }
+            if (exists opts.oauth2_pkce) {
+                # Accept RestClient's backwards-compatible True/False/1/0 shorthand
+                if ((opts.oauth2_pkce === True) || (opts.oauth2_pkce == "1")) {
+                    oauth2_pkce = "S256";
+                } else if ((opts.oauth2_pkce === False) || (opts.oauth2_pkce == "0")) {
+                    oauth2_pkce = "none";
+                } else {
+                    if (!PkceValueSet{opts.oauth2_pkce}) {
+                        throw "RESTCLIENTIO-OPTION-ERROR",
+                            sprintf("invalid oauth2_pkce option value %y; valid values: %y",
+                                opts.oauth2_pkce, keys PkceValueSet);
+                    }
+                    oauth2_pkce = opts.oauth2_pkce;
+                }
+            }
             if (opts.username) {
                 username = opts.username;
             }
@@ -838,6 +923,28 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # HTTP Basic auth: set if username provided and no OAuth2 grant type configured
             if (opts.username && (!oauth2_grant_type || oauth2_grant_type == "none")) {
                 setUserPassword(opts.username, opts.password);
+            }
+
+            # Custom token refresh: all-or-nothing validation + body-user-pass auth
+            # requires username/password
+            if ((*hash<auto> custom_token_opts = opts{keys CustomTokenOptions})) {
+                if (custom_token_opts.size() != CustomTokenOptions.size()) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("custom token options are not all set; all of must be set; have "
+                            "options: %y missing options: %y", custom_token_opts,
+                            CustomTokenOptions - keys custom_token_opts);
+                }
+                if (custom_token_opts.custom_token_auth == "body-user-pass") {
+                    if (!username.val() || !password.val()) {
+                        throw "RESTCLIENTIO-OPTION-ERROR",
+                            "custom token refresh auth method 'body-user-pass' requires a "
+                            "username and password to be set";
+                    }
+                }
+                custom_token_auth = custom_token_opts.custom_token_auth;
+                custom_token_location = custom_token_opts.custom_token_location;
+                custom_token_method = custom_token_opts.custom_token_method;
+                custom_token_path = custom_token_opts.custom_token_path;
             }
 
             if (shared_mgr) {
@@ -1876,12 +1983,17 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "password": password,
                 "token": token_val,
                 "token_type": token_type_val,
+                "oauth2_alt_token_url": oauth2_alt_token_url,
+                "oauth2_alt_url_subst": oauth2_alt_url_subst,
+                "oauth2_app": oauth2_app,
                 "oauth2_auth_args": oauth2_auth_args,
                 "oauth2_auth_url": oauth2_auth_url,
                 "oauth2_auto_refresh": oauth2_auto_refresh,
                 "oauth2_client_id": oauth2_client_id,
                 "oauth2_client_secret": oauth2_client_secret,
                 "oauth2_grant_type": oauth2_grant_type,
+                "oauth2_pkce": oauth2_pkce,
+                "oauth2_redirect_passthrough_state": oauth2_redirect_passthrough_state,
                 "oauth2_redirect_url": oauth2_redirect_url,
                 "oauth2_refresh_token": refresh_token,
                 "oauth2_scopes": oauth2_scopes,
@@ -1891,7 +2003,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "oauth2_token_expiry": oauth2_token_expiry,
                 "oauth2_token_expiry_hint": oauth2_token_expiry_hint,
                 "oauth2_token_url": oauth2_token_url,
-                "oauth2_alt_token_url": oauth2_alt_token_url,
                 "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
             };
         }
@@ -2010,13 +2121,20 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private checkLogin() {
             *string grant_type;
             bool has_token;
+            bool has_custom_token;
             {
                 AutoReadLock al(config_lock);
                 grant_type = oauth2_grant_type;
                 has_token = token_val.val();
+                has_custom_token = custom_token_auth.val();
             }
-            if (!has_token && grant_type && grant_type != "none") {
+            if (has_token) {
+                return;
+            }
+            if (grant_type && grant_type != "none") {
                 loginIntern();
+            } else if (has_custom_token) {
+                customGetTokenIntern();
             }
         }
 
@@ -2049,9 +2167,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns True if a 401 retry is possible
         private bool canRetryAuth() {
             AutoReadLock al(config_lock);
-            return oauth2_grant_type.val() && oauth2_grant_type != "none"
-                && oauth2_auto_refresh
-                && (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
+            bool has_oauth2 = oauth2_grant_type.val() && oauth2_grant_type != "none";
+            bool has_custom_token = custom_token_auth.val();
+            if (!has_oauth2 && !has_custom_token) {
+                return False;
+            }
+            if (has_oauth2 && !oauth2_auto_refresh) {
+                return False;
+            }
+            return (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
         }
 
         #! Performs an OAuth2 token request
@@ -2296,14 +2420,19 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private hash<auto> getNewTokenIntern() {
             bool has_refresh;
             string grant_type;
+            bool has_custom_token;
             {
                 AutoReadLock al(config_lock);
                 has_refresh = refresh_token.val();
                 grant_type = oauth2_grant_type;
+                has_custom_token = custom_token_auth.val();
             }
             if (has_refresh) {
                 hash<auto> resp = doOAuth2TokenRequest(getOAuth2RefreshInfo());
                 return gotOAuth2LoginInfo(resp);
+            }
+            if (has_custom_token) {
+                return customGetTokenIntern();
             }
             if (grant_type == "authorization_code" || grant_type == "implicit") {
                 throw "OAUTH2-ERROR", sprintf("The current token is invalid; no refresh token is in "
@@ -2311,6 +2440,113 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # Try to get a new token via login
             return loginIntern();
+        }
+
+        #! Makes a custom token refresh request per the @c custom_token_* options
+        /** The response body is interpreted as the raw access token. For
+            @c body-direct, the token is read from a JSON-deserialized response.
+            For @c body-plain, the token is read from the raw (trimmed) text body.
+
+            @return the token response hash (with @c token_type and @c access_token fields)
+
+            @throw REST-TOKEN-ERROR if the response body is missing or the wrong type
+        */
+        private hash<auto> customGetTokenIntern() {
+            *string c_method;
+            *string c_path;
+            *string c_location;
+            *string c_auth;
+            *string uname;
+            *string pwd;
+            {
+                AutoReadLock al(config_lock);
+                c_method = custom_token_method;
+                c_path = custom_token_path;
+                c_location = custom_token_location;
+                c_auth = custom_token_auth;
+                uname = username;
+                pwd = password;
+            }
+            if (!c_method) {
+                throw "REST-LOGIN-ERROR", "custom token refresh method is not set";
+            }
+
+            hash<auto> body;
+            switch (c_auth) {
+                case "body-user-pass":
+                    body = {
+                        "username": uname,
+                        "password": pwd,
+                    };
+                    break;
+
+                default:
+                    throw "REST-CUSTOM-TOKEN-ERROR",
+                        sprintf("invalid custom token auth method: %y", c_auth);
+            }
+
+            # Serialize the body. body-plain uses text serialization; body-direct
+            # uses JSON. Both send the form fields via the corresponding content-type
+            string body_str;
+            hash<auto> req_hdr;
+            if (c_location == "body-plain") {
+                body_str = mime_get_form_urlencoded_string(body);
+                req_hdr = {
+                    "content-type": MimeTypeFormUrlEncoded,
+                    "accept": MimeTypeText,
+                };
+            } else if (c_location == "body-direct") {
+                body_str = make_json(body);
+                req_hdr = {
+                    "content-type": MimeTypeJson,
+                    "accept": MimeTypeJson,
+                };
+            } else {
+                throw "REST-TOKEN-ERROR",
+                    sprintf("invalid / unknown custom token location: %y", c_location);
+            }
+
+            # Direct HTTP request via connection manager — no restDoRequest recursion,
+            # no OAuth2 auth injection, no REST schema validation
+            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, url, c_path);
+            hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str);
+            if (raw.status_code < 200 || raw.status_code >= 300) {
+                throw "REST-TOKEN-ERROR",
+                    sprintf("HTTP %d returned from custom token refresh %s %s",
+                        raw.status_code, c_method, c_path);
+            }
+
+            string token_text;
+            if (c_location == "body-plain") {
+                if (!raw.body) {
+                    throw "REST-TOKEN-ERROR", "no body returned from custom get token operation";
+                }
+                token_text = trim(raw.body.toString());
+                if (!token_text) {
+                    throw "REST-TOKEN-ERROR", "empty body returned from custom get token operation";
+                }
+            } else {
+                # body-direct: deserialize JSON and expect a raw string token
+                auto parsed;
+                try {
+                    parsed = parse_json(raw.body.toString());
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "REST-TOKEN-ERROR",
+                        sprintf("failed to parse custom token response body: %s: %s",
+                            ex.err, ex.desc);
+                }
+                if (parsed.typeCode() != NT_STRING) {
+                    throw "REST-TOKEN-ERROR",
+                        sprintf("custom token response body type expected to be \"string\"; "
+                            "got %y instead", parsed.fullType());
+                }
+                token_text = parsed;
+            }
+
+            return gotOAuth2LoginInfo({
+                "token_type": "Bearer",
+                "access_token": token_text,
+            });
         }
 
         #! Processes an OAuth2 login response
