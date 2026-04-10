@@ -1887,7 +1887,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // Phase 5c: Set debug location for this instruction
             setDebugLocation(inst);
             // Update runtime_loc for exception stack traces (per source line change)
-            emitRuntimeLocationUpdate(inst, module);
+            // Skip for PHI nodes — LLVM requires PHI nodes at the top of basic blocks;
+            // emitting a runtime call before the PHI would violate this constraint.
+            if (inst->opcode != QoreIROpcode::Phi) {
+                emitRuntimeLocationUpdate(inst, module);
+            }
             if (getenv("QORE_LLVM_DEBUG")) {
                 fprintf(stderr, "LLVM-INST: opcode=%d in block=%s\n",
                         static_cast<int>(inst->opcode), builder->GetInsertBlock()->getName().str().c_str());
