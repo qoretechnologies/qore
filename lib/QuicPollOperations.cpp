@@ -1111,6 +1111,10 @@ int SocketQuicClientPollOperation::migrateConnection(ExceptionSink* xsink) {
         AutoLocker al(sock->priv->m);
         fd_guard.release();
         sock->priv->socket->priv->sock = new_fd;
+        // Bump fd_generation so any sync I/O helper mid-wait (lock
+        // released) returns QSE_NOT_OPEN on re-acquire instead of
+        // operating on the pre-migration fd.
+        ++sock->priv->socket->priv->fd_generation;
         memcpy(&local_addr_, &new_local, new_local_len);
         local_addrlen_ = new_local_len;
     }

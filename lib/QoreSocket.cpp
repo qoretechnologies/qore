@@ -787,6 +787,17 @@ long SSLSocketHelper::verifyPeerCertificate() const {
     return rc;
 }
 
+my_socket_priv::my_socket_priv(QoreSocket* s, QoreSSLCertificate* c, QoreSSLPrivateKey* p)
+        : socket(s), cert(c), pk(p) {
+    // Wire the back-pointer so sync I/O helpers can release this
+    // mutex during their poll-wait phase.  See qore_socket_private::outer_lock.
+    socket->priv->outer_lock = &m;
+}
+
+my_socket_priv::my_socket_priv() : socket(new QoreSocket) {
+    socket->priv->outer_lock = &m;
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());

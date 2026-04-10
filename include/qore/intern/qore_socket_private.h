@@ -767,6 +767,32 @@ struct qore_socket_private {
     int in_op = -1,
         ssl_verify_mode = SSL_VERIFY_NONE;
 
+    //! Back-pointer to the outer my_socket_priv's mutex — used by sync I/O
+    //! helpers to release the lock during their poll wait phase.
+    /** Wired by my_socket_priv's constructor when this qore_socket_private
+        is owned by a my_socket_priv.  Null for bare QoreSocket instances
+        that are not wrapped in the object layer.  When null, sync helpers
+        fall back to holding the (non-existent) lock — no contamination
+        concern because there is no outer lock to contend for.
+
+        @since %Qore 2.3
+    */
+    QoreThreadLock* outer_lock = nullptr;
+
+    //! Generation counter bumped on every close / fd swap.
+    /** Sync I/O helpers that release outer_lock during their poll wait
+        phase must re-verify this counter after re-acquiring the lock: if
+        it has changed, the fd they were operating on has been replaced
+        (via close(), migration, etc.) and any captured socket state is
+        stale.  The correct response is to return QSE_NOT_OPEN.
+
+        Mirrors @ref SocketPollOperationBase::getFdGeneration() at the
+        socket level rather than the poll-op level.
+
+        @since %Qore 2.3
+    */
+    uint32_t fd_generation = 0;
+
     // issue #3512: the remote certificate captured
     QoreObject* remote_cert = nullptr;
 
@@ -1100,6 +1126,11 @@ struct qore_socket_private {
         }
         //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
         sock = QORE_INVALID_SOCKET;
+        // Bump fd_generation so any sync I/O helper currently in its
+        // poll-wait phase (with outer_lock released) sees the generation
+        // change on re-acquire and returns QSE_NOT_OPEN instead of
+        // retrying on a dead fd.
+        ++fd_generation;
         if (buflen) {
             buflen = 0;
         }

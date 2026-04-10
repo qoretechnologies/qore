@@ -30,6 +30,7 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreThreadLock.h>
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
 
@@ -92,6 +93,52 @@ int SocketSyncPoll::run(qore_socket_private& sock, AbstractPollState& state,
 
         // wait_rc > 0 — retry continuePoll()
     }
+}
+
+int SocketSyncPoll::waitReleasingLock(qore_socket_private& sock, QoreThreadLock& outer_lock,
+        bool want_read, bool want_write, int timeout_ms,
+        const char* cname, const char* mname, ExceptionSink* xsink) {
+    assert(xsink);
+    assert(want_read || want_write);
+    // Caller must hold the outer lock on entry.
+    assert(outer_lock.trylock());
+
+    // Snapshot the fd and its generation so we can detect close/fd-swap
+    // by another thread during the unlocked wait window.
+    const uint32_t gen_before = sock.fd_generation;
+    const int saved_fd = sock.sock;
+    if (saved_fd == QORE_INVALID_SOCKET) {
+        se_not_open(cname, mname, xsink, "waitReleasingLock");
+        return -1;
+    }
+
+    int wait_rc;
+    {
+        // Release the Socket's outer mutex for the duration of the wait
+        // so other threads (including the async I/O controller) can
+        // operate on the same Socket concurrently.  Re-acquired on
+        // scope exit even if asyncIoWait() throws.
+        AutoUnlocker au(outer_lock);
+        wait_rc = sock.asyncIoWait(timeout_ms, want_read, want_write, cname, mname, xsink);
+    }
+
+    // After re-acquiring the lock, verify the socket wasn't closed or
+    // had its fd swapped out from under us during the wait.  If it
+    // was, the caller must abort its retry loop — the fd we were
+    // waiting on no longer corresponds to what it had before.
+    if (sock.fd_generation != gen_before || sock.sock != saved_fd) {
+        if (!*xsink) {
+            xsink->raiseException("SOCKET-CLOSED",
+                "the underlying socket was closed or replaced while %s::%s() "
+                "was waiting for I/O readiness", cname, mname);
+        }
+        return -1;
+    }
+
+    if (*xsink) {
+        return -1;
+    }
+    return wait_rc;
 }
 
 void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,

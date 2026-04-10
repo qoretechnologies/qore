@@ -35,6 +35,7 @@
 #include <qore/AbstractPollState.h>
 
 class qore_socket_private;
+class QoreThreadLock;
 
 //! Canonical sync-over-async bridge for socket I/O.
 /**
@@ -128,6 +129,50 @@ public:
     DLLLOCAL static void assertNotOnIoThread(const char* cname,
                                              const char* mname,
                                              ExceptionSink* xsink);
+
+    //! Single readiness-wait cycle with the outer Socket mutex released.
+    /** Releases @a outer_lock, waits for the requested readiness on the
+        socket's primary fd via @c asyncIoWait(), then re-acquires the
+        lock.  Used by direct sync I/O code (brecv, sendIntern,
+        accept_intern, doSSLRW) so concurrent async operations on the
+        same Socket are not blocked by a long-running sync wait.
+
+        After re-acquiring the lock the helper verifies that the
+        socket's fd_generation counter hasn't changed — if it has, the
+        socket was closed or had its fd swapped while waiting and the
+        caller must abort rather than retry its I/O.
+
+        @param sock the socket to wait on
+        @param outer_lock the mutex to release during the wait (the
+            caller must hold it on entry; it is held again on return)
+        @param want_read true to wait for POLLIN
+        @param want_write true to wait for POLLOUT
+        @param timeout_ms wait budget in milliseconds; negative means
+            "wait forever"
+        @param cname class name for error/timeout messages
+        @param mname method name for error/timeout messages
+        @param xsink exception sink
+
+        @return
+          - `> 0`: readiness reached — caller may retry I/O
+          - `0`: timeout (no exception raised; caller decides whether
+            to propagate via `se_timeout()`)
+          - `< 0`: socket was closed during the wait, or the wait
+            itself failed with an error (exception raised via @a xsink)
+
+        @note The helper intentionally does **not** call
+        `se_timeout()` on a timeout — that decision belongs to the
+        caller, which knows the full operation context (total budget
+        left, whether this was the first iteration, etc.).
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL static int waitReleasingLock(qore_socket_private& sock,
+                                          QoreThreadLock& outer_lock,
+                                          bool want_read, bool want_write,
+                                          int timeout_ms,
+                                          const char* cname, const char* mname,
+                                          ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_SOCKETSYNCPOLL_H
