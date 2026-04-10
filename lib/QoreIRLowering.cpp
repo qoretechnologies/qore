@@ -6829,6 +6829,14 @@ QoreIRValue QoreIRLowering::lowerShift(const QoreValue& expr, std::string& error
         std::vector<QoreIRValue> operands;
         return lowerExprOpOrInvoke(QoreIROpcode::Call, expr, operands, op->loc, error);
     }
+    // Path-based shift for complex lvalues (must be before guardLValueBase)
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            lvalue, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Shift);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     if (!guardLValueBase(lvalue, error)) {
         return QoreIRValue();
     }
