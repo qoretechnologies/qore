@@ -664,6 +664,26 @@ private:
     */
     DLLLOCAL void unregisterExtraFds(IoThreadContext& t, const std::string& key, ExceptionSink* xsink);
 
+    //! Release an old fd from event loop tracking, if still owned by expected_hash
+    /** Safely removes \c old_fd from the kqueue/epoll registration and erases
+        \c fd_to_sock_hash[old_fd], but only if the current owner of that fd is
+        still \c expected_hash.
+
+        This guards against the fd-recycling race: when a socket is closed and
+        its fd is later reused by a new socket, a late cleanup of the original
+        socket must not clobber the new owner's tracking or deregister its
+        kqueue filter.  If \c fd_to_sock_hash[old_fd] has moved to a different
+        hash, leave everything untouched.
+
+        @param t the I/O thread context
+        @param old_fd the fd to release
+        @param expected_hash the sock_hash that should currently own \c old_fd
+        @param xsink exception sink
+        @since %Qore 2.3
+    */
+    DLLLOCAL void releaseFdIfOwner(IoThreadContext& t, int old_fd,
+        const std::string& expected_hash, ExceptionSink* xsink);
+
     //! Compute the event union for a socket
     DLLLOCAL int computeEventUnion(const IoThreadContext& t, const std::string& sock_hash) const;
 

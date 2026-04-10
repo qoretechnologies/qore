@@ -3410,11 +3410,15 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
                 printd(2, "AsyncIoControllerPriv::updateEventLoopRegistration() "
                     "fd changed for socket '%s': %d -> %d\n",
                     sock_hash.c_str(), fd_it->second, curr_fd);
-                // Remove old fd from EventLoop — on Linux, epoll auto-removes
-                // closed fds, but we must also clean up fd_map; remove()
-                // silently handles EBADF/ENOENT from already-closed fds
-                t.fd_to_sock_hash.erase(fd_it->second);
-                t.loop->remove(fd_it->second, xsink);
+                // Release the old fd from the event loop — guarded against
+                // fd-recycling: if the same fd number has already been
+                // reassigned to a different socket (e.g., migrateConnection
+                // closed it and a concurrent registration picked it up),
+                // releaseFdIfOwner() will leave the new owner alone.
+                //
+                // On Linux, epoll auto-removes closed fds; on macOS kqueue
+                // does the same.  remove() silently handles EBADF/ENOENT.
+                releaseFdIfOwner(t, fd_it->second, sock_hash, xsink);
                 // Add new fd to EventLoop
                 int union_events = computeEventUnion(t, sock_hash);
                 t.loop->add(curr_fd, union_events, socket, xsink);
@@ -3445,22 +3449,23 @@ void AsyncIoControllerPriv::updateEventLoopRegistration(IoThreadContext& t, cons
         auto rit = t.socket_refcounts.find(prev_sock_hash);
         if (rit != t.socket_refcounts.end()) {
             if (rit->second <= 1) {
-                // Last reference - remove from EventLoop using the registered fd
+                // Last reference - remove from EventLoop using the registered
+                // fd, guarded against fd-recycling via releaseFdIfOwner().
                 auto fd_it = t.registered_fds.find(prev_sock_hash);
                 if (fd_it != t.registered_fds.end()) {
-                    t.loop->remove(fd_it->second, xsink);
+                    releaseFdIfOwner(t, fd_it->second, prev_sock_hash, xsink);
                 } else {
                     AbstractPollableIoObjectBase* ps = static_cast<AbstractPollableIoObjectBase*>(
                         prev_sock->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
                     if (ps) {
-                        t.loop->remove(ps->getPollableDescriptor(), xsink);
+                        int pfd = ps->getPollableDescriptor();
+                        if (pfd >= 0) {
+                            releaseFdIfOwner(t, pfd, prev_sock_hash, xsink);
+                        }
                         ps->deref(xsink);
                     }
                 }
                 t.registered_events.erase(prev_sock_hash);
-                if (fd_it != t.registered_fds.end()) {
-                    t.fd_to_sock_hash.erase(fd_it->second);
-                }
                 t.registered_fds.erase(prev_sock_hash);
                 t.socket_refcounts.erase(rit);
                 {
@@ -3549,35 +3554,20 @@ void AsyncIoControllerPriv::unregisterFromEventLoop(IoThreadContext& t, const st
         auto rit = t.socket_refcounts.find(prev_sock_hash);
         if (rit != t.socket_refcounts.end()) {
             if (rit->second <= 1) {
-                // Last reference - remove from EventLoop using the registered fd
+                // Last reference - remove from EventLoop using the registered
+                // fd.  Use releaseFdIfOwner() to guard against fd-recycling:
+                // when a socket is closed its fd is released and may be
+                // recycled by a new socket that has since registered with the
+                // controller.  Calling remove() on a recycled fd would
+                // accidentally deregister the new socket from kqueue/epoll,
+                // and erasing fd_to_sock_hash[fd] would silently break
+                // dispatch for the new owner — exactly the bug that caused
+                // HttpServerHttp3Migration.qtest to hang on macOS when the
+                // streaming-test client fd was recycled by the upload-test
+                // client's post-migration fd.
                 auto fd_it = t.registered_fds.find(prev_sock_hash);
                 if (fd_it != t.registered_fds.end()) {
-                    // Verify the socket still owns this fd before removing from epoll.
-                    // When a socket is closed, its fd is released and may be recycled
-                    // by a new socket.  Calling remove() on a recycled fd would
-                    // accidentally deregister the new socket from epoll.
-                    bool should_remove = true;
-                    AbstractPollableIoObjectBase* check_sock = static_cast<AbstractPollableIoObjectBase*>(
-                        prev_sock->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
-                    if (check_sock) {
-                        int current_fd = check_sock->getPollableDescriptor();
-                        if (current_fd < 0 || current_fd != fd_it->second) {
-                            // Socket closed or fd changed — skip remove; epoll
-                            // auto-removed the old fd on close
-                            should_remove = false;
-                        }
-                        check_sock->deref(xsink);
-                    }
-                    if (should_remove) {
-                        t.loop->remove(fd_it->second, xsink);
-                    }
-                    // Only clear fd tracking when the fd was actually removed
-                    // from epoll.  When should_remove is false (socket closed,
-                    // epoll auto-removed the fd), the fd is already gone from
-                    // epoll, so clearing tracking is safe.
-                    // When should_remove is true, we removed it ourselves.
-                    // In both cases, clear the tracking.
-                    t.fd_to_sock_hash.erase(fd_it->second);
+                    releaseFdIfOwner(t, fd_it->second, prev_sock_hash, xsink);
                 }
                 t.registered_events.erase(prev_sock_hash);
                 t.registered_fds.erase(prev_sock_hash);
@@ -3665,8 +3655,10 @@ void AsyncIoControllerPriv::updateExtraFds(IoThreadContext& t, const std::string
     // Remove stale fds (were registered before, not in new set)
     for (int fd : prev_fds) {
         if (!new_fd_events.count(fd)) {
-            t.loop->remove(fd, xsink);
-            t.fd_to_sock_hash.erase(fd);
+            // Guard against fd-recycling — if fd has been reassigned to a
+            // different sock_hash since we registered it, leave the new
+            // owner's state intact.
+            releaseFdIfOwner(t, fd, sock_hash, xsink);
         }
     }
 
@@ -3711,12 +3703,57 @@ void AsyncIoControllerPriv::unregisterExtraFds(IoThreadContext& t, const std::st
         ExceptionSink* xsink) {
     auto it = t.key_extra_fds.find(key);
     if (it != t.key_extra_fds.end()) {
+        // Determine which sock_hash owns these extra fds so we can guard
+        // against fd recycling — if the entry in fd_to_sock_hash no longer
+        // matches, the fd has been reused by a different socket.
+        auto rs_it = t.registered_sockets.find(key);
+        std::string key_sock_hash;
+        if (rs_it != t.registered_sockets.end()) {
+            AbstractPollableIoObjectBase* ps = static_cast<AbstractPollableIoObjectBase*>(
+                rs_it->second->getReferencedPrivateData(CID_ABSTRACTPOLLABLEIOOBJECTBASE, xsink));
+            if (ps) {
+                key_sock_hash = getSocketHash(ps);
+                ps->deref(xsink);
+            }
+        }
         for (int fd : it->second) {
-            t.loop->remove(fd, xsink);
-            t.fd_to_sock_hash.erase(fd);
+            releaseFdIfOwner(t, fd, key_sock_hash, xsink);
         }
         t.key_extra_fds.erase(it);
     }
+}
+
+void AsyncIoControllerPriv::releaseFdIfOwner(IoThreadContext& t, int old_fd,
+        const std::string& expected_hash, ExceptionSink* xsink) {
+    // Guard against fd-recycling: if the current owner of old_fd in
+    // fd_to_sock_hash is NOT expected_hash, it means the fd was closed and
+    // the kernel has handed the same number to a different socket that has
+    // since been registered.  Removing its kqueue/epoll filter or erasing
+    // its fd_to_sock_hash entry would silently break that new socket.
+    //
+    // If the entry is absent, old_fd has already been cleaned up — nothing
+    // to do here either.  Only when the fd still maps to expected_hash is
+    // it safe (and correct) to remove from the event loop and erase the
+    // mapping.
+    //
+    // Empty expected_hash means the caller could not determine ownership
+    // (e.g. the registered socket for a key has already been cleared); in
+    // that case we must not blindly remove, as the fd may now belong to a
+    // different socket.
+    if (expected_hash.empty()) {
+        return;
+    }
+    auto fsh_it = t.fd_to_sock_hash.find(old_fd);
+    if (fsh_it == t.fd_to_sock_hash.end()) {
+        return;
+    }
+    if (fsh_it->second != expected_hash) {
+        // fd has been recycled by a different socket — leave new owner's
+        // state intact
+        return;
+    }
+    t.loop->remove(old_fd, xsink);
+    t.fd_to_sock_hash.erase(fsh_it);
 }
 
 bool AsyncIoControllerPriv::enqueueCmdLocked(IoCommand cmd, const std::string& key,
