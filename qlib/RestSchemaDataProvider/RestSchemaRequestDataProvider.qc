@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RestSchemaRequestDataProvider module definition
 
-/** RestSchemaRequestDataProvider.qc Copyright 2024 Qore Technologies, s.r.o.
+/** RestSchemaRequestDataProvider.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -61,7 +61,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Creates the object from the arguments (Swagger)
-    constructor(AbstractRestSchemaValidator schema, *RestClient rest, string uri_path,
+    constructor(AbstractRestSchemaValidator schema, *RestClientIo rest, string uri_path,
             Swagger::PathItemObject pio, Swagger::OperationObject op)
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
@@ -84,7 +84,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Creates the object from the arguments (OpenAPI 3.0)
-    constructor(AbstractRestSchemaValidator schema, *RestClient rest, string uri_path,
+    constructor(AbstractRestSchemaValidator schema, *RestClientIo rest, string uri_path,
             OpenApi3::PathItemObject pio, OpenApi3::OperationObject op)
             : RestSchemaDataProviderBase(rest) {
         self.schema = schema;
@@ -134,7 +134,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         string type = isSwagger() ? "Swagger/OpenAPI 2.0" : "OpenAPI 3.0";
         return sprintf("%s data provider for URL `%s`, URI path `%s`, and HTTP method `%s`.\n\n"
             "## Summary\n\n%s\n\n## Description\n\n%s",
-            type, rest.getURL(), uri_path, method.upr(), summary, desc);
+            type, rest.getUrl(), uri_path, method.upr(), summary, desc);
     }
 
     #! Returns data provider info
@@ -382,7 +382,7 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
 
     #! Makes a REST request and returns the response
     private *hash<auto> doRequestIntern(auto req, *hash<auto> options) {
-        RestClient rest = getRestClient();
+        RestClientIo rest = getRestClient();
         # make URI path with any query args
         string uri_path = getUriPath();
         map uri_path = replace(uri_path, "{" + $1.key + "}", $1.value.toString()), options.path_vars.pairIterator();
@@ -408,8 +408,11 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
         # validate the request using abstract types
         op.validateRequest(True, pio, \uri_info, \req_body, \hdr, \mime_types, disable_request_type_check);
 
-        # make the call
-        hash<auto> info;
+        # make the call — restDoRawRequest skips the client-side validator's
+        # processRequest() step because the data provider has already validated
+        # and serialized the body via op.validateRequest() / op.getRequestBody()
+        # above; the response is still validated via buildResponse's parseResponse
+        hash<RestClient::RestResponseInfo> info;
         try {
             *data body = op.getRequestBody(pio, req_body, \hdr, disable_request_type_check);
             *hash<string, bool> produces = op.produces;
@@ -427,18 +430,18 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
                 }
                 uri_path = base_path + uri_path;
             }
-            hash<auto> resp = rest.doValidatedRequest(method, uri_path, body, \info, NOTHING, hdr);
+            info = rest.restDoRawRequest(method, uri_path, body, hdr);
             *hash<auto> rv;
-            if (resp.body.val()) {
-                rv.body = resp.body;
+            if (info.body.val()) {
+                rv.body = info.body;
             }
             if (options.include_response_headers) {
                 rv += {
-                    "headers": info."response-headers",
-                    "headers-raw": info."response-headers-raw",
+                    "headers": info.headers,
+                    "headers-raw": info.headers,
                 };
             } else if (response_headers) {
-                rv.headers = map {$1: info."response-headers"{$1.lwr()}}, response_headers;
+                rv.headers = map {$1: info.headers{$1.lwr()}}, response_headers;
             }
             return rv;
         } catch (hash<ExceptionInfo> ex) {
@@ -479,9 +482,9 @@ public class RestSchemaRequestDataProvider inherits RestSchemaDataProviderBase {
     }
 
     #! Returns a REST client for HTTP operations
-    private RestClient getRestClient() {
+    private RestClientIo getRestClient() {
         if (!rest) {
-            rest = new RestClient({
+            rest = new RestClientIo({
                 "url": schema.getTargetUrl(),
                 "validator": schema,
             });
