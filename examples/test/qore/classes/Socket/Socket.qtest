@@ -159,6 +159,7 @@ class SocketTest inherits QUnit::Test {
         addTestCase("Happy Eyeballs async connect", \happyEyeballsAsyncTest());
         addTestCase("Happy Eyeballs single family", \happyEyeballsSingleFamilyTest());
         addTestCase("Happy Eyeballs SSL connect", \happyEyeballsSslTest());
+        addTestCase("fd_generation re-verification", \fdGenerationTest());
         set_return_value(main());
     }
 
@@ -1772,6 +1773,84 @@ class SocketTest inherits QUnit::Test {
         client.send(test_data);
         string received = accepted.recv(test_data.size());
         assertEq(test_data, received);
+
+        client.close();
+        accepted.close();
+        server.close();
+    }
+
+    #! Verifies fd_generation re-verification in SocketSyncPoll::waitReleasingLock().
+    /** This test uses the debug-only @c dbg_force_fd_swap_next_wait() builtin
+        to arm a one-shot flag that simulates an fd swap during a sync Socket
+        recv()'s lock-yielding wait phase.  When the helper re-acquires the
+        outer mutex and sees the bumped generation counter, it must abort
+        with a @c SOCKET-CLOSED exception rather than retrying on a
+        potentially stale fd.
+
+        Without the fd_generation re-verification, a racing close() during
+        the wait window would leave the sync helper operating on a
+        reused/closed fd — silently corrupting reads or returning data
+        from an unrelated connection.
+    */
+    fdGenerationTest() {
+        # dbg_force_fd_swap_next_wait() is registered only in debug builds.
+        # call_function() dispatches by name at runtime, so release-build
+        # test runs just see a FUNCTION-NOT-FOUND exception we catch below.
+
+        # Establish a server + client + accepted pair.  The client never
+        # sends data, so the server-side recv() will enter its wait phase
+        # where the hook fires.
+        Socket server();
+        server.bind("localhost:0");
+        server.listen();
+        int port = server.getSocketInfo().port;
+
+        Socket client();
+        client.connect("localhost:" + port, 5s);
+
+        Socket accepted = server.accept(5s);
+        assertTrue(accepted.isOpen());
+
+        # Arm the one-shot hook.  The hook bumps fd_generation inside
+        # the wait window; because no real close() fires, asyncIoWait()
+        # still runs until its natural timeout — so we use a short
+        # (500ms) budget.  When the wait returns and waitReleasingLock
+        # re-acquires the mutex, the generation mismatch is detected
+        # and recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT).
+        try {
+            call_function("dbg_force_fd_swap_next_wait", accepted);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION" || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                testSkip("debug build required for dbg_force_fd_swap_next_wait()");
+            }
+            rethrow;
+        }
+        date start = now_us();
+        bool got_socket_closed = False;
+        try {
+            accepted.recv(1, 500ms);
+            assertTrue(False, "recv() should have aborted with SOCKET-CLOSED");
+        } catch (hash<ExceptionInfo> ex) {
+            got_socket_closed = (ex.err == "SOCKET-CLOSED");
+            if (!got_socket_closed && m_options.verbose > 1) {
+                printf("fdGenerationTest: got %s: %s\n", ex.err, ex.desc);
+            }
+        }
+        date elapsed = now_us() - start;
+
+        assertTrue(got_socket_closed,
+            "recv() must throw SOCKET-CLOSED (not SOCKET-TIMEOUT) when fd_generation "
+            "changes during the wait");
+        assertTrue(elapsed < 2s,
+            sprintf("recv() must return promptly after the wait; took %y", elapsed));
+
+        # The socket state counter is live even after this simulated swap —
+        # the underlying fd is still open — but the flag re-arms only on
+        # explicit request, so a follow-up recv() must work normally.
+        # Send one byte from the client so the second recv can complete.
+        client.send("x");
+        string second = accepted.recv(1, 5s);
+        assertEq("x", second);
 
         client.close();
         accepted.close();
