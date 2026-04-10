@@ -34,6 +34,7 @@
 
 #include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/QoreSocket.h"
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
@@ -1464,6 +1465,12 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "accept", xsink);
             return QSE_IN_OP_THREAD;
         }
+        // Skipped when called from a non-blocking poll op with timeout_ms == 0;
+        // in that case the caller is an async poll state (SocketAcceptPollState)
+        // running on the I/O thread and the single-shot ::accept() doesn't block.
+        if (timeout_ms != 0) {
+            SocketSyncPoll::assertNotOnIoThread("Socket", "accept", xsink);
+        }
 
         int rc;
         if (sfamily == AF_UNIX) {
@@ -1753,6 +1760,7 @@ struct qore_socket_private {
     DLLLOCAL int connectUNIX(const char* p, int sock_type, int protocol, ExceptionSink* xsink) {
         assert(xsink);
         assert(p);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "connect", xsink);
         QORE_TRACE("connectUNIX()");
 
 #ifdef _Q_WINDOWS
@@ -2287,6 +2295,7 @@ struct qore_socket_private {
     DLLLOCAL int connectINET(const char* host, const char* service, int timeout_ms, ExceptionSink* xsink,
             int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0) {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "connect", xsink);
         family = q_get_af(family);
         type = q_get_sock_type(type);
 
@@ -2723,6 +2732,7 @@ struct qore_socket_private {
     DLLLOCAL int upgradeClientToSSLIntern(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
             int timeout_ms, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
+        SocketSyncPoll::assertNotOnIoThread("Socket", mname, xsink);
         SSLSocketHelperHelper sshh(this, true);
 
         int rc;
@@ -2753,6 +2763,7 @@ struct qore_socket_private {
     DLLLOCAL int upgradeServerToSSLIntern(ExceptionSink* xsink, const char* mname, int timeout_ms,
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
+        SocketSyncPoll::assertNotOnIoThread("Socket", mname, xsink);
         //printd(5, "qore_socket_private::upgradeServerToSSLIntern() this: %p mode: %d\n", this, ssl_verify_mode);
         SSLSocketHelperHelper sshh(this, true);
 
@@ -3393,6 +3404,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recv", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3464,6 +3476,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recv", xsink);
             return nullptr;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3529,6 +3542,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvBinary", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3585,6 +3599,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvBinary", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3647,6 +3662,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvToOutputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvToOutputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -3689,6 +3705,7 @@ struct qore_socket_private {
 
     DLLLOCAL QoreStringNode* readHTTPHeaderString(ExceptionSink* xsink, int timeout, int source) {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "readHTTPHeaderString", xsink);
         ssize_t rc;
         QoreStringNodeHolder hdr(readHTTPData(xsink, "readHTTPHeaderString", timeout, rc));
         if (!hdr) {
@@ -3703,6 +3720,7 @@ struct qore_socket_private {
     DLLLOCAL QoreHashNode* readHTTPHeader(ExceptionSink* xsink, QoreHashNode* info, int timeout,
             ssize_t& rc, int source, const char* headers_raw_key = "headers-raw") {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "readHTTPHeader", xsink);
         QoreStringNodeHolder hdr(readHTTPData(xsink, "readHTTPHeader", timeout, rc));
         if (!hdr) {
             assert(*xsink);
@@ -4175,6 +4193,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, mname, xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         if (!size) {
             return 0;
         }
@@ -4238,6 +4257,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendFromInputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendFromInputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -4297,6 +4317,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendHttpChunkedBodyFromInputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendHttpChunkedBodyFromInputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -4391,6 +4412,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendHttpChunkedBodyTrailer", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendHttpChunkedBodyTrailer", xsink);
 
         QoreString buf;
         if (!headers) {
@@ -4449,6 +4471,7 @@ struct qore_socket_private {
         const ResolvedCallReferenceNode* send_callback, InputStream* input_stream, size_t max_chunk_size,
         const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
         QoreThreadLock* l = nullptr, bool* aborted = nullptr) {
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         // prepare header string
         QoreString hdr(enc);
 
@@ -4470,6 +4493,7 @@ struct qore_socket_private {
         const void* data, size_t size, const ResolvedCallReferenceNode* send_callback, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
         QoreThreadLock* l = nullptr, bool* aborted = nullptr) {
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         // prepare header string
         QoreString hdr(enc);
 
@@ -4620,6 +4644,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, "readHTTPChunkedBodyBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, "readHTTPChunkedBodyBinary", xsink);
 
         // reset "expecting HTTP chunked body" flag
         if (http_exp_chunked_body)
@@ -4816,6 +4841,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, "readHTTPChunkedBody", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, "readHTTPChunkedBody", xsink);
 
         // reset "expecting HTTP chunked body" flag
         if (http_exp_chunked_body)
