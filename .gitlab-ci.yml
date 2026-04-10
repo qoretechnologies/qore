@@ -117,6 +117,7 @@ build-perf:
 test-ubuntu-amd64:
   stage: test
   parallel: 2
+  timeout: 75 minutes
   needs: [build-ubuntu-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
@@ -146,6 +147,7 @@ test-ubuntu-amd64:
 test-ubuntu-arm64:
   stage: test
   parallel: 2
+  timeout: 75 minutes
   needs: [build-ubuntu-arm64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-arm64
   tags:
@@ -175,6 +177,7 @@ test-ubuntu-arm64:
 test-alpine-amd64:
   stage: test
   parallel: 2
+  timeout: 75 minutes
   needs: [build-alpine-amd64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   tags:
@@ -204,6 +207,7 @@ test-alpine-amd64:
 test-alpine-arm64:
   stage: test
   parallel: 2
+  timeout: 75 minutes
   needs: [build-alpine-arm64]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine-arm64
   tags:
@@ -232,6 +236,7 @@ test-alpine-arm64:
 
 test-macos:
   stage: test
+  timeout: 75 minutes
   needs: []
   tags:
     - macos
@@ -265,6 +270,7 @@ test-macos:
 
 test-perf:
   stage: test
+  timeout: 75 minutes
   needs: [build-perf]
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   tags:
