@@ -3833,6 +3833,13 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     if (ii->invoke_opcode == QoreIROpcode::ListPush && ii->operands.size() >= 2) {
         return true;
     }
+    // RangeSlice with pre-evaluated operands (source, start, end)
+    if ((ii->invoke_opcode == QoreIROpcode::RangeSliceAny
+            || ii->invoke_opcode == QoreIROpcode::RangeSliceInt
+            || ii->invoke_opcode == QoreIROpcode::RangeSliceFloat)
+            && ii->operands.size() >= 3) {
+        return true;
+    }
     // CreateParseRef: native for simple local lvalue OR complex hash member access with operands
     if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
         if (auto* prn = dynamic_cast<const ParseReferenceNode*>(

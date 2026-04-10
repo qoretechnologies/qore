@@ -287,9 +287,9 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "RangeInt"                      , false, false, false,  2, "RangeInt", false, true , "ParseNode", true , true , false, true  }, // 243
     { "RangeFloat"                    , false, false, false,  2, "RangeFloat", false, true , "ParseNode", true , true , false, true  }, // 244
     { "RangeDate"                     , false, false, false,  2, "RangeDate", false, true , "ParseNode", true , true , false, true  }, // 245
-    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , false, false, false }, // 246
-    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , false, false, false }, // 247
-    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , false, false, false }, // 248
+    { "RangeSliceAny"                 , false, false, false,  3, "RangeSliceAny", false, true , "ParseNode", true , true , false, false }, // 246
+    { "RangeSliceInt"                 , false, false, false,  3, "RangeSliceInt", false, true , "ParseNode", true , true , false, false }, // 247
+    { "RangeSliceFloat"               , false, false, false,  3, "RangeSliceFloat", false, true , "ParseNode", true , true , false, false }, // 248
     { "CastAny"                       , false, false, false,  1, "CastAny", false, true , "ParseNode", true , true , false, false }, // 249
     { "CastList"                      , false, false, false,  1, "CastList", false, true , "ParseNode", true , true , false, false }, // 250
     { "CastHash"                      , false, false, false,  1, "CastHash", false, true , "ParseNode", true , true , false, false }, // 251

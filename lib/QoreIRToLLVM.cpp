@@ -5160,6 +5160,27 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 result = builder->CreateCall(helper, {state_val, index_val, xsink_arg});
                 // Result is nanboxed — handled by common tail below
 
+            } else if (inv->invoke_opcode == QoreIROpcode::RangeSliceAny
+                    || inv->invoke_opcode == QoreIROpcode::RangeSliceInt
+                    || inv->invoke_opcode == QoreIROpcode::RangeSliceFloat) {
+                // RangeSlice invoke: ternary op with pre-evaluated operands
+                auto* first = getVal(inv->operands[0].id, error);
+                if (!first) { return false; }
+                auto* second = getVal(inv->operands[1].id, error);
+                if (!second) { return false; }
+                auto* third = getVal(inv->operands[2].id, error);
+                if (!third) { return false; }
+                llvm::Value* first_boxed = boxValue(first, inv->operands[0].id);
+                llvm::Value* second_boxed = boxValue(second, inv->operands[1].id);
+                llvm::Value* third_boxed = boxValue(third, inv->operands[2].id);
+                llvm::Value* opcode_val = llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx),
+                        static_cast<int>(inv->invoke_opcode));
+                auto helper = module.getOrInsertFunction("qore_rt_ternary_op",
+                        llvm::FunctionType::get(i64_type,
+                            {llvm::Type::getInt32Ty(ctx), i64_type, i64_type, i64_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {opcode_val, first_boxed, second_boxed, third_boxed, xsink_arg});
+
             } else {
                 // Fallback: evaluate the full AST expression via qore_rt_invoke_expr
                 if (aot_mode) {
