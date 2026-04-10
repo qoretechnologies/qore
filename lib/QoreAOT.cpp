@@ -6343,10 +6343,11 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (qc) {
             id.ref1 = qc->getPath();
         }
-        // Strip class prefix from method name if present (e.g., "LoggerWrapper::debug" → "debug")
-        const char* mname = call->getName();
-        const char* last_sep = strrchr(mname, ':');
-        id.ref2 = (last_sep && last_sep > mname && *(last_sep - 1) == ':') ? last_sep + 1 : mname;
+        // Preserve the full method name including any class prefix for base class calls
+        // (e.g., "AbstractDataField::getExampleValue" stays qualified so that the NamedScope
+        // at deserialization has size() > 1, causing evalImpl to use the method pointer directly
+        // instead of virtual dispatch — preventing infinite recursion for explicit base class calls)
+        id.ref2 = call->getName();
         return id;
     }
 

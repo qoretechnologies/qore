@@ -386,6 +386,21 @@ QoreValue SelfFunctionCallNode::evalImpl(RuntimeConfig& rc, bool& needs_deref, E
     }
 
     if (ns.size() == 1) {
+        // When the method pointer is resolved to a non-abstract multi-variant method AND the
+        // runtime class differs from the declaring class (a derived class overrides some
+        // variants), name-based dispatch via exec() finds only the overriding class's
+        // variants, hiding inherited overloads.  Use the method pointer directly for correct
+        // cross-hierarchy overload resolution.  Only applies when the declaring method has
+        // multiple variants (no hiding possible with a single variant) and is not abstract
+        // (abstract methods must use virtual dispatch to reach the concrete implementation).
+        // Do NOT pass an explicit class context — let CodeEvaluationHelper use
+        // runtime_get_class() for correct access control (same as ns.size() > 1 path).
+        if (method && !is_abstract && self->getClass() != method->getClass()
+                && qore_method_private::get(*method)->getFunction()->numVariants() > 1) {
+            return tmp_args
+                ? qore_method_private::evalTmpArgs(*method, xsink, rc, self, args)
+                : qore_method_private::eval(*method, xsink, rc, self, args);
+        }
         // must have a class context here
         assert(class_ctx || runtime_cls);
         return exec(self, ns.ostr, class_ctx ? class_ctx : runtime_cls, xsink);

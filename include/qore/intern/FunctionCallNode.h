@@ -499,7 +499,8 @@ public:
     }
 
     DLLLOCAL SelfFunctionCallNode(const SelfFunctionCallNode& old, QoreListNode* n_args)
-            : AbstractMethodCallNode(old, n_args), ns(old.ns), is_copy(old.is_copy) {
+            : AbstractMethodCallNode(old, n_args), ns(old.ns), class_ctx(old.class_ctx),
+              is_copy(old.is_copy), is_abstract(old.is_abstract) {
     }
 
     DLLLOCAL int parseInitCall(QoreValue& val, QoreParseContext& parse_context);

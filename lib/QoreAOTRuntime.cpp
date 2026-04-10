@@ -239,6 +239,14 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
             if (!ref2 || !*ref2) {
                 return 0;
             }
+            // ref2 may be qualified ("ClassName::methodName") for explicit base class calls
+            // or unqualified ("methodName") for normal self calls — extract unqualified name
+            // for method lookup while preserving the full name for NamedScope construction
+            const char* method_name = ref2;
+            const char* last_sep = strrchr(ref2, ':');
+            if (last_sep && last_sep > ref2 && *(last_sep - 1) == ':') {
+                method_name = last_sep + 1;
+            }
             // Look up class, then find method
             const QoreClass* qc = nullptr;
             if (ref1 && *ref1) {
@@ -252,24 +260,27 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                     ref1 ? ref1 : "(null)", ref2);
                 return 0;
             }
-            const QoreMethod* m = qc->findMethod(ref2);
+            const QoreMethod* m = qc->findMethod(method_name);
             if (!m) {
-                m = qc->findStaticMethod(ref2);
+                m = qc->findStaticMethod(method_name);
             }
             // Fall back to parse-time lookup for not-yet-initialized classes
             if (!m) {
                 qore_class_private* qcp = qore_class_private::get(
                     *const_cast<QoreClass*>(qc));
-                m = qcp->parseFindLocalMethod(ref2);
+                m = qcp->parseFindLocalMethod(method_name);
                 if (!m) {
-                    m = qcp->parseFindLocalStaticMethod(ref2);
+                    m = qcp->parseFindLocalStaticMethod(method_name);
                 }
             }
             if (!m) {
-                printd(1, "AOT SLOT: cannot find method '%s::%s'\n", ref1, ref2);
+                printd(1, "AOT SLOT: cannot find method '%s::%s'\n", ref1, method_name);
                 return 0;
             }
-            printd(5, "AOT SLOT: resolved self method '%s::%s' -> %p\n", ref1, ref2, m);
+            printd(5, "AOT SLOT: resolved self method '%s::%s' -> %p\n", ref1, method_name, m);
+            // Use the full ref2 for NamedScope: qualified names ("ClassName::method") produce
+            // ns.size() > 1, making evalImpl use the method pointer directly (base class call);
+            // unqualified names produce ns.size() == 1 for normal virtual dispatch
             SelfFunctionCallNode* sfcn = new SelfFunctionCallNode(&loc_builtin, strdup(ref2), nullptr, m,
                 m->getClass(), qore_class_private::get(*m->getClass()));
             return toBitsNB(QoreValue(sfcn));
