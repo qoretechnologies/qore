@@ -230,6 +230,8 @@ public class ConnectionSchemeCache {
 
             "shipstation": "ShipStationRestClient",
 
+            "systemeio": "SystemeIoRestClient",
+
             "customerio": "CustomerIoRestClient",
 
             "instantly": "InstantlyRestClient",
