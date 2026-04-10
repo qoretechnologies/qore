@@ -251,6 +251,8 @@ public class ConnectionSchemeCache {
             "tableaures": "TableauRestClient",
             "tally": "TallyRestClient",
 
+            "onedrive": "OneDriveRestClient",
+
             "sse": "ServerSentEventClient",
             "sses": "ServerSentEventClient",
 
