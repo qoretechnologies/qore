@@ -3339,10 +3339,23 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
+            // Wait for read readiness with the outer Socket mutex released
+            // so concurrent async operations on the same Socket (writes or
+            // other directions) can make forward progress.  Direction-level
+            // exclusion via NB_RECV ensures no other thread starts a
+            // concurrent read on this SSL*.  Falls back to the direct path
+            // for bare QoreSocket instances with no outer_lock wired.
+            int wait_rc;
+            if (qs.outer_lock) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    true, false, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
                 if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
@@ -3354,10 +3367,20 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isWriteFinished(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
+            // Same yielding-wait pattern as the WANT_READ branch above —
+            // direction-level exclusion via NB_SEND keeps concurrent SSL
+            // writes from clobbering the SSL* state.
+            int wait_rc;
+            if (qs.outer_lock) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    false, true, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
                 if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
