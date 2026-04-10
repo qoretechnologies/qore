@@ -45,22 +45,24 @@ public class MewsRestDataProvider inherits MewsRestDataProviderBase {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "Mews REST Client",
                 "short_desc": "The REST client for accessing the Mews server",
-                "type": AbstractDataProviderType::get(new Type("MewsRestClient")),
-                "desc": "The REST client for accessing the Mews server",
+                "type": AbstractDataProviderType::get(new Type("AbstractRestClient")),
+                "desc": "The REST client for accessing the Mews server; must be a "
+                    "`MewsRestClient` or `MewsRestClientIo` instance (both carry the Mews auth "
+                    "token state via the shared `MewsRestClientBase` mixin)",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "URL",
                 "short_desc": "The URL to the Mews server",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The URL to the Mews REST server; overrides any URL in any RestClient object passed "
+                "desc": "The URL to the Mews REST server; overrides any URL in any REST client object passed "
                     "as an option",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
                 "short_desc": "Options to any REST client created",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "desc": "Options to the `MewsRestClient` constructor; only used if a `MewsRestClient` object is created for "
-                    "a call to the Mews server",
+                "desc": "Options to the `MewsRestClientIo` constructor; only used if a `MewsRestClientIo` "
+                    "object is created for a call to the Mews server",
             },
         };
     }
@@ -78,7 +80,7 @@ public class MewsRestDataProvider inherits MewsRestDataProviderBase {
     }
 
     #! Creates the object from the REST client
-    constructor(MewsRestClient mews) : MewsRestDataProviderBase(mews) {
+    constructor(AbstractRestClient mews) : MewsRestDataProviderBase(mews) {
     }
 
     #! Returns the data provider name
@@ -88,7 +90,7 @@ public class MewsRestDataProvider inherits MewsRestDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Mews REST data provider for `%s`", rest.getSafeURL());
+        return sprintf("Mews REST data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

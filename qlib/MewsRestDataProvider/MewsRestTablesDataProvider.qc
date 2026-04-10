@@ -95,7 +95,7 @@ public class MewsRestTablesDataProvider inherits MewsRestDataProviderBase {
     }
 
     #! Creates the object from the REST client
-    constructor(MewsRestClient mews) : MewsRestDataProviderBase(mews) {
+    constructor(AbstractRestClient mews) : MewsRestDataProviderBase(mews) {
     }
 
     #! Returns the data provider name
@@ -105,7 +105,7 @@ public class MewsRestTablesDataProvider inherits MewsRestDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Mews REST tables data provider for `%s`", rest.getSafeURL());
+        return sprintf("Mews REST tables data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

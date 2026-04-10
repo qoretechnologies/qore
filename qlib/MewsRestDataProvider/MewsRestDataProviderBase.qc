@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MewsRestDataProvider class definition
 
-/** MewsRestDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** MewsRestDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated doContent-Typecumentation files (the "Software"),
@@ -32,7 +32,8 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     private {
-        MewsRestClient::MewsRestClient rest;
+        #! The REST client — must be a @ref MewsRestClient or @ref MewsRestClientIo
+        RestClient::AbstractRestClient rest;
         SwaggerDataProvider::SwaggerDataProvider sdp;
     }
 
@@ -41,15 +42,28 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
     }
 
     #! Creates the object from a REST connection
-    constructor(MewsRestClient::MewsRestClient rest, *SwaggerDataProvider::SwaggerDataProvider sdp) {
+    /** @param rest the Mews-flavored REST client (either @ref MewsRestClient::MewsRestClient
+            or @ref MewsRestClient::MewsRestClientIo — both carry the Mews auth token
+            state via the shared @ref MewsRestClient::MewsRestClientBase mixin)
+        @param sdp an optional pre-built SwaggerDataProvider (defaults to one constructed
+            from the Mews Swagger schema)
+
+        @throw MEWS-CLIENT-ERROR if \a rest is not a Mews-flavored client or has no
+            Swagger schema validator installed
+    */
+    constructor(RestClient::AbstractRestClient rest, *SwaggerDataProvider::SwaggerDataProvider sdp) {
+        if (!(rest instanceof MewsRestClient::MewsRestClientBase)) {
+            throw "MEWS-CLIENT-ERROR", sprintf("expected a MewsRestClient or MewsRestClientIo "
+                "instance; got %y instead", rest.className());
+        }
         self.rest = rest;
         if (sdp) {
             self.sdp = sdp;
         } else {
             AbstractRestSchemaValidator v = rest.getValidator();
             if (!(v instanceof SwaggerSchema)) {
-                throw "MEWS-CLIENT-ERROR", sprintf("The MewsRestClient object has no Swagger schema; validator "
-                    "used: %y", v.className());
+                throw "MEWS-CLIENT-ERROR", sprintf("The Mews REST client object has no Swagger schema; "
+                    "validator used: %y", v.className());
             }
             self.sdp = new SwaggerDataProvider(cast<SwaggerSchema>(v), rest);
             if (logger) {
@@ -65,12 +79,14 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
         LoggerWrapper::setLogger(logger);
     }
 
-    static MewsRestClient::MewsRestClient getRestConnection(*hash<auto> options) {
-        MewsRestClient rest;
+    static AbstractRestClient getRestConnection(*hash<auto> options) {
+        AbstractRestClient rest;
         if (options.restclient) {
             rest = options.restclient;
             if (options.url) {
-                rest.setURL(options.url);
+                # Non-mutating URL override: build a sibling client via copyWithUrl()
+                # — works for both MewsRestClient and MewsRestClientIo
+                rest = rest.copyWithUrl(options.url);
             }
         } else {
             if (!options.url && !options.restclient_options) {
@@ -83,7 +99,8 @@ public class MewsRestDataProviderBase inherits DataProvider::AbstractDataProvide
             if (options.url) {
                 opts.url = options.url;
             }
-            rest = new MewsRestClient(opts);
+            # Default to the async multiplexed MewsRestClientIo transport
+            rest = new MewsRestClientIo(opts);
         }
         return rest;
     }

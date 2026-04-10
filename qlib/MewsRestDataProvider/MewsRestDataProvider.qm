@@ -36,7 +36,7 @@
 %requires SwaggerDataProvider
 
 module MewsRestDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "User module providing a data provider API for Mews instances";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -548,6 +548,11 @@ module MewsRestDataProvider {
     @endverbatim
 
     @section mewsrestdataprovider_relnotes Release Notes
+
+    @subsection mewsrestdataprovider_v1_1 MewsRestDataProvider v1.1
+    - migrated from @ref MewsRestClient::MewsRestClient "MewsRestClient" (sync) to
+      @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" (multiplexed HTTP/2 + HTTP/3)
+      as the underlying REST transport
 
     @subsection mewsrestdataprovider_v1_0 MewsRestDataProvider v1.0
     - initial release of the module

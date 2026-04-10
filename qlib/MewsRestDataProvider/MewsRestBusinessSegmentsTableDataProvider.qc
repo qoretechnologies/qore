@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MewsRestDataProvider module definition
 
-/** MewsRestBusinessSegmentsTableDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** MewsRestBusinessSegmentsTableDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -72,7 +72,7 @@ public class MewsRestBusinessSegmentsTableDataProvider inherits MewsRestTableDat
     }
 
     #! Creates the object from the arguments
-    constructor(MewsRestClient rest) : MewsRestTableDataProvider(rest, TableApiConfig){
+    constructor(AbstractRestClient rest) : MewsRestTableDataProvider(rest, TableApiConfig){
     }
 
     #! Returns data provider static info
