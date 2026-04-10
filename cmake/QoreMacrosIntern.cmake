@@ -376,31 +376,42 @@ return i;
 endmacro()
 
 macro(create_git_revision)
-    # Always regenerate git-revision.h during cmake configure to ensure
-    # the git hash is up-to-date after pulling new commits
+    # git-revision.h must reflect the current HEAD sha at BUILD time, not at
+    # configure time — otherwise `qore --version` reports a stale hash after
+    # `git pull && cmake --build` (a common dev workflow that doesn't re-run
+    # cmake).  We do two things:
+    #   1. Generate the file once at configure time so the build can include
+    #      it from a clean checkout.
+    #   2. Add a custom target that re-runs UpdateGitRevision.cmake on every
+    #      build; the script writes the file only if content changed, so
+    #      including TUs are only recompiled when the hash actually changes.
     find_package(Git)
-    if(GIT_FOUND)
-        execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
-                        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-                        OUTPUT_VARIABLE GIT_REV OUTPUT_STRIP_TRAILING_WHITESPACE)
-        # Check if file exists and has same content to avoid unnecessary rebuilds
-        set(_git_rev_file "${CMAKE_BINARY_DIR}/include/qore/intern/git-revision.h")
-        set(_git_rev_content "#define BUILD \"${GIT_REV}\"")
-        if(EXISTS ${_git_rev_file})
-            file(READ ${_git_rev_file} _existing_content)
-            string(STRIP "${_existing_content}" _existing_content)
-            string(STRIP "${_git_rev_content}" _git_rev_content_stripped)
-            if(NOT "${_existing_content}" STREQUAL "${_git_rev_content_stripped}")
-                file(WRITE ${_git_rev_file} "${_git_rev_content}")
-                message(STATUS "Updated git-revision.h: ${GIT_REV}")
-            endif()
-        else()
-            file(WRITE ${_git_rev_file} "${_git_rev_content}")
-            message(STATUS "Created git-revision.h: ${GIT_REV}")
-        endif()
-    else()
+    if(NOT GIT_FOUND)
         message(FATAL_ERROR "Git is needed to generate git-revision.h")
     endif()
+
+    set(_git_rev_file "${CMAKE_BINARY_DIR}/include/qore/intern/git-revision.h")
+
+    # Configure-time bootstrap: ensure the file exists before the build starts
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                    OUTPUT_VARIABLE GIT_REV
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT EXISTS ${_git_rev_file})
+        file(WRITE ${_git_rev_file} "#define BUILD \"${GIT_REV}\"\n")
+        message(STATUS "Created git-revision.h: ${GIT_REV}")
+    endif()
+
+    # Build-time refresh: re-run on every build so the embedded hash always
+    # matches HEAD.  ALL ensures it runs even when no other target depends
+    # on it; libqore is wired to depend on this target in CMakeLists.txt.
+    add_custom_target(UpdateGitRevision ALL
+        COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DOUTPUT_FILE=${_git_rev_file}
+            -P ${CMAKE_SOURCE_DIR}/cmake/UpdateGitRevision.cmake
+        COMMENT "Updating git-revision.h with current HEAD sha"
+        VERBATIM)
 endmacro()
 
 
