@@ -3815,6 +3815,16 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
                 && !ii->operands.empty())) {
         return true;
     }
+    // Cast opcodes: native when cast_node is available (type path extracted at compile time)
+    if ((ii->invoke_opcode == QoreIROpcode::CastAny
+            || ii->invoke_opcode == QoreIROpcode::CastList
+            || ii->invoke_opcode == QoreIROpcode::CastHash
+            || ii->invoke_opcode == QoreIROpcode::CastObject
+            || ii->invoke_opcode == QoreIROpcode::CastEnum)
+            && !ii->operands.empty()
+            && dynamic_cast<const QoreCastOperatorNode*>(ii->expr.getInternalNode())) {
+        return true;
+    }
     // CreateParseRef with simple local lvalue
     if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
         if (auto* prn = dynamic_cast<const ParseReferenceNode*>(

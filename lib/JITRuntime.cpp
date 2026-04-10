@@ -943,6 +943,87 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_with_inner_aot(QoreAOTContext* ctx, i
     return qore_rt_cast_with_inner(ctx->exprs[slot], inner_bits, xsink);
 }
 
+// Cast by type path: resolves the cast type at runtime from a string path,
+// then performs the cast on the pre-evaluated inner value.
+// Eliminates the need for EXPR_TREE serialization of cast operator nodes.
+extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
+        const char* type_path, int64_t or_nothing, ExceptionSink* xsink) {
+    QoreValue inner = fromBits(inner_bits);
+
+    if (!type_path || !*type_path) {
+        xsink->raiseException("IR-CAST-ERROR", "missing cast type path");
+        return toBits(QoreValue());
+    }
+
+    QoreProgram* pgm = getProgram();
+    if (!pgm) {
+        xsink->raiseException("IR-CAST-ERROR", "no program context for cast type resolution");
+        return toBits(QoreValue());
+    }
+
+    // Resolve the type path
+    std::string error;
+    QoreAOTTypeResolver resolver(pgm);
+    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+
+    // Try class cast first
+    const QoreClass* qc = ti ? QoreTypeInfo::getUniqueReturnClass(ti) : nullptr;
+    if (qc || (ti && QoreTypeInfo::isType(ti, NT_OBJECT))) {
+        // Class cast: check if value is an object of the right class
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_OBJECT) {
+            xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to %s'%s'",
+                inner.getTypeName(), qc ? "class " : "", qc ? qc->getName() : "object");
+            return toBits(QoreValue());
+        }
+        if (qc) {
+            const QoreObject* obj = inner.get<const QoreObject>();
+            const QoreClass* oc = obj->getClass();
+            bool priv;
+            const QoreClass* tc = oc->getClass(*qc, priv);
+            if (!tc) {
+                xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to class '%s'",
+                    obj->getClassName(), qc->getName());
+                return toBits(QoreValue());
+            }
+            if (priv && !qore_class_private::runtimeCheckPrivateClassAccess(*tc)) {
+                xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from class '%s' to "
+                    "privately-accessible class '%s' in this context", obj->getClassName(), qc->getName());
+                return toBits(QoreValue());
+            }
+        }
+        return inner.hasNode() ? toBits(inner.refSelf()) : toBits(inner);
+    }
+
+    // Try hashdecl cast
+    const TypedHashDecl* hd = ti ? QoreTypeInfo::getUniqueReturnHashDecl(ti) : nullptr;
+    if (!hd) {
+        // Try direct hashdecl lookup by path
+        const QoreNamespace* pns = nullptr;
+        hd = pgm->findHashDecl(type_path, pns);
+    }
+    if (hd) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-CAST-ERROR", "cannot cast from type '%s' to hashdecl '%s'",
+                inner.getTypeName(), hd->getName());
+            return toBits(QoreValue());
+        }
+        // Perform hashdecl cast via runtime type cast
+        QoreValue result = typed_hash_decl_private::get(*hd)->newHash(inner.get<const QoreHashNode>(),
+            or_nothing != 0, xsink);
+        return toBits(result);
+    }
+
+    // Fallback: unsupported cast type
+    xsink->raiseException("IR-CAST-ERROR", "cannot resolve cast type '%s'", type_path);
+    return toBits(QoreValue());
+}
+
 // --- Call reference creation helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_create_call_ref(uint64_t expr_bits, ExceptionSink* xsink) {

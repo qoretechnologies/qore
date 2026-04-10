@@ -4950,17 +4950,37 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 auto* inner_val = getVal(inv->operands[0].id, error);
                 if (!inner_val) { return false; }
                 llvm::Value* inner_boxed = boxValue(inner_val, inv->operands[0].id);
-                QoreValue expr_val = inv->expr;
-                uint64_t expr_bits;
-                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 if (aot_mode) {
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, i64_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                    // AOT: extract type path at compile time, resolve at runtime
+                    auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
+                        inv->expr.getInternalNode());
+                    if (cast_node) {
+                        const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
+                        std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                        llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                        llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
+                                cast_node->isOrNothing() ? 1 : 0);
+                        auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path",
+                                llvm::FunctionType::get(i64_type,
+                                    {i64_type, ptr_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper,
+                                {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg});
+                    } else {
+                        // Fallback to expr slot
+                        QoreValue expr_val = inv->expr;
+                        uint64_t expr_bits;
+                        std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, i64_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                    }
                 } else {
+                    QoreValue expr_val = inv->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
                     auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner",
                             llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
@@ -9368,18 +9388,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* inner_val = getVal(inst->operands[0].id, error);
             if (!inner_val) { return false; }
             llvm::Value* inner_boxed = boxValue(inner_val, inst->operands[0].id);
-            QoreValue expr_val = expr_inst->expr;
-            uint64_t expr_bits;
-            std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
             llvm::Value* result;
             if (aot_mode) {
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
-                        llvm::FunctionType::get(i64_type,
-                            {ptr_type, i32_type, i64_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                // AOT: extract type path at compile time, resolve at runtime
+                auto* cast_node = dynamic_cast<const QoreCastOperatorNode*>(
+                    expr_inst->expr.getInternalNode());
+                if (cast_node) {
+                    const QoreTypeInfo* ti = cast_node->getCastTypeInfo();
+                    std::string type_path = ti ? QoreTypeInfo::getPath(ti) : "";
+                    llvm::Value* type_path_ptr = builder->CreateGlobalStringPtr(type_path);
+                    llvm::Value* or_nothing_val = llvm::ConstantInt::get(i64_type,
+                            cast_node->isOrNothing() ? 1 : 0);
+                    auto helper = module.getOrInsertFunction("qore_rt_cast_by_type_path",
+                            llvm::FunctionType::get(i64_type,
+                                {i64_type, ptr_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {inner_boxed, type_path_ptr, or_nothing_val, xsink_arg});
+                } else {
+                    // Fallback to expr slot if cast node is unavailable
+                    QoreValue expr_val = expr_inst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner_aot",
+                            llvm::FunctionType::get(i64_type,
+                                {ptr_type, i32_type, i64_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
+                            llvm::ConstantInt::get(i32_type, slot), inner_boxed, xsink_arg});
+                }
             } else {
+                QoreValue expr_val = expr_inst->expr;
+                uint64_t expr_bits;
+                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 llvm::Value* expr_const = llvm::ConstantInt::get(i64_type, expr_bits);
                 auto helper = module.getOrInsertFunction("qore_rt_cast_with_inner",
                         llvm::FunctionType::get(i64_type, {i64_type, i64_type, ptr_type}, false));
