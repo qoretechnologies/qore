@@ -465,6 +465,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Callback to notify the connection when options (tokens) are updated
             transient *code update_options;
+
+            #! Header name for sending the token as an API key (lowercased); NOTHING to use standard Authorization
+            *string token_api_key_header_val;
+
+            #! Key/value pattern that marks a 200-OK body as an auth failure (triggers token refresh)
+            *hash<auto> rest_body_auth_error_check;
         }
 
         public {
@@ -504,6 +510,116 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "Accept": Accept,
                 "User-Agent": RestClientIo::VersionString,
             };
+
+            #! Map of legacy @c http_version values to internal @c protocol codes
+            const HttpVersionMap = {
+                "auto": "auto",
+                "1.0": "h1",
+                "1.1": "h1",
+                "2.0": "h2",
+                "3.0": "h3",
+            };
+
+            #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
+            /** Unknown keys cause a @c RESTCLIENTIO-OPTION-ERROR at construction time. This set
+                intentionally mirrors the options declared by @ref RestClient::RestConnection
+                "RestConnection" so that @ref RestClient::RestConnection::getAsyncImpl()
+                "getAsyncImpl()" can pass its full options hash verbatim. Keys marked "accepted
+                but not honored" are valid options that RestClientIo has not yet implemented and
+                silently ignores — Phase 2 (TLS client certs) and Phase 3 (OAuth2 PKCE, custom
+                token refresh, etc.) will wire them up.
+
+                Subclasses that add their own options (e.g.,
+                @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo") must strip those keys
+                before calling the base constructor.
+            */
+            const KnownOptions = {
+                # Core transport / URL
+                "url": True,
+                "default_path": True,
+                "protocol": True,
+                "http_version": True,
+                "connect_timeout": True,
+                "timeout": True,
+                "proxy": True,
+                "max_connections_per_host": True,
+                "max_streams_per_connection": True,
+                "max_redirects": True,
+                "redirect_passthru": True,
+                "enable_cookies": True,
+                "cookie": True,
+                # TLS (verify mode honored; client cert/key accepted but not honored — Phase 2)
+                "ssl_verify_mode": True,
+                "ssl_verify_cert": True,
+                "accept_all_certs": True,
+                "ssl_cert_path": True,
+                "ssl_cert_data": True,
+                "ssl_key_path": True,
+                "ssl_key_data": True,
+                "ssl_key_password": True,
+                # Logging
+                "logger": True,
+                # Serialization / encoding
+                "data": True,
+                "send_encoding": True,
+                "content_encoding": True,
+                "no_charset": True,
+                "error_passthru": True,
+                "allow_any_response": True,
+                # Headers
+                "headers": True,
+                # REST schema validator
+                "validator": True,
+                "swagger": True,
+                "openapi3": True,
+                "swagger_base_path": True,
+                "swagger_lax_parsing": True,
+                "validator_base_path": True,
+                # Auth (basic + token)
+                "username": True,
+                "password": True,
+                "token": True,
+                "token_type": True,
+                "token_api_key_header": True,
+                "rest_body_auth_error_check": True,
+                # OAuth2 (core honored)
+                "oauth2_grant_type": True,
+                "oauth2_client_id": True,
+                "oauth2_client_secret": True,
+                "oauth2_token_url": True,
+                "oauth2_alt_token_url": True,
+                "oauth2_scopes": True,
+                "oauth2_scope_separator_char": True,
+                "oauth2_auth_args": True,
+                "oauth2_token_args": True,
+                "oauth2_auth_url": True,
+                "oauth2_redirect_url": True,
+                "oauth2_auto_refresh": True,
+                "oauth2_token_use_basic_auth": True,
+                "oauth2_token_auth_secret_only": True,
+                "oauth2_token_expiry": True,
+                "oauth2_token_expiry_hint": True,
+                "oauth2_refresh_token": True,
+                # OAuth2 (accepted but not honored — Phase 3)
+                "oauth2_pkce": True,
+                "oauth2_alt_url_subst": True,
+                "oauth2_redirect_passthrough_state": True,
+                "oauth2_app": True,
+                # Custom token refresh (accepted but not honored — Phase 3)
+                "custom_token_auth": True,
+                "custom_token_location": True,
+                "custom_token_method": True,
+                "custom_token_path": True,
+                # Ping metadata (consumed by RestConnection, passed through unchanged)
+                "ping_method": True,
+                "ping_path": True,
+                "ping_headers": True,
+                "ping_body": True,
+                "disable_automatic_pings": True,
+                # Lifecycle
+                "skip_login": True,
+                "update_options": True,
+            };
         }
 
         #! Creates a new RestClientIo with the given options
@@ -517,6 +633,47 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
         constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+            # Reject HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
+            foreach string dep_key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
+                if (opts.hasKey(dep_key)) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("option %y is not supported by RestClientIo: %s", dep_key,
+                            RestClient::AbstractRestClient::Http1OnlyOptions{dep_key});
+                }
+            }
+
+            # Validate option keys — fail fast on typos and unsupported legacy options
+            if (*list<string> unknown = keys (opts - (keys KnownOptions))) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    sprintf("unknown RestClientIo option(s) %y; supported options: %y", unknown,
+                        keys KnownOptions);
+            }
+
+            # Normalize http_version (RestClient legacy) → protocol (RestClientIo/HttpClientIo)
+            if (exists opts.http_version) {
+                if (!HttpVersionMap{opts.http_version}) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("invalid http_version %y; valid values: %y", opts.http_version,
+                            keys HttpVersionMap);
+                }
+                if (exists opts.protocol && opts.protocol != HttpVersionMap{opts.http_version}) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("http_version %y maps to protocol %y which conflicts with "
+                            "explicit protocol %y", opts.http_version,
+                            HttpVersionMap{opts.http_version}, opts.protocol);
+                }
+                opts.protocol = HttpVersionMap{opts.http_version};
+                remove opts.http_version;
+            }
+
+            # Normalize ssl_verify_cert (RestClient legacy bool) → ssl_verify_mode
+            if (exists opts.ssl_verify_cert && !exists opts.ssl_verify_mode) {
+                opts.ssl_verify_mode = opts.ssl_verify_cert.toBool()
+                    ? Qore::SSL_VERIFY_PEER
+                    : Qore::SSL_VERIFY_NONE;
+            }
+            remove opts.ssl_verify_cert;
+
             if (!opts.url) {
                 throw "RESTCLIENTIO-ERROR", "url option is required";
             }
@@ -537,10 +694,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 logger = cast<LoggerInterface>(opts.logger);
             }
 
+            # Set validator: explicit object takes precedence, otherwise load from swagger/openapi3
             if (opts.validator instanceof RestSchemaValidator::AbstractRestSchemaValidator) {
                 validator = cast<RestSchemaValidator::AbstractRestSchemaValidator>(opts.validator);
+                *string base_path = opts.swagger_base_path ?? opts.validator_base_path;
+                if (base_path) {
+                    validator.setBasePath(base_path);
+                }
             } else {
-                validator = new RestSchemaValidator::NullRestSchemaValidator();
+                if (opts.openapi3 && opts.swagger) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        "options 'openapi3' and 'swagger' are mutually exclusive";
+                }
+                *hash<auto> loader_opts = opts.swagger_lax_parsing ? {"parse_flags": -1} : NOTHING;
+                if (opts.openapi3) {
+                    validator = OpenApi3Loader::fromUrl(opts.openapi3, NOTHING, loader_opts);
+                } else if (opts.swagger) {
+                    validator = SwaggerLoader::fromUrl(opts.swagger, NOTHING, loader_opts);
+                } else {
+                    validator = new RestSchemaValidator::NullRestSchemaValidator();
+                }
+                *string base_path = opts.swagger_base_path ?? opts.validator_base_path;
+                if (base_path && !(validator instanceof RestSchemaValidator::NullRestSchemaValidator)) {
+                    validator.setBasePath(base_path);
+                }
             }
 
             headers += DefaultHeaders + opts.headers;
@@ -549,6 +726,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             if (opts.send_encoding) {
                 setSendEncoding(opts.send_encoding);
+            }
+
+            # Must be set before setToken() so it routes the initial token correctly
+            if (opts.token_api_key_header.val()) {
+                token_api_key_header_val = opts.token_api_key_header.lwr();
+            }
+
+            if (opts.rest_body_auth_error_check) {
+                rest_body_auth_error_check = opts.rest_body_auth_error_check;
             }
 
             if (opts.token) {
@@ -869,19 +1055,59 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
-                # Strip stale authorization from hdr — prepareRequest() merges as
+                # Strip stale auth header from hdr — prepareRequest() merges as
                 # hdr = {} + headers + hdr, so the old value would override the
                 # freshly-refreshed token in headers
-                hdr -= "authorization";
+                hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
                 prepared = prepareRequest(method, \path, body, \hdr);
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 4. Deserialize and return — pass request context for info fields
-            return buildResponse(raw, prepared.error_passthru,
+            # 4. Deserialize
+            hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
+
+            # 5. Body-level auth error check on 200 OK: some servers return success with an error
+            # payload when the token has expired; refresh and retry once
+            if (isBodyAuthError(resp) && canRetryAuth()) {
+                try {
+                    getNewTokenIntern();
+                } catch () {
+                    return resp;
+                }
+                hdr -= getAuthHeaderName();
+                prepared = prepareRequest(method, \path, body, \hdr);
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                resp = buildResponse(raw, prepared.error_passthru,
+                    prepared.allow_any_response, method, path, hdr,
+                    prepared.serialized_body);
+            }
+
+            return resp;
+        }
+
+        #! Returns the header name used to carry authentication tokens (lowercased)
+        private string getAuthHeaderName() {
+            AutoReadLock al(config_lock);
+            return token_api_key_header_val.val() ? token_api_key_header_val : "authorization";
+        }
+
+        #! Returns True if the response matches the configured body-level auth error pattern
+        private bool isBodyAuthError(hash<RestClient::RestResponseInfo> resp) {
+            *hash<auto> pattern;
+            {
+                AutoReadLock al(config_lock);
+                pattern = rest_body_auth_error_check;
+            }
+            if (!pattern) {
+                return False;
+            }
+            if (resp.body.typeCode() != NT_HASH) {
+                return False;
+            }
+            return resp.body{keys pattern} == pattern;
         }
 
         #! Sends an async generic REST request and returns a RestFuture
@@ -1167,8 +1393,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
-                # Strip stale authorization from hdr (see restDoRequest comment)
-                hdr -= "authorization";
+                # Strip stale auth header from hdr (see restDoRequest comment)
+                hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
                 prepared = prepareRequest(method, \path, body, \hdr);
                 sig = signer({"path": path, "body": prepared.serialized_body,
@@ -1177,10 +1403,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 5. Deserialize and return
-            return buildResponse(raw, prepared.error_passthru,
+            # 5. Deserialize
+            hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
+
+            # 6. Body-level auth error retry (see restDoRequest)
+            if (isBodyAuthError(resp) && canRetryAuth()) {
+                try {
+                    getNewTokenIntern();
+                } catch () {
+                    return resp;
+                }
+                hdr -= getAuthHeaderName();
+                prepared = prepareRequest(method, \path, body, \hdr);
+                sig = signer({"path": path, "body": prepared.serialized_body,
+                    "hdr": hdr - shdr});
+                hdr{shdr} = sig;
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                resp = buildResponse(raw, prepared.error_passthru,
+                    prepared.allow_any_response, method, path, hdr,
+                    prepared.serialized_body);
+            }
+
+            return resp;
         }
 
         #! Sends an async signed REST request and returns a RestFuture
@@ -1521,7 +1767,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             AutoWriteLock al(config_lock);
             token_type_val = token_type;
             token_val = token;
-            headers += {"authorization": sprintf("%s %s", token_type, token)};
+            if (token_api_key_header_val.val()) {
+                # token_api_key_header: send raw token in the configured header; no type prefix
+                remove headers."authorization";
+                headers{token_api_key_header_val} = token;
+            } else {
+                headers += {"authorization": sprintf("%s %s", token_type, token)};
+            }
             if (new_refresh_token) {
                 self.refresh_token = new_refresh_token;
             }

@@ -438,6 +438,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("cookie option with jar", \testCookieOptionWithJar());
         addTestCase("cookie option absent", \testCookieOptionAbsent());
 
+        # option-parity (Phase 1): option validation + RestClient-legacy aliases
+        addTestCase("option unknown key rejected", \testOptionUnknownKeyRejected());
+        addTestCase("option http_version alias", \testOptionHttpVersionAlias());
+        addTestCase("option http_version invalid", \testOptionHttpVersionInvalid());
+        addTestCase("option http_version conflicts with protocol", \testOptionHttpVersionConflict());
+        addTestCase("option ssl_verify_cert alias", \testOptionSslVerifyCertAlias());
+        addTestCase("option Http1OnlyOptions rejected", \testOptionHttp1OnlyRejected());
+        addTestCase("option token_api_key_header", \testOptionTokenApiKeyHeader());
+        addTestCase("option rest_body_auth_error_check", \testOptionRestBodyAuthErrorCheck());
+        addTestCase("option swagger/openapi3 mutually exclusive", \testOptionSwaggerOpenapi3Conflict());
+        addTestCase("option unsupported OAuth2 Phase 3 accepted silently",
+            \testOptionPhase3OAuth2Accepted());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -2776,6 +2789,153 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # No cookie header should be present (cookie jar is empty, no static cookie)
         assertFalse(resp.body.request_headers.cookie.val(),
             "no cookie header should be present without cookie option");
+    }
+
+    # --- option-parity Phase 1 tests ---
+
+    testOptionUnknownKeyRejected() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "unknown RestClientIo option",
+            sub () { createClient({"not_a_real_option": 42}); });
+    }
+
+    testOptionHttpVersionAlias() {
+%ifndef NoJson
+        # http_version "1.1" should map to protocol "h1"
+        RestClientIo::RestClientIo h1_alias = new RestClientIo::RestClientIo({
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+            "http_version": "1.1",
+        });
+        on_exit h1_alias.close();
+        hash<RestClient::RestResponseInfo> resp = h1_alias.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("h1", resp.protocol);
+
+        # http_version "2.0" should construct without error (wire-level h2 negotiation
+        # is exercised in the existing h2 tests that set protocol directly)
+        RestClientIo::RestClientIo h2_alias = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "http_version": "2.0",
+        });
+        on_exit h2_alias.close();
+        resp = h2_alias.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testOptionHttpVersionInvalid() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "invalid http_version",
+            sub () { createClient({"http_version": "9.9"}); });
+    }
+
+    testOptionHttpVersionConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "conflicts with",
+            sub () { createClient({"http_version": "1.1", "protocol": "h2"}); });
+    }
+
+    testOptionSslVerifyCertAlias() {
+%ifndef NoJson
+        # ssl_verify_cert False should disable verification (needed for self-signed test cert)
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "ssl_verify_cert": False,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # explicit ssl_verify_mode must take precedence over the ssl_verify_cert alias
+        # (SSL_VERIFY_NONE wins even if ssl_verify_cert is True)
+        RestClientIo::RestClientIo rest2 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "ssl_verify_cert": True,
+            "ssl_verify_mode": Qore::SSL_VERIFY_NONE,
+        });
+        on_exit rest2.close();
+        resp = rest2.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testOptionHttp1OnlyRejected() {
+        # Every H1-only option should be rejected with an explanatory message
+        foreach string key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
+            string k = key;
+            assertThrows("RESTCLIENTIO-OPTION-ERROR", "not supported by RestClientIo",
+                sub () { createClient({k: True}); });
+        }
+    }
+
+    testOptionTokenApiKeyHeader() {
+%ifndef NoJson
+        # With token_api_key_header set, the token must be sent in that header
+        # as a raw value (no "Bearer" prefix), not in Authorization
+        RestClientIo::RestClientIo rest = createClient({
+            "token": "sekret",
+            "token_type": "Bearer",
+            "token_api_key_header": "X-API-Key",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("sekret", resp.body.request_headers."x-api-key");
+        assertFalse(resp.body.request_headers.authorization.val(),
+            "Authorization header must not be set when token_api_key_header is used");
+
+        # And without token_api_key_header, the token goes into Authorization as usual
+        RestClientIo::RestClientIo std = createClient({
+            "token": "sekret",
+            "token_type": "Bearer",
+        });
+        on_exit std.close();
+        resp = std.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer sekret", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testOptionRestBodyAuthErrorCheck() {
+        # Accepts the option; positive end-to-end test requires a server that returns
+        # an auth-error body on 200 OK, which is exercised indirectly via the 401 retry path
+        RestClientIo::RestClientIo rest = createClient({
+            "rest_body_auth_error_check": {"error": "invalid_token"},
+        });
+        on_exit rest.close();
+        assertEq(sprintf("https://127.0.0.1:%d", port), rest.getUrl());
+    }
+
+    testOptionSwaggerOpenapi3Conflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "swagger": "file:///dev/null",
+                    "openapi3": "file:///dev/null",
+                });
+            });
+    }
+
+    testOptionPhase3OAuth2Accepted() {
+        # These options are Phase 3 and not yet honored, but must be accepted silently
+        # so that RestConnection.getAsyncImpl() can forward its full option hash without
+        # per-option filtering
+        RestClientIo::RestClientIo rest = createClient({
+            "oauth2_pkce": "S256",
+            "oauth2_alt_url_subst": "auto",
+            "oauth2_redirect_passthrough_state": True,
+            "custom_token_auth": "body-user-pass",
+            "custom_token_location": "body-direct",
+            "custom_token_method": "POST",
+            "custom_token_path": "/token",
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        });
+        on_exit rest.close();
+        assertEq(sprintf("https://127.0.0.1:%d", port), rest.getUrl());
     }
 }
 

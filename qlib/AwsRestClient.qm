@@ -119,6 +119,19 @@ public class AwsRestClientBase {
             "aws_service",
         );
 
+        #! full set of AWS-specific options consumed by @ref AwsRestClientBase subclasses
+        /** Used to strip AWS-specific keys before forwarding option hashes to a REST client
+            base class that does not accept them.
+        */
+        const AwsOptions = {
+            "aws_keyid": True,
+            "aws_secret": True,
+            "aws_region": True,
+            "aws_service": True,
+            "aws_s3": True,
+            "aws_token": True,
+        };
+
         #! Qore digest algorithm to use for HMAC calculations; must match AwsSignatureAlgorithm
         const QoreDigest = CRYPTO_DIGEST_SHA256;
 
@@ -665,7 +678,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(opts + {"data": "json"}, shared_mgr) {
+            : RestClientIo(AwsRestClientIo::stripAwsOptions(opts) + {"data": "json"}, shared_mgr) {
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
             throw "AWSRESTCLIENT-ERROR", sprintf("AWS URL must not contain a username or password; URL: %y",
@@ -711,6 +724,11 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
             aws_token = opts.aws_token;
             addDefaultHeaders({"X-Amz-Security-Token": aws_token});
         }
+    }
+
+    #! Returns a copy of \a opts with AWS-specific keys removed, suitable for the RestClientIo base
+    static hash<auto> stripAwsOptions(hash<auto> opts) {
+        return opts - (keys AwsRestClientBase::AwsOptions);
     }
 
     #! Sends a generic REST request with AWS Signature V4 signing

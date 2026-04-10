@@ -420,6 +420,28 @@ public hashdecl RestResponseInfo {
     @since RestClient 2.4
 */
 public class AbstractRestClient inherits Serializable, Qore::Thread::AbstractPoolableResource {
+    public {
+        #! HTTPClient-era options that HTTP/2 and HTTP/3 cannot honor
+        /** These options exist in @ref RestClient::RestConnection "RestConnection" because
+            @ref RestClient::RestClient "RestClient" (HTTP/1.x via HTTPClient) honors them, but
+            they are structurally incompatible with HTTP/2 and HTTP/3 where percent-encoded URIs
+            and explicit charset handling are mandated by the protocol.
+
+            @ref RestClient::RestConnection::getAsyncImpl() "RestConnection::getAsyncImpl()" strips
+            these before constructing an async client; direct construction of \c RestClientIo with
+            any of these keys raises a @c RESTCLIENTIO-OPTION-ERROR.
+
+            @since %RestClient 2.6
+        */
+        const Http1OnlyOptions = {
+            "pre_encoded_urls": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol "
+                "level; send pre-encoded paths directly",
+            "assume_encoding": "HTTP/2 and HTTP/3 responses use binary bodies with explicit "
+                "content-type charset parameters",
+            "encode_chars": "HTTP/2 and HTTP/3 mandate percent-encoded URIs at the protocol level",
+        };
+    }
+
     #! Sends an HTTP \c GET request and returns the response
     abstract hash<RestResponseInfo> restGet(string path, *hash<auto> hdr);
 
@@ -4352,7 +4374,10 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        return create_object("RestClientIo::RestClientIo", getConnectionOptions(rtopts));
+        # RestClient (sync) honors Http1OnlyOptions via HTTPClient; the async transport
+        # operates at the h2/h3 layer where these options cannot apply
+        hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
+        return create_object("RestClientIo::RestClientIo", opts);
     }
 
     #! Returns an async-I/O-capable connection object with alt token signer applied
