@@ -3879,6 +3879,26 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                                 && !ii->operands.empty())) {
                         break;
                     }
+                    // CreateParseRef with simple local lvalue: LLVM lowering
+                    // uses qore_rt_create_local_ref_aot(ctx, local_slot) directly,
+                    // no expression slot needed — eliminates EXPR_TREE for \var
+                    if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
+                        if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
+                                ii->expr.getInternalNode())) {
+                            const QoreValue& lv_expr = prn->getLVExp();
+                            if (lv_expr.getType() == NT_VARREF) {
+                                auto* vrn = lv_expr.get<VarRefNode>();
+                                if (vrn->getType() == VT_LOCAL
+                                        || vrn->getType() == VT_LOCAL_TS) {
+                                    // Register the local var (not the expr) so the
+                                    // LLVM lowering can find its slot
+                                    slots.getLocalSlot(
+                                        reinterpret_cast<const void*>(vrn->ref.id));
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     uint64_t bits;
                     memcpy(&bits, &ii->expr, sizeof(bits));
                     slots.getExprSlot(bits);
@@ -4077,6 +4097,20 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::CreateParseRef: {
                     auto* pri = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
+                    // Skip expr slot for simple local refs — LLVM lowering uses
+                    // qore_rt_create_local_ref_aot(ctx, local_slot) directly
+                    if (pri->node) {
+                        const QoreValue& lv_expr = pri->node->getLVExp();
+                        if (lv_expr.getType() == NT_VARREF) {
+                            auto* vrn = lv_expr.get<VarRefNode>();
+                            if (vrn->getType() == VT_LOCAL
+                                    || vrn->getType() == VT_LOCAL_TS) {
+                                slots.getLocalSlot(
+                                    reinterpret_cast<const void*>(vrn->ref.id));
+                                break;
+                            }
+                        }
+                    }
                     uint64_t bits;
                     memcpy(&bits, &pri->expr, sizeof(bits));
                     slots.getExprSlot(bits);

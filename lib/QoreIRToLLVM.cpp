@@ -4768,15 +4768,38 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             } else if (inv->invoke_opcode == QoreIROpcode::CreateParseRef) {
                 // CreateParseRef invoke
                 if (aot_mode) {
-                    QoreValue expr_val = inv->expr;
-                    uint64_t expr_bits;
-                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                            llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    // Try native AOT lowering: resolve local slot at compile time
+                    bool native_lowered = false;
+                    if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
+                            inv->expr.getInternalNode())) {
+                        const QoreValue& lv_expr = prn->getLVExp();
+                        if (lv_expr.getType() == NT_VARREF) {
+                            auto* vrn = lv_expr.get<VarRefNode>();
+                            if (vrn->getType() == VT_LOCAL || vrn->getType() == VT_LOCAL_TS) {
+                                int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                                    reinterpret_cast<const void*>(vrn->ref.id));
+                                auto helper = module.getOrInsertFunction(
+                                    "qore_rt_create_local_ref_aot",
+                                    llvm::FunctionType::get(i64_type,
+                                        {ptr_type, i32_type, ptr_type}, false));
+                                result = builder->CreateCall(helper, {aot_ctx_arg,
+                                    llvm::ConstantInt::get(i32_type, local_slot), xsink_arg});
+                                native_lowered = true;
+                            }
+                        }
+                    }
+                    if (!native_lowered) {
+                        // Fall back to expr slot for complex lvalue refs
+                        QoreValue expr_val = inv->expr;
+                        uint64_t expr_bits;
+                        std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                        int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                        auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type}, false));
+                        result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                    }
                 } else {
                     const auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(
                             inv->expr.getInternalNode());
@@ -7282,14 +7305,36 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* prinst = static_cast<const QoreIRCreateParseRefInstruction*>(inst);
             llvm::Value* result;
             if (aot_mode) {
-                QoreValue expr_val = prinst->expr;
-                uint64_t expr_bits;
-                std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
-                int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
+                // Try native AOT lowering: resolve local slot at compile time
+                bool native_lowered = false;
+                if (prinst->node) {
+                    const QoreValue& lv_expr = prinst->node->getLVExp();
+                    if (lv_expr.getType() == NT_VARREF) {
+                        auto* vrn = lv_expr.get<VarRefNode>();
+                        if (vrn->getType() == VT_LOCAL || vrn->getType() == VT_LOCAL_TS) {
+                            int32_t local_slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(
+                                reinterpret_cast<const void*>(vrn->ref.id));
+                            auto helper = module.getOrInsertFunction(
+                                "qore_rt_create_local_ref_aot",
+                                llvm::FunctionType::get(i64_type,
+                                    {ptr_type, i32_type, ptr_type}, false));
+                            result = builder->CreateCall(helper, {aot_ctx_arg,
+                                llvm::ConstantInt::get(i32_type, local_slot), xsink_arg});
+                            native_lowered = true;
+                        }
+                    }
+                }
+                if (!native_lowered) {
+                    // Fall back to expr slot for complex lvalue refs
+                    QoreValue expr_val = prinst->expr;
+                    uint64_t expr_bits;
+                    std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
+                    int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
+                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                            llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper, {aot_ctx_arg,
                         llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                }
             } else {
                 llvm::Value* node_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(prinst->node));

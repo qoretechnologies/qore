@@ -977,6 +977,26 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_parse_ref(const ParseReferenceNode*
     return toBits(result);
 }
 
+//! AOT: create a reference to a local variable from slot index
+/** Eliminates EXPR_TREE for \var expressions by resolving the LocalVar*
+    from the AOT context's local slot, constructing a temporary VarRefNode
+    and ParseReferenceNode, and evaluating to produce a ReferenceNode.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, int32_t local_slot,
+        ExceptionSink* xsink) {
+    if (local_slot < 0 || local_slot >= ctx->num_locals || !ctx->locals[local_slot]) {
+        xsink->raiseException("AOT-REF-ERROR",
+            "cannot resolve local slot %d for reference creation", local_slot);
+        return 0;
+    }
+    LocalVar* lv = ctx->locals[local_slot];
+    // Build a temporary VarRefNode + ParseReferenceNode and evaluate
+    VarRefNode* vrn = new VarRefNode(&loc_builtin, strdup(lv->getName()), lv, false);
+    SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn)));
+    ReferenceNode* ref = prn->evalToRef(xsink);
+    return ref ? toBits(QoreValue(ref)) : 0;
+}
+
 // --- Typed container construction helpers ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_new_hash_decl(const NewHashDeclNode* node, ExceptionSink* xsink) {
