@@ -2123,35 +2123,17 @@ struct qore_socket_private {
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
             h2_session.get(), h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
         if (h2_cond) {
-            Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
-            printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
-            if (stream && !stream->body.empty()) {
-                return true;
-            }
-
-            // Check if raw socket has data (HTTP/2 frames)
-            bool sock_avail = isSocketDataAvailable(timeout_ms, mname, xsink);
-            printd(5, "isDataAvailable() isSocketDataAvailable(%d)=%d\n", timeout_ms, sock_avail);
-            if (sock_avail) {
-                if (*xsink) {
-                    return false;
-                }
-
-                // Process pending HTTP/2 frames
-                h2_receiving_frames = true;
-                int rv = h2_session->receiveData(100, xsink);
-                h2_receiving_frames = false;
-                printd(5, "isDataAvailable() receiveData rv=%d\n", rv);
-
-                if (*xsink) {
-                    return false;
-                }
-
-                // Re-check stream buffer
-                stream = h2_session->getStream(h2_active_stream_id);
-                printd(5, "isDataAvailable() after recv stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
-                return stream && !stream->body.empty();
-            }
+            // Server-side HTTP/2 is fully async in the current architecture:
+            // handlers must read body data via @ref readHttp2StreamDataBlock()
+            // or use the pre-read `cx.header-info.body` field populated by
+            // HttpServerAsyncIo.  Calling sync isDataAvailable() on an
+            // H2-active server socket is a misuse — raise a clear error
+            // instead of running a sync recv/process loop under the outer
+            // mutex.
+            xsink->raiseException("SOCKET-H2-SYNC-ERROR",
+                "Socket::isDataAvailable() is not supported on an HTTP/2-active "
+                "server socket; use readHttp2StreamDataBlock() or the async "
+                "poll API instead");
             return false;
         }
         return isSocketDataAvailable(timeout_ms, mname, xsink);
@@ -3203,69 +3185,25 @@ struct qore_socket_private {
             return (ssize_t)bs;
         }
 
-        // Read from HTTP/2 stream buffer when stream is active (but not when receiving protocol frames)
-        // NOTE: Only do HTTP/2 stream handling for server-side connections. For client connections,
-        // HTTPClient's readHttp2StreamData() handles the stream-level reading.
+        // Server-side HTTP/2 is fully async in the current architecture —
+        // handlers must read body data via @ref readHttp2StreamDataBlock()
+        // or use the pre-read `cx.header-info.body` field populated by
+        // HttpServerAsyncIo.  Calling sync recv() on an H2-active server
+        // socket is a misuse; raise a clear error.
+        //
+        // The `!h2_receiving_frames` gate lets the recursive brecv from
+        // h2_session->receiveData() bypass this check — that internal
+        // call needs the raw-socket path below.
         int32_t h2_active_stream_id = getH2ActiveStreamId();
-        bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
-        if (h2_cond) {
-            while (true) {
-                Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
-
-                if (stream && !stream->body.empty()) {
-                    // Return data from HTTP/2 stream buffer
-                    size_t bytes = std::min(bs, stream->body.size());
-                    memcpy(rbuf, stream->body.data(), bytes);
-                    stream->body.erase(stream->body.begin(), stream->body.begin() + bytes);
-                    buf = rbuf;
-                    if (do_event) {
-                        do_read_event((ssize_t)bytes, bytes);
-                    }
-                    return (ssize_t)bytes;
-                }
-
-                // If the stream is closed and no data remains, report EOF
-                if (stream && (stream->state == Http2StreamState::Closed || stream->body_complete)) {
-                    return 0;
-                }
-
-                // If no data buffered, receive more HTTP/2 frames
-                if (!stream || stream->body.empty()) {
-                    // Wait for raw socket data (HTTP/2 frames).  Yield the
-                    // outer Socket mutex during the wait when wired — same
-                    // pattern as the non-SSL raw path below.
-                    if (timeout >= 0) {
-                        int wait_rc;
-                        if (outer_lock) {
-                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
-                                true, false, timeout, "Socket", meth, xsink);
-                        } else {
-                            wait_rc = isSocketDataAvailable(timeout, meth, xsink) ? 1 : 0;
-                        }
-                        if (*xsink) {
-                            return -1;
-                        }
-                        if (wait_rc <= 0) {
-                            if (!suppress_exception) {
-                                se_timeout("Socket", meth, timeout, xsink);
-                            }
-                            return QSE_TIMEOUT;
-                        }
-                    }
-
-                    // Set flag to prevent recursion when receiveData calls brecv
-                    h2_receiving_frames = true;
-                    int rv = h2_session->receiveData(timeout, xsink);
-                    h2_receiving_frames = false;
-
-                    if (rv < 0) {
-                        return -1;
-                    }
-
-                    // Re-fetch stream after receiving data
-                    stream = h2_session->getStream(h2_active_stream_id);
-                }
+        if (h2_session && h2_session->isServer() && h2_active_stream_id > 0
+                && !h2_receiving_frames) {
+            if (!suppress_exception) {
+                xsink->raiseException("SOCKET-H2-SYNC-ERROR",
+                    "Socket::%s() is not supported on an HTTP/2-active server "
+                    "socket; use readHttp2StreamDataBlock() or the async poll "
+                    "API instead", meth);
             }
+            return QSE_SSL_ERR;
         }
 
         // real socket reads are only done when the buffer is empty
