@@ -244,11 +244,25 @@ bool QoreIRVerifier::verify(const QoreIRFunction& func, std::string& error) {
                 }
             }
             int expected = expectedOperands(inst->opcode);
-            if (expected >= 0 && expected != static_cast<int>(inst->operands.size())) {
-                error = "unexpected operand count for opcode " + std::to_string(static_cast<int>(inst->opcode))
-                    + " (expected " + std::to_string(expected) + ", got " + std::to_string(inst->operands.size()) + ")";
-                return false;
+            if (expected >= 0) {
+                // Exact operand count check
+                if (expected != static_cast<int>(inst->operands.size())) {
+                    error = "unexpected operand count for opcode " + std::to_string(static_cast<int>(inst->opcode))
+                        + " (expected " + std::to_string(expected) + ", got "
+                        + std::to_string(inst->operands.size()) + ")";
+                    return false;
+                }
+            } else if (expected <= -2) {
+                // Minimum operand count check: encoded as -(min + 2)
+                int min_operands = -(expected + 2);
+                if (static_cast<int>(inst->operands.size()) < min_operands) {
+                    error = "too few operands for opcode " + std::to_string(static_cast<int>(inst->opcode))
+                        + " (minimum " + std::to_string(min_operands) + ", got "
+                        + std::to_string(inst->operands.size()) + ")";
+                    return false;
+                }
             }
+            // expected == -1: skip validation entirely (fully variable)
             if ((inst->opcode == QoreIROpcode::LoadArg || inst->opcode == QoreIROpcode::LoadClosure)
                     && inst->operands.size() > 1) {
                 error = "load.arg/load.closure only support zero or one operand";

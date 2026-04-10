@@ -21,7 +21,7 @@ struct OpcodeInfo {
     bool can_return_nothing;            //! Can legitimately return NOTHING
     bool never_returns_nothing;         //! Always returns non-NOTHING value
     bool is_terminator;                 //! Ends a basic block (control flow)
-    int expected_operands;              //! Expected operand count (-1 = variable)
+    int expected_operands;              //! Expected operand count (-1 = variable, <= -2 = minimum via OPCODE_MIN_OPERANDS)
 
     const char* description;            //! What the opcode does (for debugging/docs)
     bool may_have_side_effects;         //! Can modify global state (globals, statics, objects)
@@ -33,6 +33,11 @@ struct OpcodeInfo {
     bool is_unary_invoke;               //! Unary computation op (Invoke dispatches via qore_rt_unary_op)
     bool is_binary_invoke;              //! Binary computation op (Invoke dispatches via qore_rt_binary_op)
 };
+
+//! Encode a minimum operand count for variable-length instructions.
+//! Value = -(min + 2): -2 means min=0, -3 means min=1, -5 means min=3.
+//! The verifier checks operands.size() >= min instead of == exact.
+#define OPCODE_MIN_OPERANDS(n) (-(static_cast<int>(n) + 2))
 
 //! Registry of all IR opcodes (in enum ID order)
 constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
@@ -153,7 +158,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "ChompString"                   , false, true , false,  0, "ChompString", false, true , "ParseNode", true , false, false, false }, // 114
     { "TransliterateAny"              , false, true , false,  0, "TransliterateAny", false, true , "ParseNode", true , false, false, false }, // 115
     { "TransliterateString"           , false, true , false,  0, "TransliterateString", false, true , "ParseNode", true , false, false, false }, // 116
-    { "BackgroundInt"                 , false, true , false,  0, "BackgroundInt", false, true , "ParseNode", true , true , false, false }, // 117
+    { "BackgroundInt"                 , false, true , false, OPCODE_MIN_OPERANDS(0), "BackgroundInt", false, true , "ParseNode", true , true , false, false }, // 117
     { "ListAssignAny"                 , false, false, false,  0, "ListAssignAny", false, true , "ParseNode", true , false, false, false }, // 118
     { "ExistsAny"                     , false, false, false,  1, "ExistsAny", false, true , "ParseNode", true , true , true , false }, // 119
     { "ExistsBool"                    , false, true , false,  1, "ExistsBool", false, true , "ParseNode", true , true , true , false }, // 120
@@ -324,7 +329,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "CreateClosure"                 , false, false, false,  0, "CreateClosure", false, true , "ParseNode", true , false, false, false }, // 285
     { "CreateCallRef"                 , false, false, false,  0, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 286
     { "CreateMethodRef"               , false, false, false,  0, "CreateMethodRef", false, true , "ParseNode", true , false, false, false }, // 287
-    { "CreateParseRef"                , false, false, false,  0, "CreateParseRef", false, true , "ParseNode", true , false, false, false }, // 288
+    { "CreateParseRef"                , false, false, false, OPCODE_MIN_OPERANDS(0), "CreateParseRef", false, true , "ParseNode", true , false, false, false }, // 288
     { "NewHashDecl"                   , false, false, false,  0, "NewHashDecl", false, true , "ParseNode", true , false, false, false }, // 289
     { "NewComplexHash"                , false, false, false,  0, "NewComplexHash", false, true , "ParseNode", true , false, false, false }, // 290
     { "NewComplexList"                , false, false, false,  0, "NewComplexList", false, true , "ParseNode", true , false, false, false }, // 291
@@ -389,11 +394,11 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "HashDerefDynamic"              , false, false, false,  2, "HashDerefDynamic", true , true , "ParseNode", true , true , false, true  }, // 350
     { "ListIndexDynamic"              , false, false, false,  2, "ListIndexDynamic", false, true , "ParseNode", true , true , false, true  }, // 351
     { "HashKeyStoreDynamic"           , false, false, false,  3, "Store to variable", true , true , "AssignmentNode", false, false, false, false }, // 352
-    { "LValuePathAssign"              , false, false, false,  1, "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 353
-    { "LValuePathCompound"            , false, false, false,  1, "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 354
-    { "LValuePathUnary"               , false, false, false,  0, "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 355
-    { "LValuePathBinaryMut"           , false, false, false,  1, "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 356
-    { "LValuePathTernary"             , false, false, false,  2, "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 357
+    { "LValuePathAssign"              , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathAssign", true , true , "AssignmentNode", true , false, false, false }, // 353
+    { "LValuePathCompound"            , false, false, false, OPCODE_MIN_OPERANDS(1), "LValuePathCompound", true , true , "ParseNode", true , false, false, false }, // 354
+    { "LValuePathUnary"               , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathUnary", true , true , "ParseNode", true , false, false, false }, // 355
+    { "LValuePathBinaryMut"           , false, false, false, OPCODE_MIN_OPERANDS(0), "LValuePathBinaryMut", true , true , "ParseNode", true , false, false, false }, // 356
+    { "LValuePathTernary"             , false, false, false, OPCODE_MIN_OPERANDS(3), "LValuePathTernary", true , true , "ParseNode", true , false, false, false }, // 357
 };
 
 //! Static assertion to verify registry completeness

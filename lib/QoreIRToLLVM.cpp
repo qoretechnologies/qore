@@ -10293,9 +10293,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     break;
                 }
                 case QoreIROpcode::LValuePathBinaryMut: {
-                    auto* rhs_val = getVal(inst->operands[0].id, error);
-                    if (!rhs_val) { return false; }
-                    llvm::Value* rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    // operands[0] = RHS for push/unshift; empty for regex subst/transliterate
+                    llvm::Value* rhs_boxed;
+                    if (!inst->operands.empty()) {
+                        auto* rhs_val = getVal(inst->operands[0].id, error);
+                        if (!rhs_val) { return false; }
+                        rhs_boxed = boxValue(rhs_val, inst->operands[0].id);
+                    } else {
+                        rhs_boxed = llvm::ConstantInt::get(i64_type, VAL_NOTHING);
+                    }
                     if (aot_slots) {
                         auto fn = module.getOrInsertFunction("qore_rt_lv_path_binary_mut_aot",
                             llvm::FunctionType::get(i64_type,
