@@ -248,21 +248,6 @@ public:
     DLLLOCAL ~OptionalNonBlockingHelper();
 };
 
-//! RAII helper that temporarily restores blocking mode on a non-blocking socket
-/** Sockets are born non-blocking; this helper sets blocking mode in the constructor
-    and restores non-blocking mode in the destructor.  Use for synchronous code paths
-    that need blocking I/O (e.g. legacy APIs, simple blocking reads).
-*/
-class SyncBlockingHelper {
-public:
-    qore_socket_private& sock;
-    ExceptionSink* xsink;
-    bool set;
-
-    DLLLOCAL SyncBlockingHelper(qore_socket_private& s, ExceptionSink* xs);
-    DLLLOCAL ~SyncBlockingHelper();
-};
-
 class PrivateQoreSocketTimeoutBase {
 public:
     DLLLOCAL PrivateQoreSocketTimeoutBase(qore_socket_private* s) : sock(s), start(sock ? q_clock_getmicros() : 0) {
@@ -1423,12 +1408,40 @@ struct qore_socket_private {
             }
 
             int rc = ::accept(sock, addr, size);
-            if (rc != QORE_INVALID_SOCKET)
+            if (rc != QORE_INVALID_SOCKET) {
+#ifndef _Q_WINDOWS
+                // The listener may be non-blocking (the async I/O controller flips it to
+                // O_NONBLOCK while it owns the socket).  On macOS/BSD the accepted socket
+                // inherits O_NONBLOCK from the listener, which breaks subsequent blocking
+                // operations such as the SSL handshake (SSL_R_PACKET_LENGTH_TOO_LONG).
+                // Force the accepted socket to blocking mode here.
+                int arg = fcntl(rc, F_GETFL, 0);
+                if (arg >= 0 && (arg & O_NONBLOCK)) {
+                    fcntl(rc, F_SETFL, arg & ~O_NONBLOCK);
+                }
+#endif
                 return rc;
+            }
 
+            int err = sock_get_error();
             // retry if interrupted by a signal
-            if (sock_get_error() == EINTR)
+            if (err == EINTR)
                 continue;
+            // The listener may be non-blocking (async I/O controller).  Wait for a
+            // pending connection and retry.  isDataAvailable handles timeout_ms < 0
+            // as an infinite wait.
+            if (err == EAGAIN
+#if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
+                    || err == EWOULDBLOCK
+#endif
+                    ) {
+                if (!isDataAvailable(timeout_ms, "accept", xsink)) {
+                    if (*xsink)
+                        return -1;
+                    return QSE_TIMEOUT;
+                }
+                continue;
+            }
 
             qore_socket_error(xsink, "SOCKET-ACCEPT-ERROR", "error in accept()", 0, 0, 0, addr);
             return -1;

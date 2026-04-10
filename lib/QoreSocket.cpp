@@ -567,29 +567,29 @@ int SSLSocketHelper::connect(const char* mname, int timeout_ms, ExceptionSink* x
 
     int rc;
 
-    if (timeout_ms >= 0) {
-        if (qs.set_non_blocking(true, xsink))
-            return qs.close_and_exit();
+    // Always run the non-blocking retry loop.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_connect can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  doSSLUpgradeNonBlockingIO uses
+    // isSocketDataAvailable(timeout_ms, ...) which treats negative timeouts as
+    // infinite wait.
+    if (qs.set_non_blocking(true, xsink))
+        return qs.close_and_exit();
 
-        while (true) {
-            ERR_clear_error();
-            rc = SSL_connect(ssl);
-
-            if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_connect", xsink))) {
-                if (!qs.isOpen())
-                    break;
-                continue;
-            }
-
-            break;
-        }
-
-        if (qs.isOpen() && qs.set_non_blocking(false, xsink))
-            return qs.close_and_exit();
-    } else {
+    while (true) {
         ERR_clear_error();
         rc = SSL_connect(ssl);
+
+        if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_connect", xsink))) {
+            if (!qs.isOpen())
+                break;
+            continue;
+        }
+
+        break;
     }
+
+    if (qs.isOpen() && qs.set_non_blocking(false, xsink))
+        return qs.close_and_exit();
 
     if (rc <= 0) {
         if (!*xsink)
@@ -606,29 +606,29 @@ int SSLSocketHelper::accept(const char* mname, int timeout_ms, ExceptionSink* xs
 
     int rc;
 
-    if (timeout_ms >= 0) {
-        if (qs.set_non_blocking(true, xsink))
-            return qs.close_and_exit();
+    // Always run the non-blocking retry loop.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_accept can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  doSSLUpgradeNonBlockingIO uses
+    // isSocketDataAvailable(timeout_ms, ...) which treats negative timeouts as
+    // infinite wait.
+    if (qs.set_non_blocking(true, xsink))
+        return qs.close_and_exit();
 
-        while (true) {
-            ERR_clear_error();
-            rc = SSL_accept(ssl);
-
-            if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_accept", xsink))) {
-                if (!qs.isOpen())
-                    break;
-                continue;
-            }
-
-            break;
-        }
-
-        if (qs.isOpen() && qs.set_non_blocking(false, xsink))
-            return qs.close_and_exit();
-    } else {
+    while (true) {
         ERR_clear_error();
         rc = SSL_accept(ssl);
+
+        if (rc == -1 && !(rc = doSSLUpgradeNonBlockingIO(rc, mname, timeout_ms, "SSL_accept", xsink))) {
+            if (!qs.isOpen())
+                break;
+            continue;
+        }
+
+        break;
     }
+
+    if (qs.isOpen() && qs.set_non_blocking(false, xsink))
+        return qs.close_and_exit();
 
     if (rc <= 0) {
         //printd(5, "SSLSocketHelper::accept() rc: %d\n", rc);
@@ -3288,31 +3288,11 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
     assert(size);
     SSLSocketReferenceHelper ssrh(this);
 
-    if (timeout_ms < 0) {
-        while (true) {
-            int rc;
-            ERR_clear_error();
-            switch (action) {
-                case READ:
-                    rc = SSL_read(ssl, buf, size);
-                    break;
-                case WRITE:
-                    rc = SSL_write(ssl, buf, size);
-                    break;
-                case PEEK:
-                    rc = SSL_peek(ssl, buf, size);
-                    break;
-            }
-            if (rc <= 0) {
-                // we set SSL_MODE_AUTO_RETRY so there should never be any need to retry
-                // issue 1729: only return 0 when reading, indicating that the remote closed the connection
-                if (!sslError(xsink, mname, get_action_method(action), action == WRITE ? true : false)) {
-                    rc = 0;
-                }
-            }
-            return rc;
-        }
-    }
+    // Always use the non-blocking retry loop below.  Sockets are born non-blocking since the
+    // AsyncIoController redesign, so SSL_read/SSL_write can return WANT_READ/WANT_WRITE even
+    // when the caller passed timeout_ms < 0.  The general path handles infinite wait via
+    // isSocketDataAvailable(timeout_ms, ...) — kqueue/poll treat negative timeout as infinite.
+    // OptionalNonBlockingHelper is a no-op when the socket is already non-blocking.
 
     // set non blocking
     OptionalNonBlockingHelper nbh(qs, true, xsink);
@@ -3352,7 +3332,7 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 if (*xsink) {
                     return -1;
                 }
-                if (do_timeout && timeout_ms) {
+                if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
                 rc = QSE_TIMEOUT;
@@ -3367,7 +3347,7 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 if (*xsink) {
                     return -1;
                 }
-                if (do_timeout && timeout_ms) {
+                if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
                 rc = QSE_TIMEOUT;
@@ -3504,21 +3484,6 @@ DLLLOCAL OptionalNonBlockingHelper::OptionalNonBlockingHelper(qore_socket_privat
 DLLLOCAL OptionalNonBlockingHelper::~OptionalNonBlockingHelper() {
     if (set) {
         sock.set_non_blocking(false, xsink);
-    }
-}
-
-DLLLOCAL SyncBlockingHelper::SyncBlockingHelper(qore_socket_private& s, ExceptionSink* xs)
-        : sock(s), xsink(xs), set(false) {
-    if (sock.isOpen()) {
-        if (!sock.set_non_blocking(false, xs)) {
-            set = true;
-        }
-    }
-}
-
-DLLLOCAL SyncBlockingHelper::~SyncBlockingHelper() {
-    if (set && sock.isOpen()) {
-        sock.set_non_blocking(true, xsink);
     }
 }
 
