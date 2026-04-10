@@ -592,6 +592,37 @@ controller-owned sockets but still correct on legacy blocking sockets.
 covers internal TLS bookkeeping (NewSessionTicket, post-handshake renegotiation).  Sync SSL code
 that relies on AUTO_RETRY for I/O retry on a non-blocking socket is incorrect.
 
+#### Invariant: sync Socket APIs must never run on the async I/O controller thread
+
+Sync Socket APIs block — either directly on a syscall or indirectly via
+`isDataAvailable()`/`isWriteFinished()`/`asyncIoWait()`.  Running any such call on the
+async I/O controller's own I/O thread would deadlock the controller: the wait primitives
+block the very thread that is supposed to deliver the readiness events.
+
+Every sync Socket entry point in `qore_socket_private` (`recv`, `recvAll`, `recvBinary`,
+`recvBinaryAll`, `recvToOutputStream`, `send`, `sendFromInputStream`,
+`sendHttpChunkedBody{FromInputStream,Trailer}`, `sendHttp{Message,Response}`,
+`readHTTPHeader`, `readHTTPHeaderString`, `readHttpChunkedBody{,Binary}`, `accept_internal`
+— except the special `timeout_ms == 0` single-shot non-blocking path — `connectINET`,
+`connectUNIX`, `upgradeClient/ServerToSSLIntern`) and the higher-level wrappers
+(`QoreHttpClientObject::send_internal`, `QoreHttpClientObject::connect`,
+`qore_ftp_private::checkConnectedUnlocked`, `qore_ftp_private::connect`) calls
+`SocketSyncPoll::assertNotOnIoThread()` before doing any blocking work.  Violation raises
+`SOCKET-SYNC-ON-IO-THREAD-ERROR` in both debug and release builds; debug builds additionally
+`abort()` so the core file points at the offending frame.
+
+In the current architecture this invariant is held **structurally**: Qore poll operations
+are always worker-dispatched, `onComplete` callbacks go to the worker pool, and queue
+pushes are non-blocking.  User Qore code therefore never runs on the I/O thread and the
+assertion is defense-in-depth — it catches misuse introduced by future refactors or by
+C++ poll states that accidentally call into a sync Socket path.
+
+The canonical bridge from sync to async is `SocketSyncPoll::run(state, timeout_ms, ...)`
+(`include/qore/intern/SocketSyncPoll.h`), which loops an `AbstractPollState`'s
+`continuePoll()` and waits for `SOCK_POLLIN` / `SOCK_POLLOUT` between iterations.  New sync
+Socket APIs should be implemented as thin wrappers over this helper rather than
+hand-rolled EAGAIN / `WANT_READ` retry loops.
+
 ### QUIC Keepalive Policy
 
 QUIC keepalive (`ngtcp2_conn_set_keep_alive_timeout`) must be **gated on active stream count** for

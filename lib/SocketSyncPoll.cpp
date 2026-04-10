@@ -96,22 +96,31 @@ int SocketSyncPoll::run(qore_socket_private& sock, AbstractPollState& state,
 
 void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,
         ExceptionSink* xsink) {
-    (void)cname;
-    (void)mname;
-    (void)xsink;
-#ifdef DEBUG
-    if (qore_on_async_io_thread()) {
-        // A sync Socket API is running on the async I/O controller's
-        // I/O thread — this will deadlock the controller because the
-        // wait primitives block the very thread that's supposed to
-        // deliver the readiness events.  Abort here with a clear
-        // message rather than hanging in production diagnostics.
-        fprintf(stderr,
-            "FATAL: sync %s::%s() called from the async I/O controller "
-            "thread — this would deadlock the controller.  Sync socket "
-            "APIs must only be called from handler/worker threads.\n",
-            cname, mname);
-        assert(false && "sync socket API called from async I/O thread");
+    if (!qore_on_async_io_thread()) {
+        return;
     }
+    // A sync Socket API is running on the async I/O controller's
+    // I/O thread.  This would deadlock the controller — the sync wait
+    // primitives block the very thread that is supposed to deliver the
+    // readiness events.  Raise a fail-fast exception with a clear
+    // message so the bug surfaces as close to its origin as possible.
+    //
+    // In debug builds we also abort() so the stack trace points directly
+    // at the offending call site; in release builds the raised exception
+    // is sufficient.
+    if (xsink) {
+        xsink->raiseException("SOCKET-SYNC-ON-IO-THREAD-ERROR",
+            "synchronous %s::%s() called from the async I/O controller "
+            "thread — this would deadlock the controller; sync socket "
+            "APIs must only be called from handler/worker threads",
+            cname, mname);
+    }
+#ifdef DEBUG
+    fprintf(stderr,
+        "FATAL: sync %s::%s() called from the async I/O controller "
+        "thread — this would deadlock the controller.  Sync socket "
+        "APIs must only be called from handler/worker threads.\n",
+        cname, mname);
+    assert(false && "sync socket API called from async I/O thread");
 #endif
 }
