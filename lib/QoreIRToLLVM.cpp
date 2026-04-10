@@ -57,6 +57,7 @@ static_assert(QORE_IR_MAX_OPCODE == 357,
 #include "qore/intern/FunctionCallNode.h"
 #include "qore/intern/ScopedObjectCallNode.h"
 #include "qore/intern/QoreBackgroundOperatorNode.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/ConstantList.h"
 #include "qore/intern/QoreClosureParseNode.h"
 #include "qore/intern/ParseReferenceNode.h"
@@ -4788,6 +4789,31 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                                 native_lowered = true;
                             }
                         }
+                        // Complex hash member access: \member{key} with pre-evaluated key operand
+                        if (!native_lowered && !inv->operands.empty() && lv_expr.hasNode()) {
+                            auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                                lv_expr.getInternalNode());
+                            if (hd) {
+                                // Extract member name from the left side (SelfVarrefNode)
+                                const QoreValue& left = hd->getLeft();
+                                if (left.hasNode() && left.getType() == NT_SELF_VARREF) {
+                                    auto* svn = left.get<SelfVarrefNode>();
+                                    const char* member_name = svn->str;
+                                    auto* key_val = getVal(inv->operands[0].id, error);
+                                    if (key_val) {
+                                        llvm::Value* key_boxed = boxValue(key_val, inv->operands[0].id);
+                                        llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
+                                        auto helper = module.getOrInsertFunction(
+                                            "qore_rt_create_member_hash_ref_aot",
+                                            llvm::FunctionType::get(i64_type,
+                                                {ptr_type, i64_type, ptr_type}, false));
+                                        result = builder->CreateCall(helper,
+                                            {name_ptr, key_boxed, xsink_arg});
+                                        native_lowered = true;
+                                    }
+                                }
+                            }
+                        }
                     }
                     if (!native_lowered) {
                         // Fall back to expr slot for complex lvalue refs
@@ -7425,6 +7451,30 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             result = builder->CreateCall(helper, {aot_ctx_arg,
                                 llvm::ConstantInt::get(i32_type, local_slot), xsink_arg});
                             native_lowered = true;
+                        }
+                    }
+                    // Complex hash member access: \member{key} with pre-evaluated key operand
+                    if (!native_lowered && !prinst->operands.empty() && lv_expr.hasNode()) {
+                        auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                            lv_expr.getInternalNode());
+                        if (hd) {
+                            const QoreValue& left = hd->getLeft();
+                            if (left.hasNode() && left.getType() == NT_SELF_VARREF) {
+                                auto* svn = left.get<SelfVarrefNode>();
+                                const char* member_name = svn->str;
+                                auto* key_val = getVal(prinst->operands[0].id, error);
+                                if (key_val) {
+                                    llvm::Value* key_boxed = boxValue(key_val, prinst->operands[0].id);
+                                    llvm::Value* name_ptr = builder->CreateGlobalStringPtr(member_name);
+                                    auto helper = module.getOrInsertFunction(
+                                        "qore_rt_create_member_hash_ref_aot",
+                                        llvm::FunctionType::get(i64_type,
+                                            {ptr_type, i64_type, ptr_type}, false));
+                                    result = builder->CreateCall(helper,
+                                        {name_ptr, key_boxed, xsink_arg});
+                                    native_lowered = true;
+                                }
+                            }
                         }
                     }
                 }

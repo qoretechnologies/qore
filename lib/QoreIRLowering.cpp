@@ -3109,6 +3109,20 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return builder.createCreateClosure(closure, expr, closure->loc)->result;
     }
     if (auto* parse_ref = dynamic_cast<const ParseReferenceNode*>(node)) {
+        // Try to pre-evaluate the hash key for \member{key} patterns
+        // This enables native AOT lowering without EXPR_TREE serialization
+        std::vector<QoreIRValue> key_operands;
+        const QoreValue& lv_expr = parse_ref->getLVExp();
+        if (lv_expr.hasNode()) {
+            auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                lv_expr.getInternalNode());
+            if (hd) {
+                QoreIRValue key_val = lowerExpression(hd->getRight(), error);
+                if (key_val.isValid()) {
+                    key_operands.push_back(key_val);
+                }
+            }
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3116,12 +3130,18 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, parse_ref->loc);
+            auto* inst = builder.createInvoke(expr, key_operands, normal_block, handler, parse_ref->loc);
             inst->invoke_opcode = QoreIROpcode::CreateParseRef;
             builder.setBlock(normal_block);
             return inst->result;
         }
-        return builder.createCreateParseRef(parse_ref, expr, parse_ref->loc)->result;
+        // Non-exception path: use the specialized CreateParseRef instruction
+        auto* cpr_inst = builder.createCreateParseRef(parse_ref, expr, parse_ref->loc);
+        // Add key operands for complex hash member access
+        for (auto& op : key_operands) {
+            cpr_inst->operands.push_back(op);
+        }
+        return cpr_inst->result;
     }
     if (dynamic_cast<const AbstractCallReferenceNode*>(node)) {
         auto* parse_node = dynamic_cast<const ParseNode*>(node);

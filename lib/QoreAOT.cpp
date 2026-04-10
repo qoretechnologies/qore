@@ -3829,7 +3829,7 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
         return true;
     }
-    // CreateParseRef with simple local lvalue
+    // CreateParseRef: native for simple local lvalue OR complex hash member access with operands
     if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
         if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
                 ii->expr.getInternalNode())) {
@@ -3838,6 +3838,14 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
                 auto* vrn = lv_expr.get<VarRefNode>();
                 if (vrn->getType() == VT_LOCAL
                         || vrn->getType() == VT_LOCAL_TS) {
+                    return true;
+                }
+            }
+            // Complex hash member access: \member{key} with pre-evaluated key operand
+            if (!ii->operands.empty() && lv_expr.hasNode()) {
+                auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                    lv_expr.getInternalNode());
+                if (hd) {
                     return true;
                 }
             }
@@ -4126,16 +4134,24 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                 }
                 case QoreIROpcode::CreateParseRef: {
                     auto* pri = static_cast<QoreIRCreateParseRefInstruction*>(inst.get());
-                    // Skip expr slot for simple local refs — LLVM lowering uses
-                    // qore_rt_create_local_ref_aot(ctx, local_slot) directly
                     if (pri->node) {
                         const QoreValue& lv_expr = pri->node->getLVExp();
+                        // Skip expr slot for simple local refs — LLVM lowering uses
+                        // qore_rt_create_local_ref_aot(ctx, local_slot) directly
                         if (lv_expr.getType() == NT_VARREF) {
                             auto* vrn = lv_expr.get<VarRefNode>();
                             if (vrn->getType() == VT_LOCAL
                                     || vrn->getType() == VT_LOCAL_TS) {
                                 slots.getLocalSlot(
                                     reinterpret_cast<const void*>(vrn->ref.id));
+                                break;
+                            }
+                        }
+                        // Skip expr slot for complex hash member access with pre-evaluated key
+                        if (!pri->operands.empty() && lv_expr.hasNode()) {
+                            auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(
+                                lv_expr.getInternalNode());
+                            if (hd) {
                                 break;
                             }
                         }

@@ -63,6 +63,8 @@
 #include <qore/intern/QoreException.h>
 #include <qore/intern/StatementBlock.h>
 #include <qore/intern/FunctionCallNode.h>
+#include <qore/intern/SelfVarrefNode.h>
+#include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
 #include <qore/intern/CallReferenceCallNode.h>
 #include <qore/intern/FunctionalOperatorInterface.h>
 #include <qore/intern/QoreClassIntern.h>
@@ -1076,6 +1078,37 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_local_ref_aot(QoreAOTContext* ctx, 
     SimpleRefHolder<ParseReferenceNode> prn(new ParseReferenceNode(&loc_builtin, QoreValue(vrn)));
     ReferenceNode* ref = prn->evalToRef(xsink);
     return ref ? toBits(QoreValue(ref)) : 0;
+}
+
+//! AOT: create a reference to a member hash element (\member{key})
+/** Eliminates EXPR_TREE for \self.member{key} expressions by building the
+    partial lvalue expression at runtime from pre-evaluated key value and
+    member name string embedded as a constant.
+*/
+extern "C" DLLEXPORT uint64_t qore_rt_create_member_hash_ref_aot(
+        const char* member_name, uint64_t key_bits, ExceptionSink* xsink) {
+    assert(member_name);
+
+    // Get current self/class context
+    QoreObject* self = nullptr;
+    const qore_class_private* qc = nullptr;
+    runtime_get_object_and_class(self, qc);
+    if (!self) {
+        xsink->raiseException("AOT-REF-ERROR",
+            "no current object for member hash reference '\\%s{...}'", member_name);
+        return 0;
+    }
+
+    // Build the partial lvalue expression: SelfVarrefNode{key}
+    // SelfVarrefNode references the member variable on the current object
+    SelfVarrefNode* svn = new SelfVarrefNode(&loc_builtin, strdup(member_name));
+    QoreValue key = fromBits(key_bits);
+    QoreValue key_copy = key.hasNode() ? key.refSelf() : key;
+    QoreValue lv(new QoreHashObjectDereferenceOperatorNode(&loc_builtin, QoreValue(svn), key_copy));
+
+    // Create ReferenceNode with the partial lvalue
+    ReferenceNode* ref = new ReferenceNode(lv, nullptr, self, self, qc);
+    return toBits(QoreValue(ref));
 }
 
 // --- Typed container construction helpers ---
