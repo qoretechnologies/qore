@@ -1166,79 +1166,54 @@ static QoreAOTContext* buildContextFromSlotMap(
         switch (kind) {
             case AOTExprKind::NEW_OBJECT:
             case AOTExprKind::SCOPED_NEW_OBJECT: {
-                // ref1 = class path, followed by serialized constructor args.
-                // Args are in classifyAndWriteExpr format (AOTExprKind-tagged), NOT writeValue format.
-                // Use readOneExpr so VarRefNode args are reconstructed from ctx->locals[] and
-                // hash literal args (QoreParseHashNode) are reconstructed with proper VarRefNode values.
-                // The list must have value=false (needs_eval=true) so evalList() evaluates VarRefNodes.
+                // ref1 = class path, ref2 = variant signature (e.g. "(string)").
+                // No inline args — constructor args are pre-computed IR operands.
+                // Resolve class and variant at load time and store in call_targets[slot]
+                // so the LLVM code can load them at runtime.
                 ref1 = reader.readStringRef(ptr);
-                uint8_t num_args = QoreAOTBinaryReader::readU8(ptr);
-                QoreListNode* call_args = nullptr;
-                if (num_args > 0) {
-                    call_args = qore_list_private::newList(true);
-                    for (uint8_t j = 0; j < num_args; ++j) {
-                        std::string arg_err;
-                        QoreValue arg = readOneExpr(reader, ptr, end, arg_err, pgm,
-                            ctx->locals, ctx->num_locals, ctx->globals, ctx->num_globals);
-                        if (!arg_err.empty()) {
-                            printd(0, "AOT v2: error reading constructor arg %d for '%s': %s\n",
-                                j, ref1 ? ref1 : "", arg_err.c_str());
-                            arg.discard(nullptr);
-                            call_args->push(QoreValue(), nullptr);
-                            has_unsupported = true;
-                        } else {
-                            call_args->push(arg, nullptr);
-                        }
-                    }
-                }
-                // Resolve the class and create the node with args
-                if (has_unsupported) {
-                    // Unsupported arg expression — function needs source fallback
-                    if (call_args) {
-                        call_args->deref(nullptr);
-                    }
-                    // Must use continue (not break) to skip resolveExprSlot() which would
-                    // create a NewObjectCallNode with no args, triggering a constructor
-                    // resolution error for classes without a default constructor.
-                    continue;
-                }
+                ref2 = reader.readStringRef(ptr);
+                const QoreClass* qc = nullptr;
+                const AbstractQoreFunctionVariant* resolved_variant = nullptr;
                 if (ref1 && *ref1) {
                     const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    qc = qore_root_ns_private::runtimeFindClass(
                         *pp->RootNS, ref1, found_ns);
-                    if (qc) {
-                        // Use NewObjectCallNode for both kinds — evalImpl is identical
-                        // (both call qore_class_private::execConstructor with the same args)
-                        {
-                            const QoreMethod* cons = qc->getConstructor();
-                            printd(5, "AOT buildCtx NEW_OBJECT: class='%s' id=%d nargs=%d constructor=%p\n",
-                                qc->getName(), qc->getID(), (int)num_args, (void*)cons);
-                            if (cons) {
-                                const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
-                                printd(5, "  constructor vlist=%d\n", (int)cf->numVariants());
-                                if (cf->numVariants() > 0) {
-                                    auto* sig2 = cf->first()->getSignature();
-                                    printd(5, "  first variant sig='%s' np=%d minp=%d\n",
-                                        sig2->getSignatureText(), sig2->numParams(), sig2->getMinParamTypes());
+                    if (qc && ref2 && *ref2) {
+                        // Match variant by signature
+                        const QoreMethod* cons = qc->getConstructor();
+                        if (cons) {
+                            const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                            QoreFunctionIterator vi(*cf);
+                            while (vi.next()) {
+                                const AbstractQoreFunctionVariant* v = vi.getVariant();
+                                auto* vsig = v->getSignature();
+                                if (!vsig) continue;
+                                std::string vs("(");
+                                const type_vec_t& types = vsig->getTypeList();
+                                for (size_t vi2 = 0; vi2 < types.size(); ++vi2) {
+                                    if (vi2 > 0) vs.append(",");
+                                    vs.append(QoreTypeInfo::getPath(types[vi2]));
+                                }
+                                vs.append(")");
+                                if (vs == ref2) {
+                                    resolved_variant = v;
+                                    break;
                                 }
                             }
                         }
-                        NewObjectCallNode* nocn = new NewObjectCallNode(qc, call_args);
-                        printd(5, "  nocn->variant=%p\n", (void*)nocn->getVariant());
-                        ctx->exprs[i] = toBitsNB(QoreValue(nocn));
-                    } else {
-                        printd(0, "AOT v2: cannot resolve class '%s' for new object\n", ref1);
-                        if (call_args) {
-                            call_args->deref(nullptr);
-                        }
-                        has_unsupported = true;
                     }
-                } else {
-                    if (call_args) {
-                        call_args->deref(nullptr);
-                    }
-                    has_unsupported = true;
                 }
+                if (!qc) {
+                    printd(0, "AOT v2: cannot resolve class '%s' for new object\n",
+                        ref1 ? ref1 : "(null)");
+                    has_unsupported = true;
+                    continue;
+                }
+                // Store in call_targets for LLVM to load qc/variant at runtime
+                ctx->call_targets[i].qc = qc;
+                ctx->call_targets[i].variant = resolved_variant;
+                // exprs[i] not used — LLVM uses call_targets directly
+                ctx->exprs[i] = toBitsNB(QoreValue());
                 continue;
             }
             case AOTExprKind::FUNC_CALL:
@@ -4304,11 +4279,18 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
             continue;
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
-        const char* class_name = qc->getName();
+
+        // Use namespace-qualified class path to match compiler's naming convention
+        // (QoreAOT.cpp uses qc->getPath() for variant keys)
+        const char* class_path = qc->getPath();
+        // Strip leading :: (getPath() returns "::Ns::ClassName")
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
 
         // Skip system classes - they can't be modified and their methods are already set up
         if (qcp->sys) {
-            printd(2, "AOT: skipping system class '%s' in method registration\n", class_name);
+            printd(2, "AOT: skipping system class '%s' in method registration\n", class_path);
             continue;
         }
 
@@ -4328,7 +4310,7 @@ static void registerAOTFunctionsInNamespace(qore_ns_private* ns, QoreProgram* pg
                     continue;
                 }
 
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                std::string method_name = std::string(class_path) + "::" + meth->getName();
                 // Generate unique key including parameter types to match compiled variant
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 auto it = func_map.find(variant_key);
@@ -4702,7 +4684,12 @@ static void registerFallbackFunctionsOnMainVariants(
             continue;
         }
         qore_class_private* qcp = qore_class_private::get(*qc);
-        const char* class_name = qc->getName();
+
+        // Use namespace-qualified class path to match compiler's naming convention
+        const char* class_path = qc->getPath();
+        if (class_path[0] == ':' && class_path[1] == ':') {
+            class_path += 2;
+        }
 
         if (qcp->sys) {
             continue;
@@ -4724,7 +4711,7 @@ static void registerFallbackFunctionsOnMainVariants(
                     continue;
                 }
 
-                std::string method_name = std::string(class_name) + "::" + meth->getName();
+                std::string method_name = std::string(class_path) + "::" + meth->getName();
                 std::string variant_key = getVariantKey(method_name.c_str(), variant);
                 auto it = func_map.find(variant_key);
                 if (it == func_map.end()) {
@@ -4743,7 +4730,7 @@ static void registerFallbackFunctionsOnMainVariants(
                 // Find matching method variant in MAIN program
                 qore_program_private* main_pp = qore_program_private::get(*main_pgm);
                 const QoreClass* main_qc = qore_root_ns_private::runtimeFindClass(
-                    *main_pp->RootNS, class_name);
+                    *main_pp->RootNS, class_path);
                 UserVariantBase* main_uvb = nullptr;
                 if (main_qc) {
                     qore_class_private* main_qcp = qore_class_private::get(

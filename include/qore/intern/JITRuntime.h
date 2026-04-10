@@ -599,6 +599,20 @@ uint64_t qore_rt_call_function_direct(const QoreFunction* func, const AbstractQo
 uint64_t qore_rt_call_fast(const QoreFunction* func, const AbstractQoreFunctionVariant* variant,
     QoreProgram* pgm, uint64_t* args, int nargs, ExceptionSink* xsink);
 
+//! Constructor call with pre-evaluated NaN-boxed args.  Used by IR interpreter
+//! and AOT LLVM codegen to avoid AST fallback — each constructor arg is
+//! computed as a separate IR operand and passed as a NaN-boxed value.  execConstructor
+//! and CodeEvaluationHelper handle default args and type coercion.
+uint64_t qore_rt_new_object_nb(const QoreClass* qc,
+    const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+    ExceptionSink* xsink);
+
+//! AOT variant of qore_rt_new_object_nb: loads qc/variant from the AOT context's
+//! call_targets slot (populated at module load time from serialized class_path
+//! + variant_sig).  Avoids baking stale class pointers into AOT native code.
+uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx, int32_t slot,
+    uint64_t* args, int nargs, ExceptionSink* xsink);
+
 //! Direct method call for devirtualized calls (final classes) — builds QoreListNode
 //! and calls qore_method_private::eval().
 uint64_t qore_rt_call_method_direct(const QoreMethod* method, uint64_t* args, int nargs,

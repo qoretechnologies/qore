@@ -4106,6 +4106,11 @@ void buildAOTSlotMap(const QoreIRFunction& func, AOTSlotMap& slots) {
                     break;
                 }
                 case QoreIROpcode::NewObject: {
+                    // Allocate an expression slot to hold the runtime-resolved
+                    // qc/variant pointers (populated at AOT load time from the
+                    // serialized class_path + variant_sig).  The slot key is
+                    // the expr AST node bits — same identity used by the AOT
+                    // serializer to recover class_path.
                     auto* noi = static_cast<QoreIRNewObjectInstruction*>(inst.get());
                     uint64_t bits;
                     memcpy(&bits, &noi->expr, sizeof(bits));
@@ -6372,8 +6377,18 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         id.kind = AOTExprKind::NEW_OBJECT;
         const QoreClass* qc = no->getClass();
         id.ref1 = qc ? qc->getPath() : "";
-        id.call_args = no->getArgs();
-        id.parse_args = no->getParseArgs();
+        // Variant signature for runtime disambiguation
+        const auto* variant = no->getVariant();
+        if (variant && variant->getSignature()) {
+            auto* sig = variant->getSignature();
+            id.ref2 = "(";
+            const type_vec_t& types = sig->getTypeList();
+            for (size_t i = 0; i < types.size(); ++i) {
+                if (i > 0) id.ref2.append(",");
+                id.ref2.append(QoreTypeInfo::getPath(types[i]));
+            }
+            id.ref2.append(")");
+        }
         return id;
     }
 
@@ -6393,8 +6408,17 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (qc) {
             id.kind = AOTExprKind::NEW_OBJECT;
             id.ref1 = qc->getPath();
-            id.call_args = vrn->getArgs();
-            id.parse_args = vrn->getParseArgs();
+            const auto* variant = vrn->getVariant();
+            if (variant && variant->getSignature()) {
+                auto* sig = variant->getSignature();
+                id.ref2 = "(";
+                const type_vec_t& types = sig->getTypeList();
+                for (size_t i = 0; i < types.size(); ++i) {
+                    if (i > 0) id.ref2.append(",");
+                    id.ref2.append(QoreTypeInfo::getPath(types[i]));
+                }
+                id.ref2.append(")");
+            }
             return id;
         }
         // Complex hash construction (e.g., hash<string, int> h())
@@ -6529,8 +6553,17 @@ static AOTExprSlotId classifyExpression(uint64_t bits, const AOTSlotMap& slots,
         if (sc->oc) {
             id.ref1 = sc->oc->getPath();
         }
-        id.call_args = sc->getArgs();
-        id.parse_args = sc->getParseArgs();
+        const auto* variant = sc->getVariant();
+        if (variant && variant->getSignature()) {
+            auto* sig = variant->getSignature();
+            id.ref2 = "(";
+            const type_vec_t& types = sig->getTypeList();
+            for (size_t i = 0; i < types.size(); ++i) {
+                if (i > 0) id.ref2.append(",");
+                id.ref2.append(QoreTypeInfo::getPath(types[i]));
+            }
+            id.ref2.append(")");
+        }
         return id;
     }
 

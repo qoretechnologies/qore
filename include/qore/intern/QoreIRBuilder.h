@@ -124,10 +124,14 @@ public:
     // Static class variable access
     QoreIRStaticVarInstruction* createLoadStaticVar(QoreVarInfo* vi, const char* var_name,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
-    // Object instantiation
+    // Object instantiation: args come from pre-computed IR operands.
+    // `expr` is a compile-time-only metadata holder (the original AST node)
+    // used by AOT slot serialization to extract class_path/variant_sig.
     QoreIRNewObjectInstruction* createNewObject(const QoreClass* qc,
-        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-        const QoreValue& expr, const QoreProgramLocation* loc = nullptr);
+        const AbstractQoreFunctionVariant* variant,
+        const std::vector<QoreIRValue>& operands,
+        const QoreValue& expr,
+        const QoreProgramLocation* loc = nullptr);
     // Constant loading
     QoreIRLoadConstantInstruction* createLoadConstant(const RuntimeConstantRefNode* node,
         const QoreValue& expr, const QoreProgramLocation* loc = nullptr);

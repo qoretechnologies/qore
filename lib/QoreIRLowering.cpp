@@ -3269,9 +3269,12 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
         return QoreIRValue();
     }
     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(node)) {
-        // NewObject evaluates constructor args through AST at runtime;
-        // track as AST-delegated so map body push/pop implicit args for $1/$#
-        ++ast_delegate_count;
+        // No-AST path: lower each constructor arg as a separate IR instruction,
+        // then pass the computed operand values to the NewObject instruction.
+        std::vector<QoreIRValue> operands;
+        if (!lowerCallArgs(new_obj->getParseArgs(), new_obj->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3279,18 +3282,20 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, nullptr);
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, nullptr);
             inst->invoke_opcode = QoreIROpcode::NewObject;
             builder.setBlock(normal_block);
             return inst->result;
         }
         return builder.createNewObject(new_obj->getClass(), new_obj->getVariant(),
-                new_obj->getArgs(), expr, nullptr)->result;
+                operands, expr, nullptr)->result;
     }
     if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(node)) {
-        // NewObject evaluates constructor args through AST at runtime;
-        // track as AST-delegated so map body push/pop implicit args for $1/$#
-        ++ast_delegate_count;
+        // No-AST path: lower each constructor arg as a separate IR instruction.
+        std::vector<QoreIRValue> operands;
+        if (!lowerCallArgs(scoped_obj->getParseArgs(), scoped_obj->getArgs(), operands, error)) {
+            return QoreIRValue();
+        }
         if (!exception_stack.empty()) {
             QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
             if (!normal_block) {
@@ -3298,13 +3303,13 @@ QoreIRValue QoreIRLowering::lowerExpression(const QoreValue& expr, std::string& 
                 return QoreIRValue();
             }
             QoreIRBasicBlock* handler = exception_stack.back();
-            auto* inst = builder.createInvoke(expr, {}, normal_block, handler, scoped_obj->loc);
+            auto* inst = builder.createInvoke(expr, operands, normal_block, handler, scoped_obj->loc);
             inst->invoke_opcode = QoreIROpcode::NewObject;
             builder.setBlock(normal_block);
             return inst->result;
         }
         return builder.createNewObject(scoped_obj->oc, scoped_obj->getVariant(),
-                scoped_obj->getArgs(), expr, scoped_obj->loc)->result;
+                operands, expr, scoped_obj->loc)->result;
     }
     // Parse-time constant values: use LoadConstant (returns expr.refSelf() at runtime)
     if (dynamic_cast<const QoreObject*>(node)
@@ -3583,13 +3588,15 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
     // Handle VarRefNewObjectNode (e.g., "Foo f("hello")") — a variable declaration
     // with implicit constructor call. Split into construction + assignment.
     if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
-        // Constructor args are evaluated through AST at runtime;
-        // track as AST-delegated so map body push/pop implicit args for $1/$#
-        ++ast_delegate_count;
         // Check if this is a class constructor (VRN_OBJECT)
         const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
         if (qc) {
-            // VRN_OBJECT: construct object using NewObject opcode, then store to variable
+            // VRN_OBJECT: construct object using NewObject opcode, then store to variable.
+            // No-AST path: lower each constructor arg as a separate IR instruction.
+            std::vector<QoreIRValue> operands;
+            if (!lowerCallArgs(vrn->getParseArgs(), vrn->getArgs(), operands, error)) {
+                return QoreIRValue();
+            }
             QoreIRValue obj_val;
             if (!exception_stack.empty()) {
                 QoreIRBasicBlock* normal_block = createBlock("invoke.cont");
@@ -3598,13 +3605,13 @@ QoreIRValue QoreIRLowering::lowerVarRef(const QoreValue& expr, std::string& erro
                     return QoreIRValue();
                 }
                 QoreIRBasicBlock* handler = exception_stack.back();
-                auto* inst = builder.createInvoke(expr, {}, normal_block, handler, var->loc);
+                auto* inst = builder.createInvoke(expr, operands, normal_block, handler, var->loc);
                 inst->invoke_opcode = QoreIROpcode::NewObject;
                 builder.setBlock(normal_block);
                 obj_val = inst->result;
             } else {
                 obj_val = builder.createNewObject(qc, vrn->getVariant(),
-                    vrn->getArgs(), expr, var->loc)->result;
+                    operands, expr, var->loc)->result;
             }
             // Store the constructed object to the variable
             if (!storeVarRef(var, obj_val, error, "VarRefNewObjectNode", &expr, var->loc)) {

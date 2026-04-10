@@ -1253,10 +1253,31 @@ static std::unique_ptr<QoreIRInstruction> readStaticVar(
 // ============================================================================
 
 static bool writeNewObject(AOTInstWriteCtx& ctx) {
+    // Serialize class path (namespace-qualified) and variant signature.
+    // The class/variant are the only metadata needed — args are IR operands
+    // (handled by the generic instruction write path).
     auto* ni = static_cast<const QoreIRNewObjectInstruction*>(ctx.inst);
-    if (!ctx.writeExpr(ctx.writer, ni->expr)) {
-        return false;
+    const char* class_path = ni->qc ? ni->qc->getPath() : "";
+    // Strip leading :: from qc->getPath() so it matches runtime lookups
+    if (class_path[0] == ':' && class_path[1] == ':') {
+        class_path += 2;
     }
+    ctx.writer.writeStringRef(class_path);
+    // Variant signature for disambiguation (empty string if no variant)
+    std::string variant_sig;
+    if (ni->variant) {
+        auto* sig = ni->variant->getSignature();
+        if (sig) {
+            variant_sig = "(";
+            const type_vec_t& types = sig->getTypeList();
+            for (size_t i = 0; i < types.size(); ++i) {
+                if (i > 0) variant_sig.append(",");
+                variant_sig.append(QoreTypeInfo::getPath(types[i]));
+            }
+            variant_sig.append(")");
+        }
+    }
+    ctx.writer.writeStringRef(variant_sig.c_str());
     return true;
 }
 
@@ -1264,14 +1285,41 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
         uint16_t opcode_raw, QoreIRBasicBlock* exc_target,
         const std::vector<QoreIRValue>& operands, uint32_t result_id,
         AOTInstReadCtx& ctx) {
-    std::string error;
-    QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
-    if (!error.empty()) {
-        return nullptr;
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* variant_sig = ctx.reader.readStringRef(ctx.ptr);
+    const QoreClass* qc = nullptr;
+    const AbstractQoreFunctionVariant* variant = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path, found_ns);
+        if (qc && variant_sig && *variant_sig) {
+            // Resolve variant by walking the constructor's variants
+            const QoreMethod* cons = qc->getConstructor();
+            if (cons) {
+                const QoreFunction* cf = qore_method_private::get(*cons)->getFunction();
+                QoreFunctionIterator vi(*cf);
+                while (vi.next()) {
+                    const AbstractQoreFunctionVariant* v = vi.getVariant();
+                    auto* vsig = v->getSignature();
+                    if (!vsig) continue;
+                    std::string vs("(");
+                    const type_vec_t& types = vsig->getTypeList();
+                    for (size_t i = 0; i < types.size(); ++i) {
+                        if (i > 0) vs.append(",");
+                        vs.append(QoreTypeInfo::getPath(types[i]));
+                    }
+                    vs.append(")");
+                    if (vs == variant_sig) {
+                        variant = v;
+                        break;
+                    }
+                }
+            }
+        }
     }
-    auto* ni = new QoreIRNewObjectInstruction(nullptr, nullptr, nullptr, expr);
+    auto* ni = new QoreIRNewObjectInstruction(qc, variant);
     ni->opcode = static_cast<QoreIROpcode>(opcode_raw);
-    expr.discard(nullptr);
     ni->result = QoreIRValue(result_id);
     ni->operands = operands;
     ni->exception_target = exc_target;

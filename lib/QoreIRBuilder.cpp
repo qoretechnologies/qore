@@ -464,11 +464,14 @@ QoreIRStaticVarInstruction* QoreIRBuilder::createLoadStaticVar(QoreVarInfo* vi, 
 }
 
 QoreIRNewObjectInstruction* QoreIRBuilder::createNewObject(const QoreClass* qc,
-        const AbstractQoreFunctionVariant* variant, const QoreListNode* args,
-        const QoreValue& expr, const QoreProgramLocation* loc) {
-    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, args, expr);
+        const AbstractQoreFunctionVariant* variant,
+        const std::vector<QoreIRValue>& operands,
+        const QoreValue& expr,
+        const QoreProgramLocation* loc) {
+    auto inst = block->appendInstruction<QoreIRNewObjectInstruction>(qc, variant, expr);
     inst->loc = loc;
     inst->result = func->createValue();
+    inst->operands = operands;
     return inst;
 }
 

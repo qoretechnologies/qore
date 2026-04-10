@@ -324,7 +324,7 @@ constexpr OpcodeInfo OPCODE_REGISTRY[358] = {
     { "HashKeyAccessInt"              , true , false, false,  1, "HashKeyAccessInt", false, true , "ParseNode", true , true , false, false }, // 280
     { "LoadSelfMember"                , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 281
     { "LoadStaticVar"                 , false, false, false,  0, "Load variable value", false, false, "VarRefNode", true , false, false, false }, // 282
-    { "NewObject"                     , false, false, false,  0, "NewObject", false, true , "ParseNode", true , false, false, false }, // 283
+    { "NewObject"                     , false, false, false, -1, "NewObject", false, true , "ParseNode", true , false, false, false }, // 283
     { "LoadConstant"                  , false, false, false,  0, "Load constant value", false, false, "ConstantNode", true , false, false, false }, // 284
     { "CreateClosure"                 , false, false, false,  0, "CreateClosure", false, true , "ParseNode", true , false, false, false }, // 285
     { "CreateCallRef"                 , false, false, false,  0, "Call function or method", true , true , "FunctionCallNode", true , false, false, false }, // 286

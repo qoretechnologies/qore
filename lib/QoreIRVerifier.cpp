@@ -844,7 +844,9 @@ static const QoreValue* getInstructionExpr(const QoreIRInstruction* inst) {
         case QoreIROpcode::LoadStaticVar:
             return &static_cast<const QoreIRStaticVarInstruction*>(inst)->expr;
         case QoreIROpcode::NewObject:
-            return &static_cast<const QoreIRNewObjectInstruction*>(inst)->expr;
+            // NewObject has no expr field — class/variant are stored directly
+            // and args are IR operands, not AST nodes.
+            return nullptr;
         case QoreIROpcode::LoadConstant:
             return &static_cast<const QoreIRLoadConstantInstruction*>(inst)->expr;
 

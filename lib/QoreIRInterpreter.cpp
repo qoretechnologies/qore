@@ -1288,31 +1288,57 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
             return evalAndRef(inv->expr, xsink);
         }
 
-        // NewObject: construct object directly without VarRefNewObjectNode assignment
-        // VarRefNewObjectNode::evalImpl assigns to the local variable internally, but
-        // the IR lowering emits a separate StoreLocal for that. Going through evalExprNode
-        // would cause a double-assignment, leaking one reference.
+        // NewObject: construct object with pre-computed NaN-boxed operand values.
+        // Class and variant are extracted from `inv->expr` metadata (no AST
+        // evaluation). Args come from inv->operands, NOT from AST nodes.
         case QoreIROpcode::NewObject: {
+            const QoreClass* qc = nullptr;
+            const AbstractQoreFunctionVariant* variant = nullptr;
             if (inv->expr.hasNode()) {
-                auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(inv->expr.getInternalNode());
-                if (vrn) {
-                    const QoreClass* qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
-                    if (qc) {
-                        RuntimeConfig& rc = rc_get_current_ref();
-                        return qore_class_private::execConstructor(*qc, rc,
-                            vrn->getVariant(), vrn->getArgs(), xsink);
-                    }
-                }
-                // ScopedObjectCallNode: bare "new ClassName(args)" not in a var decl
-                auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(inv->expr.getInternalNode());
-                if (scoped && scoped->oc) {
-                    RuntimeConfig& rc = rc_get_current_ref();
-                    return qore_class_private::execConstructor(*scoped->oc, rc,
-                        scoped->getVariant(), scoped->getArgs(), xsink);
+                if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
+                        inv->expr.getInternalNode())) {
+                    qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
+                    variant = vrn->getVariant();
+                } else if (auto* scoped = dynamic_cast<const ScopedObjectCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    qc = scoped->oc;
+                    variant = scoped->getVariant();
+                } else if (auto* nocn = dynamic_cast<const NewObjectCallNode*>(
+                        inv->expr.getInternalNode())) {
+                    qc = nocn->getClass();
+                    variant = nocn->getVariant();
                 }
             }
-            // Direct eval — avoids evalExprNode() overhead
-            return evalAndRef(inv->expr, xsink);
+            if (!qc) {
+                xsink->raiseException("RUNTIME-ERROR",
+                    "NewObject invoke: class not resolved");
+                return QoreValue();
+            }
+            // Build NaN-boxed arg array from pre-computed IR operands
+            int nargs = static_cast<int>(inv->operands.size());
+            constexpr int SMALL_BUF = 8;
+            uint64_t nb_buf[SMALL_BUF];
+            uint64_t* nb_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
+            for (int i = 0; i < nargs; ++i) {
+                nb_args[i] = toBits(getIRValue(values, inv->operands[i]));
+            }
+            ReferenceHolder<QoreListNode> arg_list(xsink);
+            if (nargs > 0) {
+                arg_list = qore_list_private::newList(false);
+                qore_list_private* priv = qore_list_private::get(**arg_list);
+                priv->reserve(nargs);
+                for (int i = 0; i < nargs; ++i) {
+                    QoreValue val = fromBits(nb_args[i]);
+                    if (val.hasNode()) {
+                        val.refSelf();
+                    }
+                    priv->pushIntern(val);
+                }
+            }
+            if (nargs > SMALL_BUF) delete[] nb_args;
+            RuntimeConfig& rc = rc_get_current_ref();
+            return qore_class_private::execConstructor(*qc, rc, variant,
+                nargs > 0 ? *arg_list : nullptr, xsink);
         }
 
         // VrnConstruct: construct hashdecl/complex types without local variable assignment
@@ -4306,43 +4332,32 @@ load_local_done:
             }
             case QoreIROpcode::NewObject: {
                 auto* no_inst = static_cast<QoreIRNewObjectInstruction*>(inst);
-                RuntimeConfig& rc = rc_get_current_ref();
                 const QoreClass* qc = no_inst->qc;
                 const AbstractQoreFunctionVariant* variant = no_inst->variant;
-                const QoreListNode* args = no_inst->args;
-                if (!qc && no_inst->expr.hasNode()) {
-                    // AOT fallback: qc/variant/args not set at compile time;
-                    // recover class and args from the deserialized expression node
-                    auto* nocn = dynamic_cast<const NewObjectCallNode*>(
-                        no_inst->expr.getInternalNode());
-                    if (nocn) {
-                        qc = nocn->getClass();
-                        variant = nocn->getVariant();
-                        args = nocn->getArgs();
-                    } else {
-                        auto* socn = dynamic_cast<const ScopedObjectCallNode*>(
-                            no_inst->expr.getInternalNode());
-                        if (socn) {
-                            qc = socn->oc;
-                            variant = socn->getVariant();
-                            args = socn->getArgs();
-                        }
-                    }
-                }
                 if (!qc) {
                     xsink->raiseException("RUNTIME-ERROR",
-                        "cannot construct object: class not resolved in AOT mode");
+                        "cannot construct object: class not resolved");
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-                QoreValue out = qore_class_private::execConstructor(*qc, rc,
-                        variant, args, xsink);
+                // Build NaN-boxed arg array from pre-computed IR operand values
+                int nargs = static_cast<int>(no_inst->operands.size());
+                constexpr int SMALL_BUF = 8;
+                uint64_t nb_buf[SMALL_BUF];
+                uint64_t* nb_args = nargs <= SMALL_BUF ? nb_buf : new uint64_t[nargs];
+                for (int i = 0; i < nargs; ++i) {
+                    nb_args[i] = toBits(getIRValue(values, no_inst->operands[i]));
+                }
+                // Dispatch via the shared no-AST runtime helper
+                uint64_t rv = qore_rt_new_object_nb(qc, variant, nb_args, nargs, xsink);
+                if (nargs > SMALL_BUF) delete[] nb_args;
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
+                QoreValue out = fromBits(rv);
                 setValueSlot(values, no_inst->result.id, out, xsink);
                 if (out.hasNode()) {
                     cleanup.push_back(no_inst->result.id);

@@ -39,30 +39,12 @@ namespace {
 // ============================================================================
 
 //! NEW_OBJECT and SCOPED_NEW_OBJECT
+//! ref1 = class path, ref2 = variant signature (e.g. "(string,int)" or "()" ).
+//! No inline args — constructor args are computed by separate IR instructions
+//! that feed the NewObject's operand values at runtime.
 static bool write_slot_NEW_OBJECT(AOTExprSlotWriteCtx& ctx) {
-    // ref1 = class path, followed by serialized constructor args.
-    // Use classifyAndWriteExpr (not writeValue) so runtime-evaluated args
-    // like VarRefNode and hash literals are serialized with slot indices
-    // and reconstructed correctly at load time.
     ctx.writer.writeStringRef(ctx.expr.ref1.c_str());
-    if (ctx.expr.call_args && ctx.expr.call_args->size() > 0) {
-        ctx.writer.writeU8(static_cast<uint8_t>(ctx.expr.call_args->size()));
-        for (size_t j = 0; j < ctx.expr.call_args->size(); ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.call_args->retrieveEntry(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else if (ctx.expr.parse_args && ctx.expr.parse_args->size() > 0) {
-        // Fallback to parse_args (VarRefNewObjectNode stores args here, not in call_args)
-        uint8_t num_args = ctx.expr.parse_args->size() <= 255
-            ? static_cast<uint8_t>(ctx.expr.parse_args->size()) : 0;
-        ctx.writer.writeU8(num_args);
-        for (uint8_t j = 0; j < num_args; ++j) {
-            ::classifyAndWriteExpr(ctx.writer, ctx.expr.parse_args->get(j),
-                ctx.parent_locals, ctx.parent_globals, ctx.const_reverse_map);
-        }
-    } else {
-        ctx.writer.writeU8(0);
-    }
+    ctx.writer.writeStringRef(ctx.expr.ref2.c_str());
     return true;
 }
 

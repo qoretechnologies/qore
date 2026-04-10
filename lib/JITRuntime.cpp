@@ -5617,6 +5617,27 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive_aot(AotFunctionPtr sel
 extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_with_base_aot(QoreAOTContext* ctx, int32_t slot, uint64_t base_bits,
         ExceptionSink* xsink) {
     assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+
+    // For DOT_EVAL_TARGET slots, the expression is NOTHING and the method dispatch info
+    // is stored in call_targets.  Use the pre-resolved method/class for dispatch.
+    QoreValue expr;
+    std::memcpy(&expr, &ctx->exprs[slot], sizeof(expr));
+    if (!expr.hasNode()) {
+        const QoreAOTCallTarget& target = ctx->call_targets[slot];
+        if (target.method) {
+            return target.is_pseudo
+                ? qore_rt_dot_eval_pseudo_method_direct(base_bits, target.method, target.qc,
+                    target.variant, nullptr, 0, xsink)
+                : qore_rt_dot_eval_method_direct(base_bits, target.method, target.qc,
+                    target.variant, nullptr, 0, xsink);
+        }
+        if (target.method_name) {
+            QoreValue base = fromBits(base_bits);
+            return dot_eval_fallback_with_args(base, target.method_name, nullptr, 0, xsink);
+        }
+        return toBits(QoreValue());
+    }
+
     return qore_rt_dot_eval_with_base(ctx->exprs[slot], base_bits, xsink);
 }
 
@@ -5965,6 +5986,39 @@ static QoreListNode* buildArgListFromNanBoxed(uint64_t* args, int nargs, Excepti
         priv->pushIntern(val);
     }
     return arg_list;
+}
+
+// Constructor call with pre-evaluated NaN-boxed args.
+// Used by IR interpreter and JIT LLVM codegen to avoid AST fallback for
+// NewObject — each constructor arg is computed as a separate IR operand and
+// passed as a NaN-boxed value. execConstructor + CodeEvaluationHelper handle
+// default args and type coercion; pre-evaluated values pass through eval() as
+// a no-op since only AST nodes need re-evaluation.
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb(const QoreClass* qc,
+        const AbstractQoreFunctionVariant* variant, uint64_t* args, int nargs,
+        ExceptionSink* xsink) {
+    if (!qc) {
+        xsink->raiseException("AOT-ERROR", "null class pointer in new object call");
+        return toBits(QoreValue());
+    }
+    ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    RuntimeConfig& rc = rc_get_current_ref();
+    // Pass nullptr (not *arg_list) when nargs=0: buildArgListFromNanBoxed
+    // returns null for empty lists and *arg_list on a null holder is UB.
+    return toBits(qore_class_private::execConstructor(*qc, rc, variant,
+        nargs > 0 ? *arg_list : nullptr, xsink));
+}
+
+// AOT variant: resolve qc/variant from the per-function call_targets slot
+// (populated at module load time from serialized class_path + variant_sig).
+extern "C" DLLEXPORT uint64_t qore_rt_new_object_nb_aot(QoreAOTContext* ctx,
+        int32_t slot, uint64_t* args, int nargs, ExceptionSink* xsink) {
+    assert(ctx && slot >= 0 && slot < ctx->num_exprs);
+    const QoreAOTCallTarget& target = ctx->call_targets[slot];
+    return qore_rt_new_object_nb(target.qc, target.variant, args, nargs, xsink);
 }
 
 // Dispatch a method call on a QoreObject with pre-evaluated args.

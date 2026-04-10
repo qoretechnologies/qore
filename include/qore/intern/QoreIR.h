@@ -1238,8 +1238,8 @@ public:
 class QoreIRNewObjectInstruction : public QoreIRInstruction {
 public:
     QoreIRNewObjectInstruction(const QoreClass* n_qc, const AbstractQoreFunctionVariant* n_variant,
-            const QoreListNode* n_args, const QoreValue& n_expr)
-            : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant), args(n_args),
+            const QoreValue& n_expr = QoreValue())
+            : QoreIRInstruction(QoreIROpcode::NewObject), qc(n_qc), variant(n_variant),
               expr(n_expr) {
         expr.ref();
     }
@@ -1251,8 +1251,14 @@ public:
 
     const QoreClass* qc;
     const AbstractQoreFunctionVariant* variant;
-    const QoreListNode* args;       //!< Pre-evaluated constructor arguments
-    QoreValue expr;                 //!< Original AST expression (for AOT)
+    // Compile-time-only metadata: the original AST node (NewObjectCallNode,
+    // ScopedObjectCallNode, or VarRefNewObjectNode).  Used ONLY by the AOT
+    // compiler to serialize class_path/variant_sig as slot metadata so the
+    // runtime can re-resolve qc/variant.  Runtime execution uses qc/variant
+    // fields and `operands` (inherited), NEVER `expr`.
+    QoreValue expr;
+    // Constructor arguments come from the inherited `operands` field (IR values
+    // computed by separate IR instructions). No AST fallback.
 };
 
 //! Runtime constant load instruction - loads ConstantEntry::saved_val

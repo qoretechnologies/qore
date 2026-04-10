@@ -4597,37 +4597,55 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 // LoadSelfMember doesn't modify locals — no reload needed
 
             } else if (inv->invoke_opcode == QoreIROpcode::NewObject) {
-                // NewObject invoke: call constructor directly
+                // NewObject invoke: build NaN-boxed arg array from operands.
+                // AOT mode: use slot-based qc/variant lookup via call_targets.
+                // JIT mode: extract qc/variant from inv->expr metadata and bake.
+                int nargs = static_cast<int>(inv->operands.size());
+                llvm::Value* args_array;
+                if (nargs > 0) {
+                    llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                            llvm_func->getEntryBlock().begin());
+                    args_array = ab.CreateAlloca(i64_type,
+                            llvm::ConstantInt::get(i32_type, nargs), "new_obj_args");
+                    for (int i = 0; i < nargs; ++i) {
+                        auto* arg_val = getVal(inv->operands[i].id, error);
+                        if (!arg_val) { return false; }
+                        llvm::Value* boxed = boxValue(arg_val, inv->operands[i].id);
+                        llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                                llvm::ConstantInt::get(i32_type, i));
+                        builder->CreateStore(boxed, gep);
+                    }
+                } else {
+                    args_array = builder->CreateIntToPtr(
+                        llvm::ConstantInt::get(i64_type, 0), ptr_type);
+                }
+                llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
                 if (aot_mode) {
                     QoreValue expr_val = inv->expr;
                     uint64_t expr_bits;
                     std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                    auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
+                    auto helper = module.getOrInsertFunction("qore_rt_new_object_nb_aot",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, i32_type, ptr_type}, false));
-                    result = builder->CreateCall(helper, {aot_ctx_arg,
-                            llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                                {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                    result = builder->CreateCall(helper,
+                            {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                             args_array, nargs_val, xsink_arg});
                 } else {
-                    // Extract class/variant/args from the AST node
                     const QoreClass* qc = nullptr;
                     const AbstractQoreFunctionVariant* variant = nullptr;
-                    const QoreListNode* args = nullptr;
                     if (auto* new_obj = dynamic_cast<const NewObjectCallNode*>(
                             inv->expr.getInternalNode())) {
                         qc = new_obj->getClass();
                         variant = new_obj->getVariant();
-                        args = new_obj->getArgs();
                     } else if (auto* scoped_obj = dynamic_cast<const ScopedObjectCallNode*>(
                             inv->expr.getInternalNode())) {
                         qc = scoped_obj->oc;
                         variant = scoped_obj->getVariant();
-                        args = scoped_obj->getArgs();
                     } else if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(
                             inv->expr.getInternalNode())) {
                         qc = QoreTypeInfo::getUniqueReturnClass(vrn->getTypeInfo());
                         variant = vrn->getVariant();
-                        args = vrn->getArgs();
                     }
                     assert(qc);
                     llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
@@ -4636,14 +4654,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
                             reinterpret_cast<uint64_t>(variant));
                     llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                    llvm::Value* args_ptr = llvm::ConstantInt::get(i64_type,
-                            reinterpret_cast<uint64_t>(args));
-                    llvm::Value* args_as_ptr = builder->CreateIntToPtr(args_ptr, ptr_type);
-                    auto helper = module.getOrInsertFunction("qore_rt_new_object",
+                    auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
                             llvm::FunctionType::get(i64_type,
-                                {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+                                {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
                     result = builder->CreateCall(helper,
-                            {qc_as_ptr, variant_as_ptr, args_as_ptr, xsink_arg});
+                            {qc_as_ptr, variant_as_ptr, args_array, nargs_val, xsink_arg});
                 }
                 // Constructor can modify locals through side effects
                 reloadAllLocalsFromRuntime(module, llvm_func);
@@ -7273,36 +7288,56 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         }
         case QoreIROpcode::NewObject: {
             const auto* noinst = static_cast<const QoreIRNewObjectInstruction*>(inst);
+            // Build NaN-boxed arg array from pre-computed IR operand values.
+            int nargs = static_cast<int>(noinst->operands.size());
+            llvm::Value* args_array;
+            if (nargs > 0) {
+                llvm::IRBuilder<> ab(&llvm_func->getEntryBlock(),
+                        llvm_func->getEntryBlock().begin());
+                args_array = ab.CreateAlloca(i64_type,
+                        llvm::ConstantInt::get(i32_type, nargs), "new_obj_args");
+                for (int i = 0; i < nargs; ++i) {
+                    auto* arg_val = getVal(noinst->operands[i].id, error);
+                    if (!arg_val) { return false; }
+                    llvm::Value* boxed = boxValue(arg_val, noinst->operands[i].id);
+                    llvm::Value* gep = builder->CreateGEP(i64_type, args_array,
+                            llvm::ConstantInt::get(i32_type, i));
+                    builder->CreateStore(boxed, gep);
+                }
+            } else {
+                args_array = builder->CreateIntToPtr(
+                    llvm::ConstantInt::get(i64_type, 0), ptr_type);
+            }
+            llvm::Value* nargs_val = llvm::ConstantInt::get(i32_type, nargs);
             llvm::Value* result;
             if (aot_mode) {
-                // AOT: delegate to AST expression evaluation
+                // AOT mode: load qc/variant from ctx->call_targets[slot] at runtime.
+                // Slot key is the bits of the metadata expr.
                 QoreValue expr_val = noinst->expr;
                 uint64_t expr_bits;
                 std::memcpy(&expr_bits, &expr_val, sizeof(expr_bits));
                 int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
-                auto helper = module.getOrInsertFunction("qore_rt_invoke_expr_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
-                result = builder->CreateCall(helper, {aot_ctx_arg,
-                        llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                auto helper = module.getOrInsertFunction("qore_rt_new_object_nb_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, i32_type, ptr_type}, false));
+                result = builder->CreateCall(helper,
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot),
+                         args_array, nargs_val, xsink_arg});
             } else {
-                // JIT: call constructor directly
+                // JIT mode: bake qc/variant as constants (valid within the same program).
                 llvm::Value* qc_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(noinst->qc));
                 llvm::Value* qc_as_ptr = builder->CreateIntToPtr(qc_ptr, ptr_type);
                 llvm::Value* variant_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(noinst->variant));
                 llvm::Value* variant_as_ptr = builder->CreateIntToPtr(variant_ptr, ptr_type);
-                llvm::Value* args_ptr = llvm::ConstantInt::get(i64_type,
-                        reinterpret_cast<uint64_t>(noinst->args));
-                llvm::Value* args_as_ptr = builder->CreateIntToPtr(args_ptr, ptr_type);
-                auto helper = module.getOrInsertFunction("qore_rt_new_object",
+                auto helper = module.getOrInsertFunction("qore_rt_new_object_nb",
                         llvm::FunctionType::get(i64_type,
-                            {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+                            {ptr_type, ptr_type, ptr_type, i32_type, ptr_type}, false));
                 result = builder->CreateCall(helper,
-                        {qc_as_ptr, variant_as_ptr, args_as_ptr, xsink_arg});
+                        {qc_as_ptr, variant_as_ptr, args_array, nargs_val, xsink_arg});
             }
-            // Constructor evaluates args from AST and runs constructor body;
-            // either can modify locals through reference parameters
+            // Constructor runs constructor body; can modify locals through ref params
             reloadAllLocalsFromRuntime(module, llvm_func);
             values[inst->result.id] = result;
             nanboxed_values.insert(inst->result.id);
