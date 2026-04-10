@@ -7358,6 +7358,14 @@ QoreIRValue QoreIRLowering::lowerTrim(const QoreValue& expr, std::string& error)
     if (!op) {
         return QoreIRValue();
     }
+    // Path-based trim for complex lvalues — avoids EXPR_TREE serialization
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Trim);
+        if (path_result.isValid()) {
+            return path_result;
+        }
+    }
     std::vector<QoreIRValue> operands;
     QoreIROpcode opcode = QoreIROpcode::TrimAny;
     QoreParseAnalysis analysis;
@@ -7395,6 +7403,15 @@ QoreIRValue QoreIRLowering::lowerTransliteration(const QoreValue& expr, std::str
     auto* op = dynamic_cast<const QoreTransliterationOperatorNode*>(node);
     if (!op) {
         return QoreIRValue();
+    }
+    // Path-based transliteration for complex lvalues — avoids EXPR_TREE serialization
+    {
+        QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathBinaryMut,
+            op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign,
+            LVUnaryOp::PreInc, LVBinaryMutOp::Transliterate, expr);
+        if (path_result.isValid()) {
+            return path_result;
+        }
     }
     std::vector<QoreIRValue> operands;
     QoreIROpcode opcode = QoreIROpcode::TransliterateAny;

@@ -3829,6 +3829,10 @@ static bool shouldSkipInvokeExprSlot(const QoreIRInvokeInstruction* ii) {
     if (ii->invoke_opcode == QoreIROpcode::BackgroundInt && !ii->operands.empty()) {
         return true;
     }
+    // ListPush with pre-evaluated operands (list + value)
+    if (ii->invoke_opcode == QoreIROpcode::ListPush && ii->operands.size() >= 2) {
+        return true;
+    }
     // CreateParseRef: native for simple local lvalue OR complex hash member access with operands
     if (ii->invoke_opcode == QoreIROpcode::CreateParseRef) {
         if (auto* prn = dynamic_cast<const ParseReferenceNode*>(
