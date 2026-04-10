@@ -4180,9 +4180,21 @@ struct qore_socket_private {
                         || errno == EWOULDBLOCK
 #endif
                         ) {
-                        if (!isWriteFinished(timeout_ms, mname, xsink)) {
-                            if (*xsink)
-                                return -1;
+                        // Wait for write readiness with the outer Socket
+                        // mutex released so concurrent async ops on the
+                        // same Socket can make forward progress.  Falls
+                        // back to the direct path for bare QoreSocket
+                        // instances with no outer_lock wired.
+                        int wait_rc;
+                        if (outer_lock) {
+                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                                false, true, timeout_ms, cname, mname, xsink);
+                        } else {
+                            wait_rc = isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
+                        }
+                        if (*xsink)
+                            return -1;
+                        if (wait_rc <= 0) {
                             se_timeout("Socket", mname, timeout_ms, xsink);
                             rc = QSE_TIMEOUT;
                             break;
