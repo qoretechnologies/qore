@@ -6575,10 +6575,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call(
 
     // Create SetSelfFunctionCallNode which captures current self/class context
     // do_op_background copies the expression via copy_value_and_resolve_lvar_refs;
-    // the original must be freed after the call
+    // the original must be freed after. SetSelfFunctionCallNode::deref(ExceptionSink*)
+    // shadows AbstractQoreNode::deref and only handles self — so we must call both:
+    // the shadowing deref for self, then discard for the node itself.
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(*sfcn, arg_list);
     QoreValue result = do_op_background(QoreValue(call_node), xsink);
-    call_node->deref(xsink);
+    call_node->deref(xsink);           // derefs self (the shadowing override)
+    QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
     return toBits(result);
 }
 
@@ -6629,9 +6632,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_background_self_call_aot(
         nullptr, method, self->getClass(), cls);
 
     // Create SetSelfFunctionCallNode which captures current self/class context and takes arg_list ownership
-    // do_op_background copies the expression; the original must be freed after
+    // do_op_background copies the expression; the original must be freed after.
+    // SetSelfFunctionCallNode::deref(xsink) shadows AbstractQoreNode::deref and only handles self.
     SetSelfFunctionCallNode* call_node = new SetSelfFunctionCallNode(temp_sfcn, arg_list);
     QoreValue result = do_op_background(QoreValue(call_node), xsink);
-    call_node->deref(xsink);
+    call_node->deref(xsink);           // derefs self (the shadowing override)
+    QoreValue(call_node).discard(xsink); // decrements refcount and frees the node
     return toBits(result);
 }

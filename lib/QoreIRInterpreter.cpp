@@ -1604,6 +1604,7 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
                             new SetSelfFunctionCallNode(*sfcn, arg_list.release());
                         QoreValue bg_result = do_op_background(QoreValue(call_node), xsink);
                         call_node->deref(xsink);
+                        QoreValue(call_node).discard(xsink);
                         return bg_result;
                     }
                 }
@@ -8182,6 +8183,7 @@ load_local_done:
                         new SetSelfFunctionCallNode(*sfcn, arg_list.release());
                     res = do_op_background(QoreValue(bg_call), xsink);
                     bg_call->deref(xsink);
+                    QoreValue(bg_call).discard(xsink);
                 } else {
                     // Full AST fallback path
                     res = evalAndRef(expr_inst->expr, xsink);
