@@ -833,6 +833,7 @@ int QuicSession::resetHttp3(ExceptionSink* xsink) {
     // Clear all stream state from the rejected 0-RTT attempt: streams opened during
     // 0-RTT (including internal uni-streams created by nghttp3) were discarded by ngtcp2
     streams_.clear();
+    updateKeepAliveLocked();
     body_data_.clear();
     streaming_body_data_.clear();
     // Clear any pre-H3 buffered data and completed streams from the 0-RTT attempt
@@ -2263,6 +2264,9 @@ QuicStreamInfo* QuicSession::getOrCreateStream(int64_t stream_id) {
     stream->state = QuicStreamState::Open;
     auto* ptr = stream.get();
     streams_[stream_id] = std::move(stream);
+    // Stream count went from 0 to nonzero — re-enable keepalive while in use.
+    // Cheap no-op when streams_ was already non-empty.
+    updateKeepAliveLocked();
     return ptr;
 }
 
@@ -2341,6 +2345,7 @@ std::unique_ptr<QuicStreamInfo> QuicSession::takeCompletedStream() {
             }
             auto result = std::move(it->second);
             streams_.erase(it);
+            updateKeepAliveLocked();
             return result;
         }
     }
@@ -2419,6 +2424,7 @@ void QuicSession::cleanupStream(int64_t stream_id) {
         printd(5, "QuicSession::cleanupStream() stream_id=" QLLD " removing dispatched stream\n",
             stream_id);
         streams_.erase(it);
+        updateKeepAliveLocked();
     }
     // Deregister Queue and release references — handler has exited
     {
@@ -2456,6 +2462,7 @@ int QuicSession::resetStream(int64_t stream_id) {
     auto it = streams_.find(stream_id);
     if (it != streams_.end()) {
         streams_.erase(it);
+        updateKeepAliveLocked();
     }
     // Clean up any buffered extended-CONNECT tunnel data for this stream
     {
@@ -2624,6 +2631,7 @@ int QuicSession::cancelStream(int64_t stream_id, uint64_t app_error_code, Except
 
     // Remove from tracking
     streams_.erase(stream_id);
+    updateKeepAliveLocked();
 
     // Signal that packets need to be written (RESET_STREAM frame)
     pending_write_.store(true, std::memory_order_release);
@@ -2893,21 +2901,39 @@ int QuicSession::handshakeCompletedCallback(ngtcp2_conn* conn, void* user_data) 
     auto* session = static_cast<QuicSession*>(user_data);
     session->handshake_completed_.store(true, std::memory_order_release);
 
-    // Configure keepalive pings based on peer's max_idle_timeout.
-    // Without this, a dead peer (crashed without CONNECTION_CLOSE) is only
-    // detected after our own idle timeout expires.  Following curl's pattern:
-    // send pings at half the peer's idle timeout to keep the connection alive
-    // and detect dead peers quickly via timeout on the ping response.
-    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn);
-    if (rp && rp->max_idle_timeout > 0) {
-        ngtcp2_duration keep_ns = rp->max_idle_timeout / 2;
-        if (keep_ns < 1) {
-            keep_ns = 1;
-        }
-        ngtcp2_conn_set_keep_alive_timeout(conn, keep_ns);
-    }
+    // Configure keepalive based on peer's max_idle_timeout AND stream count.
+    // Mirrors curl's cf_ngtcp2_setup_keep_alive pattern: without an active
+    // stream we leave keepalive disabled and let the peer's idle timer close
+    // the connection naturally — otherwise idle client connections leak.
+    // updateKeepAliveLocked() reads streams_, so it must run under mtx_;
+    // ngtcp2 holds the session lock for the duration of this callback.
+    session->updateKeepAliveLocked();
 
     return 0;
+}
+
+void QuicSession::updateKeepAliveLocked() {
+    if (!conn_) {
+        return;
+    }
+    const ngtcp2_transport_params* rp = ngtcp2_conn_get_remote_transport_params(conn_);
+    if (!rp || !rp->max_idle_timeout) {
+        // Peer announced no idle timeout — keepalive is meaningless; disable
+        // it so we never wake up just to ping.
+        ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+        return;
+    }
+    if (streams_.empty()) {
+        // No active streams — let the peer's idle timer close the connection.
+        // Without this, idle H3 client connections accumulate forever because
+        // our keepalive pings keep resetting the peer's idle timer.
+        ngtcp2_conn_set_keep_alive_timeout(conn_, UINT64_MAX);
+        return;
+    }
+    // Streams are active — keep the connection alive at half the peer's
+    // idle timeout so a dead peer is detected promptly.
+    ngtcp2_duration keep_ns = (rp->max_idle_timeout > 1) ? (rp->max_idle_timeout / 2) : 1;
+    ngtcp2_conn_set_keep_alive_timeout(conn_, keep_ns);
 }
 
 int QuicSession::extendMaxLocalStreamsBidiCallback(ngtcp2_conn* /* conn */,

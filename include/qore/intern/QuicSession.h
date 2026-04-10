@@ -953,6 +953,18 @@ private:
     //! Mark a stream as complete and move to the completed queue
     DLLLOCAL void markStreamComplete(int64_t stream_id);
 
+    //! Update the QUIC keepalive timer based on whether any streams are active
+    /** Mirrors curl's cf_ngtcp2_setup_keep_alive (lib/vquic/curl_ngtcp2.c):
+        - When no streams are active and the peer announced an idle timeout,
+          disable keepalive (UINT64_MAX) so the peer's idle timer can close
+          the connection naturally.  This prevents leaked idle H3 client
+          connections from accumulating.
+        - When streams are active, set keepalive to half the peer's
+          max_idle_timeout to keep the connection alive while in use.
+        Caller must hold mtx_.
+    */
+    DLLLOCAL void updateKeepAliveLocked();
+
     // --- ngtcp2 static callbacks ---
 
     //! Callback to get ngtcp2_conn from conn_ref (for TLS integration)
