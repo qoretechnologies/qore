@@ -450,9 +450,23 @@ static uint64_t resolveExprSlot(AOTExprKind kind, const char* ref1, const char* 
                 printd(0, "AOT v2: cannot resolve constant '%s'\n", ref1);
                 return 0;
             }
-            // Return the constant's value directly
-            QoreValue cv = ce->getReferencedValue();
-            return toBitsNB(cv);
+            // Wrap the ConstantEntry in a RuntimeConstantRefNode so the value is
+            // fetched LAZILY at execution time, not at slot-map build time.
+            //
+            // This is critical for init-function contexts: when an AOT-compiled
+            // init function (e.g., __const_init::DataProvider::AbstractDataProviderTypeMap)
+            // references another constant (e.g., DataProvider::DataTypeMap), the
+            // referenced constant's value may not have been populated yet — its
+            // own init function hasn't run yet. Deferring evaluation via
+            // RuntimeConstantRefNode ensures the value is read AFTER init functions
+            // execute in dependency order.
+            //
+            // For already-initialized constants (e.g., builtin constants or constants
+            // whose init has already run), the node still works correctly because
+            // ce->saved_val is read at runtime.
+            auto* rtcr = new RuntimeConstantRefNode(&loc_builtin,
+                const_cast<ConstantEntry*>(ce), /*aot_deferred=*/true);
+            return toBitsNB(QoreValue(rtcr));
         }
 
         case AOTExprKind::CALL_REF:

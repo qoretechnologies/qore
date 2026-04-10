@@ -466,7 +466,16 @@ protected:
     }
 
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const {
-        return ce->saved_val.eval(needs_deref, xsink);
+        // For constants still undergoing delayed init (parseCommitRuntimeInit
+        // path), ce->saved_val holds the committed value. For normal/builtin
+        // constants (e.g. Reflection::IntType), only ce->val is populated and
+        // saved_val remains empty — fall back to evaluating ce->val in that
+        // case so AOT init functions referencing builtin constants get the
+        // correct value instead of NOTHING.
+        if (ce->saved_val) {
+            return ce->saved_val.eval(needs_deref, xsink);
+        }
+        return ce->val.eval(needs_deref, xsink);
     }
 
     DLLLOCAL ~RuntimeConstantRefNode() {
