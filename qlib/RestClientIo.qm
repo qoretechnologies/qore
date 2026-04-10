@@ -1001,8 +1001,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @return a copy of the options hash the caller passed to the constructor,
                 before any internal normalization (e.g., before \c http_version was
                 translated to \c protocol)
-
-            @since %RestClientIo 1.1
         */
         hash<auto> getConstructorOptions() {
             return saved_opts;
@@ -1025,8 +1023,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             parent's access token via the captured options. If the parent's token
             is not valid for the new URL, the copy will refresh on the first
             request via the normal 401 retry path.
-
-            @since %RestClientIo 1.1
         */
         RestClientIo copyWithUrl(string new_url) {
             hash<auto> opts = saved_opts + {
@@ -1234,8 +1230,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @param hdr request headers (caller is responsible for setting \c Content-Type)
 
             @return the deserialized @ref RestClient::RestResponseInfo hash
-
-            @since %RestClientIo 1.1
         */
         hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
                 *hash<auto> hdr) {
@@ -1382,8 +1376,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
 
             @return a Future that resolves to the response hash
-
-            @since %RestClientIo 1.1
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
