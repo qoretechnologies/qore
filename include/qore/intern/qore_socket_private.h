@@ -1432,11 +1432,21 @@ struct qore_socket_private {
         }
 
         while (true) {
-            if (timeout_ms >= 0 && !isDataAvailable(timeout_ms, "accept", xsink)) {
-                if (*xsink)
+            if (timeout_ms >= 0) {
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout_ms, "Socket", "accept", xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout_ms, "accept", xsink) ? 1 : 0;
+                }
+                if (*xsink) {
                     return -1;
-                // do not throw exception here, NOTHING will be returned in Qore on timeout
-                return QSE_TIMEOUT; // -3
+                }
+                if (wait_rc <= 0) {
+                    // do not throw exception here, NOTHING will be returned in Qore on timeout
+                    return QSE_TIMEOUT; // -3
+                }
             }
 
             int rc = ::accept(sock, addr, size);
@@ -1460,16 +1470,24 @@ struct qore_socket_private {
             if (err == EINTR)
                 continue;
             // The listener may be non-blocking (async I/O controller).  Wait for a
-            // pending connection and retry.  isDataAvailable handles timeout_ms < 0
-            // as an infinite wait.
+            // pending connection and retry.  waitReleasingLock/isDataAvailable handle
+            // timeout_ms < 0 as an infinite wait.
             if (err == EAGAIN
 #if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
                     || err == EWOULDBLOCK
 #endif
                     ) {
-                if (!isDataAvailable(timeout_ms, "accept", xsink)) {
-                    if (*xsink)
-                        return -1;
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout_ms, "Socket", "accept", xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout_ms, "accept", xsink) ? 1 : 0;
+                }
+                if (*xsink) {
+                    return -1;
+                }
+                if (wait_rc <= 0) {
                     return QSE_TIMEOUT;
                 }
                 continue;
