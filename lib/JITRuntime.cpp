@@ -32,6 +32,10 @@
 #include "qore/intern/QoreJITIncludes.h"
 #include "qore/intern/JITRuntime.h"
 #include "qore/intern/QoreJITException.h"
+#include "qore/intern/QoreRegexSubst.h"
+#include "qore/intern/QoreRegexSubstOperatorNode.h"
+#include "qore/intern/QoreTransliteration.h"
+#include "qore/intern/QoreTransliterationOperatorNode.h"
 
 // Macro for JIT runtime functions: check xsink and throw C++ exception
 // if a Qore exception was raised. Used at return points of qore_rt_*
@@ -5188,11 +5192,46 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
                 lvh.getValue().get<QoreListNode>()->insert(rhs.refSelf(), xsink);
             }
             break;
-        case LVBinaryMutOp::RegexSubst:
-        case LVBinaryMutOp::Transliterate:
-            // Pattern operations require AST evaluation — not supported in JIT path
-            xsink->raiseException("JIT-ERROR", "regex subst/transliterate not supported in LValuePath JIT");
-            return toBits(QoreValue());
+        case LVBinaryMutOp::RegexSubst: {
+            if (!lvh.checkType(NT_STRING)) {
+                break;
+            }
+            if (inst->pattern_expr.hasNode()) {
+                auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
+                    inst->pattern_expr.getInternalNode());
+                if (regex_op && regex_op->getRegexSubst()) {
+                    const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
+                    QoreStringNode* nv = regex_op->getRegexSubst()->exec(str, xsink);
+                    if (!*xsink && nv) {
+                        lvh.assign(nv);
+                        if (inst->ref_rv) {
+                            res = nv->refSelf();
+                        }
+                    }
+                }
+            }
+            break;
+        }
+        case LVBinaryMutOp::Transliterate: {
+            if (!lvh.checkType(NT_STRING)) {
+                break;
+            }
+            if (inst->pattern_expr.hasNode()) {
+                auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
+                    inst->pattern_expr.getInternalNode());
+                if (trans_op && trans_op->getTransliteration()) {
+                    const QoreStringNode* str = lvh.getValue().get<const QoreStringNode>();
+                    QoreStringNode* nv = trans_op->getTransliteration()->exec(str, xsink);
+                    if (!*xsink && nv) {
+                        lvh.assign(nv);
+                        if (inst->ref_rv) {
+                            res = nv->refSelf();
+                        }
+                    }
+                }
+            }
+            break;
+        }
     }
     if (*xsink) {
         return toBits(QoreValue());

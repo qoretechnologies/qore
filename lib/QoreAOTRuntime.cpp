@@ -1431,7 +1431,12 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->call_targets[i].method = method;
                 ctx->call_targets[i].qc = qc;
                 ctx->call_targets[i].is_pseudo = is_pseudo != 0;
-                ctx->call_targets[i].method_name = (ref2 && *ref2) ? ref2 : nullptr;
+                // Make an owned copy of the method name since the source buffer
+                // (decompressed metadata) may be freed after deserialization
+                if (ref2 && *ref2) {
+                    ctx->owned_call_target_strings.emplace_back(ref2);
+                    ctx->call_targets[i].method_name = ctx->owned_call_target_strings.back().c_str();
+                }
                 // Resolve variant from method if available
                 if (method) {
                     MethodFunctionBase* mfb = qore_method_private::get(
@@ -4022,9 +4027,15 @@ static void registerAOTFunctionsFromSlotMaps(
                 // findMethod/findStaticMethod — the latter checks committedEmpty()
                 // which returns true for deserialized (pending) variants
                 qore_class_private* qcp = qore_class_private::get(*const_cast<QoreClass*>(qc));
+                // Collect both normal and static methods — a class can have both
+                // a non-static and a static method with the same name (e.g.,
+                // getDisplayName() and static getDisplayName(string)).
+                // We search both to find the variant matching the target signature.
                 const QoreMethod* m = qcp->parseFindLocalMethod(method_name.c_str());
+                const QoreMethod* m_static = qcp->parseFindLocalStaticMethod(method_name.c_str());
                 if (!m) {
-                    m = qcp->parseFindLocalStaticMethod(method_name.c_str());
+                    m = m_static;
+                    m_static = nullptr;
                 }
                 printd(5, "AOT slot-reg: method lookup '%s' m=%p\n",
                     method_name.c_str(), (void*)m);
@@ -4042,7 +4053,6 @@ static void registerAOTFunctionsFromSlotMaps(
                             target_sig = "()";
                         }
                     }
-
                     MethodFunctionBase* mfb = qore_method_private::get(*m)->getFunction();
                     QoreFunctionIterator vi(*mfb);
                     int var_count = 0;
@@ -4073,6 +4083,35 @@ static void registerAOTFunctionsFromSlotMaps(
                         if (normalizeTypePaths(var_sig) == target_sig) {
                             uvb = candidate;
                             break;
+                        }
+                    }
+                    // If no match found and there's a same-named static method, try that
+                    if (!uvb && m_static) {
+                        MethodFunctionBase* mfb_s = qore_method_private::get(*m_static)->getFunction();
+                        QoreFunctionIterator vi_s(*mfb_s);
+                        while (vi_s.next()) {
+                            const AbstractQoreFunctionVariant* v = vi_s.getVariant();
+                            auto* candidate = const_cast<UserVariantBase*>(
+                                dynamic_cast<const UserVariantBase*>(v));
+                            if (!candidate) {
+                                continue;
+                            }
+                            std::string var_sig("(");
+                            AbstractFunctionSignature* sig = v->getSignature();
+                            if (sig) {
+                                const type_vec_t& types = sig->getTypeList();
+                                for (size_t ti = 0; ti < types.size(); ++ti) {
+                                    if (ti > 0) {
+                                        var_sig.append(",");
+                                    }
+                                    var_sig.append(QoreTypeInfo::getPath(types[ti]));
+                                }
+                            }
+                            var_sig.append(")");
+                            if (normalizeTypePaths(var_sig) == target_sig) {
+                                uvb = candidate;
+                                break;
+                            }
                         }
                     }
                     if (!uvb) {

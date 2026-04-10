@@ -37,6 +37,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <list>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -133,6 +134,10 @@ struct QoreAOTContext {
     //! Owned StaticClassVarRefNode objects created during LValuePath deserialization.
     //! These resolve StaticVar path steps at runtime; deref'd in destructor.
     std::vector<AbstractQoreNode*> owned_static_var_refs;
+
+    //! Owned string copies for call target method names from slot map deserialization.
+    //! Uses std::list so that element pointers remain stable across insertions.
+    std::list<std::string> owned_call_target_strings;
 
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
