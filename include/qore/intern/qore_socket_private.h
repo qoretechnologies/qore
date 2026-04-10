@@ -793,6 +793,23 @@ struct qore_socket_private {
     */
     uint32_t fd_generation = 0;
 
+#ifdef DEBUG
+    //! Debug-only: when true, the next lock-yielding wait simulates an fd swap.
+    /** Tests set this flag via the debug Socket API to exercise the
+        fd_generation re-verification path in
+        @ref SocketSyncPoll::waitReleasingLock().  The flag is a
+        one-shot: the helper bumps @ref fd_generation and clears the
+        flag before entering its wait, so a single invocation produces
+        exactly one simulated swap.
+
+        @note DEBUG builds only.  The hook is unconditionally ignored
+        in release builds because the member does not exist there.
+
+        @since %Qore 2.3
+    */
+    bool debug_force_fd_swap_next_wait = false;
+#endif
+
     // issue #3512: the remote certificate captured
     QoreObject* remote_cert = nullptr;
 

@@ -29,10 +29,12 @@
 */
 
 #include <qore/Qore.h>
+#include <qore/QoreSocketObject.h>
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
+#include "qore/intern/QC_Socket.h"
 
 #include <set>
 
@@ -396,6 +398,35 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+#ifdef DEBUG
+//! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait of @a sock.
+/** Tests use this to exercise the fd_generation re-verification path in
+    @ref SocketSyncPoll::waitReleasingLock() without racing an actual
+    close() across threads.  The next sync I/O helper on @a sock that
+    enters its lock-yielding wait phase bumps the socket's internal
+    fd_generation counter inside the wait window, so the re-acquire
+    detects the simulated swap and aborts with SOCKET-CLOSED.
+ */
+static QoreValue f_dbg_force_fd_swap_next_wait(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    const QoreObject* obj = get_param_value(params, 0).get<const QoreObject>();
+    if (!obj) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR",
+            "dbg_force_fd_swap_next_wait() requires a Socket argument");
+        return QoreValue();
+    }
+    ReferenceHolder<QoreSocketObject> sock(
+        reinterpret_cast<QoreSocketObject*>(
+            const_cast<QoreObject*>(obj)->getReferencedPrivateData(CID_SOCKET, xsink)),
+        xsink);
+    if (*xsink || !sock) {
+        return QoreValue();
+    }
+    sock->dbgForceFdSwapNextWait();
+    return QoreValue();
+}
+#endif
+
 static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
 
@@ -423,4 +454,9 @@ void init_debug_functions(QoreNamespace& qns) {
     qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEFAULT, listTypeInfo);
     qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
     qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
+#ifdef DEBUG
+    qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
+        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
+#endif
 }

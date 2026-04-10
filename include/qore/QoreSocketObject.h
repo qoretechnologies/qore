@@ -86,6 +86,18 @@ class QoreSocketObject : public AbstractPollableIoObjectBase {
     friend class SocketQuicSendStreamingResponsePollOperation;
 
 public:
+#ifdef DEBUG
+    //! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait.
+    /** Called via the @c dbg_force_fd_swap_next_wait() debug builtin in
+        @ref lib/ql_debug.cpp.  DLLLOCAL so the function never appears
+        in the public ABI — debug-only test hook with no release-build
+        surface.
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void dbgForceFdSwapNextWait();
+#endif
+
     DLLEXPORT QoreSocketObject();
 
     DLLEXPORT QoreSocketObject(QoreSocketObject& orig, int descriptor);

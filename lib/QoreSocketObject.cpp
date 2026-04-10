@@ -974,6 +974,13 @@ int QoreSocketObject::getSocket() {
     return priv->socket->getSocket();
 }
 
+#ifdef DEBUG
+void QoreSocketObject::dbgForceFdSwapNextWait() {
+    AutoLocker al(priv->m);
+    qore_socket_private::get(*priv->socket)->debug_force_fd_swap_next_wait = true;
+}
+#endif
+
 void QoreSocketObject::setEncoding(const QoreEncoding* id) {
     priv->socket->setEncoding(id);
 }

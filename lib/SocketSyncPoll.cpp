@@ -198,6 +198,16 @@ int SocketSyncPoll::waitReleasingLock(qore_socket_private& sock, QoreThreadLock&
         // operate on the same Socket concurrently.  Re-acquired on
         // scope exit even if asyncIoWait() throws.
         AutoUnlocker au(outer_lock);
+#ifdef DEBUG
+        // One-shot debug hook: simulate an fd swap by bumping the
+        // generation counter.  Tests use this to exercise the
+        // re-verification path below without needing to race an
+        // actual close() across threads.
+        if (sock.debug_force_fd_swap_next_wait) {
+            sock.debug_force_fd_swap_next_wait = false;
+            ++sock.fd_generation;
+        }
+#endif
         wait_rc = sock.asyncIoWait(timeout_ms, want_read, want_write, cname, mname, xsink);
     }
 
