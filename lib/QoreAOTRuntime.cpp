@@ -56,6 +56,7 @@
 
 #include "qore/intern/ModuleInfo.h"
 #include "qore/intern/VarRefNode.h"
+#include "qore/intern/StaticClassVarRefNode.h"
 #include "qore/intern/ParseReferenceNode.h"
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/SelfVarrefNode.h"
@@ -2336,6 +2337,27 @@ static QoreAOTContext* buildContextFromSlotMap(
                     const qore_ns_private* vns = nullptr;
                     step.ref_ptr = qore_root_ns_private::runtimeFindGlobalVar(
                         *pp->RootNS, step.name.c_str(), vns);
+                } else if (step.kind == LVPathStepKind::StaticVar
+                        && !step.name.empty()) {
+                    // Name format: "ClassPath::varName" — split and resolve
+                    std::string full_name = step.name;
+                    size_t sep = full_name.rfind("::");
+                    if (sep != std::string::npos && sep >= 2) {
+                        std::string class_path = full_name.substr(0, sep);
+                        std::string var_name = full_name.substr(sep + 2);
+                        const qore_ns_private* found_ns = nullptr;
+                        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                            *pp->RootNS, class_path.c_str(), found_ns);
+                        if (qc) {
+                            QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+                            if (vi) {
+                                auto* scv = new StaticClassVarRefNode(
+                                    &loc_builtin, var_name.c_str(), *qc, *vi);
+                                step.ref_ptr = scv;
+                                ctx->owned_static_var_refs.push_back(scv);
+                            }
+                        }
+                    }
                 }
                 pi->path.push_back(std::move(step));
             }

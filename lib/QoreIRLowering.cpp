@@ -2749,7 +2749,8 @@ static bool extractLValuePath(const QoreValue& expr,
         LVPathStep step;
         step.kind = LVPathStepKind::StaticVar;
         step.ref_ptr = scv;
-        step.name = scv->str;
+        // Store "ClassPath::varName" so AOT deserialization can resolve the static var
+        step.name = std::string(scv->qc.getPath()) + "::" + scv->str;
         path.push_back(step);
         return true;
     }

@@ -331,6 +331,10 @@ QoreAOTContext::~QoreAOTContext() {
     for (int i = 0; i < num_locs; ++i) {
         delete locs[i];
     }
+    // Deref owned StaticClassVarRefNode objects (created during LValuePath deserialization)
+    for (auto* node : owned_static_var_refs) {
+        node->deref(nullptr);
+    }
     free(locals);
     free(globals);
     free(exprs);

@@ -130,6 +130,10 @@ struct QoreAOTContext {
     //! The raw pointers in lv_path_insts[] point into these objects.
     std::vector<std::unique_ptr<QoreIRLValuePathInstruction>> owned_lv_path_insts;
 
+    //! Owned StaticClassVarRefNode objects created during LValuePath deserialization.
+    //! These resolve StaticVar path steps at runtime; deref'd in destructor.
+    std::vector<AbstractQoreNode*> owned_static_var_refs;
+
     //! Destructor: deref all held expression values, then free arrays.
     //! Implemented in QoreAOT.cpp because it needs QoreValue.
     ~QoreAOTContext();
