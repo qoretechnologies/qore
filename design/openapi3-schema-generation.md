@@ -19,7 +19,7 @@ Document REST endpoints using the `@SCHEMA` block format within Qore comments:
     @params
     - id (int): The unique user identifier
 
-    @return hash<UserInfo>
+    @return (hash<UserInfo>): user data
     - id (int): User ID
     - username (string): Username
     - email (string): Email address
@@ -91,18 +91,47 @@ The generator supports all Qore types:
 | `binary` | string | binary |
 | `hash` | object | - |
 | `hash<TypeName>` | $ref to schema | - |
+| `hash TypeName` | $ref to schema | - |
 | `list<T>` | array of T | - |
 | `*type` | type (nullable) | - |
 
+Both `hash<TypeName>` and the space-separated form `hash TypeName` are accepted
+for named hash schemas. The space-separated form is the one produced by Qore
+hashdecl reflection, so either works interchangeably.
+
 ### Return Type Definitions
 
-Specify return types with optional field descriptions:
+Return types are declared with the format `(type): description`. **Both the
+parentheses and the description are required** — including for named hash
+types such as `hash<OrderResponse>` or `hash OrderResponse`. Omitting either
+one causes the schema block to fail to parse (`parseReturnLine` falls back to
+`any`, and in Qorus the `doxygen-api-filter` throws
+`SCHEMA-ERROR: invalid schema type declaration`).
+
+Specify return types with optional nested field descriptions:
+
 ```
-@return hash<OrderResponse>
+@return (hash<OrderResponse>): the newly created order
 - order_id (int): Unique order identifier
 - items (list<hash<OrderItem>>): Order line items
 - total (*float): Order total (nullable)
 - status (string): Order status
+```
+
+Counter-examples that DO NOT parse:
+
+```
+@return hash<OrderResponse>                   # missing parentheses
+@return (hash<OrderResponse>)                 # missing ": description"
+@return (hash<OrderResponse>):                # empty description
+```
+
+If the return value is a primitive, the same format applies:
+
+```
+@return (string): a simple string response
+@return (*hash<Response>): optional response (may be NOTHING)
+@return (list<hash<UserInfo>>): list of users
 ```
 
 ## Command-Line Tool
@@ -252,7 +281,7 @@ class UserHandler inherits AbstractRestHandler {
         - offset (*int): Pagination offset (default: 0)
         - status (*string): Filter by status (active, inactive, pending)
 
-        @return hash<UserListResponse>
+        @return (hash<UserListResponse>): paginated user list
         - users (list<hash<UserInfo>>): List of user objects
         - total (int): Total number of users matching filter
         - has_more (bool): Whether more results are available
@@ -277,7 +306,7 @@ class UserHandler inherits AbstractRestHandler {
         - password (string): Password (min 8 characters)
         - role (*string): User role (default: "user")
 
-        @return hash<UserInfo>
+        @return (hash<UserInfo>): the newly created user
         - id (int): Assigned user ID
         - username (string): Username
         - email (string): Email address
@@ -302,7 +331,7 @@ class UserHandler inherits AbstractRestHandler {
         @params
         - id (int): User ID
 
-        @return hash<UserInfo>
+        @return (hash<UserInfo>): user details
         - id (int): User ID
         - username (string): Username
         - email (string): Email address
@@ -330,7 +359,7 @@ class UserHandler inherits AbstractRestHandler {
         - email (*string): New email address
         - role (*string): New role
 
-        @return hash<UserInfo>
+        @return (hash<UserInfo>): the updated user
         - id (int): User ID
         - username (string): Username
         - email (string): Updated email
@@ -356,7 +385,7 @@ class UserHandler inherits AbstractRestHandler {
         @params
         - id (int): User ID
 
-        @return hash<StatusResponse>
+        @return (hash<StatusResponse>): deletion status
         - success (bool): Whether deletion succeeded
         - message (string): Status message
 
