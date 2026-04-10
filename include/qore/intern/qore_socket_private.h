@@ -839,12 +839,6 @@ struct qore_socket_private {
     */
     bool h2_receiving_frames = false;
 
-    //! Flag indicating HTTP/2 stream data is read by an external poll loop
-    /** When true, stream reads should not call receiveData() directly to avoid
-        concurrent HTTP/2 frame processing.
-    */
-    bool h2_stream_read_external = false;
-
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
     /** When set, readHttpChunkedBodyBinary() and readHttpChunkedBody() will
         raise an HTTP-BODY-TOO-LARGE exception if the accumulated body exceeds
@@ -2135,10 +2129,6 @@ struct qore_socket_private {
                 return true;
             }
 
-            if (h2_stream_read_external) {
-                return false;
-            }
-
             // Check if raw socket has data (HTTP/2 frames)
             bool sock_avail = isSocketDataAvailable(timeout_ms, mname, xsink);
             printd(5, "isDataAvailable() isSocketDataAvailable(%d)=%d\n", timeout_ms, sock_avail);
@@ -2218,7 +2208,29 @@ struct qore_socket_private {
                     return -1;
                 }
 #else
-                int rc = asyncIoWait(timeout_ms, false, true, "Socket", "connectINETTimeout", xsink);
+                // Yield the outer Socket mutex during the connect wait when
+                // wired — a sync connect() on a handler thread used to block
+                // concurrent async ops on the same Socket for the full
+                // connect_timeout.  Falls back to direct asyncIoWait() for
+                // bare QoreSocket instances.  On POSIX waitReleasingLock
+                // returns > 0 on ready, 0 on timeout (no exception), < 0 on
+                // error/fd-swap (exception raised) — mirror asyncIoWait()'s
+                // return contract for the error-path branches below.
+                int rc;
+                if (outer_lock) {
+                    rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        false, true, timeout_ms, "Socket", "connectINETTimeout", xsink);
+                    if (rc == 0) {
+                        // Promote the tri-state "timeout" to the return code
+                        // the existing switch below expects from asyncIoWait()
+                        // ("rc > 0" ready, fall-through "else" for timeout).
+                        // Any value <= 0 that is not an error takes the
+                        // timeout branch; we set it to 0 which the "else"
+                        // arm handles.
+                    }
+                } else {
+                    rc = asyncIoWait(timeout_ms, false, true, "Socket", "connectINETTimeout", xsink);
+                }
 #endif
                 if (*xsink)
                     return -1;
@@ -3217,34 +3229,28 @@ struct qore_socket_private {
                     return 0;
                 }
 
-                if (h2_stream_read_external) {
-                    if (timeout >= 0) {
-                        if (!suppress_exception) {
-                            se_timeout("Socket", meth, timeout, xsink);
-                        }
-                        return QSE_TIMEOUT;
-                    }
-
-                    // Blocking read: wait for socket readability and retry
-                    if (!isSocketDataAvailable(1000, meth, xsink)) {
-                        if (*xsink) {
-                            return -1;
-                        }
-                    }
-                    continue;
-                }
-
                 // If no data buffered, receive more HTTP/2 frames
                 if (!stream || stream->body.empty()) {
-                    // Wait for raw socket data (HTTP/2 frames)
-                    if (timeout >= 0 && !isSocketDataAvailable(timeout, meth, xsink)) {
+                    // Wait for raw socket data (HTTP/2 frames).  Yield the
+                    // outer Socket mutex during the wait when wired — same
+                    // pattern as the non-SSL raw path below.
+                    if (timeout >= 0) {
+                        int wait_rc;
+                        if (outer_lock) {
+                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                                true, false, timeout, "Socket", meth, xsink);
+                        } else {
+                            wait_rc = isSocketDataAvailable(timeout, meth, xsink) ? 1 : 0;
+                        }
                         if (*xsink) {
                             return -1;
                         }
-                        if (!suppress_exception) {
-                            se_timeout("Socket", meth, timeout, xsink);
+                        if (wait_rc <= 0) {
+                            if (!suppress_exception) {
+                                se_timeout("Socket", meth, timeout, xsink);
+                            }
+                            return QSE_TIMEOUT;
                         }
-                        return QSE_TIMEOUT;
                     }
 
                     // Set flag to prevent recursion when receiveData calls brecv
