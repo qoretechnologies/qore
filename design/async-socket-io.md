@@ -536,6 +536,90 @@ The C++ layer guarantees correct socket fd cleanup — Qore-level code must not 
 SOCK_DGRAM sockets (HTTP/3 QUIC shared UDP) are exempt — closing them would break other sessions
 sharing the fd.
 
+### Poll Operation Reference Lifecycle
+
+A poll operation wrapper class typically holds two kinds of state with overlapping lifetimes:
+
+1. A `unique_ptr<AbstractPollState> poll_state` that owns whatever inner connect/read/write/SSL/QUIC
+   poll state is currently driving the operation.  Inner poll states commonly capture **raw pointers**
+   into the underlying socket (e.g. `qore_socket_private*`) and dereference those pointers from
+   their destructor (e.g. to close racing fds, release SSL handles, or trim QUIC sessions).
+2. A refcounted reference to the owning object (`QoreSocketObject* sock`, `QoreHttpClientObject*
+   client`, etc.) whose private data the inner poll state's raw pointers refer to.
+
+**The wrapper's `deref()` (or any other path that releases the owning reference) must release
+`poll_state` BEFORE deref'ing the owning object.**  Concretely:
+
+```cpp
+void MyPollOperation::deref(ExceptionSink* xsink) {
+    if (ROdereference()) {
+        // ... any non-pointer cleanup (clearNonBlock, etc.) ...
+        poll_state.reset();      // (1) destroy inner poll state while sock is still alive
+        sock->deref(xsink);      // (2) may free sock
+        delete this;             // (3) safe — poll_state is already null
+    }
+}
+```
+
+If steps (1) and (2) are reversed, `delete this` runs `~unique_ptr<AbstractPollState>` after `sock`
+has already been freed, and the inner poll state's destructor dereferences a dangling pointer.
+The same rule applies to `abort()`-style paths and any other code that releases the owning
+reference: `poll_state.reset()` first, then drop the ref.
+
+This contract is required for **every** wrapper that holds both a `poll_state` and a refcounted
+owning reference, including HTTPClient-level wrappers, WebSocket/SSE wrappers, and any future
+poll-op composition.
+
+### Sync I/O on Born-Non-Blocking Sockets
+
+Since the AsyncIoController redesign, sockets are born **non-blocking** — the I/O thread expects
+`O_NONBLOCK` to be set on every socket it owns, and worker code that calls into a socket while the
+controller still owns it inherits that state.  Any sync code path that calls a raw I/O primitive
+on such a socket — `::recv`, `::send`, `::accept`, `SSL_read`, `SSL_write`, `SSL_peek`,
+`SSL_connect`, `SSL_accept` — must handle the non-blocking return values explicitly:
+
+- Plain TCP: `EAGAIN` / `EWOULDBLOCK` — must wait via `isDataAvailable(timeout, ...)` /
+  `isWriteFinished(timeout, ...)` and retry, not raise an error.
+- SSL: `SSL_ERROR_WANT_READ` / `SSL_ERROR_WANT_WRITE` — must wait on the same primitives (or via
+  `doSSLUpgradeNonBlockingIO()` for handshake paths) and retry.
+
+Both `isDataAvailable()` and `isSocketDataAvailable()` accept `timeout_ms < 0` as "wait forever",
+which preserves the historical "no explicit timeout" semantics.  `OptionalNonBlockingHelper` is a
+no-op when the socket is already non-blocking, so RAII flipping is harmless on the new-style
+controller-owned sockets but still correct on legacy blocking sockets.
+
+`SSL_MODE_AUTO_RETRY` does **not** make a non-blocking socket behave like a blocking one — it only
+covers internal TLS bookkeeping (NewSessionTicket, post-handshake renegotiation).  Sync SSL code
+that relies on AUTO_RETRY for I/O retry on a non-blocking socket is incorrect.
+
+### QUIC Keepalive Policy
+
+QUIC keepalive (`ngtcp2_conn_set_keep_alive_timeout`) must be **gated on active stream count** for
+client connections, mirroring curl's `cf_ngtcp2_setup_keep_alive` (`lib/vquic/curl_ngtcp2.c`).
+The three-state model:
+
+1. Peer announced no `max_idle_timeout`            → keepalive disabled (`UINT64_MAX`)
+2. No active streams (`streams_.empty()`)          → keepalive disabled (`UINT64_MAX`)
+3. Streams in flight                               → keepalive = `peer.max_idle_timeout / 2`
+
+State (2) is the critical case: an idle client connection with no streams must let the **peer's**
+idle timer close it.  If we keep pinging the peer ourselves we reset the peer's idle timer on every
+ping and the connection lives forever — accumulating UDP fds, an entry in the controller cache, and
+recurring `ngtcp2_conn_get_expiry()` work on the I/O thread for as long as the process runs.
+
+The transition into state (2) is triggered by removing the last stream from `streams_`.  Every code
+path that mutates `QuicSession::streams_` (add, erase, clear) must call `updateKeepAliveLocked()`
+under `mtx_`.  Adding a new stream-mutation site without that call silently re-introduces the leak.
+
+Long-lived multiplexed connections (CONNECT tunnels, server-initiated streams, WebSocket-over-H3)
+keep at least one entry in `streams_` for their lifetime, so the helper sees `!streams_.empty()`
+and keepalive stays at half-idle for those — no regression for active multiplexed use.
+
+`set_keep_alive_timeout(UINT64_MAX)` takes effect on the **next** `ngtcp2_conn_get_expiry()` call
+without needing any auxiliary signal — ngtcp2 recomputes the keepalive expiry dynamically each time
+from `keep_alive.timeout`, and a value of `UINT64_MAX` returns `UINT64_MAX` from the expiry helper.
+No `pending_write_` bump is required.
+
 ### Thread Scaling
 
 I/O thread and callback worker thread counts are capped at `hardware_concurrency()` (the number of
