@@ -3461,24 +3461,41 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
     int err = SSL_get_error(ssl, rc);
 
     if (err == SSL_ERROR_WANT_READ) {
-        if (qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-            return 0;
+        // Yield the outer Socket mutex during the wait so concurrent async
+        // ops on the same Socket can make forward progress.  Same rationale
+        // as doSSLRW() above — direction-level exclusion via NB_RECV
+        // already prevents concurrent same-direction SSL operations on
+        // this SSL*.
+        int wait_rc;
+        if (qs.outer_lock) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                true, false, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;
     }
 
     if (err == SSL_ERROR_WANT_WRITE) {
-        if (qs.isWriteFinished(timeout_ms, mname, xsink)) {
-            return 0;
+        int wait_rc;
+        if (qs.outer_lock) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                false, true, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;
