@@ -2879,6 +2879,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
             }
+
+            // Signal any remaining cancel waiters whose Cancel commands
+            // were pushed but not visible to drain() due to the Vyukov
+            // MPSC push visibility window (tail.exchange done, next.store
+            // pending).  Without this, waitCancel() blocks forever.
+            for (auto& [key, cond] : cancel_cond_map) {
+                cond->broadcast();
+                delete cond;
+            }
+            cancel_cond_map.clear();
         }
     }
 
