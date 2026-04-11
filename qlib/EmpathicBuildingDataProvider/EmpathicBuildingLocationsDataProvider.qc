@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingLocationsDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingLocationsDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -55,7 +55,7 @@ public class EmpathicBuildingLocationsDataProvider inherits EmpathicBuildingData
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger, hash<auto> org)
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger, hash<auto> org)
             : EmpathicBuildingDataProviderBase(rest, logger) {
         self.org = org;
     }
@@ -68,7 +68,7 @@ public class EmpathicBuildingLocationsDataProvider inherits EmpathicBuildingData
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("Empathic Building data %s provider for locations for org `%s` (%s), url: `%s`",
-            ProviderInfo.name, org.id, org.name, rest.getSafeURL());
+            ProviderInfo.name, org.id, org.name, rest.getSafeUrl());
     }
 
     #! Returns data provider static info
@@ -111,14 +111,12 @@ public class EmpathicBuildingLocationsDataProvider inherits EmpathicBuildingData
             return locmap;
         }
 
-        hash<auto> info;
         try {
             locmap = cast<*hash<string, hash<auto>>>(map {$1.id: $1}, doRestCommand("GET", "v1/organizations/"
-                + org.id + "/locations", NOTHING, \info).body) ?? {};
+                + org.id + "/locations", NOTHING).body) ?? {};
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            # translate RestClientIo error arg to the legacy "request-uri"/"response-code"/"response-body" shape
+            rethrow ex.err, ex.desc, mapRestErrorInfo(ex);
         }
 
         return locmap;

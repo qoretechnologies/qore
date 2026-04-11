@@ -31,13 +31,13 @@
 # enable all warnings
 
 %requires(reexport) DataProvider
-%requires(reexport) RestClient
+%requires(reexport) RestClientIo
 %try-module uuid
 %define NoUuid
 %endtry
 
 module EmpathicBuildingDataProvider {
-    version = "1.1";
+    version = "1.2";
     desc = "user module providing a data provider API for Haltian EmpathicBuilding services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -176,6 +176,13 @@ module EmpathicBuildingDataProvider {
     @endverbatim
 
     @section empathicbuildingdataprovider_relnotes Release Notes
+
+    @subsection empathicbuildingdataprovider_v1_2 EmpathicBuildingDataProvider v1.2
+    - migrated to the async multiplexed @ref RestClientIo::RestClientIo "RestClientIo"
+      transport (HTTP/1.1/2/3) on the default build path; the \c restclient data provider
+      option is widened to @ref RestClient::AbstractRestClient "AbstractRestClient" so callers
+      can still pass a sync @ref RestClient::RestClient "RestClient" when HTTP/1.x-only
+      features are required
 
     @subsection empathicbuildingdataprovider_v1_1 EmpathicBuildingDataProvider v1.1
     - added support for the data provider action catalog API

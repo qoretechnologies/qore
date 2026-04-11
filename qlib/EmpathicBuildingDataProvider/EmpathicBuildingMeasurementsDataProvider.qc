@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingMeasurementsDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingMeasurementsDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -56,7 +56,7 @@ public class EmpathicBuildingMeasurementsDataProvider inherits EmpathicBuildingD
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger)
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger)
             : EmpathicBuildingDataProviderBase(rest, logger) {
     }
 
@@ -67,7 +67,7 @@ public class EmpathicBuildingMeasurementsDataProvider inherits EmpathicBuildingD
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Empathic Building data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("Empathic Building data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info
