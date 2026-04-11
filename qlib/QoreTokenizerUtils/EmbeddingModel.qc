@@ -82,7 +82,7 @@ public class EmbeddingModel {
         *int dimension;
 %ifndef NoRestClient
         #! REST client for HTTP mode (lazy-initialized)
-        *RestClient rest_client;
+        *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
@@ -190,10 +190,11 @@ public class EmbeddingModel {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClient({
+                rest_client = new RestClientIo::RestClientIo({
                     "url": url,
                     "connect_timeout": connect_timeout_ms,
                     "timeout": timeout_ms,
+                    "data": "json",
                 });
             }
         }
@@ -329,16 +330,12 @@ public class EmbeddingModel {
             body.model = model_name;
         }
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.post("/v1/embeddings", body, NOTHING, \hdr);
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
-        }
+        hash<auto> resp = rest_client.restPost("/v1/embeddings", body, hdr);
 
         # sort by index and extract embeddings
         list<hash<auto>> data = resp.body.data;
@@ -363,16 +360,12 @@ public class EmbeddingModel {
             "texts": texts,
         };
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.post("/embed", body, NOTHING, \hdr);
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
-        }
+        hash<auto> resp = rest_client.restPost("/embed", body, hdr);
 
         list<list<float>> result = ();
         foreach list<float> vec in (resp.body.dense) {

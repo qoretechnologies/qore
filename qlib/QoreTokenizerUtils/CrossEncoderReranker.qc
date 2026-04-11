@@ -86,7 +86,7 @@ public class CrossEncoderReranker {
         int max_length;
 %ifndef NoRestClient
         #! REST client (lazy-initialized)
-        *RestClient rest_client;
+        *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
@@ -308,16 +308,12 @@ public class CrossEncoderReranker {
             "passages": passages,
         };
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
-        hash<auto> resp = rest_client.post("/rerank", body, NOTHING, \hdr);
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
-        }
+        hash<auto> resp = rest_client.restPost("/rerank", body, hdr);
 
         # handle response format: {"scores": [float, ...]}
         if (exists resp.body.scores) {
@@ -346,10 +342,11 @@ public class CrossEncoderReranker {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClient({
+                rest_client = new RestClientIo::RestClientIo({
                     "url": url,
                     "connect_timeout": connect_timeout_ms,
                     "timeout": timeout_ms,
+                    "data": "json",
                 });
             }
         }
