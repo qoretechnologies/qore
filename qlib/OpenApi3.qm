@@ -262,6 +262,15 @@ qore-openapi3-gen -f json -t "My API" -s "https://api.example.com" src/*.qclass
     - YAML MIME type equivalence: \c "application/yaml" (RFC 9512), \c "text/x-yaml",
       \c "application/x-yaml", and \c "text/yaml" are treated as interchangeable when
       validating content types against API schemas
+    - @ref OpenApi3::SchemaObject "SchemaObject" now merges \c allOf member schemas into
+      the containing schema during construction; \c properties and \c required sets from
+      each member are union-merged (local fields take precedence), so
+      @ref OpenApi3::SchemaObject::getDataType() "getDataType()" exposes the composed
+      field set directly instead of falling back to an opaque \c auto type
+    - @ref OpenApi3::ParameterGroup "ParameterGroup" now inherits @ref Qore::Serializable
+      "Serializable" so that @ref OpenApi3::OpenApi3Schema "OpenApi3Schema" instances
+      (and any data provider that holds one) can be round-tripped through
+      @ref Qore::Serializable::serialize() "Serializable::serialize()"
     - classes inherit from abstract base classes in @ref RestSchemaValidator for polymorphic usage:
       - @ref OpenApi3::SchemaBase "SchemaBase": inherits
         @ref RestSchemaValidator::AbstractSchemaBase "AbstractSchemaBase"
@@ -626,7 +635,7 @@ public class OpenApi3Loader {
 }
 
 #! Common class for objects that have parameters
-public class ParameterGroup {
+public class ParameterGroup inherits Qore::Serializable {
     public {
         #! A hash of parameters for this object
         /**
@@ -4250,6 +4259,27 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         throw "INVALID-FIELD-TYPE", sprintf("Schema Object %y: invalid 'allOf' list value "
                             "datatype: %y", name, val.type());
                     allOf[allOf.size()] = SchemaObject::newSchemaObject(name + "AllOf", val, openapi3);
+                }
+                # Merge allOf member schemas into this schema so that getDataType()
+                # exposes the union of their properties and required sets. Local
+                # fields declared on the outer schema take precedence over inherited
+                # ones. If no explicit type was set, default to "object" since
+                # allOf composition is only meaningful for object schemas.
+                foreach SchemaObject member in (allOf) {
+                    foreach hash<auto> i in (member.properties.pairIterator()) {
+                        if (!exists properties{i.key}) {
+                            properties{i.key} = i.value;
+                        }
+                    }
+                    if (member.required) {
+                        required += member.required;
+                    }
+                    if (member.additionalProperties && !exists additionalProperties) {
+                        additionalProperties = member.additionalProperties;
+                    }
+                }
+                if (type == "any" && properties) {
+                    type = "object";
                 }
             }
         }

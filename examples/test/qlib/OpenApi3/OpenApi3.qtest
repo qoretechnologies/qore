@@ -3281,7 +3281,12 @@ public class OpenApi3Test inherits QUnit::Test {
         }
 
         {
-            string rep = makeBody("OK");
+            # GET /pets is declared as array<Pet> in PetStore.openapi3.yaml;
+            # with the v1.0 allOf merge SchemaObject::getDataType() exposes Pet as
+            # a concrete hash<{name, tag, id}>, so the dummy response body must be
+            # a valid Pet object for the response validator to accept it
+            hash<auto> petRep = {"id": 1, "name": "OK", "tag": "x"};
+            string rep = makeBody(petRep);
 
             HttpTestServer serv(rep);
             string url = sprintf("http://localhost:%d", serv.port);
@@ -3296,7 +3301,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 #printf("url: %y\n", url);
                 # GET /pets returns an array schema, so single value gets wrapped in a list
                 hash<auto> h = rc.get("/pets?limit=10");
-                assertEq(("OK",), h.body);
+                assertEq((petRep,), h.body);
 
                 assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/pets?invalid_param=y");
                 assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/something?x=y");
@@ -3310,7 +3315,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 });
                 # GET /pets returns an array schema, so single value gets wrapped in a list
                 hash<auto> h = rc.get("/pets?limit=10");
-                assertEq(("OK",), h.body);
+                assertEq((petRep,), h.body);
             }
             {
                 serv.restart();
@@ -3322,7 +3327,7 @@ public class OpenApi3Test inherits QUnit::Test {
                 rc.getValidator().setBasePath("v2");
                 # GET /pets returns an array schema, so single value gets wrapped in a list
                 hash<auto> h = rc.get("/v2/pets?limit=10");
-                assertEq(("OK",), h.body);
+                assertEq((petRep,), h.body);
             }
         }
     }
@@ -3389,7 +3394,12 @@ public class OpenApi3Test inherits QUnit::Test {
         assertThrows("SCHEMA-VALIDATION-ERROR", \so.processRequest(), ("get", "/invalid/path"));
 
         {
-            string rep = makeBody("OK");
+            # GET /pets is declared as array<Pet> in PetStore.openapi3.yaml;
+            # with the v1.0 allOf merge SchemaObject::getDataType() exposes Pet as
+            # a concrete hash<{name, tag, id}>, so the dummy response body must be
+            # a valid Pet object for the response validator to accept it
+            hash<auto> petRep = {"id": 1, "name": "OK", "tag": "x"};
+            string rep = makeBody(petRep);
 
             HttpTestServer serv(rep);
             on_exit serv.done();
@@ -3405,7 +3415,7 @@ public class OpenApi3Test inherits QUnit::Test {
             RestClient rc(opts);
             hash h = rc.get("/pets?limit=10");
             # GET /pets returns an array schema, so single value gets wrapped in a list
-            assertEq(("OK",), h.body);
+            assertEq((petRep,), h.body);
 
             assertThrows("SCHEMA-VALIDATION-ERROR", \rc.get(), "/invalid?x=y");
         }
