@@ -42,6 +42,29 @@
 // Forward decl for getLocalTypePath
 const char* getLocalTypePath(const LocalVar* lv);
 
+// Error propagation convention for instruction read_fn handlers:
+// Every read_fn that calls ctx.readExpr(...) with a LOCAL `std::string error`
+// MUST copy a non-empty inner error into ctx.error before returning nullptr:
+//
+//     std::string error;
+//     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
+//     if (!error.empty()) {
+//         ctx.error = error;  // propagate so callers see the real cause
+//         return nullptr;
+//     }
+//
+// Without the propagation, deserializeIRInstruction surfaces the failure as
+// `"failed to deserialize instruction N in block M: "` with an empty tail,
+// which actively hides the root cause (observed symptom: EXPR_TREE blob
+// deserialization errors in handler IR, hours wasted re-probing the writer
+// when the real fault was already known to the reader).
+//
+// The two readDotEvalMethodDirect / readInvokeDotEvalMethodDirect handlers
+// are intentional exceptions: their expr field is optional, the instruction
+// carries method_name + class_path + fallback_method_name for runtime dispatch,
+// and the local `error` is captured-but-ignored by design (see their
+// "Expr read failure is non-fatal" comments).
+
 // ============================================================================
 // Group 0: Base - No extra fields
 // ============================================================================
@@ -503,6 +526,7 @@ static std::unique_ptr<QoreIRInstruction> readLValue(
     std::string error;
     QoreValue lvalue = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     bool weak = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
@@ -536,10 +560,6 @@ static std::unique_ptr<QoreIRInstruction> readExpr(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
-        // Propagate inner error so deserializeIRInstruction surfaces the real
-        // cause instead of an empty-tail "failed to deserialize instruction ..."
-        // message. See file-level comment in follow-up cleanup commit for the
-        // systematic convention across all read_fn handlers.
         ctx.error = error;
         return nullptr;
     }
@@ -574,6 +594,7 @@ static std::unique_ptr<QoreIRInstruction> readCallDirect(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;
@@ -620,6 +641,7 @@ static std::unique_ptr<QoreIRInstruction> readCallMethodDirect(
     if (has_expr) {
         expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
         if (!error.empty()) {
+            ctx.error = error;
             return nullptr;
         }
     }
@@ -685,6 +707,7 @@ static std::unique_ptr<QoreIRInstruction> readInvokeMethodDirect(
     if (has_expr) {
         expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
         if (!error.empty()) {
+            ctx.error = error;
             return nullptr;
         }
     }
@@ -741,6 +764,7 @@ static std::unique_ptr<QoreIRInstruction> readCallStaticDirect(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     const char* class_path = ctx.reader.readStringRef(ctx.ptr);
@@ -916,6 +940,7 @@ static std::unique_ptr<QoreIRInstruction> readInvoke(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     uint16_t invoke_opcode_raw = QoreAOTBinaryReader::readU16(ctx.ptr);
@@ -1242,6 +1267,7 @@ static std::unique_ptr<QoreIRInstruction> readStaticVar(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* si = new QoreIRStaticVarInstruction(nullptr, var_name ? var_name : "", expr);
@@ -1350,6 +1376,7 @@ static std::unique_ptr<QoreIRInstruction> readLoadConst(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* lci = new QoreIRLoadConstantInstruction(nullptr, expr);
@@ -1380,6 +1407,7 @@ static std::unique_ptr<QoreIRInstruction> readCreateClosure(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* cci = new QoreIRCreateClosureInstruction(nullptr, expr);
@@ -1410,6 +1438,7 @@ static std::unique_ptr<QoreIRInstruction> readCreateCallRef(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* cri = new QoreIRCreateCallRefInstruction(expr);
@@ -1440,6 +1469,7 @@ static std::unique_ptr<QoreIRInstruction> readCreateMethodRef(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* cri = new QoreIRCreateMethodRefInstruction(expr);
@@ -1470,6 +1500,7 @@ static std::unique_ptr<QoreIRInstruction> readCreateParseRef(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* cri = new QoreIRCreateParseRefInstruction(nullptr, expr);
@@ -1500,6 +1531,7 @@ static std::unique_ptr<QoreIRInstruction> readNewHashDecl(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* ni = new QoreIRNewHashDeclInstruction(nullptr, expr);
@@ -1530,6 +1562,7 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexHash(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* ni = new QoreIRNewComplexHashInstruction(nullptr, expr);
@@ -1560,6 +1593,7 @@ static std::unique_ptr<QoreIRInstruction> readNewComplexList(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* ni = new QoreIRNewComplexListInstruction(nullptr, expr);
@@ -1590,6 +1624,7 @@ static std::unique_ptr<QoreIRInstruction> readVrnConstruct(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* vi = new QoreIRVrnConstructInstruction(nullptr, expr);
@@ -1903,6 +1938,7 @@ static std::unique_ptr<QoreIRInstruction> readRefForeachInit(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        ctx.error = error;
         return nullptr;
     }
     auto* ri = new QoreIRRefForeachInitInstruction(expr);
@@ -2016,6 +2052,7 @@ static std::unique_ptr<QoreIRInstruction> readSwitchCaseMatch(
     if (has_val) {
         case_val = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
         if (!error.empty()) {
+            ctx.error = error;
             return nullptr;
         }
     }
