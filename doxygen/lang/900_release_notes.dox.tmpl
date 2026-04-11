@@ -1165,6 +1165,8 @@ cargo install tree-sitter-cli@0.26.5
       - 3 classification/regression pipeline processors: logistic-regression, knn-classification, knn-regression
       - 3 evaluation pipeline processors: classification-metrics, regression-metrics, clustering-metrics
       - optional onnx-model pipeline processor for ONNX Runtime inference
+      - extract-structured pipeline processor for LLM-based structured data extraction with
+        built-in NER, invoice, contact, and sentiment schemas
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1436,6 +1438,16 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qorellmutilsintro "QoreLlmUtils" module
+      - new module providing a pluggable LLM backend abstraction for chat completions
+      - supports HTTP/OpenAI-compatible, Anthropic Messages API, and Qorus AI Gateway modes
+      - thread-safe lazy-initialized REST client with configurable timeouts
+      - JSON schema enforcement via response_format (HTTP) and tool-use extraction (Anthropic)
+    - @ref qorestructuredextractionintro "QoreStructuredExtraction" module
+      - new module providing LLM-based structured information extraction from unstructured text
+      - built-in templates: NER, invoice, contact, and sentiment analysis schemas
+      - ExtractionPipeline with validation, retry logic, and JSON code fence handling
+      - ExtractionSchema with JSON Schema conversion for LLM prompt engineering
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding

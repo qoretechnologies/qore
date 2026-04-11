@@ -1,0 +1,564 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreStructuredExtraction.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreStructuredExtraction
+%requires json
+%requires Util
+%requires QUnit
+
+%try-module ../../../../qlib/DataProviderML
+%define NoDataProviderML
+%endtry
+
+%exec-class QoreStructuredExtractionTest
+
+#! Mock LLM backend that returns pre-configured responses for testing
+class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
+    private {
+        #! The response content to return
+        string mock_response;
+        #! Number of calls made
+        int call_count = 0;
+        #! List of responses for sequential calls (for retry testing)
+        *list<string> sequential_responses;
+    }
+
+    constructor(string response) : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+        mock_response = response;
+    }
+
+    constructor(list<string> responses)
+            : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+        sequential_responses = responses;
+        mock_response = responses[0];
+    }
+
+    hash<LlmCompletionResult> complete(string system_prompt, string user_prompt,
+            *hash<auto> output_schema) {
+        string content;
+        if (sequential_responses && call_count < sequential_responses.size()) {
+            content = sequential_responses[call_count];
+        } else {
+            content = mock_response;
+        }
+        ++call_count;
+        return <LlmCompletionResult>{
+            "content": content,
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+            },
+        };
+    }
+
+    int getCallCount() {
+        return call_count;
+    }
+}
+
+public class QoreStructuredExtractionTest inherits QUnit::Test {
+    constructor() : Test("QoreStructuredExtractionTest", "1.0") {
+        # Schema tests
+        addTestCase("ExtractionSchema - NER template", \nerTemplateTest());
+        addTestCase("ExtractionSchema - Invoice template", \invoiceTemplateTest());
+        addTestCase("ExtractionSchema - Contact template", \contactTemplateTest());
+        addTestCase("ExtractionSchema - Sentiment template", \sentimentTemplateTest());
+        addTestCase("ExtractionSchema - getTemplate valid", \getTemplateValidTest());
+        addTestCase("ExtractionSchema - getTemplate invalid", \getTemplateInvalidTest());
+        addTestCase("ExtractionSchema - getTemplateNames", \getTemplateNamesTest());
+        addTestCase("ExtractionSchema - toJsonSchema", \toJsonSchemaTest());
+        addTestCase("ExtractionSchema - toJsonSchema with enum", \toJsonSchemaEnumTest());
+        addTestCase("ExtractionSchema - toJsonSchema with items", \toJsonSchemaItemsTest());
+
+        # Pipeline construction tests
+        addTestCase("ExtractionPipeline - constructor", \pipelineConstructorTest());
+        addTestCase("ExtractionPipeline - empty fields rejected", \pipelineEmptyFieldsTest());
+        addTestCase("ExtractionPipeline - getSchema", \pipelineGetSchemaTest());
+        addTestCase("ExtractionPipeline - getJsonSchema", \pipelineGetJsonSchemaTest());
+
+        # Pipeline extraction tests with mock LLM
+        addTestCase("ExtractionPipeline - valid NER extraction", \extractValidNerTest());
+        addTestCase("ExtractionPipeline - valid invoice extraction",
+            \extractValidInvoiceTest());
+        addTestCase("ExtractionPipeline - valid sentiment extraction",
+            \extractValidSentimentTest());
+        addTestCase("ExtractionPipeline - missing required field", \extractMissingFieldTest());
+        addTestCase("ExtractionPipeline - type mismatch", \extractTypeMismatchTest());
+        addTestCase("ExtractionPipeline - enum validation", \extractEnumValidationTest());
+        addTestCase("ExtractionPipeline - invalid JSON response", \extractInvalidJsonTest());
+        addTestCase("ExtractionPipeline - JSON with code fences", \extractCodeFencesTest());
+        addTestCase("ExtractionPipeline - retry on failure", \extractRetryTest());
+        addTestCase("ExtractionPipeline - usage accumulation", \extractUsageTest());
+        addTestCase("ExtractionPipeline - extractBatch", \extractBatchTest());
+        addTestCase("ExtractionPipeline - array item validation",
+            \extractArrayItemValidationTest());
+
+        # Processor tests (need DataProviderML module)
+%ifndef NoDataProviderML
+        addTestCase("QoreExtractionProcessor - constructor validation",
+            \processorConstructorTest());
+%endif
+
+        set_return_value(main());
+    }
+
+    # ===================== Schema Template Tests =====================
+
+    nerTemplateTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::NerSchema;
+        assertEq("extract_entities", schema.name);
+        assertEq(1, schema.fields.size());
+        assertEq("entities", schema.fields[0].name);
+        assertEq("array", schema.fields[0].type);
+        assertTrue(schema.fields[0].required);
+        assertEq(True, schema.fields[0].items.hasKey("type"));
+        assertEq("object", schema.fields[0].items.type);
+    }
+
+    invoiceTemplateTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::InvoiceSchema;
+        assertEq("extract_invoice", schema.name);
+        assertEq(11, schema.fields.size());
+
+        # Check required fields
+        list<string> required_names = ();
+        foreach hash<ExtractionFieldDef> field in (schema.fields) {
+            if (field.required) {
+                push required_names, field.name;
+            }
+        }
+        assertTrue(inlist("invoice_number", required_names));
+        assertTrue(inlist("invoice_date", required_names));
+        assertTrue(inlist("vendor_name", required_names));
+        assertTrue(inlist("currency", required_names));
+        assertTrue(inlist("total_amount", required_names));
+        assertTrue(inlist("line_items", required_names));
+    }
+
+    contactTemplateTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::ContactSchema;
+        assertEq("extract_contact", schema.name);
+        assertEq(8, schema.fields.size());
+        assertEq("full_name", schema.fields[0].name);
+        assertTrue(schema.fields[0].required);
+        # Most fields are optional
+        int optional_count = 0;
+        foreach hash<ExtractionFieldDef> field in (schema.fields) {
+            if (!field.required) {
+                ++optional_count;
+            }
+        }
+        assertEq(7, optional_count);
+    }
+
+    sentimentTemplateTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::SentimentSchema;
+        assertEq("extract_sentiment", schema.name);
+        assertEq(5, schema.fields.size());
+        # Check enum constraint on overall_sentiment
+        assertEq("overall_sentiment", schema.fields[0].name);
+        assertEq(4, schema.fields[0].enum_values.size());
+        assertTrue(inlist("POSITIVE", schema.fields[0].enum_values));
+        assertTrue(inlist("NEGATIVE", schema.fields[0].enum_values));
+    }
+
+    getTemplateValidTest() {
+        assertEq("extract_entities", ExtractionSchema::getTemplate("ner").name);
+        assertEq("extract_invoice", ExtractionSchema::getTemplate("invoice").name);
+        assertEq("extract_contact", ExtractionSchema::getTemplate("contact").name);
+        assertEq("extract_sentiment", ExtractionSchema::getTemplate("sentiment").name);
+        # Test case-insensitivity
+        assertEq("extract_entities", ExtractionSchema::getTemplate("NER").name);
+        assertEq("extract_invoice", ExtractionSchema::getTemplate("Invoice").name);
+    }
+
+    getTemplateInvalidTest() {
+        assertThrows("EXTRACTION-SCHEMA-ERROR", "unknown template",
+            sub () {
+                ExtractionSchema::getTemplate("nonexistent");
+            }
+        );
+    }
+
+    getTemplateNamesTest() {
+        list<string> names = ExtractionSchema::getTemplateNames();
+        assertEq(4, names.size());
+        assertTrue(inlist("ner", names));
+        assertTrue(inlist("invoice", names));
+        assertTrue(inlist("contact", names));
+        assertTrue(inlist("sentiment", names));
+    }
+
+    toJsonSchemaTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::ContactSchema;
+        hash<auto> js = ExtractionSchema::toJsonSchema(schema);
+
+        assertEq("object", js.type);
+        assertEq("extract_contact", js.name);
+        assertEq(8, js.properties.size());
+        assertTrue(js.properties.hasKey("full_name"));
+        assertTrue(js.properties.hasKey("email"));
+        # Only full_name is required
+        assertEq(1, js.required.size());
+        assertEq("full_name", js.required[0]);
+    }
+
+    toJsonSchemaEnumTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::SentimentSchema;
+        hash<auto> js = ExtractionSchema::toJsonSchema(schema);
+
+        assertTrue(js.properties.overall_sentiment.hasKey("enum"));
+        assertEq(4, js.properties.overall_sentiment."enum".size());
+    }
+
+    toJsonSchemaItemsTest() {
+        hash<ExtractionSchemaInfo> schema = ExtractionSchema::NerSchema;
+        hash<auto> js = ExtractionSchema::toJsonSchema(schema);
+
+        assertTrue(js.properties.entities.hasKey("items"));
+        assertEq("object", js.properties.entities.items.type);
+    }
+
+    # ===================== Pipeline Construction Tests =====================
+
+    pipelineConstructorTest() {
+        MockLlmBackend mock("{}");
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        assertEq("extract_entities", pipeline.getSchema().name);
+    }
+
+    pipelineEmptyFieldsTest() {
+        MockLlmBackend mock("{}");
+        assertThrows("EXTRACTION-PIPELINE-ERROR", "at least one field",
+            sub () {
+                new ExtractionPipeline(mock, <ExtractionSchemaInfo>{
+                    "name": "empty",
+                    "description": "empty",
+                    "fields": (),
+                });
+            }
+        );
+    }
+
+    pipelineGetSchemaTest() {
+        MockLlmBackend mock("{}");
+        ExtractionPipeline pipeline(mock, ExtractionSchema::InvoiceSchema);
+        hash<ExtractionSchemaInfo> schema = pipeline.getSchema();
+        assertEq("extract_invoice", schema.name);
+        assertEq(11, schema.fields.size());
+    }
+
+    pipelineGetJsonSchemaTest() {
+        MockLlmBackend mock("{}");
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        hash<auto> js = pipeline.getJsonSchema();
+        assertEq("object", js.type);
+        assertEq("extract_entities", js.name);
+    }
+
+    # ===================== Pipeline Extraction Tests =====================
+
+    extractValidNerTest() {
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "John Smith",
+                    "start": 0,
+                    "end": 10,
+                    "confidence": 0.95,
+                },
+                {
+                    "entity_type": "ORGANIZATION",
+                    "text": "Acme Corp",
+                    "start": 20,
+                    "end": 29,
+                    "confidence": 0.88,
+                },
+            ),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        hash<ExtractionResult> result = pipeline.extractData(
+            "John Smith works at Acme Corp.");
+
+        assertTrue(result.valid);
+        assertEq((), result.validation_errors);
+        assertEq(1, result.attempt_count);
+        assertEq(2, result.extracted.entities.size());
+        assertEq("PERSON", result.extracted.entities[0].entity_type);
+        assertEq("John Smith", result.extracted.entities[0].text);
+        assertEq(0, result.extracted.entities[0].start);
+        assertEq(10, result.extracted.entities[0].end);
+    }
+
+    extractValidInvoiceTest() {
+        string response = make_json({
+            "invoice_number": "INV-2026-001",
+            "invoice_date": "2026-04-11",
+            "vendor_name": "Qore Technologies",
+            "currency": "EUR",
+            "total_amount": 1500.00,
+            "line_items": (
+                {
+                    "description": "Software License",
+                    "quantity": 1,
+                    "unit_price": 1500.00,
+                    "amount": 1500.00,
+                },
+            ),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::InvoiceSchema);
+        hash<ExtractionResult> result = pipeline.extractData("Invoice text...");
+
+        assertTrue(result.valid);
+        assertEq("INV-2026-001", result.extracted.invoice_number);
+        assertEq("Qore Technologies", result.extracted.vendor_name);
+        assertEq(1500, result.extracted.total_amount);
+        assertEq(1, result.extracted.line_items.size());
+    }
+
+    extractValidSentimentTest() {
+        string response = make_json({
+            "overall_sentiment": "POSITIVE",
+            "sentiment_score": 0.8,
+            "confidence": 0.92,
+            "aspects": (
+                {"aspect": "quality", "sentiment": "POSITIVE", "score": 0.9},
+            ),
+            "key_phrases": ("excellent product", "highly recommend"),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::SentimentSchema);
+        hash<ExtractionResult> result = pipeline.extractData("Great product!");
+
+        assertTrue(result.valid);
+        assertEq("POSITIVE", result.extracted.overall_sentiment);
+        assertEq(0.8, result.extracted.sentiment_score);
+    }
+
+    extractMissingFieldTest() {
+        # Missing required "entities" field
+        string response = make_json({
+            "not_entities": (),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertTrue(result.validation_errors.size() > 0);
+        assertTrue(result.validation_errors[0] =~ /required field.*entities.*missing/);
+    }
+
+    extractTypeMismatchTest() {
+        # entities should be an array, not a string
+        string response = make_json({
+            "entities": "not an array",
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertTrue(result.validation_errors.size() > 0);
+        assertTrue(result.validation_errors[0] =~ /expected array/);
+    }
+
+    extractEnumValidationTest() {
+        string response = make_json({
+            "overall_sentiment": "INVALID_VALUE",
+            "sentiment_score": 0.5,
+            "confidence": 0.8,
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::SentimentSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertTrue(result.validation_errors.size() > 0);
+        assertTrue(result.validation_errors[0] =~ /not one of/);
+    }
+
+    extractInvalidJsonTest() {
+        MockLlmBackend mock("this is not json at all");
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertTrue(result.validation_errors.size() > 0);
+        assertTrue(result.validation_errors[0] =~ /JSON parse error/);
+    }
+
+    extractCodeFencesTest() {
+        # LLMs sometimes wrap JSON in markdown code fences
+        string inner_json = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Alice",
+                    "start": 0,
+                    "end": 5,
+                    "confidence": 0.9,
+                },
+            ),
+        });
+        string fenced = "```json\n" + inner_json + "\n```";
+
+        MockLlmBackend mock(fenced);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        hash<ExtractionResult> result = pipeline.extractData("Alice went to the store.");
+
+        assertTrue(result.valid);
+        assertEq(1, result.extracted.entities.size());
+        assertEq("Alice", result.extracted.entities[0].text);
+    }
+
+    extractRetryTest() {
+        # First response is invalid JSON, second is valid
+        string valid_response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Bob",
+                    "start": 0,
+                    "end": 3,
+                    "confidence": 0.85,
+                },
+            ),
+        });
+
+        MockLlmBackend mock(("not json", valid_response));
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 2});
+        hash<ExtractionResult> result = pipeline.extractData("Bob is here.");
+
+        assertTrue(result.valid);
+        assertEq(2, result.attempt_count);
+        assertEq(2, mock.getCallCount());
+    }
+
+    extractUsageTest() {
+        # Test that usage accumulates across retries
+        string valid_response = make_json({
+            "entities": (),
+        });
+
+        MockLlmBackend mock(("not json", valid_response));
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 2});
+        hash<ExtractionResult> result = pipeline.extractData("No entities here.");
+
+        assertTrue(result.valid);
+        assertEq(2, result.attempt_count);
+        # Usage should be accumulated (150 * 2 = 300 total tokens)
+        assertEq(300, result.usage.total_tokens);
+    }
+
+    extractBatchTest() {
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    "text": "Test",
+                    "start": 0,
+                    "end": 4,
+                    "confidence": 0.9,
+                },
+            ),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema);
+        list<hash<ExtractionResult>> results = pipeline.extractBatch(
+            ("Text one", "Text two", "Text three"));
+
+        assertEq(3, results.size());
+        foreach hash<ExtractionResult> r in (results) {
+            assertTrue(r.valid);
+        }
+        assertEq(3, mock.getCallCount());
+    }
+
+    extractArrayItemValidationTest() {
+        # Array items missing required properties
+        string response = make_json({
+            "entities": (
+                {
+                    "entity_type": "PERSON",
+                    # missing "text", "start", "end", "confidence"
+                },
+            ),
+        });
+
+        MockLlmBackend mock(response);
+        ExtractionPipeline pipeline(mock, ExtractionSchema::NerSchema,
+            <ExtractionPipelineOptions>{"max_retries": 0});
+        hash<ExtractionResult> result = pipeline.extractData("Some text");
+
+        assertFalse(result.valid);
+        assertTrue(result.validation_errors.size() > 0);
+        assertTrue(result.validation_errors[0] =~ /missing required property/);
+    }
+
+    # ===================== Processor Tests =====================
+
+%ifndef NoDataProviderML
+    processorConstructorTest() {
+        # Test missing text_field
+        assertThrows("CONSTRUCTOR-ERROR", "text_field",
+            sub () {
+                new DataProviderML::QoreExtractionProcessor({
+                    "llm_mode": "qorus",
+                    "schema_template": "ner",
+                });
+            }
+        );
+
+        # Test missing schema
+        assertThrows("CONSTRUCTOR-ERROR", "schema_template or custom_schema",
+            sub () {
+                new DataProviderML::QoreExtractionProcessor({
+                    "text_field": "body",
+                    "llm_mode": "qorus",
+                });
+            }
+        );
+
+        # Test missing llm_mode
+        assertThrows("CONSTRUCTOR-ERROR", "llm_mode",
+            sub () {
+                new DataProviderML::QoreExtractionProcessor({
+                    "text_field": "body",
+                    "schema_template": "ner",
+                });
+            }
+        );
+
+        # Test valid construction with qorus mode (doesn't need url)
+        DataProviderML::QoreExtractionProcessor proc({
+            "text_field": "body",
+            "schema_template": "ner",
+            "llm_mode": "qorus",
+        });
+        assertEq("extract-structured", proc.getName());
+    }
+%endif
+}

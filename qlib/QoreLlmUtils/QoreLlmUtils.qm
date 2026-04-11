@@ -1,0 +1,93 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreLlmUtils.qm pluggable LLM backend abstraction for Qore AI modules
+
+/*  QoreLlmUtils.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%try-module RestClient
+%define NoRestClient
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+module QoreLlmUtils {
+    version = "1.0.0";
+    desc = "user module providing a pluggable LLM backend abstraction for chat "
+        "completions across HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreLlmUtils Module
+
+    @tableofcontents
+
+    @section qorellmutilsintro QoreLlmUtils Module Introduction
+
+    The %QoreLlmUtils module provides a pluggable LLM backend abstraction for Qore
+    AI modules that need to make chat completion calls.  It supports three modes:
+
+    - \b http: Calls an OpenAI-compatible \c /v1/chat/completions endpoint
+      (SGLang, vLLM, OpenAI, Azure OpenAI, etc.) with optional JSON schema
+      enforcement via \c response_format.
+    - \b anthropic: Calls the Anthropic Messages API (\c /v1/messages) with
+      native tool-use-based JSON extraction when an output schema is provided.
+    - \b qorus: Calls the Qorus AI Gateway via \c UserApi::callRestApi().
+
+    @par Example: HTTP mode (OpenAI-compatible)
+    @code{.py}
+%requires QoreLlmUtils
+
+LlmBackend llm({"mode": "http", "url": "http://localhost:8080", "model": "gpt-4o"});
+hash<LlmCompletionResult> result = llm.complete(
+    "You are a helpful assistant.",
+    "Summarize this document: ...",
+);
+printf("Response: %s\n", result.content);
+    @endcode
+
+    @par Example: Anthropic mode
+    @code{.py}
+%requires QoreLlmUtils
+
+LlmBackend llm({"mode": "anthropic", "url": "https://api.anthropic.com",
+    "model": "claude-sonnet-4-20250514", "api_key": ENV.ANTHROPIC_API_KEY});
+hash<LlmCompletionResult> result = llm.complete(
+    "You are an extraction engine.",
+    "Extract entities from: ...",
+    {"type": "object", "properties": {"entities": {"type": "array"}}},
+);
+printf("Structured output: %s\n", result.content);
+    @endcode
+
+    @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
+
+    @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
+    - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
+      HTTP/OpenAI-compatible, Anthropic, and Qorus AI Gateway modes
+*/

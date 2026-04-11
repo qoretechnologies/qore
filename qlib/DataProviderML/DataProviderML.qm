@@ -32,6 +32,7 @@
 
 %requires QoreModelRegistry
 %requires QoreTokenizerUtils
+%requires QoreStructuredExtraction
 
 module DataProviderML {
     version = "1.0";
@@ -1251,6 +1252,42 @@ module DataProviderML {
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 QoreEmbedTextProcessor::ConstructorOptions{
                     "embedding_url", "embedding_model", "embedding_api_key", "window_size",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register extract-structured action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/extract-structured",
+            "action": "extract-structured",
+            "display_name": "Extract Structured Data from Text",
+            "short_desc": "Pulls structured fields from unstructured text using an LLM",
+            "desc": "Uses an LLM to extract typed structured data from a text field — for "
+                "example, pulling names and addresses from emails, line items from invoices, "
+                "entities from articles, or sentiment from reviews.\n\n"
+                "Choose a built-in schema template (NER, invoice, contact, sentiment) or "
+                "define a custom schema. Each record is enriched with:\n"
+                "- `_extracted` — the structured data matching the schema\n"
+                "- `_extraction_valid` — whether the output passed validation\n"
+                "- `_extraction_usage` — LLM token usage\n"
+                "- `_extraction_errors` — validation errors (if any)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreExtractionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreExtractionProcessor::ConstructorOptions{"text_field", "llm_mode"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreExtractionProcessor::ConstructorOptions{
+                    "schema_template", "llm_url", "llm_model", "llm_api_key",
+                    "temperature", "max_retries",
                 }, {
                     "loc": "constructor",
                 }

@@ -83,6 +83,7 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         Children."tokenize" = "QoreTokenizeProcessor";
         Children."chunk-text" = "QoreChunkTextProcessor";
         Children."embed-text" = "QoreEmbedTextProcessor";
+        Children."extract-structured" = "QoreExtractionProcessor";
     }
 
     #! Returns the name of this data provider
@@ -180,6 +181,8 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreChunkTextProcessor();
             case "embed-text":
                 return new QoreEmbedTextProcessor();
+            case "extract-structured":
+                return new QoreExtractionProcessor();
         }
     }
 }

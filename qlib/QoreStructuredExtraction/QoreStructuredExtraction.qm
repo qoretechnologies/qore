@@ -1,0 +1,80 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreStructuredExtraction.qm LLM-based structured information extraction
+
+/*  QoreStructuredExtraction.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) QoreLlmUtils
+%requires json
+
+module QoreStructuredExtraction {
+    version = "1.0.0";
+    desc = "user module providing LLM-based structured information extraction "
+        "with schema enforcement and built-in templates for NER, invoices, "
+        "contacts, and sentiment analysis";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreStructuredExtraction Module
+
+    @tableofcontents
+
+    @section qorestructuredextractionintro QoreStructuredExtraction Module Introduction
+
+    The %QoreStructuredExtraction module extracts typed structured data from unstructured
+    text using LLM calls with JSON schema enforcement.  Named entity recognition (NER)
+    is a special case.
+
+    The module provides:
+    - @ref QoreStructuredExtraction::ExtractionSchema "ExtractionSchema" — schema types
+      and built-in templates (NER, Invoice, Contact, Sentiment)
+    - @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline" — core
+      extraction engine with validation and retry logic
+
+    @par Example: Named Entity Recognition
+    @code{.py}
+%requires QoreStructuredExtraction
+%requires QoreLlmUtils
+
+LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
+    "model": "gpt-4o"});
+ExtractionPipeline pipeline(llm, ExtractionSchema::NerSchema);
+hash<ExtractionResult> result = pipeline.extractData("John Smith works at Acme Corp in New York.");
+if (result.valid) {
+    foreach hash<auto> entity in (result.extracted.entities) {
+        printf("%s: %s (%.0f%%)\n", entity.entity_type, entity.text,
+            entity.confidence * 100);
+    }
+}
+    @endcode
+
+    @section qorestructuredextractionrelnotes QoreStructuredExtraction Module Release Notes
+
+    @subsection qorestructuredextraction_1_0 QoreStructuredExtraction Module Version 1.0
+    - Initial release with @ref QoreStructuredExtraction::ExtractionPipeline "ExtractionPipeline"
+      and four built-in templates: NER, Invoice, Contact, Sentiment
+*/

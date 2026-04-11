@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreLlmUtils.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreLlmUtils
+%requires Util
+%requires QUnit
+
+%exec-class QoreLlmUtilsTest
+
+public class QoreLlmUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreLlmUtilsTest", "1.0") {
+        addTestCase("LlmBackend config validation - invalid mode", \configInvalidModeTest());
+        addTestCase("LlmBackend config validation - http requires url", \configHttpNoUrlTest());
+        addTestCase("LlmBackend config validation - anthropic requires url",
+            \configAnthropicNoUrlTest());
+        addTestCase("LlmBackend config - valid http mode", \configValidHttpTest());
+        addTestCase("LlmBackend config - valid anthropic mode", \configValidAnthropicTest());
+        addTestCase("LlmBackend config - valid qorus mode", \configValidQorusTest());
+        addTestCase("LlmBackend config - defaults", \configDefaultsTest());
+        addTestCase("LlmBackend getMode/getModel", \gettersTest());
+        addTestCase("LlmBackend qorus mode - no Qorus context", \qorusNoContextTest());
+        addTestCase("LlmBackendConfig hashdecl defaults", \hashdeclDefaultsTest());
+        set_return_value(main());
+    }
+
+    # ===================== Config Validation Tests =====================
+
+    configInvalidModeTest() {
+        assertThrows("LLM-CONFIG-ERROR", "invalid mode",
+            sub () {
+                LlmBackend llm(<LlmBackendConfig>{"mode": "invalid"});
+            }
+        );
+    }
+
+    configHttpNoUrlTest() {
+        assertThrows("LLM-CONFIG-ERROR", "url is required",
+            sub () {
+                LlmBackend llm(<LlmBackendConfig>{"mode": "http"});
+            }
+        );
+    }
+
+    configAnthropicNoUrlTest() {
+        assertThrows("LLM-CONFIG-ERROR", "url is required",
+            sub () {
+                LlmBackend llm(<LlmBackendConfig>{"mode": "anthropic"});
+            }
+        );
+    }
+
+    configValidHttpTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:8080",
+            "model": "gpt-4o",
+            "api_key": "test-key",
+        });
+        assertEq("http", llm.getMode());
+        assertEq("gpt-4o", llm.getModel());
+    }
+
+    configValidAnthropicTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "https://api.anthropic.com",
+            "model": "claude-sonnet-4-20250514",
+            "api_key": "test-key",
+        });
+        assertEq("anthropic", llm.getMode());
+        assertEq("claude-sonnet-4-20250514", llm.getModel());
+    }
+
+    configValidQorusTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "qorus",
+            "model": "my-model",
+        });
+        assertEq("qorus", llm.getMode());
+        assertEq("my-model", llm.getModel());
+    }
+
+    configDefaultsTest() {
+        # Qorus mode doesn't need url, so we can test defaults
+        LlmBackend llm(<LlmBackendConfig>{"mode": "qorus"});
+        assertEq("qorus", llm.getMode());
+        assertEq(NOTHING, llm.getModel());
+    }
+
+    gettersTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:8080",
+            "model": "test-model",
+        });
+        assertEq("http", llm.getMode());
+        assertEq("test-model", llm.getModel());
+
+        # Test with no model
+        LlmBackend llm2(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:8080",
+        });
+        assertEq(NOTHING, llm2.getModel());
+    }
+
+    qorusNoContextTest() {
+        LlmBackend llm(<LlmBackendConfig>{"mode": "qorus"});
+        # Calling complete in qorus mode outside of Qorus should fail
+        assertThrows("LLM-ERROR", "Qorus runtime context",
+            sub () {
+                llm.complete("system", "user");
+            }
+        );
+    }
+
+    hashdeclDefaultsTest() {
+        hash<LlmBackendConfig> config(<LlmBackendConfig>{"mode": "http", "url": "http://x"});
+        assertEq(4096, config.max_tokens);
+        assertEq(0.0, config.temperature);
+        assertEq(10000, config.connect_timeout_ms);
+        assertEq(120000, config.timeout_ms);
+        assertEq("2023-06-01", config.anthropic_version);
+    }
+}
