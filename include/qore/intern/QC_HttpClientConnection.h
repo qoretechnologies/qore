@@ -35,9 +35,9 @@
 
 #include "qore/intern/QoreHttp1ClientConnection.h"
 
-DLLLOCAL QoreClass* initHttp1ClientConnectionClass(QoreNamespace& qorens);
+DLLLOCAL QoreClass* initHttp1ConnectionClass(QoreNamespace& qorens);
 
-DLLEXPORT extern qore_classid_t CID_HTTP1CLIENTCONNECTION;
-DLLEXPORT extern QoreClass* QC_HTTP1CLIENTCONNECTION;
+DLLEXPORT extern qore_classid_t CID_HTTP1CONNECTION;
+DLLEXPORT extern QoreClass* QC_HTTP1CONNECTION;
 
 #endif // _QORE_CLASS_HTTPCLIENTCONNECTION_H

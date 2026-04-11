@@ -34,19 +34,27 @@
 
 /** @cond INTERNAL */
 
-//! HTTP/1.1 client connection (C++ foundation class)
-/** This class is the C++ foundation for HTTP/1.1 client connections built as
-    part of the Phase P2 port of @c HttpClientConnectionManager basics to C++
-    (see @c design/http-client-manager-cpp-port.md).  It wraps a socket and
-    an @c Http1ClientPollOperationBase, submits the poll op to the global
+//! HTTP/1.1 client connection — C++ foundation for the connection manager port
+/** @c Qore::Http1Connection is the C++ foundation for HTTP/1.1 client
+    connections built as part of the Phase P2 port of
+    @c HttpClientConnectionManager basics to C++ (see
+    @c design/http-client-manager-cpp-port.md).  It wraps a socket and an
+    @c Http1ClientPollOperationBase, submits the poll op to the global
     @c AsyncIoController on construction, and exposes a minimal request
     submission API that returns a @c Future for sync-over-async dispatch.
+
+    @par Naming
+    The class is named @c Http1Connection (not @c Http1ClientConnection)
+    so it does not collide with the existing
+    @c HttpClientIo::Http1ClientConnection module class.  Phase P6 of the
+    porting plan rewires the Qore-level @c HttpClientIo classes to inherit
+    from this C++ base.
 
     @par Lifecycle
     The connection is created in CONNECTING state; call @ref waitForReady
     to block until the connection is usable or an error occurs.  Then submit
-    requests via @ref submitRequest and await the returned @c Future via
-    @c get().  When done, call @ref close.
+    requests via the C++ API (Phase P2 does not yet expose @c submitRequest
+    via QPP — that is added in a later phase).  When done, call @ref close.
 
     @note The primary purpose of this class is internal — it is the C++
     foundation that Phase P3+ will layer the connection manager on top of.
@@ -54,7 +62,7 @@
 
     @since %Qore 2.3
 */
-qclass Http1ClientConnection [
+qclass Http1Connection [
     ns=Qore;
     arg=Http1ClientConnection* priv;
     flags=final;
@@ -69,64 +77,64 @@ qclass Http1ClientConnection [
 
     @since %Qore 2.3
 */
-Http1ClientConnection::constructor(string target_host, int target_port, bool ssl_required = False) {
+Http1Connection::constructor(string target_host, int target_port, bool ssl_required = False) {
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection(target_host->c_str(), (int)target_port, ssl_required, xsink),
         xsink);
     if (*xsink) {
         return;
     }
-    self->setPrivate(CID_HTTP1CLIENTCONNECTION, conn.release());
+    self->setPrivate(CID_HTTP1CONNECTION, conn.release());
 }
 
 //! Closes the connection and releases resources
 /** Idempotent — safe to call multiple times.
 */
-Http1ClientConnection::destructor() {
+Http1Connection::destructor() {
     priv->closeConnection(xsink);
     priv->deref(xsink);
 }
 
 //! Copying is not supported
-/** @throw HTTP1CLIENTCONNECTION-COPY-ERROR always
+/** @throw HTTP1CONNECTION-COPY-ERROR always
 */
-Http1ClientConnection::copy() {
-    xsink->raiseException("HTTP1CLIENTCONNECTION-COPY-ERROR",
-        "Http1ClientConnection objects cannot be copied");
+Http1Connection::copy() {
+    xsink->raiseException("HTTP1CONNECTION-COPY-ERROR",
+        "Http1Connection objects cannot be copied");
 }
 
 //! Returns True when the connection is ready for requests
 /** @return True when the connection has reached READY state
 */
-bool Http1ClientConnection::isReady() [flags=RET_VALUE_ONLY] {
+bool Http1Connection::isReady() [flags=RET_VALUE_ONLY] {
     return priv->isReady();
 }
 
 //! Returns True when the connection has been closed
 /** @return True when the connection has reached CLOSED state
 */
-bool Http1ClientConnection::isClosed() [flags=RET_VALUE_ONLY] {
+bool Http1Connection::isClosed() [flags=RET_VALUE_ONLY] {
     return priv->isClosed();
 }
 
 //! Returns the number of active streams (0 or 1 for HTTP/1.1)
 /** @return the current active stream count
 */
-int Http1ClientConnection::getActiveStreamCount() [flags=RET_VALUE_ONLY] {
+int Http1Connection::getActiveStreamCount() [flags=RET_VALUE_ONLY] {
     return priv->getActiveStreamCount();
 }
 
 //! Returns the target hostname
 /** @return the host passed to the constructor
 */
-string Http1ClientConnection::getTargetHost() [flags=RET_VALUE_ONLY] {
+string Http1Connection::getTargetHost() [flags=RET_VALUE_ONLY] {
     return new QoreStringNode(priv->getTargetHost());
 }
 
 //! Returns the target port
 /** @return the port passed to the constructor
 */
-int Http1ClientConnection::getTargetPort() [flags=RET_VALUE_ONLY] {
+int Http1Connection::getTargetPort() [flags=RET_VALUE_ONLY] {
     return priv->getTargetPort();
 }
 
@@ -135,7 +143,7 @@ int Http1ClientConnection::getTargetPort() [flags=RET_VALUE_ONLY] {
     @return True if the connection is ready; False on timeout
     @throw HTTPCLIENT-CONNECT-ERROR if the connection is closed with an error
 */
-bool Http1ClientConnection::waitForReady(int timeout_ms = 30000) {
+bool Http1Connection::waitForReady(int timeout_ms = 30000) {
     return priv->waitForReadyOrError((int64_t)timeout_ms, xsink);
 }
 
@@ -143,6 +151,6 @@ bool Http1ClientConnection::waitForReady(int timeout_ms = 30000) {
 /** Idempotent — safe to call multiple times.  After this call, any further
     request submission raises @c HTTPCLIENT-STATE-ERROR.
 */
-nothing Http1ClientConnection::close() {
+nothing Http1Connection::close() {
     priv->closeConnection(xsink);
 }

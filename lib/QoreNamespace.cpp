@@ -182,7 +182,7 @@ DLLLOCAL QoreClass* initHttp3ServerPollOperationClass(QoreNamespace& ns);
 extern QoreClass* QC_HTTP3SERVERPOLLOPERATION;
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpClientPingPollOperationBaseClass(QoreNamespace& ns);
-DLLLOCAL QoreClass* initHttp1ClientConnectionClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttp1ConnectionClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
 
 DLLLOCAL void init_type_constants(QoreNamespace& ns);
@@ -1352,10 +1352,12 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initHttp2ClientPollOperationBaseClass(qns));
     // HttpClientPingPollOperationBase must be after SocketPollOperationBase
     qns.addSystemClass(initHttpClientPingPollOperationBaseClass(qns));
-    // Http1ClientConnection: C++ foundation for the upcoming HttpClientConnectionManager
+    // Qore::Http1Connection: C++ foundation for the upcoming HttpClientConnectionManager
     // C++ port (Phase P2 — see design/http-client-manager-cpp-port.md).  Must be after
-    // Http1ClientPollOperationBase because it wraps that class internally.
-    qns.addSystemClass(initHttp1ClientConnectionClass(qns));
+    // Http1ClientPollOperationBase because it wraps that class internally.  Named
+    // Http1Connection (not Http1ClientConnection) to avoid colliding with the
+    // existing HttpClientIo::Http1ClientConnection module class.
+    qns.addSystemClass(initHttp1ConnectionClass(qns));
 
     qns.addSystemClass(initLoggerInterfaceBaseClass(qns));  // must be before AsyncIoController and logger_bin module
     qns.addSystemClass(initAsyncIoControllerClass(qns));
