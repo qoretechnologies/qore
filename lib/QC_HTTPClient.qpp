@@ -2471,6 +2471,30 @@ int HTTPClient::getConnectTimeout() [flags=CONSTANT] {
    return client->getConnectTimeout();
 }
 
+//! Enables or disables the async connection manager for HTTP/1.1 dispatch
+/** When enabled, simple request/response operations (no streaming, no proxy)
+    delegate to the internal C++ connection manager instead of the legacy sync
+    socket dispatch.  This provides connection pooling and async I/O
+    integration for the sync HTTPClient API.
+
+    @param enable @ref True to enable, @ref False to disable (default)
+
+    @since %Qore 2.3
+*/
+nothing HTTPClient::setUseConnectionManager(softbool enable = True) {
+    client->setUseConnectionManager(enable);
+}
+
+//! Returns @ref True if the async connection manager is enabled
+/** @return @ref True if the async connection manager dispatch is enabled,
+    @ref False otherwise
+
+    @since %Qore 2.3
+*/
+bool HTTPClient::getUseConnectionManager() [flags=CONSTANT] {
+    return client->getUseConnectionManager();
+}
+
 //! Sets the \c TCP_NODELAY setting for the object
 /** When this setting is True, then data will be immediately sent out over the HTTPClient object's socket, when it is
     @ref False, then data transmission may be delayed to be packaged with other data for the same target.

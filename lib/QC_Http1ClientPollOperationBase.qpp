@@ -97,6 +97,14 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         response_headers->deref(xsink);
         response_headers = nullptr;
     }
+    if (response_status_message) {
+        response_status_message->deref();
+        response_status_message = nullptr;
+    }
+    if (response_http_version) {
+        response_http_version->deref();
+        response_http_version = nullptr;
+    }
     if (response_body) {
         response_body->deref(xsink);
         response_body = nullptr;
@@ -729,6 +737,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
         response_status_code = (int)hdr->getKeyValue("status_code").getAsBigInt();
 
+        // Capture status message and HTTP version for conn_mgr response format
+        if (response_status_message) {
+            response_status_message->deref();
+            response_status_message = nullptr;
+        }
+        QoreValue sm_val = hdr->getKeyValue("status_message");
+        if (sm_val.getType() == NT_STRING) {
+            response_status_message = sm_val.get<const QoreStringNode>()->stringRefSelf();
+        }
+        if (response_http_version) {
+            response_http_version->deref();
+            response_http_version = nullptr;
+        }
+        QoreValue hv_val = hdr->getKeyValue("http_version");
+        if (hv_val.getType() == NT_STRING) {
+            response_http_version = hv_val.get<const QoreStringNode>()->stringRefSelf();
+        }
+
         // Build response headers hash with lowercase keys
         if (response_headers) {
             response_headers->deref(xsink);
@@ -1288,6 +1314,12 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // Build response hash
     ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
     resp->setKeyValue("status_code", response_status_code, xsink);
+    if (response_status_message) {
+        resp->setKeyValue("status_message", response_status_message->stringRefSelf(), xsink);
+    }
+    if (response_http_version) {
+        resp->setKeyValue("http_version", response_http_version->stringRefSelf(), xsink);
+    }
     if (response_headers) {
         resp->setKeyValue("headers", response_headers->hashRefSelf(), xsink);
     }
@@ -1430,6 +1462,14 @@ void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
         response_headers = nullptr;
     }
     response_status_code = 0;
+    if (response_status_message) {
+        response_status_message->deref();
+        response_status_message = nullptr;
+    }
+    if (response_http_version) {
+        response_http_version->deref();
+        response_http_version = nullptr;
+    }
     if (response_body) {
         response_body->deref(xsink);
         response_body = nullptr;
@@ -1449,6 +1489,15 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
     // Check Content-Type for text-based types
     if (!response_headers) {
         return response_body->refSelf();
+    }
+
+    // Don't charset-convert compressed bodies — caller handles decompression first
+    QoreValue ce_val = response_headers->getKeyValue("content-encoding");
+    if (ce_val.getType() == NT_STRING) {
+        const char* ce = ce_val.get<const QoreStringNode>()->c_str();
+        if (ce && *ce && strcasecmp(ce, "identity")) {
+            return response_body->refSelf();
+        }
     }
 
     QoreValue ct_val = response_headers->getKeyValue("content-type");

@@ -227,6 +227,12 @@ private:
     //! Response status code
     int response_status_code = 0;
 
+    //! Response status message (e.g., "OK", "Not Found"); ref'd or nullptr
+    QoreStringNode* response_status_message = nullptr;
+
+    //! Response HTTP version string (e.g., "1.1", "1.0"); ref'd or nullptr
+    QoreStringNode* response_http_version = nullptr;
+
     //! Response headers (ref'd or nullptr, lowercase keys)
     QoreHashNode* response_headers = nullptr;
 

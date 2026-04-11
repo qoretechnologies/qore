@@ -208,6 +208,8 @@ public:
         @param headers optional request headers (may be nullptr)
         @param body optional request body
         @param body_len request body length in bytes
+        @param timeout_ms per-request timeout in milliseconds; 0 or negative
+            uses the default from @c Options::request_timeout_ms
         @param xsink exception sink
 
         @return the response hash (caller owns), or @c nullptr on error
@@ -219,7 +221,7 @@ public:
     DLLEXPORT virtual QoreHashNode* request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink);
+        int timeout_ms, ExceptionSink* xsink);
 
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 

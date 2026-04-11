@@ -43,6 +43,7 @@
 #include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QoreHttp3ClientConnection.h"
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreHttpClientObject.h>
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -1082,7 +1083,7 @@ static void ut_manager_acquire_first_request(UnitTestCounters& c) {
 
     ReferenceHolder<QoreHashNode> response(
         mgr->request("GET", "http", "127.0.0.1", server_port, "/",
-            nullptr, nullptr, 0, &xsink),
+            nullptr, nullptr, 0, 0, &xsink),
         &xsink);
     UT_ASSERT(c, !xsink, "manager.request succeeds");
     UT_ASSERT(c, (bool)response, "manager.request returns a response hash");
@@ -1141,7 +1142,7 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     {
         ReferenceHolder<QoreHashNode> r1(
             mgr->request("GET", "http", "127.0.0.1", server_port, "/",
-                nullptr, nullptr, 0, &xsink),
+                nullptr, nullptr, 0, 0, &xsink),
             &xsink);
         UT_ASSERT(c, !xsink && r1, "first request succeeds");
         if (xsink) xsink.clear();
@@ -1154,7 +1155,7 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     {
         ReferenceHolder<QoreHashNode> r2(
             mgr->request("GET", "http", "127.0.0.1", server_port, "/",
-                nullptr, nullptr, 0, &xsink),
+                nullptr, nullptr, 0, 0, &xsink),
             &xsink);
         UT_ASSERT(c, !xsink && r2, "second request succeeds (reuse)");
         if (xsink) xsink.clear();
@@ -1197,7 +1198,7 @@ static void ut_manager_close_all(UnitTestCounters& c) {
 
     ReferenceHolder<QoreHashNode> r(
         mgr->request("GET", "http", "127.0.0.1", server_port, "/",
-            nullptr, nullptr, 0, &xsink),
+            nullptr, nullptr, 0, 0, &xsink),
         &xsink);
     UT_ASSERT(c, !xsink && r, "request succeeds");
     if (xsink) xsink.clear();
@@ -1441,6 +1442,194 @@ static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
     }
 }
 
+// --- P10 tests: HTTPClient via conn_mgr ---
+
+static void ut_httpclient_conn_mgr_get(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    // Create HTTPClient and enable conn_mgr dispatch
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+    UT_ASSERT(c, client.getUseConnectionManager(), "conn_mgr enabled");
+
+    QoreHashNode* info = new QoreHashNode(autoTypeInfo);
+    ReferenceHolder<QoreHashNode> info_holder(info, &xsink);
+    ReferenceHolder<QoreHashNode> response(
+        client.send("GET", "/", nullptr, nullptr, 0, true, info, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "GET via conn_mgr succeeds");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printd(0, "ut_httpclient_conn_mgr_get: %s: %s\n", err->c_str(), desc->c_str());
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, (bool)response, "GET returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "status is 200");
+
+        QoreValue body = response->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
+        if (body.getType() == NT_STRING) {
+            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            UT_ASSERT(c, !strcmp(bs->c_str(), "hello"), "body is 'hello'");
+        }
+
+        // Verify status_message is present
+        QoreValue sm = response->getKeyValue("status_message");
+        UT_ASSERT(c, sm.getType() == NT_STRING, "status_message present");
+
+        // Verify content-type header was flattened to top level
+        QoreValue ct = response->getKeyValue("content-type");
+        UT_ASSERT(c, ct.getType() == NT_STRING, "content-type header flattened");
+    }
+    xsink.clear();
+}
+
+static void ut_httpclient_conn_mgr_post(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        int hdr_len = ut_read_request_headers(cfd, buf, sizeof(buf));
+        // Read body based on Content-Length
+        const char* cl_hdr = strcasestr(buf, "Content-Length:");
+        int body_len = cl_hdr ? atoi(cl_hdr + 15) : 0;
+        char body_buf[4096] = {};
+        if (body_len > 0) {
+            // Check if body was already received with headers
+            int remaining = hdr_len - (int)(strstr(buf, "\r\n\r\n") - buf + 4);
+            if (remaining > 0) {
+                memcpy(body_buf, strstr(buf, "\r\n\r\n") + 4, remaining);
+            }
+            if (remaining < body_len) {
+                recv(cfd, body_buf + remaining, body_len - remaining, 0);
+            }
+        }
+
+        // Echo body in response
+        char resp[8192];
+        snprintf(resp, sizeof(resp),
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "%.*s",
+            body_len, body_len, body_buf);
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+
+    SimpleRefHolder<QoreStringNode> body_str(new QoreStringNode("test-body"));
+    ReferenceHolder<QoreHashNode> response(
+        client.send("POST", "/data", nullptr, **body_str, true, nullptr, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "POST via conn_mgr succeeds");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        QoreStringValueHelper desc(xsink.getExceptionDesc());
+        printd(0, "ut_httpclient_conn_mgr_post: %s: %s\n", err->c_str(), desc->c_str());
+        xsink.clear();
+        return;
+    }
+    UT_ASSERT(c, (bool)response, "POST returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "status is 200");
+
+        QoreValue body = response->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "body is a string");
+        if (body.getType() == NT_STRING) {
+            const QoreStringNode* bs = body.get<const QoreStringNode>();
+            UT_ASSERT(c, !strcmp(bs->c_str(), "test-body"), "body echoed");
+        }
+    }
+    xsink.clear();
+}
+
+static void ut_httpclient_conn_mgr_error_passthru(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 9\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "not found";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    QoreHttpClientObject client;
+    QoreString url_str;
+    url_str.sprintf("http://127.0.0.1:%d/", server_port);
+    client.setURL(url_str.c_str(), &xsink);
+    UT_ASSERT(c, !xsink, "setURL succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    client.setUseConnectionManager(true);
+
+    // Without error_passthru, 404 should raise an exception
+    ReferenceHolder<QoreHashNode> response(
+        client.send("GET", "/missing", nullptr, nullptr, 0, true, nullptr, &xsink), &xsink);
+    UT_ASSERT(c, (bool)xsink, "404 raises HTTP-CLIENT-RECEIVE-ERROR");
+    if (xsink) {
+        QoreStringValueHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, !strcmp(err->c_str(), "HTTP-CLIENT-RECEIVE-ERROR"),
+            "exception is HTTP-CLIENT-RECEIVE-ERROR");
+    }
+    xsink.clear();
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -1513,6 +1702,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_h2_dispatch(c);
     ut_http3_connection_construct(c);
     ut_manager_h3_dispatch(c);
+    ut_httpclient_conn_mgr_get(c);
+    ut_httpclient_conn_mgr_post(c);
+    ut_httpclient_conn_mgr_error_passthru(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);

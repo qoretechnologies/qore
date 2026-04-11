@@ -576,7 +576,7 @@ done:
 QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
         const char* scheme, const char* host, int port, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) {
+        int timeout_ms, ExceptionSink* xsink) {
     HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
     if (!conn || *xsink) {
         return nullptr;
@@ -602,8 +602,9 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     QoreObject* future_obj = const_cast<QoreObject*>(future_v.get<const QoreObject>());
     future_obj->ref();
 
+    int effective_timeout = timeout_ms > 0 ? timeout_ms : opts_.request_timeout_ms;
     QoreValue result = q_future_get_blocking(future_obj,
-        opts_.request_timeout_ms, xsink);
+        effective_timeout, xsink);
     future_obj->deref(xsink);
 
     // The PromiseAction has already cleared the active stream count

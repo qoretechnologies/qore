@@ -748,6 +748,20 @@ public:
     **/
     DLLEXPORT int getConnectTimeout() const;
 
+    //! Enables or disables async connection manager dispatch for simple H1 requests
+    /** @param enable true to enable, false to disable
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setUseConnectionManager(bool enable);
+
+    //! Returns true if async connection manager dispatch is enabled
+    /** @return true if the connection manager is enabled
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool getUseConnectionManager() const;
+
     //! sets the TCP_NODELAY flag on the object
     /**
          This function will try to set the TCP_NODELAY flag immediately if the
