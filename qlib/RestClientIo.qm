@@ -712,21 +712,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # preserves the caller's original intent for sibling construction
             saved_opts = opts;
 
-            # Reject HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
-            foreach string dep_key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
-                if (opts.hasKey(dep_key)) {
-                    throw "RESTCLIENTIO-OPTION-ERROR",
-                        sprintf("option %y is not supported by RestClientIo: %s", dep_key,
-                            RestClient::AbstractRestClient::Http1OnlyOptions{dep_key});
-                }
-            }
-
-            # Validate option keys — fail fast on typos and unsupported legacy options
-            if (*list<string> unknown = keys (opts - (keys KnownOptions))) {
-                throw "RESTCLIENTIO-OPTION-ERROR",
-                    sprintf("unknown RestClientIo option(s) %y; supported options: %y", unknown,
-                        keys KnownOptions);
-            }
+            # Strip HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
+            # and any unknown keys (e.g., service-specific options already
+            # consumed by subclass getOptions() calls like "api_profile",
+            # "encode_chars", "tenant", etc.)
+            opts -= keys RestClient::AbstractRestClient::Http1OnlyOptions;
+            opts -= keys (opts - (keys KnownOptions));
 
             # Normalize http_version (RestClient legacy) → protocol (RestClientIo/HttpClientIo)
             if (exists opts.http_version) {

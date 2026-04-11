@@ -732,8 +732,7 @@ public class GoogleRestClientIo inherits RestClientIo::RestClientIo, GoogleRestC
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(GoogleRestClientBase::getOptions(opts)
-                - keys RestClient::AbstractRestClient::Http1OnlyOptions, shared_mgr) {
+            : RestClientIo(GoogleRestClientBase::getOptions(opts), shared_mgr) {
     }
 }
 }
