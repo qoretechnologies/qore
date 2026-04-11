@@ -1177,6 +1177,8 @@ cargo install tree-sitter-cli@0.26.5
       - semantic-chunk-text pipeline processor for embedding-similarity-based document chunking
       - guardrail-filter pipeline processor (DPC_FILTER) for blocking unsafe records
       - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
+      - ocr pipeline processor for text extraction from images via Tesseract or HTTP
+      - vision-extraction pipeline processor for multimodal LLM image analysis
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1455,6 +1457,14 @@ cargo install tree-sitter-cli@0.26.5
       - TopicRestrictionRule: LLM-based topic boundary enforcement
       - OutputFormatEnforcer: length, forbidden/required pattern validation
       - GuardrailEngine: rule chain orchestration with severity-based short-circuit
+    - @ref qoreocrutilsintro "QoreOcrUtils" module
+      - new module providing an OCR abstraction layer with native and HTTP backends
+      - OcrEngine: dual-mode OCR (Tesseract native + HTTP endpoint)
+      - ScannedPdfDetector: heuristic detection of scanned PDF pages
+    - @ref qorevisionextractionintro "QoreVisionExtraction" module
+      - new module providing multimodal LLM vision extraction
+      - VisionLlmClient: image description, table extraction, and text extraction
+      - supports OpenAI and Anthropic multimodal APIs with base64 image content blocks
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and Qorus AI Gateway modes

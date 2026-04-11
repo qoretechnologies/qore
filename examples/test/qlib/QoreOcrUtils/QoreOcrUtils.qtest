@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreOcrUtils.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreOcrUtils
+%requires Util
+%requires QUnit
+
+%try-module ocr
+%define NoOcr
+%endtry
+
+%exec-class QoreOcrUtilsTest
+
+public class QoreOcrUtilsTest inherits QUnit::Test {
+    constructor() : Test("QoreOcrUtilsTest", "1.0") {
+        # OcrEngine config validation tests
+        addTestCase("OcrEngine - invalid mode", \ocrInvalidModeTest());
+        addTestCase("OcrEngine - http requires url", \ocrHttpNoUrlTest());
+        addTestCase("OcrEngine - valid http config", \ocrValidHttpTest());
+
+        # Native mode tests (only if ocr module available)
+%ifndef NoOcr
+        addTestCase("OcrEngine - native mode", \ocrNativeModeTest());
+        addTestCase("OcrEngine - native OCR with image", \ocrNativeImageTest());
+%endif
+
+        # ScannedPdfDetector tests
+        addTestCase("ScannedPdfDetector - empty text is scanned", \pdfEmptyTest());
+        addTestCase("ScannedPdfDetector - short text is scanned", \pdfShortTest());
+        addTestCase("ScannedPdfDetector - long text is digital", \pdfLongTest());
+        addTestCase("ScannedPdfDetector - findScannedPages", \pdfFindPagesTest());
+        addTestCase("ScannedPdfDetector - negative threshold", \pdfNegativeThresholdTest());
+        addTestCase("ScannedPdfDetector - custom threshold", \pdfCustomThresholdTest());
+
+        set_return_value(main());
+    }
+
+    # ===================== OcrEngine Tests =====================
+
+    ocrInvalidModeTest() {
+        assertThrows("OCR-CONFIG-ERROR", "invalid mode",
+            sub () {
+                new OcrEngine(<OcrConfig>{"mode": "invalid"});
+            }
+        );
+    }
+
+    ocrHttpNoUrlTest() {
+        assertThrows("OCR-CONFIG-ERROR", "url is required",
+            sub () {
+                new OcrEngine(<OcrConfig>{"mode": "http"});
+            }
+        );
+    }
+
+    ocrValidHttpTest() {
+        # Should construct without error (no connection until extractText)
+        OcrEngine engine(<OcrConfig>{
+            "mode": "http",
+            "url": "http://localhost:1",
+        });
+        assertTrue(True);
+    }
+
+%ifndef NoOcr
+    ocrNativeModeTest() {
+        OcrEngine engine(<OcrConfig>{
+            "mode": "native",
+            "language": "eng",
+        });
+        assertTrue(True);
+    }
+
+    ocrNativeImageTest() {
+        # Create a simple test image if ImageMagick is available
+        string test_img = tmp_location() + "/qore_ocr_test.png";
+        int rc = system("which magick >/dev/null 2>&1 && magick -size 300x50 xc:white "
+            "-font Helvetica -pointsize 20 -annotate +10+30 'OCR Test 123' "
+            + test_img + " 2>/dev/null");
+        if (rc != 0) {
+            # Try old convert command
+            rc = system("which convert >/dev/null 2>&1 && convert -size 300x50 xc:white "
+                "-font Helvetica -pointsize 20 -annotate +10+30 'OCR Test 123' "
+                + test_img + " 2>/dev/null");
+        }
+        if (rc != 0 || !is_file(test_img)) {
+            testSkip("ImageMagick not available for test image generation");
+            return;
+        }
+
+        on_exit {
+            if (is_file(test_img)) {
+                unlink(test_img);
+            }
+        }
+
+        binary img = ReadOnlyFile::readBinaryFile(test_img);
+        OcrEngine engine(<OcrConfig>{"mode": "native", "language": "eng"});
+        hash<OcrResult> result = engine.extractText(img);
+
+        assertTrue(result.text.val());
+        assertTrue(result.confidence > 0.0);
+        assertTrue(trim(result.text) =~ /OCR/i);
+    }
+%endif
+
+    # ===================== ScannedPdfDetector Tests =====================
+
+    pdfEmptyTest() {
+        ScannedPdfDetector detector();
+        assertTrue(detector.isScannedPage(""));
+        assertTrue(detector.isScannedPage("   "));
+    }
+
+    pdfShortTest() {
+        ScannedPdfDetector detector(50);
+        assertTrue(detector.isScannedPage("Hello"));
+        assertTrue(detector.isScannedPage("Short text here"));
+    }
+
+    pdfLongTest() {
+        ScannedPdfDetector detector(50);
+        string long_text = "This is a page with plenty of digital text content that "
+            "clearly exceeds the threshold for scanned page detection.";
+        assertFalse(detector.isScannedPage(long_text));
+    }
+
+    pdfFindPagesTest() {
+        ScannedPdfDetector detector(20);
+        list<string> pages = (
+            "",                          # page 0: scanned (empty)
+            "This page has enough text",  # page 1: digital
+            "Hi",                        # page 2: scanned (too short)
+            "Another page with substantial content here", # page 3: digital
+        );
+        list<int> scanned = detector.findScannedPages(pages);
+        assertEq(2, scanned.size());
+        assertEq(0, scanned[0]);
+        assertEq(2, scanned[1]);
+    }
+
+    pdfNegativeThresholdTest() {
+        assertThrows("OCR-CONFIG-ERROR",
+            sub () {
+                new ScannedPdfDetector(-1);
+            }
+        );
+    }
+
+    pdfCustomThresholdTest() {
+        ScannedPdfDetector detector(10);
+        assertEq(10, detector.getThreshold());
+        assertTrue(detector.isScannedPage("Short"));
+        assertFalse(detector.isScannedPage("Long enough text"));
+    }
+}

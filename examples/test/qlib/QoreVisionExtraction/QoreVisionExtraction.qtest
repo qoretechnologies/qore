@@ -1,0 +1,82 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreVisionExtraction.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreVisionExtraction
+%requires Util
+%requires QUnit
+
+%exec-class QoreVisionExtractionTest
+
+public class QoreVisionExtractionTest inherits QUnit::Test {
+    constructor() : Test("QoreVisionExtractionTest", "1.0") {
+        # Config validation tests
+        addTestCase("VisionLlmClient - invalid mode", \visionInvalidModeTest());
+        addTestCase("VisionLlmClient - missing url", \visionMissingUrlTest());
+        addTestCase("VisionLlmClient - valid openai config", \visionValidOpenaiTest());
+        addTestCase("VisionLlmClient - valid anthropic config", \visionValidAnthropicTest());
+        addTestCase("VisionLlmConfig - defaults", \visionConfigDefaultsTest());
+
+        set_return_value(main());
+    }
+
+    visionInvalidModeTest() {
+        assertThrows("VISION-CONFIG-ERROR", "invalid mode",
+            sub () {
+                new VisionLlmClient(<VisionLlmConfig>{
+                    "mode": "invalid",
+                    "url": "http://x",
+                    "model": "x",
+                });
+            }
+        );
+    }
+
+    visionMissingUrlTest() {
+        assertThrows("VISION-CONFIG-ERROR", "url is required",
+            sub () {
+                new VisionLlmClient(<VisionLlmConfig>{
+                    "mode": "openai",
+                    "url": "",
+                    "model": "gpt-4o",
+                });
+            }
+        );
+    }
+
+    visionValidOpenaiTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "openai",
+            "url": "https://api.openai.com",
+            "model": "gpt-4o",
+            "api_key": "test-key",
+        });
+        assertTrue(True);
+    }
+
+    visionValidAnthropicTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "anthropic",
+            "url": "https://api.anthropic.com",
+            "model": "claude-sonnet-4-20250514",
+            "api_key": "test-key",
+        });
+        assertTrue(True);
+    }
+
+    visionConfigDefaultsTest() {
+        hash<VisionLlmConfig> config(<VisionLlmConfig>{
+            "mode": "openai",
+            "url": "http://x",
+            "model": "test",
+        });
+        assertEq(4096, config.max_tokens);
+        assertEq(10000, config.connect_timeout_ms);
+        assertEq(120000, config.timeout_ms);
+        assertEq("2023-06-01", config.anthropic_version);
+    }
+}

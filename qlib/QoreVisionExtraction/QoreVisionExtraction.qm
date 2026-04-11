@@ -1,0 +1,77 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreVisionExtraction.qm multimodal LLM vision extraction
+
+/*  QoreVisionExtraction.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%try-module RestClient
+%define NoRestClient
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+module QoreVisionExtraction {
+    version = "1.0.0";
+    desc = "user module providing multimodal LLM vision extraction for "
+        "image description, table extraction, and text extraction from images";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreVisionExtraction Module
+
+    @tableofcontents
+
+    @section qorevisionextractionintro QoreVisionExtraction Module Introduction
+
+    The %QoreVisionExtraction module provides multimodal LLM calls for
+    extracting information from images.  It sends images as base64-encoded
+    content blocks to vision-capable LLMs (OpenAI GPT-4o, Anthropic Claude)
+    and returns extracted text, descriptions, or markdown tables.
+
+    @par Example: Describe an image
+    @code{.py}
+%requires QoreVisionExtraction
+
+VisionLlmClient client(<VisionLlmConfig>{
+    "mode": "openai",
+    "url": "https://api.openai.com",
+    "model": "gpt-4o",
+    "api_key": ENV.OPENAI_API_KEY,
+});
+binary img = ReadOnlyFile::readBinaryFile("chart.png");
+hash<VisionExtractionResult> result = client.describeImage(img, "image/png");
+printf("Description: %s\n", result.text);
+    @endcode
+
+    @section qorevisionextractionrelnotes QoreVisionExtraction Module Release Notes
+
+    @subsection qorevisionextraction_1_0 QoreVisionExtraction Module Version 1.0
+    - Initial release with @ref QoreVisionExtraction::VisionLlmClient "VisionLlmClient"
+      supporting OpenAI and Anthropic multimodal APIs
+*/

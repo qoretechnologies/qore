@@ -88,6 +88,8 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         Children."semantic-chunk-text" = "QoreSemanticChunkProcessor";
         Children."guardrail-filter" = "QoreGuardrailFilterProcessor";
         Children."guardrail-transform" = "QoreGuardrailTransformProcessor";
+        Children."ocr" = "QoreOcrProcessor";
+        Children."vision-extraction" = "QoreVisionExtractionProcessor";
     }
 
     #! Returns the name of this data provider
@@ -195,6 +197,10 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreGuardrailFilterProcessor();
             case "guardrail-transform":
                 return new QoreGuardrailTransformProcessor();
+            case "ocr":
+                return new QoreOcrProcessor();
+            case "vision-extraction":
+                return new QoreVisionExtractionProcessor();
         }
     }
 }

@@ -34,6 +34,8 @@
 %requires QoreTokenizerUtils
 %requires QoreStructuredExtraction
 %requires QoreGuardrails
+%requires QoreOcrUtils
+%requires QoreVisionExtraction
 
 module DataProviderML {
     version = "1.0";
@@ -1421,6 +1423,77 @@ module DataProviderML {
                 QoreGuardrailTransformProcessor::ConstructorOptions{"text_field", "rules"}, {
                     "preselected": True,
                     "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register ocr action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/ocr",
+            "action": "ocr",
+            "display_name": "Extract Text from Images with OCR",
+            "short_desc": "Converts images of documents into searchable text using Tesseract",
+            "desc": "Runs OCR (Optical Character Recognition) on an image field to convert "
+                "scanned documents, photos, or screenshots into machine-readable text.\n\n"
+                "Each record is enriched with:\n"
+                "- `ocr_text` — the extracted text\n"
+                "- `ocr_confidence` — OCR confidence score (0.0 to 1.0)\n\n"
+                "Supports native Tesseract (local) or HTTP OCR endpoints.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreOcrProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreOcrProcessor::ConstructorOptions{"image_field", "ocr_mode"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreOcrProcessor::ConstructorOptions{
+                    "language", "tessdata_path", "http_url",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register vision-extraction action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/vision-extraction",
+            "action": "vision-extraction",
+            "display_name": "Analyze Images with Vision AI",
+            "short_desc": "Uses a vision LLM to describe images, extract tables, or read text",
+            "desc": "Sends images to a vision-capable LLM (GPT-4o, Claude) for analysis. "
+                "Useful when OCR alone cannot handle complex layouts, charts, diagrams, "
+                "or visual content that requires understanding.\n\n"
+                "Extraction types:\n"
+                "- `describe` — detailed image description\n"
+                "- `extract_table` — tables as markdown\n"
+                "- `extract_text` — all visible text preserving layout\n\n"
+                "Each record is enriched with:\n"
+                "- `vision_text` — the extracted content\n"
+                "- `vision_format` — output format used",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreVisionExtractionProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreVisionExtractionProcessor::ConstructorOptions{
+                    "image_field", "extraction_type", "vision_mode",
+                    "vision_url", "vision_model",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreVisionExtractionProcessor::ConstructorOptions{
+                    "mime_type_field", "vision_api_key",
+                }, {
                     "loc": "constructor",
                 }
             ),
