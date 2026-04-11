@@ -77,6 +77,11 @@ public class OutputFormatEnforcer inherits AbstractGuardrailRule {
         return "output_format";
     }
 
+    #! Output format enforcement is an output-side concern by default
+    string getDirection() {
+        return direction_override ?? GD_OUTPUT;
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
         list<hash<GuardrailViolation>> violations = ();

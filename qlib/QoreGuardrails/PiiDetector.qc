@@ -199,11 +199,6 @@ public class PiiDetector inherits AbstractGuardrailRule {
     private string regex_escape(string s) {
         return regex_subst(s, "([\\\\\\[\\](){}.*+?^$|])", "\\\\$1", RE_Global);
     }
-
-    #! Calculates elapsed milliseconds since start
-    private int getElapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000;
-    }
 }
 
 } # namespace QoreGuardrails

@@ -73,6 +73,11 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         return "topic_restriction";
     }
 
+    #! Topic restriction is an input-side concern by default
+    string getDirection() {
+        return direction_override ?? GD_INPUT;
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 
@@ -82,7 +87,13 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         }
 %endif
 
-        # Without LLM, pass (cannot classify topics without one)
+        # Without LLM, cannot classify topics
+        if (getFailClosed()) {
+            hash<GuardrailResult> result = makeFailResult(
+                "topic classification unavailable without LLM (fail-closed)");
+            result.duration_ms = getElapsedMs(start);
+            return result;
+        }
         hash<GuardrailResult> result = makePassResult();
         result.duration_ms = getElapsedMs(start);
         return result;
@@ -130,6 +141,13 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
                 return result;
             }
         } catch (hash<ExceptionInfo> ex) {
+            if (getFailClosed()) {
+                hash<GuardrailResult> result = makeFailResult(
+                    sprintf("topic classification unavailable (fail-closed): %s",
+                        ex.desc));
+                result.duration_ms = getElapsedMs(start);
+                return result;
+            }
             # LLM failure — pass through (fail open)
         }
 
@@ -138,11 +156,6 @@ public class TopicRestrictionRule inherits AbstractGuardrailRule {
         return result;
     }
 %endif
-
-    #! Calculates elapsed milliseconds since start
-    private int getElapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000;
-    }
 }
 
 } # namespace QoreGuardrails

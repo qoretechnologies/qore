@@ -329,10 +329,11 @@ public class QoreGuardrailsTest inherits QUnit::Test {
                 "type": "output_format",
                 "severity": GS_HIGH,
                 "params": {"max_length": 5},
+                "direction": "both",
             },
         ), {"evaluate_all": True});
 
-        # With evaluate_all, both rules should be evaluated
+        # With evaluate_all + direction override, both rules should be evaluated
         hash<GuardrailResult> r = engine.evaluateInput(
             "My email is john@example.com");
         assertFalse(r.passed);
@@ -351,6 +352,7 @@ public class QoreGuardrailsTest inherits QUnit::Test {
                 "type": "output_format",
                 "severity": GS_HIGH,
                 "params": {"max_length": 1000},
+                "direction": "both",
             },
         ));
 
@@ -374,10 +376,11 @@ public class QoreGuardrailsTest inherits QUnit::Test {
                 "type": "output_format",
                 "severity": GS_HIGH,
                 "params": {"max_length": 1000},
+                "direction": "both",
             },
         ));
 
-        # Disabled PII rule should be skipped
+        # Disabled PII rule should be skipped (1 rule remaining)
         assertEq(1, engine.getRuleCount());
         hash<GuardrailResult> r = engine.evaluateInput("test@example.com");
         assertTrue(r.passed);
@@ -404,6 +407,7 @@ public class QoreGuardrailsTest inherits QUnit::Test {
                 "type": "output_format",
                 "severity": GS_HIGH,
                 "params": {"max_length": 1000},
+                "direction": "both",
             },
         ));
 

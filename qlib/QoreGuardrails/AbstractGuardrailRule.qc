@@ -29,6 +29,11 @@ public const GS_WARNING = "warning";
 public const GS_HIGH = "high";
 public const GS_CRITICAL = "critical";
 
+#! Rule direction — when the rule should be evaluated
+public const GD_INPUT = "input";
+public const GD_OUTPUT = "output";
+public const GD_BOTH = "both";
+
 #! A single guardrail violation
 public hashdecl GuardrailViolation {
     #! Rule name that triggered this violation
@@ -59,7 +64,8 @@ public hashdecl GuardrailResult {
 
 #! Configuration for a single guardrail rule
 public hashdecl GuardrailRuleConfig {
-    #! Rule type: "pii", "prompt_injection", "topic_restriction", "output_format"
+    #! Rule type: "pii", "prompt_injection", "topic_restriction", "output_format",
+    #! "toxicity", "hallucination"
     string type;
     #! Whether this rule is enabled
     bool enabled = True;
@@ -67,10 +73,26 @@ public hashdecl GuardrailRuleConfig {
     string severity = GS_HIGH;
     #! Rule-specific parameters
     *hash<auto> params;
+    #! When to evaluate: "input", "output", or "both"; if not set, uses the
+    #! rule's default (e.g., prompt_injection defaults to "input")
+    *string direction;
+    #! If True, LLM/ONNX errors cause the rule to FAIL instead of pass;
+    #! use this for high-security deployments where silent pass-through is
+    #! not acceptable
+    *bool fail_closed;
 }
 
 #! Abstract base class for guardrail rules
-/** Subclasses implement specific detection logic (pattern-based, LLM-based, etc.)
+/** Subclasses implement specific detection logic (pattern-based, LLM-based,
+    ONNX-based, etc.).
+
+    Each rule declares a default direction (input, output, or both) which
+    controls whether it runs during \c evaluateInput() or \c evaluateOutput().
+    The direction can be overridden per-rule via \c GuardrailRuleConfig.direction.
+
+    Rules that depend on external services (LLM, ONNX) can be configured to
+    fail-closed — blocking content when the service is unavailable instead of
+    silently passing.
 
     @since QoreGuardrails 1.0
 */
@@ -78,6 +100,10 @@ public class AbstractGuardrailRule {
     private {
         #! The severity level for violations from this rule
         string severity;
+        #! Direction override from config (NOTHING = use class default)
+        *string direction_override;
+        #! Whether to fail when external service is unavailable
+        bool fail_closed = False;
     }
 
     #! Creates the rule with the given severity
@@ -90,14 +116,41 @@ public class AbstractGuardrailRule {
 
     #! Evaluates the rule against the given text
     /** @param text the text to evaluate
-        @param context optional context (e.g., allowed topics, RAG sources)
+        @param ctx optional context (e.g., allowed topics, RAG sources)
         @return a @ref GuardrailResult hash
     */
     abstract hash<GuardrailResult> evaluate(string text, *hash<auto> ctx);
 
+    #! Returns the rule's effective direction
+    /** Returns the config override if set, otherwise the class default.
+        Subclasses override this to set their natural default.
+
+        @return "input", "output", or "both"
+    */
+    string getDirection() {
+        return direction_override ?? GD_BOTH;
+    }
+
+    #! Sets the direction override from config
+    /** @param direction "input", "output", "both", or NOTHING for class default
+    */
+    setDirection(*string direction) {
+        direction_override = direction;
+    }
+
     #! Returns the configured severity
     string getSeverity() {
         return severity;
+    }
+
+    #! Sets whether this rule fails when external services are unavailable
+    setFailClosed(bool val) {
+        fail_closed = val;
+    }
+
+    #! Returns whether this rule fails when external services are unavailable
+    bool getFailClosed() {
+        return fail_closed;
     }
 
     #! Creates a passing result
@@ -128,6 +181,11 @@ public class AbstractGuardrailRule {
             "rules_evaluated": 1,
             "duration_ms": 0,
         };
+    }
+
+    #! Calculates elapsed milliseconds since start
+    private int getElapsedMs(date start) {
+        return (now_us() - start).durationMicroseconds() / 1000;
     }
 }
 

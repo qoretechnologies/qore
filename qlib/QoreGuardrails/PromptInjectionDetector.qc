@@ -91,6 +91,11 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         return "prompt_injection";
     }
 
+    #! Prompt injection is an input-side concern by default
+    string getDirection() {
+        return direction_override ?? GD_INPUT;
+    }
+
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 
@@ -162,6 +167,16 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
                 return result;
             }
         } catch (hash<ExceptionInfo> ex) {
+            if (getFailClosed()) {
+                hash<GuardrailResult> result = makeFailResult(
+                    sprintf("LLM injection classification unavailable (fail-closed): %s",
+                        ex.desc),
+                    NOTHING,
+                    {"detection_method": "fail_closed", "error": ex.desc},
+                );
+                result.duration_ms = getElapsedMs(start);
+                return result;
+            }
             # LLM failure is not a guardrail failure — fall through to pass
         }
 
@@ -170,11 +185,6 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
         return result;
     }
 %endif
-
-    #! Calculates elapsed milliseconds since start
-    private int getElapsedMs(date start) {
-        return (now_us() - start).durationMicroseconds() / 1000;
-    }
 }
 
 } # namespace QoreGuardrails

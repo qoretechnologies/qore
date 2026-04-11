@@ -28,19 +28,25 @@ public namespace QoreGuardrails {
 /** Evaluates rules in order, collecting violations. By default, short-circuits
     on the first critical violation. Set \c evaluate_all to override.
 
+    Rules are filtered by direction: \c evaluateInput() only runs rules with
+    direction "input" or "both", and \c evaluateOutput() only runs rules with
+    direction "output" or "both".
+
     @par Example: Build and run a guardrail chain
     @code{.py}
 GuardrailEngine engine((
     <GuardrailRuleConfig>{"type": "pii", "severity": "critical",
         "params": {"action": "block"}},
+    <GuardrailRuleConfig>{"type": "prompt_injection", "severity": "critical"},
     <GuardrailRuleConfig>{"type": "output_format", "severity": "high",
         "params": {"max_length": 5000}},
 ));
 
-hash<GuardrailResult> result = engine.evaluateInput("user message...");
-if (!result.passed) {
-    # block the request
-}
+# prompt_injection runs, output_format is skipped (output-only rule)
+hash<GuardrailResult> input_result = engine.evaluateInput("user message...");
+
+# output_format runs, prompt_injection is skipped (input-only rule)
+hash<GuardrailResult> output_result = engine.evaluateOutput("ai response...");
     @endcode
 
     @since QoreGuardrails 1.0
@@ -58,6 +64,8 @@ public class GuardrailEngine {
         @param global_options optional global settings:
             - \c evaluate_all (bool): if True, evaluate all rules even after
               critical violations (default False)
+            - \c fail_closed (bool): global default for fail-closed mode
+              (can be overridden per-rule)
             - \c llm_config (hash): LlmBackendConfig for LLM-based rules
 
         @throw GUARDRAIL-CONFIG-ERROR if a rule type is unknown
@@ -71,26 +79,37 @@ public class GuardrailEngine {
             if (!config.enabled) {
                 continue;
             }
-            push rules, createRule(config, global_options);
+            AbstractGuardrailRule rule = createRule(config, global_options);
+
+            # Apply direction override from config
+            if (config.direction.val()) {
+                rule.setDirection(config.direction);
+            }
+
+            # Apply fail-closed setting
+            bool fc = config.fail_closed ?? global_options.fail_closed ?? False;
+            rule.setFailClosed(fc);
+
+            push rules, rule;
         }
     }
 
-    #! Evaluates input text against all configured rules
+    #! Evaluates input text against rules with direction "input" or "both"
     /** @param text the input text to check
-        @param context optional context for rule evaluation
+        @param ctx optional context for rule evaluation
         @return a @ref GuardrailResult hash
     */
     hash<GuardrailResult> evaluateInput(string text, *hash<auto> ctx) {
-        return evaluateRules(text, ctx);
+        return evaluateRules(text, ctx, GD_INPUT);
     }
 
-    #! Evaluates output text against all configured rules
+    #! Evaluates output text against rules with direction "output" or "both"
     /** @param text the output text to check
-        @param context optional context (e.g., RAG sources for hallucination check)
+        @param ctx optional context (e.g., RAG sources for hallucination check)
         @return a @ref GuardrailResult hash
     */
     hash<GuardrailResult> evaluateOutput(string text, *hash<auto> ctx) {
-        return evaluateRules(text, ctx);
+        return evaluateRules(text, ctx, GD_OUTPUT);
     }
 
     #! Returns the number of configured rules
@@ -98,8 +117,9 @@ public class GuardrailEngine {
         return rules.size();
     }
 
-    #! Evaluates all rules against the text
-    private hash<GuardrailResult> evaluateRules(string text, *hash<auto> ctx) {
+    #! Evaluates rules matching the given phase direction
+    private hash<GuardrailResult> evaluateRules(string text, *hash<auto> ctx,
+            string phase) {
         date start = now_us();
         list<hash<GuardrailViolation>> all_violations = ();
         *string current_text = NOTHING;
@@ -107,7 +127,13 @@ public class GuardrailEngine {
         bool passed = True;
 
         foreach AbstractGuardrailRule rule in (rules) {
-            # Use modified text from previous rule if available (e.g., after redaction)
+            # Skip rules that don't apply to this phase
+            string dir = rule.getDirection();
+            if (dir != GD_BOTH && dir != phase) {
+                continue;
+            }
+
+            # Use modified text from previous rule if available
             string eval_text = current_text ?? text;
             hash<GuardrailResult> result = rule.evaluate(eval_text, ctx);
             ++evaluated;
@@ -162,10 +188,17 @@ public class GuardrailEngine {
                     global_options.llm_config);
             case "output_format":
                 return new OutputFormatEnforcer(config.severity, config.params);
+            case "toxicity":
+                return new ToxicityDetector(config.severity, config.params,
+                    global_options.llm_config);
+            case "hallucination":
+                return new HallucinationDetector(config.severity, config.params,
+                    global_options.llm_config);
         }
         throw "GUARDRAIL-CONFIG-ERROR",
             sprintf("unknown rule type %y; expected: pii, prompt_injection, "
-                "topic_restriction, output_format", config.type);
+                "topic_restriction, output_format, toxicity, hallucination",
+                config.type);
     }
 }
 
