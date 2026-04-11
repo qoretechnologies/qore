@@ -2063,6 +2063,7 @@ qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;Rest
 qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator;RestClientIo")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
+qore_user_module("qlib/OpenApi3DataProvider" "OpenApi3;RestClient;RestClientIo;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
 qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")

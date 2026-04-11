@@ -1,0 +1,671 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+# try importing JSON and YAML modules
+%try-module json
+%define NoJson
+%endtry
+%try-module yaml
+%define NoYaml
+%endtry
+
+%ifdef NoYaml
+# Stub function when yaml module is not available
+auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required for this test"; }
+%endif
+
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/OpenApi3.qm
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/OpenApi3DataProvider
+
+%exec-class OpenApi3DataProviderTest
+
+class PetStoreHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> pets = (
+            {"id": 1, "name": "rex", "tag": "dog"},
+            {"id": 2, "name": "whiskers", "tag": "cat"},
+        );
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        string method = hdr.method;
+        string path = hdr.path;
+        # collection endpoint: /pets (no trailing id)
+        if (path =~ /(^|\/)pets\/?$/) {
+            if (method == "GET") {
+                return makeResponse(200, make_json(pets), {"Content-Type": MimeTypeJson});
+            }
+            if (method == "POST") {
+                hash<auto> req_body = parse_json(body.toString());
+                hash<auto> new_pet = req_body + {"id": 42};
+                return makeResponse(200, make_json(new_pet), {"Content-Type": MimeTypeJson});
+            }
+        }
+        # item endpoint: /pets/{id}
+        if (path =~ /(^|\/)pets\/[0-9]+\/?$/) {
+            if (method == "GET") {
+                return makeResponse(200, make_json(pets[0]), {"Content-Type": MimeTypeJson});
+            }
+            if (method == "DELETE") {
+                return makeResponse(204, "", {"Content-Type": MimeTypeText});
+            }
+        }
+        # Return JSON 404 so response validation still succeeds against the
+        # OpenAPI Error schema
+        return makeResponse(404, make_json({"code": 404, "message": "not found: " + path}),
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
+public class OpenApi3DataProviderTest inherits QUnit::Test {
+    public {
+        const PetStoreSpec = get_script_dir() + "/../OpenApi3/PetStore.openapi3.yaml";
+    }
+
+    private {
+        HttpServer m_http;
+        int m_port;
+    }
+
+    constructor() : Test("OpenApi3DataProviderTest", "1.0") {
+        addTestCase("phase 1 smoke test", \phase1SmokeTest());
+        addTestCase("phase 2 path tree test", \phase2PathTreeTest());
+        addTestCase("phase 3 request type test", \phase3RequestTypeTest());
+        addTestCase("phase 4 response type test", \phase4ResponseTypeTest());
+        addTestCase("phase 5 schema composition test", \phase5SchemaCompositionTest());
+        addTestCase("phase 6 request execution test", \phase6RequestExecutionTest());
+        addTestCase("phase 7 nullable types test", \phase7NullableTypesTest());
+        addTestCase("phase 7 multipart form data test", \phase7MultipartFormDataTest());
+        addTestCase("phase 7 multi content type test", \phase7MultiContentTypeTest());
+        addTestCase("phase 7 factory and serialization test", \phase7FactoryAndSerializationTest());
+
+        Logger logger("test", LoggerLevel::getLevelInfo());
+        if (m_options.verbose > 2) {
+            logger.addAppender(new StdoutAppender());
+        }
+        hash<HttpServerOptionInfo> http_opts = <HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": True,
+        };
+        m_http = new HttpServer(http_opts);
+        # one handler covers both /pets and /pets/{id} — PetStoreHandler dispatches
+        # by path regex
+        PetStoreHandler handler();
+        m_http.setHandler("petstore", "/pets", MimeTypeJson, handler);
+        m_http.setDefaultHandler("petstore-default", handler);
+        m_port = m_http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
+        set_return_value(main());
+    }
+
+    destructor() {
+        if (m_http) {
+            m_http.stop();
+        }
+    }
+
+    checkModules() {
+%ifdef NoJson
+        testSkip("no json module");
+%endif
+%ifdef NoYaml
+        testSkip("no yaml module");
+%endif
+    }
+
+    phase1SmokeTest() {
+        checkModules();
+
+        # Factory must be registered with the DataProvider registry
+        AbstractDataProviderFactory factory = DataProvider::getFactoryEx("openapi3");
+        assertEq("openapi3", factory.getInfo().name);
+        assertEq(True, factory.getInfo().api_management);
+        assertEq(("rest",), factory.getInfo().api_profiles);
+
+        # Minimal inline OpenAPI 3 schema; enough to verify that the data
+        # provider constructs, loads the schema, and reports the right name
+        hash<auto> schema = {
+            "openapi": "3.0.0",
+            "info": {
+                "title": "test",
+                "version": "1.0",
+            },
+            "servers": (
+                {"url": "https://example.com/v1"},
+            ),
+            "paths": {
+                "/ping": {
+                    "get": {
+                        "operationId": "ping",
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"type": "string"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+
+        TmpFile file("openapi3-data-provider-test-", ".yaml");
+        file.file.write(make_yaml(schema));
+        OpenApi3DataProvider prov({
+            "schema": file.path,
+        });
+        assertEq("test", prov.getName());
+        assertEq("openapi3", prov.getInfo().schema_type);
+        assertEq(True, prov.getInfo().supports_children);
+        assertEq("OpenApi3DataProvider", prov.getInfo().type);
+        assertTrue(prov.getDesc() =~ /OpenAPI 3 data provider/);
+
+        # Constructing directly from the schema object should also work
+        OpenApi3Schema schema_obj = OpenApi3Loader::fromString(make_yaml(schema));
+        OpenApi3DataProvider prov2(schema_obj);
+        assertEq("test", prov2.getName());
+    }
+
+    phase2PathTreeTest() {
+        checkModules();
+
+        OpenApi3DataProvider prov({"schema": PetStoreSpec});
+        assertEq("Swagger Petstore", prov.getName());
+
+        # Root should expose a single "pets" child (from /pets and /pets/{id})
+        *list<string> root_kids = prov.getChildProviderNames();
+        assertEq(("pets",), root_kids);
+
+        # pets node: has GET and POST operations from /pets, plus a wildcard child for /pets/{id}
+        AbstractDataProvider pets = prov.getChildProviderEx("pets");
+        *list<string> pets_kids = pets.getChildProviderNames();
+        assertTrue(inlist("GET", pets_kids), "GET /pets should be enumerated");
+        assertTrue(inlist("POST", pets_kids), "POST /pets should be enumerated");
+        assertTrue(inlist("*", pets_kids), "wildcard child for /pets/{id} should be enumerated");
+
+        # GET /pets resolves to an OpenApi3RequestDataProvider
+        AbstractDataProvider get_pets = pets.getChildProviderEx("GET");
+        assertEq("GET", get_pets.getName());
+        assertEq("OpenApi3RequestDataProvider", get_pets.getInfo().type);
+
+        # wildcard /pets/{id} has GET and DELETE operations
+        AbstractDataProvider pet_by_id = pets.getChildProviderEx("*");
+        *list<string> pet_by_id_kids = pet_by_id.getChildProviderNames();
+        assertTrue(inlist("GET", pet_by_id_kids), "GET /pets/{id} should be enumerated");
+        assertTrue(inlist("DELETE", pet_by_id_kids), "DELETE /pets/{id} should be enumerated");
+
+        # Traversal via the path helper should also work end-to-end
+        AbstractDataProvider get_by_id = prov.getChildProviderPath("pets/*/GET");
+        assertEq("GET", get_by_id.getName());
+
+        # POST /pets operation — verify we reached the right op
+        AbstractDataProvider post_pets = pets.getChildProviderEx("POST");
+        assertEq("POST", post_pets.getName());
+    }
+
+    phase3RequestTypeTest() {
+        checkModules();
+
+        OpenApi3DataProvider prov({"schema": PetStoreSpec});
+
+        # GET /pets exposes two optional query parameters: tags (array<string>) and limit (int)
+        AbstractDataProvider get_pets = prov.getChildProviderPath("pets/GET");
+        *AbstractDataProviderType req_type = get_pets.getRequestType();
+        assertEq(True, exists req_type, "GET /pets must expose a request type");
+        *AbstractDataField query_field = req_type.getField("query");
+        assertEq(True, exists query_field, "GET /pets request type must have a `query` field");
+        AbstractDataProviderType query_type = query_field.getType();
+        assertEq(NT_HASH, query_type.getBaseTypeCode());
+        assertEq(True, exists query_type.getField("tags"));
+        assertEq(True, exists query_type.getField("limit"));
+
+        # POST /pets has a requestBody with a NewPet schema → synthetic body parameter
+        # becomes the `body` field on the request type
+        AbstractDataProvider post_pets = prov.getChildProviderPath("pets/POST");
+        *AbstractDataProviderType post_req = post_pets.getRequestType();
+        assertEq(True, exists post_req, "POST /pets must expose a request type");
+        *AbstractDataField body_field = post_req.getField("body");
+        assertEq(True, exists body_field, "POST /pets must expose a `body` field from its requestBody");
+        AbstractDataProviderType body_type = body_field.getType();
+        assertEq(NT_HASH, body_type.getBaseTypeCode());
+        # NewPet.required = ["name"]; Pet merges id via allOf (Phase 5) — for now only NewPet fields
+        assertEq(True, exists body_type.getField("name"), "NewPet.name must be on the body");
+        assertEq(True, exists body_type.getField("tag"), "NewPet.tag must be on the body");
+
+        # GET /pets/{id}: path parameters are NOT exposed on the request type; they are
+        # supplied at request time via the `path_vars` request option (same design as
+        # SwaggerDataProvider). Verify that the request type constructs without error
+        # and that the op carries the path parameter on `op.parameters`.
+        AbstractDataProvider get_by_id = prov.getChildProviderPath("pets/*/GET");
+        *AbstractDataProviderType id_req = get_by_id.getRequestType();
+        assertEq(True, exists id_req, "GET /pets/{id} must expose a request type");
+    }
+
+    phase4ResponseTypeTest() {
+        checkModules();
+
+        OpenApi3DataProvider prov({"schema": PetStoreSpec});
+
+        # GET /pets: 200 response is a list<Pet> → list body, plus a default error response
+        AbstractDataProvider get_pets = prov.getChildProviderPath("pets/GET");
+        *AbstractDataProviderType resp = get_pets.getResponseType();
+        assertEq(True, exists resp, "GET /pets must expose a response type");
+        *AbstractDataField body = resp.getField("body");
+        assertEq(True, exists body, "GET /pets success response must have a body field");
+        # The 200 body is `array of Pet` → list type
+        assertEq(NT_LIST, body.getType().getBaseTypeCode());
+
+        # getErrorResponseTypes() should expose the "default" response; PetStore uses
+        # Error schema with code + message
+        *hash<string, AbstractDataProviderType> errs = get_pets.getErrorResponseTypes();
+        assertEq(True, exists errs, "GET /pets must expose error response types");
+        assertEq(True, exists errs."default", "PetStore default response must be exposed");
+        AbstractDataProviderType err_type = get_pets.getErrorResponseType("default");
+        *AbstractDataField err_body = err_type.getField("body");
+        assertEq(True, exists err_body);
+        # Error has code + message fields
+        AbstractDataProviderType err_body_type = err_body.getType();
+        assertEq(NT_HASH, err_body_type.getBaseTypeCode());
+        assertEq(True, exists err_body_type.getField("code"));
+        assertEq(True, exists err_body_type.getField("message"));
+
+        # Unknown error code should throw
+        assertThrows("UNKNOWN-ERROR-RESPONSE", \get_pets.getErrorResponseType(), "999");
+
+        # POST /pets success response: Pet schema (allOf of NewPet + {id}).
+        # Phase 5 allOf merge should produce a hash type with name, tag (from
+        # NewPet) and id (from the local allOf fragment).
+        AbstractDataProvider post_pets = prov.getChildProviderPath("pets/POST");
+        *AbstractDataProviderType post_resp = post_pets.getResponseType();
+        assertEq(True, exists post_resp);
+        *AbstractDataField post_body = post_resp.getField("body");
+        assertEq(True, exists post_body);
+        AbstractDataProviderType post_body_type = post_body.getType();
+        assertEq(NT_HASH, post_body_type.getBaseTypeCode(), "Pet allOf merge must yield a hash type");
+        assertEq(True, exists post_body_type.getField("name"), "Pet.name (from NewPet via allOf)");
+        assertEq(True, exists post_body_type.getField("tag"), "Pet.tag (from NewPet via allOf)");
+        assertEq(True, exists post_body_type.getField("id"), "Pet.id (from local allOf fragment)");
+
+        # DELETE /pets/{id}: 204 success response has no body (no schema)
+        AbstractDataProvider del = prov.getChildProviderPath("pets/*/DELETE");
+        *AbstractDataProviderType del_resp = del.getResponseType();
+        assertEq(True, exists del_resp);
+        # 204 has no schema → empty response body (no `body` field)
+        *AbstractDataField del_body = del_resp.getField("body");
+        assertEq(False, exists del_body, "204 response has no body schema");
+
+        # Record type: GET /pets returns list<Pet>; after Phase 5 allOf merge
+        # the element record type should include the merged fields.
+        *hash<string, AbstractDataField> rec = get_pets.getRecordType();
+        assertEq(True, exists rec, "GET /pets has_record must expose a record type");
+        assertTrue(rec.hasKey("name"), "record fields include Pet.name");
+        assertTrue(rec.hasKey("id"), "record fields include Pet.id (merged via allOf)");
+    }
+
+    phase5SchemaCompositionTest() {
+        checkModules();
+
+        # allOf merge: build an inline schema that composes two sub-schemas.
+        # The merged type should expose all fields from all members, plus any
+        # locally declared properties.
+        hash<auto> all_of_schema = {
+            "openapi": "3.0.0",
+            "info": {"title": "allOf-test", "version": "1.0"},
+            "paths": {
+                "/thing": {
+                    "post": {
+                        "operationId": "createThing",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Composite"},
+                                },
+                            },
+                        },
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {"$ref": "#/components/schemas/Composite"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "components": {
+                "schemas": {
+                    "Base": {
+                        "type": "object",
+                        "required": ("id",),
+                        "properties": {
+                            "id": {"type": "integer"},
+                            "name": {"type": "string"},
+                        },
+                    },
+                    "Mixin": {
+                        "type": "object",
+                        "properties": {
+                            "tag": {"type": "string"},
+                        },
+                    },
+                    "Composite": {
+                        "allOf": (
+                            {"$ref": "#/components/schemas/Base"},
+                            {"$ref": "#/components/schemas/Mixin"},
+                            {
+                                "type": "object",
+                                "required": ("extra",),
+                                "properties": {
+                                    "extra": {"type": "boolean"},
+                                },
+                            },
+                        ),
+                    },
+                },
+            },
+        };
+        TmpFile all_file("openapi3-allof-test-", ".yaml");
+        all_file.file.write(make_yaml(all_of_schema));
+        OpenApi3DataProvider all_prov({"schema": all_file.path});
+
+        AbstractDataProvider post_thing = all_prov.getChildProviderPath("thing/POST");
+        AbstractDataProviderType req_type = post_thing.getRequestType();
+        AbstractDataField body_f = req_type.getField("body");
+        AbstractDataProviderType body_t = body_f.getType();
+        assertEq(NT_HASH, body_t.getBaseTypeCode(), "Composite allOf must resolve to a hash type");
+        assertEq(True, exists body_t.getField("id"), "merged field from Base");
+        assertEq(True, exists body_t.getField("name"), "merged field from Base");
+        assertEq(True, exists body_t.getField("tag"), "merged field from Mixin");
+        assertEq(True, exists body_t.getField("extra"), "merged field from inline allOf fragment");
+
+        # oneOf/anyOf: OpenApi3 already handles these at validation time via
+        # OpenApi3HashDataType's checkSchemaComposition(); at the data provider
+        # type level they surface as hash types with relaxed additionalProperties.
+        # Verify that a schema using oneOf does not break the data provider and
+        # that the request type still constructs without throwing.
+        hash<auto> one_of_schema = {
+            "openapi": "3.0.0",
+            "info": {"title": "oneOf-test", "version": "1.0"},
+            "paths": {
+                "/shape": {
+                    "post": {
+                        "operationId": "createShape",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/Shape"},
+                                },
+                            },
+                        },
+                        "responses": {
+                            "200": {"description": "ok"},
+                        },
+                    },
+                },
+            },
+            "components": {
+                "schemas": {
+                    "Circle": {
+                        "type": "object",
+                        "required": ("radius",),
+                        "properties": {"radius": {"type": "number"}},
+                    },
+                    "Square": {
+                        "type": "object",
+                        "required": ("side",),
+                        "properties": {"side": {"type": "number"}},
+                    },
+                    "Shape": {
+                        "oneOf": (
+                            {"$ref": "#/components/schemas/Circle"},
+                            {"$ref": "#/components/schemas/Square"},
+                        ),
+                    },
+                },
+            },
+        };
+        TmpFile one_file("openapi3-oneof-test-", ".yaml");
+        one_file.file.write(make_yaml(one_of_schema));
+        OpenApi3DataProvider one_prov({"schema": one_file.path});
+        AbstractDataProvider post_shape = one_prov.getChildProviderPath("shape/POST");
+        AbstractDataProviderType shape_req = post_shape.getRequestType();
+        AbstractDataField shape_body = shape_req.getField("body");
+        assertEq(True, exists shape_body, "oneOf schemas must still produce a body field");
+    }
+
+    phase6RequestExecutionTest() {
+        checkModules();
+
+        string url = sprintf("http://127.0.0.1:%d", m_port);
+        OpenApi3DataProvider prov({
+            "schema": PetStoreSpec,
+            "url": url,
+        });
+
+        # GET /pets: returns a list of Pet
+        AbstractDataProvider get_pets = prov.getChildProviderPath("pets/GET");
+        *hash<auto> resp = get_pets.doRequest();
+        assertEq(True, exists resp, "GET /pets must return a response");
+        assertEq(NT_LIST, resp.body.typeCode());
+        assertEq(2, resp.body.size());
+        assertEq("rex", resp.body[0].name);
+        assertEq("whiskers", resp.body[1].name);
+        assertEq(1, resp.body[0].id);
+
+        # POST /pets: round-trip a body and verify the server saw it
+        AbstractDataProvider post_pets = prov.getChildProviderPath("pets/POST");
+        hash<auto> post_resp = post_pets.doRequest({"body": {"name": "fido", "tag": "dog"}});
+        assertEq("fido", post_resp.body.name);
+        assertEq("dog", post_resp.body.tag);
+        assertEq(42, post_resp.body.id, "server injects id=42 on POST");
+
+        # GET /pets/{id}: resolve the wildcard at navigation time by passing the
+        # concrete id through the path; getChildProviderImpl falls through to
+        # path_tree."*" and calls getChildIntern("*", "1"), which builds the
+        # URI path as "/pets/1"
+        AbstractDataProvider get_by_id = prov.getChildProviderPath("pets/1/GET");
+        hash<auto> by_id_resp = get_by_id.doRequest();
+        assertEq(1, by_id_resp.body.id);
+        assertEq("rex", by_id_resp.body.name);
+
+        # Search records — doRequestIntern returns a list, so requestSearchRecords
+        # should iterate via DefaultRecordIterator
+        AbstractDataProviderRecordIterator iter = get_pets.requestSearchRecords(NOTHING, NOTHING);
+        int count = 0;
+        while (iter.next()) {
+            ++count;
+        }
+        assertEq(2, count, "record iterator must walk both pets");
+    }
+
+    phase7NullableTypesTest() {
+        checkModules();
+
+        # OpenAPI 3.0 style: explicit "nullable: true"
+        hash<auto> schema_30 = {
+            "openapi": "3.0.0",
+            "info": {"title": "nullable-3.0", "version": "1.0"},
+            "paths": {
+                "/item": {
+                    "post": {
+                        "operationId": "create",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ("name",),
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "tag": {"type": "string", "nullable": True},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        TmpFile f30("openapi3-nullable30-", ".yaml");
+        f30.file.write(make_yaml(schema_30));
+        OpenApi3DataProvider p30({"schema": f30.path});
+        AbstractDataProvider post30 = p30.getChildProviderPath("item/POST");
+        AbstractDataProviderType body30 = post30.getRequestType().getField("body").getType();
+        AbstractDataField tag30 = body30.getField("tag");
+        assertEq(True, exists tag30, "nullable field should still be present");
+        # nullable fields become *-prefixed types in Qore's data provider type system
+        assertTrue(tag30.getType().getName() =~ /^\*/, "nullable field should be an or-nothing type");
+
+        # OpenAPI 3.1 style: type: ["string", "null"]
+        hash<auto> schema_31 = {
+            "openapi": "3.1.0",
+            "info": {"title": "nullable-3.1", "version": "1.0"},
+            "paths": {
+                "/item": {
+                    "post": {
+                        "operationId": "create",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "required": ("name",),
+                                        "properties": {
+                                            "name": {"type": "string"},
+                                            "tag": {"type": ("string", "null")},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        "responses": {"200": {"description": "ok"}},
+                    },
+                },
+            },
+        };
+        TmpFile f31("openapi3-nullable31-", ".yaml");
+        f31.file.write(make_yaml(schema_31));
+        OpenApi3DataProvider p31({"schema": f31.path});
+        AbstractDataProvider post31 = p31.getChildProviderPath("item/POST");
+        AbstractDataProviderType body31 = post31.getRequestType().getField("body").getType();
+        AbstractDataField tag31 = body31.getField("tag");
+        assertEq(True, exists tag31, "3.1 type-array nullable field should still be present");
+        assertTrue(tag31.getType().getName() =~ /^\*/, "3.1 type-array null should be an or-nothing type");
+    }
+
+    phase7MultipartFormDataTest() {
+        checkModules();
+
+        # Multipart.openapi3.yaml is the OpenAPI 3 equivalent of Swagger's Multipart fixture
+        string multipart_spec = get_script_dir() + "/../OpenApi3/Multipart.openapi3.yaml";
+        if (!is_readable(multipart_spec)) {
+            testSkip("Multipart.openapi3.yaml fixture not available");
+        }
+        OpenApi3DataProvider prov({"schema": multipart_spec});
+        # Assert at least one operation is reachable; detailed form-data assertions
+        # live in the OpenApi3 module's own test
+        assertEq(True, exists prov.getChildProviderNames());
+    }
+
+    phase7MultiContentTypeTest() {
+        checkModules();
+
+        # A response with multiple content types; the data provider picks the
+        # first schema with a schema field (currently application/json)
+        hash<auto> schema = {
+            "openapi": "3.0.0",
+            "info": {"title": "multi-ct", "version": "1.0"},
+            "paths": {
+                "/thing": {
+                    "get": {
+                        "operationId": "get",
+                        "responses": {
+                            "200": {
+                                "description": "ok",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {"id": {"type": "integer"}},
+                                        },
+                                    },
+                                    "application/xml": {
+                                        "schema": {
+                                            "type": "object",
+                                            "properties": {"id": {"type": "integer"}},
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        };
+        TmpFile f("openapi3-multict-", ".yaml");
+        f.file.write(make_yaml(schema));
+        OpenApi3DataProvider prov({"schema": f.path});
+        AbstractDataProvider g = prov.getChildProviderPath("thing/GET");
+        *AbstractDataProviderType resp = g.getResponseType();
+        assertEq(True, exists resp);
+        *AbstractDataField body = resp.getField("body");
+        assertEq(True, exists body, "multi-content-type response must still expose a body");
+        assertEq(NT_HASH, body.getType().getBaseTypeCode());
+    }
+
+    phase7FactoryAndSerializationTest() {
+        checkModules();
+
+        # Factory instantiation via DataProvider API
+        OpenApi3DataProviderFactory factory();
+        hash<DataProviderFactoryInfo> info = factory.getInfo();
+        assertTrue(info.api_management);
+        assertEq(("rest",), info.api_profiles);
+        assertEq("openapi3", info.name);
+
+        # Roundtrip the provider through serialization and re-exercise the
+        # request/response type mapping on the deserialized instance
+        OpenApi3DataProvider prov({"schema": PetStoreSpec});
+        OpenApi3DataProvider prov2 = Serializable::deserialize(prov.serialize());
+        assertEq("Swagger Petstore", prov2.getName());
+        AbstractDataProvider p0 = prov2.getChildProviderPath("pets/GET");
+        AbstractDataProviderType req = p0.getRequestType();
+        assertEq(True, exists req.getField("query"));
+        AbstractDataProviderType resp = p0.getResponseType();
+        assertEq(NT_LIST, resp.getField("body").getType().getBaseTypeCode());
+
+        # Schema-as-object constructor form
+        OpenApi3Schema schema_obj = OpenApi3Loader::fromFile(PetStoreSpec);
+        OpenApi3DataProvider prov3(schema_obj);
+        assertEq("Swagger Petstore", prov3.getName());
+    }
+}

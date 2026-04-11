@@ -1369,6 +1369,17 @@ cargo install tree-sitter-cli@0.26.5
       - new @ref OpenApi3::OpenApi3SchemaTokenizer "OpenApi3SchemaTokenizer" class for parsing \@SCHEMA documentation blocks
       - new @ref OpenApi3::OpenApi3TypeMapper "OpenApi3TypeMapper" class for mapping Qore types to OpenAPI types
       - new \c qore-openapi3-gen CLI tool for generating schemas from source files
+    - @ref openapi3dataproviderintro "OpenApi3DataProvider" module
+      - new module providing a @ref dataproviderintro "data provider" API for OpenAPI 3.0 / 3.1 schemas
+      - introspects OpenAPI 3 schemas to expose REST operations as child data providers
+        (e.g., <tt>pets/POST</tt> resolves to an
+        @ref OpenApi3DataProvider::OpenApi3RequestDataProvider "OpenApi3RequestDataProvider" instance)
+      - transparently supports both @ref RestClient::RestClient "RestClient" (HTTP/1.1 sync) and
+        @ref RestClientIo::RestClientIo "RestClientIo" (multiplexed HTTP/2 + HTTP/3) via the
+        @ref RestClient::AbstractRestClient "AbstractRestClient" interface
+      - request bodies declared via OpenAPI 3 \c requestBody are automatically mapped onto the
+        request type \c body field
+      - response bodies including schemas with multiple content types are supported
     - @ref pdfcorestclientintro "PdfCoRestClient" module
       - new module providing a REST client for <a href="https://pdf.co/">PDF.co</a>'s document processing API
       - supports API key authentication via \c x-api-key header
@@ -1975,6 +1986,7 @@ hash<ExtendedInfo> ext = <ExtendedInfo>{"name": "test", "id": 1, "created": now(
       - <a href="../../modules/PerplexityDataProvider/html/index.html#perplexitydataproviderintro">PerplexityDataProvider</a>
       - <a href="../../modules/PerplexityRestClient/html/index.html#perplexityrestclientintro">PerplexityRestClient</a>
       - <a href="../../modules/OpenApi3/html/index.html#openapi3intro">OpenApi3</a>
+      - <a href="../../modules/OpenApi3DataProvider/html/index.html#openapi3dataproviderintro">OpenApi3DataProvider</a>
       - <a href="../../modules/Pop3ClientDataProvider/html/index.html#pop3clientdataproviderintro">Pop3ClientDataProvider</a>
       - <a href="../../modules/ServerSentEventClient/html/index.html#serversenteventclientintro">ServerSentEventClient</a>
       - <a href="../../modules/ServerSentEventHandler/html/index.html#serversenteventhandlerintro">ServerSentEventHandler</a>

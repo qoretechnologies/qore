@@ -1,0 +1,93 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! Qore OpenApi3DataProvider module definition
+
+/*  OpenApi3DataProvider.qm Copyright 2019 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+# assume local scope for variables, do not use "$" signs
+%modern
+# require type definitions everywhere
+# strict argument handling
+# enable all warnings
+# allow the use of the weak reference assignment operator: ':='
+%allow-weak-references
+
+%requires(reexport) DataProvider
+%requires(reexport) OpenApi3
+%requires(reexport) RestClientIo
+
+module OpenApi3DataProvider {
+    version = "1.0";
+    desc = "user module providing a data provider API for OpenAPI 3.0 / 3.1 schemas";
+    author = "David Nichols <david@qore.org>";
+    url = "http://qore.org";
+    license = "MIT";
+    init = sub () {
+        # register the data provider factory
+        DataProvider::registerFactory(new OpenApi3DataProviderFactory());
+    };
+}
+
+/** @mainpage OpenApi3DataProvider Module
+
+    @tableofcontents
+
+    @section openapi3dataproviderintro Introduction to the OpenApi3DataProvider Module
+
+    The %OpenApi3DataProvider module provides a @ref dataproviderintro "data provider" API for OpenAPI 3.0 and 3.1
+    REST APIs. The @ref OpenApi3DataProvider::OpenApi3DataProvider "OpenApi3DataProvider" class allows for
+    introspecting an OpenAPI 3 schema, while the
+    @ref OpenApi3DataProvider::OpenApi3RequestDataProvider "OpenApi3RequestDataProvider" class supports the
+    @ref dataproviderintro "data provider" request-reply API for communication with REST servers.
+
+    OpenAPI 3 schemas can be introspected with the following format:
+    - REST operation path: <tt><i>uri_path</i>/<i>HTTP_method</i></tt>
+      - ex: <tt><b>pets/POST</b></tt>
+      - results in a
+        @ref OpenApi3DataProvider::OpenApi3RequestDataProvider "OpenApi3RequestDataProvider" object where the
+        request and response messages can be queried and requests can be sent to the server
+
+    This module transparently supports both @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x
+    transport) and @ref RestClientIo::RestClientIo "RestClientIo" (async transport supporting HTTP/1.x, HTTP/2,
+    and HTTP/3, with connection multiplexing on HTTP/2 and HTTP/3) via the
+    @ref RestClient::AbstractRestClient "AbstractRestClient" interface.
+    @ref RestClientIo::RestClientIo "RestClientIo" is the recommended transport for new code as it is the async,
+    event-loop-based evolution of @ref RestClient::RestClient "RestClient" and is the only transport that
+    supports HTTP/2 and HTTP/3.
+
+    The following classes are provided by this module:
+    - @ref OpenApi3DataProvider::OpenApi3DataProvider "OpenApi3DataProvider"
+    - @ref OpenApi3DataProvider::OpenApi3DataProviderBase "OpenApi3DataProviderBase"
+    - @ref OpenApi3DataProvider::OpenApi3DataProviderCommon "OpenApi3DataProviderCommon"
+    - @ref OpenApi3DataProvider::OpenApi3DataProviderFactory "OpenApi3DataProviderFactory"
+    - @ref OpenApi3DataProvider::OpenApi3RequestDataProvider "OpenApi3RequestDataProvider"
+
+    @section openapi3dataprovider_relnotes Release Notes
+
+    @subsection openapi3dataprovider_v1_0 OpenApi3DataProvider v1.0
+    - initial release of the module
+*/
+
+#! contains all public definitions in the OpenApi3DataProvider module
+public namespace OpenApi3DataProvider {
+}
