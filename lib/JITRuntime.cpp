@@ -5175,6 +5175,67 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
+    // Multi-step hash/list remove/delete: navigate to the PARENT container,
+    // then drop the final key/element.  LValueHelper::remove() only clears
+    // the value without removing the hash key; we need container-level
+    // removal.  Mirrors the IR-interpreter path at QoreIRInterpreter.cpp
+    // (case LValuePathUnary).
+    //
+    // Object members and any non-container parent state fall through to the
+    // legacy single-step navigate + lvh.remove() route below.
+    bool handled_multistep_remove = false;
+    if (is_remove && path_copy.size() >= 2) {
+        const LVPathStep& last_step = path_copy.back();
+        bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
+                || last_step.kind == LVPathStepKind::HashKey);
+        bool last_is_list = (last_step.kind == LVPathStepKind::ListIndex);
+        if (last_is_hash || last_is_list) {
+            LValueHelper lvh(xsink);
+            // for_remove=true on the parent walk: don't vivify intermediate
+            // containers just to remove a nested key that doesn't exist.
+            if (lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
+                // Parent slot missing (or an exception was raised): nothing
+                // to remove in either case.
+                return toBits(QoreValue());
+            }
+            QoreValue container = lvh.getValue();
+            qore_type_t ct = container.getType();
+            if (last_is_hash && ct == NT_HASH) {
+                lvh.ensureUnique();
+                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                res = h->takeKeyValue(last_step.name.c_str());
+                if (inst->unary_op == LVUnaryOp::Delete) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                }
+                handled_multistep_remove = true;
+            } else if (last_is_list && ct == NT_LIST) {
+                lvh.ensureUnique();
+                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                size_t idx = static_cast<size_t>(last_step.slot_id);
+                if (idx < l->size()) {
+                    if (inst->unary_op == LVUnaryOp::Remove) {
+                        res = l->retrieveEntry(idx).refSelf();
+                    }
+                    l->setEntry(idx, QoreValue(), xsink);
+                }
+                handled_multistep_remove = true;
+            } else if (ct == NT_NOTHING) {
+                // Parent slot is empty: there is nothing to remove.
+                return toBits(QoreValue());
+            }
+            // Fall through for NT_OBJECT / NT_WEAKREF / other parent types:
+            // the legacy navigate + lvh.remove() path handles them.
+        }
+    }
+
+    if (handled_multistep_remove) {
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
+        return toBits(res);
+    }
+
     if (is_remove) {
         LValueHelper lvh(xsink);
         if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
