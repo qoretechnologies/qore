@@ -25,7 +25,12 @@
 public namespace QoreGuardrails {
 
 #! LLM-based topic boundary enforcement
-/** Uses an LLM to verify that a query is within the configured allowed topics.
+/** Ensures that user queries stay within allowed topics using an LLM classifier.
+    For example, a customer support chatbot for a software company can be
+    restricted to topics like "billing", "technical support", and "account
+    management" -- any questions about competitors or unrelated subjects would be
+    blocked.
+
     Requires a QoreLlmUtils backend.
 
     @since QoreGuardrails 1.0

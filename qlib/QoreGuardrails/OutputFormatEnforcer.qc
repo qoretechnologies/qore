@@ -31,6 +31,18 @@ public namespace QoreGuardrails {
     - Forbidden patterns (e.g., code blocks, URLs, profanity patterns)
     - Required patterns (e.g., must contain a greeting)
 
+    @par Example: Enforce output length and content rules
+    @code{.py}
+OutputFormatEnforcer fmt("high", {
+    "max_length": 500,
+    "forbidden_patterns": ("```", "<script"),
+});
+hash<GuardrailResult> result = fmt.evaluate(llm_output);
+if (!result.passed) {
+    printf("Output violated rules: %y\n", result.violations);
+}
+    @endcode
+
     @since QoreGuardrails 1.0
 */
 public class OutputFormatEnforcer inherits AbstractGuardrailRule {

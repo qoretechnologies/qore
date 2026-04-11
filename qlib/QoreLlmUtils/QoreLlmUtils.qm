@@ -50,7 +50,9 @@ module QoreLlmUtils {
     @section qorellmutilsintro QoreLlmUtils Module Introduction
 
     The %QoreLlmUtils module provides a pluggable LLM backend abstraction for Qore
-    AI modules that need to make chat completion calls.  It supports three modes:
+    AI modules that need to make chat completion calls. An LLM (Large Language Model)
+    is an AI system like ChatGPT or Claude that generates text responses.  It supports
+    three modes:
 
     - \b http: Calls an OpenAI-compatible \c /v1/chat/completions endpoint
       (SGLang, vLLM, OpenAI, Azure OpenAI, etc.) with optional JSON schema
@@ -61,6 +63,7 @@ module QoreLlmUtils {
 
     @par Example: HTTP mode (OpenAI-compatible)
     @code{.py}
+%modern
 %requires QoreLlmUtils
 
 LlmBackend llm({"mode": "http", "url": "http://localhost:8080", "model": "gpt-4o"});
@@ -73,6 +76,7 @@ printf("Response: %s\n", result.content);
 
     @par Example: Anthropic mode
     @code{.py}
+%modern
 %requires QoreLlmUtils
 
 LlmBackend llm({"mode": "anthropic", "url": "https://api.anthropic.com",

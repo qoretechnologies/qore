@@ -45,7 +45,9 @@ module QoreAgentStrategies {
     @section qoreagentstrategiesintro QoreAgentStrategies Module Introduction
 
     The %QoreAgentStrategies module provides configurable execution strategies
-    for LLM-based agents.  Each strategy defines how tool calls are dispatched
+    for LLM-based agents — software systems that use AI to break down complex
+    tasks, call tools, and reason about results.  Each strategy defines how
+    tool calls are dispatched
     and how the agent's reasoning loop operates.
 
     Strategies:
@@ -63,6 +65,7 @@ module QoreAgentStrategies {
     @par Example: Planning strategy
     @code{.py}
 %requires QoreAgentStrategies
+%modern
 
 LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
     "model": "gpt-4o"});

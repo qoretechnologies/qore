@@ -36,6 +36,16 @@ public namespace QoreGuardrails {
     - \b redact: replace PII with placeholder text and pass
     - \b warn: report violations but pass
 
+    @par Example: Detect and redact PII in text
+    @code{.py}
+PiiDetector pii("critical", {"action": "redact"});
+hash<GuardrailResult> result = pii.evaluate("Email me at john@example.com");
+if (result.modified_text) {
+    printf("Redacted: %s\n", result.modified_text);
+    # Output: "Email me at [EMAIL_REDACTED]"
+}
+    @endcode
+
     @since QoreGuardrails 1.0
 */
 public class PiiDetector inherits AbstractGuardrailRule {

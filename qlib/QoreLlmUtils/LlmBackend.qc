@@ -35,7 +35,7 @@ public hashdecl LlmBackendConfig {
     *string url;
     #! Model name to pass in the request
     *string model;
-    #! API key for authentication (Bearer token for HTTP, x-api-key for Anthropic)
+    #! API key for authentication — this is the secret key from your LLM provider (e.g., from the OpenAI or Anthropic dashboard)
     *string api_key;
     #! Maximum tokens to generate; default 4096
     int max_tokens = 4096;
@@ -70,6 +70,23 @@ public hashdecl LlmCompletionResult {
     Thread-safe: the underlying REST client is lazily initialized behind a mutex.
 
     @since QoreLlmUtils 1.0
+
+    @par Example: Create an HTTP backend and get a completion
+    @code{.py}
+%modern
+%requires QoreLlmUtils
+
+LlmBackend llm(<LlmBackendConfig>{
+    "mode": "http",
+    "url": "http://localhost:8080",
+    "model": "gpt-4o",
+});
+hash<LlmCompletionResult> result = llm.complete(
+    "You are a helpful assistant.",
+    "What are the main benefits of cloud computing?",
+);
+printf("Response: %s\n", result.content);
+    @endcode
 */
 public class LlmBackend {
     private {
@@ -161,12 +178,12 @@ public class LlmBackend {
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
 
-    #! Returns the configured mode
+    /** @return the configured backend mode ("http", "anthropic", or "qorus") */
     string getMode() {
         return mode;
     }
 
-    #! Returns the configured model name
+    /** @return the configured model name, or @ref nothing if none was set */
     *string getModel() {
         return model_name;
     }

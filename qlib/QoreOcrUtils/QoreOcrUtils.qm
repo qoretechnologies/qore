@@ -64,6 +64,7 @@ module QoreOcrUtils {
     @par Example: OCR with native backend
     @code{.py}
 %requires QoreOcrUtils
+%modern
 
 OcrEngine engine(<OcrConfig>{"mode": "native", "language": "eng"});
 binary img = ReadOnlyFile::readBinaryFile("document.png");

@@ -66,9 +66,12 @@ public hashdecl ExtractionResult {
     int attempt_count;
 }
 
-#! Built-in extraction schema templates and schema utilities
-/** Provides pre-built schema templates for common extraction tasks and
-    utilities for converting schemas to JSON Schema format.
+#! Provides pre-built schema templates for common data extraction tasks, plus utilities for converting schemas to JSON Schema format used by LLMs.
+/** The built-in templates cover the most common business extraction needs:
+    - \b NER: Find people, companies, locations, dates, and monetary amounts in text
+    - \b Invoice: Extract invoice numbers, dates, vendors, line items, and totals
+    - \b Contact: Extract names, emails, phone numbers, companies, and addresses
+    - \b Sentiment: Analyze whether text is positive, negative, neutral, or mixed
 
     @since QoreStructuredExtraction 1.0
 */

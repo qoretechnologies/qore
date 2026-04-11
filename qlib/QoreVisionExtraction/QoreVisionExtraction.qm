@@ -57,6 +57,7 @@ module QoreVisionExtraction {
     @par Example: Describe an image
     @code{.py}
 %requires QoreVisionExtraction
+%modern
 
 VisionLlmClient client(<VisionLlmConfig>{
     "mode": "openai",

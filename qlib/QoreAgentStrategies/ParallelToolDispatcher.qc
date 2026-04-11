@@ -29,13 +29,33 @@ public namespace QoreAgentStrategies {
     dispatcher executes them in parallel using background threads. Results
     are collected and returned in the original order.
 
-    This is orthogonal to agent strategies — any strategy can use the
-    dispatcher via the \c dispatchToolsParallel() method.
+    This dispatcher works alongside any agent strategy — any strategy can
+    use the dispatcher via the \c dispatchToolsParallel() method.
 
     @par Limits
     - \c max_concurrent (int): maximum parallel tool calls; default 5
     - \c tool_timeout_ms (int): per-tool timeout; default 30000
     - \c max_total_time_ms (int): total time budget for all tools; default 120000
+
+    @par Example: Dispatch three tools concurrently
+    @code{.py}
+ParallelToolDispatcher dispatcher({"max_concurrent": 5});
+
+code my_dispatch = auto sub (string name, hash<auto> args) {
+    # call the tool and return its result
+    return call_tool(name, args);
+};
+
+list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+    ({"name": "search_db", "args": {"query": "revenue"}},
+     {"name": "web_search", "args": {"query": "market trends"}},
+     {"name": "get_calendar", "args": {"date": "2026-04-11"}}),
+    my_dispatch,
+);
+foreach hash<auto> r in (results) {
+    printf("Tool %s: %y\n", r.name, r.result ?? r.error);
+}
+    @endcode
 
     @since QoreAgentStrategies 1.0
 */

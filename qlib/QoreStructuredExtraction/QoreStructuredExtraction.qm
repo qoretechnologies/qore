@@ -46,8 +46,13 @@ module QoreStructuredExtraction {
     @section qorestructuredextractionintro QoreStructuredExtraction Module Introduction
 
     The %QoreStructuredExtraction module extracts typed structured data from unstructured
-    text using LLM calls with JSON schema enforcement.  Named entity recognition (NER)
-    is a special case.
+    text using LLM calls with JSON schema enforcement.  Named Entity Recognition
+    (NER) — finding people, organizations, locations, and dates in text — is a
+    special case.
+
+    Use this module when you need to pull structured fields from free-text
+    documents — for example, extracting invoice numbers from scanned invoices,
+    contact details from emails, or sentiment scores from customer reviews.
 
     The module provides:
     - @ref QoreStructuredExtraction::ExtractionSchema "ExtractionSchema" — schema types
@@ -58,6 +63,7 @@ module QoreStructuredExtraction {
     @par Example: Named Entity Recognition
     @code{.py}
 %requires QoreStructuredExtraction
+%modern
 %requires QoreLlmUtils
 
 LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",

@@ -33,6 +33,10 @@ public namespace QoreAgentStrategies {
 
     The loop runs for at most \c max_reflections iterations.
 
+    The name "reflexion" comes from the AI research technique of having an
+    agent reflect on its own output to identify gaps and improve quality,
+    similar to how a human might review and revise their own work.
+
     @since QoreAgentStrategies 1.0
 */
 public class ReflexionAgentStrategy inherits AbstractAgentStrategy {

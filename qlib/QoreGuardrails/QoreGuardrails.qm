@@ -54,9 +54,15 @@ module QoreGuardrails {
     AI-powered chat endpoints.  Rules are evaluated in chains with configurable
     severity levels and short-circuit behavior.
 
+    Use guardrails to protect your AI-powered applications from security risks
+    and compliance violations -- for example, preventing customers from
+    extracting your system prompt, blocking credit card numbers from being sent
+    to external AI services, or ensuring AI responses stay on-topic.
+
     Built-in rules:
-    - @ref QoreGuardrails::PiiDetector "PiiDetector" -- pattern-based PII
-      detection and redaction (email, phone, SSN, credit card)
+    - @ref QoreGuardrails::PiiDetector "PiiDetector" -- pattern-based detection
+      and redaction of PII (Personally Identifiable Information) such as email
+      addresses, phone numbers, Social Security numbers, and credit card numbers
     - @ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector" --
       LLM-based prompt injection classification
     - @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule" --
@@ -67,6 +73,7 @@ module QoreGuardrails {
     @par Example: Evaluate input guardrails
     @code{.py}
 %requires QoreGuardrails
+%modern
 
 GuardrailEngine engine((
     <GuardrailRuleConfig>{"type": "pii", "enabled": True, "severity": "critical",

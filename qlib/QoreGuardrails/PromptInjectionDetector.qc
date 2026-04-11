@@ -28,6 +28,11 @@ public namespace QoreGuardrails {
 /** Classifies input text as a potential prompt injection attempt using an LLM.
     Falls back to pattern-based heuristics if no LLM backend is configured.
 
+    A prompt injection is an attack where a user tries to override the AI
+    system's instructions -- for example, by saying "ignore all previous
+    instructions" or "pretend you are a different AI."  This rule detects such
+    attempts.
+
     Pattern-based heuristics detect common injection indicators:
     - "ignore previous instructions"
     - "you are now"

@@ -49,7 +49,7 @@ public hashdecl ExtractionPipelineOptions {
 LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
     "model": "gpt-4o"});
 ExtractionPipeline pipeline(llm, ExtractionSchema::NerSchema);
-hash<ExtractionResult> result = pipeline.extract("Apple Inc. was founded by Steve Jobs.");
+hash<ExtractionResult> result = pipeline.extractData("Apple Inc. was founded by Steve Jobs.");
     @endcode
 
     @since QoreStructuredExtraction 1.0
