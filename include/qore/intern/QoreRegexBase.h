@@ -74,6 +74,9 @@ public:
     //! Returns the regex options flags
     DLLLOCAL int getOptions() const { return options; }
 
+    //! OR additional option bits into the options bitmask (for AOT deserialization)
+    DLLLOCAL void addOptions(int opts) { options |= opts; }
+
     //! Returns the original pattern string (preserved for AOT serialization)
     DLLLOCAL const char* getPatternCStr() const {
         return pattern_cache.empty() ? nullptr : pattern_cache.c_str();

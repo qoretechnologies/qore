@@ -879,6 +879,15 @@ struct AOTLVPathSlotId {
     uint8_t unary_op;          //!< LVUnaryOp
     uint8_t binary_mut_op;     //!< LVBinaryMutOp
     uint8_t ternary_op;        //!< LVTernaryOp
+    uint8_t ref_rv = 1;        //!< whether the return value of the operation is used
+    //! For RegexSubst / Transliterate binary_mut ops — the pattern info needed to
+    //! reconstruct the QoreRegexSubst / QoreTransliteration runtime object.  Empty
+    //! (pattern_empty = true) for opcodes that don't use a pattern expression.
+    bool pattern_empty = true;
+    std::string pattern;       //!< regex or transliteration source pattern
+    std::string pattern_newstr;//!< regex substitution / transliteration replacement
+    int64_t pattern_options = 0;//!< PCRE2 options bitmask (regex only)
+    uint8_t pattern_global = 0;//!< global (/g) flag (regex only)
     std::vector<AOTLVPathStepId> steps;
 };
 

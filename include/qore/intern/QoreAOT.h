@@ -135,6 +135,16 @@ struct QoreAOTContext {
     //! These resolve StaticVar path steps at runtime; deref'd in destructor.
     std::vector<AbstractQoreNode*> owned_static_var_refs;
 
+    //! Owned QoreRegexSubstOperatorNode objects created for LValuePath RegexSubst
+    //! binary_mut ops.  LValuePath instructions hold them via pattern_expr as
+    //! non-owning QoreValue; the context owns them here and derefs them in the
+    //! destructor.
+    std::vector<AbstractQoreNode*> owned_regex_subst_nodes;
+
+    //! Owned QoreTransliterationOperatorNode objects for LValuePath Transliterate
+    //! binary_mut ops.  Same lifetime rules as owned_regex_subst_nodes.
+    std::vector<AbstractQoreNode*> owned_transliteration_nodes;
+
     //! Owned string copies for call target method names from slot map deserialization.
     //! Uses std::list so that element pointers remain stable across insertions.
     std::list<std::string> owned_call_target_strings;

@@ -3157,6 +3157,16 @@ bool serializeSlotMaps(QoreAOTBinaryWriter& writer, const std::vector<AOTCompile
             writer.writeU8(lvid.unary_op);
             writer.writeU8(lvid.binary_mut_op);
             writer.writeU8(lvid.ternary_op);
+            writer.writeU8(lvid.ref_rv);
+            // Pattern info for RegexSubst / Transliterate binary_mut ops.
+            // Emitted unconditionally as (present_flag u8) so readers can skip.
+            writer.writeU8(lvid.pattern_empty ? 0 : 1);
+            if (!lvid.pattern_empty) {
+                writer.writeStringRef(lvid.pattern.c_str());
+                writer.writeStringRef(lvid.pattern_newstr.c_str());
+                writer.writeI64(lvid.pattern_options);
+                writer.writeU8(lvid.pattern_global);
+            }
             writer.writeU8(static_cast<uint8_t>(lvid.steps.size()));
             for (auto& step : lvid.steps) {
                 writer.writeU8(step.kind);

@@ -2322,6 +2322,73 @@ static QoreAOTContext* buildContextFromSlotMap(
             pi->unary_op = static_cast<LVUnaryOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->binary_mut_op = static_cast<LVBinaryMutOp>(QoreAOTBinaryReader::readU8(ptr));
             pi->ternary_op = static_cast<LVTernaryOp>(QoreAOTBinaryReader::readU8(ptr));
+            pi->ref_rv = QoreAOTBinaryReader::readU8(ptr) != 0;
+            // Pattern info for RegexSubst / Transliterate binary_mut ops.
+            // The writer always emits a present_flag u8, followed by the pattern
+            // data when present.  Reconstructs the matching Qore runtime node
+            // and attaches it via pattern_expr so the RegexSubst/Transliterate
+            // runtime helper can dynamic_cast it out and execute the regex.
+            uint8_t pattern_present = QoreAOTBinaryReader::readU8(ptr);
+            if (pattern_present) {
+                const char* pattern_str = reader.readStringRef(ptr);
+                const char* newstr_str = reader.readStringRef(ptr);
+                int64_t pat_options = QoreAOTBinaryReader::readI64(ptr);
+                uint8_t pat_global = QoreAOTBinaryReader::readU8(ptr);
+                if (pi->binary_mut_op == LVBinaryMutOp::RegexSubst) {
+                    // Use the default constructor (allocates str + newstr) and
+                    // then feed the pattern/replacement/options via the concat /
+                    // setGlobal helpers, mirroring what the parser does.  The
+                    // runtime constructor taking a C-string expects newstr to be
+                    // provided separately via the concatTarget API but does NOT
+                    // allocate a newstr buffer, so using it here would crash the
+                    // destructor.
+                    auto* rs = new QoreRegexSubst();
+                    if (pattern_str) {
+                        for (const char* p = pattern_str; *p; ++p) {
+                            rs->concatSource(*p);
+                        }
+                    }
+                    // Apply options bits (combined with PCRE2_UTF already set by ctor)
+                    rs->addOptions(static_cast<int>(pat_options));
+                    if (pat_global) {
+                        rs->setGlobal();
+                    }
+                    if (newstr_str) {
+                        for (const char* p = newstr_str; *p; ++p) {
+                            rs->concatTarget(*p);
+                        }
+                    }
+                    if (rs->parse() == 0) {
+                        // Construct the operator node that wraps the regex; the
+                        // runtime helper dynamic_cast's inst->pattern_expr to this
+                        // type, then calls getRegexSubst().
+                        auto* op_node = new QoreRegexSubstOperatorNode(&loc_builtin,
+                            QoreValue(), rs);
+                        const_cast<QoreValue&>(pi->pattern_expr) = op_node;
+                        ctx->owned_regex_subst_nodes.push_back(op_node);
+                    } else {
+                        rs->deref();
+                    }
+                } else if (pi->binary_mut_op == LVBinaryMutOp::Transliterate) {
+                    auto* tr = new QoreTransliteration(&loc_builtin);
+                    if (pattern_str) {
+                        for (const char* p = pattern_str; *p; ++p) {
+                            tr->concatSource(*p);
+                        }
+                    }
+                    tr->finishSource();
+                    if (newstr_str) {
+                        for (const char* p = newstr_str; *p; ++p) {
+                            tr->concatTarget(*p);
+                        }
+                    }
+                    tr->finishTarget();
+                    auto* op_node = new QoreTransliterationOperatorNode(&loc_builtin,
+                        QoreValue(), tr);
+                    const_cast<QoreValue&>(pi->pattern_expr) = op_node;
+                    ctx->owned_transliteration_nodes.push_back(op_node);
+                }
+            }
             uint8_t num_steps = QoreAOTBinaryReader::readU8(ptr);
             for (uint8_t s = 0; s < num_steps; ++s) {
                 LVPathStep step;

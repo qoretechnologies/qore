@@ -335,6 +335,14 @@ QoreAOTContext::~QoreAOTContext() {
     for (auto* node : owned_static_var_refs) {
         node->deref(nullptr);
     }
+    // Deref owned QoreRegexSubstOperatorNode / QoreTransliterationOperatorNode objects
+    // created during LValuePath deserialization for RegexSubst / Transliterate ops
+    for (auto* node : owned_regex_subst_nodes) {
+        node->deref(nullptr);
+    }
+    for (auto* node : owned_transliteration_nodes) {
+        node->deref(nullptr);
+    }
     free(locals);
     free(globals);
     free(exprs);
@@ -3274,6 +3282,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_exprs = cf.num_exprs;
             fws.num_stmts = cf.num_stmts;
             fws.num_regex_cases = cf.num_regex_cases;
+            fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
             for (auto& hir : cf.handler_irs) {
@@ -3291,6 +3300,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_exprs = cif.num_exprs;
             fws.num_stmts = cif.num_stmts;
             fws.num_regex_cases = cif.num_regex_cases;
+            fws.num_lv_path_insts = cif.num_lv_path_insts;
             fws.slot_ids = cif.slot_ids;
             func_slots.push_back(std::move(fws));
         }
@@ -6830,6 +6840,39 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         lvid.unary_op = static_cast<uint8_t>(pi->unary_op);
         lvid.binary_mut_op = static_cast<uint8_t>(pi->binary_mut_op);
         lvid.ternary_op = static_cast<uint8_t>(pi->ternary_op);
+        lvid.ref_rv = pi->ref_rv ? 1 : 0;
+        // Extract pattern info for RegexSubst / Transliterate binary_mut ops —
+        // without this, the AOT-reconstructed instruction has an empty pattern_expr
+        // and the runtime regex substitute / transliterate is a no-op.
+        if (pi->opcode == QoreIROpcode::LValuePathBinaryMut && pi->pattern_expr.hasNode()) {
+            if (pi->binary_mut_op == LVBinaryMutOp::RegexSubst) {
+                auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
+                    pi->pattern_expr.getInternalNode());
+                if (regex_op && regex_op->getRegexSubst()) {
+                    QoreRegexSubst* rs = regex_op->getRegexSubst();
+                    lvid.pattern_empty = false;
+                    if (const char* pat = rs->getPatternCStr()) {
+                        lvid.pattern = pat;
+                    }
+                    lvid.pattern_options = rs->getOptions();
+                    lvid.pattern_global = rs->isGlobal() ? 1 : 0;
+                    if (const QoreString* ns = rs->getNewStr()) {
+                        lvid.pattern_newstr.assign(ns->c_str(), ns->size());
+                    }
+                }
+            } else if (pi->binary_mut_op == LVBinaryMutOp::Transliterate) {
+                auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
+                    pi->pattern_expr.getInternalNode());
+                if (trans_op && trans_op->getTransliteration()) {
+                    QoreTransliteration* tr = trans_op->getTransliteration();
+                    lvid.pattern_empty = false;
+                    const QoreString& src = tr->getSource();
+                    const QoreString& tgt = tr->getTarget();
+                    lvid.pattern.assign(src.c_str(), src.size());
+                    lvid.pattern_newstr.assign(tgt.c_str(), tgt.size());
+                }
+            }
+        }
         for (const auto& step : pi->path) {
             AOTLVPathStepId sid;
             sid.kind = static_cast<uint8_t>(step.kind);
