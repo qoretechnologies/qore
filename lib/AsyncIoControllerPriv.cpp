@@ -1920,7 +1920,22 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             while (!t.timeout_heap.empty()) {
                 auto& top = t.timeout_heap.top();
                 if (top.deadline_us > now_us) {
-                    // Earliest unexpired timeout → sets poll_deadline_us
+                    // Future deadline — but check if the key is still in the
+                    // cache.  Stale entries (for connections that were removed
+                    // between the deadline push and now) must be skipped;
+                    // otherwise poll_deadline_us is set to a stale deadline and
+                    // the I/O thread sleeps until it expires, ignoring
+                    // intermediate work.  Confirmed as the root cause of the
+                    // scenario 4 intermittent 15-second delay in the
+                    // HttpServer.qtest asyncModeH1KeepAliveServerCloseTest.
+                    if (t.cache.find(top.key) == t.cache.end()) {
+                        ASYNC_IO_TRACE("StepC SKIP-STALE-FUTURE key='%s' "
+                            "deadline=%lld\n",
+                            top.key.c_str(), (long long)top.deadline_us);
+                        t.timeout_heap.pop();
+                        continue;
+                    }
+                    // Earliest unexpired non-stale timeout → sets poll_deadline_us
                     if (poll_deadline_us == 0 || top.deadline_us < poll_deadline_us) {
                         poll_deadline_us = top.deadline_us;
                     }
