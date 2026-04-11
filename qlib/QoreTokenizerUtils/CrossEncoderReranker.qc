@@ -82,12 +82,20 @@ public class CrossEncoderReranker {
         #! HTTP timeouts
         int connect_timeout_ms;
         int timeout_ms;
+        #! Maximum sequence length for ONNX mode
+        int max_length;
 %ifndef NoRestClient
         #! REST client (lazy-initialized)
         *RestClient rest_client;
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
+%ifndef NoMl
+        #! ONNX model for local inference
+        *ML::OnnxModel onnx_model;
+%endif
+        #! HuggingFace tokenizer for ONNX mode
+        *Tokenizer::HFTokenizer onnx_tokenizer;
     }
 
     #! Creates a CrossEncoderReranker with the given configuration
@@ -116,10 +124,22 @@ public class CrossEncoderReranker {
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
+%ifdef NoMl
+            throw "RERANKER-DEPENDENCY-ERROR",
+                "ml module is required for ONNX mode but is not available";
+%endif
             if (!config.model_path.val()) {
                 throw "RERANKER-CONFIG-ERROR", "model_path is required for ONNX mode";
             }
-            throw "RERANKER-CONFIG-ERROR", "ONNX mode is not yet implemented";
+            if (!config.tokenizer_config) {
+                throw "RERANKER-CONFIG-ERROR",
+                    "tokenizer_config is required for ONNX mode";
+            }
+            max_length = config.max_length;
+%ifndef NoMl
+            onnx_model = new ML::OnnxModel(config.model_path);
+%endif
+            onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }
 
@@ -135,6 +155,9 @@ public class CrossEncoderReranker {
 
         if (mode == "http") {
             return scoreHttp(query, passages);
+        }
+        if (mode == "onnx") {
+            return scoreOnnx(query, passages);
         }
 
         throw "RERANKER-ERROR", sprintf("unsupported mode %y", mode);
@@ -169,6 +192,109 @@ public class CrossEncoderReranker {
             push result, scored[i]."index";
         }
         return result;
+    }
+
+    #! Scores via local ONNX cross-encoder model
+    /** Tokenizes each query-passage pair, pads to uniform length, runs ONNX
+        inference in sub-batches, and applies sigmoid to the logits.
+
+        @param query the search query
+        @param passages candidate passages to score
+        @return list of float relevance scores (0.0 to 1.0)
+    */
+    private list<float> scoreOnnx(string query, list<string> passages) {
+%ifndef NoMl
+        # Tokenize all query-passage pairs
+        list<hash<auto>> encodings = ();
+        foreach string passage in (passages) {
+            hash<auto> enc = onnx_tokenizer.encodeAdvanced(query, {
+                "text_pair": passage,
+                "max_length": max_length,
+                "truncation": "longest_first",
+            });
+            push encodings, enc;
+        }
+
+        # Find max sequence length across all pairs for padding
+        int pad_len = 0;
+        foreach hash<auto> enc in (encodings) {
+            if (enc.input_ids.size() > pad_len) {
+                pad_len = enc.input_ids.size();
+            }
+        }
+
+        int pad_token_id = onnx_tokenizer.getPadTokenId();
+        if (pad_token_id < 0) {
+            pad_token_id = 0;
+        }
+
+        # Pad all sequences to uniform length and build input tensors
+        list<list<int>> all_input_ids = ();
+        list<list<int>> all_attention_mask = ();
+        list<list<int>> all_token_type_ids = ();
+
+        foreach hash<auto> enc in (encodings) {
+            list<int> ids = enc.input_ids;
+            list<int> mask = enc.attention_mask ?? (map 1, range(ids.size()));
+            list<int> type_ids = enc.token_type_ids ?? (map 0, range(ids.size()));
+
+            int pad_count = pad_len - ids.size();
+            if (pad_count > 0) {
+                ids += (map pad_token_id, range(pad_count));
+                mask += (map 0, range(pad_count));
+                type_ids += (map 0, range(pad_count));
+            }
+
+            push all_input_ids, ids;
+            push all_attention_mask, mask;
+            push all_token_type_ids, type_ids;
+        }
+
+        # Run inference in sub-batches for memory efficiency
+        int batch_size = 16;
+        list<float> all_scores = ();
+
+        int total = all_input_ids.size();
+        int offset = 0;
+        while (offset < total) {
+            int end = min(offset + batch_size, total);
+            list<list<int>> batch_ids = all_input_ids[offset .. end - 1];
+            list<list<int>> batch_mask = all_attention_mask[offset .. end - 1];
+            list<list<int>> batch_types = all_token_type_ids[offset .. end - 1];
+
+            hash<auto> inputs = {
+                "input_ids": batch_ids,
+                "attention_mask": batch_mask,
+                "token_type_ids": batch_types,
+            };
+
+            hash<auto> result = onnx_model.run(inputs);
+
+            # Extract logits and apply sigmoid
+            # Cross-encoder models typically output logits in a "logits" key
+            # or a single unnamed output; handle both
+            auto logits = result.logits ?? result{result.firstKey()};
+
+            if (logits.typeCode() == NT_LIST) {
+                foreach auto logit_row in (logits) {
+                    float raw;
+                    if (logit_row.typeCode() == NT_LIST) {
+                        # Shape [batch, 1] or [batch, num_labels]
+                        raw = logit_row[0].toFloat();
+                    } else {
+                        raw = logit_row.toFloat();
+                    }
+                    # Sigmoid: score = 1 / (1 + exp(-x))
+                    push all_scores, 1.0 / (1.0 + exp(-raw));
+                }
+            }
+
+            offset = end;
+        }
+
+        return all_scores;
+%endif
+        throw "RERANKER-ERROR", "ml module not available for ONNX inference";
     }
 
     #! Scores via HTTP endpoint

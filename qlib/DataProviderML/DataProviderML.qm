@@ -1293,6 +1293,84 @@ module DataProviderML {
                 }
             ),
         });
+
+        # register rerank-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/rerank-text",
+            "action": "rerank-text",
+            "display_name": "Re-rank Search Results by Relevance",
+            "short_desc": "Scores and re-orders search results using a cross-encoder model",
+            "desc": "Improves search precision by scoring each candidate passage against the "
+                "query using a cross-encoder model. Unlike embedding-based search which "
+                "encodes query and passage independently, cross-encoders attend to both "
+                "simultaneously for more accurate relevance scoring.\n\n"
+                "Accumulates all candidate records, scores them, and emits the top-k most "
+                "relevant records enriched with:\n"
+                "- `reranker_score` — relevance score (0.0 to 1.0)\n"
+                "- `reranker_rank` — rank position (1 = most relevant)",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreRerankerProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRerankerProcessor::ConstructorOptions{
+                    "query_field", "passage_field", "reranker_mode",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreRerankerProcessor::ConstructorOptions{
+                    "top_k", "reranker_url", "reranker_api_key",
+                    "reranker_model_path", "tokenizer_config_path", "max_length",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register semantic-chunk-text action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/semantic-chunk-text",
+            "action": "semantic-chunk-text",
+            "display_name": "Split Text at Semantic Boundaries",
+            "short_desc": "Chunks text where topics change instead of at fixed token counts",
+            "desc": "Splits text into chunks at semantic boundaries rather than arbitrary "
+                "token counts. Groups related sentences together by comparing embedding "
+                "similarity between consecutive segments — when similarity drops below a "
+                "threshold, a new chunk begins.\n\n"
+                "Each input record produces one or more output records with:\n"
+                "- `chunk_text` — the text of the semantic chunk\n"
+                "- `chunk_index` — zero-based index of the chunk\n"
+                "- `chunk_token_count` — number of tokens in the chunk\n\n"
+                "Best for narrative documents (articles, reports, transcripts) where meaning "
+                "flows across sentences. For structured documents with clear headings, use "
+                "the standard `chunk-text` processor instead.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_AGGREGATE,
+            "cls": "DataProviderML::QoreSemanticChunkProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSemanticChunkProcessor::ConstructorOptions{
+                    "text_field", "tokenizer_config_path", "embedding_mode",
+                }, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreSemanticChunkProcessor::ConstructorOptions{
+                    "chunk_size", "chunk_overlap", "similarity_threshold", "segment_size",
+                    "embedding_url", "embedding_model", "embedding_api_key",
+                    "embedding_model_path",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
     };
 }
 

@@ -76,6 +76,8 @@ public class EmbeddingModel {
         *string api_key;
         int connect_timeout_ms;
         int timeout_ms;
+        #! Maximum input tokens for ONNX mode
+        int max_tokens;
         #! Cached embedding dimension (detected on first call)
         *int dimension;
 %ifndef NoRestClient
@@ -84,6 +86,12 @@ public class EmbeddingModel {
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
 %endif
+%ifndef NoMl
+        #! ONNX model for local inference
+        *ML::OnnxModel onnx_model;
+%endif
+        #! HuggingFace tokenizer for ONNX mode
+        *Tokenizer::HFTokenizer onnx_tokenizer;
     }
 
     #! Creates an EmbeddingModel with the given configuration
@@ -124,8 +132,15 @@ public class EmbeddingModel {
             if (!config.model_path.val()) {
                 throw "EMBEDDING-CONFIG-ERROR", "model_path is required for ONNX mode";
             }
-            # ONNX implementation will be added when the ml ONNX API is finalized
-            throw "EMBEDDING-CONFIG-ERROR", "ONNX mode is not yet implemented";
+            if (!config.tokenizer_config) {
+                throw "EMBEDDING-CONFIG-ERROR",
+                    "tokenizer_config is required for ONNX mode";
+            }
+            max_tokens = config.max_tokens;
+%ifndef NoMl
+            onnx_model = new ML::OnnxModel(config.model_path);
+%endif
+            onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
     }
 
@@ -154,7 +169,9 @@ public class EmbeddingModel {
         if (mode == "http") {
             return embedBatchHttp(texts);
         }
-        # ONNX path would go here
+        if (mode == "onnx") {
+            return embedBatchOnnx(texts);
+        }
         throw "EMBEDDING-ERROR", sprintf("unsupported mode %y", mode);
     }
 
@@ -181,6 +198,107 @@ public class EmbeddingModel {
             }
         }
 %endif
+    }
+
+    #! Embeds texts via local ONNX model
+    /** Tokenizes texts, pads to uniform length, runs ONNX inference in
+        sub-batches, mean-pools the last hidden state (weighted by attention
+        mask), and L2-normalizes the output vectors.
+
+        @param texts list of texts to embed
+        @return list of float vectors, one per input text
+    */
+    private list<list<float>> embedBatchOnnx(list<string> texts) {
+%ifndef NoMl
+        int batch_size = 32;
+        list<list<float>> all_embeddings = ();
+        int total = texts.size();
+        int offset = 0;
+
+        while (offset < total) {
+            int end = min(offset + batch_size, total);
+            list<string> batch_texts = texts[offset .. end - 1];
+
+            # Batch tokenize with padding to longest in batch
+            list<hash<auto>> encodings = onnx_tokenizer.encodeBatch(batch_texts, {
+                "max_length": max_tokens,
+                "truncation": "longest_first",
+                "padding": "true",
+            });
+
+            # Build input tensors
+            list<list<int>> batch_input_ids = ();
+            list<list<int>> batch_attention_mask = ();
+            list<list<int>> batch_token_type_ids = ();
+
+            foreach hash<auto> enc in (encodings) {
+                push batch_input_ids, enc.input_ids;
+                push batch_attention_mask,
+                    enc.attention_mask ?? (map 1, range(enc.input_ids.size()));
+                push batch_token_type_ids,
+                    enc.token_type_ids ?? (map 0, range(enc.input_ids.size()));
+            }
+
+            hash<auto> inputs = {
+                "input_ids": batch_input_ids,
+                "attention_mask": batch_attention_mask,
+                "token_type_ids": batch_token_type_ids,
+            };
+
+            hash<auto> result = onnx_model.run(inputs);
+
+            # Get the last hidden state (typically the first output)
+            auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
+
+            # Mean-pool over sequence dimension, weighted by attention mask
+            for (int i = 0; i < batch_input_ids.size(); ++i) {
+                list<int> mask = batch_attention_mask[i];
+                auto token_embeddings = hidden_states[i];
+                int embed_dim = token_embeddings[0].size();
+
+                list<float> pooled = (map 0.0, range(embed_dim));
+                float mask_sum = 0.0;
+
+                for (int j = 0; j < mask.size(); ++j) {
+                    if (mask[j]) {
+                        mask_sum += 1.0;
+                        for (int k = 0; k < embed_dim; ++k) {
+                            pooled[k] += token_embeddings[j][k].toFloat();
+                        }
+                    }
+                }
+
+                if (mask_sum > 0.0) {
+                    for (int k = 0; k < embed_dim; ++k) {
+                        pooled[k] /= mask_sum;
+                    }
+                }
+
+                # L2-normalize
+                float norm = 0.0;
+                foreach float v in (pooled) {
+                    norm += v * v;
+                }
+                norm = sqrt(norm);
+                if (norm > 0.0) {
+                    for (int k = 0; k < pooled.size(); ++k) {
+                        pooled[k] /= norm;
+                    }
+                }
+
+                if (!dimension) {
+                    dimension = embed_dim;
+                }
+
+                push all_embeddings, pooled;
+            }
+
+            offset = end;
+        }
+
+        return all_embeddings;
+%endif
+        throw "EMBEDDING-ERROR", "ml module not available for ONNX inference";
     }
 
     #! Embeds texts via HTTP endpoint

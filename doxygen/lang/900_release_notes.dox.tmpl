@@ -1167,6 +1167,8 @@ cargo install tree-sitter-cli@0.26.5
       - optional onnx-model pipeline processor for ONNX Runtime inference
       - extract-structured pipeline processor for LLM-based structured data extraction with
         built-in NER, invoice, contact, and sentiment schemas
+      - rerank-text pipeline processor for cross-encoder re-ranking of search results
+      - semantic-chunk-text pipeline processor for embedding-similarity-based document chunking
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1449,6 +1451,8 @@ cargo install tree-sitter-cli@0.26.5
       - ExtractionPipeline with validation, retry logic, and JSON code fence handling
       - ExtractionSchema with JSON Schema conversion for LLM prompt engineering
     - @ref qoretokenizerutilsintro "QoreTokenizerUtils" module
+      - ONNX backend implemented for EmbeddingModel: batch tokenize, mean-pool, L2-normalize
+      - ONNX backend implemented for CrossEncoderReranker: sentence-pair tokenization, sigmoid scoring
       - new module providing document chunking and token counting for RAG pipelines
       - DocumentChunker: splits documents into overlapping token-bounded chunks for embedding
       - TokenCounter: counts tokens, checks context window fit, truncates at token boundaries

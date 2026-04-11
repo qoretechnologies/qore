@@ -56,8 +56,10 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         addTestCase("StructuredDocumentChunker single block no split", \structuredSingleBlockTest());
         addTestCase("StructuredDocumentChunker paragraph merging", \structuredParagraphMergeTest());
         addTestCase("EmbeddingModel config validation", \embeddingConfigTest());
+        addTestCase("EmbeddingModel ONNX config validation", \embeddingOnnxConfigTest());
         addTestCase("EmbeddingModel empty batch", \embeddingEmptyBatchTest());
         addTestCase("CrossEncoderReranker config validation", \rerankerConfigTest());
+        addTestCase("CrossEncoderReranker ONNX config validation", \rerankerOnnxConfigTest());
         addTestCase("CrossEncoderReranker empty input", \rerankerEmptyTest());
         set_return_value(main());
     }
@@ -443,6 +445,33 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         assertEq(-1, emb.getDimension(), "dimension should be -1 before first embed");
     }
 
+    embeddingOnnxConfigTest() {
+        # ONNX mode without tokenizer_config
+        assertThrows("EMBEDDING-CONFIG-ERROR", "tokenizer_config", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{
+                    "mode": "onnx",
+                    "model_path": "/nonexistent.onnx",
+                });
+        });
+
+        # ONNX mode without model_path
+        assertThrows("EMBEDDING-CONFIG-ERROR", "model_path", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{"mode": "onnx"});
+        });
+
+        # ONNX mode with valid config but nonexistent model file
+        assertThrows("ML-ONNX-ERROR", sub() {
+            new QoreTokenizerUtils::EmbeddingModel(
+                <QoreTokenizerUtils::EmbeddingConfig>{
+                    "mode": "onnx",
+                    "model_path": "/nonexistent.onnx",
+                    "tokenizer_config": tokenizer_config,
+                });
+        });
+    }
+
     embeddingEmptyBatchTest() {
         auto emb = new QoreTokenizerUtils::EmbeddingModel(
             <QoreTokenizerUtils::EmbeddingConfig>{
@@ -484,6 +513,33 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
                 "url": "http://localhost:1",
             });
         assertTrue(exists rr, "reranker should be created");
+    }
+
+    rerankerOnnxConfigTest() {
+        # ONNX mode without tokenizer_config
+        assertThrows("RERANKER-CONFIG-ERROR", "tokenizer_config", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{
+                    "mode": "onnx",
+                    "model_path": "/nonexistent.onnx",
+                });
+        });
+
+        # ONNX mode without model_path
+        assertThrows("RERANKER-CONFIG-ERROR", "model_path", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{"mode": "onnx"});
+        });
+
+        # ONNX mode with valid config but nonexistent model file
+        assertThrows("ML-ONNX-ERROR", sub() {
+            new QoreTokenizerUtils::CrossEncoderReranker(
+                <QoreTokenizerUtils::RerankerConfig>{
+                    "mode": "onnx",
+                    "model_path": "/nonexistent.onnx",
+                    "tokenizer_config": tokenizer_config,
+                });
+        });
     }
 
     rerankerEmptyTest() {
