@@ -31,6 +31,7 @@
 
 #include <qore/Qore.h>
 #include <qore/HttpClientConnection.h>
+#include <qore/HttpClientConnectionManager.h>
 
 bool HttpClientConnectionBase::tryReserveStream() {
     AutoLocker al(reserve_lock);
@@ -52,6 +53,30 @@ void HttpClientConnectionBase::releaseStreamReservation() {
 int HttpClientConnectionBase::getPendingStreamCount() const {
     AutoLocker al(reserve_lock);
     return pending_stream_count;
+}
+
+void HttpClientConnectionBase::setManager(HttpClientConnectionManagerBase* mgr) {
+    AutoLocker al(onclose_lock);
+    manager_ = mgr;
+}
+
+void HttpClientConnectionBase::onClosedHook() {
+    // Read the back-pointer under our local lock, then release the lock
+    // BEFORE invoking the manager method.  This breaks any potential
+    // ordering issues between onclose_lock and manager.pool_lock for
+    // app-thread paths that take pool_lock first.
+    //
+    // Lifetime safety: setManager(nullptr) is contractually required to
+    // run before the manager destroys itself, so a non-null manager_
+    // observed here is guaranteed alive for the duration of the call.
+    HttpClientConnectionManagerBase* mgr;
+    {
+        AutoLocker al(onclose_lock);
+        mgr = manager_;
+    }
+    if (mgr) {
+        mgr->onConnectionClosed(this);
+    }
 }
 
 bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, ExceptionSink* xsink) {

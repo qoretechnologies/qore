@@ -34,13 +34,11 @@
 #define _QORE_INTERN_QOREHTTP1CLIENTCONNECTION_H
 
 #include <qore/HttpClientConnection.h>
-#include <qore/QoreThreadLock.h>
 
 #include <string>
 
 class QoreSocketObject;
 class Http1ClientPollOperationPriv;
-class HttpClientConnectionManagerBase;
 
 //! HTTP/1.1 C++ client connection
 /** Wraps a @ref Http1ClientPollOperationPriv and the socket it operates on,
@@ -96,27 +94,6 @@ public:
         }
     }
 
-    //! Registers (or clears) the owning manager back-pointer for close
-    //! notifications.
-    /** When the connection's state transitions to CLOSED for the first time,
-        @ref onClosedHook fires; if a manager has been registered, the hook
-        invokes @c manager->onConnectionClosed(this) so the manager can evict
-        the connection from its pool promptly.
-
-        Lock ordering: this method takes @c onclose_lock briefly to set the
-        back-pointer.  See @c design/http-client-manager-cpp-port.md for the
-        full ordering rules.
-
-        @param mgr the manager to notify on close, or @c nullptr to clear
-
-        @note Callers MUST clear the back-pointer (via @c setManager(nullptr))
-        before destroying the manager — otherwise the I/O thread could fire
-        @ref onClosedHook on a manager that is mid-destruction (UAF).
-
-        @since %Qore 2.3
-    */
-    DLLLOCAL void setManager(HttpClientConnectionManagerBase* mgr);
-
     // --- HttpClientConnectionBase overrides ---
 
     HttpClientProtocol getProtocol() const override {
@@ -133,11 +110,6 @@ public:
 
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
-
-    //! AbstractHttpPollConnectionPriv hook — invoked exactly once on the
-    //! first close transition (from any thread).  Forwards to the registered
-    //! manager (if any) so it can evict this connection from its pool.
-    DLLLOCAL void onClosedHook() override;
 
 private:
     //! The socket QoreObject (ref'd).  Owns a QoreSocketObject priv.
@@ -160,23 +132,13 @@ private:
         @ref buildAndSubmit.  Phase P3+ managers can override via
         @ref setOwner before construction-time submission to use their own
         owner string and benefit from @c cancelByOwner cleanup.
+
+        @note @c manager_ and @c onclose_lock live on
+        @ref HttpClientConnectionBase (the base class) so all H1/H2/H3
+        connection wrappers automatically participate in the close-hook
+        protocol without per-protocol overrides.
     */
     std::string owner_str;
-
-    //! Lock protecting @ref manager_ — see @ref onClosedHook + @ref setManager.
-    /** This is the OUTERMOST lock in the close-hook lock-ordering chain:
-        @c onclose_lock → manager.pool_lock → controller.lock.  Held only
-        briefly to read or write @ref manager_; releasing it before invoking
-        the manager method is acceptable because the manager destructor MUST
-        call @c setManager(nullptr) before tearing itself down.
-    */
-    QoreThreadLock onclose_lock;
-
-    //! Owning manager back-pointer (raw, no ref).
-    /** Protected by @ref onclose_lock.  Set/cleared by @ref setManager.
-        Read by @ref onClosedHook to dispatch the eviction call.
-    */
-    HttpClientConnectionManagerBase* manager_ = nullptr;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.

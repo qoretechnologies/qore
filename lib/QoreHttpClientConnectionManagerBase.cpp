@@ -358,23 +358,21 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 
     // Register the manager back-pointer immediately so onClosedHook can
     // dispatch to us if the connection closes between now and our return.
+    // setManager lives on HttpClientConnectionBase, so this works for
+    // any future H2/H3 connection class without per-protocol dispatch.
     conn->setManager(this);
 
     // Race window: the connection's I/O thread may have already closed
-    // the connection (e.g., immediate refused connect) BEFORE setManager
-    // ran.  In that case onClosedHook fired with manager_=nullptr and
-    // we missed the eviction.  Check now and propagate.
+    // the connection (e.g., immediate refused connect) between
+    // construction and the setManager call above.  In that case
+    // onClosedHook fired with manager_=nullptr and our pool eviction
+    // path was bypassed.  Detect and propagate the error here so the
+    // caller doesn't see a "ready" connection that's actually dead.
     if (conn->isClosed()) {
-        ReferenceHolder<QoreHashNode> err(
-            static_cast<HttpClientConnectionBase*>(conn)
-                ->isClosed() ? nullptr : nullptr,
-            xsink);
-        // Use the connection's stored error info if available.  Cast to
-        // Http1ClientConnection isn't necessary — the base class doesn't
-        // expose getReferencedErrorInfo, but we can rely on
-        // closeConnection + waitForReadyOrError semantics on the caller
-        // side.  For createConnection's contract, raise a generic error
-        // here and the caller (acquireConnection) will see the failure.
+        // The connection's poll-op error info isn't exposed on the
+        // base class API, so we surface a generic CONNECT-ERROR here.
+        // A future phase may add a base-class getReferencedErrorInfo
+        // accessor if a downstream caller needs the underlying detail.
         xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
             "connection to %s:%d closed before manager registration",
             host, port);
@@ -450,10 +448,9 @@ found:
     // Null the manager back-pointer so the impending closeConnection's
     // setClosed → onClosedHook does NOT call back into us (we already
     // removed it from the pool — the callback would be a no-op anyway,
-    // but breaks the back-pointer cleanly).
-    if (auto* h1 = dynamic_cast<Http1ClientConnection*>(conn)) {
-        h1->setManager(nullptr);
-    }
+    // but cleanly breaks the back-pointer).  setManager lives on the
+    // base class so this works generically for H1/H2/H3.
+    conn->setManager(nullptr);
     conn->closeConnection(xsink);
     conn->deref(xsink);
 }
@@ -486,11 +483,10 @@ void HttpClientConnectionManagerBase::closeAll(ExceptionSink* xsink) {
     }
 
     // For each drained connection: null the manager back-pointer
-    // (lifetime contract section 7.3), close, and deref.
+    // (lifetime contract section 7.3), close, and deref.  setManager
+    // lives on the base class so this works generically.
     for (HttpClientConnectionBase* conn : drained) {
-        if (auto* h1 = dynamic_cast<Http1ClientConnection*>(conn)) {
-            h1->setManager(nullptr);
-        }
+        conn->setManager(nullptr);
         ExceptionSink local_xs;
         conn->closeConnection(&local_xs);
         local_xs.clear();

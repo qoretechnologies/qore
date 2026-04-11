@@ -33,7 +33,6 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
-#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -344,28 +343,4 @@ QoreHashNode* Http1ClientConnection::getReferencedErrorInfo() {
         return nullptr;
     }
     return poll_op_priv->getErrorInfo();
-}
-
-void Http1ClientConnection::setManager(HttpClientConnectionManagerBase* mgr) {
-    AutoLocker al(onclose_lock);
-    manager_ = mgr;
-}
-
-void Http1ClientConnection::onClosedHook() {
-    // Read the back-pointer under our local lock, then release the lock
-    // BEFORE invoking the manager method.  This breaks any potential
-    // ordering issues between onclose_lock and manager.pool_lock for
-    // app-thread paths that take pool_lock first.
-    //
-    // Lifetime safety: setManager(nullptr) is contractually required to
-    // run before the manager destroys itself, so a non-null manager_
-    // observed here is guaranteed alive for the duration of the call.
-    HttpClientConnectionManagerBase* mgr;
-    {
-        AutoLocker al(onclose_lock);
-        mgr = manager_;
-    }
-    if (mgr) {
-        mgr->onConnectionClosed(this);
-    }
 }

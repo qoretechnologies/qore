@@ -42,6 +42,7 @@
 class QoreHashNode;
 class QoreObject;
 class ExceptionSink;
+class HttpClientConnectionManagerBase;
 
 //! HTTP client protocol version
 /** @since %Qore 2.3
@@ -119,6 +120,43 @@ public:
 
     //! Returns the current pending (reserved-but-not-yet-submitted) count.
     DLLEXPORT int getPendingStreamCount() const;
+
+    //! Registers (or clears) the owning manager back-pointer for close
+    //! notifications.
+    /** When the connection's state transitions to CLOSED for the first
+        time, @ref AbstractHttpPollConnectionPriv::onClosedHook fires; if
+        a manager has been registered via this setter, the hook invokes
+        @c manager->onConnectionClosed(this) so the manager can evict the
+        connection from its pool promptly.
+
+        Lock ordering: this method takes @c onclose_lock briefly to set
+        the back-pointer.  See section 7.2 of
+        @c design/http-client-manager-cpp-port.md for the full ordering
+        rules.
+
+        @param mgr the manager to notify on close, or @c nullptr to clear
+
+        @note Callers MUST clear the back-pointer (via
+        @c setManager(nullptr)) before destroying the manager — otherwise
+        the I/O thread could fire @ref AbstractHttpPollConnectionPriv::onClosedHook
+        on a manager that is mid-destruction (UAF).
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void setManager(HttpClientConnectionManagerBase* mgr);
+
+    //! @ref AbstractHttpPollConnectionPriv hook — invoked exactly once on
+    //! the first close transition (from any thread).  Forwards to the
+    //! registered manager (if any).
+    /** Subclasses generally do NOT need to override this — the base
+        class implementation handles dispatch via the @ref setManager
+        back-pointer.  Override only when additional close-time work is
+        needed (e.g., a protocol-specific notification beyond the
+        manager dispatch).
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void onClosedHook() override;
 
     //! Submit a request; returns a hash with @c stream_id (int) and
     //! @c future (Future) keys.
@@ -211,6 +249,25 @@ protected:
     //! Reserved-but-not-yet-submitted stream slots.  Protected by
     //! @ref reserve_lock.
     int pending_stream_count = 0;
+
+    //! Lock protecting @ref manager_.
+    /** This is the OUTERMOST lock in the close-hook lock-ordering chain:
+        @c onclose_lock → manager.pool_lock → controller.lock.  Held only
+        briefly to read or write @ref manager_; @ref onClosedHook releases
+        it BEFORE invoking the manager method to avoid lock inversion
+        with app-thread paths that take @c pool_lock first.
+    */
+    mutable QoreThreadLock onclose_lock;
+
+    //! Owning manager back-pointer (raw, no ref).  Protected by
+    //! @ref onclose_lock.
+    /** Set/cleared by @ref setManager.  Read by @ref onClosedHook to
+        dispatch the eviction call.  The manager destructor MUST call
+        @c setManager(nullptr) on every connection it owns BEFORE
+        freeing manager state — see the lifetime contract in section
+        7.3 of @c design/http-client-manager-cpp-port.md.
+    */
+    HttpClientConnectionManagerBase* manager_ = nullptr;
 };
 
 #endif // _QORE_HTTPCLIENTCONNECTION_H
