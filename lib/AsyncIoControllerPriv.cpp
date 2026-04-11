@@ -517,16 +517,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.args) {
             async_item.args->deref(xsink);
         }
-        // Release program reference AFTER all object derefs — program must
-        // stay alive while we deref objects belonging to it
-        if (async_item.pgm) {
-            async_item.pgm->deref(xsink);
-        }
 
+        // Decrement per-program and per-dispatcher counters BEFORE the final
+        // program deref.  If this worker is holding the last reference to
+        // the Program and the deref triggers final Program destruction,
+        // that destruction calls aio_program_cleanup() →
+        // AsyncIoControllerPriv::cancelByProgram() → waitForProgramIdle(),
+        // which blocks until active_per_program[pgm] reaches 0.  With the
+        // old ordering (decrement after deref), the count still showed this
+        // worker as active during the Program destructor — the worker
+        // would wait for itself and deadlock.  Swapping the order keeps
+        // the Program alive via async_item.pgm until after the counter
+        // is decremented, so the destructor's waitForProgramIdle() sees 0
+        // and returns immediately.
         {
             AutoLocker al(m);
             --active_processing;
-            // Decrement per-program count and signal waiters
             if (async_item.pgm) {
                 auto it = active_per_program.find(async_item.pgm);
                 if (it != active_per_program.end()) {
@@ -539,6 +545,16 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             if (async_queue.empty() && active_processing == 0) {
                 idle_cond.broadcast();
             }
+        }
+
+        // Release the program reference last.  Object derefs above may
+        // still need the program alive (e.g., QoreObject destructors
+        // running Qore code), which is why we defer the pgm deref until
+        // after those are complete — but we must have already decremented
+        // the per-program counter so waitForProgramIdle() sees this worker
+        // as idle when called from the Program destructor path.
+        if (async_item.pgm) {
+            async_item.pgm->deref(xsink);
         }
     }
 }
