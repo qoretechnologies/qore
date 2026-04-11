@@ -711,6 +711,182 @@ without needing any auxiliary signal — ngtcp2 recomputes the keepalive expiry 
 from `keep_alive.timeout`, and a value of `UINT64_MAX` returns `UINT64_MAX` from the expiry helper.
 No `pending_write_` bump is required.
 
+**Silent close plumbing (critical follow-up to the keepalive gating above):** disabling keepalive
+on an idle client session lets the peer's idle timer close the connection, but detecting that close
+on the Qore side is **not** automatic.  `ngtcp2_conn_handle_expiry()` in ngtcp2 returns
+`NGTCP2_ERR_IDLE_CLOSE` on idle timeout WITHOUT transitioning `conn->state` to
+`NGTCP2_CS_CLOSING` or `NGTCP2_CS_DRAINING`, so `ngtcp2_conn_in_closing_period()` and
+`ngtcp2_conn_in_draining_period()` both keep returning false.  If `QuicSession::isClosed()` only
+consulted those helpers, the Http3 client poll op would never observe the close and the UDP
+socket would leak indefinitely.
+
+The fix is `QuicSession::idle_closed_` — an `std::atomic<bool>` set in `handleExpiryLocked()`
+when `ngtcp2_conn_handle_expiry()` returns `NGTCP2_ERR_IDLE_CLOSE`, checked by `isClosed()`
+lock-free **before** the mutex acquisition and the state-period helpers.  `processTimerAndWrite()`
+short-circuits after the flag is set (clears `pending_write_`, returns `next_expiry = UINT64_MAX`),
+and `SocketQuicClientPollOperation::continuePoll` has a post-`sendPendingPackets` `isClosed()`
+check so the `QCS::CLOSED` transition happens in the same continuePoll cycle rather than a
+round later.
+
+The chain end-to-end: ngtcp2 idle timer fires → `handleExpiryLocked` sets `idle_closed_` → next
+`isClosed()` returns true → `SocketQuicClientPollOperation::continuePoll` transitions to `QCS::CLOSED`
+→ `getStateImpl()` returns `"closed"` → `Http3ClientPollOperationBase::continuePoll` sees
+`inner_state == "closed"` → `setError("HTTP3-CONNECTION-CLOSED", ...)` → `h3_state = CLOSED` →
+`needsCloseOnComplete()` returns true → AsyncIoController closes the UDP fd → manager removes
+the connection from the pool.
+
+Without this flag the session stays in `QCS::READING` forever even though ngtcp2 has acknowledged
+the idle timeout internally.  This was commit `432402a02` and was reproduced on drake's
+qorus-core as 64,796 leaked UDP sockets (fd limit hit at 65,536) before being fixed.
+
+### HTTP/1.1 and HTTP/2 Client Idle Close Policy
+
+TCP-based HTTP client connections get peer-initiated close detection for free via kernel FIN
+→ `epoll` `POLLIN` → poll op reads 0 → error path.  Unlike the UDP/QUIC case, no
+user-space timer is required to notice a peer close — the OS tells us.
+
+The gap is **proactive** close: closing a pooled idle connection before the peer does.  nginx's
+upstream `keepalive_timeout` handles this with a per-connection read-event timer (see
+`src/http/modules/ngx_http_upstream_keepalive_module.c:384`, default 60s) that fires after
+the idle period and does a `recv(MSG_PEEK)` to confirm silence, then closes.  Qore mirrors this:
+
+- **Configuration** — `HttpClientConnectionManager` stores `opts.idle_timeout` (default 60s,
+  matching nginx's upstream default).  Non-default values propagate through to the C++ poll op
+  via `setIdleTimeout(int idle_timeout_ms)` called from
+  `HttpClientConnectionManager::submitConnectionToController()` immediately after connection
+  creation.  `submitIdleTimeout` wiring is H1/H2-only — H3 relies on its ngtcp2 idle timer
+  described in the section above.
+- **Arming** — `idle_timeout_us` is stored as an I/O-thread-only member on
+  `Http{1,2}ClientPollOperationPriv`.  The deadline (`idle_deadline_us`) is armed lazily on
+  the first idle entry and reset to 0 whenever the connection leaves idle state.  For H1 that
+  happens in `handleIdle` (`armIdleDeadline()` helper) and on every response completion path
+  (`dispatchResponse` / `dispatchStreamingEnd`).  For H2 it happens via `applyIdleTimeout()`
+  which is called at every return point from `handleReading`.
+- **Firing** — the armed `poll_info` carries `poll_timeout_ms = remaining_deadline_us / 1000`
+  so the AsyncIoController's timeout heap wakes the poll op when the deadline hits.  On the
+  next `continuePoll`, the deadline check fires: H1 transitions to `CLOSED` with
+  `HTTP1-IDLE-TIMEOUT`, H2 transitions to `CLOSED` with `HTTP2-IDLE-TIMEOUT`.
+  `needsCloseOnComplete()` → controller closes socket → `handleConnectionResult` → pool removal.
+- **TOCTOU avoidance** — H2's `applyIdleTimeout` takes `stream_lock` to atomically read
+  `active_stream_count` AND set/check the deadline, closing the race with a concurrent
+  `submitRequest` on an app thread.  If a new stream was submitted, the deadline is reset
+  instead of fired.  H1 is serial by nature so no lock is needed there.
+- **Protocol-switch guard** — H1 `Http1ClientPollOperation::onComplete` checks
+  `isProtocolSwitched()` and returns without calling `handleCompletion` if the H1 connection
+  is in the middle of a WebSocket hijack (HTTP/1.1 → WS via `101 Switching Protocols`).
+  Without this guard, `handleConnectionResult` would call `continueReading()` which throws
+  `HTTPCLIENT-STATE-ERROR` and closes the socket that the WebSocket layer is now using.
+
+The end state: H1/H2 idle connections are closed proactively by the poll op, invisibly to
+callers, with a deterministic upper bound (`idle_timeout`) on how long a stale pooled connection
+can survive.  Misbehaving peers that never close (infinite keepalive) no longer pin pool slots
+indefinitely.  This was commit `fa6f6b40a`.
+
+### HttpClientPollOperation.onComplete MRO Override Requirement
+
+`Http{1,2,3}ClientPollOperation` inherit from both a QPP C++ base
+(`Http{1,2,3}ClientPollOperationBase` → `SocketPollOperationBase` → `AbstractPollOperation`)
+and a Qore-language base (`HttpClientPollOperation`).  `AbstractPollOperation::onComplete`
+at `lib/QC_AbstractPollOperation.qpp:84` is a **no-op** — it exists only to satisfy the
+pollop method contract in classes that don't care about completion notifications.
+
+Qore's method resolution walks the first-listed parent before the second, so
+`evalMethod("onComplete")` on a concrete `Http1ClientPollOperation` instance resolves to
+`AbstractPollOperation::onComplete` (reached via the C++ base chain) instead of the real
+`HttpClientPollOperation::onComplete` at `qlib/HttpClientIo/HttpClientPollOperation.qc:104`.
+The net effect is that `handleCompletion()` is never called, `handleConnectionResult()` is
+never called, and closed/errored/idle-timed-out connections are never removed from the pool.
+
+The fix is two-layered:
+1. `HttpClientConnectionManager::submitConnectionToController()` sets
+   `"has_on_complete": True` in the submit info hash, which is an explicit escape hatch
+   documented at `lib/AsyncIoControllerPriv.cpp:715-727` for cases where
+   `findMethod("onComplete")` returns the wrong parent's implementation.  This forces the
+   controller to dispatch `onComplete` via the worker pool.
+2. `Http1ClientPollOperation`, `Http2ClientPollOperation`, and `Http3ClientPollOperation`
+   each declare a concrete `onComplete(hash<SocketPollResultInfo>)` override in
+   `qlib/HttpClientIo/Http{1,2,3}ClientPollOperationImpl.qc`.  Declaring the method directly
+   on the concrete subclass forces Qore's method resolution to pick this class's version
+   first, bypassing the MRO flaw.  H1's override additionally checks `isProtocolSwitched()`
+   as described in the idle-close policy section above.
+
+**Rule for future poll op classes:** if a Qore-visible class inherits from both a QPP C++
+base and a Qore module base that both define the same method, the concrete subclass must
+declare the method itself to force Qore method resolution, and any controller submission
+must pass `"has_on_complete": True` (or the equivalent flag for other overridable methods).
+
+### C++-side close notification — `AbstractHttpPollConnectionPriv::onClosedHook`
+
+The `onComplete` MRO override above describes how the **Qore-side**
+`HttpClientConnectionManager` learns that a pooled connection has closed: the controller
+dispatches `onComplete` via the worker pool, the Qore method walks the manager chain, and
+`handleConnectionResult()` evicts the connection from the pool.
+
+A parallel **C++-side** close-notification path was added as part of the Phase P3 prep
+work for the C++ port of `HttpClientConnectionManager` (see
+`design/http-client-manager-cpp-port.md` section 7.1).  The C++ path bypasses Qore method
+dispatch entirely:
+
+- `AbstractHttpPollConnectionPriv` exposes a virtual `onClosedHook()` method.
+- `setClosed()` fires the hook exactly once on the first CONNECTING/READY → CLOSED
+  transition, after releasing its internal lock and after signaling all `ready_notifiers`.
+  A `bool on_closed_hook_fired` field guards the one-shot semantics under the existing
+  `lock`.
+- C++ connection wrappers (e.g., `Http1ClientConnection`) override the hook to forward to
+  a registered manager via a back-pointer.
+- The C++ manager registers itself via `connection->setManager(this)` after construction
+  and calls `connection->setManager(nullptr)` before destruction (the lifetime contract).
+
+The two paths coexist for the duration of the porting effort:
+
+| Layer | Close-notification mechanism |
+|-------|------------------------------|
+| Existing Qore `HttpClientIo::HttpClientConnectionManager` (P0–P5) | `onComplete` MRO override → worker pool dispatch → `handleConnectionResult` |
+| New C++ `HttpClientConnectionManagerBase` (P3+) | `onClosedHook` virtual → direct manager call from `setClosed()` |
+| Phase P6 rewire of the Qore manager to inherit from the C++ base | Switches to `onClosedHook` and drops the `onComplete` MRO machinery |
+
+Both paths rely on the same `setClosed()` invariant: state transitions to CLOSED on the
+first call, the broadcast and notifier signaling run, and (with the new addition) the
+hook fires exactly once.  The Qore-side `onComplete` dispatch is still triggered by the
+controller's own cache cleanup independently of the hook, so there is no duplicate
+notification — the Qore manager sees `onComplete`, the C++ manager (when present) sees
+`onClosedHook`, and a connection is owned by exactly one of them at a time.
+
+### QoreCallDispatcher Worker Loop Ordering Contract
+
+`QoreCallDispatcher::workerLoop` at `lib/AsyncIoControllerPriv.cpp` processes async work items
+on a pool of worker threads.  Each item carries a `QoreProgram* pgm` reference (taken by
+`enqueue()` to keep the Program alive while the worker processes the task) and is counted in
+`active_per_program[pgm]` for the duration of processing.
+
+The **ordering contract** for completing a task is:
+
+```
+1. Dispatch the task (evalMethod or similar)
+2. Deref captured objects (spop_obj, result, callback, args)
+3. Under m: decrement active_processing AND active_per_program[pgm]; broadcast pgm_idle_cond
+4. Deref async_item.pgm (may trigger Program destruction)
+```
+
+Step 3 **must** happen before step 4.  Rationale: if step 4 is the final reference to the
+Program, its destructor runs `aio_program_cleanup()` → `cancelByProgram()` →
+`waitForProgramIdle()`, which blocks until `active_per_program[pgm]` reaches 0.  With the
+reverse ordering, the current worker is still counted as active during its own Program
+destructor → the worker waits for itself and deadlocks.
+
+This was a latent bug that stayed dormant for years because the test thread's `closeAll()`
+path normally released the final Program ref before the worker finished.  It was exposed by
+the `onComplete` MRO override in commit `fa6f6b40a`, which caused `conn.close()` to run inside
+the worker — making the worker the last ref holder in `RestClientIo.qtest`.  Reproduction was
+gcore + gdb on a hung process; stack trace showed the self-wait
+(`waitForProgramIdle` → `pthread_cond_wait` on a condition that only this thread could
+signal, via its own counter decrement that hadn't run yet).  Fixed in commit `e31718a59`.
+
+**`async_item.pgm` holds the Program alive during step 3**, so previous object derefs in step
+2 cannot access a freed Program — this is why step 3 can safely do the decrement before step 4
+without introducing a use-after-free.  Any future changes to `workerLoop` that introduce new
+per-program state must maintain this ordering contract.
+
 ### Thread Scaling
 
 I/O thread and callback worker thread counts are capped at `hardware_concurrency()` (the number of
