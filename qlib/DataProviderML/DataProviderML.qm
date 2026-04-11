@@ -1460,6 +1460,46 @@ module DataProviderML {
             ),
         });
 
+        # register pdf-ocr action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/pdf-ocr",
+            "action": "pdf-ocr",
+            "display_name": "Extract Text from PDF Documents",
+            "short_desc": "Reads text from PDFs, using OCR automatically for scanned pages",
+            "desc": "Extracts text from PDF documents, handling both digital and scanned "
+                "pages automatically. Digital pages have their text extracted directly "
+                "(fast and accurate). Scanned pages are rasterized to images and processed "
+                "with OCR (Tesseract).\n\n"
+                "This is ideal for processing business documents like contracts, invoices, "
+                "and reports that may contain a mix of digital text and scanned images.\n\n"
+                "Each record is enriched with:\n"
+                "- `pdf_text` — the full document text (all pages combined)\n"
+                "- `pdf_total_pages` — total number of pages\n"
+                "- `pdf_ocr_pages` — number of pages that required OCR\n"
+                "- `pdf_page_details` — per-page results with text and confidence\n\n"
+                "**Requirements:** the `pdf` module must be installed for PDF reading "
+                "and page rasterization. The `ocr` module (Tesseract) is needed for "
+                "scanned pages.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QorePdfOcrProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QorePdfOcrProcessor::ConstructorOptions{"pdf_field",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QorePdfOcrProcessor::ConstructorOptions{
+                    "language", "dpi", "scanned_threshold",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
         # register vision-extraction action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MLApp::AppName,

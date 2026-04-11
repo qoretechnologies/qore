@@ -89,6 +89,7 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         Children."guardrail-filter" = "QoreGuardrailFilterProcessor";
         Children."guardrail-transform" = "QoreGuardrailTransformProcessor";
         Children."ocr" = "QoreOcrProcessor";
+        Children."pdf-ocr" = "QorePdfOcrProcessor";
         Children."vision-extraction" = "QoreVisionExtractionProcessor";
     }
 
@@ -199,6 +200,8 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreGuardrailTransformProcessor();
             case "ocr":
                 return new QoreOcrProcessor();
+            case "pdf-ocr":
+                return new QorePdfOcrProcessor();
             case "vision-extraction":
                 return new QoreVisionExtractionProcessor();
         }
