@@ -2389,6 +2389,45 @@ static std::vector<std::string> extractAllDependencies(const char* source, int s
             }
         }
 
+        // Check for %try-module directive — source-level optional load.
+        // If the module successfully loaded at qcc compile time, its functions
+        // / classes may have been referenced inside the `%ifndef NoXxx` guarded
+        // block and baked into the AOT binary.  At runtime those references
+        // must resolve, so `%try-module <name>` effectively becomes a runtime
+        // dependency for the compiled binary.  Adding it here is safe: if the
+        // module is unavailable at runtime, qore_aot_module_init_v3 tolerates
+        // dependency load failures (the referenced slots will then fail to
+        // resolve — same as the pre-fix behavior for that branch).
+        if (p + 11 <= end && strncmp(p, "%try-module", 11) == 0) {
+            p += 11;
+            // Skip whitespace after %try-module
+            while (p < end && (*p == ' ' || *p == '\t')) {
+                ++p;
+            }
+            // Now read the module name (stop at whitespace, newline, or version operators)
+            const char* name_start = p;
+            while (p < end && *p != '\n' && *p != ' ' && *p != '\t' &&
+                   *p != '<' && *p != '>' && *p != '=') {
+                ++p;
+            }
+            if (p > name_start) {
+                std::string raw_path(name_start, p - name_start);
+                std::string dep_name = raw_path;
+                {
+                    size_t slash_pos = dep_name.rfind('/');
+                    if (slash_pos != std::string::npos) {
+                        dep_name = dep_name.substr(slash_pos + 1);
+                    }
+                    if (dep_name.size() > 3 && dep_name.compare(dep_name.size() - 3, 3, ".qm") == 0) {
+                        dep_name = dep_name.substr(0, dep_name.size() - 3);
+                    }
+                }
+                if (dep_name != "qore") {
+                    deps.push_back(dep_name);
+                }
+            }
+        }
+
         // Skip to end of line
         while (p < end && *p != '\n') {
             if (p + 1 < end && p[0] == '/' && p[1] == '*') {
