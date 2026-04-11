@@ -79,6 +79,24 @@ void HttpClientConnectionBase::onClosedHook() {
     }
 }
 
+QoreHashNode* HttpClientConnectionBase::submitRequest(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        ExceptionSink* xsink) {
+    // Default: not implemented.  C++ subclasses (Http1ClientConnection etc.)
+    // override with protocol-specific implementations.  Qore subclasses
+    // override the QPP method at the Qore level.
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequest not implemented on this connection class");
+    return nullptr;
+}
+
+void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
+    // Default: just transition the state machine to CLOSED.
+    // C++ subclasses override to also abort the poll op and cancel the
+    // controller submission.  Qore subclasses override at the Qore level.
+    setClosed();
+}
+
 bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, ExceptionSink* xsink) {
     // Delegate to the AbstractHttpPollConnectionPriv condition-variable wait.
     bool ready = AbstractHttpPollConnectionPriv::waitForReady(timeout_ms);

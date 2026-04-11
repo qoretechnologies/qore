@@ -77,11 +77,19 @@ enum class HttpClientProtocol {
 */
 class HttpClientConnectionBase : public AbstractHttpPollConnectionPriv {
 public:
-    //! Returns the protocol (H1, H2, or H3)
-    DLLEXPORT virtual HttpClientProtocol getProtocol() const = 0;
+    //! Returns the protocol (H1, H2, or H3).
+    /** Default returns H1.  Subclasses override.
+    */
+    DLLEXPORT virtual HttpClientProtocol getProtocol() const {
+        return HttpClientProtocol::H1;
+    }
 
-    //! Returns the number of active streams on this connection
-    DLLEXPORT virtual int getActiveStreamCount() const = 0;
+    //! Returns the number of active streams on this connection.
+    /** Default returns 0.  Subclasses override.
+    */
+    DLLEXPORT virtual int getActiveStreamCount() const {
+        return 0;
+    }
 
     //! Returns the maximum concurrent streams this connection can host.
     /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
@@ -184,14 +192,17 @@ public:
     */
     DLLEXPORT virtual QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
-        ExceptionSink* xsink) = 0;
+        ExceptionSink* xsink);
 
     //! Close the connection and release controller resources
     /** After this call, @ref isClosed returns true and no further requests
         can be submitted.  Any in-flight request is rejected with
         @c HTTP1-ABORT (or protocol equivalent).
+
+        Default: calls @ref setClosed.  Subclasses override to also abort
+        the poll op and cancel the controller submission.
     */
-    DLLEXPORT virtual void closeConnection(ExceptionSink* xsink) = 0;
+    DLLEXPORT virtual void closeConnection(ExceptionSink* xsink);
 
     //! Blocks until the connection transitions out of CONNECTING
     /** @param timeout_ms wait budget in milliseconds (0 or negative = wait forever)
@@ -219,6 +230,13 @@ public:
         return ssl_required;
     }
 
+    //! Default constructor for Qore subclass construction.
+    /** Qore subclasses (HttpClientIo::HttpClientConnection) create the
+        C++ priv via this default constructor; protocol-specific state
+        lives in the Qore layer.
+    */
+    DLLEXPORT HttpClientConnectionBase() = default;
+
 protected:
     DLLLOCAL HttpClientConnectionBase(std::string target_host, int target_port,
             bool ssl_required)
@@ -233,7 +251,9 @@ protected:
         @c desc (string) keys; caller owns the returned ref (or nullptr if
         no error info is available).
     */
-    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() = 0;
+    DLLLOCAL virtual QoreHashNode* getReferencedErrorInfo() {
+        return nullptr;
+    }
 
     std::string target_host;
     int target_port;

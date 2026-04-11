@@ -37,7 +37,7 @@ public namespace HttpClientIo {
     acquired before \c HttpClientPollOperation.stream_lock.  Never acquire
     in reverse order or a deadlock will result.
 */
-public class HttpClientConnection inherits AbstractHttpPollConnection {
+public class HttpClientConnection inherits HttpClientConnectionBase {
     private {
         #! URL info (host, port, scheme)
         hash<auto> url_info;

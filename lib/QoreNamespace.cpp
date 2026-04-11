@@ -182,6 +182,7 @@ DLLLOCAL QoreClass* initHttp3ServerPollOperationClass(QoreNamespace& ns);
 extern QoreClass* QC_HTTP3SERVERPOLLOPERATION;
 DLLLOCAL QoreClass* initHttp2ClientPollOperationBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttpClientPingPollOperationBaseClass(QoreNamespace& ns);
+DLLLOCAL QoreClass* initHttpClientConnectionBaseClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initHttp1ConnectionClass(QoreNamespace& ns);
 DLLLOCAL QoreClass* initAbstractPollableIoObjectClass(QoreNamespace& ns);
 
@@ -1327,6 +1328,8 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initDelegatingPollOperationClass(qns));
     // AbstractHttpPollConnection must be before Http{1,2,3}ClientPollOperationBase
     qns.addSystemClass(initAbstractHttpPollConnectionClass(qns));
+    // HttpClientConnectionBase must be after AbstractHttpPollConnection (vparent)
+    qns.addSystemClass(initHttpClientConnectionBaseClass(qns));
     // HttpIdlePollOperationBase must be after SocketPollOperationBase
     qns.addSystemClass(initHttpIdlePollOperationBaseClass(qns));
     // HttpKeepAlivePollOperationBase must be after SocketPollOperationBase

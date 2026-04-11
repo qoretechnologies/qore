@@ -1,0 +1,167 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_HttpClientConnectionBase.qpp
+
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    Note that the Qore library is released under a choice of three open-source
+    licenses: MIT (as above), LGPL 2+, or GPL 2+; see README-LICENSE for more
+    information.
+*/
+
+#include "qore/Qore.h"
+#include <qore/HttpClientConnection.h>
+
+/** @cond INTERNAL */
+
+//! C++ base for HTTP client connections — Phase P6 of the porting plan
+/** This QPP class exposes the @ref HttpClientConnectionBase C++ class to
+    Qore, enabling Qore subclasses (e.g., @c HttpClientIo::HttpClientConnection)
+    to inherit from it and participate in the C++ connection manager's pool.
+
+    @par Inheritance
+    Qore connection classes inherit from this class (via
+    @c vparent=AbstractHttpPollConnection) to get both the state machine
+    (CONNECTING → READY → CLOSED) and the pool-management API
+    (tryReserveStream, setManager, onClosedHook).
+
+    Methods declared here can be overridden in Qore subclasses:
+    - @ref getActiveStreamCount — subclass returns its poll op's count
+    - @ref close — subclass aborts its poll op + cancels controller
+    - @ref getMaxConcurrentStreams — subclass returns its configured cap
+
+    @since %Qore 2.3
+*/
+qclass HttpClientConnectionBase [
+    ns=Qore;
+    arg=HttpClientConnectionBase* priv;
+    vparent=AbstractHttpPollConnection;
+];
+
+//! Default constructor
+/** Creates the C++ priv with default state.  Qore subclasses call this
+    implicitly via the inheritance chain.
+*/
+HttpClientConnectionBase::constructor() {
+    self->setPrivate(CID_HTTPCLIENTCONNECTIONBASE, new HttpClientConnectionBase());
+}
+
+//! Destructor
+/** Calls closeConnection if not already closed.
+*/
+HttpClientConnectionBase::destructor() {
+    priv->closeConnection(xsink);
+    priv->deref(xsink);
+}
+
+//! Copying is not supported
+/** @throw HTTPCLIENTCONNECTIONBASE-COPY-ERROR always
+*/
+HttpClientConnectionBase::copy() {
+    xsink->raiseException("HTTPCLIENTCONNECTIONBASE-COPY-ERROR",
+        "HttpClientConnectionBase objects cannot be copied");
+}
+
+//! Returns the number of active streams on this connection
+/** Override in subclasses to return the protocol-specific count.
+    @return 0 by default
+*/
+int HttpClientConnectionBase::getActiveStreamCount() [flags=RET_VALUE_ONLY] {
+    return priv->getActiveStreamCount();
+}
+
+//! Returns the maximum concurrent streams this connection can host
+/** Override in subclasses for H2/H3 multi-stream support.
+    @return 1 by default (HTTP/1.1 semantics)
+*/
+int HttpClientConnectionBase::getMaxConcurrentStreams() [flags=RET_VALUE_ONLY] {
+    return priv->getMaxConcurrentStreams();
+}
+
+//! Atomically checks capacity and reserves a stream slot
+/** @return True if a slot was reserved, False if at capacity
+*/
+bool HttpClientConnectionBase::tryReserveStream() {
+    return priv->tryReserveStream();
+}
+
+//! Releases a previously-reserved stream slot
+/** Decrements the pending stream count.
+*/
+nothing HttpClientConnectionBase::releaseStreamReservation() {
+    priv->releaseStreamReservation();
+}
+
+//! Returns the current pending (reserved-but-not-yet-submitted) count
+/** @return the pending reservation count
+*/
+int HttpClientConnectionBase::getPendingStreamCount() [flags=RET_VALUE_ONLY] {
+    return priv->getPendingStreamCount();
+}
+
+//! Blocks until the connection becomes ready or fails
+/** @param timeout_ms wait budget in milliseconds (0 = wait forever)
+    @return True if the connection is ready; False on timeout
+    @throw HTTPCLIENT-CONNECT-ERROR if closed with an error
+*/
+bool HttpClientConnectionBase::waitForReadyOrError(int timeout_ms = 30000) {
+    return priv->waitForReadyOrError((int64_t)timeout_ms, xsink);
+}
+
+//! Closes the connection
+/** Override in subclasses to also abort the poll op and cancel the
+    controller submission.  Default: transitions state to CLOSED.
+*/
+nothing HttpClientConnectionBase::close() {
+    priv->closeConnection(xsink);
+}
+
+//! Returns True when the connection is ready for requests
+/** @return True when the connection has reached READY state
+*/
+bool HttpClientConnectionBase::isReady() [flags=RET_VALUE_ONLY] {
+    return priv->isReady();
+}
+
+//! Returns True when the connection has been closed
+/** @return True when the connection has reached CLOSED state
+*/
+bool HttpClientConnectionBase::isClosed() [flags=RET_VALUE_ONLY] {
+    return priv->isClosed();
+}
+
+//! Returns True when the connection is draining (GOAWAY received)
+/** @return True when the connection has reached DRAINING state
+*/
+bool HttpClientConnectionBase::isDraining() [flags=RET_VALUE_ONLY] {
+    return priv->isDraining();
+}
+
+//! Returns the current connection state as an int
+/** Values match HttpClientConnectionState enum:
+    0=CONNECTING, 1=READY, 2=DRAINING, 3=CLOSED
+    @return the state integer
+*/
+int HttpClientConnectionBase::getConnectionState() [flags=RET_VALUE_ONLY] {
+    return priv->getState();
+}
