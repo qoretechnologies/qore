@@ -719,6 +719,67 @@ MACRO (QORE_EXTERNAL_USER_MODULE _module_file _mod_deps)
     endif()
 ENDMACRO (QORE_EXTERNAL_USER_MODULE)
 
+# Configure a two-phase documentation build for an external binary module that
+# contains one or more user sub-modules, so that the binary module's mainpage
+# and other doc pages can cross-reference symbols in the user module docs via
+# @ref.
+#
+# Must be called AFTER qore_external_binary_module() and all
+# qore_external_user_module() calls for the sub-modules.
+#
+# The binary module docs are laid out as ${CMAKE_BINARY_DIR}/docs/${binary}/html/
+# and user module docs as ${CMAKE_BINARY_DIR}/docs/${usermod}/html/, so the
+# correct binary-to-user relative path is "../../${usermod}/html" (two levels
+# of ".." to escape the binary module's html subdirectory to the shared docs/
+# parent).
+#
+# Param #1: binary module name (e.g. "krb5")
+# Param #2: list of user module names separated by semicolons
+#           (e.g. "Krb5Util" or "NcursesUi;NcursesReplUi")
+#
+# Example:
+#     qore_external_binary_module(krb5 ${PROJECT_VERSION})
+#     qore_external_user_module("qlib/Krb5Util" "")
+#     qore_binary_module_two_phase_docs(krb5 "Krb5Util")
+MACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS _binary_module _user_modules)
+    if (DOXYGEN_FOUND)
+        # Suppress unresolved cross-reference warnings on the initial pass,
+        # which runs before any user module tag files exist.
+        file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile
+            "\n# Suppress warnings for initial pass (no user module TAGFILES available)\nWARN_IF_DOC_ERROR = NO\n")
+
+        # Build the TAGFILES line that pulls in every user module's tag file.
+        # Binary HTML is at docs/${binary}/html/; user HTML is at docs/${usermod}/html/;
+        # from the former, the correct relative path is ../../${usermod}/html.
+        set(_qb2pd_tagfiles "")
+        foreach(_qb2pd_um ${_user_modules})
+            if (_qb2pd_tagfiles STREQUAL "")
+                set(_qb2pd_tagfiles "${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html")
+            else()
+                set(_qb2pd_tagfiles "${_qb2pd_tagfiles} ${CMAKE_BINARY_DIR}/${_qb2pd_um}.tag=../../${_qb2pd_um}/html")
+            endif()
+        endforeach()
+
+        # Create the final-pass Doxyfile by copying the initial one and appending
+        # the correct TAGFILES line plus re-enabling doc error warnings.
+        file(COPY_FILE ${CMAKE_BINARY_DIR}/Doxyfile ${CMAKE_BINARY_DIR}/Doxyfile.final)
+        file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile.final
+            "\n# Final pass: enable user module cross-references and re-enable doc error warnings\nTAGFILES = ${_qb2pd_tagfiles}\nWARN_IF_DOC_ERROR = YES\n")
+
+        add_custom_target(docs-module-final
+            COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
+            COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ${CMAKE_BINARY_DIR}/docs/${_binary_module}/html ${CMAKE_BINARY_DIR}/docs/${_binary_module}/html/search
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+            COMMENT "Generating API documentation with Doxygen (final pass with user module cross-references)"
+            VERBATIM
+        )
+        foreach(_qb2pd_um ${_user_modules})
+            add_dependencies(docs-module-final docs-${_qb2pd_um})
+        endforeach()
+        add_dependencies(docs docs-module-final)
+    endif()
+ENDMACRO (QORE_BINARY_MODULE_TWO_PHASE_DOCS)
+
 # Install qore native/user modules (qm files) into the proper location.
 # Example:
 #   set(QM_FILES foo.qm bar.qm)

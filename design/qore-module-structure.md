@@ -96,43 +96,75 @@ module list in `doxygen/lang/120_modules.dox.tmpl` and release notes.
 
 ### Two-Phase Doc Build for External Modules with User Sub-Modules
 
-When an external binary module includes user sub-modules (e.g., ncurses includes
-NcursesUi and NcursesReplUi), the binary module docs should be built twice so that the
-binary module's mainpage can `@ref` into user module symbols:
+When an external binary module includes user sub-modules (e.g., `krb5` includes
+`Krb5Util`, `ncurses` includes `NcursesUi` and `NcursesReplUi`), the binary module
+docs must be built in two passes so that the binary module's mainpage can `@ref`
+into user module symbols:
 
 1. **Initial pass** (`docs-module`): generates the binary module's tag file (e.g.,
-   `ncurses.tag`) with empty `TAGFILES` and `WARN_IF_DOC_ERROR = NO` to suppress
+   `krb5.tag`) with empty `TAGFILES` and `WARN_IF_DOC_ERROR = NO` to suppress
    unresolved cross-reference warnings.
-2. **User module builds** (`docs-<ModuleName>`): each generates its own tag file,
-   referencing the binary module's tag file for cross-references back to binary module
-   symbols.
-3. **Final pass** (`docs-module-final`): rebuilds binary module docs with user module
-   tag files in `TAGFILES`, enabling `@ref` cross-references from the mainpage into
-   user module symbols.
+2. **User module builds** (`docs-<UserModuleName>`): each generates its own tag
+   file, referencing the binary module's tag file for cross-references back to
+   binary module symbols.
+3. **Final pass** (`docs-module-final`): rebuilds the binary module docs with the
+   user module tag files in `TAGFILES`, enabling `@ref` cross-references from the
+   mainpage into user module symbols.
 
-Implementation pattern (in `CMakeLists.txt`):
+#### Preferred: `qore_binary_module_two_phase_docs()` macro
+
+External modules should use the `qore_binary_module_two_phase_docs()` macro from
+`QoreMacros.cmake`. It handles all three phases, including the correct relative
+paths for tag files (a subtle point — see below), and replaces ~25 lines of
+duplicated inline CMake with a single call:
+
 ```cmake
-# Suppress warnings in initial pass
-file(APPEND ${CMAKE_BINARY_DIR}/Doxyfile
-    "\nWARN_IF_DOC_ERROR = NO\n")
+qore_external_binary_module(${module_name} ${PROJECT_VERSION} ${LINK_FLAGS})
+qore_external_user_module("qlib/Krb5Util" "")
 
-# Configure final-pass Doxyfile with user module tag files
-set(TAGFILES "\"${CMAKE_BINARY_DIR}/UserMod1.tag=../UserMod1/html\" ...")
-configure_file(${QORE_USERMODULE_DOXYGEN_TEMPLATE}
-    ${CMAKE_BINARY_DIR}/Doxyfile.final @ONLY)
+if (DOXYGEN_FOUND)
+    qore_wrap_dox(QORE_DOX_SRC ${QORE_DOX_TMPL_SRC})
+    add_custom_target(QORE_MOD_DOX_FILES DEPENDS ${QORE_DOX_SRC})
+    add_dependencies(docs-module QORE_MOD_DOX_FILES)
 
-# Create final-pass target
-add_custom_target(docs-module-final
-    COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile.final
-    COMMAND ${QORE_DOCS_ENV} ${QORE_QDX_COMMAND} --post ...
-    ...)
-add_dependencies(docs-module-final docs-UserMod1 docs-UserMod2)
-add_dependencies(docs docs-module-final)
+    # Two-phase doc build so the binary module's mainpage can @ref into user modules
+    qore_binary_module_two_phase_docs(${module_name} "Krb5Util")
+endif()
 ```
 
-Reference implementations:
-- qore lang docs two-phase build: `CMakeLists.txt` (search for `docs-lang-final`)
-- ncurses module: `CMakeLists.txt` (search for `docs-module-final`)
+With multiple user sub-modules, pass a semicolon-separated list:
+
+```cmake
+qore_binary_module_two_phase_docs(ncurses "NcursesUi;NcursesReplUi")
+```
+
+The macro must be called **after** `qore_external_binary_module()` and all
+`qore_external_user_module()` calls for the sub-modules, because it reads the
+binary-module Doxyfile that the former generates and adds dependencies on the
+`docs-<UserModuleName>` targets that the latter register.
+
+#### Relative-path gotcha in `TAGFILES`
+
+The binary module's HTML output is at `${CMAKE_BINARY_DIR}/docs/${binary}/html/`
+and each user module's HTML is at `${CMAKE_BINARY_DIR}/docs/${usermod}/html/`.
+From the binary module's HTML pages, the correct relative path to a user module
+is therefore **`../../${usermod}/html`** (two `..` levels — one to escape the
+`html/` subdirectory, another to escape the binary module's own
+`docs/${binary}/` parent back to the shared `docs/` root).
+
+Earlier inline implementations of this pattern used a single `..` level and
+produced broken cross-module links that resolved to a non-existent
+`docs/${binary}/${usermod}/html/` path. The `qore_binary_module_two_phase_docs()`
+macro fixes this in one place; always prefer the macro over a bespoke inline
+implementation.
+
+#### Reference implementations
+
+- `cmake/QoreMacros.cmake` — `QORE_BINARY_MODULE_TWO_PHASE_DOCS` macro
+- `module-krb5/CMakeLists.txt` — single-user-sub-module usage
+- `qore/CMakeLists.txt` — qore lang docs two-phase build (search for
+  `docs-lang-final`); this predates the macro and uses its own inline pattern
+  tailored to the lang-docs layout
 
 ## Binary Module Namespace Registration
 
@@ -232,4 +264,4 @@ Current usages to migrate:
 - [ ] all tests and scripts use `%modern`
 - [ ] module mainpage has `@section <lowercasemodname>intro` as first section
 - [ ] documentation section IDs use `<modname>` prefix (not underscored variants)
-- [ ] external modules with user sub-modules: two-phase doc build configured
+- [ ] external modules with user sub-modules: two-phase doc build configured via `qore_binary_module_two_phase_docs()`
