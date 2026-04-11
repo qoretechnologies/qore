@@ -258,9 +258,17 @@ QoreHashNode* Http1ClientConnection::submitRequest(const char* method, const cha
     int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
         body, body_len, /* streaming */ false, action, /* max_streams */ 1, xsink);
     if (*xsink || stream_id < 0) {
-        // Action was deref'd by submitRequest on failure.
+        // Action was deref'd by submitRequest on failure.  The caller
+        // (manager) is responsible for releasing any prior stream
+        // reservation it might have made via tryReserveStream.
         return nullptr;
     }
+
+    // Successful submit: convert any prior reservation into an active
+    // stream.  The poll op already incremented its own active stream
+    // count atomically inside submitRequest, so we just decrement the
+    // pending count here.  No-op if no manager reserved a slot.
+    releaseStreamReservation();
 
     // Wake the I/O controller so it processes the queued request promptly.
     if (sock_obj) {

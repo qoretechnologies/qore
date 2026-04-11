@@ -34,6 +34,7 @@
 #define _QORE_HTTPCLIENTCONNECTION_H
 
 #include <qore/AbstractHttpPollConnection.h>
+#include <qore/QoreThreadLock.h>
 
 #include <string>
 
@@ -80,6 +81,44 @@ public:
 
     //! Returns the number of active streams on this connection
     DLLEXPORT virtual int getActiveStreamCount() const = 0;
+
+    //! Returns the maximum concurrent streams this connection can host.
+    /** Default 1 (HTTP/1.1 semantics).  H2 connections override to return
+        their negotiated MAX_CONCURRENT_STREAMS setting (or the cap from
+        the manager's options).  H3 connections similarly.
+
+        @return the per-connection concurrent stream cap, or 0 for unlimited
+    */
+    DLLEXPORT virtual int getMaxConcurrentStreams() const {
+        return 1;
+    }
+
+    //! Atomically checks capacity and reserves a stream slot.
+    /** Returns @c true if a slot was reserved, @c false if the connection
+        is at capacity.  Callers MUST call @ref releaseStreamReservation
+        when the stream is submitted (the reservation converts to an
+        active slot inside the poll op) or abandoned.
+
+        Compares @ref getActiveStreamCount + @ref pending_stream_count
+        against @ref getMaxConcurrentStreams under @ref reserve_lock —
+        no TOCTOU race with concurrent reservers.
+
+        @return @c true on success, @c false at capacity
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool tryReserveStream();
+
+    //! Releases a previously-reserved stream slot.
+    /** Decrements @ref pending_stream_count.  No-op if no slot is
+        currently reserved (e.g., double-release).
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT void releaseStreamReservation();
+
+    //! Returns the current pending (reserved-but-not-yet-submitted) count.
+    DLLEXPORT int getPendingStreamCount() const;
 
     //! Submit a request; returns a hash with @c stream_id (int) and
     //! @c future (Future) keys.
@@ -161,6 +200,17 @@ protected:
     std::string target_host;
     int target_port;
     bool ssl_required;
+
+    //! Lock protecting @ref pending_stream_count.
+    /** This is a leaf lock — it does not nest with other connection
+        locks.  See section 7.2 of @c design/http-client-manager-cpp-port.md
+        for the full lock-ordering rules.
+    */
+    mutable QoreThreadLock reserve_lock;
+
+    //! Reserved-but-not-yet-submitted stream slots.  Protected by
+    //! @ref reserve_lock.
+    int pending_stream_count = 0;
 };
 
 #endif // _QORE_HTTPCLIENTCONNECTION_H

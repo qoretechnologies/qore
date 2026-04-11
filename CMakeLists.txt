@@ -949,6 +949,7 @@ set(LIBQORE_CPP_SRC
     lib/AsyncIoControllerPriv.cpp
     lib/QoreHttpClientConnectionBase.cpp
     lib/QoreHttp1ClientConnection.cpp
+    lib/QoreHttpClientConnectionManagerBase.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -1260,6 +1261,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionBase.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp1ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"

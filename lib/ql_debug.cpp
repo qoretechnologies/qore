@@ -877,9 +877,18 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
 
 class UtCountingManager : public HttpClientConnectionManagerBase {
 public:
+    DLLLOCAL UtCountingManager(const HttpClientConnectionManagerBase::Options& opts,
+            ExceptionSink* xsink)
+        : HttpClientConnectionManagerBase(opts, xsink) {
+    }
+
     DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
         ++close_count;
         last_conn = conn;
+        // Also call the base implementation so the connection is removed
+        // from the pool (no-op here since we never add to the pool, but
+        // documents the intended subclass pattern).
+        HttpClientConnectionManagerBase::onConnectionClosed(conn);
     }
     std::atomic<int> close_count{0};
     HttpClientConnectionBase* last_conn = nullptr;
@@ -906,7 +915,9 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     int dead_port = ntohs(addr.sin_port);
     ::close(sfd);
 
-    ReferenceHolder<UtCountingManager> mgr(new UtCountingManager(), &xsink);
+    ReferenceHolder<UtCountingManager> mgr(
+        new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
     UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
@@ -963,7 +974,9 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     });
 
-    ReferenceHolder<UtCountingManager> mgr(new UtCountingManager(), &xsink);
+    ReferenceHolder<UtCountingManager> mgr(
+        new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
+        &xsink);
     ReferenceHolder<Http1ClientConnection> conn(
         new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
     UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
@@ -1030,6 +1043,213 @@ static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     xsink.clear();
 }
 
+// --- HttpClientConnectionManagerBase (Phase P3) tests ---
+//
+// Exercise the C++ pool, per-key creation serialization, eviction via
+// onClosedHook, and the convenience request() method.
+
+static void ut_manager_acquire_first_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    ReferenceHolder<QoreHashNode> response(
+        mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+            nullptr, nullptr, 0, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "manager.request succeeds");
+    UT_ASSERT(c, (bool)response, "manager.request returns a response hash");
+    if (response) {
+        int64 status = response->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "response status is 200");
+    }
+    xsink.clear();
+}
+
+static void ut_manager_pool_reuse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Server that handles two sequential requests on the same connection
+    // (HTTP/1.1 keep-alive — Connection: keep-alive header).  After the
+    // second response, the server closes.
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        for (int i = 0; i < 2; ++i) {
+            char buf[4096];
+            ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+            if (n <= 0) return;
+            // Use Content-Length-only reply with keep-alive on the first
+            // response so the client reuses the connection.
+            const char* resp = (i == 0)
+                ? "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Content-Length: 5\r\n"
+                  "Connection: keep-alive\r\n"
+                  "\r\n"
+                  "hello"
+                : "HTTP/1.1 200 OK\r\n"
+                  "Content-Type: text/plain\r\n"
+                  "Content-Length: 5\r\n"
+                  "Connection: close\r\n"
+                  "\r\n"
+                  "world";
+            send(cfd, resp, strlen(resp), 0);
+        }
+    });
+
+    // First request — creates a connection.
+    {
+        ReferenceHolder<QoreHashNode> r1(
+            mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+                nullptr, nullptr, 0, &xsink),
+            &xsink);
+        UT_ASSERT(c, !xsink && r1, "first request succeeds");
+        if (xsink) xsink.clear();
+    }
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "pool has 1 connection after first request");
+    UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port),
+        "key has 1 connection");
+
+    // Second request to the same target — should reuse the pooled connection.
+    {
+        ReferenceHolder<QoreHashNode> r2(
+            mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+                nullptr, nullptr, 0, &xsink),
+            &xsink);
+        UT_ASSERT(c, !xsink && r2, "second request succeeds (reuse)");
+        if (xsink) xsink.clear();
+    }
+    // Pool size still 1 — same connection reused, not a new one created.
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(),
+        "pool still has 1 connection after second request (reuse)");
+}
+
+static void ut_manager_close_all(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Length: 2\r\n"
+            "Connection: keep-alive\r\n"
+            "\r\n"
+            "ok";
+        send(cfd, resp, strlen(resp), 0);
+        // Sleep so the connection stays in the pool after the response
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    });
+
+    HttpClientConnectionManagerBase::Options opts;
+    opts.connect_timeout_ms = 5000;
+    opts.request_timeout_ms = 5000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    ReferenceHolder<QoreHashNode> r(
+        mgr->request("GET", "http", "127.0.0.1", server_port, "/",
+            nullptr, nullptr, 0, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink && r, "request succeeds");
+    if (xsink) xsink.clear();
+
+    UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "pool has 1 connection before closeAll");
+    mgr->closeAll(&xsink);
+    UT_ASSERT(c, !xsink, "closeAll succeeds");
+    UT_ASSERT_EQ(c, 0, mgr->getPoolSize(), "pool empty after closeAll");
+
+    // Subsequent acquireConnection raises HTTPCLIENT-SHUTDOWN
+    HttpClientConnectionBase* dead_conn = mgr->acquireConnection(
+        "http", "127.0.0.1", server_port, &xsink);
+    UT_ASSERT(c, !dead_conn, "acquireConnection returns nullptr after closeAll");
+    UT_ASSERT(c, xsink.isException(), "acquireConnection raises after closeAll");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTPCLIENT-SHUTDOWN"),
+        "exception code is HTTPCLIENT-SHUTDOWN");
+    xsink.clear();
+}
+
+static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Valid http proxy URL with explicit port
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com:8080";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "valid proxy URL parses");
+        xsink.clear();
+    }
+
+    // Valid http proxy URL without explicit port (defaults to 80)
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "http://proxy.example.com";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, !xsink, "proxy URL without port defaults to 80");
+        xsink.clear();
+    }
+
+    // Invalid proxy scheme
+    {
+        HttpClientConnectionManagerBase::Options opts;
+        opts.proxy_url = "ftp://proxy.example.com";
+        ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+            new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+        UT_ASSERT(c, xsink.isException(), "invalid proxy scheme rejected");
+        xsink.clear();
+    }
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -1093,6 +1313,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_connection_connect_refused(c);
     ut_http1_onclosed_hook_one_shot(c);
     ut_http1_onclosed_hook_app_thread_close(c);
+    ut_manager_acquire_first_request(c);
+    ut_manager_pool_reuse(c);
+    ut_manager_close_all(c);
+    ut_manager_proxy_url_parse(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);

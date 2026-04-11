@@ -32,6 +32,28 @@
 #include <qore/Qore.h>
 #include <qore/HttpClientConnection.h>
 
+bool HttpClientConnectionBase::tryReserveStream() {
+    AutoLocker al(reserve_lock);
+    int max = getMaxConcurrentStreams();
+    if (max && (getActiveStreamCount() + pending_stream_count) >= max) {
+        return false;
+    }
+    ++pending_stream_count;
+    return true;
+}
+
+void HttpClientConnectionBase::releaseStreamReservation() {
+    AutoLocker al(reserve_lock);
+    if (pending_stream_count > 0) {
+        --pending_stream_count;
+    }
+}
+
+int HttpClientConnectionBase::getPendingStreamCount() const {
+    AutoLocker al(reserve_lock);
+    return pending_stream_count;
+}
+
 bool HttpClientConnectionBase::waitForReadyOrError(int64_t timeout_ms, ExceptionSink* xsink) {
     // Delegate to the AbstractHttpPollConnectionPriv condition-variable wait.
     bool ready = AbstractHttpPollConnectionPriv::waitForReady(timeout_ms);
