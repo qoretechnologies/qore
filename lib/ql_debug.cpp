@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QoreHttp2ClientConnection.h"
 #include <qore/HttpClientConnectionManager.h>
 
 #include <arpa/inet.h>
@@ -1216,6 +1217,125 @@ static void ut_manager_close_all(UnitTestCounters& c) {
     xsink.clear();
 }
 
+// --- HTTP/2 connection (Phase P4) ---
+//
+// End-to-end H2 testing requires a real HTTP/2 server (nghttp2 framing,
+// HPACK, ALPN), which is too involved for the C++ unit test framework.
+// Phase P6 wires up the existing HttpClientIo H2 tests via the C++
+// manager — those tests will catch H2 regressions end-to-end.
+//
+// For Phase P4 we exercise the C++ code path with two minimal tests:
+// (1) construction succeeds and the connection submits to the
+// controller without crashing, and (2) the connect-refused path
+// transitions to CLOSED via the I/O thread, fires onClosedHook, and
+// surfaces an error to the caller.
+
+static void ut_http2_connection_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // Bind an ephemeral port and immediately close — the next connect
+    // is refused.  H2 socket setup includes ALPN configuration which
+    // exercises the SSL code path on construction.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        UT_ASSERT(c, false, "reserve socket succeeds");
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // Plain HTTP h2c connection (no ALPN required) — verifies the
+    // construction path without exercising the SSL setup.
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection("127.0.0.1", dead_port,
+            /* ssl_required */ false, /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "Http2ClientConnection construction succeeds (h2c, refused port)");
+    if (xsink) { xsink.clear(); return; }
+
+    // The connect should fail (refused).  We accept either:
+    //   - waitForReadyOrError raises HTTPCLIENT-CONNECT-ERROR / SOCKET-CONNECT-ERROR
+    //   - waitForReadyOrError times out and isClosed() is true afterward
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "h2c connection to refused port is not ready");
+    UT_ASSERT(c, xsink.isException() || conn->isClosed(),
+        "either an exception was raised or the connection is closed");
+    xsink.clear();
+}
+
+static void ut_http2_connection_alpn_setup(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // HTTPS H2 — the constructor configures ALPN ("h2") on the socket
+    // BEFORE the SSL handshake.  The actual handshake will fail (no
+    // server) but we verify that the ALPN setup path doesn't crash.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http2ClientConnection> conn(
+        new Http2ClientConnection("127.0.0.1", dead_port,
+            /* ssl_required */ true, /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "HTTPS Http2ClientConnection construction succeeds (ALPN configured)");
+    if (xsink) { xsink.clear(); return; }
+
+    // Just verify isReady() / isClosed() are queryable; the actual
+    // connect outcome is not deterministic on a refused port + SSL.
+    UT_ASSERT(c, !conn->isReady(), "fresh https H2 connection not yet ready");
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_manager_h2_dispatch(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H2;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H2) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    // Acquire to a refused port — used to raise PROTOCOL-NOT-IMPLEMENTED
+    // before P4; now should attempt the connect and surface a CONNECT
+    // error.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "http", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection on refused port returns nullptr");
+    UT_ASSERT(c, xsink.isException(),
+        "manager(H2) raises a connect error (no longer PROTOCOL-NOT-IMPLEMENTED)");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
+        "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
+    xsink.clear();
+}
+
 static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -1317,6 +1437,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_manager_pool_reuse(c);
     ut_manager_close_all(c);
     ut_manager_proxy_url_parse(c);
+    ut_http2_connection_construct(c);
+    ut_http2_connection_alpn_setup(c);
+    ut_manager_h2_dispatch(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);

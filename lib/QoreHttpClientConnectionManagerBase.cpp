@@ -33,6 +33,7 @@
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreFuture.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include "qore/intern/QoreHttp2ClientConnection.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 
@@ -197,10 +198,11 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key) {
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
-    if (opts_.protocol != HttpClientProtocol::H1) {
+    if (opts_.protocol != HttpClientProtocol::H1
+            && opts_.protocol != HttpClientProtocol::H2) {
         xsink->raiseException("PROTOCOL-NOT-IMPLEMENTED",
-            "Phase P3 of the C++ HttpClientConnectionManager port supports "
-            "only HTTP/1.1; H2 and H3 are scheduled for Phases P4 and P5");
+            "the C++ HttpClientConnectionManager port currently supports "
+            "HTTP/1.1 and HTTP/2; HTTP/3 is scheduled for Phase P5");
         return nullptr;
     }
 
@@ -345,10 +347,24 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
 HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         const std::string& /*key*/, const char* host, int port,
         bool ssl_required, ExceptionSink* xsink) {
-    // Phase P3: H1 only.  Phase P4 will dispatch to Http2ClientConnection
-    // and Phase P5 to Http3ClientConnection based on opts_.protocol.
-    Http1ClientConnection* conn = new Http1ClientConnection(host, port,
-        ssl_required, xsink);
+    // Phase P3: H1 only.  Phase P4 added H2 dispatch.  Phase P5 will
+    // add H3 (Http3ClientConnection) here.
+    HttpClientConnectionBase* conn = nullptr;
+    switch (opts_.protocol) {
+        case HttpClientProtocol::H1:
+            conn = new Http1ClientConnection(host, port, ssl_required, xsink);
+            break;
+        case HttpClientProtocol::H2:
+            conn = new Http2ClientConnection(host, port, ssl_required,
+                opts_.max_streams_per_connection, xsink);
+            break;
+        case HttpClientProtocol::H3:
+            // Phase P5
+            xsink->raiseException("PROTOCOL-NOT-IMPLEMENTED",
+                "HTTP/3 is scheduled for Phase P5 of the C++ "
+                "HttpClientConnectionManager port");
+            return nullptr;
+    }
     if (*xsink) {
         ExceptionSink dx;
         conn->deref(&dx);
