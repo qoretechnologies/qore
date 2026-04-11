@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchAggregationDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchAggregationDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -85,7 +85,7 @@ public class ElasticSearchAggregationDataProvider inherits ElasticSearchDataProv
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -95,7 +95,7 @@ public class ElasticSearchAggregationDataProvider inherits ElasticSearchDataProv
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch aggregation API provider for `%s`", rest.getSafeURL());
+        return sprintf("ElasticSearch aggregation API provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -142,7 +142,7 @@ public class ElasticSearchAggregationDataProvider inherits ElasticSearchDataProv
             body.aggs = remove req.aggregations;
         }
 
-        hash<auto> response = rest.post(uri, body).body;
+        hash<auto> response = rest.restPost(uri, body).body;
         return {
             "took": response.took,
             "timed_out": response.timed_out,

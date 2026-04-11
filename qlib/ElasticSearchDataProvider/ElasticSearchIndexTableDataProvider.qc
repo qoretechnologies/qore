@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchIndexesDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchIndexTableDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -367,7 +367,8 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest, string name, hash<auto> index) : ElasticSearchDataProviderBase (rest) {
+    constructor(RestClient::AbstractRestClient rest, string name, hash<auto> index)
+            : ElasticSearchDataProviderBase (rest) {
         self.name = name;
         self.index = index;
         getRecordInfoIntern();
@@ -380,7 +381,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch data provider for index `%s` for `%s`", name, rest.getSafeURL());
+        return sprintf("ElasticSearch data provider for index `%s` for `%s`", name, rest.getSafeUrl());
     }
 
     #! Returns an iterator for zero or more records matching the search options
@@ -406,7 +407,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
     */
     private int updateRecordsImpl(hash<auto> set, *hash<auto> where_cond, *hash<auto> search_options) {
         # NOTE: this call will throw an exception if the update operation fails
-        rest.post(getDocUriPath("_update", where_cond, "update", search_options,
+        rest.restPost(getDocUriPath("_update", where_cond, "update", search_options,
             ElasticSearchDocumentUpdateDataProvider::QueryArgs), {"doc": set});
         return 1;
     }
@@ -422,7 +423,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
     */
     private int deleteRecordsImpl(*hash<auto> where_cond, *hash<auto> search_options) {
         # NOTE: this call will throw an exception if the delete operation fails
-        rest.del(getDocUriPath("_doc", where_cond, "delete", search_options,
+        rest.restDel(getDocUriPath("_doc", where_cond, "delete", search_options,
             ElasticSearchDocumentDeleteDataProvider::QueryArgs));
         return 1;
     }
@@ -443,7 +444,7 @@ public class ElasticSearchIndexTableDataProvider inherits ElasticSearchDataProvi
         }
 
         # NOTE: this call will throw an exception if the create operation fails
-        string id = rest.post(uri, rec).body._id;
+        string id = rest.restPost(uri, rec).body._id;
         return {"_id": id} + rec;
     }
 

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -64,22 +64,24 @@ public class ElasticSearchDataProvider inherits ElasticSearchDataProviderBase {
             "restclient": <DataProviderOptionInfo>{
                 "display_name": "REST Client",
                 "short_desc": "The REST client for accessing the ElasticSearch server",
-                "type": AbstractDataProviderType::get(new Type("RestClient")),
-                "desc": "The REST client for accessing the ElasticSearch server",
+                "type": AbstractDataProviderType::get(new Type("AbstractRestClient")),
+                "desc": "The REST client for accessing the ElasticSearch server; must be an "
+                    "`AbstractRestClient` subclass — typically a `RestClientIo` (async, "
+                    "multiplexed HTTP/1.1/2/3) or a `RestClient` (sync HTTP/1.x)",
             },
             "url": <DataProviderOptionInfo>{
                 "display_name": "URL",
                 "short_desc": "The URL to the ElasticSearch server",
                 "type": AbstractDataProviderTypeMap."string",
-                "desc": "The URL to the ElasticSearch REST server; overrides any URL in any RestClient object passed "
-                    "as an option",
+                "desc": "The URL to the ElasticSearch REST server; overrides any URL in any REST client object "
+                    "passed as an option",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
                 "short_desc": "Options to any REST client created",
                 "type": AbstractDataProviderTypeMap."*hash",
-                "desc": "Options to the `RestClient` constructor; only used if a `RestClient` object is created for "
-                    "a call to the ElasticSearch server",
+                "desc": "Options to the `RestClientIo` constructor; only used if a `RestClientIo` object is created "
+                    "for a call to the ElasticSearch server",
             },
         };
     }
@@ -105,12 +107,14 @@ public class ElasticSearchDataProvider inherits ElasticSearchDataProviderBase {
         LoggerWrapper::setLogger(logger);
     }
 
-    static RestClient::RestClient getRestConnection(*hash<auto> options) {
-        RestClient rest;
+    static AbstractRestClient getRestConnection(*hash<auto> options) {
+        AbstractRestClient rest;
         if (options.restclient) {
             rest = options.restclient;
             if (options.url) {
-                rest.setURL(options.url);
+                # Non-mutating URL override: build a sibling client via copyWithUrl()
+                # — works for both sync RestClient and async RestClientIo
+                rest = rest.copyWithUrl(options.url);
             }
         } else {
             if (!options.url && !options.restclient_options) {
@@ -123,7 +127,8 @@ public class ElasticSearchDataProvider inherits ElasticSearchDataProviderBase {
             if (options.url) {
                 opts.url = options.url;
             }
-            rest = new RestClient(opts);
+            # Default to the async multiplexed RestClientIo transport (HTTP/1.1/2/3)
+            rest = new RestClientIo(opts);
         }
         return rest;
     }
@@ -135,7 +140,7 @@ public class ElasticSearchDataProvider inherits ElasticSearchDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch data provider for `%s`", rest.getSafeURL());
+        return sprintf("ElasticSearch data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

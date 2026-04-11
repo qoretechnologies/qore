@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchBulkDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchBulkDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -68,7 +68,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -78,7 +78,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch bulk API provider for `%s`", rest.getSafeURL());
+        return sprintf("ElasticSearch bulk API provider for `%s`", rest.getSafeUrl());
     }
 
     #! Makes a request and returns the response
@@ -107,7 +107,11 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             uri += sprintf("%s=%s", arg, encode_url(string(req{arg}), True));
         }
 
-        return rest.post(uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
+        # Use restDoRawRequest to bypass the validator's JSON serialization step —
+        # ElasticSearch's bulk API is strict about newline-delimited JSON and rejects
+        # any wrapping (the default data-serialization path would JSON-encode the string,
+        # wrapping it in quotes and stripping the trailing \n).
+        return rest.restDoRawRequest("POST", uri, ndjson, {"Content-Type": "application/x-ndjson"}).body;
     }
 
     #! Formats the operations list as NDJSON

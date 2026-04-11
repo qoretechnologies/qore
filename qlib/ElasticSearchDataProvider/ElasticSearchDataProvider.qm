@@ -32,7 +32,7 @@
 
 %requires(reexport) ConnectionProvider
 %requires(reexport) DataProvider
-%requires(reexport) RestClient
+%requires(reexport) RestClientIo
 
 %try-module json
 %define NoJson
@@ -44,7 +44,7 @@ auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required 
 %endif
 
 module ElasticSearchDataProvider {
-    version = "1.2";
+    version = "1.3";
     desc = "user module providing a data provider API for ElasticSearch instances";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -241,6 +241,15 @@ module ElasticSearchDataProvider {
     @endverbatim
 
     @section elasticsearchdataprovider_relnotes Release Notes
+
+    @subsection elasticsearchdataprovider_v1_3 ElasticSearchDataProvider v1.3
+    - migrated the default REST transport from the sync
+      @ref RestClient::RestClient "RestClient" (HTTP/1.x) to the multiplexed async
+      @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3); the data provider
+      and its sub-providers now take any
+      @ref RestClient::AbstractRestClient "AbstractRestClient" subclass, so callers that
+      already have a sync `RestClient` or an async `RestClientIo` can pass either via the
+      `restclient` constructor option
 
     @subsection elasticsearchdataprovider_v1_1 ElasticSearchDataProvider v1.1
     - added support for the data provider action catalog API
