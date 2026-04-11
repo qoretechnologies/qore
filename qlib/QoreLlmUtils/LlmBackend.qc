@@ -57,6 +57,53 @@ public hashdecl LlmCompletionResult {
     hash<auto> usage;
 }
 
+#! A single tool call returned by the LLM
+public hashdecl ChatToolCall {
+    #! Unique ID for this tool call (from the LLM response)
+    string id;
+    #! Function/tool name to call
+    string name;
+    #! Parsed arguments hash to pass to the tool
+    *hash<auto> arguments;
+}
+
+#! A message in a multi-turn conversation
+public hashdecl ChatMessage {
+    #! Message role: "system", "user", "assistant", or "tool"
+    string role;
+    #! Text content (may be empty for assistant messages that only contain tool_calls)
+    *string content;
+    #! Tool calls requested by the assistant (present when role is "assistant")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! ID of the tool call this message is responding to (when role is "tool")
+    *string tool_call_id;
+    #! Tool name (when role is "tool")
+    *string name;
+}
+
+#! Definition of a tool the LLM can call
+public hashdecl ToolDefinition {
+    #! Tool name (must match ^[a-zA-Z0-9_-]{1,64}$)
+    string name;
+    #! Human-readable description of what the tool does
+    *string description;
+    #! JSON Schema describing the tool's parameters
+    *hash<auto> parameters;
+}
+
+#! Response from a multi-turn chat call
+public hashdecl ChatResponse {
+    #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
+    #! "max_tokens" (hit limit), or "stop_sequence"
+    string stop_reason;
+    #! Text content (if any)
+    *string content;
+    #! Tool calls the LLM wants executed (when stop_reason is "tool_use")
+    *list<hash<ChatToolCall>> tool_calls;
+    #! Token usage information
+    hash<auto> usage;
+}
+
 #! Pluggable LLM backend for chat completions
 /** Provides a unified interface for making LLM chat completion calls across
     multiple providers.  Supports three backends:
@@ -186,6 +233,36 @@ public class LlmBackend {
     /** @return the configured model name, or @ref nothing if none was set */
     *string getModel() {
         return model_name;
+    }
+
+    #! Multi-turn chat with optional tool calling
+    /** Sends a list of messages (including conversation history and tool
+        results) to the LLM, optionally with tool definitions that the LLM
+        can choose to call.
+
+        Use this method for agent loops where you need the LLM to:
+        - Decide which tools to call based on the conversation
+        - Receive tool results and reason about next steps
+        - Maintain multi-turn conversation state
+
+        @param messages list of @ref ChatMessage hashes forming the conversation
+        @param tools optional list of @ref ToolDefinition hashes the LLM can call
+        @return a @ref ChatResponse hash with stop_reason, content, and optional tool_calls
+
+        @throw LLM-ERROR if the chat request fails
+
+        @since QoreLlmUtils 1.1
+    */
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        switch (mode) {
+            case "http":
+            case "qorus":
+                return chatHttp(messages, tools);
+            case "anthropic":
+                return chatAnthropic(messages, tools);
+        }
+        throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
     }
 
     #! Ensures the REST client is initialized
@@ -383,6 +460,296 @@ public class LlmBackend {
             "content": content,
             "usage": usage,
         };
+    }
+    #! Chat via OpenAI-compatible endpoint (also used for Qorus mode)
+    private hash<ChatResponse> chatHttp(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+%ifndef NoRestClient
+        if (mode != "qorus") {
+            ensureRestClient();
+        }
+
+        # Build messages in OpenAI format
+        list<hash<auto>> api_messages = ();
+        foreach hash<ChatMessage> msg in (messages) {
+            hash<auto!> api_msg();
+            api_msg.role = msg.role;
+            if (msg.content.val()) {
+                api_msg.content = msg.content;
+            }
+            if (msg.tool_calls) {
+                list<auto> tc_list = ();
+                foreach hash<ChatToolCall> tc in (msg.tool_calls) {
+                    push tc_list, {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": make_json(tc.arguments ?? {}),
+                        },
+                    };
+                }
+                api_msg.tool_calls = tc_list;
+            }
+            if (msg.tool_call_id.val()) {
+                api_msg.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val() && msg.role == "tool") {
+                api_msg.name = msg.name;
+            }
+            push api_messages, api_msg;
+        }
+
+        hash<auto> body = {
+            "messages": api_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        };
+        if (model_name.val()) {
+            body.model = model_name;
+        }
+
+        # Add tool definitions
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "type": "function",
+                    "function": {
+                        "name": td.name,
+                        "description": td.description ?? "",
+                        "parameters": td.parameters
+                            ?? {"type": "object", "properties": {}},
+                    },
+                };
+            }
+            body.tools = tool_defs;
+        }
+
+        hash<auto> hdr = {"Content-Type": "application/json"};
+        if (api_key.val()) {
+            hdr."Authorization" = "Bearer " + api_key;
+        }
+
+        hash<auto> resp;
+        string endpoint = (mode == "qorus") ? "ai/v1/chat/completions"
+            : "/v1/chat/completions";
+        try {
+            if (mode == "qorus") {
+                resp = call_static_method("UserApi", "callRestApi", "PUT",
+                    endpoint, body);
+            } else {
+                resp = rest_client.post(endpoint, body, NOTHING, \hdr);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "UNKNOWN-CLASS") {
+                throw "LLM-ERROR",
+                    "Qorus mode requires a Qorus runtime context (UserApi not available)";
+            }
+            throw "LLM-ERROR", sprintf("chat request failed: %s", ex.desc), ex;
+        }
+
+        if (resp.body.typeCode() == NT_STRING) {
+            resp.body = parse_json(resp.body);
+        }
+
+        # For Qorus mode, resp IS the body (no .body wrapper)
+        hash<auto> response_data = mode == "qorus" ? resp : resp.body;
+
+        hash<auto> choice = response_data.choices[0];
+        hash<auto> msg = choice.message;
+
+        # Normalize finish_reason
+        string stop_reason;
+        switch (choice.finish_reason) {
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "tool_calls":
+                stop_reason = "tool_use";
+                break;
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            default:
+                stop_reason = choice.finish_reason ?? "end_turn";
+        }
+
+        # Parse tool calls if present
+        *list<hash<ChatToolCall>> parsed_tool_calls;
+        if (msg.tool_calls) {
+            parsed_tool_calls = ();
+            foreach hash<auto> tc in (msg.tool_calls) {
+                *hash<auto> args;
+                if (tc.function.arguments.val()) {
+                    if (tc.function.arguments.typeCode() == NT_STRING) {
+                        args = parse_json(tc.function.arguments);
+                    } else {
+                        args = tc.function.arguments;
+                    }
+                }
+                push parsed_tool_calls, <ChatToolCall>{
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "arguments": args,
+                };
+            }
+        }
+
+        return <ChatResponse>{
+            "stop_reason": stop_reason,
+            "content": msg.content,
+            "tool_calls": parsed_tool_calls,
+            "usage": response_data.usage ?? {},
+        };
+%endif
+        throw "LLM-ERROR", "RestClient not available";
+    }
+
+    #! Chat via Anthropic Messages API
+    private hash<ChatResponse> chatAnthropic(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+%ifndef NoRestClient
+        ensureRestClient();
+
+        # Extract system message and build Anthropic message list
+        *string system_prompt;
+        list<hash<auto>> api_messages = ();
+
+        # Collect tool result messages to group consecutive ones
+        list<hash<auto>> pending_tool_results = ();
+
+        foreach hash<ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                system_prompt = msg.content;
+                continue;
+            }
+
+            # Flush any pending tool results before a non-tool message
+            if (msg.role != "tool" && pending_tool_results) {
+                push api_messages, {
+                    "role": "user",
+                    "content": pending_tool_results,
+                };
+                pending_tool_results = ();
+            }
+
+            if (msg.role == "tool") {
+                # Accumulate tool results — Anthropic requires them grouped
+                push pending_tool_results, {
+                    "type": "tool_result",
+                    "tool_use_id": msg.tool_call_id,
+                    "content": msg.content ?? "",
+                };
+                continue;
+            }
+
+            if (msg.role == "assistant" && msg.tool_calls) {
+                # Convert assistant tool_calls to Anthropic content blocks
+                list<auto> content_blocks = ();
+                if (msg.content.val()) {
+                    push content_blocks, {"type": "text", "text": msg.content};
+                }
+                foreach hash<ChatToolCall> tc in (msg.tool_calls) {
+                    push content_blocks, {
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.arguments ?? {},
+                    };
+                }
+                push api_messages, {
+                    "role": "assistant",
+                    "content": content_blocks,
+                };
+                continue;
+            }
+
+            # Regular user or assistant message
+            push api_messages, {
+                "role": msg.role,
+                "content": msg.content ?? "",
+            };
+        }
+
+        # Flush any remaining tool results
+        if (pending_tool_results) {
+            push api_messages, {
+                "role": "user",
+                "content": pending_tool_results,
+            };
+        }
+
+        hash<auto> body = {
+            "model": model_name ?? "claude-sonnet-4-20250514",
+            "max_tokens": max_tokens,
+            "messages": api_messages,
+        };
+        if (system_prompt.val()) {
+            body.system = system_prompt;
+        }
+
+        # Add tool definitions
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "name": td.name,
+                    "description": td.description ?? "",
+                    "input_schema": td.parameters
+                        ?? {"type": "object", "properties": {}},
+                };
+            }
+            body.tools = tool_defs;
+        }
+
+        hash<auto> hdr = {
+            "Content-Type": "application/json",
+            "anthropic-version": anthropic_version,
+        };
+        if (api_key.val()) {
+            hdr."x-api-key" = api_key;
+        }
+
+        hash<auto> resp;
+        try {
+            resp = rest_client.post("/v1/messages", body, NOTHING, \hdr);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Anthropic chat request failed: %s", ex.desc), ex;
+        }
+
+        if (resp.body.typeCode() == NT_STRING) {
+            resp.body = parse_json(resp.body);
+        }
+
+        # Parse response content blocks
+        *string text_content;
+        *list<hash<ChatToolCall>> parsed_tool_calls;
+        list<auto> content_blocks = resp.body.content ?? ();
+
+        foreach hash<auto> block in (content_blocks) {
+            if (block.type == "text") {
+                text_content = block.text;
+            } else if (block.type == "tool_use") {
+                if (!parsed_tool_calls) {
+                    parsed_tool_calls = ();
+                }
+                push parsed_tool_calls, <ChatToolCall>{
+                    "id": block.id,
+                    "name": block.name,
+                    "arguments": block.input,
+                };
+            }
+        }
+
+        return <ChatResponse>{
+            "stop_reason": resp.body.stop_reason ?? "end_turn",
+            "content": text_content,
+            "tool_calls": parsed_tool_calls,
+            "usage": resp.body.usage ?? {},
+        };
+%endif
+        throw "LLM-ERROR", "RestClient not available";
     }
 }
 

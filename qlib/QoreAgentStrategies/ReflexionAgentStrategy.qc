@@ -27,7 +27,8 @@ public namespace QoreAgentStrategies {
 #! Agent strategy that executes, evaluates completeness, and corrects
 /** The reflexion strategy operates in a loop:
 
-    1. \b Execute: Generate an initial response (with optional tool calls)
+    1. \b Execute: Run a @ref SimpleAgentStrategy to generate a response
+       (with tool calling if tools are available)
     2. \b Reflect: LLM evaluates whether the response fully answers the query
     3. \b Correct: If incomplete, re-execute with the reflection feedback
 
@@ -45,6 +46,8 @@ public class ReflexionAgentStrategy inherits AbstractAgentStrategy {
         int max_reflections;
         #! Maximum tool iterations per execution
         int max_iterations;
+        #! Whether to use parallel tool dispatch
+        bool parallel_dispatch;
     }
 
     #! Creates a ReflexionAgentStrategy
@@ -52,13 +55,17 @@ public class ReflexionAgentStrategy inherits AbstractAgentStrategy {
         @param options strategy options:
             - \c max_reflections (int): maximum reflection cycles; default 2
             - \c max_iterations (int): tool iterations per execution; default 3
+            - \c parallel_dispatch (bool): parallel tool dispatch; default False
             - \c token_budget (int): total token budget; default 50000
+            - \c event_callback (code): event callback for observability
     */
     constructor(QoreLlmUtils::LlmBackend llm_backend, *hash<auto> options)
             : AbstractAgentStrategy(llm_backend,
-                {"token_budget": options.token_budget ?? 50000}) {
+                {"token_budget": options.token_budget ?? 50000,
+                 "event_callback": options.event_callback}) {
         max_reflections = options.max_reflections ?? 2;
         max_iterations = options.max_iterations ?? 3;
+        parallel_dispatch = options.parallel_dispatch ?? False;
     }
 
     hash<AgentResult> execute(hash<AgentContext> ctx) {
@@ -68,19 +75,25 @@ public class ReflexionAgentStrategy inherits AbstractAgentStrategy {
         int reflections_done = 0;
         string current_response;
 
-        # Build tools description
-        string tools_desc = "";
-        if (ctx.tools) {
-            tools_desc = "\nAvailable tools: "
-                + (map $1.name, ctx.tools).join(", ");
-        }
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_started",
+            "strategy": "reflexion",
+            "timestamp": now_us(),
+        });
 
-        # Initial execution
-        hash<QoreLlmUtils::LlmCompletionResult> exec_result = callLlm(
-            "You are a helpful assistant." + tools_desc,
-            ctx.message);
-        ++llm_calls;
-        current_response = exec_result.content;
+        # Initial execution using SimpleAgentStrategy (with tool calling)
+        SimpleAgentStrategy executor(llm, {
+            "max_iterations": max_iterations,
+            "parallel_dispatch": parallel_dispatch,
+            "token_budget": 0,
+            "event_callback": event_callback,
+        });
+
+        hash<AgentResult> exec_result = executor.execute(ctx);
+        current_response = exec_result.response;
+        all_tool_calls += exec_result.tool_calls;
+        llm_calls += exec_result.llm_calls;
+        tokens_consumed += exec_result.total_tokens;
 
         # Reflection loop
         while (reflections_done < max_reflections) {
@@ -119,28 +132,57 @@ public class ReflexionAgentStrategy inherits AbstractAgentStrategy {
 
             hash<auto> reflection = parse_json(reflection_result.content);
 
+            emitEvent(<AgentEvent>{
+                "event_type": "iteration_completed",
+                "strategy": "reflexion",
+                "iteration": reflections_done + 1,
+                "metadata": {
+                    "complete": reflection.complete,
+                    "missing": reflection.missing,
+                },
+                "timestamp": now_us(),
+            });
+
             if (reflection.complete) {
                 break;
             }
 
             ++reflections_done;
 
-            # Re-execute with corrections
-            string correction_prompt = sprintf(
-                "Original query: %s\n\nPrevious response: %s\n\n"
-                "The response was incomplete. Missing: %s\n"
-                "Corrections needed: %s\n\n"
-                "Please provide an improved, complete response.",
-                ctx.message, current_response,
-                reflection.missing, reflection.corrections);
+            # Re-execute with corrections using SimpleAgentStrategy
+            SimpleAgentStrategy corrector(llm, {
+                "max_iterations": max_iterations,
+                "parallel_dispatch": parallel_dispatch,
+                "token_budget": 0,
+                "event_callback": event_callback,
+            });
 
-            hash<QoreLlmUtils::LlmCompletionResult> correction_result = callLlm(
-                "You are a helpful assistant. Provide an improved response "
-                "addressing the identified gaps." + tools_desc,
-                correction_prompt);
-            ++llm_calls;
-            current_response = correction_result.content;
+            hash<AgentResult> correction_result = corrector.execute(<AgentContext>{
+                "message": sprintf(
+                    "Original query: %s\n\nPrevious response: %s\n\n"
+                    "The response was incomplete. Missing: %s\n"
+                    "Corrections needed: %s\n\n"
+                    "Please provide an improved, complete response.",
+                    ctx.message, current_response,
+                    reflection.missing, reflection.corrections),
+                "tools": ctx.tools,
+                "tool_dispatch": ctx.tool_dispatch,
+                "system_prompt": "You are a helpful assistant. Provide an improved "
+                    "response addressing the identified gaps.",
+            });
+
+            current_response = correction_result.response;
+            all_tool_calls += correction_result.tool_calls;
+            llm_calls += correction_result.llm_calls;
+            tokens_consumed += correction_result.total_tokens;
         }
+
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_completed",
+            "strategy": "reflexion",
+            "timestamp": now_us(),
+            "metadata": {"reflections_done": reflections_done},
+        });
 
         return <AgentResult>{
             "response": current_response,

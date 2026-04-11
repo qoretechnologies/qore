@@ -28,9 +28,13 @@ public namespace QoreAgentStrategies {
 /** The planning strategy operates in three phases:
 
     1. \b Planning: LLM decomposes the query into sub-tasks with tool specifications
-    2. \b Execution: Each sub-task is executed with up to \c max_iterations_per_subtask
-       tool dispatch iterations
+    2. \b Execution: Each sub-task is executed using a @ref SimpleAgentStrategy with
+       its own tool-calling loop (up to \c max_iterations_per_subtask iterations)
     3. \b Synthesis: LLM combines sub-task results into a final response
+
+    This is useful for complex queries that require multiple distinct steps —
+    for example, "compare Q1 revenue with last year and find the top-selling
+    product" requires searching two datasets and cross-referencing results.
 
     @since QoreAgentStrategies 1.0
 */
@@ -40,6 +44,8 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
         int max_subtasks;
         #! Maximum tool dispatch iterations per sub-task
         int max_iterations_per_subtask;
+        #! Whether to use parallel tool dispatch within subtasks
+        bool parallel_dispatch;
     }
 
     #! Creates a PlanningAgentStrategy
@@ -47,19 +53,29 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
         @param options strategy options:
             - \c max_subtasks (int): max sub-tasks; default 5
             - \c max_iterations_per_subtask (int): tool iterations per sub-task; default 3
+            - \c parallel_dispatch (bool): parallel tool dispatch in subtasks; default False
             - \c token_budget (int): total token budget; default 50000
+            - \c event_callback (code): event callback for observability
     */
     constructor(QoreLlmUtils::LlmBackend llm_backend, *hash<auto> options)
             : AbstractAgentStrategy(llm_backend,
-                {"token_budget": options.token_budget ?? 50000}) {
+                {"token_budget": options.token_budget ?? 50000,
+                 "event_callback": options.event_callback}) {
         max_subtasks = options.max_subtasks ?? 5;
         max_iterations_per_subtask = options.max_iterations_per_subtask ?? 3;
+        parallel_dispatch = options.parallel_dispatch ?? False;
     }
 
     hash<AgentResult> execute(hash<AgentContext> ctx) {
         resetTokenCounter();
         list<hash<auto>> all_tool_calls = ();
         int llm_calls = 0;
+
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_started",
+            "strategy": "planning",
+            "timestamp": now_us(),
+        });
 
         # Phase 1: Planning — decompose into sub-tasks
         string tools_desc = "";
@@ -114,32 +130,42 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
             splice subtasks, max_subtasks;
         }
 
-        # Phase 2: Execution — execute each sub-task
+        # Phase 2: Execution — execute each sub-task with SimpleAgentStrategy
         list<hash<auto>> subtask_results = ();
         foreach hash<auto> subtask in (subtasks) {
-            hash<auto> sub_result = {
+            emitEvent(<AgentEvent>{
+                "event_type": "tool_dispatched",
+                "strategy": "planning",
+                "tool_name": subtask.tool,
+                "metadata": {"subtask": subtask.description},
+                "timestamp": now_us(),
+            });
+
+            SimpleAgentStrategy executor(llm, {
+                "max_iterations": max_iterations_per_subtask,
+                "parallel_dispatch": parallel_dispatch,
+                "token_budget": 0,
+                "event_callback": event_callback,
+            });
+
+            hash<AgentResult> sub_result = executor.execute(<AgentContext>{
+                "message": subtask.description,
+                "tools": ctx.tools,
+                "tool_dispatch": ctx.tool_dispatch,
+                "system_prompt": "You are executing a sub-task. Complete the "
+                    "following task using the available tools.",
+            });
+
+            # Track tokens from subtask
+            tokens_consumed += sub_result.total_tokens;
+            llm_calls += sub_result.llm_calls;
+            all_tool_calls += sub_result.tool_calls;
+
+            push subtask_results, {
                 "description": subtask.description,
-                "tool_calls": (),
-                "result": NOTHING,
+                "response": sub_result.response,
+                "tool_calls": sub_result.tool_calls,
             };
-
-            # Execute tool if specified and available
-            if (subtask.tool.val() && ctx.tool_dispatch) {
-                try {
-                    auto tool_result = dispatchTool(ctx, subtask.tool,
-                        subtask.args ?? {});
-                    sub_result.result = tool_result;
-                    push all_tool_calls, {
-                        "tool": subtask.tool,
-                        "args": subtask.args ?? {},
-                        "result": tool_result,
-                    };
-                } catch (hash<ExceptionInfo> ex) {
-                    sub_result.result = sprintf("Error: %s: %s", ex.err, ex.desc);
-                }
-            }
-
-            push subtask_results, sub_result;
         }
 
         # Phase 3: Synthesis — combine results
@@ -147,8 +173,8 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
             ctx.message);
         int idx = 1;
         foreach hash<auto> sr in (subtask_results) {
-            synthesis_input += sprintf("%d. %s\n   Result: %y\n\n",
-                idx, sr.description, sr.result);
+            synthesis_input += sprintf("%d. %s\n   Result: %s\n\n",
+                idx, sr.description, sr.response);
             ++idx;
         }
 
@@ -157,6 +183,13 @@ public class PlanningAgentStrategy inherits AbstractAgentStrategy {
             "compose a comprehensive response that addresses the original query.",
             synthesis_input);
         ++llm_calls;
+
+        emitEvent(<AgentEvent>{
+            "event_type": "strategy_completed",
+            "strategy": "planning",
+            "timestamp": now_us(),
+            "metadata": {"subtask_count": subtasks.size()},
+        });
 
         return <AgentResult>{
             "response": synthesis_result.content,
