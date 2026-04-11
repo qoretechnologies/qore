@@ -78,6 +78,154 @@
 // Defined in Function.cpp - collects all local variables from a StatementBlock and nested blocks
 extern void collectAllStatementLocals(const StatementBlock* block, std::vector<LocalVar*>& locals);
 
+// Forward-reference class lookup map used by readValue VT_NEW_OBJECT during
+// AOT class deserialization. The deserializer populates this as each class is
+// added to its namespace so that instance-member init expressions of the form
+// `OtherClass m()` can resolve the target class even before it has been
+// committed into the root namespace's clmap (which happens after the full
+// classes pass). The pointer is installed in an RAII scope from
+// deserializeClasses() and cleared on exit.
+static thread_local const std::unordered_map<std::string, QoreClass*>*
+    g_aot_pending_class_map = nullptr;
+
+// Read an instance-member / static-member default value.
+//
+// If the value is a VT_NEW_OBJECT whose target class is not yet registered in
+// the program or in the in-progress class map, defer the class lookup: read
+// the class path + arg values into `pending_class_path` + `pending_args` so
+// the second pass (after all classes are committed) can resolve the class
+// and construct the ScopedObjectCallNode. Otherwise, read normally and
+// return the QoreValue via `default_val`.
+//
+// Returns true on success, false on malformed data.
+template <class Pending>
+static bool readDeferredMemberDefault(
+        const QoreAOTBinaryReader& reader,
+        const uint8_t*& ptr, const uint8_t* end,
+        std::string& error,
+        QoreValue& default_val,
+        Pending& pim) {
+    if (ptr >= end) {
+        error = "unexpected end of data reading member default tag";
+        return false;
+    }
+    const uint8_t* save = ptr;
+    uint8_t tag_byte = *ptr;
+    if (tag_byte != static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT)) {
+        // Normal case: use the standard reader
+        default_val = reader.readValue(ptr, end, error);
+        return error.empty();
+    }
+    // VT_NEW_OBJECT: try resolving the class now, deferring to a pending
+    // entry on the PendingInstanceMember / PendingStaticMember if not yet
+    // registered.
+    ++ptr;  // consume tag
+    if (ptr + 8 > end) {
+        error = "unexpected end of data reading new_object class path";
+        return false;
+    }
+    (void)QoreAOTBinaryReader::readU32(ptr);  // path_len (unused — using string pool)
+    uint32_t path_offset = QoreAOTBinaryReader::readU32(ptr);
+    const char* class_path = reader.getString(path_offset);
+    if (!class_path) {
+        error = "invalid string offset for new_object class path";
+        return false;
+    }
+    if (ptr + 4 > end) {
+        error = "unexpected end of data reading new_object arg count";
+        return false;
+    }
+    uint32_t nargs = QoreAOTBinaryReader::readU32(ptr);
+
+    // Read constructor arguments regardless — args don't forward-reference
+    // classes in practice (they're usually simple constant values).
+    std::vector<QoreValue> args;
+    args.reserve(nargs);
+    for (uint32_t i = 0; i < nargs; ++i) {
+        QoreValue arg = reader.readValue(ptr, end, error);
+        if (!error.empty()) {
+            for (auto& v : args) v.discard(nullptr);
+            return false;
+        }
+        args.push_back(arg);
+    }
+
+    // Try to resolve class: first in committed program, then in the
+    // in-progress class map populated during deserializeClasses.
+    const QoreClass* qc = nullptr;
+    {
+        ExceptionSink xs;
+        qc = getProgram()->findClass(class_path, &xs);
+        if (xs.isException()) {
+            xs.clear();
+        }
+    }
+    if (!qc && g_aot_pending_class_map) {
+        auto it = g_aot_pending_class_map->find(class_path);
+        if (it != g_aot_pending_class_map->end()) {
+            qc = it->second;
+        }
+    }
+    if (qc) {
+        // Resolvable now: construct ScopedObjectCallNode immediately.
+        QoreParseListNode* parse_args = nullptr;
+        if (nargs > 0) {
+            parse_args = new QoreParseListNode(&loc_builtin);
+            for (auto& v : args) {
+                parse_args->add(v, &loc_builtin);
+            }
+            args.clear();
+        }
+        ScopedObjectCallNode* socn = new ScopedObjectCallNode(
+            &loc_builtin, qc, parse_args);
+        if (parse_args) {
+            socn->resolveParseArgs();
+        }
+        default_val = QoreValue(socn);
+    } else {
+        // Defer: store class path + args; second pass resolves.
+        pim.pending_new_class_path = class_path;
+        pim.pending_new_args = std::move(args);
+        default_val = QoreValue();
+    }
+    (void)save;  // save no longer needed — ptr correctly advanced
+    return true;
+}
+
+// Resolve a constant FQN (e.g. "Reflection::AutoHashType" or
+// "Some::Class::MEMBER") to its ConstantEntry via the given program, falling
+// back to a class-constant lookup when the name isn't a namespace constant.
+// Returns nullptr on failure. Used by AOT load paths that rebuild AST nodes
+// referencing program/class constants.
+static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* fqn) {
+    if (!pgm || !fqn || !*fqn) {
+        return nullptr;
+    }
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    const qore_ns_private* cns = nullptr;
+    ConstantEntry* ce = const_cast<ConstantEntry*>(
+        qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS, fqn, cns));
+    if (ce) {
+        return ce;
+    }
+    // Try class constant lookup: path format "ClassName::ConstName"
+    std::string path(fqn);
+    size_t sep = path.rfind("::");
+    if (sep == std::string::npos || sep == 0) {
+        return nullptr;
+    }
+    std::string class_path = path.substr(0, sep);
+    std::string const_name = path.substr(sep + 2);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+        *pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        return nullptr;
+    }
+    return const_cast<ConstantEntry*>(
+        qore_class_private::get(*qc)->constlist.findEntry(const_name.c_str()));
+}
+
 // ---- QoreAOTBinaryWriter ----
 
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
@@ -829,13 +977,25 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 }
             }
 
-            // Resolve the class and create a ScopedObjectCallNode
+            // Resolve the class. Try the program's committed-class map
+            // first; fall back to the deserializer's in-progress class map
+            // for forward references (e.g. `OtherClass m();` in a class that
+            // is deserialized before `OtherClass`). The in-progress map is
+            // installed by deserializeClasses() via g_aot_pending_class_map.
             ExceptionSink xsink;
             const QoreClass* qc = getProgram()->findClass(class_path, &xsink);
             if (xsink.isException()) {
                 xsink.clear();
             }
+            if (!qc && g_aot_pending_class_map) {
+                auto it = g_aot_pending_class_map->find(class_path);
+                if (it != g_aot_pending_class_map->end()) {
+                    qc = it->second;
+                }
+            }
             if (!qc) {
+                printd(0, "AOT readValue VT_NEW_OBJECT: cannot resolve class '%s'\n",
+                    class_path ? class_path : "(null)");
                 delete parse_args;
                 return QoreValue();
             }
@@ -1391,21 +1551,99 @@ static void writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
             if (dv.isNothing() || dv.isNull() || dt == NT_BOOLEAN || dt == NT_INT
                     || dt == NT_FLOAT || dt == NT_STRING || dt == NT_DATE
                     || dt == NT_NUMBER || dt == NT_BINARY || dt == NT_LIST
-                    || dt == NT_HASH) {
+                    || dt == NT_HASH || dt == NT_OBJECT) {
+                // Note: NT_OBJECT is routed through writeValue so the writer's
+                // CRM lookup can emit VT_CONST_REF for parse-folded Type-class
+                // constants (e.g. `*Type t = IntType` default args).
                 writer.writeU8(1);
                 writer.writeValue(dv);
             } else if (dv.hasNode()) {
-                // Try to serialize as a classifiable expression (e.g. function call)
-                auto* fcn = dynamic_cast<const FunctionCallNode*>(dv.getInternalNode());
+                const AbstractQoreNode* node = dv.getInternalNode();
+
+                // Helper: resolve the FQN of a constant referenced by node
+                // chain (either a directly-registered CRM pointer, or a
+                // RuntimeConstantRefNode wrapping a ConstantEntry whose
+                // val/saved_val node is in the CRM).
+                auto resolveConstFqn = [&writer](const AbstractQoreNode* n) -> std::string {
+                    if (!writer.const_reverse_map || !n) {
+                        return std::string();
+                    }
+                    auto it = writer.const_reverse_map->find(n);
+                    if (it != writer.const_reverse_map->end()) {
+                        return it->second;
+                    }
+                    if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(n)) {
+                        ConstantEntry* ce = rcr->getConstantEntry();
+                        if (ce) {
+                            if (ce->val.hasNode()) {
+                                auto it2 = writer.const_reverse_map->find(ce->val.getInternalNode());
+                                if (it2 != writer.const_reverse_map->end()) {
+                                    return it2->second;
+                                }
+                            }
+                            QoreValue sv = ce->getReferencedValue();
+                            std::string rv;
+                            if (sv.hasNode()) {
+                                auto it2 = writer.const_reverse_map->find(sv.getInternalNode());
+                                if (it2 != writer.const_reverse_map->end()) {
+                                    rv = it2->second;
+                                }
+                            }
+                            sv.discard(nullptr);
+                            return rv;
+                        }
+                    }
+                    return std::string();
+                };
+
+                // Case 1: no-arg function call default (e.g., getcwd(), now())
+                auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
                 if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())) {
-                    // No-arg function call default (e.g., getcwd(), now())
                     writer.writeU8(2);  // expression default: function call
                     writer.writeStringRef(fcn->getName());
-                } else {
-                    // Unclassifiable complex expression — write opaque placeholder
-                    writer.writeU8(1);
-                    writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
+                    continue;
                 }
+
+                // Case 2: RuntimeConstantRefNode — a plain constant reference.
+                //   e.g. `hash<auto> options = DefaultsMap`. At call time we want
+                //   to return the constant's current value, so serialize the
+                //   constant's FQN and rebuild a RuntimeConstantRefNode at load.
+                if (auto* rcr = dynamic_cast<const RuntimeConstantRefNode*>(node)) {
+                    (void)rcr;  // silence unused-if-no-CRM warning
+                    std::string fqn = resolveConstFqn(node);
+                    if (!fqn.empty()) {
+                        writer.writeU8(3);  // expression default: constant ref
+                        writer.writeStringRef(fqn.c_str());
+                        continue;
+                    }
+                }
+
+                // Case 3: QoreDotEvalOperatorNode — method call on a constant,
+                //   e.g. `AutoHashType.getName()`. We only support the no-arg
+                //   form with a constant-ref left-hand side. The reader builds
+                //   a fresh QoreDotEvalOperatorNode whose `left` is a new
+                //   RuntimeConstantRefNode — the method is then resolved by
+                //   dynamic dispatch at each call.
+                if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
+                    MethodCallNode* mc = de->getMethodCall();
+                    if (mc && mc->getName() && (!mc->getArgs() || mc->getArgs()->empty())) {
+                        QoreValue left = de->getExpression();
+                        std::string fqn;
+                        if (left.hasNode()) {
+                            fqn = resolveConstFqn(left.getInternalNode());
+                        }
+                        if (!fqn.empty()) {
+                            writer.writeU8(4);  // expression default: const.method()
+                            writer.writeStringRef(fqn.c_str());
+                            writer.writeStringRef(mc->getName());
+                            continue;
+                        }
+                    }
+                }
+
+                // Fallback: unclassifiable complex expression — write opaque
+                writer.writeU8(1);
+                writer.writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_OPAQUE_DEFAULT));
             } else {
                 // Unknown type — write opaque placeholder
                 writer.writeU8(1);
@@ -3573,6 +3811,22 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
     class_list.resize(count);
 
+    // In-progress class path → QoreClass* map used as a fallback lookup in
+    // readValue VT_NEW_OBJECT for forward references inside member init
+    // expressions (e.g. `OtherClass m()`). This is needed because classes
+    // are not committed to the root namespace's clmap until after the full
+    // classes pass, so getProgram()->findClass() won't find them mid-pass.
+    std::unordered_map<std::string, QoreClass*> pending_class_map;
+    struct ClassMapRAII {
+        ClassMapRAII(const std::unordered_map<std::string, QoreClass*>* p) {
+            g_aot_pending_class_map = p;
+        }
+        ~ClassMapRAII() {
+            g_aot_pending_class_map = nullptr;
+        }
+    };
+    ClassMapRAII raii(&pending_class_map);
+
     for (uint32_t i = 0; i < count; ++i) {
         const char* name = reader.readStringRef(ptr);
         const char* path = reader.readStringRef(ptr);
@@ -3606,6 +3860,18 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             preexisting_classes.insert(i);
         }
         class_list[i] = qc;
+
+        // Register into the forward-ref map for member-init resolution.
+        // Build both the bare path ("DataProvider::Foo") and a fully-scoped
+        // form with leading "::" so either lookup shape works.
+        if (path && *path) {
+            pending_class_map[path] = qc;
+            if (strncmp(path, "::", 2) == 0) {
+                pending_class_map[std::string(path + 2)] = qc;
+            } else {
+                pending_class_map[std::string("::") + path] = qc;
+            }
+        }
 
         // Read base classes (store paths for later resolution)
         uint32_t num_bases = QoreAOTBinaryReader::readU32(ptr);
@@ -3642,23 +3908,28 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             uint8_t maccess = QoreAOTBinaryReader::readU8(ptr);
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             QoreValue default_val;
+            PendingInstanceMember pim;
+            pim.name = mname ? mname : "";
+            pim.type_path = mtype_path ? mtype_path : "";
+            pim.access = maccess;
             if (has_default) {
-                default_val = reader.readValue(ptr, end, error);
-                if (!error.empty()) {
-                    error = "instance member '" + std::string(mname ? mname : "(null)") + "' default: " + error;
+                if (!readDeferredMemberDefault(reader, ptr, end, error,
+                        default_val, pim)) {
+                    error = "instance member '" + pim.name + "' default: " + error;
                     return false;
                 }
             }
+            pim.default_val = default_val;
 
             if (!class_already_existed && mname && *mname) {
-                PendingInstanceMember pim;
-                pim.name = mname;
-                pim.type_path = mtype_path ? mtype_path : "";
-                pim.access = maccess;
-                pim.default_val = default_val;
                 instance_members.push_back(std::move(pim));
-            } else if (default_val.hasNode()) {
-                default_val.discard(nullptr);
+            } else {
+                if (default_val.hasNode()) {
+                    default_val.discard(nullptr);
+                }
+                for (auto& v : pim.pending_new_args) {
+                    v.discard(nullptr);
+                }
             }
         }
         pending_instance_members.push_back(std::move(instance_members));
@@ -3676,24 +3947,28 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             // Read the serialized initial value if present. Matches the
             // write-side layout: u8 has_value + optional value.
             QoreValue default_val;
+            PendingStaticMember psm;
+            psm.name = sm_name ? sm_name : "";
+            psm.type_path = sm_type_path ? sm_type_path : "";
+            psm.access = sm_access;
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             if (has_default) {
-                default_val = reader.readValue(ptr, end, error);
-                if (!error.empty()) {
-                    error = "static member '" + std::string(sm_name ? sm_name : "(null)") +
-                        "': " + error;
+                if (!readDeferredMemberDefault(reader, ptr, end, error,
+                        default_val, psm)) {
+                    error = "static member '" + psm.name + "': " + error;
                     return false;
                 }
             }
+            psm.default_val = default_val;
             if (!class_already_existed && sm_name && *sm_name) {
-                PendingStaticMember psm;
-                psm.name = sm_name;
-                psm.type_path = sm_type_path ? sm_type_path : "";
-                psm.access = sm_access;
-                psm.default_val = default_val;
                 static_members.push_back(std::move(psm));
-            } else if (default_val.hasNode()) {
-                default_val.discard(nullptr);
+            } else {
+                if (default_val.hasNode()) {
+                    default_val.discard(nullptr);
+                }
+                for (auto& v : psm.pending_new_args) {
+                    v.discard(nullptr);
+                }
             }
         }
         pending_static_members.push_back(std::move(static_members));
@@ -3841,6 +4116,25 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
     // Second pass: create instance members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
+    // Build a path→QoreClass* map across all deserialized classes so pending
+    // forward-reference `NewObject` init expressions can be resolved here,
+    // after every class has been registered.
+    std::unordered_map<std::string, QoreClass*> all_class_map;
+    for (uint32_t i = 0; i < class_list.size(); ++i) {
+        if (!class_list[i]) {
+            continue;
+        }
+        const char* cpath = class_list[i]->getPath();
+        if (cpath && *cpath) {
+            all_class_map[cpath] = class_list[i];
+            if (strncmp(cpath, "::", 2) == 0) {
+                all_class_map[std::string(cpath + 2)] = class_list[i];
+            } else {
+                all_class_map[std::string("::") + cpath] = class_list[i];
+            }
+        }
+    }
+
     for (uint32_t i = 0; i < class_list.size() && i < pending_instance_members.size(); ++i) {
         QoreClass* qc = class_list[i];
         if (!qc) {
@@ -3859,6 +4153,49 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
                     error.clear();
                     ti = autoTypeInfo;
                 }
+            }
+
+            // Resolve a pending forward-referenced NewObject default if any.
+            if (!pim.pending_new_class_path.empty()) {
+                const QoreClass* target = nullptr;
+                {
+                    ExceptionSink xs;
+                    target = getProgram()->findClass(pim.pending_new_class_path.c_str(), &xs);
+                    if (xs.isException()) {
+                        xs.clear();
+                    }
+                }
+                if (!target) {
+                    auto it = all_class_map.find(pim.pending_new_class_path);
+                    if (it != all_class_map.end()) {
+                        target = it->second;
+                    }
+                }
+                if (target) {
+                    QoreParseListNode* parse_args = nullptr;
+                    if (!pim.pending_new_args.empty()) {
+                        parse_args = new QoreParseListNode(&loc_builtin);
+                        for (auto& v : pim.pending_new_args) {
+                            parse_args->add(v, &loc_builtin);
+                        }
+                        pim.pending_new_args.clear();
+                    }
+                    ScopedObjectCallNode* socn = new ScopedObjectCallNode(
+                        &loc_builtin, target, parse_args);
+                    if (parse_args) {
+                        socn->resolveParseArgs();
+                    }
+                    pim.default_val = QoreValue(socn);
+                } else {
+                    printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
+                        "instance member '%s' in class '%s'\n",
+                        pim.pending_new_class_path.c_str(), pim.name.c_str(), qc->getName());
+                    for (auto& v : pim.pending_new_args) {
+                        v.discard(nullptr);
+                    }
+                    pim.pending_new_args.clear();
+                }
+                pim.pending_new_class_path.clear();
             }
 
             // Transfer ownership of the default value to the class member
@@ -3881,6 +4218,24 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
     // Second pass: create static members now that types are resolved
     // NOTE: hashdecls and enums must be deserialized before calling this method
     // so that type references to them can be resolved
+    // Build an all-classes path map for pending forward-ref NewObject init
+    // resolution (mirrors resolveInstanceMembers).
+    std::unordered_map<std::string, QoreClass*> all_class_map;
+    for (uint32_t i = 0; i < class_list.size(); ++i) {
+        if (!class_list[i]) {
+            continue;
+        }
+        const char* cpath = class_list[i]->getPath();
+        if (cpath && *cpath) {
+            all_class_map[cpath] = class_list[i];
+            if (strncmp(cpath, "::", 2) == 0) {
+                all_class_map[std::string(cpath + 2)] = class_list[i];
+            } else {
+                all_class_map[std::string("::") + cpath] = class_list[i];
+            }
+        }
+    }
+
     for (uint32_t i = 0; i < class_list.size() && i < pending_static_members.size(); ++i) {
         QoreClass* qc = class_list[i];
         if (!qc) {
@@ -3899,6 +4254,49 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                     error.clear();
                     ti = autoTypeInfo;
                 }
+            }
+
+            // Resolve a pending forward-referenced NewObject default if any
+            if (!psm.pending_new_class_path.empty()) {
+                const QoreClass* target = nullptr;
+                {
+                    ExceptionSink xs;
+                    target = getProgram()->findClass(psm.pending_new_class_path.c_str(), &xs);
+                    if (xs.isException()) {
+                        xs.clear();
+                    }
+                }
+                if (!target) {
+                    auto it = all_class_map.find(psm.pending_new_class_path);
+                    if (it != all_class_map.end()) {
+                        target = it->second;
+                    }
+                }
+                if (target) {
+                    QoreParseListNode* parse_args = nullptr;
+                    if (!psm.pending_new_args.empty()) {
+                        parse_args = new QoreParseListNode(&loc_builtin);
+                        for (auto& v : psm.pending_new_args) {
+                            parse_args->add(v, &loc_builtin);
+                        }
+                        psm.pending_new_args.clear();
+                    }
+                    ScopedObjectCallNode* socn = new ScopedObjectCallNode(
+                        &loc_builtin, target, parse_args);
+                    if (parse_args) {
+                        socn->resolveParseArgs();
+                    }
+                    psm.default_val = QoreValue(socn);
+                } else {
+                    printd(0, "AOT deser: cannot resolve pending NewObject class '%s' for "
+                        "static member '%s' in class '%s'\n",
+                        psm.pending_new_class_path.c_str(), psm.name.c_str(), qc->getName());
+                    for (auto& v : psm.pending_new_args) {
+                        v.discard(nullptr);
+                    }
+                    psm.pending_new_args.clear();
+                }
+                psm.pending_new_class_path.clear();
             }
 
             // Create the static variable info. The default value is
@@ -4512,6 +4910,41 @@ static bool readAndSetupVariantSignature(
             } else {
                 param_defaults[j] = QoreValue(true);
             }
+        } else if (has_default == 3) {
+            // Expression default: plain constant reference.
+            // Build a RuntimeConstantRefNode pointing at the resolved entry
+            // so later evaluation returns the current value of the constant.
+            const char* cfqn = reader.readStringRef(ptr);
+            ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, cfqn);
+            if (ce) {
+                param_defaults[j] = QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
+            } else {
+                printd(0, "AOT deser: cannot resolve default const ref '%s'\n",
+                    cfqn ? cfqn : "(null)");
+                param_defaults[j] = QoreValue(true);
+            }
+        } else if (has_default == 4) {
+            // Expression default: no-arg method call on a constant
+            //   e.g. `AutoHashType.getName()`.
+            // Rebuild the AST as a QoreDotEvalOperatorNode whose `left` is a
+            // freshly-constructed RuntimeConstantRefNode wrapping the
+            // referenced ConstantEntry, and whose method call has a dynamic
+            // lookup by name (qc/method left null) — the runtime dispatch
+            // path in AbstractMethodCallNode::exec handles this case.
+            const char* cfqn = reader.readStringRef(ptr);
+            const char* mname = reader.readStringRef(ptr);
+            ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, cfqn);
+            if (ce && mname && *mname) {
+                auto* rcr = new RuntimeConstantRefNode(&loc_builtin, ce);
+                auto* mc = new MethodCallNode(&loc_builtin, strdup(mname),
+                    (QoreParseListNode*)nullptr);
+                auto* de = new QoreDotEvalOperatorNode(&loc_builtin, QoreValue(rcr), mc);
+                param_defaults[j] = QoreValue(de);
+            } else {
+                printd(0, "AOT deser: cannot resolve default dot-eval const '%s'.%s()\n",
+                    cfqn ? cfqn : "(null)", mname ? mname : "(null)");
+                param_defaults[j] = QoreValue(true);
+            }
         }
     }
 
@@ -4588,6 +5021,13 @@ bool QoreAOTBinaryDeserializer::deserializeFunctions(std::string& error) {
                         default_val.discard(nullptr);
                     } else if (has_default == 2) {
                         // Expression default (no-arg function call): skip function name ref
+                        reader.readStringRef(ptr);
+                    } else if (has_default == 3) {
+                        // Expression default (const ref): skip FQN
+                        reader.readStringRef(ptr);
+                    } else if (has_default == 4) {
+                        // Expression default (method call on const): skip FQN + method name
+                        reader.readStringRef(ptr);
                         reader.readStringRef(ptr);
                     }
                 }

@@ -1046,6 +1046,13 @@ class QoreAOTBinaryDeserializer {
         std::string type_path;
         uint8_t access;
         QoreValue default_val;
+        //! When set, the member init is a `Class(args)` call whose target
+        //! class is a forward reference to a class that has not yet been
+        //! registered. Resolved into a ScopedObjectCallNode and installed
+        //! into default_val in the second pass, after all classes exist.
+        std::string pending_new_class_path;
+        //! Evaluated constructor args for pending_new_class_path (owned).
+        std::vector<QoreValue> pending_new_args;
     };
     std::vector<std::vector<PendingInstanceMember>> pending_instance_members;
 
@@ -1055,6 +1062,9 @@ class QoreAOTBinaryDeserializer {
         std::string type_path;
         uint8_t access;
         QoreValue default_val;
+        //! Same deferred-new-object channel as PendingInstanceMember.
+        std::string pending_new_class_path;
+        std::vector<QoreValue> pending_new_args;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 
