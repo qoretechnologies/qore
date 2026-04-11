@@ -1570,16 +1570,18 @@ ReferenceNode* QoreObject::getReferenceToMember(const char* mem, ExceptionSink* 
         qore_class_private::get(*priv->theclass));
 }
 
-int QoreObject::setMemberValue(const char* key, const QoreClass* cls, const QoreValue val, ExceptionSink* xsink) {
+int QoreObject::setMemberValue(const char* key, const QoreClass* cls, QoreValue val, ExceptionSink* xsink) {
     if (!cls) {
         setValue(key, val, xsink);
         return *xsink ? -1 : 0;
     }
     LValueHelper lvh(xsink);
     if (priv->getLValue(key, lvh, qore_class_private::get(*cls), false, xsink)) {
+        val.discard(xsink);
         return -1;
     }
-    lvh.assign(val.refSelf(), "<set normal class member value>");
+    // consuming semantics: caller transfers the reference in val
+    lvh.assign(val, "<set normal class member value>");
     return *xsink ? -1 : 0;
 }
 

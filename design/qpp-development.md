@@ -168,11 +168,14 @@ The naming pattern is `obj_<parameter_name>`:
 
 ### Setting Member Values in QPP Constructors
 
-Use `self->setValue("member", val, xsink)` — not `self->setMemberValue("member", cls, val, xsink)` —
-when initializing Qore members from a QPP constructor body.  `setMemberValue` goes through
-class-context member access with DGC object-counting that can interact poorly with the
-constructor's `CodeContextHelper` ref, producing a leaked ref.  `setValue` performs a simple
-member assignment and is the pattern used by `SocketPollOperation` and other working QPP classes.
+Both `self->setValue("member", val, xsink)` and `self->setMemberValue("member", cls, val, xsink)`
+have consuming ownership semantics (as of %Qore 2.3) — the reference in `val` is transferred
+to the object.  For regular (non-`private:internal`) members, `setValue` is preferred because
+it is slightly cheaper and does not require a class argument; from inside a constructor,
+`runtime_get_class()` is the class being constructed, so `setValue` can reach every member of
+the class, including `private` members.  Use `setMemberValue(cls, ...)` only when an explicit
+class context is required — typically from external C++ code that needs to set
+`private:internal` members on behalf of a specific class.
 
 ### Documentation Format
 
