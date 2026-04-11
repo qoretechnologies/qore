@@ -284,6 +284,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_DelegatingPollOperation.qpp
     lib/QC_AbstractHttpPollConnection.qpp
     lib/QC_HttpClientConnectionBase.qpp
+    lib/QC_HttpClientConnectionManagerBase.qpp
     lib/QC_HttpIdlePollOperationBase.qpp
     lib/QC_HttpKeepAlivePollOperationBase.qpp
     lib/QC_HttpAcceptPollOperationBase.qpp
@@ -1549,6 +1550,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractHttpPollConnection.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"

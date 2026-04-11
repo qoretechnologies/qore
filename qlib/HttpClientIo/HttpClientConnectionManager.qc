@@ -64,7 +64,7 @@ auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
     destructors fire on one controller's I/O thread and cancel operations on
     another controller.
 */
-public class HttpClientConnectionManager {
+public class HttpClientConnectionManager inherits HttpClientConnectionManagerBase {
     public {
         #! Interval before re-probing HTTP/3 for hosts that fell back to HTTP/2
         const H3_REPROBE_INTERVAL = 5m;
