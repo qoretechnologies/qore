@@ -308,13 +308,10 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
-    // Abort the poll op — transitions priv to CLOSED, notifies pending
-    // actions with HTTP1-ABORT, clears our connection_priv raw pointer
-    // inside the priv (so the priv no longer dereferences us).
-    poll_op_priv->abort(xsink);
-
-    // Cancel the op in the global AsyncIoController so it's removed from
-    // the cache and the socket fd released.
+    // Cancel the op in the global AsyncIoController — this synchronously
+    // waits until the I/O thread stops processing the operation.  The I/O
+    // thread's cancel processing calls abort() on the poll op via
+    // doCancelIntern → callAbort, so we must NOT call abort() again here.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -331,6 +328,9 @@ void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
         }
         cancel_xsink.clear();
         submitted_to_controller = false;
+    } else {
+        // Not submitted to the I/O controller — abort directly.
+        poll_op_priv->abort(xsink);
     }
 
     // Drive the connection base state machine to CLOSED so any

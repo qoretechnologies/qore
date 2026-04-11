@@ -247,8 +247,10 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
         return;
     }
 
-    poll_op_priv->abort(xsink);
-
+    // Cancel the op in the global AsyncIoController — this synchronously
+    // waits until the I/O thread stops processing the operation.  The I/O
+    // thread's cancel processing calls abort() on the poll op via
+    // doCancelIntern → callAbort, so we must NOT call abort() again here.
     if (submitted_to_controller && sock_priv) {
         ExceptionSink cancel_xsink;
         ReferenceHolder<QoreObject> ctl_obj_holder(
@@ -265,6 +267,9 @@ void Http3ClientConnection::closeConnection(ExceptionSink* xsink) {
         }
         cancel_xsink.clear();
         submitted_to_controller = false;
+    } else {
+        // Not submitted to the I/O controller — abort directly.
+        poll_op_priv->abort(xsink);
     }
 
     setClosed();
