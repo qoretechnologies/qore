@@ -10,6 +10,11 @@
 %requires ../../../../qlib/PgsqlSqlUtilBase.qm
 %requires ../../../../qlib/PgsqlSqlUtil.qm
 %requires ../../../../qlib/SchemaReverse.qm
+%requires ../../../../qlib/Schema
+
+%try-module yaml
+%define NoYaml
+%endtry
 
 %requires ./SqlUtilTestBase.qm
 
@@ -322,6 +327,7 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("pgvector type support", \pgvectorTest());
             addTestCase("pgvector ivfflat index", \pgvectorIvfflatIndexTest());
             addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
+            addTestCase("populate column backfill", \populateColumnTest());
         }
 
         set_return_value(main());
@@ -737,6 +743,115 @@ class PgsqlTest inherits SqlTestBase {
         PgsqlIndex expected("sk_ivfflat_test_emb", False, ch,
             NOTHING, "ivfflat", {"lists": 100}, {"embedding": "vector_cosine_ops"});
         assertTrue(live.equal(expected), "live ivfflat index equals expected definition");
+    }
+
+    #! Integration test for the populate column feature
+    /** Creates a table with data, then adds a NOT NULL column with populate, and verifies
+        the 3-step dance: add-nullable → backfill → SET NOT NULL.
+    */
+    private populateColumnTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        string tname = "pgsql_populate_test";
+
+        # clean up leftover from a previous failed run
+        {
+            PgsqlTable t0(ds, tname);
+            if (t0.checkExistence()) {
+                t0.dropCommit();
+            }
+        }
+
+        # Phase 1: create a table with initial data (no populate columns yet)
+        string schema_v1 = make_yaml({
+            "schema": {"name": "PopulateTest", "version": "1.0"},
+            "tables": {
+                (tname): {
+                    "columns": {
+                        "id": {"type": "int", "notnull": True},
+                        "name": {"type": "varchar", "size": 100, "notnull": True},
+                    },
+                    "primary_key": {"name": "pk_populate_test", "columns": ("id",)},
+                },
+            },
+        });
+
+        {
+            Schema::DataSchema s1(ds, Schema::DataSchemaLoader::loadHash(parse_yaml(schema_v1)));
+            s1.align(True, m_options.verbose);
+        }
+
+        # insert some test data
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            AbstractTable at = (new Table(ds, tname)).getTable();
+            at.insert({"id": 1, "name": "alice"});
+            at.insert({"id": 2, "name": "bob"});
+        }
+
+        # Phase 2: add a NOT NULL column with populate:{field: name}
+        string schema_v2 = make_yaml({
+            "schema": {"name": "PopulateTest", "version": "1.1"},
+            "tables": {
+                (tname): {
+                    "columns": {
+                        "id": {"type": "int", "notnull": True},
+                        "name": {"type": "varchar", "size": 100, "notnull": True},
+                        "display_name": {
+                            "type": "varchar", "size": 240, "notnull": True,
+                            "populate": {"field": "name"},
+                        },
+                    },
+                    "primary_key": {"name": "pk_populate_test", "columns": ("id",)},
+                },
+            },
+        });
+
+        {
+            Schema::DataSchema s2(ds, Schema::DataSchemaLoader::loadHash(parse_yaml(schema_v2)));
+            s2.align(True, m_options.verbose);
+        }
+
+        # verify the column exists and is NOT NULL
+        {
+            AbstractTable at = (new Table(ds, tname)).getTable();
+            Columns cols = at.describe();
+            assertTrue(cols.hasKey("display_name"), "populate column exists");
+            assertFalse(cols.display_name.nullable, "populate column is NOT NULL");
+        }
+
+        # verify the data was backfilled
+        {
+            *list<auto> rows = ds.selectRows("select id, display_name from " + tname
+                + " order by id");
+            assertEq(2, rows.size(), "two rows present");
+            assertEq("alice", rows[0].display_name, "row 1 backfilled from name");
+            assertEq("bob", rows[1].display_name, "row 2 backfilled from name");
+        }
+
+        # Phase 3: re-align — should be a no-op
+        {
+            Schema::DataSchema s3(ds, Schema::DataSchemaLoader::loadHash(parse_yaml(schema_v2)));
+            hash<SchemaAlignmentInfo> info = s3.alignWithInfo(False, m_options.verbose,
+                m_options.verbose > 0);
+            assertFalse(info.created, "re-align not created");
+        }
+
+        # clean up
+        {
+            on_error ds.rollback();
+            on_success ds.commit();
+            AbstractTable tc = (new Table(ds, tname)).getTable();
+            if (tc.checkExistence()) {
+                tc.drop();
+            }
+        }
     }
 
     private string getResultSetSql() {

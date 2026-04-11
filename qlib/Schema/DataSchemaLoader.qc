@@ -316,6 +316,13 @@ public class DataSchemaLoader {
             result.default_value = col_def.default_value;
         }
 
+        # Add populate expression for automatic backfill when adding a new column to a non-empty
+        # table; the DataSchema alignment layer uses this to automate the
+        # add-nullable → UPDATE → SET NOT NULL migration pattern
+        if (exists col_def.populate) {
+            result.populate = col_def.populate;
+        }
+
         # Add comment
         if (col_def.comment.val()) {
             result.comment = col_def.comment;

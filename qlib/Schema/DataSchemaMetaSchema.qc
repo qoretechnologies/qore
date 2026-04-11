@@ -154,6 +154,14 @@ public const DataSchemaJsonSchema = {
                     "description": "Per-driver overrides merged into the base type (e.g. "
                         "{pgsql: {native_type: text}}); may be used alone when 'type' is omitted",
                 },
+                "populate": {
+                    "description": "Expression or literal value to backfill existing rows when this "
+                        "column is added to a non-empty table. Automates the add-nullable -> UPDATE "
+                        "-> SET NOT NULL migration pattern. Can be: a scalar literal, a DPQL expression "
+                        "hash ({exp: 'upr', args: [{field: 'name'}]}), a field reference shorthand "
+                        "({field: 'other_col'}), or a per-driver SQL escape hatch "
+                        "({sql: {pgsql: 'digest(name, sha256)'}}).",
+                },
             },
         },
         "indexDefinition": {

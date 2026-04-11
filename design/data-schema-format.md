@@ -72,13 +72,58 @@ Supported column types:
 ```yaml
 columns:
   my_column:
-    type: varchar          # Required: column type
+    type: varchar          # Required: column type (or use driver: instead)
     size: 240              # Optional: column size (required for varchar, char)
     scale: 2               # Optional: numeric scale
     notnull: true          # Optional: NOT NULL constraint
     default_value: "A"     # Optional: default value
     comment: "Description" # Optional: column comment
+    populate: {field: name} # Optional: backfill expression for adding to non-empty tables
 ```
+
+### Populate Expressions
+
+When adding a NOT NULL column to a non-empty table, the database rejects the `ALTER TABLE ADD
+COLUMN` because existing rows would be NULL. The `populate` attribute automates the 3-step
+migration pattern: add the column as nullable, backfill existing rows, then set NOT NULL.
+
+The alignment layer only uses `populate` when the column is **genuinely new** (not already in the
+database). On subsequent alignments the column already exists and `populate` is ignored. The
+backfill uses `WHERE col IS NULL` for idempotency.
+
+Supported forms:
+
+```yaml
+# Field reference — copy from another column
+populate: {field: name}
+# → UPDATE t SET display_name = name WHERE display_name IS NULL
+
+# Literal value — fill with a constant
+populate: "active"
+# → UPDATE t SET status = 'active' WHERE status IS NULL
+
+# DPQL expression — rendered to SQL via the driver's expression map when possible,
+# otherwise evaluated client-side and passed as a bind value
+populate: {exp: upr, args: [{field: name}]}
+# → UPDATE t SET upper_name = upper(name) WHERE upper_name IS NULL
+
+populate: {exp: now}
+# → UPDATE t SET created = current_timestamp WHERE created IS NULL
+
+populate: {exp: coalesce, args: [{field: legacy_status}, "unknown"]}
+# → UPDATE t SET status = coalesce(legacy_status, 'unknown') WHERE status IS NULL
+
+# Per-driver SQL escape hatch — for DB-specific functions not in the expression map
+populate:
+  sql:
+    pgsql: "digest(name, 'sha256')"
+    oracle: "DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(name), 4)"
+    mysql: "UNHEX(SHA2(name, 256))"
+# → UPDATE t SET name_sha256 = digest(name, 'sha256') WHERE name_sha256 IS NULL  (on pgsql)
+```
+
+`populate` works with or without `notnull`. If `notnull: true` is set, the constraint is applied
+after the backfill. If `notnull` is not set, the backfill runs but no NOT NULL constraint is added.
 
 ## Table Definition
 

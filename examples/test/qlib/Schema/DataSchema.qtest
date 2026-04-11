@@ -204,6 +204,29 @@ class DataSchemaTest inherits QUnit::Test {
             Schema::DataSchemaLoader::normalizeColumn("t", "c", {"notnull": True});
         });
 
+        # populate attribute preserved through normalization
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "varchar", "size": 240, "notnull": True, "populate": {"field": "name"}});
+        assertTrue(col.hasKey("populate"), "populate key preserved");
+        assertEq("name", col.populate.field, "populate field reference preserved");
+        assertTrue(col.notnull, "notnull preserved alongside populate");
+
+        # populate with literal value
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "varchar", "size": 20, "notnull": True, "populate": "active"});
+        assertEq("active", col.populate, "populate literal preserved");
+
+        # populate with DPQL expression
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "varchar", "size": 240, "populate": {"exp": "upr", "args": ({"field": "name"},)}});
+        assertEq("upr", col.populate.exp, "populate DPQL exp preserved");
+
+        # populate with per-driver SQL
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "binary", "notnull": True,
+             "populate": {"sql": {"pgsql": "digest(name, 'sha256')"}}});
+        assertEq("digest(name, 'sha256')", col.populate.sql.pgsql, "populate SQL preserved");
+
         # default value
         col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
             {"type": "char", "size": 1, "default_value": "A"});
