@@ -536,6 +536,11 @@ static std::unique_ptr<QoreIRInstruction> readExpr(
     std::string error;
     QoreValue expr = ctx.readExpr(ctx.reader, ctx.ptr, ctx.end, error);
     if (!error.empty()) {
+        // Propagate inner error so deserializeIRInstruction surfaces the real
+        // cause instead of an empty-tail "failed to deserialize instruction ..."
+        // message. See file-level comment in follow-up cleanup commit for the
+        // systematic convention across all read_fn handlers.
+        ctx.error = error;
         return nullptr;
     }
     bool has_ref_args = QoreAOTBinaryReader::readU8(ctx.ptr) != 0;

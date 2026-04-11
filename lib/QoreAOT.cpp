@@ -6781,6 +6781,66 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
     }
 
+    // Pre-pass: walk OnBlockExit handler IRs and register any handler-referenced
+    // locals in the function's slot map. Without this, handler IR expressions that
+    // reference locals not already in slots.local_slots would serialize them as
+    // handler-internal slot indices (via temp_slots in classifyAndWriteExpr's
+    // EXPR_TREE fallback), and those indices would be out-of-range at runtime
+    // (ctx->num_locals covers only the function's own slots).
+    //
+    // We do a dry-run serialization of each handler IR to a throwaway writer,
+    // with a writeExpr callback that routes AST expressions through
+    // serializeExprTreeToBlob with the function's own (mutable) slot map.
+    // serializeExprTreeToBlob mutates slots.local_slots via const_cast whenever
+    // it encounters a VarRefNode for a local not yet registered. The blob output
+    // is discarded — only the side effects on slots.local_slots matter.
+    {
+        AOTSlotMap& mutable_slots = const_cast<AOTSlotMap&>(slots);
+        auto writeExpr_dryrun = [&mutable_slots, const_reverse_map](
+                QoreAOTBinaryWriter&, const QoreValue& expr) -> bool {
+            if (expr.hasNode()) {
+                std::vector<uint8_t> discard_blob;
+                // Ignore return value — we only want the side effect on slots
+                serializeExprTreeToBlob(expr, mutable_slots, discard_blob, false,
+                    const_reverse_map);
+            }
+            return true;  // never fail the enclosing IR serialization dry-run
+        };
+        std::function<void(const QoreIRFunction&)> dry_run_ir =
+                [&](const QoreIRFunction& f) {
+            // Recurse into any nested OnBlockExit handler IRs first so that
+            // inner handlers contribute their locals before outer ones.
+            for (auto& block : f.blocks) {
+                for (auto& inst_ptr : block->instructions) {
+                    if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
+                        auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(
+                            inst_ptr.get());
+                        if (obei->handler_ir) {
+                            dry_run_ir(*obei->handler_ir);
+                        }
+                    }
+                }
+            }
+            // Dry-run serialize this function's instructions. The writer's output
+            // buffer is discarded; only writeExpr's side effect on slots matters.
+            QoreAOTBinaryWriter dry_writer;
+            (void)serializeIRFunction(dry_writer, f, writeExpr_dryrun);
+        };
+        // Only pre-walk the handler_ir branches — the top-level function's
+        // expressions are already covered by the classifyExpression loop below.
+        for (auto& block : func.blocks) {
+            for (auto& inst_ptr : block->instructions) {
+                if (inst_ptr->opcode == QoreIROpcode::OnBlockExit) {
+                    auto* obei = static_cast<const QoreIROnBlockExitInstruction*>(
+                        inst_ptr.get());
+                    if (obei->handler_ir) {
+                        dry_run_ir(*obei->handler_ir);
+                    }
+                }
+            }
+        }
+    }
+
     // Extract expression slot identities FIRST — ExprTreeSerializer may add
     // new local/global vars to the slot map during classification
     out.exprs.resize(slots.expr_slots.size());

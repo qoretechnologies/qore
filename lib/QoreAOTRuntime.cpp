@@ -897,7 +897,7 @@ class ExprTreeDeserializer {
             return QoreValue();
         }
 
-uint8_t kind_byte = readU8();
+        uint8_t kind_byte = readU8();
         const auto* kinfo = getAOTExprNodeKindInfo(kind_byte);
         if (!kinfo || !kinfo->is_supported || !kinfo->read_fn) {
             printd(0, "AOT EXPR_TREE: unknown node kind %d\n", (int)kind_byte);
@@ -3608,35 +3608,22 @@ std::unique_ptr<QoreIRFunction> deserializeIRFunction(
         slot_to_local[sid] = const_cast<LocalVar*>(lv);
     }
 
-    // 4b. Build a locals array from slot_to_local for EXPR_TREE deserialization.
-    // During serialization, EXPR_TREE blobs inside closure/handler IR use slot
-    // indices from the function's own local variables (not the parent's).
-    // The readExpr callback passed in may reference the parent's locals, which
-    // causes "invalid local slot" errors for closure parameters.
-    // Build this function's own locals array and override the readExpr callback.
-    AOTExprReadFunc funcReadExpr;
-    std::vector<LocalVar*> func_locals_arr;
+    // 4b. For handler/closure IR expressions: always delegate to the caller's
+    // readExpr, which routes through the enclosing (parent) AOT context.
+    //
+    // The writer side (classifyAndWriteExpr + its EXPR_TREE fallback) resolves
+    // local/global variable references against the PARENT function's
+    // parent_locals / parent_globals identity vectors (see QoreAOTBinary.cpp —
+    // LOCAL_VARREF writes `parent_locals` index as a string, GLOBAL_VARREF
+    // writes `parent_globals` index, EXPR_TREE blobs seed their temp_slots
+    // from parent_locals). All slot references in this function's serialized
+    // expression fields therefore live in the PARENT's AOT slot space.
+    //
+    // Using a locals array built from this function's own IR slot ids would
+    // mis-index those references — so we keep `effectiveReadExpr = &readExpr`
+    // and rely on the caller (typically the handler-specific readExprCb in
+    // buildContextFromSlotMap) to resolve through the parent ctx.
     const AOTExprReadFunc* effectiveReadExpr = &readExpr;
-    if (!slot_to_local.empty()) {
-        int func_max_slot = 0;
-        for (auto& [sid, lv] : slot_to_local) {
-            if ((int)sid + 1 > func_max_slot) {
-                func_max_slot = (int)sid + 1;
-            }
-        }
-        func_locals_arr.resize(func_max_slot, nullptr);
-        for (auto& [sid, lv] : slot_to_local) {
-            func_locals_arr[sid] = lv;
-        }
-        funcReadExpr = [pgm, &func_locals_arr]
-                (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
-                const uint8_t* e, std::string& err) -> QoreValue {
-            return readOneExpr(rdr, p, e, err, pgm,
-                func_locals_arr.data(), static_cast<int>(func_locals_arr.size()),
-                nullptr, 0);
-        };
-        effectiveReadExpr = &funcReadExpr;
-    }
 
     // 5. Pre-create all blocks (needed for forward references)
     func->blocks.reserve(num_blocks);
