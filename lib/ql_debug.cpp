@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
+#include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
@@ -490,6 +491,129 @@ static void ut_future_get_blocking_error(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// --- PromiseAction + QoreFuture + q_future_get_blocking chain ---
+//
+// These tests exercise the exact sync-over-async chain the HTTPClient
+// migration will use in Phase 3 onward: the I/O thread invokes a
+// PromiseAction::execute() with a result, the Promise resolves, the
+// Future wakes, and q_future_get_blocking returns the value to the
+// sync caller.  Any missing glue in the chain surfaces here instead
+// of in a full integration test.
+
+static void ut_promise_action_execute_then_get(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Create the Promise/Future pair as the async submitter would.
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    // Wrap the Future in a QoreObject so q_future_get_blocking can use
+    // the FutureImpl fast path.
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Hand ownership of the Promise to the PromiseAction.  The C++
+    // poll op would do the same — submitRequest() stores the action
+    // and invokes execute()/executeError() from continuePoll() on the
+    // I/O thread.  Here we simulate that by calling execute() from a
+    // background thread after a short delay.
+    QorePromise* promise_raw = promise_holder.release();  // action now owns it
+    AbstractAsyncAction* action = new PromiseAction(promise_raw);
+    promise_raw->deref(&xsink);  // action took its own ref in its ctor
+    UT_ASSERT(c, !xsink, "PromiseAction construction succeeds");
+
+    // Simulate an I/O-thread completion from a background thread.
+    // The action holds a ref to the Promise; we pass a copy of the
+    // result value through its execute() entry point.
+    QoreHashNode* result_hash = new QoreHashNode(autoTypeInfo);
+    {
+        ExceptionSink setup_xsink;
+        result_hash->setKeyValue("status_code", 200, &setup_xsink);
+        result_hash->setKeyValue("body", new QoreStringNode("hello"), &setup_xsink);
+        setup_xsink.clear();
+    }
+    std::thread completer([action, result_hash]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ExceptionSink tx;
+        action->execute(QoreValue(result_hash), &tx);
+        action->cleanup(&tx);
+        tx.clear();
+        delete action;
+    });
+
+    // Sync caller awaits the Future with a 5s budget — should return
+    // the result within ~50ms.
+    int us_tick;
+    int64 start_s = q_epoch_us(us_tick);
+    int64 start_us = start_s * 1000000LL + us_tick;
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    completer.join();
+    UT_ASSERT(c, !xsink, "q_future_get_blocking succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH,
+        "q_future_get_blocking returns a hash result");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        UT_ASSERT_EQ(c, (int64)200, h->getKeyValue("status_code").getAsBigInt(),
+            "result hash carries status_code=200");
+        QoreValue body = h->getKeyValue("body");
+        UT_ASSERT(c, body.getType() == NT_STRING, "result hash carries a body string");
+        if (body.getType() == NT_STRING) {
+            UT_ASSERT(c, !strcmp(body.get<const QoreStringNode>()->c_str(), "hello"),
+                "result body is 'hello'");
+        }
+    }
+    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 500000,
+        "await elapsed ~50ms (before background completion)");
+
+    result.discard(&xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_promise_action_execute_error(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise_holder->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    QorePromise* promise_raw = promise_holder.release();
+    AbstractAsyncAction* action = new PromiseAction(promise_raw);
+    promise_raw->deref(&xsink);
+
+    // Simulate an I/O-thread error completion — the poll op would
+    // call executeError("HTTP1-RECV-ERROR", "...") when recv fails.
+    std::thread completer([action]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        ExceptionSink tx;
+        action->executeError("HTTP1-RECV-ERROR",
+            "connection reset by peer", &tx);
+        action->cleanup(&tx);
+        tx.clear();
+        delete action;
+    });
+
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    completer.join();
+
+    UT_ASSERT(c, xsink.isException(),
+        "executeError propagates to q_future_get_blocking");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "HTTP1-RECV-ERROR"),
+        "exception code matches the action's error code");
+    UT_ASSERT(c, result.isNothing(), "error path returns NOTHING");
+    xsink.clear();
+
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -546,6 +670,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_future_get_blocking_resolved(c);
     ut_future_get_blocking_timeout(c);
     ut_future_get_blocking_error(c);
+    ut_promise_action_execute_then_get(c);
+    ut_promise_action_execute_error(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
