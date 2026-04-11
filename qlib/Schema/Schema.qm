@@ -46,7 +46,7 @@
 %endtry
 
 module Schema {
-    version = "1.5.0";
+    version = "1.6.0";
     desc = "user module for working with SQL schemas";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -179,6 +179,163 @@ module Schema {
             table: users
             set: {status: "A"}
             where: {status: null}
+    @endcode
+
+    @par Example: Column type shorthands including text, float, and pgvector types
+    @code{.yaml}
+    tables:
+      documents:
+        columns:
+          id: {type: int, notnull: true}
+          title: {type: varchar, size: 500, notnull: true}
+          content: {type: text, comment: "Full document content (native TEXT on pgsql/mysql)"}
+          score: {type: float, comment: "Relevance score (double precision on pgsql)"}
+          data: {type: clob, comment: "Serialized data (CLOB on Oracle, TEXT on pgsql)"}
+          thumbnail: {type: blob, comment: "Binary thumbnail image"}
+          embedding:                            # pgvector column (pgsql only)
+            type: vector
+            size: 1024
+            comment: "Dense embedding vector"
+    @endcode
+
+    @par Example: Index access methods (pgvector IVFFlat, HNSW, etc.)
+    @code{.yaml}
+    tables:
+      chunks:
+        columns:
+          id: {type: varchar, size: 64, notnull: true}
+          content: {type: text, notnull: true}
+          embedding: {type: vector, size: 1024}
+        primary_key: {name: pk_chunks, columns: [id]}
+        indexes:
+          # Standard btree index (default — no method needed)
+          sk_chunks_content: {columns: [content]}
+
+          # pgvector IVFFlat index with WITH clause and per-column operator class
+          sk_chunks_embedding:
+            columns: [embedding]
+            method: ivfflat
+            with: {lists: 100}
+            opclass: {embedding: vector_cosine_ops}
+
+          # Per-driver override: IVFFlat only on pgsql, plain btree elsewhere
+          sk_chunks_embedding_safe:
+            columns: [embedding]
+            driver:
+              pgsql:
+                method: hnsw
+                with: {m: 16, ef_construction: 64}
+                opclass: {embedding: vector_l2_ops}
+    @endcode
+
+    @par Example: Populate attribute for automatic column backfill
+    @code{.yaml}
+    # When adding a NOT NULL column to a table that already has data,
+    # use 'populate' to automate the add-nullable -> backfill -> SET NOT NULL pattern.
+
+    tables:
+      accounts:
+        columns:
+          id: {type: int, notnull: true}
+          name: {type: varchar, size: 200, notnull: true}
+
+          # Copy from another column
+          display_name:
+            type: varchar
+            size: 240
+            notnull: true
+            populate: {field: name}
+
+          # Fill with a constant
+          status:
+            type: varchar
+            size: 20
+            notnull: true
+            populate: "active"
+
+          # DPQL expression (rendered to SQL via the driver's expression map)
+          upper_name:
+            type: varchar
+            size: 240
+            notnull: true
+            populate:
+              exp: upr
+              args:
+                - {field: name}
+
+          # Per-driver SQL for DB-specific functions
+          name_sha256:
+            type: binary
+            notnull: true
+            populate:
+              sql:
+                pgsql: "digest(name, 'sha256')"
+                oracle: "DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(name), 4)"
+    @endcode
+
+    @par Example: Insert-only tables with auto-triggers
+    @code{.yaml}
+    tables:
+      # Append-only audit log — trigger fires on INSERT only (no UPDATE)
+      audit_log:
+        columns:
+          id: {type: int, notnull: true}
+          action: {type: varchar, size: 50, notnull: true}
+          details: {type: text}
+          created: {type: timestamp, notnull: true}
+        primary_key: {name: pk_audit_log, columns: [id]}
+        auto_triggers:
+          created: true
+          insert_only: true
+          sequence_columns:
+            id: seq_audit_log
+
+      # Table with a modified column maintained by application code (not by the trigger)
+      ai_collections:
+        columns:
+          id: {type: int, notnull: true}
+          name: {type: varchar, size: 255, notnull: true}
+          status: {type: varchar, size: 20, notnull: true, default_value: active}
+          created: {type: timestamp, notnull: true}
+          modified: {type: timestamp}
+        primary_key: {name: pk_collections, columns: [id]}
+        auto_triggers:
+          created: true          # auto-populate created on INSERT
+          insert_only: true      # trigger fires only on INSERT (app manages modified)
+          sequence_columns:
+            id: seq_collections
+    @endcode
+
+    @par Example: Driver-only columns (no top-level type)
+    @code{.yaml}
+    tables:
+      spatial_data:
+        columns:
+          id: {type: int, notnull: true}
+          # Column defined entirely through driver override — no shorthand type available
+          geom:
+            driver:
+              pgsql:
+                native_type: geometry
+                comment: "PostGIS geometry column"
+          # Combining a type shorthand with driver-specific tweaks
+          metadata:
+            type: int
+            driver:
+              pgsql:
+                identity: true
+    @endcode
+
+    @par Example: Datasource declaration for oload
+    @code{.yaml}
+    schema:
+      name: MyApp
+      version: "1.0.0"
+      datasource: my-app-db          # oload uses this to resolve the target database
+      version_table: schema_info     # table holding the version string
+      version_column: version        # column holding the version string
+      version_where:                 # WHERE clause to locate the version row
+        name: MyApp
     @endcode
 
     See \c design/data-schema-format.md in the Qore source for the complete format specification.
@@ -625,6 +782,24 @@ module Schema {
     - Auto-trigger configuration: \c created, \c modified, \c sequence_columns
 
     @section schema_relnotes Schema Module Release History
+
+    @subsection schema_v1_6_0 Schema Module v1.6.0
+    - added \c populate attribute on column definitions for automatic backfill when adding new
+      columns to non-empty tables — automates the add-nullable → UPDATE → SET NOT NULL pattern;
+      supports field references (\c {field: name}), literal values, DPQL expressions rendered
+      to SQL via the driver's expression map, and per-driver raw SQL escape hatches
+    - added \c text and \c float column type shorthands to @ref Schema::ColumnTypeMap
+    - added \c vector, \c halfvec, \c sparsevec pgvector types to the meta-schema column type enum
+    - added \c unique_constraints pass-through in DataSchemaLoader table normalization
+    - added \c insert_only key to the \c auto_triggers configuration for insert-only tables
+    - added \c schema.datasource metadata field for oload integration (declares the target
+      datasource name so oload can resolve it without a \c get_datasource_name() function)
+    - driver-only column definitions now supported (no top-level \c type required when \c driver
+      overrides are provided — useful for pgvector and other extension types)
+    - user-provided \c driver overrides on column definitions are now merged with the base type's
+      driver block (allows combining \c type shorthand with driver-specific tweaks)
+    - pgvector column \c size is now routed to \c driver.pgsql.size (matching PgsqlSqlUtilBase
+      conventions) rather than the top level
 
     @subsection schema_v1_5_0 Schema Module v1.5.0
     - separated module into individual \c .qc files for better maintainability
