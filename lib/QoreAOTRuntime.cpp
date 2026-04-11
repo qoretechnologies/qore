@@ -1946,13 +1946,35 @@ static QoreAOTContext* buildContextFromSlotMap(
                     enclosing_locals["self"] = closure_sig->selfid;
                 }
 
+                // Build extended locals array for EXPR_TREE blob deserialization.
+                // The writer (classifyAndWriteExpr in QoreAOTBinary.cpp) uses
+                // closure_locals = parent_locals + closure params + (optional)
+                // argv when serializing the closure body's IR. The reader must
+                // mirror that ordering so that LOCAL_VARREF slot indices inside
+                // EXPR_TREE blobs (or any other readExpr-bound field) resolve
+                // to the correct LocalVar*.
+                std::vector<LocalVar*> closure_locals_vec;
+                closure_locals_vec.reserve(num_locals + closure_sig->numParams() + 1);
+                for (int l = 0; l < num_locals; ++l) {
+                    closure_locals_vec.push_back(ctx->locals[l]);
+                }
+                for (unsigned p = 0; p < closure_sig->numParams(); ++p) {
+                    closure_locals_vec.push_back(closure_sig->lv[p]);
+                }
+                if (closure_sig->argvid) {
+                    closure_locals_vec.push_back(closure_sig->argvid);
+                }
+                LocalVar** closure_locals_arr = closure_locals_vec.empty()
+                    ? nullptr : closure_locals_vec.data();
+                int closure_locals_count = static_cast<int>(closure_locals_vec.size());
+
                 // Deserialize closure body IR
                 std::string ir_error;
-                auto readExprCb = [pgm, ctx, num_locals, num_globals]
+                auto readExprCb = [pgm, ctx, num_globals, closure_locals_arr, closure_locals_count]
                         (const QoreAOTBinaryReader& rdr, const uint8_t*& p,
                         const uint8_t* e, std::string& err) -> QoreValue {
                     return readOneExpr(rdr, p, e, err, pgm,
-                        ctx->locals, num_locals, ctx->globals, num_globals);
+                        closure_locals_arr, closure_locals_count, ctx->globals, num_globals);
                 };
                 auto closure_ir = deserializeIRFunction(reader, ptr, ir_end_ptr, pgm,
                     readExprCb, &enclosing_locals, ir_error,
