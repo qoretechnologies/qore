@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     constants can only be defined when parsing
     constants values will be substituted during the 2nd parse phase
@@ -306,8 +306,16 @@ public:
             const QoreTypeInfo* typeInfo = nullptr, bool pub = false, ClassAccess access = Public);
 
     //! Add a pre-created ConstantEntry (takes ownership)
-    DLLLOCAL void addEntry(const char* name, ConstantEntry* ce) {
-        cnemap.insert(cnemap_t::value_type(name, ce));
+    /** Uses ce->getName() as the key — which returns a pointer into the
+        ConstantEntry's own std::string storage — so the key remains stable
+        for the lifetime of the entry. The deserializer-supplied `name`
+        pointer must NOT be used here: it points into the AOT binary
+        reader's string pool, which is freed when the deserializer is
+        destroyed (end of qore_aot_module_init_v3), leaving dangling keys
+        that cause find() to fail while iteration still works.
+    */
+    DLLLOCAL void addEntry(const char* /*name*/, ConstantEntry* ce) {
+        cnemap.insert(cnemap_t::value_type(ce->getName(), ce));
     }
 
     DLLLOCAL ConstantEntry* findEntry(const char* name);
