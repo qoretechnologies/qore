@@ -77,18 +77,15 @@ push is completing. If `acknowledge()` runs during this window, it consumes the 
 while the command is still invisible. The command then sits unprocessed until the next `poll()`
 timeout (up to 10 seconds on idle connections).
 
-The fix has two layers:
+The fix is a **post-processCommands re-check** in the main I/O loop: after `processCommands()`
+returns, re-check `cmdq.empty()`.  If a late-arriving command from the Vyukov visibility window
+has become visible, loop back to `processCommands()` instead of entering `poll()`.
 
-1. **Conditional acknowledge:** Only call `notifier.acknowledge()` when the drained batch is
-   non-empty. If the batch is empty, the eventfd/pipe notification remains, causing the next
-   `poll()` to return immediately and retry `processCommands()`.
-
-2. **Post-processCommands re-check:** After `processCommands()` returns in the main I/O loop,
-   re-check `cmdq.empty()`. If a late-arriving command from the Vyukov visibility window has
-   become visible, loop back to `processCommands()` instead of entering `poll()`.
-
-Together these guarantee every enqueued command is processed within one extra event loop pass,
-even when notifications and enqueues interleave or the MPSC push is mid-flight.
+Note: conditionally skipping `acknowledge()` when the batch is empty was considered but rejected
+— it causes a busy-loop because stale eventfd/pipe notifications keep waking `poll()` every
+iteration.  The re-check approach adds just enough delay (a few instructions between `cmdq.empty()`
+in `processCommands` and `cmdq.empty()` in the main loop) for the producer's `next.store()` to
+complete in the common case, while preserving the correct `acknowledge()` semantics.
 
 ### Commands
 
@@ -462,7 +459,7 @@ returned 0 events. All callers handle this correctly:
 Known failure modes include:
 
 - **EventNotifier race**: Commands enqueued but notification consumed without processing. The nested
-  conditional-acknowledge and post-processCommands re-check prevents this (see "EventNotifier and Command Queue").
+  acknowledge-and-recheck loop in `processCommands()` and the post-processCommands re-check prevents this (see "EventNotifier and Command Queue").
 - **Operations not resubmitted or removed correctly**, leading to hangs or timeouts.
 - **HTTP/2 frames queued in nghttp2 but not flushed** to the wire (see "HTTP/2 Frame Flushing" above).
 - **Handler thread submitting HTTP/2 responses without calling `wake()`**, leaving frames buffered until the
@@ -902,6 +899,6 @@ logical CPUs), not a fixed constant.  I/O threads are CPU-bound (epoll/kqueue + 
 more threads than CPUs adds context switching overhead without benefit.  The `QORE_IO_THREADS` env
 var accepts any positive integer; `setMaxIoThreads(0)` auto-detects from `hardware_concurrency()`.
 
-Any changes to queue or EventNotifier handling must preserve the conditional-acknowledge and post-processCommands re-check protocol described
+Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck loop in `processCommands()` and the post-processCommands re-check protocol described
 above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
 CONNECT rejection layers.

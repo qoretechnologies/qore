@@ -3379,18 +3379,15 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
             }
         }
 
-        // Only acknowledge the notifier when we actually processed commands.
-        // If the batch was empty, a producer may be in the Vyukov MPSC push
-        // visibility window (tail.exchange done, next.store pending).
-        // Acknowledging would consume the notification while the command is
-        // still invisible, causing up to a full poll timeout before the item
-        // is processed.  Leaving the eventfd readable ensures the next poll()
-        // returns immediately and retries.
-        if (!batch.empty()) {
-            t.notifier->acknowledge(xsink);
-            if (*xsink) {
-                xsink->clear();
-            }
+        // Acknowledge notifier — consume the eventfd/pipe notification so
+        // that poll() doesn't busy-wake on stale counters.  Skipping
+        // acknowledge when the batch is empty was considered but rejected:
+        // it causes a busy-loop from accumulated stale notifications.
+        // The main-loop re-check after processCommands() catches items
+        // from the Vyukov MPSC push visibility window instead.
+        t.notifier->acknowledge(xsink);
+        if (*xsink) {
+            xsink->clear();
         }
 
         // Check if new commands arrived during processing/acknowledge
