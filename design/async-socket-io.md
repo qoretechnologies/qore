@@ -57,30 +57,38 @@ whenever a command is enqueued. This replaces the previous pipe-based approach.
 
 ### Enqueueing (worker thread)
 
-1. Acquire the controller lock (`m`).
-2. Append the command to `cmdq`.
-3. Release the lock.
-4. Call `notifier.notify()` (outside the lock).
+1. Push the command to the lock-free `MpscQueue` (`cmdq`).
+2. Call `notifier.notify()`.
+
+No lock is needed — the `MpscQueue` (Vyukov MPSC algorithm) is wait-free for producers.
 
 ### Processing (I/O thread — `processCommands()`)
 
-There is a race condition between enqueueing and notification:
+There are two race conditions between enqueueing and notification:
 
-- Worker: (1) enqueue command (with lock), (2) notify (without lock)
-- I/O thread: (1) process commands (with lock), (2) acknowledge (without lock)
+**Race 1 — interleaved acknowledge:** The I/O thread drains `cmdq`, the worker enqueues and
+notifies, then the I/O thread acknowledges — consuming the notification without processing the
+new command.
 
-Race scenario: the I/O thread finds `cmdq` empty, the worker enqueues and notifies, then the I/O
-thread acknowledges — consuming the notification without processing the new command.
+**Race 2 — Vyukov MPSC push visibility window:** The Vyukov MPSC push is two-step:
+`tail.exchange()` (makes the node the new tail) then `prev->next.store()` (links it into the
+chain). Between these two steps, `drain()` and `empty()` see the queue as empty even though a
+push is completing. If `acknowledge()` runs during this window, it consumes the notification
+while the command is still invisible. The command then sits unprocessed until the next `poll()`
+timeout (up to 10 seconds on idle connections).
 
-The fix is a nested loop:
+The fix has two layers:
 
-1. Acquire lock, drain `cmdq`, release lock.
-2. Call `notifier.acknowledge()`.
-3. Re-acquire lock, check if `cmdq` has new commands.
-4. If new commands exist, loop back to step 1.
-5. If `cmdq` is empty, return.
+1. **Conditional acknowledge:** Only call `notifier.acknowledge()` when the drained batch is
+   non-empty. If the batch is empty, the eventfd/pipe notification remains, causing the next
+   `poll()` to return immediately and retry `processCommands()`.
 
-This guarantees every enqueued command is processed even when notifications and enqueues interleave.
+2. **Post-processCommands re-check:** After `processCommands()` returns in the main I/O loop,
+   re-check `cmdq.empty()`. If a late-arriving command from the Vyukov visibility window has
+   become visible, loop back to `processCommands()` instead of entering `poll()`.
+
+Together these guarantee every enqueued command is processed within one extra event loop pass,
+even when notifications and enqueues interleave or the MPSC push is mid-flight.
 
 ### Commands
 
@@ -454,7 +462,7 @@ returned 0 events. All callers handle this correctly:
 Known failure modes include:
 
 - **EventNotifier race**: Commands enqueued but notification consumed without processing. The nested
-  acknowledge-and-recheck loop in `processCommands()` prevents this (see "EventNotifier and Command Queue").
+  conditional-acknowledge and post-processCommands re-check prevents this (see "EventNotifier and Command Queue").
 - **Operations not resubmitted or removed correctly**, leading to hangs or timeouts.
 - **HTTP/2 frames queued in nghttp2 but not flushed** to the wire (see "HTTP/2 Frame Flushing" above).
 - **Handler thread submitting HTTP/2 responses without calling `wake()`**, leaving frames buffered until the
@@ -894,6 +902,6 @@ logical CPUs), not a fixed constant.  I/O threads are CPU-bound (epoll/kqueue + 
 more threads than CPUs adds context switching overhead without benefit.  The `QORE_IO_THREADS` env
 var accepts any positive integer; `setMaxIoThreads(0)` auto-detects from `hardware_concurrency()`.
 
-Any changes to queue or EventNotifier handling must preserve the acknowledge-and-recheck protocol described
+Any changes to queue or EventNotifier handling must preserve the conditional-acknowledge and post-processCommands re-check protocol described
 above. Any changes to HTTP/2 frame processing must preserve the flush-after-receive pattern and the extended
 CONNECT rejection layers.

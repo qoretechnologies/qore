@@ -1841,6 +1841,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;  // Quit command received
         }
 
+        // Re-check cmdq after processCommands returns — the Vyukov MPSC
+        // queue has a push visibility window between tail.exchange() and
+        // prev->next.store() where drain()/empty() see the queue as empty
+        // even though a push is completing.  If acknowledge() consumed the
+        // notification during that window, the command would sit invisible
+        // until the next poll timeout (up to 10s).  This re-check catches
+        // the late-arriving item after the store completes.
+        if (!t.cmdq.empty()) {
+            continue;
+        }
+
         // --- PHASE 1: Snapshot under lock ---
         struct OpToPoll {
             std::string key;
@@ -3368,11 +3379,18 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
             }
         }
 
-        // Acknowledge notifier — each command has already targeted specific
-        // sockets via wake_socket_hashes; no blanket re-poll needed
-        t.notifier->acknowledge(xsink);
-        if (*xsink) {
-            xsink->clear();
+        // Only acknowledge the notifier when we actually processed commands.
+        // If the batch was empty, a producer may be in the Vyukov MPSC push
+        // visibility window (tail.exchange done, next.store pending).
+        // Acknowledging would consume the notification while the command is
+        // still invisible, causing up to a full poll timeout before the item
+        // is processed.  Leaving the eventfd readable ensures the next poll()
+        // returns immediately and retries.
+        if (!batch.empty()) {
+            t.notifier->acknowledge(xsink);
+            if (*xsink) {
+                xsink->clear();
+            }
         }
 
         // Check if new commands arrived during processing/acknowledge
