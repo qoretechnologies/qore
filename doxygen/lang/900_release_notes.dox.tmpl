@@ -921,6 +921,12 @@ cargo install tree-sitter-cli@0.26.5
       - Eigen3-backed float64 columns for SIMD-friendly numeric operations
       - thread-safe with \c std::mutex, cooperative cancellation via \c qore_check_cancel()
       - \c dom=FILESYSTEM on CSV/Parquet I/O, \c dom=DATABASE on database I/O
+    - @ref ocrintro "ocr" module
+      - new builtin module providing text extraction from images using Tesseract OCR
+      - TesseractEngine class with extractText() and extractTextWithMetadata()
+      - block-level bounding boxes and confidence scores
+      - supports PNG, JPEG, TIFF, BMP, GIF input formats
+      - thread-safe with std::mutex, dom=FILESYSTEM on all methods
     - @ref tokenizerintro "tokenizer" module
       - new builtin module providing <a href="https://huggingface.co/">HuggingFace</a>-compatible text tokenization
       - supports BPE (GPT-2, Llama, Mistral), WordPiece (BERT, DistilBERT), and Unigram/SentencePiece (T5, XLM-R)

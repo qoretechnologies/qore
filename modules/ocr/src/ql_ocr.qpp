@@ -1,0 +1,44 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    ql_ocr.qpp
+
+    Qore OCR module hashdecls and constants
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "qore/Qore.h"
+
+/** @defgroup ocr_constants OCR Constants
+*/
+///@{
+//! Returns true if Tesseract OCR is available in this build
+/** @par Example:
+    @code{.py}
+bool has = Ocr::ocr_has_tesseract();
+    @endcode
+
+    @return @ref True "True" if Tesseract OCR support is compiled in
+
+    @since ocr 1.0
+*/
+bool ocr_has_tesseract() [flags=CONSTANT] {
+    return true;
+}
+///@}
+
+//! OCR extraction result
+/** Contains the text extracted from an image along with confidence and
+    block-level bounding box information.
+
+    @since ocr 1.0
+*/
+hashdecl Qore::Ocr::OcrResultInfo {
+    //! The extracted text
+    string text;
+    //! Overall confidence score (0.0 to 1.0)
+    float confidence;
+    //! Block-level results with text, confidence, and bounding boxes
+    *list<hash<auto>> blocks;
+}

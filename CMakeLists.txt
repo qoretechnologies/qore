@@ -1844,6 +1844,7 @@ if (NOT Eigen3_FOUND)
 endif()
 add_subdirectory(modules/ml)
 add_subdirectory(modules/tokenizer)
+add_subdirectory(modules/ocr)
 add_subdirectory(modules/dataframe)
 # protobuf module (requires libprotobuf)
 # Try MODULE mode first (CMake's FindProtobuf) — avoids broken CONFIG files

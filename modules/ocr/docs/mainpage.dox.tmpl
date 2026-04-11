@@ -1,0 +1,23 @@
+/** @mainpage Qore ocr Module
+
+    @tableofcontents
+
+    @section ocrintro ocr Module Introduction
+
+    The \c ocr module provides text extraction from images using the Tesseract
+    OCR engine.  It supports PNG, JPEG, TIFF, BMP, and GIF input formats and
+    returns extracted text along with confidence scores and bounding-box
+    metadata.
+
+    Classes provided by this module:
+    - @ref Qore::Ocr::TesseractEngine "TesseractEngine" — Tesseract OCR
+      engine wrapper
+
+    @section ocr_relnotes ocr Module Release Notes
+
+    @subsection ocr_1_0 ocr Module Version 1.0
+    - initial release with TesseractEngine class
+    - supports extractText() and extractTextWithMetadata() for image-to-text
+    - block-level bounding box and confidence information
+    - thread-safe: concurrent calls serialized internally
+*/

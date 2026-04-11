@@ -1,0 +1,83 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/*
+    QC_TesseractEngine.qpp
+
+    Qore TesseractEngine class definition
+
+    Copyright (C) 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+#include "TesseractEngine.h"
+
+using namespace QoreOcr;
+
+//! Tesseract OCR engine wrapper
+/** Provides text extraction from images using the Tesseract OCR engine.
+    Supports PNG, JPEG, TIFF, BMP, and GIF input formats.
+
+    @par Example:
+    @code{.py}
+    %requires ocr
+
+    Ocr::TesseractEngine engine("", "eng");
+    binary img = ReadOnlyFile::readBinaryFile("document.png");
+    string text = engine.extractText(img);
+    printf("Extracted: %s\n", text);
+    @endcode
+
+    @note Thread-safe: concurrent calls to extractText() are serialized internally.
+
+    @since ocr 1.0
+*/
+qclass TesseractEngine [arg=QoreTesseractEngine* te; ns=Qore::Ocr; dom=FILESYSTEM];
+
+//! Creates a new TesseractEngine
+/** @param datapath path to the tessdata directory containing trained models;
+        pass an empty string to use the default system path
+    @param language Tesseract language code(s); use \c "+" to combine
+        (e.g., \c "eng+fra" for English and French)
+
+    @throw OCR-INIT-ERROR if Tesseract initialization fails (e.g., missing
+        trained data for the requested language)
+*/
+TesseractEngine::constructor(string datapath = "", string language = "eng") {
+    self->setPrivate(CID_TESSERACTENGINE,
+        new QoreTesseractEngine(datapath, language, xsink));
+}
+
+//! Extracts text from image binary data
+/** @param image_data raw image bytes (PNG, JPEG, TIFF, BMP, GIF)
+    @return the extracted text
+
+    @throw OCR-ERROR if the image cannot be decoded or OCR fails
+*/
+string TesseractEngine::extractText(binary image_data) [dom=FILESYSTEM] {
+    return te->extractText(image_data, xsink);
+}
+
+//! Extracts text with metadata from image binary data
+/** @param image_data raw image bytes (PNG, JPEG, TIFF, BMP, GIF)
+    @return a @ref Qore::Ocr::OcrResultInfo "OcrResultInfo" hash with:
+        - \c text: the full extracted text
+        - \c confidence: overall confidence score (0.0 to 1.0)
+        - \c blocks: list of block-level results with text, confidence,
+          and bounding box coordinates
+
+    @throw OCR-ERROR if the image cannot be decoded or OCR fails
+*/
+hash<auto> TesseractEngine::extractTextWithMetadata(binary image_data) [dom=FILESYSTEM] {
+    return te->extractTextWithMetadata(image_data, xsink);
+}
+
+//! Returns engine capabilities
+/** @return a hash with:
+        - \c has_tesseract (bool): always @ref True "True"
+        - \c version (string): Tesseract version string
+        - \c languages (list<string>): available language codes
+
+    @since ocr 1.0
+*/
+hash<auto> TesseractEngine::getCapabilities() [flags=RET_VALUE_ONLY] {
+    return te->getCapabilities();
+}
