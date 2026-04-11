@@ -40,6 +40,11 @@ public const ColumnTypeMap = {
     "blob": {"qore_type": SqlUtil::BLOB},
     "clob": {"qore_type": SqlUtil::CLOB},
     "binary": {"qore_type": Type::Binary},
+    "float": {"qore_type": Type::Float},
+    # "text" renders as the native TEXT type on drivers that support it (pgsql, mysql);
+    # it falls back to CLOB on drivers that do not (e.g. oracle)
+    "text": {"qore_type": SqlUtil::CLOB,
+        "driver": {"pgsql": {"native_type": "text"}, "mysql": {"native_type": "text"}}},
     # pgvector extension types (PostgreSQL only)
     "vector": {"driver": {"pgsql": {"native_type": "vector"}}},
     "halfvec": {"driver": {"pgsql": {"native_type": "halfvec"}}},
@@ -211,6 +216,9 @@ public class DataSchemaLoader {
         if (table_def.indexes) {
             result.indexes = table_def.indexes;
         }
+        if (table_def.unique_constraints) {
+            result.unique_constraints = table_def.unique_constraints;
+        }
         if (table_def.foreign_constraints) {
             result.foreign_constraints = table_def.foreign_constraints;
         }
@@ -238,21 +246,59 @@ public class DataSchemaLoader {
         @param col_name the column name (for error messages)
         @param col_def the raw column definition hash (with "type", "size", etc.)
         @return a GenericColumnInfo-compatible hash
+
+        The column definition may use either of two forms:
+        - the \c type shorthand (e.g. \c {type: varchar, size: 240}) — looked up in
+          @ref Schema::ColumnTypeMap "ColumnTypeMap"
+        - a pure driver-override form (e.g. \c {driver: {pgsql: {native_type: vector, size: 1024}}})
+          for columns that only exist on one driver
+
+        Any user-provided \c driver hash is recursively merged on top of the base type's driver
+        block so the two forms can be combined (e.g. \c {type: int, driver: {pgsql: {identity: true}}}).
     */
     static hash<auto> normalizeColumn(string table_name, string col_name, hash<auto> col_def) {
-        *hash<auto> base_type = ColumnTypeMap{col_def.type};
-        if (!base_type) {
-            throw "DATA-SCHEMA-ERROR", sprintf("table %y column %y: unknown type %y; valid types: %y",
-                table_name, col_name, col_def.type, ColumnTypeMap.keys());
-        }
-
         # Build result as a generic hash to avoid type narrowing issues
         hash<auto!> result();
-        result += base_type;
 
-        # Add size if specified
+        if (col_def.type.val()) {
+            *hash<auto> base_type = ColumnTypeMap{col_def.type};
+            if (!base_type) {
+                throw "DATA-SCHEMA-ERROR", sprintf("table %y column %y: unknown type %y; valid types: %y",
+                    table_name, col_name, col_def.type, ColumnTypeMap.keys());
+            }
+            result += base_type;
+        } else if (!col_def.driver) {
+            # a column must either have a 'type' or a pure-driver override — otherwise the
+            # loader has no idea what kind of column to create
+            throw "DATA-SCHEMA-ERROR", sprintf("table %y column %y: column definition must set "
+                "either 'type' or 'driver' (got %y)", table_name, col_name, col_def.keys());
+        }
+
+        # Add size if specified — for pgvector extension types, size belongs under
+        # driver.pgsql.size rather than at the top level, matching how PgsqlSqlUtilBase and
+        # the c_vector/c_halfvec/c_sparsevec helpers emit these columns
         if (exists col_def.size) {
-            result.size = col_def.size;
+            if (col_def.type == "vector" || col_def.type == "halfvec" || col_def.type == "sparsevec") {
+                # rebuild result.driver.pgsql as an explicit hash<auto> to avoid type-narrowing
+                # from the const ColumnTypeMap entry (which only contains a string native_type)
+                hash<auto!> existing_pgsql;
+                if (result.driver.typeCode() == NT_HASH && result.driver.pgsql.typeCode() == NT_HASH) {
+                    foreach hash<auto> p in (result.driver.pgsql.pairIterator()) {
+                        existing_pgsql{p.key} = p.value;
+                    }
+                }
+                existing_pgsql.size = col_def.size;
+                hash<auto!> new_driver;
+                if (result.driver.typeCode() == NT_HASH) {
+                    foreach hash<auto> p in (result.driver.pairIterator()) {
+                        new_driver{p.key} = p.value;
+                    }
+                }
+                new_driver.pgsql = existing_pgsql;
+                result.driver = new_driver;
+            } else {
+                result.size = col_def.size;
+            }
         }
 
         # Add scale if specified
@@ -273,6 +319,38 @@ public class DataSchemaLoader {
         # Add comment
         if (col_def.comment.val()) {
             result.comment = col_def.comment;
+        }
+
+        # Merge user-provided driver overrides on top of the base type's driver block.
+        # This lets a schema combine `type:` with driver-specific tweaks, or define a
+        # column entirely through driver overrides with no shorthand type at all.
+        if (col_def.driver.typeCode() == NT_HASH) {
+            # copy the existing driver block into a fresh untyped hash to dodge type narrowing
+            # from const ColumnTypeMap entries
+            hash<auto!> merged_driver;
+            if (result.driver.typeCode() == NT_HASH) {
+                foreach hash<auto> p in (result.driver.pairIterator()) {
+                    merged_driver{p.key} = p.value;
+                }
+            }
+            foreach hash<auto> pair in (col_def.driver.pairIterator()) {
+                if (pair.value.typeCode() == NT_HASH) {
+                    # merge the inner hash key-by-key
+                    hash<auto!> inner;
+                    if (merged_driver{pair.key}.typeCode() == NT_HASH) {
+                        foreach hash<auto> ip in (merged_driver{pair.key}.pairIterator()) {
+                            inner{ip.key} = ip.value;
+                        }
+                    }
+                    foreach hash<auto> ip in (pair.value.pairIterator()) {
+                        inner{ip.key} = ip.value;
+                    }
+                    merged_driver{pair.key} = inner;
+                } else {
+                    merged_driver{pair.key} = pair.value;
+                }
+            }
+            result.driver = merged_driver;
         }
 
         return result;

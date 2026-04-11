@@ -7788,6 +7788,35 @@ AbstractIndex ix = indexes.pk_jobs;
         #! returns a string that can be used to rename the index in the database
         abstract string getRenameSql(string table_name, string new_name);
 
+        #! compares two optional hashes for equality without regard to key order
+        /** Qore's \c == operator on hashes is order-sensitive, but index storage options and
+            per-column operator class hashes are semantically order-independent, so driver-specific
+            \c equalImpl methods need this helper for stable diff results.
+
+            @since SqlUtil 1.10
+        */
+        static bool hashesEqualUnordered(*hash<auto> a, *hash<auto> b) {
+            if (!a.val() && !b.val()) {
+                return True;
+            }
+            if (!a.val() || !b.val()) {
+                return False;
+            }
+            if (a.size() != b.size()) {
+                return False;
+            }
+            HashIterator it(a);
+            while (it.next()) {
+                if (!b.hasKey(it.getKey())) {
+                    return False;
+                }
+                if (b{it.getKey()} != it.getValue()) {
+                    return False;
+                }
+            }
+            return True;
+        }
+
         #! tags the index with a column supporting constraint (unique or fk constraint, etc) that the index supports
         setSupportingConstraint(AbstractColumnSupportingConstraint c) {
             constraint = c;

@@ -320,6 +320,8 @@ class PgsqlTest inherits SqlTestBase {
             addTestCase("pgsqlutil: schema align with trigger drop #2963", \test2963());
             addTestCase("proxy bulk upsert", \proxyBulkUpsertTest());
             addTestCase("pgvector type support", \pgvectorTest());
+            addTestCase("pgvector ivfflat index", \pgvectorIvfflatIndexTest());
+            addTestCase("pg_get_indexdef parser", \pgIndexDefParserTest());
         }
 
         set_return_value(main());
@@ -609,6 +611,132 @@ class PgsqlTest inherits SqlTestBase {
 
         # clean up
         vec_table.dropCommit();
+    }
+
+    #! Unit test for parsePgIndexDef — no DB required
+    private pgIndexDefParserTest() {
+        # simple btree with no extras
+        hash<auto> r = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX sk_users_name ON public.users USING btree (name)");
+        assertEq(NOTHING, r.with_options, "simple btree: no with");
+        assertEq(NOTHING, r.opclass, "simple btree: no opclass");
+
+        # unique btree with per-column opclass
+        r = PgsqlTable::parsePgIndexDef(
+            "CREATE UNIQUE INDEX uk_users_email ON public.users USING btree "
+            "(email varchar_pattern_ops)");
+        assertEq(NOTHING, r.with_options, "varchar_pattern_ops: no with");
+        assertEq("varchar_pattern_ops", r.opclass.email, "varchar_pattern_ops: opclass");
+
+        # ivfflat with WITH clause and opclass (integer coerced back to int)
+        r = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX sk_ai_chunks_embedding ON public.ai_chunks USING ivfflat "
+            "(embedding vector_cosine_ops) WITH (lists='100')");
+        assertEq("vector_cosine_ops", r.opclass.embedding, "ivfflat: opclass");
+        assertEq(100, r.with_options.lists, "ivfflat: lists coerced to int");
+
+        # hnsw with multiple WITH options
+        r = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX sk_ai_chunks_embedding ON public.ai_chunks USING hnsw "
+            "(embedding vector_l2_ops) WITH (m='16', ef_construction='64')");
+        assertEq("vector_l2_ops", r.opclass.embedding, "hnsw: opclass");
+        assertEq(16, r.with_options.m, "hnsw: m");
+        assertEq(64, r.with_options.ef_construction, "hnsw: ef_construction");
+
+        # multi-column, mixed default/non-default opclasses — default is not reported by PG so we
+        # should only see the non-default ones
+        r = PgsqlTable::parsePgIndexDef(
+            "CREATE INDEX sk_mixed ON public.t USING btree (a, b varchar_pattern_ops)");
+        assertEq(NOTHING, r.opclass.a, "multi-col: default opclass not reported");
+        assertEq("varchar_pattern_ops", r.opclass.b, "multi-col: non-default opclass reported");
+    }
+
+    #! End-to-end ivfflat index test — requires pgvector installed
+    private pgvectorIvfflatIndexTest() {
+        if (!table) {
+            testSkip("no DB connection");
+        }
+
+        AbstractDatasource ds = getDatasource();
+        on_exit ds.rollback();
+
+        *hash<auto> ext_row = ds.selectRow("select * from pg_extension where extname = %v", "vector");
+        if (!ext_row) {
+            testSkip("pgvector extension not installed");
+        }
+
+        # build a table description with a vector column and an ivfflat index
+        hash<auto> tdesc = {
+            "columns": {
+                "id": {"qore_type": Type::Int, "notnull": True},
+                "embedding": {"driver": {"pgsql": {"native_type": "vector", "size": 3}}},
+            },
+            "primary_key": {"name": "pk_ivfflat_test", "columns": ("id",)},
+            "indexes": {
+                "sk_ivfflat_test_emb": {
+                    "columns": ("embedding",),
+                    "method": "ivfflat",
+                    "with": {"lists": 100},
+                    "opclass": {"embedding": "vector_cosine_ops"},
+                },
+            },
+        };
+
+        string tname = "pgsql_ivfflat_test";
+
+        # clean up a leftover from a previous failed run
+        {
+            PgsqlTable t0(ds, tname);
+            if (t0.checkExistence()) {
+                t0.dropCommit();
+            }
+        }
+
+        # create + populate the table via setupTable
+        PgsqlTable t(ds, tname);
+        t.setupTable(tdesc);
+        t.create();
+        ds.commit();
+        on_exit {
+            ds.rollback();
+            PgsqlTable tc(ds, tname);
+            if (tc.checkExistence()) {
+                tc.dropCommit();
+            }
+        }
+
+        # verify the index exists with the right access method
+        *string amname = ds.selectRow(
+            "select am.amname from pg_class i, pg_am am "
+            "where i.relkind = 'i' and i.relname = %v and i.relam = am.oid",
+            "sk_ivfflat_test_emb").amname;
+        assertEq("ivfflat", amname, "ivfflat access method recorded in catalog");
+
+        # verify the reconstructed DDL captures the WITH clause and opclass
+        *string indexdef = ds.selectRow(
+            "select pg_get_indexdef(i.oid, 0, false) indexdef from pg_class i "
+            "where i.relkind = 'i' and i.relname = %v", "sk_ivfflat_test_emb").indexdef;
+        assertTrue(indexdef.lwr().find("ivfflat") >= 0, "DDL contains ivfflat");
+        assertTrue(indexdef.lwr().find("vector_cosine_ops") >= 0, "DDL contains opclass");
+        assertTrue(indexdef.lwr().find("lists") >= 0, "DDL contains WITH lists");
+
+        # re-describe the table and verify round-trip through PgsqlIndex.equalImpl: the loaded
+        # definition must compare equal to a fresh one built from the same hash so that a second
+        # alignment reports no drift
+        PgsqlTable t2(ds, tname);
+        Indexes live_ix = t2.getIndexes();
+        assertTrue(live_ix.hasKey("sk_ivfflat_test_emb"), "ivfflat index present in describe");
+        PgsqlIndex live = cast<PgsqlIndex>(live_ix.sk_ivfflat_test_emb);
+        assertEq("ivfflat", live.method, "reverse-engineered method");
+        assertEq(100, live.with_options.lists, "reverse-engineered WITH lists");
+        assertEq("vector_cosine_ops", live.opclass.embedding, "reverse-engineered opclass");
+
+        # construct an expected PgsqlIndex with the same column reference, and verify they compare equal
+        Columns emb_cols = t2.describe();
+        hash<auto> ch = {"embedding": emb_cols.embedding};
+        PgsqlIndex expected("sk_ivfflat_test_emb", False, ch,
+            NOTHING, "ivfflat", {"lists": 100}, {"embedding": "vector_cosine_ops"});
+        assertTrue(live.equal(expected), "live ivfflat index equals expected definition");
     }
 
     private string getResultSetSql() {

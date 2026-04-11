@@ -47,10 +47,24 @@ public class AbstractTable inherits AbstractSqlUtilBase {
             - \c index_tablespace: (@ref string_type) a string giving the index tablespace to use for indexes
             - \c replace: (\c bool_type) if @ref True "True" and supported by the underlying db driver
               "create or replace" text is used when creating objects
+            - \c method: (@ref string_type) the access method for the index (e.g. \c "btree", \c "hash",
+              \c "gist", \c "gin", \c "brin", \c "ivfflat", \c "hnsw" on PostgreSQL; \c "btree" or \c "hash"
+              on MySQL; \c "bitmap" or an \c INDEXTYPE name on Oracle; \c "clustered", \c "nonclustered", or
+              \c "columnstore" on MSSQL); drivers that cannot express a given method will throw
+              \c INDEX-OPTION-ERROR at alignment time
+            - \c with: (@ref hash_type) method-specific storage options rendered as
+              \c "WITH (k1 = v1, k2 = v2, ...)" on pgsql and mssql, or as a \c PARAMETERS('...') string on
+              Oracle domain indexes; throws \c INDEX-OPTION-ERROR on drivers that do not support it
+            - \c opclass: (@ref hash_type) per-column operator class (PostgreSQL only), mapping column name
+              to operator class name (e.g. \c {"embedding": "vector_cosine_ops"}); throws
+              \c INDEX-OPTION-ERROR on drivers that do not support it
         */
         const IndexOptions = {
             "index_tablespace": Type::String,
             "replace": Type::Boolean,
+            "method": Type::String,
+            "with": Type::Hash,
+            "opclass": Type::Hash,
         };
 
         #! default constraint options
@@ -919,11 +933,18 @@ bool b = table.empty();
 
             hash<auto> ih = desc.indexes{ixn};
 
+            # apply per-index driver-specific overrides (e.g. {driver: {pgsql: {method: ivfflat}}})
+            AbstractDatabase::checkDriverOptions(\ih, drv);
+
             if (!ih.columns || !inlist(ih.columns.typeCode(), (NT_LIST, NT_STRING)))
                 throw "DESCRIPTION-ERROR", sprintf("%s: value assigned to \"columns\" key for index %y is not a list "
                     "or a string, got type %y instead (%y)", getDesc(), ixn, ih.columns.type(), ih.columns);
 
-            addIndexUnlocked(ixn, ih.unique ? True : False, ih.columns, opt.(getIndexOptions().keys()));
+            # build the per-index option hash: take the global index options from opt, plus any
+            # index-specific keys from ih (e.g. method, with, opclass, index_tablespace); the "unique"
+            # and "columns" keys are consumed positionally and must not appear as options
+            hash<auto> ix_opt = opt.(getIndexOptions().keys()) + (ih - ("unique", "columns"));
+            addIndexUnlocked(ixn, ih.unique ? True : False, ih.columns, ix_opt);
         }
 
         # add primary key to table

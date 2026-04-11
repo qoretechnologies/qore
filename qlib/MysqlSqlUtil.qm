@@ -209,22 +209,42 @@ public namespace MysqlSqlUtil {
     #! represents a MySQL-specific index
     public class MysqlIndex inherits SqlUtil::AbstractIndex {
         public {
+            #! the native index type (e.g. \c "BTREE", \c "HASH", \c "FULLTEXT", \c "SPATIAL"); this mirrors
+            #! the MySQL catalog value and is the driver-default unless \c method is set explicitly by the user
             string type;
+
+            #! the explicit access method requested by the user via the generic \c method index option;
+            #! \c NOTHING means "use the driver default" and \c getCreateSql emits no \c USING clause
+            *string method;
         }
 
         #! creates the object from the arguments
-        constructor(string n_name, bool n_unique, hash n_cols, string n_type = "BTREE") : AbstractIndex(n_name, n_unique, n_cols) {
+        constructor(string n_name, bool n_unique, hash n_cols, string n_type = "BTREE", *string n_method)
+                : AbstractIndex(n_name, n_unique, n_cols) {
             type = n_type;
+            method = n_method;
         }
 
         #! returns a string that can be used to create the index in the database
         string getCreateSql(string table_name, *hash opt) {
-            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            string sql = sprintf("create %sindex %s", unique ? "unique " : "", name);
+            if (method.val()) {
+                sql += sprintf(" using %s", method.upr());
+            }
+            sql += sprintf(" on %s (%s)", table_name,
+                (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            return sql;
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
         private bool equalImpl(AbstractIndex ix) {
-            return type == cast<MysqlIndex>(ix).type;
+            MysqlIndex mix = cast<MysqlIndex>(ix);
+            # normalize MySQL index-type comparison: the catalog reports BTREE as the default, and an
+            # explicitly-requested method: btree should compare equal to a no-method index; "HASH" etc.
+            # are reported as type and/or method depending on which end of the round-trip we are on
+            string t1 = (method.val() ? method.upr() : type.upr());
+            string t2 = (mix.method.val() ? mix.method.upr() : mix.type.upr());
+            return t1 == t2;
         }
 
         #! returns a string that can be used to rename the index in the database; hwoever mysql does not support renaming indexes, so the index is dropped and recreated :(
@@ -2404,7 +2424,25 @@ end";
         }
 
         private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-            return new MysqlIndex(iname, enabled, ch, opt.index_type);
+            # MySQL does not support per-column operator classes or WITH-clause storage parameters on
+            # plain CREATE INDEX; reject those generic options with a clear error so users are not
+            # silently given a different index than they asked for
+            if (opt.with) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'with' option is not supported "
+                    "on MySQL; use driver: {mysql: {...}} to omit on MySQL only", iname);
+            }
+            if (opt.opclass) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
+                    "on MySQL", iname);
+            }
+            if (opt.method.val()) {
+                string m = opt.method.upr();
+                if (m != "BTREE" && m != "HASH") {
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: MySQL only supports method: 'btree' or "
+                        "'hash' on plain CREATE INDEX; got %y", iname, opt.method);
+                }
+            }
+            return new MysqlIndex(iname, enabled, ch, opt.index_type ?? "BTREE", opt.method);
         }
 
         private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {

@@ -1699,6 +1699,10 @@ where
         }
 
         private AbstractIndex addIndexImpl(string iname, bool enabled, hash<auto> ch, *hash<auto> opt) {
+            if (opt.method.val() || opt.with || opt.opclass) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: generic index options method/with/opclass "
+                    "are not supported on Firebird", iname);
+            }
             return new XdbcFirebirdIndex(iname, enabled, ch);
         }
 

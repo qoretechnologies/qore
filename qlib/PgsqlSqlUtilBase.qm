@@ -416,20 +416,79 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
     public {
         #! the tablespace name of the index
         *string tablespace;
+
+        #! access method for the index (e.g. \c "btree", \c "hash", \c "gist", \c "gin", \c "brin",
+        #! \c "ivfflat", \c "hnsw"); \c NOTHING means the driver default (btree)
+        *string method;
+
+        #! method-specific storage parameters; rendered as \c "WITH (k1 = v1, ...)" in the CREATE INDEX
+        *hash<auto> with_options;
+
+        #! per-column operator class hash (column name → opclass name); PostgreSQL supports attaching an
+        #! operator class to each indexed column (e.g. \c {"embedding": "vector_cosine_ops"} for an ivfflat
+        #! index over a pgvector column)
+        *hash<string, string> opclass;
     }
 
     #! creates the object from the arguments
-    constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace) : AbstractIndex(n_name, n_unique, n_cols) {
+    constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace,
+            *string n_method, *hash<auto> n_with, *hash<string, string> n_opclass)
+            : AbstractIndex(n_name, n_unique, n_cols) {
         tablespace = n_tablespace;
+        method = n_method;
+        with_options = n_with;
+        opclass = n_opclass;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
-        string sql = sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+        # build column list with optional per-column operator class; follow the same
+        # key → ddl_name resolution as Columns::getSqlColumnNameIterator() so reserved-word
+        # columns are still correctly quoted
+        string cols_sql;
+        {
+            list<string> parts = ();
+            HashIterator col_it = columns.iterator();
+            while (col_it.next()) {
+                string cn = col_it.getKey();
+                auto c = col_it.getValue();
+                string name_sql;
+                if (c.typeCode() == NT_OBJECT && c instanceof AbstractColumn) {
+                    AbstractColumn ac = c;
+                    name_sql = ac.ddl_name.val() ? ac.ddl_name : cn;
+                } else if (c.typeCode() == NT_HASH && c.ddl_name.val()) {
+                    name_sql = c.ddl_name;
+                } else {
+                    name_sql = cn;
+                }
+                if (opclass{cn}.val()) {
+                    parts += sprintf("%s %s", name_sql, opclass{cn});
+                } else {
+                    parts += name_sql;
+                }
+            }
+            cols_sql = parts.join(", ");
+        }
+
+        string sql = sprintf("create %sindex %s on %s", unique ? "unique " : "", name, table_name);
+        if (method.val()) {
+            sql += sprintf(" using %s", method);
+        }
+        sql += sprintf(" (%s)", cols_sql);
+
+        if (with_options) {
+            list<string> parts = ();
+            HashIterator wi(with_options);
+            while (wi.next()) {
+                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+            }
+            sql += sprintf(" with (%s)", parts.join(", "));
+        }
 
         *string ts = opt.index_tablespace ? opt.index_tablespace : tablespace;
-        if (ts)
+        if (ts) {
             sql += sprintf(" tablespace %s", ts);
+        }
         return sql;
     }
 
@@ -440,6 +499,21 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
     private bool equalImpl(AbstractIndex ix) {
+        PgsqlIndex pix = cast<PgsqlIndex>(ix);
+        # normalize method comparison: NOTHING and "btree" are the PostgreSQL default
+        string m1 = method.val() ? method.lwr() : "btree";
+        string m2 = pix.method.val() ? pix.method.lwr() : "btree";
+        if (m1 != m2) {
+            return False;
+        }
+        # hash equality is order-sensitive in Qore, but storage options and opclasses are
+        # semantically order-independent, so compare key-by-key
+        if (!AbstractIndex::hashesEqualUnordered(with_options, pix.with_options)) {
+            return False;
+        }
+        if (!AbstractIndex::hashesEqualUnordered(opclass, pix.opclass)) {
+            return False;
+        }
         return True;
     }
 
@@ -1659,9 +1733,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         );
 
         #! maps qore type names to PostgreSQL type names
+        # note: \c Type::Float maps to the short name \c "float" (not \c "double precision")
+        # so fresh column definitions match what \c getColumnsImpl reads back — \c PgsqlNameMap
+        # rewrites \c "double precision" to \c "float" for read-back, and having the forward
+        # path emit the same short name avoids spurious "alter column type" diffs on every
+        # alignment of a schema with floating-point columns
         const QoreTypeMap = (
             "integer": "bigint",
-            "float": "double precision",
+            "float": "float",
             "number": "numeric",
             "string": "varchar",
             "date": "timestamp",
@@ -3161,11 +3240,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private Indexes getIndexesImpl() {
         hash<auto> rv;
 
-        # get index descriptions
+        # get index descriptions; join pg_am to read the access method and use pg_get_indexdef to
+        # recover the non-default opclass and WITH (storage option) clauses so that indexes using
+        # pgvector access methods (ivfflat / hnsw) round-trip correctly through align / diff
         *hash<auto> qh = ds.select("SELECT i.relname index_name, d.indisunique, d.indisprimary, "
-            "pg_get_indexdef(i.oid, a.attnum, false) column_name, tablespace FROM pg_class t, pg_class i, "
-            "pg_index d, pg_attribute a, pg_indexes xs WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
-            "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relnamespace IN (SELECT oid FROM pg_namespace "
+            "pg_get_indexdef(i.oid, a.attnum, false) column_name, xs.tablespace, "
+            "am.amname access_method, pg_get_indexdef(i.oid, 0, false) indexdef "
+            "FROM pg_class t, pg_class i, pg_index d, pg_attribute a, pg_indexes xs, pg_am am "
+            "WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
+            "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relam = am.oid AND "
+            "i.relnamespace IN (SELECT oid FROM pg_namespace "
             "WHERE nspname IN (%v)) AND a.attrelid = i.oid AND t.relname = %v ORDER BY i.relname, attnum", schema,
             name);
 
@@ -3177,6 +3261,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                         "unique": row.indisunique,
                         "tablespace": row.tablespace,
                         "primary": row.indisprimary,
+                        "access_method": row.access_method,
+                        "indexdef": row.indexdef,
                     );
                 }
                 # issue #4348: strip quotes from columns using reserved words
@@ -3207,12 +3293,96 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                         continue;
                     }
                 }
-                rv{i.key} = new PgsqlIndex(i.key, i.value.unique, i.value.columns, i.value.tablespace ? i.value.tablespace : NOTHING);
+
+                # parse the reconstructed DDL to recover opclass and WITH clause info
+                hash<auto> extra = PgsqlTable::parsePgIndexDef(i.value.indexdef);
+
+                # pgsql default access method is btree; normalize NOTHING and "btree" equivalently
+                *string method = (i.value.access_method.val() && i.value.access_method.lwr() != "btree")
+                    ? i.value.access_method
+                    : NOTHING;
+
+                # the parser returns opclass as an auto-typed hash slot; narrow to the constructor
+                # argument type so overload resolution binds cleanly
+                *hash<string, string> parsed_opclass;
+                if (extra.opclass.typeCode() == NT_HASH) {
+                    hash<string, string> tmp;
+                    foreach hash<auto> p in (extra.opclass.pairIterator()) {
+                        tmp{p.key} = p.value.toString();
+                    }
+                    parsed_opclass = tmp;
+                }
+
+                rv{i.key} = new PgsqlIndex(i.key, i.value.unique, i.value.columns,
+                    i.value.tablespace ? i.value.tablespace : NOTHING,
+                    method, extra.with_options, parsed_opclass);
             }
         }
 
         return new Indexes(rv);
     }
+
+    #! parses the DDL returned by \c pg_get_indexdef to extract the WITH clause and non-default
+    #! per-column operator classes
+    /** @return a hash with \c with_options (\c *hash<auto>) and \c opclass (\c *hash<string, string>)
+    */
+    static hash<auto> parsePgIndexDef(string ddl) {
+        # hash<auto!> suppresses per-key type narrowing so that initially-NOTHING slots can later
+        # receive hash values without tripping a parse-type error
+        hash<auto!> rv = {
+            "with_options": NOTHING,
+            "opclass": NOTHING,
+        };
+
+        # extract the column list between "USING <method> (" and the matching ")"
+        *string col_list = (ddl =~ x/using\s+\w+\s*\(([^)]*)\)/i)[0];
+        if (col_list.val()) {
+            hash<string, string> opclasses;
+            foreach string spec in (col_list.split(",")) {
+                trim spec;
+                # non-default opclass appears as "colname opclass_name" after the column
+                # (function indexes look like "(expr)" and have no simple word boundary)
+                *list<*string> cm = (spec =~ x/^(\w+)\s+(\w+)$/);
+                if (cm && cm[0] && cm[1]) {
+                    opclasses{cm[0]} = cm[1];
+                }
+            }
+            if (opclasses) {
+                rv.opclass = opclasses;
+            }
+        }
+
+        # extract the WITH (...) clause if present; values may be quoted
+        *string with_body = (ddl =~ x/with\s*\(([^)]*)\)/i)[0];
+        if (with_body.val()) {
+            hash<auto!> with_h();
+            foreach string item in (with_body.split(",")) {
+                trim item;
+                *list<*string> kv = (item =~ x/^(\w+)\s*=\s*'?([^']*)'?$/);
+                if (kv && kv[0]) {
+                    string k = kv[0];
+                    string v = kv[1] ?? "";
+                    # coerce numeric literals back to their native types for hash comparison
+                    # stability (a user's .ysm writes "lists: 100" as an int; PG stores it as
+                    # a string 'lists'='100' in reloptions and returns it quoted from
+                    # pg_get_indexdef — we want equalImpl to match)
+                    if (v =~ /^-?\d+$/) {
+                        with_h{k} = int(v);
+                    } else if (v =~ /^-?\d+\.\d+$/) {
+                        with_h{k} = float(v);
+                    } else {
+                        with_h{k} = v;
+                    }
+                }
+            }
+            if (with_h) {
+                rv.with_options = with_h;
+            }
+        }
+
+        return rv;
+    }
+
 
     private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
         hash<string, PgsqlForeignConstraint> rv;
@@ -3466,7 +3636,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-        return new PgsqlIndex(iname, enabled, ch, opt.index_tablespace);
+        # the generic 'opclass' option comes through opt as auto-typed; coerce to the declared
+        # hash<string, string> shape so the PgsqlIndex constructor binds cleanly
+        *hash<string, string> ocls;
+        if (opt.opclass.typeCode() == NT_HASH) {
+            hash<string, string> tmp;
+            foreach hash<auto> p in (opt.opclass.pairIterator()) {
+                tmp{p.key} = p.value.toString();
+            }
+            ocls = tmp;
+        }
+        return new PgsqlIndex(iname, enabled, ch, opt.index_tablespace,
+            opt.method, opt.with, ocls);
     }
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table,

@@ -182,18 +182,45 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
     public {
         #! the tablespace (filegroup) name of the index
         *string filegroup;
+
+        #! the index method requested via the generic \c method index option; valid values include
+        #! \c "clustered", \c "nonclustered", \c "columnstore", and \c "nonclustered columnstore";
+        #! \c NOTHING emits no method prefix (the SQL Server default is nonclustered)
+        *string method;
+
+        #! method-specific storage options rendered into the \c WITH clause of the \c CREATE INDEX
+        #! statement (e.g. \c {"fillfactor": 90, "pad_index": "on"})
+        *hash<auto> with_options;
     }
 
     #! creates the object from the arguments
-    constructor(string n_name, bool n_unique, hash n_cols, *string n_filegroup)
+    constructor(string n_name, bool n_unique, hash n_cols, *string n_filegroup,
+            *string n_method, *hash<auto> n_with)
             : AbstractIndex(n_name, n_unique, n_cols) {
         filegroup = n_filegroup;
+        method = n_method;
+        with_options = n_with;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
-        string sql = sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name,
+        # method becomes a prefix on MSSQL (CLUSTERED / NONCLUSTERED / COLUMNSTORE / ...)
+        string prefix;
+        if (method.val()) {
+            prefix = method.lwr() + " ";
+        }
+        string sql = sprintf("create %s%sindex %s on %s (%s)",
+            unique ? "unique " : "", prefix ?? "", name, table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+
+        if (with_options) {
+            list<string> parts = ();
+            HashIterator wi(with_options);
+            while (wi.next()) {
+                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+            }
+            sql += sprintf(" with (%s)", parts.join(", "));
+        }
 
         *string ts = opt.index_filegroup ? opt.index_filegroup : filegroup;
         if (ts)
@@ -203,8 +230,19 @@ public class MssqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
     private bool equalImpl(AbstractIndex ix) {
+        MssqlIndex mix = cast<MssqlIndex>(ix);
+        # normalize method comparison: NOTHING / "nonclustered" are the SQL Server default
+        string m1 = (method.val() ? method.lwr() : "nonclustered");
+        string m2 = (mix.method.val() ? mix.method.lwr() : "nonclustered");
+        if (m1 != m2) {
+            return False;
+        }
+        if (!AbstractIndex::hashesEqualUnordered(with_options, mix.with_options)) {
+            return False;
+        }
         return True;
     }
+
 
     #! returns a string that can be used to rename the index in the database
     string getRenameSql(string table_name, string new_name) {
@@ -2177,7 +2215,7 @@ and s.name = %v and t.name = %v order by i.name, ic.key_ordinal", schema, name);
                     }
                 }
                 rv.(i.key) = new MssqlIndex(i.key, i.value.unique, i.value.columns,
-                    i.value.filegroup ? i.value.filegroup : NOTHING);
+                    i.value.filegroup ? i.value.filegroup : NOTHING, NOTHING, NOTHING);
             }
         }
 
@@ -2325,7 +2363,11 @@ tc.constraint_name, c1.ordinal_position", schema, name);
     }
 
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-        return new MssqlIndex(iname, enabled, ch, opt.index_filegroup);
+        if (opt.opclass) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
+                "on MSSQL (SQL Server)", iname);
+        }
+        return new MssqlIndex(iname, enabled, ch, opt.index_filegroup, opt.method, opt.with);
     }
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch,

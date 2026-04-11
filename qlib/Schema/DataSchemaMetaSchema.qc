@@ -97,6 +97,12 @@ public const DataSchemaJsonSchema = {
                     "type": "string",
                     "description": "The schema version string",
                 },
+                "datasource": {
+                    "type": "string",
+                    "description": "Datasource alias used by oload to resolve the target database "
+                        "connection; required by oload when aligning .ysm/.jsm schemas, ignored by "
+                        "qschema (qschema takes the connection on the command line)",
+                },
                 "version_table": {
                     "type": "string",
                     "description": "Table containing the schema version",
@@ -113,18 +119,19 @@ public const DataSchemaJsonSchema = {
         },
         "columnDefinition": {
             "type": "object",
-            "required": ("type",),
             "properties": {
                 "type": {
                     "type": "string",
                     "enum": ("int", "varchar", "char", "timestamp", "date", "number",
-                        "blob", "clob", "binary"),
-                    "description": "The column data type",
+                        "blob", "clob", "binary", "float", "text",
+                        "vector", "halfvec", "sparsevec"),
+                    "description": "The column data type; may be omitted for pure driver-override "
+                        "columns that set 'driver' with per-driver native_type/size/etc.",
                 },
                 "size": {
                     "type": "integer",
                     "minimum": 1,
-                    "description": "Column size (for varchar, char, number)",
+                    "description": "Column size (for varchar, char, number, and pgvector types)",
                 },
                 "scale": {
                     "type": "integer",
@@ -142,6 +149,11 @@ public const DataSchemaJsonSchema = {
                     "type": "string",
                     "description": "Column comment",
                 },
+                "driver": {
+                    "type": "object",
+                    "description": "Per-driver overrides merged into the base type (e.g. "
+                        "{pgsql: {native_type: text}}); may be used alone when 'type' is omitted",
+                },
             },
         },
         "indexDefinition": {
@@ -155,6 +167,26 @@ public const DataSchemaJsonSchema = {
                 },
                 "unique": {
                     "type": "boolean",
+                },
+                "method": {
+                    "type": "string",
+                    "description": "Access method (e.g. btree, hash, gist, gin, brin, ivfflat, hnsw on "
+                        "pgsql; btree or hash on mysql; bitmap or a domain indextype on oracle; "
+                        "clustered / nonclustered / columnstore on mssql)",
+                },
+                "with": {
+                    "type": "object",
+                    "description": "Method-specific storage options rendered as WITH (k = v, ...) on "
+                        "pgsql/mssql or PARAMETERS('k=v ...') on Oracle domain indexes",
+                },
+                "opclass": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "Per-column operator class (pgsql only): column name → opclass name",
+                },
+                "driver": {
+                    "type": "object",
+                    "description": "Per-driver overrides for any of the above keys",
                 },
             },
         },
@@ -208,6 +240,12 @@ public const DataSchemaJsonSchema = {
                     "additionalProperties": {"type": "string"},
                     "description": "Map of column name to sequence name",
                 },
+                "insert_only": {
+                    "type": "boolean",
+                    "description": "If true, the generated trigger fires only on INSERT (useful for "
+                        "append-only tables, or for tables that carry a modified column maintained "
+                        "manually by the application)",
+                },
             },
         },
         "tableDefinition": {
@@ -229,6 +267,22 @@ public const DataSchemaJsonSchema = {
                     "additionalProperties": {
                         "$ref": "#/$defs/indexDefinition",
                     },
+                },
+                "unique_constraints": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "required": ("columns",),
+                        "properties": {
+                            "columns": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "minItems": 1,
+                            },
+                        },
+                    },
+                    "description": "Named unique constraints (separate from indexes; a unique "
+                        "constraint may be backed by an index of the same name)",
                 },
                 "foreign_constraints": {
                     "type": "object",

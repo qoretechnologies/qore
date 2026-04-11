@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file Sqlite3SqlUtil.qm Qore user module for working with Sqlite3 SQL data
 
-/*  Sqlite3SqlUtil.qm Copyright 2013 - 2024 Qore Technologies, s.r.o.
+/*  Sqlite3SqlUtil.qm Copyright 2013 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1051,6 +1051,11 @@ auto v = c.name;
         }
 
         private AbstractIndex addIndexImpl(string iname, bool enabled, hash<auto> ch, *hash<auto> opt) {
+            # SQLite has no USING / WITH / opclass concept on CREATE INDEX
+            if (opt.method.val() || opt.with || opt.opclass) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: generic index options method/with/opclass "
+                    "are not supported on SQLite", iname);
+            }
             return new Sqlite3Index(iname, enabled, ch);
         }
 

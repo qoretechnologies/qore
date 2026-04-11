@@ -37,6 +37,9 @@ column_options:   # Optional: column creation options
 schema:
   name: MySchema              # Required: schema name
   version: "1.0.0"            # Required: version string
+  datasource: my-ds           # Required for oload; ignored by qschema
+                              #   (qschema takes the connection as a CLI arg; oload resolves
+                              #    this alias via its -D<alias>=<url> option map)
   version_table: schema_info  # Optional: table holding version (default: schema_version)
   version_column: version     # Optional: column holding version (default: version)
   version_where:              # Optional: where clause to find version row
@@ -55,9 +58,14 @@ Supported column types:
 | `timestamp` | Date/time with timezone | `Type::Date` |
 | `date` | Date only (Oracle/PostgreSQL native) | `Type::Date` + driver override |
 | `number` | Numeric (optional `size`, `scale`) | `SqlUtil::NUMERIC` |
+| `float` | Floating-point (double precision on pgsql) | `Type::Float` |
 | `blob` | Binary large object | `SqlUtil::BLOB` |
 | `clob` | Character large object | `SqlUtil::CLOB` |
+| `text` | Native TEXT on pgsql/mysql; CLOB elsewhere | `SqlUtil::CLOB` + driver override |
 | `binary` | Binary data | `Type::Binary` |
+| `vector` | pgvector dense vector (pgsql only) | `native_type: vector` |
+| `halfvec` | pgvector half-precision vector (pgsql only) | `native_type: halfvec` |
+| `sparsevec` | pgvector sparse vector (pgsql only) | `native_type: sparsevec` |
 
 ### Column Properties
 
@@ -85,10 +93,26 @@ tables:
       name: pk_my_table
       columns: [id]
 
+    unique_constraints:      # Optional: named unique constraints (may be backed by an
+      uk_my_table:           #   index of the same name)
+        columns: [name]
+
     indexes:                 # Optional: secondary indexes
       idx_name:
         columns: [name]
         unique: true
+
+      # Example: pgvector IVFFlat index with method / opclass / WITH storage options
+      sk_chunks_embedding:
+        columns: [embedding]
+        method: ivfflat                       # access method (pgsql / mysql / oracle / mssql)
+        with:                                 # method-specific storage options
+          lists: 100
+        opclass:                              # per-column operator class (pgsql only)
+          embedding: vector_cosine_ops
+        driver:                               # per-driver override escape hatch
+          pgsql:
+            method: ivfflat
 
     foreign_constraints:     # Optional: foreign key constraints
       fk_other:
@@ -119,6 +143,9 @@ Auto-triggers generate standard database triggers for common patterns:
 - **`created: true`** — populates a `created` column with the current timestamp on INSERT
 - **`modified: true`** — populates a `modified` column with the current timestamp on INSERT and UPDATE
 - **`sequence_columns`** — populates columns from sequences when NULL on INSERT
+- **`insert_only: true`** — restrict the generated trigger to fire on INSERT only; useful for
+  append-only tables and for tables that carry a `modified` column the application maintains by
+  hand (without this key, a trigger with `modified: true` also fires on UPDATE)
 
 Trigger SQL is generated automatically for each database driver (PostgreSQL, Oracle, MySQL, MSSQL)
 by the `SqlUtil::generate_auto_triggers()` function.

@@ -555,23 +555,61 @@ public class OracleNumberColumn inherits OracleColumn {
 #! represents an Oracle index
 public class OracleIndex inherits SqlUtil::AbstractIndex {
     public {
-        #! the native type of the index (if supported)
+        #! the native type of the index (if supported); mirrors \c ALL_INDEXES.INDEX_TYPE (e.g.
+        #! \c "NORMAL", \c "BITMAP", \c "FUNCTION-BASED NORMAL", or a domain-index name)
         string native_type;
 
         #! the tablespace name of the index (if supported)
         *string tablespace;
+
+        #! the explicit access method requested via the generic \c method index option (e.g. \c "bitmap"
+        #! or a domain-index \c INDEXTYPE name); \c NOTHING means the driver default (a normal B-tree)
+        *string method;
+
+        #! method-specific storage parameters rendered into a \c PARAMETERS('k1=v1 k2=v2 ...') clause
+        #! for Oracle domain indexes
+        *hash<auto> with_options;
     }
 
     #! creates the object from the arguments
-    constructor(string n, bool u, hash c, string nt, *string t) : AbstractIndex(n, u, c) {
+    constructor(string n, bool u, hash c, string nt, *string t, *string n_method, *hash<auto> n_with)
+            : AbstractIndex(n, u, c) {
         native_type = nt;
         tablespace = t;
+        method = n_method;
+        with_options = n_with;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
-        string sql = sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name,
+        # determine method: explicit overrides native_type for emission
+        *string m = method.val() ? method.lwr() : NOTHING;
+
+        # decide whether this is a bitmap prefix or an INDEXTYPE IS domain-index creation
+        string prefix;
+        *string indextype;
+        if (m == "bitmap" || (!m && native_type.lwr() == "bitmap")) {
+            prefix = "bitmap ";
+        } else if (m.val() && m != "btree" && m != "normal") {
+            # anything other than bitmap/btree/normal is treated as a domain-index type name
+            indextype = m;
+        }
+
+        string sql = sprintf("create %s%sindex %s on %s (%s)",
+            unique ? "unique " : "", prefix ?? "", name, table_name,
             (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+
+        if (indextype.val()) {
+            sql += sprintf(" indextype is %s", indextype);
+            if (with_options) {
+                list<string> parts = ();
+                HashIterator wi(with_options);
+                while (wi.next()) {
+                    parts += sprintf("%s=%s", wi.getKey(), wi.getValue());
+                }
+                sql += sprintf(" parameters('%s')", parts.join(" "));
+            }
+        }
 
         *string ts = opt.index_tablespace ? opt.index_tablespace : tablespace;
         if (ts)
@@ -585,8 +623,26 @@ public class OracleIndex inherits SqlUtil::AbstractIndex {
 
     #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
     bool equalImpl(AbstractIndex ix) {
+        OracleIndex oix = cast<OracleIndex>(ix);
+        # normalize method comparison: NOTHING / "normal" / "btree" are all the default B-tree
+        string m1 = (method.val() ? method.lwr() : native_type.lwr());
+        string m2 = (oix.method.val() ? oix.method.lwr() : oix.native_type.lwr());
+        if (m1 == "btree") {
+            m1 = "normal";
+        }
+        if (m2 == "btree") {
+            m2 = "normal";
+        }
+        if (m1 != m2) {
+            return False;
+        }
+        # unordered hash comparison for WITH options
+        if (!AbstractIndex::hashesEqualUnordered(with_options, oix.with_options)) {
+            return False;
+        }
         return True;
     }
+
 
     #! returns a string that can be used to rename the index in the database
     string getRenameSql(string table_name, string new_name) {
@@ -3442,7 +3498,7 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
                 # skip system indexes
                 if (!ih{row.index_name})
                     continue;
-                rv.(row.index_name) = new OracleIndex(row.index_name, row.uniqueness == "UNIQUE", ih{row.index_name}, row.index_type, row.tablespace_name);
+                rv.(row.index_name) = new OracleIndex(row.index_name, row.uniqueness == "UNIQUE", ih{row.index_name}, row.index_type, row.tablespace_name, NOTHING, NOTHING);
                 if (row.constraint_name) {
                     *AbstractUniqueConstraint uk = findUniqueConstraintUnlocked(row.constraint_name);
                     if (uk) {
@@ -3617,7 +3673,18 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
     }
 
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-        return new OracleIndex(iname, enabled, ch, "normal", opt.index_tablespace);
+        # Oracle has no per-column operator class concept (domain indexes bind operators differently);
+        # reject the generic opclass option with a clear message
+        if (opt.opclass) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
+                "on Oracle", iname);
+        }
+        # "with" is only meaningful for domain indexes (PARAMETERS clause)
+        if (opt.with && !opt.method.val()) {
+            throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'with' option on Oracle requires "
+                "the 'method' option to name a domain indextype", iname);
+        }
+        return new OracleIndex(iname, enabled, ch, "normal", opt.index_tablespace, opt.method, opt.with);
     }
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {

@@ -158,6 +158,52 @@ class DataSchemaTest inherits QUnit::Test {
         col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "clob"});
         assertEq(SqlUtil::CLOB, col.qore_type);
 
+        # float — maps to Type::Float, renders as DOUBLE PRECISION on pgsql
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "float"});
+        assertEq(Type::Float, col.qore_type);
+        assertFalse(col.hasKey("driver"));
+
+        # text — falls back to CLOB base type with pgsql/mysql native_type overrides
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "text"});
+        assertEq(SqlUtil::CLOB, col.qore_type);
+        assertTrue(col.hasKey("driver"));
+        assertEq("text", col.driver.pgsql.native_type);
+        assertEq("text", col.driver.mysql.native_type);
+
+        # pgvector — size is routed to driver.pgsql.size rather than the top level
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "vector", "size": 1024, "notnull": True, "comment": "embedding"});
+        assertFalse(col.hasKey("size"), "vector size not at top level");
+        assertEq("vector", col.driver.pgsql.native_type);
+        assertEq(1024, col.driver.pgsql.size);
+        assertTrue(col.notnull);
+        assertEq("embedding", col.comment);
+
+        # halfvec and sparsevec use the same size routing
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "halfvec", "size": 512});
+        assertEq(512, col.driver.pgsql.size, "halfvec size routed to driver");
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c", {"type": "sparsevec", "size": 2048});
+        assertEq(2048, col.driver.pgsql.size, "sparsevec size routed to driver");
+
+        # driver-only column (no top-level type) — valid when 'driver' is set
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"driver": {"pgsql": {"native_type": "jsonb"}}, "notnull": True});
+        assertFalse(col.hasKey("qore_type"));
+        assertEq("jsonb", col.driver.pgsql.native_type);
+        assertTrue(col.notnull);
+
+        # user-provided driver override merged on top of base type
+        col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
+            {"type": "int", "driver": {"pgsql": {"identity": True}, "oracle": {"native_type": "number"}}});
+        assertEq(Type::Int, col.qore_type);
+        assertTrue(col.driver.pgsql.identity);
+        assertEq("number", col.driver.oracle.native_type);
+
+        # missing both 'type' and 'driver' throws
+        assertThrows("DATA-SCHEMA-ERROR", "must set", sub () {
+            Schema::DataSchemaLoader::normalizeColumn("t", "c", {"notnull": True});
+        });
+
         # default value
         col = Schema::DataSchemaLoader::normalizeColumn("t", "c",
             {"type": "char", "size": 1, "default_value": "A"});
@@ -428,7 +474,8 @@ class DataSchemaTest inherits QUnit::Test {
 
         # normalizeColumn with all valid types
         foreach string col_type in (("int", "varchar", "char", "timestamp", "date",
-                "number", "blob", "clob", "binary")) {
+                "number", "blob", "clob", "binary", "float", "text",
+                "vector", "halfvec", "sparsevec")) {
             hash<auto!> def();
             def.type = col_type;
             if (col_type == "varchar" || col_type == "char") {
