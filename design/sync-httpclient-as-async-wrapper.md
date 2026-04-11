@@ -1,407 +1,410 @@
-# Sync HTTPClient as an async wrapper over HttpClientIo
+# Sync HTTPClient dispatch via async C++ poll ops
 
 **Status:** design proposal — not yet implemented
 **Branch:** `bugfix/socket_fixes`
-**Motivation:** unify the two HTTP client implementations (legacy sync
-`HTTPClient` and modern async `HttpClientIo`) into one backend, so every
-feature added to `HttpClientIo` is immediately available through the
-legacy `HTTPClient` API, and the legacy sync code can be decommissioned
-by delegating to the async path behind the scenes.
+**Previous version:** an earlier draft proposed composing an internal
+`HttpClientConnection` inside `QoreHttpClientObject`. That draft was
+superseded after discovering that `HttpClientConnection` and all of
+`qlib/HttpClientIo/` are pure Qore classes — composing them from C++
+requires runtime module loading, transitive Qore-module dependencies,
+and runtime class dispatch overhead. This revision takes a different
+path that stays entirely in C++.
 
 ---
 
-## 1. Current state
+## 1. The goal, restated honestly
 
-The Qore tree has two parallel HTTP client implementations:
+The original motivation was: *unify the two HTTP client implementations
+so every feature added to `HttpClientIo` is immediately available
+through the legacy `HTTPClient` API*.
 
-### Sync `HTTPClient` (legacy)
+That goal is only partially achievable in a practical timeframe.
+`HttpClientIo` is ~7 900 LOC of Qore code (`HttpClientConnection`,
+`HttpClientConnectionManager`, `HttpClientStreamHandle`, per-protocol
+impls, `CookieJar`), and a full Qore-→-C++ rewrite is a multi-month
+effort that touches a lot of user-module surface. It is not what we
+should do now.
 
-- **C++ class:** `QoreHttpClientObject` (`lib/QoreHttpClientObject.cpp`)
-- **Qore class:** `HTTPClient` (`lib/QC_HTTPClient.qpp`)
-- **Socket ownership:** one `QoreSocketObject` owned directly
-  (`msock->socket`), connected synchronously via
-  `connect_unlocked()` calls through `QoreSocket::connect()` /
-  `connectSSL()`.
-- **Lock:** `SafeLocker sl(priv->m)` at the top of every public method
-  — the HTTPClient's outer mutex serialises everything.
-- **HTTP/2:** uses `priv->h2_session` (an `Http2Session` instance owned
-  by the socket's `qore_socket_private`). Writes go through
-  `h2_session->sendStreamData` + `h2_session->sendPendingDataBlocking`
-  under the outer mutex. Reads go through
-  `h2_session->receiveData` also under the outer mutex.
-- **Controller interaction:** none. The socket is not registered with
-  the `AsyncIoController`; the HTTPClient drives its own I/O via
-  sync send/recv with blocking loops.
+The **achievable, valuable** subset of the goal is: **stop having
+sync HTTPClient maintain its own parallel sync dispatch code for
+H1/H2/H3 request/response handling, and route it through the same C++
+poll-op infrastructure that `HttpClientIo` already uses**.
 
-### Async `HttpClientIo` (modern)
+- **What stays in Qore:** `HttpClientIo`'s connection pool, retry
+  orchestration, cookies, OAuth2, Alt-Svc discovery, protocol cache.
+  These stay in `qlib/HttpClientIo/*.qc`. Qore-level users still
+  call `HttpClientConnectionManager::acquireStream()` the same way.
+- **What moves in sync HTTPClient:** the request/response dispatch
+  layer in `QoreHttpClientObject` (`send_internal`, `sendHttp2Connect`,
+  `sendHttp2StreamData`, `readHttp2StreamData`, etc.) switches from
+  "manually drive nghttp2 sync under `priv->m`" to "submit a C++ poll
+  op with a `PromiseAction` and block on the Future". Sync HTTPClient
+  keeps its own pool, retry, OAuth2, cookies — unchanged.
 
-- **Entry point:** `HttpClientIo::HttpClientConnectionManager` →
-  `acquireStream()` → `HttpClientStreamHandle`
-  (`qlib/HttpClientIo/HttpClientStreamHandle.qc`)
-- **Connection model:** `HttpClientConnection` objects hold a
-  `HttpClientPollOperation` (`Http1`/`Http2`/`Http3ClientPollOperationImpl`)
-  that is submitted to the global `AsyncIoController`. The controller
-  drives the socket non-blockingly on its I/O thread.
-- **Request submission:** `conn.submitRequest(method, path, headers, body)`
-  returns `{stream_id, future}`. The Future is resolved on the I/O
-  thread via a C++ `PromiseAction` attached to the stream completion.
-- **Sync wait pattern:** `HttpClientStreamHandle::request()` at
-  `HttpClientStreamHandle.qc:247` is the canonical example: submit async,
-  block on `future.get(remaining)`, translate exceptions.
+The duplication that remains:
 
-### The duplication problem
+- Connection pooling: sync HTTPClient has `priv->msock` + session-state
+  fields; Qore HttpClientIo has `HttpClientConnectionManager::pool`.
+  Both stay. Users who want shared pooling across sync + async use
+  HttpClientIo directly.
+- Retry/OAuth2/cookies: both keep their own. Dual maintenance remains
+  for the retry-policy logic, OAuth2 token refresh logic, and cookie
+  handling.
 
-Every H1/H2/H3 feature is implemented twice — once in
-`QoreHttpClientObject` (sync, lock-held) and once in `HttpClientIo`
-(async, promise-backed). Examples:
+The duplication that **goes away**:
 
-| Feature | Sync `QoreHttpClientObject` | Async `HttpClientIo` |
+- H1 request framing, header parsing, chunked body parsing — moves to
+  the C++ poll op (already there; sync HTTPClient stops reimplementing
+  it).
+- H2 session management, stream state, flow control — moves to the
+  C++ poll op (already there; sync HTTPClient stops driving nghttp2
+  directly).
+- H3/QUIC stream handling — already via the C++ QuicSession, but the
+  sync HTTPClient's H3 paths get simpler.
+
+---
+
+## 2. The key finding: the C++ infrastructure already exists
+
+Everything the sync HTTPClient needs is already in `libqore`:
+
+| Component | File | Already usable from C++? |
 |---|---|---|
-| H2 CONNECT tunnel | `sendHttp2Connect` at `QoreHttpClientObject.cpp:4770` | `Http2ClientConnectionImpl::submitConnectRequest` |
-| H2 stream write | `sendHttp2StreamData` at `QoreHttpClientObject.cpp:5107` | `Http2ClientConnectionImpl::sendStreamData` at line 138 |
-| H2 stream read | `readHttp2StreamData` at `QoreHttpClientObject.cpp:5159` | `Http2ClientConnectionImpl::registerStreamQueue` + Queue consumer |
-| H2 data-available | `isHttp2DataAvailable` at `QoreHttpClientObject.cpp:5250` | implicit in the Queue consumer pattern |
-| Request send | `send_internal` (H1/H2/H3 branches) | `submitRequest` (protocol-agnostic) |
+| `Http1ClientPollOperationPriv::submitRequest` | `include/qore/intern/QC_Http1ClientPollOperationBase.h:111` | Yes — DLLLOCAL method |
+| `Http2ClientPollOperationPriv::submitRequest` | analogous | Yes |
+| `Http3ClientPollOperationPriv::submitRequest` | analogous | Yes |
+| `PromiseAction` (resolves a `QorePromise` on I/O-thread completion) | `include/qore/AsyncCompletionAction.h:102` | Yes — DLLEXPORT |
+| `QorePromise::set` / `setError` / `getFuture` | `include/qore/QoreFuture.h` | Yes — DLLEXPORT |
+| `QoreFuture::get(timeout_ms, xsink)` | `include/qore/QoreFuture.h:56` | Yes — DLLEXPORT |
+| `q_future_get_blocking` | `include/qore/intern/QC_Future.h` | Yes — DLLLOCAL, Phase 1 landed in `0f2889dad` |
+| `AsyncIoControllerPriv::submit` | `include/qore/intern/AsyncIoControllerPriv.h` | Yes |
 
-The async side is strictly more capable: it gets C++ poll-op fast paths,
-connection pooling, OAuth2 token refresh, persistent-connection reuse,
-and H2/H3 multiplexing "for free" from the framework. The sync side
-has to reimplement each of these by hand and hold its outer mutex
-across blocking syscalls.
+**Nothing new needs to be added to libqore as a prerequisite.** The
+migration work is all in `lib/QoreHttpClientObject.cpp` — rewriting
+the sync dispatch layer to use the C++ poll ops.
 
 ---
 
-## 2. Proposed architecture — composition delegation
+## 3. The shape of a converted method
 
-**Goal:** `QoreHttpClientObject` becomes a thin C++ facade that owns an
-internal `HttpClientIo::HttpClientConnection` (or the C++ equivalent)
-and routes every public sync method through it, blocking the caller on
-a `Future` or `Queue` for the result.
-
-### 2.1 Ownership model
+Here is what `QoreHttpClientObject::sendHttp2StreamData` looks like
+after conversion, as the minimum viable example:
 
 ```cpp
-class qore_httpclient_priv {
-public:
-    // Legacy sync path — kept during migration for methods not yet
-    // converted, eventually removed entirely.
-    my_socket_priv* msock;       // sync socket (removed when migration done)
-    Http2SessionPtr h2_session;  // (removed)
-    // ...
-
-    // New async backend — owns an HttpClientConnection managed by the
-    // global AsyncIoController.  Created lazily on first method that
-    // routes through the new path.
-    ReferenceHolder<HttpClientConnection> async_conn;
-
-    // Synchronous request timeout inherited from the legacy API.
-    int timeout_ms = HTTPCLIENT_DEFAULT_TIMEOUT;
-};
-```
-
-During the migration:
-
-- Methods that have been converted use `async_conn`.
-- Methods that have not been converted still use `msock`/`h2_session`.
-- Both paths can coexist on the same `QoreHttpClientObject` — they use
-  different socket instances so there is no shared-state collision.
-- When the last sync-path method is converted, `msock` and `h2_session`
-  are removed and the legacy code path is deleted.
-
-### 2.2 The await primitive
-
-The existing `Future`/`HttpCancellableFuture` classes
-(`HttpClientStreamHandle.qc:901`) are sufficient. A sync HTTPClient
-method looks like:
-
-```cpp
-QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path,
-        const QoreHashNode* headers, const char* protocol,
-        QoreHashNode* info, ExceptionSink* xsink) {
-    // 1. Ensure the async connection exists
-    if (!http_priv->async_conn) {
-        http_priv->createAsyncConnection(xsink);
-        if (*xsink) return nullptr;
+int QoreHttpClientObject::sendHttp2StreamData(int32_t stream_id,
+        const BinaryNode* data, bool end_stream, int timeout_ms,
+        ExceptionSink* xsink) {
+    // 1. Lock briefly to grab the H2 poll op (owned by the priv) under
+    //    priv->m; the poll op is thread-safe internally.
+    Http2ClientPollOperationPriv* h2_op;
+    {
+        SafeLocker sl(priv->m);
+        if (!http_priv->h2_poll_op) {
+            xsink->raiseException("HTTP2-ERROR", "HTTP/2 is not active");
+            return -1;
+        }
+        h2_op = http_priv->h2_poll_op;
+        h2_op->ref();  // keep alive across the unlocked await below
     }
+    ON_SCOPE_EXIT { h2_op->deref(); };
 
-    // 2. Translate args to the HttpClientIo surface
-    hash<auto> headers_hash = ...;  // convert QoreHashNode -> hash<auto>
+    // 2. Create a Promise+Future pair and a PromiseAction.  The
+    //    PromiseAction is what the I/O thread invokes when the data
+    //    is flushed (or when the stream errors out).
+    ReferenceHolder<QorePromise> promise(new QorePromise(), xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(xsink), xsink);
+    if (*xsink) return -1;
 
-    // 3. Submit async, get a Future back
-    ValueHolder submit_result(
-        http_priv->async_conn->submitConnectRequest(
-            path, headers_hash, protocol, xsink),
-        xsink);
-    if (*xsink) return nullptr;
+    // Transfer promise ownership to the PromiseAction.  The QoreFuture
+    // is the consumer-side handle we'll await below.
+    PromiseAction* action = new PromiseAction(promise.release());
 
-    int32_t stream_id = submit_result->getAsBigInt("stream_id");
-    QoreObject* future = submit_result->getKeyValue("future").get<QoreObject>();
-
-    // 4. Block the sync caller on the Future with the HTTPClient timeout
-    ValueHolder response(
-        q_future_get_blocking(future, http_priv->timeout_ms, xsink),
-        xsink);
+    // 3. Submit the write to the poll op — this is the async entry
+    //    point.  The poll op queues the data in nghttp2 and wakes the
+    //    I/O thread; the I/O thread flushes pending data on the next
+    //    continuePoll() iteration and invokes `action->execute()` when
+    //    the write is complete (or `action->executeError()` on error).
+    h2_op->sendStreamData(stream_id, data, end_stream, action, xsink);
     if (*xsink) {
-        // Translate Future-side errors into HTTPClient-side errors
-        translateFutureError(xsink);
-        return nullptr;
+        // The poll op takes ownership of the action, so if submit
+        // fails, the action is already cleaned up.
+        return -1;
     }
 
-    // 5. Build the legacy return hash and populate `info`
-    return buildLegacyConnectResponse(*response, stream_id, info, xsink);
+    // 4. Wrap the QoreFuture in a FutureImpl QoreObject and await it.
+    //    q_future_get_blocking handles the QoreObject → QoreFuture
+    //    unwrap and blocks on the CV.  timeout_ms==0 means infinite.
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(),
+                                             future.release());
+    ON_SCOPE_EXIT { future_obj->deref(xsink); };
+
+    QoreValue result = q_future_get_blocking(future_obj,
+            timeout_ms <= 0 ? -1 : timeout_ms, xsink);
+    if (*xsink) {
+        return -1;  // FUTURE-TIMEOUT, protocol error, etc.
+    }
+
+    // 5. Translate the result — for sendStreamData this is a bool/int
+    //    "ok"; for sendHttp2Connect it would be a full response hash.
+    result.discard(xsink);
+    return 0;
 }
 ```
 
-The pattern in Qore-level code already exists at
-`HttpClientStreamHandle.qc:247` — the C++ port is mechanical.
+Two important observations:
 
-### 2.3 What the await primitive needs
+1. **`priv->m` is held only briefly** — for the poll-op lookup. The
+   blocking wait (`q_future_get_blocking`) runs with the lock
+   released. Any other thread can acquire `priv->m` and do
+   unrelated work concurrently.
+2. **No nghttp2 / SSL calls on the calling thread** — all of that
+   work happens on the I/O thread inside `continuePoll()`, which
+   already knows how to manage concurrent H2 sessions safely.
 
-`q_future_get_blocking` in the sketch above does not yet exist — it is
-the C++-side equivalent of `Future::get(timeout)`. There are two ways
-to provide it:
-
-1. **Reuse the Qore-level `Future` class**: call into
-   `AbstractQoreZoneInfo`-style `eval`ing of the `get(timeout)` method.
-   Ugly but works.
-2. **Add a DLLLOCAL C++ API on `Future`**: a direct
-   `Future::waitForValue(int timeout_ms, ExceptionSink*)` that blocks
-   the calling thread on the internal CV without going through the
-   Qore method-call machinery. Cleaner, one-time cost.
-
-Option (2) is recommended. The Future class already has the CV and
-resolution state; exposing it to C++ is ~50 lines.
-
-### 2.4 What does *not* change
-
-- **The sync HTTPClient's public Qore API is unchanged.** All method
-  signatures in `lib/QC_HTTPClient.qpp` stay the same. Callers see no
-  behaviour difference except that blocking waits no longer hold the
-  outer mutex across receive/send operations.
-- **Connection pooling is preserved** — each `QoreHttpClientObject`
-  gets its own `HttpClientConnectionManager` (or shares the global
-  one), so existing tests that rely on connection reuse still work.
-- **Authentication, OAuth2, cookies, TLS** all transfer to the async
-  connection at creation time (mirroring how `RestClientIo`'s
-  constructor configures its internal connection).
+This is precisely the "submit async → block on future" pattern that
+`HttpClientStreamHandle::request()` implements at
+`qlib/HttpClientIo/HttpClientStreamHandle.qc:247` — just written in
+C++ instead of Qore.
 
 ---
 
-## 3. Migration order
+## 4. What needs to exist on the poll-op side
 
-Starting with the simplest methods unlocks the pattern; later methods
-reuse the scaffolding.
+Today's `Http2ClientPollOperationPriv::sendStreamData` (at
+`lib/QC_Http2ClientPollOperationBase.qpp:886`) is:
 
-| Phase | Method | Complexity | Gains |
-|---|---|---|---|
-| 1 | `q_future_get_blocking` C++ primitive | Small — exposes existing CV | Await primitive for all later phases |
-| 2 | `QoreHttpClientObject::async_conn` lifecycle (create on demand, tear down on destructor) | Medium — ownership rules | Foundation for all method conversions |
-| 3 | `sendHttp2StreamData` | Small — non-blocking queue + wake + Future resolution on flush | Proof-of-concept for H2 write path |
-| 4 | `readHttp2StreamData` | Medium — needs a per-stream Queue registered with the poll op | H2 read path |
-| 5 | `sendHttp2Connect` | Large — full request/response cycle, header translation, error mapping | Full H2 CONNECT tunneling |
-| 6 | `isHttp2DataAvailable` | Small — check stream buffer; no socket wait needed in the async model | Eliminates the last manual lock-yielding helper |
-| 7 | `send_internal` (H1 path) | Large — the main request dispatcher | Eliminates sync H1 send |
-| 8 | `send_internal` (H2 path) | Large — merges with phase 5 | Eliminates sync H2 send |
-| 9 | `send_internal` (H3 path) | Large — QUIC-specific | Eliminates sync H3 send |
-| 10 | `connect` / `connectSSL` | Medium — leverages `HttpClientConnection::connect()` | Eliminates sync connect |
-| 11 | Remove `msock`/`h2_session`/`quic_sessions` from `qore_httpclient_priv` | Cleanup | Final deletion of legacy state |
-
-**Phase 1 → 3 is the minimum viable prototype** — once those land,
-subsequent phases are variations on the same pattern.
-
----
-
-## 4. Risks and open questions
-
-### 4.1 Behaviour differences vs legacy sync HTTPClient
-
-The legacy sync code has subtle behaviours that the async path may not
-reproduce exactly:
-
-- **`send_internal` retry/redirect loop** (`QoreHttpClientObject.cpp:5500+`)
-  runs the full request in a sync retry loop on 3xx responses,
-  connection errors, OAuth2 401 refresh, etc. The async path handles
-  these via the `HttpClientConnectionManager` retry machinery, which
-  has slightly different semantics (per-stream vs per-connection).
-- **`sendHttp2StreamData` advisory recv probe** (line 5141) —
-  the sync method opportunistically calls `receiveData(0, …)` to
-  process RST_STREAM / WINDOW_UPDATE frames that arrive during a
-  send. The async path processes these via the controller's poll
-  loop, which runs continuously — but the ordering relative to the
-  sync caller's next method call is different.
-- **Error code translation** — legacy sync throws
-  `HTTP2-FLOW-CONTROL`, `HTTP2-ERROR`, `HTTP2-EOF`, `HTTP2-STATE-ERROR`
-  at specific points. The async path tends to throw
-  `HTTPCLIENT-STREAM-CLOSED`, `HTTPCLIENT-TIMEOUT`,
-  `HTTPCLIENT-REQUEST-ERROR`. Users who catch specific error names
-  will see changes.
-
-**Mitigation**: each converted method gets a test matrix comparing the
-legacy behaviour (captured from the current implementation) with the
-new behaviour. Any divergence is either fixed, or called out as a
-breaking change in the release notes.
-
-### 4.2 Shared connection pool vs per-HTTPClient pool
-
-`HttpClientConnectionManager` maintains a connection pool keyed by
-origin (scheme://host:port). Options for HTTPClient composition:
-
-- **Shared global pool**: all `QoreHttpClientObject` instances route
-  through one `HttpClientConnectionManager`, sharing pooled connections.
-  Efficient but couples HTTPClient lifetime to the global manager.
-- **Per-HTTPClient pool**: each `QoreHttpClientObject` gets its own
-  manager. Simpler lifetime; matches legacy HTTPClient semantics where
-  each instance owned its own connection. Memory overhead is minor.
-
-**Recommendation**: per-HTTPClient pool initially, with a
-`setSharedConnectionManager(mgr)` opt-in for advanced users who want
-the efficiency of sharing.
-
-### 4.3 The `HttpClientConnection` C++ surface
-
-Currently `HttpClientConnection` is a Qore class defined in
-`qlib/HttpClientIo/HttpClientConnection.qc` with a thin C++ wrapper.
-Calling its methods from `QoreHttpClientObject` (which is pure C++)
-requires either:
-
-- **Method dispatch through Qore's eval machinery**: acquire a
-  QoreObject reference to the connection, invoke methods via
-  `QoreObject::evalMethod`. Works but has Qore-interpreter overhead.
-- **A DLLLOCAL C++ API on `HttpClientConnectionPriv`**: direct C++
-  methods that bypass the interpreter. Cleaner but requires exposing
-  more of HttpClientIo's internals as DLLLOCAL.
-
-**Recommendation**: start with eval-dispatch for the prototype; promote
-hot paths to DLLLOCAL C++ after profiling shows the overhead matters.
-
-### 4.4 Legacy HTTPClient's socket object surfaces
-
-Some Qore code calls `httpclient.getSocket()` to get the underlying
-Socket object for low-level access (e.g. setting peer cert callbacks,
-reading socket options). The async backend owns its socket on the I/O
-thread; exposing it to the sync caller would violate the no-sync-I/O
-invariant.
-
-**Mitigation**: `getSocket()` returns a snapshot/proxy object that
-forwards query methods to the async connection's socket but rejects
-I/O methods (`send`, `recv`, `readHTTPHeader`) with
-`SOCKET-SYNC-ON-IO-THREAD-ERROR` or `SOCKET-HTTPCLIENT-ASYNC-ERROR`.
-
-### 4.5 `HTTPClient::send` body-streaming callbacks
-
-The legacy sync `send` supports a `recv_callback` / `send_callback`
-for streaming body I/O (`QC_HTTPClient.qpp:~400`). These callbacks run
-on the caller's thread and expect blocking semantics. The async backend
-dispatches body data via `Queue`s, so the callbacks must be driven by
-the sync wrapper: it reads from the queue and calls the callback
-itself, blocking between reads.
-
-**Design**: the sync wrapper spawns a per-request reader loop:
 ```cpp
-while (true) {
-    auto chunk = stream_queue.get(remaining_ms, xsink);
-    if (*xsink || chunk.isNothing()) break;
-    callback(chunk, xsink);
-    if (*xsink) break;
+void Http2ClientPollOperationPriv::sendStreamData(int64_t stream_id,
+        const BinaryNode* data, bool end_stream, ExceptionSink* xsink) {
+    H2State cur_state = h2_state.load(std::memory_order_acquire);
+    if (cur_state != H2State::READING && cur_state != H2State::WAIT_READ) {
+        xsink->raiseException("HTTP2-STATE-ERROR", ...);
+        return;
+    }
+    sock_obj->sendHttp2StreamData(stream_id, data, end_stream, xsink);
 }
 ```
-No new primitives needed — `Queue::get(timeout)` already handles this.
+
+It does not take a `PromiseAction`. It returns `void` — the caller
+gets no completion signal. This is fine for existing callers
+(`Http2ClientConnection::sendStreamData` in Qore wakes the controller
+and lets the I/O thread flush asynchronously) but insufficient for the
+sync HTTPClient migration, which needs a completion callback.
+
+**Two options for adding the PromiseAction on the poll-op side:**
+
+**(a) New overload that accepts `AbstractAsyncAction*`.** The poll op
+registers the action in a per-stream completion map. When the I/O
+thread's `continuePoll()` drains the nghttp2 outbox for that stream
+and marks the write as flushed (via a new `onStreamWriteFlushed`
+hook inside `Http2Session`), it invokes `action->execute()` and
+removes the action from the map.
+
+**(b) Use an `EventNotifier` + polling.** Sync HTTPClient creates a
+one-shot `EventNotifierAction` and blocks on
+`notifier->waitForReady(timeout)`. Simpler — no per-stream map — but
+does not carry a result value.
+
+Option (a) is required for `sendHttp2Connect` and `readHttp2StreamData`
+which return data, so we should do (a) and use it uniformly.
+
+Scope of the "new overload + stream write flush hook":
+
+- `Http2Session::sendStreamData` gets an optional `write_action`
+  parameter that attaches an action to the stream
+- `Http2Session::onStreamWriteFlushed` is called from the nghttp2
+  `on_frame_send_callback` for DATA frames
+- Similar pattern for H1 (simpler — H1 is strictly request/response,
+  the action fires when the response is received)
+- Similar for H3/QUIC (already has stream completion callbacks)
+
+LOC estimate: ~300 LOC across the three poll-op priv classes +
+`Http2Session` + `QuicSession`.
 
 ---
 
-## 5. Prototype milestones
+## 5. Phases
 
-The prototype covers phases 1-3 from the migration order. Each milestone
-is a committable, testable increment.
+### Phase 1 — `q_future_get_blocking` (DONE)
 
-### Milestone 1: `q_future_get_blocking`
+- Committed in `0f2889dad` on `bugfix/socket_fixes`.
+- Unit tests: 14 assertions, all passing.
 
-- [ ] Add `DLLLOCAL QoreValue Future::waitForValue(int timeout_ms, ExceptionSink*)`
-  to `lib/QC_Future.qpp`'s private data class
-- [ ] Verify via a test that a Qore-level `Future.set(x)` from thread A
-  unblocks a `waitForValue` call from C++ thread B
-- [ ] No behaviour change to existing Future usage
+### Phase 2 — Poll-op completion hooks
 
-**Output**: one new public DLLLOCAL C++ method, one regression test
+Add the "attach a `AbstractAsyncAction*` to a specific stream's
+write/response completion" mechanism to the C++ poll ops:
 
-### Milestone 2: `async_conn` lifecycle
+- **Phase 2a** — H1: `Http1ClientPollOperationPriv::submitRequest`
+  already accepts an `AbstractAsyncAction* action`. Verify the
+  existing wiring resolves the action from `continuePoll()` when the
+  response arrives. This may be zero new code.
+- **Phase 2b** — H2:
+  - Extend `Http2ClientPollOperationPriv::sendStreamData` with an
+    optional `AbstractAsyncAction*` for write-flush notification.
+  - Extend `Http2ClientPollOperationPriv::submitRequest` to attach an
+    `AbstractAsyncAction*` to the stream completion.
+  - Store actions in a `std::unordered_map<int32_t, AbstractAsyncAction*>`
+    inside `Http2Session`, keyed by stream id.
+  - Invoke from `Http2Session::onStreamComplete` (existing hook) and
+    `Http2Session::onStreamWriteFlushed` (new hook, fires from
+    nghttp2 `on_frame_send_callback`).
+- **Phase 2c** — H3: analogous, using `QuicSession`'s existing stream
+  completion hooks.
 
-- [ ] Add `ReferenceHolder<HttpClientConnection> async_conn` to
-  `qore_httpclient_priv`
-- [ ] `createAsyncConnection(xsink)` lazy initializer:
-  - Builds a URL-matching `HttpClientConnection` (H1 or H2 auto-selected
-    from protocol)
-  - Copies SSL certs, headers, proxy config, timeouts from the sync
-    HTTPClient's state
-  - Registers with a per-HTTPClient `HttpClientConnectionManager`
-- [ ] Teardown in destructor
-- [ ] No user-visible API change yet
+### Phase 3 — Convert `QoreHttpClientObject::sendHttp2StreamData`
 
-**Output**: the plumbing, no method conversions yet. Unit test verifies
-construction + destruction with no leaks.
+Minimum viable proof of the pattern. Rewrites one method per the
+template in §3. Tests: existing `HTTPClient.qtest` + any H2
+WebSocket-over-CONNECT tests.
 
-### Milestone 3: `sendHttp2StreamData` delegation
+### Phase 4 — Convert `QoreHttpClientObject::readHttp2StreamData`
 
-- [ ] Replace `QoreHttpClientObject::sendHttp2StreamData()` body with
-  the delegation pattern from §2.2
-- [ ] Legacy `h2_session->sendPendingDataBlocking()` call removed
-- [ ] `Http2Session::sendStreamData` still queues data, but the flush
-  is done by the async controller driving `async_conn`'s socket, not
-  by a blocking call under the outer mutex
-- [ ] Tests: `HTTPClient.qtest` and any WebSocket-over-H2 tests that
-  exercise this method must still pass
+Same pattern; the response body is delivered via a Queue instead of a
+single-shot Promise, so this uses a different `AbstractAsyncAction`
+subclass (`ChannelAction` or a new `QueueAction`).
 
-**Output**: the first working delegation, proving the pattern end-to-end.
+### Phase 5 — Convert `QoreHttpClientObject::sendHttp2Connect`
 
-After milestone 3 lands, the remaining migration is mechanical —
-each method follows the same translate-submit-await-translate shape,
-and the pattern is well-established. The design doc is updated with
-"phase N complete" notes as the work progresses.
+Full request/response cycle. Requires the H2 CONNECT negotiation to
+be driven by the poll op (it already is inside HttpClientIo), which
+means the sync HTTPClient must create the H2 poll op before calling
+`sendHttp2Connect` — that is a change to `connect_unlocked()` to
+instantiate the poll op lazily.
 
----
+### Phase 6 — Convert `QoreHttpClientObject::send_internal` (H1 path)
 
-## 6. Non-goals
+The large one. The current sync H1 path in `send_internal` handles
+request serialization, body streaming, chunked transfer, redirect
+follow, retry, OAuth2 refresh, proxy CONNECT. Most of this stays in
+C++ at the same layer — only the wire-level I/O switches to the
+poll op.
 
-- **Not rewriting the legacy HTTPClient's Qore API** — every method
-  keeps the same signature, same exception names where possible, same
-  documentation. Breaking the API would force a mass-migration of
-  downstream code.
-- **Not deleting the legacy HTTPClient class** — the class stays;
-  only the internal implementation switches. The class deletion (if
-  ever) is a separate, much later decision tied to Qore's release
-  cycle policy.
-- **Not touching Socket-level `sendHttp2StreamData`** — that method is
-  already non-blocking and is what both the legacy and new paths
-  ultimately call. It's fine as-is.
-- **Not unifying the `HttpClientIo::Http2Session` with the Socket's
-  `h2_session`** — they're separate state containers. The legacy
-  `h2_session` on the socket is removed when phase 11 completes;
-  HttpClientIo's H2 session remains as the single source of truth.
+Sub-phases: plain request → CONNECT tunnel → streaming body →
+retry/redirect.
 
----
+### Phase 7 — Convert the H2 path in `send_internal`
 
-## 7. Open questions for review
+Folds into the Phase 5 work.
 
-1. **Timing**: this is a ~4-6 week project. Acceptable to land
-   incrementally over several weeks, or do we want to cordon it off
-   onto a feature branch and merge all at once?
-2. **Shared vs per-HTTPClient pool** (§4.2): default behaviour choice.
-3. **`q_future_get_blocking` vs alternative primitive** (§2.3):
-   green-light the Future C++ API expansion, or prefer Queue-based
-   signalling?
-4. **Error code compatibility** (§4.1): which legacy error names MUST
-   be preserved for downstream compatibility, and which can migrate
-   to the HttpClientIo naming?
-5. **`getSocket()` policy** (§4.4): reject I/O access entirely, or
-   provide a best-effort proxy that tries to do the right thing?
+### Phase 8 — Convert the H3 path in `send_internal`
+
+Smallest — H3 is already QuicSession-based and partially async.
+
+### Phase 9 — Remove the legacy sync dispatch code
+
+After all conversions land, the following can be deleted:
+
+- `Http2Session::sendPendingDataBlocking` (the sync helper used by
+  the old path)
+- `h2_session` on `qore_socket_private` (moved to the poll op)
+- `setHttp2ActiveStreamId` / `getH2ActiveStreamId` on
+  `qore_socket_private` (no longer needed)
+- The `h2_cond` check in `brecv()` / `isDataAvailable()` (recently
+  converted to `SOCKET-H2-SYNC-ERROR` exceptions in `78a047e41` —
+  those exceptions become unreachable and can be deleted)
+- `QoreHttpClientObject`'s manual H2 dispatch code (~1000 LOC)
 
 ---
 
-## 8. References
+## 6. Non-goals (repeated from the previous version)
 
-- `lib/QoreHttpClientObject.cpp` — current sync implementation
-- `qlib/HttpClientIo/HttpClientStreamHandle.qc:247` — canonical async→sync wait pattern
-- `qlib/HttpClientIo/Http2ClientConnectionImpl.qc:138` — async sendStreamData
-- `lib/QoreSocket.cpp:3925` — Socket-level sendHttp2StreamData (already non-blocking)
-- `lib/QC_Http2ClientPollOperationBase.qpp:886` — C++ poll-op sendStreamData
-- `design/async-socket-io.md` — lock-yielding sync-wait infrastructure this proposal builds on
+- **Not rewriting HttpClientIo in C++.** `qlib/HttpClientIo/` stays in
+  Qore. Its internals continue to use the same C++ poll ops the
+  sync HTTPClient will use.
+- **Not unifying connection pooling across sync and async.** The
+  sync HTTPClient keeps its own `msock` state; Qore HttpClientIo
+  keeps its Qore-level pool. Users who want shared pooling use
+  HttpClientIo directly.
+- **Not deleting the legacy `HTTPClient` class.** Public Qore API
+  stays identical.
+
+---
+
+## 7. Migration order decision points
+
+1. **Is deleting the legacy sync dispatch in Phase 9 a hard
+   requirement?** If yes, Phases 6-8 are mandatory and the total
+   effort is ~4-6 weeks. If no (we're OK with dual maintenance for
+   H1/H3 for a while), we can stop after Phase 5 and revisit later
+   — ~1-2 weeks total.
+2. **Does sync HTTPClient's connection pool move too?** The
+   architecturally cleanest long-term outcome is "sync HTTPClient
+   uses HttpClientIo's pool via a thin C++ wrapper", which would
+   require Option A (runtime module load) or the original (rejected)
+   composition plan. If we skip this, sync HTTPClient keeps its own
+   pool forever — acceptable but means the HttpClientIo pool's
+   smarter protocol cache / Alt-Svc / OAuth2 features are not
+   available through the sync API.
+3. **Which protocols first?** H2 is the biggest lock-holding pain
+   (sync `sendPendingDataBlocking` under `priv->m`), so Phases 3-5
+   deliver the most value first. H1 (Phase 6) is mostly a cleanup.
+   H3 (Phase 8) is already partially async.
+
+---
+
+## 8. Risks
+
+- **Behaviour divergence in edge cases.** The sync HTTPClient has
+  years of tuning around specific server quirks (nginx H2 window
+  updates, server-initiated GOAWAY mid-stream, etc.). The poll-op
+  path is newer and may handle some cases differently. Each phase
+  gets a regression comparison against the current sync behaviour.
+- **Error translation.** Sync HTTPClient throws specific exception
+  codes (`HTTP2-FLOW-CONTROL`, `HTTP2-EOF`, `HTTP2-STATE-ERROR`)
+  that downstream code catches. The poll op path throws
+  `HTTPCLIENT-STREAM-CLOSED`, `HTTPCLIENT-TIMEOUT`, etc. We need an
+  exception-code translation layer in the converted methods, OR
+  update every caller.
+- **Recv-probe pattern in `sendHttp2StreamData`.** The sync
+  version opportunistically calls `receiveData(0)` to process
+  incoming RST_STREAM / WINDOW_UPDATE during a send. The poll op
+  path processes these on its own I/O-thread loop; if the caller
+  immediately reads, the ordering might differ. Usually invisible
+  to user code, but we should verify.
+- **`h2_session` ownership on the socket.** Currently
+  `qore_socket_private::h2_session` is the single source of truth
+  for H2 state on that socket. If the sync HTTPClient and the poll
+  op both hold an H2 session reference for the same socket during
+  the transition, we get duplicate sessions — one leaks. The
+  transition must move the session ownership atomically from the
+  socket's priv to the poll op's priv.
+
+---
+
+## 9. Immediate next step
+
+Phase 2a: verify that `Http1ClientPollOperationPriv::submitRequest`
+already resolves an `AbstractAsyncAction` on response completion. If
+yes, the H1 side needs no poll-op changes and Phase 3 can prototype
+against H1 first (simpler than H2). If no, Phase 2a adds the wiring.
+
+Either way, the next concrete PR is:
+
+- A unit test that creates a plain H1 poll op, submits a request with
+  a `PromiseAction`, and verifies the Promise resolves with the
+  response hash.
+- Adding any missing hook inside the poll op if the test fails.
+
+That unit test becomes the executable spec for Phase 3's conversion.
+
+---
+
+## 10. References
+
+- `include/qore/AsyncCompletionAction.h` — AbstractAsyncAction,
+  PromiseAction, EventNotifierAction
+- `include/qore/QoreFuture.h` — QorePromise / QoreFuture
+- `include/qore/intern/QC_Future.h` — q_future_get_blocking
+- `include/qore/intern/QC_Http1ClientPollOperationBase.h` —
+  existing H1 poll op with submitRequest
+- `lib/QC_Http2ClientPollOperationBase.qpp:886` — existing H2
+  sendStreamData that lacks a completion hook
+- `lib/QoreHttpClientObject.cpp:5107` — current sync
+  sendHttp2StreamData that holds `priv->m` across the flush
+- `qlib/HttpClientIo/HttpClientStreamHandle.qc:247` — canonical
+  submit-async → block-on-future pattern in Qore
+- `design/async-socket-io.md` — lock-yielding sync-wait infrastructure
+- `design/sync-httpclient-as-async-wrapper.md` (this file) —
+  superseded the earlier draft after discovering HttpClientIo is
+  entirely Qore-level
