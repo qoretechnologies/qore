@@ -2014,10 +2014,12 @@ end";
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
                             AbstractDataProviderTypeMap."string");
-                        # use regexp_like() with match_type for MySQL 8+ compatibility
+                        # Use REGEXP / REGEXP BINARY for broad MySQL version support
+                        # (regexp_like() requires MySQL 8.0+)
                         bool case_insensitive = exists args[2] && inlist("i", args[2]);
-                        return sprintf("regexp_like(%s, %s, '%s')", exp0, exp1,
-                            case_insensitive ? "i" : "c");
+                        return case_insensitive
+                            ? sprintf("%s REGEXP %s", exp0, exp1)
+                            : sprintf("%s REGEXP BINARY %s", exp0, exp1);
                     },
                 },
                 DP_OP_REGEX_NMATCH: {
@@ -2027,7 +2029,7 @@ end";
                         "display_name": "regex non-match (!~)",
                         "short_desc": "Returns True if the string does not match the regular expression",
                         "desc": "Returns True if the first argument does not match the second as a regular "
-                            "expression; uses MySQL NOT regexp_like() with match_type for case control",
+                            "expression; uses MySQL NOT REGEXP / REGEXP BINARY for case control",
                         "symbol": "!~",
                         "groups": "Comparison",
                         "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
@@ -2039,10 +2041,10 @@ end";
                             AbstractDataProviderTypeMap."string");
                         string exp1 = info.table.getExpressionArg(\info, role, args[1],
                             AbstractDataProviderTypeMap."string");
-                        # use regexp_like() with match_type for MySQL 8+ compatibility
                         bool case_insensitive = exists args[2] && inlist("i", args[2]);
-                        return sprintf("not regexp_like(%s, %s, '%s')", exp0, exp1,
-                            case_insensitive ? "i" : "c");
+                        return case_insensitive
+                            ? sprintf("%s NOT REGEXP %s", exp0, exp1)
+                            : sprintf("%s NOT REGEXP BINARY %s", exp0, exp1);
                     },
                 },
                 DP_OP_REGEX_SUBST: {
@@ -2051,9 +2053,9 @@ end";
                         "name": DP_OP_REGEX_SUBST,
                         "display_name": "regex substitution",
                         "short_desc": "Performs regex substitution on a string",
-                        "desc": "Performs regular expression substitution using MySQL regexp_replace() "
-                            "(requires MySQL 8.0+); args: string, regex pattern, replacement, optional "
-                            "options list (\"g\" for global, \"i\" for case-insensitive)",
+                        "desc": "Performs regular expression substitution using regexp_replace(); "
+                            "args: string, regex pattern, replacement, optional "
+                            "options list (\"i\" for case-insensitive); always replaces all occurrences",
                         "symbol": "regexSubst",
                         "groups": "Data Manipulation",
                         "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
@@ -2067,19 +2069,12 @@ end";
                             AbstractDataProviderTypeMap."string");
                         string exp2 = info.table.getExpressionArg(\info, role, args[2],
                             AbstractDataProviderTypeMap."string");
-                        # build MySQL match_type string from options list
-                        string match_type = "";
-                        if (exists args[3]) {
-                            foreach auto opt in (args[3]) {
-                                if (opt == "i") {
-                                    match_type += "i";
-                                }
-                                # "g" is default in MySQL regexp_replace (replaces all)
-                            }
-                        }
-                        if (match_type.val()) {
-                            return sprintf("regexp_replace(%s, %s, %s, 1, 0, '%s')",
-                                exp0, exp1, exp2, match_type);
+                        # MariaDB/MySQL regexp_replace takes 3 args; case-insensitive
+                        # matching uses (?i) inline flag in the pattern
+                        bool case_insensitive = exists args[3] && inlist("i", args[3]);
+                        if (case_insensitive) {
+                            return sprintf("regexp_replace(%s, concat('(?i)', %s), %s)",
+                                exp0, exp1, exp2);
                         }
                         return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
                     },
