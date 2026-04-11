@@ -1428,79 +1428,10 @@ module DataProviderML {
             ),
         });
 
-        # register ocr action
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": MLApp::AppName,
-            "path": "/ocr",
-            "action": "ocr",
-            "display_name": "Extract Text from Images with OCR",
-            "short_desc": "Converts images of documents into searchable text using Tesseract",
-            "desc": "Runs OCR (Optical Character Recognition) on an image field to convert "
-                "scanned documents, photos, or screenshots into machine-readable text.\n\n"
-                "Each record is enriched with:\n"
-                "- `ocr_text` — the extracted text\n"
-                "- `ocr_confidence` — OCR confidence score (0.0 to 1.0)\n\n"
-                "Supports native Tesseract (local) or HTTP OCR endpoints.",
-            "action_code": DPAT_PIPELINE_PROCESSOR,
-            "processor_capabilities": DPC_TRANSFORM,
-            "cls": "DataProviderML::QoreOcrProcessor",
-            "groups": (AppGroup::Analytics,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QoreOcrProcessor::ConstructorOptions{"image_field", "ocr_mode"}, {
-                    "preselected": True,
-                    "required": True,
-                    "loc": "constructor",
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QoreOcrProcessor::ConstructorOptions{
-                    "language", "tessdata_path", "http_url",
-                }, {
-                    "loc": "constructor",
-                }
-            ),
-        });
-
-        # register pdf-ocr action
-        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
-            "app": MLApp::AppName,
-            "path": "/pdf-ocr",
-            "action": "pdf-ocr",
-            "display_name": "Extract Text from PDF Documents",
-            "short_desc": "Reads text from PDFs, using OCR automatically for scanned pages",
-            "desc": "Extracts text from PDF documents, handling both digital and scanned "
-                "pages automatically. Digital pages have their text extracted directly "
-                "(fast and accurate). Scanned pages are rasterized to images and processed "
-                "with OCR (Tesseract).\n\n"
-                "This is ideal for processing business documents like contracts, invoices, "
-                "and reports that may contain a mix of digital text and scanned images.\n\n"
-                "Each record is enriched with:\n"
-                "- `pdf_text` — the full document text (all pages combined)\n"
-                "- `pdf_total_pages` — total number of pages\n"
-                "- `pdf_ocr_pages` — number of pages that required OCR\n"
-                "- `pdf_page_details` — per-page results with text and confidence\n\n"
-                "**Requirements:** the `pdf` module must be installed for PDF reading "
-                "and page rasterization. The `ocr` module (Tesseract) is needed for "
-                "scanned pages.",
-            "action_code": DPAT_PIPELINE_PROCESSOR,
-            "processor_capabilities": DPC_TRANSFORM,
-            "cls": "DataProviderML::QorePdfOcrProcessor",
-            "groups": (AppGroup::Analytics,),
-            "options": DataProviderActionCatalog::getActionOptionFromFields(
-                QorePdfOcrProcessor::ConstructorOptions{"pdf_field",}, {
-                    "preselected": True,
-                    "required": True,
-                    "loc": "constructor",
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
-                QorePdfOcrProcessor::ConstructorOptions{
-                    "language", "dpi", "scanned_threshold",
-                }, {
-                    "loc": "constructor",
-                }
-            ),
-        });
-
-        # register document-ocr action
+        # register document-ocr action (unified interface for all document formats)
+        # Note: the lower-level ocr and pdf-ocr processors remain available for
+        # programmatic use but are not registered as actions — users should use
+        # document-ocr which handles all formats automatically
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MLApp::AppName,
             "path": "/document-ocr",
