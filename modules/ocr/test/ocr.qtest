@@ -1,0 +1,108 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ocr.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ocr
+%requires Util
+%requires QUnit
+
+%exec-class OcrModuleTest
+
+public class OcrModuleTest inherits QUnit::Test {
+    private {
+        string test_image_path;
+    }
+
+    constructor() : Test("OcrModuleTest", "1.0") {
+        test_image_path = normalize_dir(get_script_dir() + "/test_image.png");
+
+        addTestCase("ocr_has_tesseract", \hasTeserractTest());
+        addTestCase("TesseractEngine - constructor", \constructorTest());
+        addTestCase("TesseractEngine - constructor bad language", \constructorBadLangTest());
+        addTestCase("TesseractEngine - getCapabilities", \capabilitiesTest());
+
+        if (!is_file(test_image_path)) {
+            printf("SKIP: test image not found at %s\n", test_image_path);
+        } else {
+            addTestCase("TesseractEngine - extractText", \extractTextTest());
+            addTestCase("TesseractEngine - extractTextWithMetadata", \extractMetadataTest());
+            addTestCase("TesseractEngine - empty image data", \emptyImageTest());
+        }
+
+        set_return_value(main());
+    }
+
+    hasTeserractTest() {
+        assertTrue(Ocr::ocr_has_tesseract());
+    }
+
+    constructorTest() {
+        Ocr::TesseractEngine engine("", "eng");
+        assertTrue(True);
+    }
+
+    constructorBadLangTest() {
+        assertThrows("OCR-INIT-ERROR",
+            sub () {
+                new Ocr::TesseractEngine("", "nonexistent_language_xyz");
+            }
+        );
+    }
+
+    capabilitiesTest() {
+        Ocr::TesseractEngine engine("", "eng");
+        hash<auto> caps = engine.getCapabilities();
+        assertTrue(caps.has_tesseract);
+        assertTrue(caps.version.val());
+        assertTrue(caps.languages.size() > 0);
+        assertTrue(inlist("eng", caps.languages));
+    }
+
+    extractTextTest() {
+        Ocr::TesseractEngine engine("", "eng");
+        binary img = ReadOnlyFile::readBinaryFile(test_image_path);
+        assertTrue(img.size() > 0);
+
+        string text = engine.extractText(img);
+        assertTrue(text.val());
+        # The test image contains "Hello Qore OCR Test 2026"
+        assertTrue(trim(text) =~ /Qore/i,
+            sprintf("extracted text should contain 'Qore', got: %y", trim(text)));
+        assertTrue(trim(text) =~ /OCR/i,
+            sprintf("extracted text should contain 'OCR', got: %y", trim(text)));
+    }
+
+    extractMetadataTest() {
+        Ocr::TesseractEngine engine("", "eng");
+        binary img = ReadOnlyFile::readBinaryFile(test_image_path);
+
+        hash<auto> meta = engine.extractTextWithMetadata(img);
+        assertTrue(meta.text.val());
+        assertTrue(meta.confidence > 0.0);
+        assertTrue(meta.confidence <= 1.0);
+        assertTrue(meta.blocks.size() > 0);
+
+        # Check block structure
+        hash<auto> block = meta.blocks[0];
+        assertTrue(block.text.val());
+        assertTrue(block.confidence > 0.0);
+        assertTrue(block.hasKey("bbox"));
+        assertTrue(block.bbox.hasKey("x1"));
+        assertTrue(block.bbox.hasKey("y1"));
+        assertTrue(block.bbox.hasKey("x2"));
+        assertTrue(block.bbox.hasKey("y2"));
+    }
+
+    emptyImageTest() {
+        Ocr::TesseractEngine engine("", "eng");
+        assertThrows("OCR-ERROR", "empty",
+            sub () {
+                engine.extractText(binary());
+            }
+        );
+    }
+}

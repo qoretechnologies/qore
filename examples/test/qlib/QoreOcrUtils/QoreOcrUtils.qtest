@@ -77,26 +77,12 @@ public class QoreOcrUtilsTest inherits QUnit::Test {
     }
 
     ocrNativeImageTest() {
-        # Create a simple test image if ImageMagick is available
-        string test_img = tmp_location() + "/qore_ocr_test.png";
-        int rc = system("which magick >/dev/null 2>&1 && magick -size 300x50 xc:white "
-            "-font Helvetica -pointsize 20 -annotate +10+30 'OCR Test 123' "
-            + test_img + " 2>/dev/null");
-        if (rc != 0) {
-            # Try old convert command
-            rc = system("which convert >/dev/null 2>&1 && convert -size 300x50 xc:white "
-                "-font Helvetica -pointsize 20 -annotate +10+30 'OCR Test 123' "
-                + test_img + " 2>/dev/null");
-        }
-        if (rc != 0 || !is_file(test_img)) {
-            testSkip("ImageMagick not available for test image generation");
+        # Use the shipped test image from the ocr module
+        string test_img = normalize_dir(get_script_dir()
+            + "/../../../../modules/ocr/test/test_image.png");
+        if (!is_file(test_img)) {
+            testSkip("test image not found at " + test_img);
             return;
-        }
-
-        on_exit {
-            if (is_file(test_img)) {
-                unlink(test_img);
-            }
         }
 
         binary img = ReadOnlyFile::readBinaryFile(test_img);
@@ -105,7 +91,9 @@ public class QoreOcrUtilsTest inherits QUnit::Test {
 
         assertTrue(result.text.val());
         assertTrue(result.confidence > 0.0);
-        assertTrue(trim(result.text) =~ /OCR/i);
+        # The test image contains "Hello Qore OCR Test 2026"
+        assertTrue(trim(result.text) =~ /OCR/i,
+            sprintf("extracted text should contain 'OCR', got: %y", trim(result.text)));
     }
 %endif
 
