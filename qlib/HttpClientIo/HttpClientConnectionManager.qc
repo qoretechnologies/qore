@@ -1384,6 +1384,18 @@ public class HttpClientConnectionManager {
             # Set manager context once — connection_ref is already set in the
             # connection impl constructor via poll_op.setConnection(self)
             conn.setManagerContext(self, key);
+
+            # Install the proactive idle timeout for H1/H2 connections (nginx
+            # upstream keepalive_timeout model).  H3 relies on ngtcp2's built-in
+            # idle timer negotiated via QUIC max_idle_timeout transport
+            # parameter, so skip it there.
+            # NOTE: Qore's "timeout" type is an int representing milliseconds;
+            # pass it directly to the poll op's setIdleTimeout(int) method.
+            if (op instanceof Http1ClientPollOperation) {
+                cast<Http1ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+            } else if (op instanceof Http2ClientPollOperation) {
+                cast<Http2ClientPollOperation>(op).setIdleTimeout(opts.idle_timeout);
+            }
         }
 
         # Use no timeout (-1) for the controller operation.  The H1/H2/H3
@@ -1394,11 +1406,20 @@ public class HttpClientConnectionManager {
         # Using connect_timeout here caused the controller to kill the operation
         # after connect_timeout seconds, even though it was in the middle of a
         # request/response cycle with a longer timeout.
+        #
+        # has_on_complete=True: HttpClientPollOperation inherits onComplete()
+        # from the Qore-level base class, but the C++/Qore multiple-inheritance
+        # resolution in AsyncIoController::submit() (lib/AsyncIoControllerPriv.cpp
+        # lines 710-727) may return the AbstractPollOperation no-op from the
+        # wrong parent.  Force dispatch explicitly so HttpClientPollOperation::
+        # onComplete() fires and handleConnectionResult() removes idle-closed,
+        # errored, and proactively-timed-out connections from the pool.
         controller.submit(<SocketPollOperationInfo>{
             "sock": sock,
             "spop": op,
             "owner": owner,
             "to": -1,
+            "has_on_complete": True,
         });
     }
 

@@ -94,6 +94,24 @@ public class Http2ClientPollOperation inherits Http2ClientPollOperationBase, Htt
         throw "COPY-ERROR", "Http2ClientPollOperation cannot be copied";
     }
 
+    #! Handles the AsyncIoController's onComplete callback and dispatches to
+    #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
+    #! can remove closed/errored connections from the pool.
+    /** Required to win Qore's method resolution over the C++ no-op from
+        \c AbstractPollOperation::onComplete() inherited via
+        \c Http2ClientPollOperationBase → \c SocketPollOperationBase →
+        \c AbstractPollOperation.  Without this concrete override,
+        \c evalMethod("onComplete") dispatches the base class no-op and
+        closed/errored connections are never removed from the pool.
+
+        See \c Http1ClientPollOperation::onComplete() for the full rationale.
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
+    }
+
     #! Registers a listener to be notified when stream data arrives
     /** @param stream_id the HTTP/2 stream ID
         @param listener an object with a notifyIo() method

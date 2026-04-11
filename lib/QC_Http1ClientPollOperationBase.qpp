@@ -460,6 +460,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     }
 
     if (req_data) {
+        // Processing a request — reset the idle deadline so the next idle
+        // period starts fresh after the response completes.
+        idle_deadline_us = 0;
+
         // Before sending on a keep-alive connection, do a non-blocking recv to
         // detect server-initiated close (EOF).  This avoids sending a request on
         // a stale connection and waiting for a response that will never arrive.
@@ -521,8 +525,43 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             peek_rc, errno, fd);
     }
 
+    // Proactive idle timeout check (nginx-style upstream keepalive_timeout).
+    // On subsequent entries (after a previous handleIdle or dispatchResponse
+    // has armed the deadline), close the connection if the deadline has
+    // elapsed.  Defense-in-depth for peers that never close idle connections.
+    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_epoch_us() >= idle_deadline_us) {
+        ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
+        sock_obj->close();
+        setError("HTTP1-IDLE-TIMEOUT",
+            "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
+        return nullptr;
+    }
+
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    // armIdleDeadline arms idle_deadline_us (if not already armed) and
+    // annotates poll_info with poll_timeout_ms so the controller wakes us
+    // at the deadline.
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::armIdleDeadline(QoreHashNode* poll_info,
+        ExceptionSink* xsink) {
+    if (idle_timeout_us <= 0 || !poll_info) {
+        return poll_info;
+    }
+    int64_t now_us = h1_epoch_us();
+    if (idle_deadline_us == 0) {
+        idle_deadline_us = now_us + idle_timeout_us;
+        ASYNC_IO_TRACE("H1 armIdleDeadline: arming now+%lldus fd=%d\n",
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+    }
+    int64_t remaining_us = idle_deadline_us - now_us;
+    int64_t timeout_ms = (remaining_us + 999) / 1000;
+    if (timeout_ms < 1) {
+        timeout_ms = 1;
+    }
+    poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+    return poll_info;
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) {
@@ -1293,9 +1332,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Return to idle
+    // Return to idle — arm the proactive idle deadline so the controller
+    // wakes us up at the timeout (nginx upstream keepalive_timeout pattern).
+    idle_deadline_us = 0;  // fresh idle period after completing a request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
 void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
@@ -1376,8 +1417,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         return nullptr;
     }
 
+    // Return to idle — arm the proactive idle deadline for nginx-style
+    // upstream keepalive_timeout behavior.
+    idle_deadline_us = 0;  // fresh idle period after completing a streaming request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
 void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
@@ -1789,6 +1833,21 @@ bool Http1ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
 */
 nothing Http1ClientPollOperationBase::abort() {
     priv->abort(xsink);
+}
+
+//! Sets the proactive idle timeout for this connection.
+/** When the connection has been idle (no pending request, no active stream)
+    for this many milliseconds, handleIdle() will close it proactively with
+    an \c HTTP1-IDLE-TIMEOUT error.  Mirrors nginx's upstream
+    \c keepalive_timeout — defense-in-depth against peers that never close
+    idle keep-alive connections.
+
+    @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
+
+    @since %Qore 2.3
+*/
+nothing Http1ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
+    priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
 }
 
 //! Returns output from the inner operation

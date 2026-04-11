@@ -94,6 +94,46 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         log(LoggerLevel::DEBUG, "cancelled request: stream_id=%d", stream_id);
     }
 
+    #! Handles the AsyncIoController's onComplete callback and dispatches to
+    #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
+    #! can remove closed/errored connections from the pool.
+    /** This override is **required** even though \c HttpClientPollOperation
+        already defines \c onComplete.  \c Http1ClientPollOperation inherits
+        from both \c Http1ClientPollOperationBase (a QPP C++ class whose
+        ancestor \c AbstractPollOperation defines \c onComplete as a C++
+        no-op) and \c HttpClientPollOperation (Qore-level override).
+        Qore's method resolution walks the first-listed parent first, so
+        without this concrete override the controller's
+        \c evalMethod("onComplete") dispatches the C++ no-op from
+        \c AbstractPollOperation and the Qore override in
+        \c HttpClientPollOperation is never invoked — \c handleCompletion()
+        doesn't fire, \c handleConnectionResult() doesn't run, and closed
+        or errored connections are never removed from the pool.  Declaring
+        \c onComplete directly on the concrete subclass forces method
+        resolution to pick this class first.
+
+        Protocol-switch completions (HTTP/1.1 → WebSocket via
+        \c 101 \c Switching \c Protocols) must NOT dispatch to
+        \c handleCompletion because the socket is hijacked to a separate
+        WebSocket poll operation and the \c HttpClientConnection is no
+        longer a normal keep-alive connection under manager ownership;
+        \c handleConnectionResult()'s \c continueReading() fallback would
+        throw \c HTTPCLIENT-STATE-ERROR and close the socket the
+        WebSocket layer is still using.
+
+        See also \c Http2ClientPollOperation::onComplete() which has the
+        same override (without the protocol-switch check, since H2 doesn't
+        hijack sockets the same way).
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (self.isProtocolSwitched()) {
+            return;
+        }
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
+    }
+
     #! Internal: creates and configures a TCP socket for HTTP/1.1
     /** No ALPN is set — HTTP/1.1 is the default protocol.
     */

@@ -393,6 +393,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 -----END PRIVATE KEY-----";
 
     constructor() : Test("RestClientIoTest", "1.0") {
+        # Install SIGUSR1 handler early so we can dump Qore-language thread
+        # stacks when the process hangs on exit (send `kill -USR1 <pid>`)
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("constructor options", \testConstructorOptions());
         addTestCase("AbstractRestClient conformance", \testAbstractRestClientConformance());
         addTestCase("restGet", \testRestGet());

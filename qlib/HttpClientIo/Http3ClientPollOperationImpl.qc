@@ -99,6 +99,22 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
         throw "COPY-ERROR", "Http3ClientPollOperation objects cannot be copied";
     }
 
+    #! Handles the AsyncIoController's onComplete callback and dispatches to
+    #! the owning connection so \c HttpClientConnectionManager::handleConnectionResult()
+    #! can remove closed/errored connections from the pool.
+    /** Required to win Qore's method resolution over the C++ no-op from
+        \c AbstractPollOperation::onComplete() inherited via
+        \c Http3ClientPollOperationBase → \c SocketPollOperationBase →
+        \c AbstractPollOperation.
+
+        See \c Http1ClientPollOperation::onComplete() for the full rationale.
+    */
+    nothing onComplete(hash<SocketPollResultInfo> result) {
+        if (connection_ref) {
+            connection_ref.handleCompletion(result);
+        }
+    }
+
     #! Registers a stream for onStreamData() notifications and registers
     #! a listener to be notified when data is dispatched
     /** @param stream_id the QUIC stream ID

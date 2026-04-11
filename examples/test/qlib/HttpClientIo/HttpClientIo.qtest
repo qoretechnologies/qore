@@ -47,6 +47,19 @@ class SimpleGetHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that responds with "Connection: close" to force peer-initiated close
+#! after the response.  Used by the EOF-close / pool-removal investigation test
+#! to verify that server-initiated connection close causes the H1 client to
+#! remove the connection from the pool without any new idle-timeout logic.
+class CloseConnectionHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, "OK", {
+            "Content-Type": "text/plain",
+            "Connection": "close",
+        });
+    }
+}
+
 #! Handler that returns a large response body
 class LargeResponseHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -303,6 +316,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Capacity and idle cleanup tests
         addTestCase("capacity error", \testCapacityError());
         addTestCase("cleanup idle with connections", \testCleanupIdleWithConnections());
+        addTestCase("H1 Connection:close removes from pool",
+            \testH1ConnectionCloseRemovesFromPool());
+        addTestCase("H1 proactive idle timeout", \testH1ProactiveIdleTimeout());
+        addTestCase("H2 proactive idle timeout", \testH2ProactiveIdleTimeout());
 
         # Additional coverage tests
         addTestCase("invalid protocol option", \testInvalidProtocolOption());
@@ -364,8 +381,17 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     globalSetUp() {
-        mLogger = new Logger("httpclientio-test", LoggerLevel::getLevelInfo());
-        if (m_options.verbose > 2) {
+        # Verbose levels:
+        #   -v   (1): test case names only (default QUnit)
+        #   -vv  (2): + INFO-level Logger output to stdout
+        #   -vvv (3): + DEBUG-level Logger output to stdout (includes the
+        #             HttpClientConnectionManager's setIdleTimeout trace and
+        #             every HTTP client state transition)
+        LoggerLevel level = m_options.verbose > 2
+            ? LoggerLevel::getLevelDebug()
+            : LoggerLevel::getLevelInfo();
+        mLogger = new Logger("httpclientio-test", level);
+        if (m_options.verbose > 1) {
             mLogger.addAppender(new StdoutAppender());
         }
 
@@ -383,6 +409,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
         mServer.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler());
         mServer.setHandler("bidi", "/bidi", NOTHING, new BidiEchoHandler());
+        mServer.setHandler("close", "/close", NOTHING, new CloseConnectionHandler());
 
         # Add plain HTTP listener
         mHttpPort = mServer.addListener(<HttpListenerOptionInfo>{
@@ -1478,6 +1505,141 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         stats = mgr.getStats();
         assertEq(0, stats.total_connections, "idle connections should be cleaned up");
+    }
+
+    #! Investigation: does the *existing* peer-close path remove the
+    #! connection from the pool via handleConnectionResult(), without any new
+    #! Fix B logic?  This is the baseline we need working before Fix B's
+    #! HTTP1-IDLE-TIMEOUT path can work — both paths rely on the same chain:
+    #!   setError / h1_state=CLOSED -> continuePoll returns nullptr ->
+    #!   controller dispatches onComplete -> handleCompletion ->
+    #!   handleConnectionResult -> removeConnectionFromPool.
+    #!
+    #! If this test fails, there's a pre-existing gap in close-detection and
+    #! Fix B's failures are the same root cause, not new bugs.  If this test
+    #! passes, Fix B's IDLE-TIMEOUT path diverges from the working pattern and
+    #! I need to diff them.
+    testH1ConnectionCloseRemovesFromPool() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # /close handler returns "Connection: close" — H1 server-initiated close
+        # after the response.  dispatchResponse() sees connection_close=true
+        # and transitions h1_state to CLOSED; controller calls onComplete;
+        # handleConnectionResult should remove from the pool.
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        hash<auto> response = stream.request("GET", "/close");
+        assertEq(200, response.status_code, "initial H1 request succeeded");
+
+        # handleConnectionResult runs on a worker thread dispatched by the
+        # I/O controller — it races with the return from stream.request().
+        # Poll the stats with a retry loop instead of sleeping for a fixed
+        # duration so the test is neither flaky nor unnecessarily slow.
+        int total_connections = waitForPoolToBeEmpty(mgr, 3s);
+        assertEq(0, total_connections,
+            "connection should be removed from pool after Connection:close");
+    }
+
+    #! Poll mgr.getStats().total_connections until it reaches 0 or the
+    #! deadline elapses.  Returns the final count (0 on success, >0 on
+    #! timeout).  Used by tests that rely on async worker dispatch to
+    #! remove closed connections from the pool.
+    private int waitForPoolToBeEmpty(HttpClientIo::HttpClientConnectionManager mgr,
+            timeout max_wait) {
+        date deadline = now_us() + max_wait;
+        int total_connections;
+        while (True) {
+            total_connections = mgr.getStats().total_connections;
+            if (!total_connections || now_us() >= deadline) {
+                return total_connections;
+            }
+            usleep(10ms);
+        }
+    }
+
+    #! Verifies the nginx-style proactive idle-timeout on H1 connections.
+    /** The poll operation's handleIdle() arms a deadline when the connection
+        enters the idle sub-state with no pending request.  When the deadline
+        elapses, handleIdle() closes the connection proactively with an
+        HTTP1-IDLE-TIMEOUT error, the controller removes it from the pool,
+        and the next request creates a fresh connection.
+
+        This test sets idle_timeout to 500ms and verifies:
+          - after a request, total_connections >= 1
+          - after sleeping idle_timeout * 3, total_connections == 0
+          - a subsequent request succeeds (new connection is created)
+    */
+    testH1ProactiveIdleTimeout() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        # Initial request creates a pooled H1 connection
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mHttpUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "initial H1 request succeeded");
+
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections >= 1,
+            "should have at least 1 H1 connection after initial request");
+
+        # The I/O thread wakes via the controller's poll_timeout_ms hint when
+        # the idle deadline elapses, handleIdle fires HTTP1-IDLE-TIMEOUT, the
+        # connection is closed, and handleConnectionResult removes it from
+        # the pool on a dispatcher worker thread.  Poll with a retry loop
+        # to avoid a racy fixed sleep.
+        int total_connections = waitForPoolToBeEmpty(mgr, 3s);
+        assertEq(0, total_connections,
+            "pool should be empty after proactive idle timeout");
+
+        # Subsequent request must still succeed by creating a fresh connection
+        stream = mgr.acquireStream(mHttpUrl);
+        response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code,
+            "request after idle-timeout eviction should create a new connection");
+    }
+
+    #! Verifies the nginx-style proactive idle-timeout on H2 connections.
+    /** Same semantics as testH1ProactiveIdleTimeout() but over HTTPS/H2.
+        The H2 poll operation's handleReading() applies applyIdleTimeout()
+        on the post-drain return path; when active_stream_count is 0 for
+        longer than idle_timeout, it closes the connection with
+        HTTP2-IDLE-TIMEOUT.
+    */
+    testH2ProactiveIdleTimeout() {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "idle_timeout": 500ms,
+            "logger": mLogger,
+        });
+        on_exit mgr.closeAll();
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(mSslUrl);
+        hash<auto> response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code, "initial H2 request succeeded");
+
+        hash<auto> stats = mgr.getStats();
+        assertTrue(stats.total_connections >= 1,
+            "should have at least 1 H2 connection after initial request");
+
+        int total_connections = waitForPoolToBeEmpty(mgr, 3s);
+        assertEq(0, total_connections,
+            "pool should be empty after proactive H2 idle timeout");
+
+        stream = mgr.acquireStream(mSslUrl);
+        response = stream.request("GET", "/simple");
+        assertEq(200, response.status_code,
+            "H2 request after idle-timeout eviction should create a new connection");
     }
 
     # ---- Additional Coverage Tests ----
