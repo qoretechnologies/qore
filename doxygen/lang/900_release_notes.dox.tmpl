@@ -1169,6 +1169,8 @@ cargo install tree-sitter-cli@0.26.5
         built-in NER, invoice, contact, and sentiment schemas
       - rerank-text pipeline processor for cross-encoder re-ranking of search results
       - semantic-chunk-text pipeline processor for embedding-similarity-based document chunking
+      - guardrail-filter pipeline processor (DPC_FILTER) for blocking unsafe records
+      - guardrail-transform pipeline processor (DPC_TRANSFORM) for annotating and redacting records
       - action catalog integration with the "ML Analytics" app
     - @ref dataproviderdataframeintro "DataProviderDataFrame" module
       - new module providing DataProvider integration for the dataframe binary module
@@ -1440,6 +1442,13 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoreguardrailsintro "QoreGuardrails" module
+      - new module providing input/output guardrails for AI-powered chat endpoints
+      - PiiDetector: pattern-based detection/redaction of email, phone, SSN, credit card
+      - PromptInjectionDetector: pattern + LLM-based prompt injection classification
+      - TopicRestrictionRule: LLM-based topic boundary enforcement
+      - OutputFormatEnforcer: length, forbidden/required pattern validation
+      - GuardrailEngine: rule chain orchestration with severity-based short-circuit
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
       - supports HTTP/OpenAI-compatible, Anthropic Messages API, and Qorus AI Gateway modes

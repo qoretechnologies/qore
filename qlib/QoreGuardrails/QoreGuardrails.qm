@@ -1,0 +1,90 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreGuardrails.qm input/output guardrails for AI-powered chat endpoints
+
+/*  QoreGuardrails.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%try-module QoreLlmUtils
+%define NoLlmUtils
+%endtry
+
+%try-module json
+%define NoJson
+%endtry
+
+module QoreGuardrails {
+    version = "1.0.0";
+    desc = "user module providing input and output guardrails for AI-powered "
+        "chat endpoints including PII detection, prompt injection detection, "
+        "topic restriction, and output format enforcement";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreGuardrails Module
+
+    @tableofcontents
+
+    @section qoreguardrailsintro QoreGuardrails Module Introduction
+
+    The %QoreGuardrails module provides input and output guardrails for
+    AI-powered chat endpoints.  Rules are evaluated in chains with configurable
+    severity levels and short-circuit behavior.
+
+    Built-in rules:
+    - @ref QoreGuardrails::PiiDetector "PiiDetector" -- pattern-based PII
+      detection and redaction (email, phone, SSN, credit card)
+    - @ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector" --
+      LLM-based prompt injection classification
+    - @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule" --
+      LLM-based topic boundary enforcement
+    - @ref QoreGuardrails::OutputFormatEnforcer "OutputFormatEnforcer" --
+      pattern-based output validation (length, forbidden patterns)
+
+    @par Example: Evaluate input guardrails
+    @code{.py}
+%requires QoreGuardrails
+
+GuardrailEngine engine((
+    <GuardrailRuleConfig>{"type": "pii", "enabled": True, "severity": "critical",
+        "params": {"action": "redact"}},
+    <GuardrailRuleConfig>{"type": "prompt_injection", "enabled": True, "severity": "critical"},
+));
+hash<GuardrailResult> result = engine.evaluateInput("My SSN is 123-45-6789");
+if (!result.passed) {
+    printf("Blocked: %y\n", result.violations);
+}
+    @endcode
+
+    @section qoreguardrailsrelnotes QoreGuardrails Module Release Notes
+
+    @subsection qoreguardrails_1_0 QoreGuardrails Module Version 1.0
+    - Initial release with @ref QoreGuardrails::GuardrailEngine "GuardrailEngine",
+      @ref QoreGuardrails::PiiDetector "PiiDetector",
+      @ref QoreGuardrails::PromptInjectionDetector "PromptInjectionDetector",
+      @ref QoreGuardrails::TopicRestrictionRule "TopicRestrictionRule", and
+      @ref QoreGuardrails::OutputFormatEnforcer "OutputFormatEnforcer"
+*/

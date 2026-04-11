@@ -33,6 +33,7 @@
 %requires QoreModelRegistry
 %requires QoreTokenizerUtils
 %requires QoreStructuredExtraction
+%requires QoreGuardrails
 
 module DataProviderML {
     version = "1.0";
@@ -1367,6 +1368,59 @@ module DataProviderML {
                     "embedding_url", "embedding_model", "embedding_api_key",
                     "embedding_model_path",
                 }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register guardrail-filter action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/guardrail-filter",
+            "action": "guardrail-filter",
+            "display_name": "Block Unsafe Records",
+            "short_desc": "Drops records that contain PII, prompt injections, or policy violations",
+            "desc": "Evaluates each record's text field against configured guardrail rules and "
+                "drops records that fail. Use this before an LLM call to prevent PII, prompt "
+                "injections, or off-topic queries from reaching the model.\n\n"
+                "Records that pass all rules continue through the pipeline unchanged. "
+                "Records that fail any rule are silently dropped.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_FILTER,
+            "cls": "DataProviderML::QoreGuardrailFilterProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGuardrailFilterProcessor::ConstructorOptions{"text_field", "rules"}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ),
+        });
+
+        # register guardrail-transform action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/guardrail-transform",
+            "action": "guardrail-transform",
+            "display_name": "Check and Annotate Text Safety",
+            "short_desc": "Enriches records with guardrail results and optionally redacts PII",
+            "desc": "Evaluates each record's text field against configured guardrail rules and "
+                "enriches the record with results. Records always pass through (unlike the "
+                "filter processor).\n\n"
+                "Each record gets:\n"
+                "- `_guardrail_passed` — whether the text passed all rules\n"
+                "- `_guardrail_violations` — list of violations found\n\n"
+                "If PII redaction is configured, the text field is replaced with the "
+                "redacted version.",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreGuardrailTransformProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreGuardrailTransformProcessor::ConstructorOptions{"text_field", "rules"}, {
+                    "preselected": True,
+                    "required": True,
                     "loc": "constructor",
                 }
             ),

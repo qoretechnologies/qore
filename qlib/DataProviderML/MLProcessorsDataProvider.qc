@@ -86,6 +86,8 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
         Children."extract-structured" = "QoreExtractionProcessor";
         Children."rerank-text" = "QoreRerankerProcessor";
         Children."semantic-chunk-text" = "QoreSemanticChunkProcessor";
+        Children."guardrail-filter" = "QoreGuardrailFilterProcessor";
+        Children."guardrail-transform" = "QoreGuardrailTransformProcessor";
     }
 
     #! Returns the name of this data provider
@@ -189,6 +191,10 @@ public class MLProcessorsDataProvider inherits DataProvider::AbstractDataProvide
                 return new QoreRerankerProcessor();
             case "semantic-chunk-text":
                 return new QoreSemanticChunkProcessor();
+            case "guardrail-filter":
+                return new QoreGuardrailFilterProcessor();
+            case "guardrail-transform":
+                return new QoreGuardrailTransformProcessor();
         }
     }
 }
