@@ -30,7 +30,7 @@
 %define NoOcr
 %endtry
 
-%try-module RestClient
+%try-module RestClientIo
 %define NoRestClient
 %endtry
 

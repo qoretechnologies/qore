@@ -53,9 +53,8 @@ public hashdecl PdfOcrResult {
     from each page. If a page has little or no text (indicating it is a scanned
     image), the page is rasterized to a bitmap and OCR is applied.
 
-    Requires the \c pdf module for PDF reading and rendering, optionally the
-    \c imagemagick module for pixel format conversion, and the \c ocr module
-    for Tesseract OCR on scanned pages.
+    Requires the \c pdf module for PDF reading and rendering, and the \c ocr
+    module for Tesseract OCR on scanned pages.
 
     @par Example: Extract text from a PDF with mixed digital and scanned pages
     @code{.py}
@@ -77,14 +76,10 @@ printf("Extracted %d pages (%d required OCR):\n%s\n",
 */
 public class PdfOcrEngine {
     private {
-        #! OCR language
-        string language;
-        #! Tessdata path
-        string datapath;
+        #! OCR engine (reused across pages)
+        OcrEngine ocr;
         #! DPI for rasterization
         int dpi;
-        #! Scanned page detection threshold
-        int scanned_threshold;
         #! Page separator string
         string page_separator;
         #! Scanned page detector
@@ -94,23 +89,31 @@ public class PdfOcrEngine {
     #! Creates a PdfOcrEngine
     /** @param config a @ref PdfOcrConfig hash
 
-        @throw OCR-DEPENDENCY-ERROR if the pdf module is not available
+        @throw OCR-DEPENDENCY-ERROR if the ocr module is not available for
+            native mode
     */
     constructor(*hash<PdfOcrConfig> config) {
-        language = config.language ?? "eng";
-        datapath = config.datapath ?? "";
         dpi = config.dpi ?? 300;
-        scanned_threshold = config.scanned_threshold ?? 50;
         page_separator = config.page_separator ?? "\n\n--- Page Break ---\n\n";
+        int scanned_threshold = config.scanned_threshold ?? 50;
         detector = new ScannedPdfDetector(scanned_threshold);
+
+        # Create a single OCR engine reused across all pages
+        string ocr_mode = config.ocr_mode ?? "native";
+        hash<OcrConfig> ocr_config(<OcrConfig>{
+            "mode": ocr_mode,
+            "language": config.language ?? "eng",
+            "datapath": config.datapath ?? "",
+        });
+        if (ocr_mode == "http") {
+            ocr_config.url = config.ocr_url;
+            ocr_config.api_key = config.ocr_api_key;
+        }
+        ocr = new OcrEngine(ocr_config);
     }
 
     #! Processes a PDF document, extracting text from all pages
-    /** For each page, the digital text layer is extracted first. If the text
-        is below the scanned threshold, the page is rasterized and OCR is
-        applied.
-
-        @param pdf_data binary PDF document data
+    /** @param pdf_data binary PDF document data
         @return a @ref PdfOcrResult hash with combined text and per-page details
 
         @throw OCR-DEPENDENCY-ERROR if required modules are not available
@@ -118,11 +121,10 @@ public class PdfOcrEngine {
         @throw OCR-ERROR if OCR fails on a scanned page
     */
     hash<PdfOcrResult> processPdf(binary pdf_data) {
-        # Get page count via pdf module (dynamic call — PdfReader is an instance class)
-        int page_count;
+        # Create PdfReader once, reuse for page count and text extraction
+        auto reader;
         try {
-            auto reader = create_object("Pdf::PdfReader", pdf_data);
-            page_count = call_object_method(reader, "pageCount");
+            reader = create_object("Pdf::PdfReader", pdf_data);
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "UNKNOWN-CLASS" || ex.err == "CREATE-OBJECT-ERROR") {
                 throw "OCR-DEPENDENCY-ERROR",
@@ -131,6 +133,8 @@ public class PdfOcrEngine {
             }
             rethrow;
         }
+
+        int page_count = call_object_method(reader, "pageCount");
 
         list<hash<PdfPageOcrResult>> page_results = ();
         list<string> all_text = ();
@@ -197,7 +201,6 @@ public class PdfOcrEngine {
 
     #! Rasterizes a PDF page and runs OCR on it
     private hash<PdfPageOcrResult> ocrPage(binary pdf_data, int page_index) {
-        # Rasterize the page to raw pixels
         hash<auto> render_result;
         try {
             render_result = call_static_method("Pdf::PdfRenderer", "renderPageFromData",
@@ -210,16 +213,10 @@ public class PdfOcrEngine {
             rethrow;
         }
 
-        # Convert raw BGRA pixels to BMP for Tesseract
-        binary bmp_data = convertPixelsToBmp(render_result);
+        # Convert raw BGRA pixels to an image format Tesseract can read
+        binary image_data = convertPixelsToImage(render_result);
 
-        # Run OCR
-        OcrEngine ocr(<OcrConfig>{
-            "mode": "native",
-            "language": language,
-            "datapath": datapath,
-        });
-        hash<OcrResult> ocr_result = ocr.extractText(bmp_data);
+        hash<OcrResult> ocr_result = ocr.extractText(image_data);
 
         return <PdfPageOcrResult>{
             "page_index": page_index,
@@ -229,13 +226,28 @@ public class PdfOcrEngine {
         };
     }
 
-    #! Converts raw BGRA pixel data from PdfRenderResult to BMP for Tesseract
-    /** Creates a BMP file from raw pixel data. BMP supports BGRA natively
-        so no pixel reordering is needed, and Tesseract can read BMP files
-        directly. This avoids any dependency on the imagemagick module.
+    #! Converts raw BGRA pixels to an image format for OCR
+    /** Tries ImageMagick (PNG output) first for better quality; falls back
+        to a built-in BMP encoder if ImageMagick is not available.
+    */
+    private binary convertPixelsToImage(hash<auto> render_result) {
+        # Try ImageMagick for high-quality PNG conversion
+%ifndef NoImageMagick
+        try {
+            auto img = create_object("ImageMagick::MagickImage",
+                render_result.width, render_result.height, "white");
+            # Import raw BGRA pixel data and export as PNG
+            call_object_method(img, "readData", render_result.data, "BGRA");
+            return call_object_method(img, "toData", "PNG");
+        } catch () {
+            # ImageMagick failed — fall through to BMP
+        }
+%endif
+        return convertPixelsToBmp(render_result);
+    }
 
-        @param render_result a PdfRenderResult hash with data, width, height, stride, format
-        @return BMP binary data suitable for Tesseract
+    #! Fallback: converts BGRA pixels to BMP format without dependencies
+    /** BMP supports BGRA natively. Tesseract can read BMP files.
     */
     private binary convertPixelsToBmp(hash<auto> render_result) {
         int w = render_result.width;
@@ -243,37 +255,28 @@ public class PdfOcrEngine {
         int stride = render_result.stride;
         binary pixels = render_result.data;
 
-        # BMP is bottom-up, so we need to flip rows
-        int row_size = w * 4;  # 32-bit BGRA
-        # Pad row to 4-byte boundary (already satisfied for 32-bit pixels)
-        int bmp_row_size = row_size;
+        int row_size = w * 4;
+        int pixel_data_size = row_size * h;
+        int file_size = 54 + pixel_data_size;
 
-        int pixel_data_size = bmp_row_size * h;
-        int file_size = 54 + pixel_data_size;  # 14 (file header) + 40 (info header) + pixels
-
-        # Build BMP file header (14 bytes)
+        # BMP file header (14 bytes) + DIB header (40 bytes)
         binary bmp = binary();
-        # Signature "BM"
-        bmp += <424D>;
-        # File size (little-endian 32-bit)
+        bmp += <424D>;                          # "BM"
         bmp += int_to_le_bytes(file_size, 4);
-        # Reserved
-        bmp += <00000000>;
-        # Pixel data offset
-        bmp += int_to_le_bytes(54, 4);
+        bmp += <00000000>;                      # reserved
+        bmp += int_to_le_bytes(54, 4);          # pixel data offset
 
-        # Build DIB header (BITMAPINFOHEADER, 40 bytes)
-        bmp += int_to_le_bytes(40, 4);       # header size
-        bmp += int_to_le_bytes(w, 4);        # width
-        bmp += int_to_le_bytes(h, 4);        # height (positive = bottom-up)
-        bmp += int_to_le_bytes(1, 2);        # color planes
-        bmp += int_to_le_bytes(32, 2);       # bits per pixel (BGRA)
-        bmp += int_to_le_bytes(0, 4);        # compression (none)
-        bmp += int_to_le_bytes(pixel_data_size, 4);  # image size
-        bmp += int_to_le_bytes(2835, 4);     # horizontal resolution (72 DPI)
-        bmp += int_to_le_bytes(2835, 4);     # vertical resolution
-        bmp += int_to_le_bytes(0, 4);        # colors in palette
-        bmp += int_to_le_bytes(0, 4);        # important colors
+        bmp += int_to_le_bytes(40, 4);          # DIB header size
+        bmp += int_to_le_bytes(w, 4);
+        bmp += int_to_le_bytes(h, 4);           # positive = bottom-up
+        bmp += int_to_le_bytes(1, 2);           # color planes
+        bmp += int_to_le_bytes(32, 2);          # bits per pixel (BGRA)
+        bmp += int_to_le_bytes(0, 4);           # compression
+        bmp += int_to_le_bytes(pixel_data_size, 4);
+        bmp += int_to_le_bytes(2835, 4);        # h resolution (72 DPI)
+        bmp += int_to_le_bytes(2835, 4);        # v resolution
+        bmp += int_to_le_bytes(0, 4);           # palette colors
+        bmp += int_to_le_bytes(0, 4);           # important colors
 
         # Pixel data (bottom-up: last row first)
         for (int y = h - 1; y >= 0; --y) {
@@ -301,14 +304,19 @@ public hashdecl PdfOcrConfig {
     string language = "eng";
     #! Path to tessdata directory (empty = system default)
     string datapath = "";
+    #! OCR mode: "native" for local Tesseract, "http" for HTTP OCR service; default "native"
+    string ocr_mode = "native";
+    #! HTTP OCR service URL (required when ocr_mode is "http")
+    *string ocr_url;
+    #! HTTP OCR service API key
+    *string ocr_api_key;
     #! DPI for rasterizing scanned pages — higher values improve OCR accuracy but
     #! use more memory; default 300
     int dpi = 300;
-    #! Minimum characters of extracted text for a page to be considered digital
-    #! (not scanned); pages below this threshold are rasterized and OCR'd; default 50
+    #! Minimum characters of extracted text for a page to be considered digital;
+    #! pages below this threshold are rasterized and OCR'd; default 50
     int scanned_threshold = 50;
-    #! Text inserted between pages in the combined output; default includes a
-    #! page break marker
+    #! Text inserted between pages; default includes page break marker
     string page_separator = "\n\n--- Page Break ---\n\n";
 }
 

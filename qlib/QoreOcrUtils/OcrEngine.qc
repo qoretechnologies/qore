@@ -84,7 +84,7 @@ public class OcrEngine {
         int timeout_ms;
 %ifndef NoRestClient
         #! REST client (lazy-initialized)
-        *RestClient rest_client;
+        *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
         Mutex rest_mutex();
 %endif
@@ -117,7 +117,7 @@ public class OcrEngine {
             }
 %ifdef NoRestClient
             throw "OCR-DEPENDENCY-ERROR",
-                "RestClient module is required for HTTP mode but is not available";
+                "RestClientIo module is required for HTTP mode but is not available";
 %endif
             url = config.url;
             api_key = config.api_key;
@@ -165,20 +165,16 @@ public class OcrEngine {
             "image": make_base64_string(image_data),
         };
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
         hash<auto> resp;
         try {
-            resp = rest_client.post("/ocr", body, NOTHING, \hdr);
+            resp = rest_client.restPost("/ocr", body, hdr);
         } catch (hash<ExceptionInfo> ex) {
             throw "OCR-ERROR", sprintf("HTTP OCR request failed: %s", ex.desc), ex;
-        }
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
         }
 
         return <OcrResult>{
@@ -186,7 +182,7 @@ public class OcrEngine {
             "confidence": (resp.body.confidence ?? 0).toFloat(),
         };
 %endif
-        throw "OCR-ERROR", "RestClient not available";
+        throw "OCR-ERROR", "RestClientIo not available";
     }
 
     #! Ensures the REST client is initialized
@@ -196,10 +192,11 @@ public class OcrEngine {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClient({
+                rest_client = new RestClientIo::RestClientIo({
                     "url": url,
                     "connect_timeout": connect_timeout_ms,
                     "timeout": timeout_ms,
+                    "data": "json",
                 });
             }
         }

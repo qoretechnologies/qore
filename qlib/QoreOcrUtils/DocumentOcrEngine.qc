@@ -30,7 +30,7 @@ public hashdecl DocumentOcrResult {
     string text;
     #! Detected input format (e.g., "PDF", "PNG", "JPEG", "TIFF", "SVG")
     string detected_format;
-    #! Number of pages (1 for images, N for PDFs)
+    #! Number of pages (1 for single images, N for PDFs and multi-page TIFFs)
     int page_count;
     #! Number of pages that required OCR
     int ocr_page_count;
@@ -48,15 +48,16 @@ public hashdecl DocumentOcrResult {
       with little or no text (scanned pages) are rasterized and OCR'd
     - \b Images (PNG, JPEG, TIFF, BMP, GIF, WebP, etc.): runs OCR directly
       via Tesseract
-    - \b SVG files: renders to a raster image via the cairo module, then OCR's
-    - \b Raw pixel data: converts to PNG via ImageMagick, then OCR's
+    - \b Multi-page TIFF: processes each page separately, returning per-page
+      results
+    - \b SVG files: converts to PNG via ImageMagick, then OCR's
+    - \b Other formats: converts to PNG via ImageMagick, then OCR's
 
     The engine uses optional modules for maximum format coverage:
-    - \c ocr (Tesseract) — required for any OCR
+    - \c ocr (Tesseract) — required for any OCR (native mode)
     - \c pdf — required for PDF processing
-    - \c imagemagick — enables 100+ additional image formats (WebP, HEIC, TIFF
-      variants, etc.) and format auto-detection
-    - \c cairo — enables SVG rendering
+    - \c imagemagick — enables 100+ additional image formats, multi-page TIFF
+      extraction, and SVG-to-PNG conversion
 
     @par Example: Process any document
     @code{.py}
@@ -79,6 +80,14 @@ printf("Text: %s\n", result.text);
 */
 public class DocumentOcrEngine {
     private {
+        #! Reusable OCR engine (created once, used for all images)
+        OcrEngine ocr;
+        #! OCR mode for PdfOcrEngine
+        string ocr_mode;
+        #! OCR URL for HTTP mode
+        *string ocr_url;
+        #! OCR API key for HTTP mode
+        *string ocr_api_key;
         #! OCR language
         string language;
         #! Tessdata path
@@ -102,6 +111,21 @@ public class DocumentOcrEngine {
         dpi = config.dpi ?? 300;
         scanned_threshold = config.scanned_threshold ?? 50;
         page_separator = config.page_separator ?? "\n\n--- Page Break ---\n\n";
+        ocr_mode = config.ocr_mode ?? "native";
+        ocr_url = config.ocr_url;
+        ocr_api_key = config.ocr_api_key;
+
+        # Create a single OcrEngine reused for all images
+        hash<OcrConfig> ocr_config(<OcrConfig>{
+            "mode": ocr_mode,
+            "language": language,
+            "datapath": datapath,
+        });
+        if (ocr_mode == "http") {
+            ocr_config.url = ocr_url;
+            ocr_config.api_key = ocr_api_key;
+        }
+        ocr = new OcrEngine(ocr_config);
     }
 
     #! Processes any supported document and extracts text
@@ -109,9 +133,8 @@ public class DocumentOcrEngine {
         extraction strategy.
 
         @param data binary file data (PDF, image, SVG, etc.)
-        @param mime_type optional MIME type hint to aid format detection
-            (e.g., \c "application/pdf", \c "image/tiff"); if not provided,
-            format is detected from the file content
+        @param mime_type optional MIME type hint (e.g., \c "application/pdf",
+            \c "image/tiff"); if not provided, format is detected from content
         @return a @ref DocumentOcrResult hash
 
         @throw OCR-ERROR if the format is not supported or OCR fails
@@ -123,8 +146,8 @@ public class DocumentOcrEngine {
         switch (format) {
             case "PDF":
                 return processPdf(data);
-            case "SVG":
-                return processSvg(data);
+            case "TIFF":
+                return processTiff(data);
             default:
                 return processImage(data, format);
         }
@@ -145,7 +168,6 @@ public class DocumentOcrEngine {
                 return "SVG";
             }
             if (mime_type =~ /^image\//) {
-                # Extract format from MIME type
                 string fmt = (mime_type =~ x/image\/([\w+-]+)/)[0] ?? "PNG";
                 return fmt.upr();
             }
@@ -153,36 +175,28 @@ public class DocumentOcrEngine {
 
         # Detect from magic bytes
         if (data.size() >= 4) {
-            # PDF: starts with %PDF
             if (data.substr(0, 4) == <25504446>) {
                 return "PDF";
             }
-            # PNG: starts with \x89PNG
             if (data.substr(0, 4) == <89504E47>) {
                 return "PNG";
             }
-            # JPEG: starts with \xFF\xD8\xFF
             if (data.substr(0, 3) == <FFD8FF>) {
                 return "JPEG";
             }
-            # TIFF: starts with II\x2A\x00 (little-endian) or MM\x00\x2A (big-endian)
             if (data.substr(0, 4) == <49492A00> || data.substr(0, 4) == <4D4D002A>) {
                 return "TIFF";
             }
-            # GIF: starts with GIF8
             if (data.substr(0, 4) == <47494638>) {
                 return "GIF";
             }
-            # BMP: starts with BM
             if (data.substr(0, 2) == <424D>) {
                 return "BMP";
             }
-            # WebP: starts with RIFF....WEBP
             if (data.size() >= 12 && data.substr(0, 4) == <52494646>
                     && data.substr(8, 4) == <57454250>) {
                 return "WEBP";
             }
-            # SVG: check for <?xml or <svg
             if (data.size() >= 5) {
                 string head = data.substr(0, min(200, data.size())).toString();
                 if (head =~ /<svg\b/i || head =~ /<!DOCTYPE\s+svg/i) {
@@ -215,6 +229,9 @@ public class DocumentOcrEngine {
         PdfOcrEngine pdf_engine(<PdfOcrConfig>{
             "language": language,
             "datapath": datapath,
+            "ocr_mode": ocr_mode,
+            "ocr_url": ocr_url,
+            "ocr_api_key": ocr_api_key,
             "dpi": dpi,
             "scanned_threshold": scanned_threshold,
             "page_separator": page_separator,
@@ -222,7 +239,6 @@ public class DocumentOcrEngine {
 
         hash<PdfOcrResult> pdf_result = pdf_engine.processPdf(data);
 
-        # Calculate average confidence
         float total_conf = 0.0;
         int conf_count = 0;
         foreach hash<PdfPageOcrResult> page in (pdf_result.pages) {
@@ -245,48 +261,75 @@ public class DocumentOcrEngine {
         };
     }
 
-    #! Processes an SVG file by rendering to PNG then OCR'ing
-    private hash<DocumentOcrResult> processSvg(binary data) {
-%ifndef NoCairo
+    #! Processes a TIFF image, handling multi-page TIFFs via ImageMagick
+    private hash<DocumentOcrResult> processTiff(binary data) {
+%ifndef NoImageMagick
         try {
-            # Load SVG
-            auto svg_reader = create_object("Cairo::CairoSvgReader", data);
-            hash<auto> svg_dims = call_object_method(svg_reader, "getDimensions");
-            int w = svg_dims.width.toInt();
-            int h = svg_dims.height.toInt();
-            if (w <= 0) { w = 800; }
-            if (h <= 0) { h = 600; }
+            # Check if multi-page
+            auto img = create_object("ImageMagick::MagickImage", data);
+            hash<auto> info = call_object_method(img, "getInfo");
+            int num_images = info.number_images ?? 1;
 
-            # Create image surface and render
-            auto surface = call_static_method("Cairo::CairoSurface", "createImage",
-                w, h, "ARGB32");
-            auto ctx = create_object("Cairo::CairoContext", surface);
-            call_object_method(svg_reader, "renderTo", ctx);
+            if (num_images > 1) {
+                # Multi-page TIFF: extract each page as PNG and OCR
+                list<hash<PdfPageOcrResult>> pages = ();
+                list<string> all_text = ();
+                float total_conf = 0.0;
 
-            # Get PNG data from surface — cairo surfaces don't export PNG directly,
-            # so we need to get pixel data and convert
-            # Fall through to ImageMagick conversion below
+                for (int i = 0; i < num_images; ++i) {
+                    # Use ImageMagick to extract each page
+                    # Read the specific frame by index
+                    binary page_png;
+                    try {
+                        auto page_img = create_object("ImageMagick::MagickImage",
+                            data, sprintf("TIFF[%d]", i));
+                        page_png = call_object_method(page_img, "toData", "PNG");
+                    } catch () {
+                        # If frame extraction fails, try the whole image
+                        page_png = call_object_method(img, "toData", "PNG");
+                    }
+
+                    hash<OcrResult> ocr_result = ocr.extractText(page_png);
+                    push pages, <PdfPageOcrResult>{
+                        "page_index": i,
+                        "text": ocr_result.text,
+                        "ocr_used": True,
+                        "confidence": ocr_result.confidence,
+                    };
+                    push all_text, ocr_result.text;
+                    total_conf += ocr_result.confidence;
+                }
+
+                return <DocumentOcrResult>{
+                    "text": all_text.join(page_separator),
+                    "detected_format": "TIFF",
+                    "page_count": num_images,
+                    "ocr_page_count": num_images,
+                    "avg_confidence": num_images > 0
+                        ? total_conf / num_images : 0.0,
+                    "pages": pages,
+                };
+            }
         } catch () {
-            # cairo not available or rendering failed — fall through
+            # ImageMagick not available or failed — treat as single image
         }
 %endif
 
-        # If cairo didn't work, try ImageMagick (it can read SVG via librsvg too)
-        binary png_data = convertToPng(data);
-        return ocrSingleImage(png_data, "SVG");
+        # Single-page TIFF or no ImageMagick — OCR directly
+        # (Tesseract reads TIFF natively)
+        return ocrSingleImage(data, "TIFF");
     }
 
     #! Processes a raster image
     private hash<DocumentOcrResult> processImage(binary data, string format) {
-        # Formats Tesseract reads natively: PNG, JPEG, TIFF, BMP, GIF
+        # Formats Tesseract reads natively
         list<string> native_formats = ("PNG", "JPEG", "TIFF", "BMP", "GIF", "PNM", "PBM");
         binary ocr_data;
 
         if (inlist(format, native_formats)) {
-            # Tesseract can read this format directly
             ocr_data = data;
         } else {
-            # Convert to PNG via ImageMagick for Tesseract
+            # Convert to PNG via ImageMagick (handles SVG, WebP, HEIC, etc.)
             ocr_data = convertToPng(data);
         }
 
@@ -295,11 +338,6 @@ public class DocumentOcrEngine {
 
     #! Runs OCR on a single image and returns a DocumentOcrResult
     private hash<DocumentOcrResult> ocrSingleImage(binary image_data, string format) {
-        OcrEngine ocr(<OcrConfig>{
-            "mode": "native",
-            "language": language,
-            "datapath": datapath,
-        });
         hash<OcrResult> result = ocr.extractText(image_data);
 
         return <DocumentOcrResult>{
@@ -320,11 +358,7 @@ public class DocumentOcrEngine {
     }
 
     #! Converts any image format to PNG via ImageMagick
-    /** @param data binary image data in any format ImageMagick supports
-        @return PNG binary data
-
-        @throw OCR-DEPENDENCY-ERROR if imagemagick module is not available
-        @throw OCR-FORMAT-ERROR if the image cannot be converted
+    /** @throw OCR-DEPENDENCY-ERROR if imagemagick module is not available
     */
     private binary convertToPng(binary data) {
 %ifndef NoImageMagick
@@ -334,16 +368,16 @@ public class DocumentOcrEngine {
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "CREATE-OBJECT-ERROR") {
                 throw "OCR-DEPENDENCY-ERROR",
-                    "the imagemagick module is required to convert this image format "
-                    "to a format Tesseract can read; install the imagemagick module";
+                    "the imagemagick module is required to convert this image format; "
+                    "install the imagemagick module";
             }
             throw "OCR-FORMAT-ERROR",
                 sprintf("failed to convert image to PNG: %s", ex.desc);
         }
 %endif
         throw "OCR-DEPENDENCY-ERROR",
-            "the imagemagick module is required to convert this image format "
-            "to a format Tesseract can read; install the imagemagick module";
+            "the imagemagick module is required to convert this image format; "
+            "install the imagemagick module";
     }
 }
 
@@ -353,6 +387,13 @@ public hashdecl DocumentOcrConfig {
     string language = "eng";
     #! Path to tessdata directory (empty = system default)
     string datapath = "";
+    #! OCR mode: "native" for local Tesseract, "http" for HTTP OCR service;
+    #! default "native"
+    string ocr_mode = "native";
+    #! HTTP OCR service URL (required when ocr_mode is "http")
+    *string ocr_url;
+    #! HTTP OCR service API key
+    *string ocr_api_key;
     #! DPI for rasterizing scanned PDF pages; default 300
     int dpi = 300;
     #! Minimum characters for a PDF page to be considered digital; default 50
