@@ -39,16 +39,10 @@
     Qore, enabling Qore subclasses (e.g., @c HttpClientIo::HttpClientConnection)
     to inherit from it and participate in the C++ connection manager's pool.
 
-    @par Inheritance
-    Qore connection classes inherit from this class (via
-    @c vparent=AbstractHttpPollConnection) to get both the state machine
-    (CONNECTING → READY → CLOSED) and the pool-management API
-    (tryReserveStream, setManager, onClosedHook).
-
-    Methods declared here can be overridden in Qore subclasses:
-    - @ref getActiveStreamCount — subclass returns its poll op's count
-    - @ref close — subclass aborts its poll op + cancels controller
-    - @ref getMaxConcurrentStreams — subclass returns its configured cap
+    @par vparent semantics
+    With @c vparent=AbstractHttpPollConnection, only this class's constructor
+    and destructor run (not the parent's).  The child's @c setPrivate tags
+    the priv with both the child's and parent's CID.
 
     @since %Qore 2.3
 */
@@ -59,19 +53,13 @@ qclass HttpClientConnectionBase [
 ];
 
 //! Default constructor
-/** Creates the C++ priv with default state.  Qore subclasses call this
-    implicitly via the inheritance chain.
+/** Creates the C++ priv with default state.  With vparent, only this
+    constructor runs (AbstractHttpPollConnection::constructor is skipped).
+    The priv is tagged with both CID_HTTPCLIENTCONNECTIONBASE and
+    CID_ABSTRACTHTTPPOLLCONNECTION.
 */
 HttpClientConnectionBase::constructor() {
     self->setPrivate(CID_HTTPCLIENTCONNECTIONBASE, new HttpClientConnectionBase());
-}
-
-//! Destructor
-/** Calls closeConnection if not already closed.
-*/
-HttpClientConnectionBase::destructor() {
-    priv->closeConnection(xsink);
-    priv->deref(xsink);
 }
 
 //! Copying is not supported
