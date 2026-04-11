@@ -34,6 +34,7 @@
 #include <qore/QoreFuture.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
+#include "qore/intern/QoreHttp3ClientConnection.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QC_Future.h"
 
@@ -198,13 +199,7 @@ void HttpClientConnectionManagerBase::evictDeadLocked(const std::string& key) {
 
 HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnection(
         const char* scheme, const char* host, int port, ExceptionSink* xsink) {
-    if (opts_.protocol != HttpClientProtocol::H1
-            && opts_.protocol != HttpClientProtocol::H2) {
-        xsink->raiseException("PROTOCOL-NOT-IMPLEMENTED",
-            "the C++ HttpClientConnectionManager port currently supports "
-            "HTTP/1.1 and HTTP/2; HTTP/3 is scheduled for Phase P5");
-        return nullptr;
-    }
+    // All three protocols (H1, H2, H3) are supported as of Phase P5.
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
     if (proxy_info_ && ssl_required) {
@@ -359,11 +354,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                 opts_.max_streams_per_connection, xsink);
             break;
         case HttpClientProtocol::H3:
-            // Phase P5
-            xsink->raiseException("PROTOCOL-NOT-IMPLEMENTED",
-                "HTTP/3 is scheduled for Phase P5 of the C++ "
-                "HttpClientConnectionManager port");
-            return nullptr;
+            conn = new Http3ClientConnection(host, port,
+                opts_.max_streams_per_connection, xsink);
+            break;
     }
     if (*xsink) {
         ExceptionSink dx;

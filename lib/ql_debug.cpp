@@ -41,6 +41,7 @@
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QoreHttp2ClientConnection.h"
+#include "qore/intern/QoreHttp3ClientConnection.h"
 #include <qore/HttpClientConnectionManager.h>
 
 #include <arpa/inet.h>
@@ -1336,6 +1337,76 @@ static void ut_manager_h2_dispatch(UnitTestCounters& c) {
     xsink.clear();
 }
 
+static void ut_http3_connection_construct(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // H3/QUIC requires a real hostname for UDP bind + QUIC handshake.
+    // Use localhost with a closed port — the QUIC handshake will fail but
+    // the construction path (UDP bind + SocketQuicClientPollOperation
+    // creation + controller submission) is exercised.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http3ClientConnection> conn(
+        new Http3ClientConnection("127.0.0.1", dead_port,
+            /* max_streams */ 100, &xsink),
+        &xsink);
+    UT_ASSERT(c, !xsink, "Http3ClientConnection construction succeeds (QUIC to refused port)");
+    if (xsink) { xsink.clear(); return; }
+
+    // waitForReadyOrError — should fail (no QUIC server)
+    bool ready = conn->waitForReadyOrError(3000, &xsink);
+    UT_ASSERT(c, !ready, "H3 connection to refused port is not ready");
+    // Either timeout or error — both are acceptable
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_manager_h3_dispatch(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    HttpClientConnectionManagerBase::Options opts;
+    opts.protocol = HttpClientProtocol::H3;
+    opts.connect_timeout_ms = 1000;
+    ReferenceHolder<HttpClientConnectionManagerBase> mgr(
+        new HttpClientConnectionManagerBase(opts, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "manager(H3) construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) { UT_ASSERT(c, false, "reserve socket"); return; }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    // H3 requires HTTPS scheme — but we're just testing the manager
+    // dispatch path (no PROTOCOL-NOT-IMPLEMENTED anymore)
+    HttpClientConnectionBase* conn = mgr->acquireConnection(
+        "https", "127.0.0.1", dead_port, &xsink);
+    UT_ASSERT(c, !conn, "acquireConnection fails on refused port");
+    UT_ASSERT(c, xsink.isException(),
+        "manager(H3) raises a connect error (not PROTOCOL-NOT-IMPLEMENTED)");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && strcmp(err->c_str(), "PROTOCOL-NOT-IMPLEMENTED") != 0,
+        "exception is NOT PROTOCOL-NOT-IMPLEMENTED");
+    xsink.clear();
+}
+
 static void ut_manager_proxy_url_parse(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -1440,6 +1511,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http2_connection_construct(c);
     ut_http2_connection_alpn_setup(c);
     ut_manager_h2_dispatch(c);
+    ut_http3_connection_construct(c);
+    ut_manager_h3_dispatch(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
