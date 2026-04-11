@@ -133,6 +133,12 @@ enum class QoreAOTValueTag : uint8_t {
     //! New object constructor call expression: class path + serialized constructor args
     //! Used for member initializers like "Mutex m()" that need runtime evaluation
     VT_NEW_OBJECT = 15,
+    //! Reference to another constant by fully-qualified name.
+    //! Used when a serialized value (typically an object inside a folded hash/list
+    //! literal, e.g. `{"int": IntType}` where IntType is a reflection constant)
+    //! shares a node pointer with another constant in the program reverse map.
+    //! At load time, the value is resolved by looking up the referenced constant.
+    VT_CONST_REF  = 16,
 };
 
 //! Section header in the binary format
@@ -237,6 +243,11 @@ public:
 class QoreAOTBinaryWriter {
 public:
     QoreAOTStringPool strings;
+    //! Optional program-wide constant reverse map, used by writeValue to encode
+    //! unserializable node pointers (e.g. QoreObject inside a folded hash literal)
+    //! as VT_CONST_REF entries. Set before calling section writers that serialize
+    //! user constant values.
+    const AOTConstantReverseMap* const_reverse_map = nullptr;
 
 private:
     std::vector<uint8_t> buffer;
@@ -1043,6 +1054,7 @@ class QoreAOTBinaryDeserializer {
         std::string name;
         std::string type_path;
         uint8_t access;
+        QoreValue default_val;
     };
     std::vector<std::vector<PendingStaticMember>> pending_static_members;
 

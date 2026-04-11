@@ -89,6 +89,28 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
         writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NULL));
         return true;
     }
+    // For otherwise-unserializable pointer-backed values (e.g. a QoreObject
+    // produced by parse-time constant folding of `{"int": IntType}`), check
+    // whether the node pointer is registered in the program reverse map.
+    // If so, write as VT_CONST_REF so the reference can be resolved at load
+    // time. This is skipped for container types (list/hash) and scope refs
+    // which have their own dedicated encodings below; checking only the
+    // types that would otherwise fall into the default-NOTHING case avoids
+    // accidentally rewriting a constant's own top-level value as a
+    // self-reference (only leaf objects make it here).
+    if (const_reverse_map && v.hasNode()) {
+        qore_type_t nt = v.getType();
+        if (nt == NT_OBJECT) {
+            const AbstractQoreNode* node = v.getInternalNode();
+            auto it = const_reverse_map->find(node);
+            if (it != const_reverse_map->end()) {
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_CONST_REF));
+                writeU32(static_cast<uint32_t>(it->second.size()));
+                writeStringRef(it->second.c_str(), it->second.size());
+                return true;
+            }
+        }
+    }
     // Must check isEnum() before getType() because getType() on TAG_ENUM
     // returns the base type (e.g., NT_INT), which would serialize the wrong thing
     if (v.isEnum()) {
@@ -825,6 +847,57 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
             return QoreValue(socn);
         }
 
+        case QoreAOTValueTag::VT_CONST_REF: {
+            // Written as: FQN string (length + string pool offset).
+            // At load time, resolve the referenced constant from the current
+            // program's namespace tree and return its referenced value. Used
+            // for objects and other unserializable values that live inside
+            // parse-time-folded hash/list literals — the parser inlines the
+            // constant's value into the literal, and the writer detects the
+            // shared node pointer via the program reverse map.
+            if (ptr + 8 > end) {
+                error = "unexpected end of data reading const_ref name";
+                return QoreValue();
+            }
+            uint32_t name_len = readU32(ptr);
+            uint32_t name_offset = readU32(ptr);
+            const char* fqn = getString(name_offset);
+            if (!fqn) {
+                error = "invalid string offset for const_ref name";
+                return QoreValue();
+            }
+            QoreProgram* pgm = getProgram();
+            if (!pgm) {
+                error = "no current program for const_ref resolution";
+                return QoreValue();
+            }
+            qore_program_private* pp = qore_program_private::get(*pgm);
+            const qore_ns_private* cns = nullptr;
+            const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
+                *pp->RootNS, fqn, cns);
+            if (!ce) {
+                // Try class constant lookup: path format "ClassName::ConstName"
+                std::string path(fqn);
+                size_t sep = path.rfind("::");
+                if (sep != std::string::npos && sep > 0) {
+                    std::string class_path = path.substr(0, sep);
+                    std::string const_name = path.substr(sep + 2);
+                    const qore_ns_private* found_ns = nullptr;
+                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                        *pp->RootNS, class_path.c_str(), found_ns);
+                    if (qc) {
+                        ce = qore_class_private::get(*qc)->constlist.findEntry(
+                            const_name.c_str());
+                    }
+                }
+            }
+            if (!ce) {
+                printd(0, "AOT readValue: cannot resolve const_ref '%s'\n", fqn);
+                return QoreValue();
+            }
+            return ce->getReferencedValue();
+        }
+
         default:
             error = "unknown value tag: " + std::to_string(static_cast<int>(tag))
                 + " at offset " + std::to_string(ptr - 1 - end);
@@ -1452,6 +1525,20 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeStringRef(vi.first);
             writer.writeStringRef(getTypePath(vi.second->getTypeInfo()));
             writer.writeU8(static_cast<uint8_t>(vi.second->access));
+            // Serialize the initial value. If the parser folded the init
+            // expression to a concrete value (e.g. `static Type t = IntType`
+            // where IntType is a reflection constant), we need to persist
+            // that value so it survives AOT load. For unserializable values
+            // (objects, closures), writeValue falls back to VT_CONST_REF via
+            // the program reverse map when possible; otherwise NOTHING is
+            // written and the static var will need an init function (which
+            // is generated separately if the expression `needs_eval()`).
+            if (vi.second->exp) {
+                writer.writeU8(1);
+                writer.writeValue(vi.second->exp);
+            } else {
+                writer.writeU8(0);
+            }
         }
 
         // class constants
@@ -3586,12 +3673,27 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* sm_name = reader.readStringRef(ptr);
             const char* sm_type_path = reader.readStringRef(ptr);
             uint8_t sm_access = QoreAOTBinaryReader::readU8(ptr);
+            // Read the serialized initial value if present. Matches the
+            // write-side layout: u8 has_value + optional value.
+            QoreValue default_val;
+            uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
+            if (has_default) {
+                default_val = reader.readValue(ptr, end, error);
+                if (!error.empty()) {
+                    error = "static member '" + std::string(sm_name ? sm_name : "(null)") +
+                        "': " + error;
+                    return false;
+                }
+            }
             if (!class_already_existed && sm_name && *sm_name) {
                 PendingStaticMember psm;
                 psm.name = sm_name;
                 psm.type_path = sm_type_path ? sm_type_path : "";
                 psm.access = sm_access;
+                psm.default_val = default_val;
                 static_members.push_back(std::move(psm));
+            } else if (default_val.hasNode()) {
+                default_val.discard(nullptr);
             }
         }
         pending_static_members.push_back(std::move(static_members));
@@ -3799,9 +3901,31 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
                 }
             }
 
-            // Create the static variable info
+            // Create the static variable info. The default value is
+            // installed via assignInit() below (after construction) so the
+            // serialized initial value survives AOT load. For static vars
+            // whose init expression `needs_eval()`, an svar init function
+            // was generated at compile time and will overwrite this value
+            // at load time (see compileInitExpr / executeInitFunctions).
             QoreVarInfo* vi = new QoreVarInfo(&loc_builtin, ti, nullptr, QoreValue(),
                 static_cast<ClassAccess>(psm.access));
+
+            // Run parseInit() first so the QoreMemberInfoBaseAccess::init
+            // flag is set and future parseInit() calls (e.g. from
+            // qore_class_private::copy() during class merge) become no-ops.
+            // Without this guard, the copy path would re-enter parseInit()
+            // and call val.set(typeInfo) → reset() on our already-installed
+            // value, silently losing it.
+            vi->parseInit(psm.name.c_str());
+
+            // Install the serialized initial value (if any). Takes
+            // ownership of the ref held in psm.default_val.
+            if (psm.default_val.hasNode() || psm.default_val.getType() != NT_NOTHING) {
+                QoreValue v = psm.default_val;
+                psm.default_val = QoreValue();  // transfer ownership
+                vi->assignInit(v);
+                vi->eval_init = true;
+            }
 
             // Add to class's vars list
             priv->vars.addNoCheck(strdup(psm.name.c_str()), vi);
@@ -4878,6 +5002,17 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
     collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules);
 
+    // Build a program-wide constant reverse map once and make it available to
+    // the writer so writeValue() can encode node-pointer references (e.g. an
+    // object inside a parse-time-folded hash literal) as VT_CONST_REF entries
+    // that resolve at load time. The writer takes a non-owning pointer; the
+    // map is cleared after all sections that call writeValue are done.
+    AOTConstantReverseMap program_crm;
+    if (root_ns) {
+        buildProgramConstantReverseMapImpl(root_ns, program_crm);
+    }
+    writer.const_reverse_map = &program_crm;
+
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);
     writeClassesSection(writer, state);
@@ -4888,6 +5023,9 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     writeGlobalsSection(writer, state);
     writeFunctionsSection(writer, state);
     writeMethodsSection(writer, state);
+
+    // Drop the non-owning CRM pointer — program_crm goes out of scope next.
+    writer.const_reverse_map = nullptr;
 
     return true;
 }
