@@ -33,6 +33,7 @@
 #include <qore/QoreSocketObject.h>
 #include <qore/QoreFuture.h>
 #include <qore/AsyncCompletionAction.h>
+#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/QC_Http1ClientPollOperationBase.h"
 #include "qore/intern/QC_SocketPollOperation.h"
@@ -172,13 +173,22 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
         return -1;
     }
 
+    // Owner string: caller-supplied (via setOwner before construction
+    // wired into a manager — Phase P3+) or per-instance default for
+    // standalone use (Phase P2 unit tests).
     char owner_buf[64];
-    snprintf(owner_buf, sizeof(owner_buf), "http1-cpp-conn-%p", (void*)this);
+    const char* owner_to_use;
+    if (!owner_str.empty()) {
+        owner_to_use = owner_str.c_str();
+    } else {
+        snprintf(owner_buf, sizeof(owner_buf), "http1-cpp-conn-%p", (void*)this);
+        owner_to_use = owner_buf;
+    }
 
     ReferenceHolder<QoreHashNode> info(new QoreHashNode(autoTypeInfo), xsink);
     info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
     info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
-    info->setKeyValue("owner", new QoreStringNode(owner_buf), xsink);
+    info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
     // No per-op timeout: the poll op itself drives the connect timeout and
     // per-request timeouts are handled by q_future_get_blocking on the
     // caller's side.
@@ -326,4 +336,28 @@ QoreHashNode* Http1ClientConnection::getReferencedErrorInfo() {
         return nullptr;
     }
     return poll_op_priv->getErrorInfo();
+}
+
+void Http1ClientConnection::setManager(HttpClientConnectionManagerBase* mgr) {
+    AutoLocker al(onclose_lock);
+    manager_ = mgr;
+}
+
+void Http1ClientConnection::onClosedHook() {
+    // Read the back-pointer under our local lock, then release the lock
+    // BEFORE invoking the manager method.  This breaks any potential
+    // ordering issues between onclose_lock and manager.pool_lock for
+    // app-thread paths that take pool_lock first.
+    //
+    // Lifetime safety: setManager(nullptr) is contractually required to
+    // run before the manager destroys itself, so a non-null manager_
+    // observed here is guaranteed alive for the duration of the call.
+    HttpClientConnectionManagerBase* mgr;
+    {
+        AutoLocker al(onclose_lock);
+        mgr = manager_;
+    }
+    if (mgr) {
+        mgr->onConnectionClosed(this);
+    }
 }

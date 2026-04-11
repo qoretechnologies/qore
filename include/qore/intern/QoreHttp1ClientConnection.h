@@ -34,9 +34,13 @@
 #define _QORE_INTERN_QOREHTTP1CLIENTCONNECTION_H
 
 #include <qore/HttpClientConnection.h>
+#include <qore/QoreThreadLock.h>
+
+#include <string>
 
 class QoreSocketObject;
 class Http1ClientPollOperationPriv;
+class HttpClientConnectionManagerBase;
 
 //! HTTP/1.1 C++ client connection
 /** Wraps a @ref Http1ClientPollOperationPriv and the socket it operates on,
@@ -67,6 +71,52 @@ public:
 
     DLLLOCAL virtual ~Http1ClientConnection();
 
+    //! Sets the controller-submission owner string before submission to
+    //! the AsyncIoController.
+    /** Must be called BEFORE construction submits the poll op (i.e., the
+        manager constructs an "owner-pending" connection, calls @ref setOwner,
+        then triggers submission).  In the simple unconstructed-by-manager
+        case, the constructor uses a default per-instance owner string.
+
+        For now (Phase P2), the constructor submits immediately and there is
+        no opportunity to call setOwner before submission.  Phase P3 will
+        introduce a two-phase construction model where the manager creates
+        the connection in an unsubmitted state, calls setOwner, then submits.
+        Until then this setter just stores the value for the next submission.
+
+        @param owner the owner string to use in the SocketPollOperationInfo
+            hash; must outlive this connection (or be copied internally —
+            this implementation copies)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setOwner(const char* owner) {
+        if (owner) {
+            owner_str = owner;
+        }
+    }
+
+    //! Registers (or clears) the owning manager back-pointer for close
+    //! notifications.
+    /** When the connection's state transitions to CLOSED for the first time,
+        @ref onClosedHook fires; if a manager has been registered, the hook
+        invokes @c manager->onConnectionClosed(this) so the manager can evict
+        the connection from its pool promptly.
+
+        Lock ordering: this method takes @c onclose_lock briefly to set the
+        back-pointer.  See @c design/http-client-manager-cpp-port.md for the
+        full ordering rules.
+
+        @param mgr the manager to notify on close, or @c nullptr to clear
+
+        @note Callers MUST clear the back-pointer (via @c setManager(nullptr))
+        before destroying the manager — otherwise the I/O thread could fire
+        @ref onClosedHook on a manager that is mid-destruction (UAF).
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void setManager(HttpClientConnectionManagerBase* mgr);
+
     // --- HttpClientConnectionBase overrides ---
 
     HttpClientProtocol getProtocol() const override {
@@ -84,6 +134,11 @@ public:
 protected:
     DLLLOCAL QoreHashNode* getReferencedErrorInfo() override;
 
+    //! AbstractHttpPollConnectionPriv hook — invoked exactly once on the
+    //! first close transition (from any thread).  Forwards to the registered
+    //! manager (if any) so it can evict this connection from its pool.
+    DLLLOCAL void onClosedHook() override;
+
 private:
     //! The socket QoreObject (ref'd).  Owns a QoreSocketObject priv.
     QoreObject* sock_obj = nullptr;
@@ -99,6 +154,29 @@ private:
 
     //! True once the poll op has been submitted to the controller
     bool submitted_to_controller = false;
+
+    //! Owner string used for the controller submit info hash.
+    /** Defaults to a per-instance string built from @c this in
+        @ref buildAndSubmit.  Phase P3+ managers can override via
+        @ref setOwner before construction-time submission to use their own
+        owner string and benefit from @c cancelByOwner cleanup.
+    */
+    std::string owner_str;
+
+    //! Lock protecting @ref manager_ — see @ref onClosedHook + @ref setManager.
+    /** This is the OUTERMOST lock in the close-hook lock-ordering chain:
+        @c onclose_lock → manager.pool_lock → controller.lock.  Held only
+        briefly to read or write @ref manager_; releasing it before invoking
+        the manager method is acceptable because the manager destructor MUST
+        call @c setManager(nullptr) before tearing itself down.
+    */
+    QoreThreadLock onclose_lock;
+
+    //! Owning manager back-pointer (raw, no ref).
+    /** Protected by @ref onclose_lock.  Set/cleared by @ref setManager.
+        Read by @ref onClosedHook to dispatch the eviction call.
+    */
+    HttpClientConnectionManagerBase* manager_ = nullptr;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.

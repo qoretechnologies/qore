@@ -40,6 +40,7 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
+#include <qore/HttpClientConnectionManager.h>
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -866,6 +867,124 @@ static void ut_http1_connection_timeout(UnitTestCounters& c) {
     xsink.clear();
 }
 
+// --- onClosedHook one-shot semantics + manager dispatch (Phase P3 prep) ---
+//
+// Verifies that AbstractHttpPollConnectionPriv::onClosedHook fires exactly
+// once per connection lifetime, even when setClosed() is invoked multiple
+// times from different code paths.  Also verifies the manager back-pointer
+// dispatch path: a registered manager receives onConnectionClosed exactly
+// once; after setManager(nullptr) it receives nothing.
+
+class UtCountingManager : public HttpClientConnectionManagerBase {
+public:
+    DLLLOCAL void onConnectionClosed(HttpClientConnectionBase* conn) override {
+        ++close_count;
+        last_conn = conn;
+    }
+    std::atomic<int> close_count{0};
+    HttpClientConnectionBase* last_conn = nullptr;
+};
+
+static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Pick an ephemeral closed port — connect will be refused, the poll op
+    // will transition to CLOSED, and onClosedHook should fire once via the
+    // I/O thread setError → setClosed path.
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sfd < 0) {
+        UT_ASSERT(c, false, "reserve socket succeeds");
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<UtCountingManager> mgr(new UtCountingManager(), &xsink);
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    conn->setManager(*mgr);
+
+    // Wait for the connect to fail.  This drives setError → setClosed →
+    // onClosedHook from the async I/O thread.
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "connection is not ready (refused)");
+    UT_ASSERT(c, xsink.isException(), "exception raised on refused connect");
+    xsink.clear();
+
+    // Hook may dispatch slightly after the state transition since
+    // setClosed → onClosedHook runs on the I/O thread but signals our
+    // condition var first.  Spin briefly to give the hook a chance to fire.
+    for (int i = 0; i < 100 && mgr->close_count.load() == 0; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed fired exactly once");
+    UT_ASSERT(c, mgr->last_conn == *conn,
+        "manager received the correct connection pointer");
+
+    // Force a second setClosed via closeConnection() — should NOT re-fire
+    // the hook because the one-shot guard latches it.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed not re-fired on second setClosed");
+
+    // Clear the manager back-pointer BEFORE deref'ing the manager — the
+    // contract requires this to prevent UAF.
+    conn->setManager(nullptr);
+}
+
+static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Spin up a server that just accepts and closes — the client connect
+    // succeeds, then we close from the app thread.
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+    server.serveOnce([](int cfd) {
+        // Accept and immediately close — the client will see EOF on first recv
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    });
+
+    ReferenceHolder<UtCountingManager> mgr(new UtCountingManager(), &xsink);
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) { xsink.clear(); return; }
+
+    conn->setManager(*mgr);
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, ready && !xsink, "connection ready");
+    if (xsink) xsink.clear();
+
+    // App-thread initiated close — drives setClosed via the abort() path.
+    conn->closeConnection(&xsink);
+    xsink.clear();
+
+    // Hook should have fired exactly once.
+    UT_ASSERT_EQ(c, 1, (int)mgr->close_count.load(),
+        "manager.onConnectionClosed fired exactly once on app-thread close");
+
+    conn->setManager(nullptr);
+}
+
 static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
     ExceptionSink xsink;
 
@@ -972,6 +1091,8 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_http1_connection_simple_request(c);
     ut_http1_connection_timeout(c);
     ut_http1_connection_connect_refused(c);
+    ut_http1_onclosed_hook_one_shot(c);
+    ut_http1_onclosed_hook_app_thread_close(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
