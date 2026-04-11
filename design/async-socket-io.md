@@ -501,12 +501,17 @@ Known failure modes include:
   double-tRef is never matched by a second tDeref and leaks the QoreObject's C++ memory.
   The `setSelf()` method is safe because `QoreObjectWeakRefHolder::reset()` stores the pointer
   without tRef, then adds exactly one tRef in the body.
-- **`setValue` vs `setMemberValue` in QPP constructors**: Use `self->setValue("member", val, xsink)`
-  (not `self->setMemberValue("member", cls, val, xsink)`) when initializing Qore members from a
-  QPP constructor body.  `setMemberValue` goes through class-context member access with DGC
-  object-counting that can produce a leaked ref when the object is later destroyed.  `setValue`
-  performs a simple member assignment that matches the pattern used by `SocketPollOperation` and
-  other working poll operations.
+- **`setValue` vs `setMemberValue` in QPP constructors**: Both APIs now have consuming ownership
+  semantics (as of %Qore 2.3), so either may be used to initialize Qore members from a QPP
+  constructor body.  `setValue` is the simpler call when the member is not `private:internal`
+  — it uses `runtime_get_class()` as the access context, which from inside a constructor is the
+  class being constructed and therefore has access to every member.  `setMemberValue(cls, ...)`
+  is required only when the caller needs an explicit class context for `private:internal`
+  members, e.g. from external code like reflection.  Historical note: prior to the ownership
+  unification, `setMemberValue` was non-consuming in the `cls != nullptr` path, which silently
+  leaked freshly-allocated heap values passed by callers that assumed `setValue`-style consume
+  semantics — this caused the `Http1ClientPollOperationBase_constructor` leaks flagged by
+  valgrind on `OpenApi3DataProvider.qtest`.
 - **Avoid duplicate Qore member refs to the same object**: If a composite poll operation wraps an
   inner operation that already holds a Qore "sock" member pointing to a Socket, the outer operation
   must NOT also store the same Socket as its own "sock" member.  During member hash cleanup,

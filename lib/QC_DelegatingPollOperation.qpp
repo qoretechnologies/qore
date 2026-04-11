@@ -223,12 +223,12 @@ DelegatingPollOperation::constructor(AbstractPollOperation inner, *code on_compl
     // Copy goal and sock from inner operation
     ValueHolder goal_val(inner_obj->evalMethod("getGoal", nullptr, xsink), xsink);
     if (!*xsink) {
-        self->setMemberValue("goal", QC_DELEGATINGPOLLOPERATION, *goal_val, xsink);
+        self->setMemberValue("goal", QC_DELEGATINGPOLLOPERATION, goal_val.release(), xsink);
     }
     // Try to get sock from inner's members (for SocketPollOperationBase subclasses)
     ValueHolder sock_val(inner_obj->getReferencedMemberNoMethod("sock", xsink), xsink);
     if (!*xsink && sock_val->getType() == NT_OBJECT) {
-        self->setMemberValue("sock", QC_DELEGATINGPOLLOPERATION, *sock_val, xsink);
+        self->setMemberValue("sock", QC_DELEGATINGPOLLOPERATION, sock_val.release(), xsink);
     } else if (*xsink) {
         xsink->clear();
     }
