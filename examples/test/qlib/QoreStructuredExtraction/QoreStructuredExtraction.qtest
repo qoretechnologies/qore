@@ -57,6 +57,47 @@ class MockLlmBackend inherits QoreLlmUtils::LlmBackend {
         };
     }
 
+    #! Override chat() — pipeline now uses chat-based extraction with tools
+    hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        string content;
+        if (sequential_responses && call_count < sequential_responses.size()) {
+            content = sequential_responses[call_count];
+        } else {
+            content = mock_response;
+        }
+        ++call_count;
+
+        # If tools are provided, return the content as a tool call (parsed JSON)
+        if (tools) {
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(content);
+            } catch () {
+                # Invalid JSON — return as text (triggers parse error in pipeline)
+                return <ChatResponse>{
+                    "stop_reason": "end_turn",
+                    "content": content,
+                    "usage": {"total_tokens": 150},
+                };
+            }
+            return <ChatResponse>{
+                "stop_reason": "tool_use",
+                "tool_calls": (<ChatToolCall>{
+                    "id": sprintf("tc_%d", call_count),
+                    "name": tools[0].name,
+                    "arguments": parsed,
+                },),
+                "usage": {"total_tokens": 150},
+            };
+        }
+        return <ChatResponse>{
+            "stop_reason": "end_turn",
+            "content": content,
+            "usage": {"total_tokens": 150},
+        };
+    }
+
     int getCallCount() {
         return call_count;
     }
@@ -404,7 +445,7 @@ public class QoreStructuredExtractionTest inherits QUnit::Test {
 
         assertFalse(result.valid);
         assertTrue(result.validation_errors.size() > 0);
-        assertTrue(result.validation_errors[0] =~ /JSON parse error/);
+        assertTrue(result.validation_errors[0] =~ /parse error/);
     }
 
     extractCodeFencesTest() {

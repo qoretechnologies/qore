@@ -32,47 +32,68 @@ public hashdecl ExtractionPipelineOptions {
     *string system_prompt;
     #! Custom user prompt template; use {text} as placeholder for input text
     *string user_prompt_template;
+    #! Number of parallel extractions for extractBatch(); default 1 (sequential)
+    int batch_parallel = 1;
 }
 
 #! LLM-based structured information extraction engine
-/** Extracts typed structured data from unstructured text using an LLM backend
-    with JSON schema enforcement.  The pipeline:
+/** Extracts typed structured data from text or images using an LLM with
+    tool-based schema enforcement.  The pipeline:
 
-    1. Builds a system prompt with JSON schema constraints from the extraction schema
-    2. Calls the LLM via @ref QoreLlmUtils::LlmBackend "LlmBackend"
-    3. Parses the JSON response
-    4. Validates the result against the schema
-    5. Retries on failure (up to \c max_retries)
+    1. Builds messages with the extraction schema as a tool definition
+    2. Calls the LLM via @ref QoreLlmUtils::LlmBackend::chat() "LlmBackend.chat()"
+       with the tool, so the LLM is forced to return data matching the schema
+    3. Parses and validates the result
+    4. Retries on failure (up to \c max_retries)
 
-    @par Example: NER extraction
+    Supports both text and image inputs — for images, pass binary data
+    and MIME type to \c extractFromImage().
+
+    Few-shot examples in the schema improve extraction quality significantly.
+
+    @par Example: NER extraction from text
     @code{.py}
+%modern
+%requires QoreStructuredExtraction
+
 LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
     "model": "gpt-4o"});
 ExtractionPipeline pipeline(llm, ExtractionSchema::NerSchema);
 hash<ExtractionResult> result = pipeline.extractData("Apple Inc. was founded by Steve Jobs.");
     @endcode
 
+    @par Example: Extract from image
+    @code{.py}
+binary img = ReadOnlyFile::readBinaryFile("receipt.jpg");
+hash<ExtractionResult> result = pipeline.extractFromImage(img, "image/jpeg");
+    @endcode
+
     @since QoreStructuredExtraction 1.0
 */
 public class ExtractionPipeline {
     private {
-        #! The LLM backend for making completion calls
+        #! The LLM backend
         LlmBackend llm;
-        #! The extraction schema defining what to extract
+        #! The extraction schema
         hash<ExtractionSchemaInfo> schema;
-        #! The JSON schema derived from the extraction schema
+        #! The JSON schema for tool definitions
         hash<auto> json_schema;
-        #! The system prompt for extraction
+        #! Tool definition for chat-based extraction
+        list<hash<QoreLlmUtils::ToolDefinition>> tools;
+        #! The system prompt
         string system_prompt;
         #! Custom user prompt template
         *string user_prompt_template;
         #! Maximum retries
         int max_retries;
+        #! Batch parallelism
+        int batch_parallel;
     }
 
     #! Creates an ExtractionPipeline
-    /** @param llm_backend the LLM backend to use for completion calls
-        @param extraction_schema the schema defining what to extract
+    /** @param llm_backend the LLM backend to use
+        @param extraction_schema the schema defining what to extract; optionally
+            includes few-shot examples for improved quality
         @param options optional pipeline configuration
 
         @throw EXTRACTION-PIPELINE-ERROR if the schema has no fields
@@ -80,7 +101,8 @@ public class ExtractionPipeline {
     constructor(LlmBackend llm_backend, hash<ExtractionSchemaInfo> extraction_schema,
             *hash<ExtractionPipelineOptions> options) {
         if (!extraction_schema.fields) {
-            throw "EXTRACTION-PIPELINE-ERROR", "extraction schema must have at least one field";
+            throw "EXTRACTION-PIPELINE-ERROR",
+                "extraction schema must have at least one field";
         }
 
         llm = llm_backend;
@@ -88,98 +110,138 @@ public class ExtractionPipeline {
         json_schema = ExtractionSchema::toJsonSchema(schema);
         max_retries = options.max_retries ?? 2;
         user_prompt_template = options.user_prompt_template;
+        batch_parallel = options.batch_parallel ?? 1;
 
         if (options.system_prompt.val()) {
             system_prompt = options.system_prompt;
         } else {
             system_prompt = buildSystemPrompt();
         }
+
+        # Build tool definition for chat-based extraction
+        tools = (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": schema.name ?? "extract",
+                "description": schema.description,
+                "parameters": json_schema,
+            },
+        );
     }
 
-    #! Extracts structured data from the given text
+    #! Extracts structured data from text
     /** @param text the unstructured text to extract from
-        @return an @ref ExtractionResult hash with extracted data, validation status,
-                and usage information
+        @return an @ref ExtractionResult hash
 
         @throw EXTRACTION-ERROR if all retry attempts fail
     */
     hash<ExtractionResult> extractData(string text) {
-        string user_prompt = buildUserPrompt(text);
-        hash<auto> total_usage = {};
-        int attempts = 0;
-        list<string> last_errors = ();
+        list<hash<QoreLlmUtils::ChatMessage>> messages = buildTextMessages(text);
+        return runExtraction(messages);
+    }
 
-        while (attempts <= max_retries) {
-            ++attempts;
+    #! Extracts structured data from an image
+    /** @param image_data raw image bytes (PNG, JPEG, etc.)
+        @param mime_type image MIME type (e.g., "image/png", "image/jpeg")
+        @param prompt optional custom user prompt for the image
+        @return an @ref ExtractionResult hash
 
-            # Add retry context to the prompt if this is a retry
-            string effective_prompt = user_prompt;
-            if (attempts > 1 && last_errors) {
-                effective_prompt += sprintf("\n\nPrevious attempt had validation errors: %s\n"
-                    "Please fix these issues in your response.", last_errors.join("; "));
-            }
-
-            hash<LlmCompletionResult> llm_result = llm.complete(system_prompt,
-                effective_prompt, json_schema);
-
-            # Accumulate usage
-            total_usage = mergeUsage(total_usage, llm_result.usage);
-
-            # Parse JSON response
-            hash<auto> parsed;
-            try {
-                parsed = parseResponse(llm_result.content);
-            } catch (hash<ExceptionInfo> ex) {
-                last_errors = (sprintf("JSON parse error: %s", ex.desc),);
-                if (attempts > max_retries) {
-                    return <ExtractionResult>{
-                        "extracted": {},
-                        "valid": False,
-                        "validation_errors": last_errors,
-                        "usage": total_usage,
-                        "attempt_count": attempts,
-                    };
-                }
-                continue;
-            }
-
-            # Validate against schema
-            list<string> errors = validateExtracted(parsed);
-            if (!errors) {
-                return <ExtractionResult>{
-                    "extracted": parsed,
-                    "valid": True,
-                    "validation_errors": (),
-                    "usage": total_usage,
-                    "attempt_count": attempts,
-                };
-            }
-
-            last_errors = errors;
-            if (attempts > max_retries) {
-                return <ExtractionResult>{
-                    "extracted": parsed,
-                    "valid": False,
-                    "validation_errors": errors,
-                    "usage": total_usage,
-                    "attempt_count": attempts,
-                };
-            }
-        }
-
-        # Unreachable, but satisfy the compiler
-        throw "EXTRACTION-ERROR", "extraction failed after all retry attempts";
+        @throw EXTRACTION-ERROR if all retry attempts fail
+    */
+    hash<ExtractionResult> extractFromImage(binary image_data, string mime_type,
+            *string prompt) {
+        string user_prompt = prompt
+            ?? "Extract structured data from this image according to the schema.";
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
+            <QoreLlmUtils::ChatMessage>{
+                "role": "user",
+                "content_parts": (
+                    <QoreLlmUtils::ContentPart>{
+                        "type": "image",
+                        "data": image_data,
+                        "mime_type": mime_type,
+                    },
+                    <QoreLlmUtils::ContentPart>{
+                        "type": "text",
+                        "text": user_prompt,
+                    },
+                ),
+            },
+        );
+        return runExtraction(messages);
     }
 
     #! Extracts structured data from a batch of texts
     /** @param texts list of texts to extract from
+        @param progress optional callback called after each extraction with
+            (int completed, int total) for progress reporting
         @return list of @ref ExtractionResult hashes, one per input text
     */
-    list<hash<ExtractionResult>> extractBatch(list<string> texts) {
-        list<hash<ExtractionResult>> results = ();
-        foreach string text in (texts) {
-            push results, extractData(text);
+    list<hash<ExtractionResult>> extractBatch(list<string> texts,
+            *code progress) {
+        if (!texts) {
+            return ();
         }
+
+        if (batch_parallel <= 1) {
+            # Sequential
+            list<hash<ExtractionResult>> results = ();
+            int idx = 0;
+            foreach string text in (texts) {
+                push results, extractData(text);
+                ++idx;
+                if (progress) {
+                    progress(idx, texts.size());
+                }
+            }
+            return results;
+        }
+
+        # Parallel batch processing
+        list<hash<ExtractionResult>> results = ();
+        # Pre-size
+        for (int i = 0; i < texts.size(); ++i) {
+            push results, <ExtractionResult>{
+                "extracted": {},
+                "valid": False,
+                "validation_errors": (),
+                "usage": {},
+                "attempt_count": 0,
+                "confidence": 0.0,
+            };
+        }
+
+        int total = texts.size();
+        int completed = 0;
+        Mutex progress_mutex();
+        Counter cnt(total);
+
+        int offset = 0;
+        while (offset < total) {
+            int batch_end = min(offset + batch_parallel, total);
+            for (int i = offset; i < batch_end; ++i) {
+                int idx = i;
+                string text = texts[i];
+                background sub () {
+                    on_exit cnt.dec();
+                    results[idx] = extractData(text);
+                    if (progress) {
+                        progress_mutex.lock();
+                        on_exit progress_mutex.unlock();
+                        ++completed;
+                        progress(completed, total);
+                    }
+                }();
+            }
+            # Wait for this batch
+            int batch_size = batch_end - offset;
+            for (int i = 0; i < batch_size; ++i) {
+                cnt.waitForZero();
+                cnt.inc();
+            }
+            offset = batch_end;
+        }
+
         return results;
     }
 
@@ -188,23 +250,107 @@ public class ExtractionPipeline {
         return schema;
     }
 
-    #! Returns the JSON schema used for LLM calls
+    #! Returns the JSON schema used for tool definitions
     hash<auto> getJsonSchema() {
         return json_schema;
     }
 
-    #! Builds the default system prompt from the schema
+    #! Runs extraction using chat() with tool definitions
+    private hash<ExtractionResult> runExtraction(
+            list<hash<QoreLlmUtils::ChatMessage>> messages) {
+        hash<auto> total_usage = {};
+        int attempts = 0;
+        list<string> last_errors = ();
+
+        while (attempts <= max_retries) {
+            ++attempts;
+
+            # Build effective messages (add retry context if needed)
+            list<hash<QoreLlmUtils::ChatMessage>> effective_messages = messages;
+            if (attempts > 1 && last_errors) {
+                push effective_messages, <QoreLlmUtils::ChatMessage>{
+                    "role": "user",
+                    "content": sprintf("Previous attempt had validation errors: %s\n"
+                        "Please fix these issues.", last_errors.join("; ")),
+                };
+            }
+
+            hash<QoreLlmUtils::ChatResponse> resp = llm.chat(effective_messages, tools);
+            total_usage = mergeUsage(total_usage, resp.usage);
+
+            # Extract data from tool call or text response
+            hash<auto> parsed;
+            try {
+                if (resp.tool_calls) {
+                    # Tool-use response — structured data in arguments
+                    parsed = resp.tool_calls[0].arguments ?? {};
+                } else if (resp.content.val()) {
+                    # Text response — parse JSON
+                    parsed = parseResponse(resp.content);
+                } else {
+                    last_errors = ("LLM returned empty response",);
+                    if (attempts > max_retries) {
+                        return makeResult(parsed ?? {}, False, last_errors,
+                            total_usage, attempts);
+                    }
+                    continue;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                last_errors = (sprintf("parse error: %s", ex.desc),);
+                if (attempts > max_retries) {
+                    return makeResult({}, False, last_errors, total_usage, attempts);
+                }
+                continue;
+            }
+
+            # Validate against schema
+            list<string> errors = validateExtracted(parsed);
+            if (!errors) {
+                return makeResult(parsed, True, (), total_usage, attempts);
+            }
+
+            last_errors = errors;
+            if (attempts > max_retries) {
+                return makeResult(parsed, False, errors, total_usage, attempts);
+            }
+        }
+
+        throw "EXTRACTION-ERROR", "extraction failed after all retry attempts";
+    }
+
+    #! Creates an ExtractionResult with confidence scoring
+    private hash<ExtractionResult> makeResult(hash<auto> extracted, bool valid,
+            list<string> errors, hash<auto> usage, int attempts) {
+        # Confidence: 1.0 if valid on first try, decreasing with retries/errors
+        float confidence = 0.0;
+        if (valid) {
+            confidence = 1.0 / attempts.toFloat();
+        }
+
+        return <ExtractionResult>{
+            "extracted": extracted,
+            "valid": valid,
+            "validation_errors": errors,
+            "usage": usage,
+            "attempt_count": attempts,
+            "confidence": confidence,
+        };
+    }
+
+    #! Builds the system prompt, including few-shot examples if present
     private string buildSystemPrompt() {
         string prompt = "You are a structured information extraction engine. "
-            "Extract information from the provided text according to the following schema.\n\n";
+            "Extract information from the provided text according to the "
+            "following schema.\n\n";
 
         prompt += sprintf("Task: %s\n\n", schema.description);
-        prompt += "Output format: Respond with a JSON object containing the following fields:\n\n";
+        prompt += "Output format: Call the extraction tool with the following "
+            "fields:\n\n";
 
         foreach hash<ExtractionFieldDef> field in (schema.fields) {
             string req = field.required ? "REQUIRED" : "optional";
-            prompt += sprintf("- \"%s\" (%s, %s): %s\n", field.name, field.type, req,
-                field.description);
+            prompt += sprintf("- \"%s\" (%s, %s): %s\n", field.name, field.type,
+                req, field.description);
             if (field.enum_values) {
                 prompt += sprintf("  Allowed values: %s\n",
                     (map sprintf("\"%s\"", $1), field.enum_values).join(", "));
@@ -212,30 +358,45 @@ public class ExtractionPipeline {
         }
 
         prompt += "\nRules:\n"
-            "- Extract only information explicitly present in the text\n"
+            "- Extract only information explicitly present in the input\n"
             "- Use null for optional fields when the information is not found\n"
-            "- Do not invent or hallucinate data\n"
-            "- Respond ONLY with the JSON object, no additional text\n";
+            "- Do not invent or hallucinate data\n";
+
+        # Add few-shot examples if available
+        if (schema.examples) {
+            prompt += "\nExamples:\n\n";
+            int idx = 1;
+            foreach hash<auto> example in (schema.examples) {
+                prompt += sprintf("Example %d:\nInput: %s\nOutput: %s\n\n",
+                    idx, example.input, make_json(example.output));
+                ++idx;
+            }
+        }
 
         return prompt;
     }
 
-    #! Builds the user prompt for a given text
-    private string buildUserPrompt(string text) {
+    #! Builds messages for text extraction
+    private list<hash<QoreLlmUtils::ChatMessage>> buildTextMessages(string text) {
+        string user_prompt;
         if (user_prompt_template.val()) {
-            return regex_subst(user_prompt_template, "\\{text\\}", text);
+            user_prompt = regex_subst(user_prompt_template, "\\{text\\}", text);
+        } else {
+            user_prompt = sprintf(
+                "Extract structured data from the following text:\n\n---\n%s\n---",
+                text);
         }
-        return sprintf("Extract structured data from the following text:\n\n---\n%s\n---", text);
+        return (
+            <QoreLlmUtils::ChatMessage>{"role": "system", "content": system_prompt},
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": user_prompt},
+        );
     }
 
-    #! Parses the LLM response as JSON
+    #! Parses a text response as JSON (fallback when LLM doesn't use tools)
     private hash<auto> parseResponse(string content) {
-        # Strip markdown code fences if present
         string cleaned = content;
         if (cleaned =~ /^```/) {
-            # Remove opening fence (with optional language tag)
             cleaned = regex_subst(cleaned, "^```[a-zA-Z]*\\s*\n?", "");
-            # Remove closing fence
             cleaned = regex_subst(cleaned, "\n?```\\s*$", "");
         }
         cleaned = trim(cleaned);
@@ -249,20 +410,19 @@ public class ExtractionPipeline {
     }
 
     #! Validates extracted data against the schema
-    /** @return list of error messages (empty if valid)
-    */
     private list<string> validateExtracted(hash<auto> data) {
         list<string> errors = ();
 
         foreach hash<ExtractionFieldDef> field in (schema.fields) {
             auto val = data{field.name};
 
-            if (field.required && !exists val) {
+            # Check required fields — handle both missing and null
+            if (field.required && (!exists val || val === NULL)) {
                 push errors, sprintf("required field \"%s\" is missing", field.name);
                 continue;
             }
 
-            if (!exists val) {
+            if (!exists val || val === NULL) {
                 continue;
             }
 
@@ -284,18 +444,16 @@ public class ExtractionPipeline {
 
             # Array item validation
             if (field.type == "array" && field.items && val.typeCode() == NT_LIST) {
-                list<string> item_errors = validateArrayItems(field.name, val, field.items);
-                if (item_errors) {
-                    errors += item_errors;
-                }
+                errors += validateArrayItems(field.name, val, field.items);
             }
         }
 
         return errors;
     }
 
-    #! Validates the type of a field value
-    private list<string> validateFieldType(string field_name, auto val, string expected_type) {
+    #! Validates field type
+    private list<string> validateFieldType(string field_name, auto val,
+            string expected_type) {
         list<string> errors = ();
 
         switch (expected_type) {
@@ -341,7 +499,7 @@ public class ExtractionPipeline {
         return errors;
     }
 
-    #! Validates array items against their schema
+    #! Validates array items
     private list<string> validateArrayItems(string field_name, list<auto> items,
             hash<auto> item_schema) {
         list<string> errors = ();
@@ -351,7 +509,7 @@ public class ExtractionPipeline {
             foreach auto item in (items) {
                 if (item.typeCode() == NT_HASH) {
                     foreach string req_field in (item_schema.required) {
-                        if (!exists item{req_field}) {
+                        if (!exists item{req_field} || item{req_field} === NULL) {
                             push errors, sprintf("field \"%s[%d]\" is missing required "
                                 "property \"%s\"", field_name, idx, req_field);
                         }

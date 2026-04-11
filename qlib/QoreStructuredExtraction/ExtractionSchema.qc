@@ -50,6 +50,9 @@ public hashdecl ExtractionSchemaInfo {
     string description;
     #! List of fields to extract
     list<hash<ExtractionFieldDef>> fields;
+    #! Optional few-shot examples for improved extraction quality; each example
+    #! has "input" (text) and "output" (hash matching the schema)
+    *list<hash<auto>> examples;
 }
 
 #! Result from an extraction operation
@@ -64,6 +67,9 @@ public hashdecl ExtractionResult {
     hash<auto> usage;
     #! Number of extraction attempts (1 = succeeded on first try)
     int attempt_count;
+    #! Extraction confidence score (0.0 to 1.0); based on validation results
+    #! and attempt count (1.0 = valid on first try, decreases with retries)
+    float confidence;
 }
 
 #! Provides pre-built schema templates for common data extraction tasks, plus utilities for converting schemas to JSON Schema format used by LLMs.
