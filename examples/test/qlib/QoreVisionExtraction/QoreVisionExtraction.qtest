@@ -16,9 +16,11 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
     constructor() : Test("QoreVisionExtractionTest", "1.0") {
         # Config validation tests
         addTestCase("VisionLlmClient - invalid mode", \visionInvalidModeTest());
-        addTestCase("VisionLlmClient - missing url", \visionMissingUrlTest());
-        addTestCase("VisionLlmClient - valid openai config", \visionValidOpenaiTest());
+        addTestCase("VisionLlmClient - valid http config", \visionValidHttpTest());
         addTestCase("VisionLlmClient - valid anthropic config", \visionValidAnthropicTest());
+        addTestCase("VisionLlmClient - openai backward compat", \visionOpenaiCompatTest());
+        addTestCase("VisionLlmClient - qorus mode", \visionQorusModeTest());
+        addTestCase("VisionLlmClient - custom system prompt", \visionCustomPromptTest());
         addTestCase("VisionLlmConfig - defaults", \visionConfigDefaultsTest());
 
         set_return_value(main());
@@ -36,21 +38,9 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         );
     }
 
-    visionMissingUrlTest() {
-        assertThrows("VISION-CONFIG-ERROR", "url is required",
-            sub () {
-                new VisionLlmClient(<VisionLlmConfig>{
-                    "mode": "openai",
-                    "url": "",
-                    "model": "gpt-4o",
-                });
-            }
-        );
-    }
-
-    visionValidOpenaiTest() {
+    visionValidHttpTest() {
         VisionLlmClient client(<VisionLlmConfig>{
-            "mode": "openai",
+            "mode": "http",
             "url": "https://api.openai.com",
             "model": "gpt-4o",
             "api_key": "test-key",
@@ -68,9 +58,37 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         assertTrue(True);
     }
 
+    visionOpenaiCompatTest() {
+        # "openai" should be accepted as alias for "http"
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "openai",
+            "url": "https://api.openai.com",
+            "model": "gpt-4o",
+        });
+        assertTrue(True);
+    }
+
+    visionQorusModeTest() {
+        # Qorus mode should construct without error (fails at call time)
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "qorus",
+            "model": "gpt-4o",
+        });
+        assertTrue(True);
+    }
+
+    visionCustomPromptTest() {
+        VisionLlmClient client(<VisionLlmConfig>{
+            "mode": "qorus",
+            "model": "gpt-4o",
+            "system_prompt": "You are a medical image analyst.",
+        });
+        assertTrue(True);
+    }
+
     visionConfigDefaultsTest() {
         hash<VisionLlmConfig> config(<VisionLlmConfig>{
-            "mode": "openai",
+            "mode": "http",
             "url": "http://x",
             "model": "test",
         });
@@ -78,5 +96,6 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         assertEq(10000, config.connect_timeout_ms);
         assertEq(120000, config.timeout_ms);
         assertEq("2023-06-01", config.anthropic_version);
+        assertEq(NOTHING, config.system_prompt);
     }
 }

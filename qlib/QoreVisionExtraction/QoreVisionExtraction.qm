@@ -26,18 +26,14 @@
 %requires qore >= 2.0
 %modern
 
-%try-module RestClient
-%define NoRestClient
-%endtry
-
-%try-module json
-%define NoJson
-%endtry
+%requires(reexport) QoreLlmUtils
+%requires json
 
 module QoreVisionExtraction {
     version = "1.0.0";
     desc = "user module providing multimodal LLM vision extraction for "
-        "image description, table extraction, and text extraction from images";
+        "image description, table extraction, text extraction, and "
+        "structured data extraction from images";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -52,15 +48,19 @@ module QoreVisionExtraction {
     The %QoreVisionExtraction module provides multimodal LLM calls for
     extracting information from images.  It sends images as base64-encoded
     content blocks to vision-capable LLMs (OpenAI GPT-4o, Anthropic Claude)
-    and returns extracted text, descriptions, or markdown tables.
+    and returns extracted text, descriptions, markdown tables, or structured
+    data.
+
+    Built on @ref QoreLlmUtils::LlmBackend "LlmBackend" — supports all
+    backend modes including HTTP/OpenAI, Anthropic, and Qorus AI Gateway.
 
     @par Example: Describe an image
     @code{.py}
-%requires QoreVisionExtraction
 %modern
+%requires QoreVisionExtraction
 
 VisionLlmClient client(<VisionLlmConfig>{
-    "mode": "openai",
+    "mode": "http",
     "url": "https://api.openai.com",
     "model": "gpt-4o",
     "api_key": ENV.OPENAI_API_KEY,
@@ -74,5 +74,7 @@ printf("Description: %s\n", result.text);
 
     @subsection qorevisionextraction_1_0 QoreVisionExtraction Module Version 1.0
     - Initial release with @ref QoreVisionExtraction::VisionLlmClient "VisionLlmClient"
-      supporting OpenAI and Anthropic multimodal APIs
+      supporting OpenAI, Anthropic, and Qorus AI Gateway modes
+    - Image description, table extraction, text extraction, and structured extraction
+    - Custom system prompts and output schemas
 */

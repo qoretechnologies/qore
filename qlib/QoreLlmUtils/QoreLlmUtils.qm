@@ -26,7 +26,7 @@
 %requires qore >= 2.0
 %modern
 
-%try-module RestClient
+%try-module RestClientIo
 %define NoRestClient
 %endtry
 

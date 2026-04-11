@@ -67,12 +67,27 @@ public hashdecl ChatToolCall {
     *hash<auto> arguments;
 }
 
+#! A content part in a multimodal message (text or image)
+public hashdecl ContentPart {
+    #! Part type: "text" for text content, "image" for image data
+    string type;
+    #! Text content (when type is "text")
+    *string text;
+    #! Image binary data (when type is "image")
+    *binary data;
+    #! Image MIME type (when type is "image"), e.g., "image/png", "image/jpeg"
+    *string mime_type;
+}
+
 #! A message in a multi-turn conversation
 public hashdecl ChatMessage {
     #! Message role: "system", "user", "assistant", or "tool"
     string role;
     #! Text content (may be empty for assistant messages that only contain tool_calls)
     *string content;
+    #! Multimodal content parts (images + text); when set, takes precedence
+    #! over \c content for the wire format sent to the LLM
+    *list<hash<ContentPart>> content_parts;
     #! Tool calls requested by the assistant (present when role is "assistant")
     *list<hash<ChatToolCall>> tool_calls;
     #! ID of the tool call this message is responding to (when role is "tool")
@@ -157,7 +172,7 @@ public class LlmBackend {
         string anthropic_version;
 %ifndef NoRestClient
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
-        *RestClient rest_client;
+        *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
         Mutex rest_mutex();
 %endif
@@ -272,10 +287,11 @@ public class LlmBackend {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
             if (!rest_client) {
-                rest_client = new RestClient({
+                rest_client = new RestClientIo::RestClientIo({
                     "url": url,
                     "connect_timeout": connect_timeout_ms,
                     "timeout": timeout_ms,
+                    "data": "json",
                 });
             }
         }
@@ -310,20 +326,16 @@ public class LlmBackend {
             };
         }
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
 
         hash<auto> resp;
         try {
-            resp = rest_client.post("/v1/chat/completions", body, NOTHING, \hdr);
+            resp = rest_client.restPost("/v1/chat/completions", body, hdr);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("HTTP completion request failed: %s", ex.desc), ex;
-        }
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
         }
 
         string content = resp.body.choices[0].message.content ?? "";
@@ -368,7 +380,6 @@ public class LlmBackend {
         }
 
         hash<auto> hdr = {
-            "Content-Type": "application/json",
             "anthropic-version": anthropic_version,
         };
         if (api_key.val()) {
@@ -377,13 +388,9 @@ public class LlmBackend {
 
         hash<auto> resp;
         try {
-            resp = rest_client.post("/v1/messages", body, NOTHING, \hdr);
+            resp = rest_client.restPost("/v1/messages", body, hdr);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("Anthropic completion request failed: %s", ex.desc), ex;
-        }
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
         }
 
         # Extract content from response
@@ -474,7 +481,28 @@ public class LlmBackend {
         foreach hash<ChatMessage> msg in (messages) {
             hash<auto!> api_msg();
             api_msg.role = msg.role;
-            if (msg.content.val()) {
+            if (msg.content_parts) {
+                # Multimodal: build content block array for OpenAI
+                list<auto> parts = ();
+                foreach hash<ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": sprintf("data:%s;base64,%s",
+                                    part.mime_type ?? "image/png", b64),
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {
+                            "type": "text",
+                            "text": part.text,
+                        };
+                    }
+                }
+                api_msg.content = parts;
+            } else if (msg.content.val()) {
                 api_msg.content = msg.content;
             }
             if (msg.tool_calls) {
@@ -526,7 +554,7 @@ public class LlmBackend {
             body.tools = tool_defs;
         }
 
-        hash<auto> hdr = {"Content-Type": "application/json"};
+        *hash<auto> hdr;
         if (api_key.val()) {
             hdr."Authorization" = "Bearer " + api_key;
         }
@@ -539,7 +567,7 @@ public class LlmBackend {
                 resp = call_static_method("UserApi", "callRestApi", "PUT",
                     endpoint, body);
             } else {
-                resp = rest_client.post(endpoint, body, NOTHING, \hdr);
+                resp = rest_client.restPost(endpoint, body, hdr);
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "UNKNOWN-CLASS") {
@@ -547,10 +575,6 @@ public class LlmBackend {
                     "Qorus mode requires a Qorus runtime context (UserApi not available)";
             }
             throw "LLM-ERROR", sprintf("chat request failed: %s", ex.desc), ex;
-        }
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
         }
 
         # For Qorus mode, resp IS the body (no .body wrapper)
@@ -666,10 +690,37 @@ public class LlmBackend {
             }
 
             # Regular user or assistant message
-            push api_messages, {
-                "role": msg.role,
-                "content": msg.content ?? "",
-            };
+            if (msg.content_parts) {
+                # Multimodal: build content block array for Anthropic
+                list<auto> parts = ();
+                foreach hash<ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": part.mime_type ?? "image/png",
+                                "data": b64,
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {
+                            "type": "text",
+                            "text": part.text,
+                        };
+                    }
+                }
+                push api_messages, {
+                    "role": msg.role,
+                    "content": parts,
+                };
+            } else {
+                push api_messages, {
+                    "role": msg.role,
+                    "content": msg.content ?? "",
+                };
+            }
         }
 
         # Flush any remaining tool results
@@ -704,7 +755,6 @@ public class LlmBackend {
         }
 
         hash<auto> hdr = {
-            "Content-Type": "application/json",
             "anthropic-version": anthropic_version,
         };
         if (api_key.val()) {
@@ -713,13 +763,9 @@ public class LlmBackend {
 
         hash<auto> resp;
         try {
-            resp = rest_client.post("/v1/messages", body, NOTHING, \hdr);
+            resp = rest_client.restPost("/v1/messages", body, hdr);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("Anthropic chat request failed: %s", ex.desc), ex;
-        }
-
-        if (resp.body.typeCode() == NT_STRING) {
-            resp.body = parse_json(resp.body);
         }
 
         # Parse response content blocks
