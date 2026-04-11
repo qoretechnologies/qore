@@ -192,12 +192,10 @@ public class QoreGuardrailsTest inherits QUnit::Test {
 
     injBenignTest() {
         PromptInjectionDetector inj(GS_CRITICAL);
-        # "system prompt" as part of a legitimate question
+        # "system prompt" in an educational context is now exempt
         hash<GuardrailResult> r = inj.evaluate(
             "What is the system prompt engineering technique?");
-        # This should be caught by pattern matching (it contains "system prompt")
-        # In a production system, LLM-based detection would handle this better
-        assertFalse(r.passed);
+        assertTrue(r.passed);
     }
 
     # ===================== Output Format Tests =====================

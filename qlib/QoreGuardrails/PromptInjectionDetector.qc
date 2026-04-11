@@ -24,48 +24,62 @@
 #! @see PromptInjectionDetector
 public namespace QoreGuardrails {
 
-#! LLM-based prompt injection detection
-/** Classifies input text as a potential prompt injection attempt using an LLM.
-    Falls back to pattern-based heuristics if no LLM backend is configured.
+#! Prompt injection detection with confidence scoring
+/** Detects prompt injection attempts using weighted pattern matching with
+    optional LLM classification fallback.
 
     A prompt injection is an attack where a user tries to override the AI
-    system's instructions -- for example, by saying "ignore all previous
+    system's instructions — for example, by saying "ignore all previous
     instructions" or "pretend you are a different AI."  This rule detects such
     attempts.
 
-    Pattern-based heuristics detect common injection indicators:
-    - "ignore previous instructions"
-    - "you are now"
-    - "system prompt"
-    - "pretend you are"
-    - role-switching attempts
-    - delimiter injection (```, ---, etc.)
+    Each pattern has a weight (0.0-1.0) that reflects how strongly it indicates
+    an injection attempt. Weights from all matching patterns are accumulated,
+    and if the total exceeds \c pattern_threshold (default 0.5), the text is
+    flagged. Some patterns have context exemptions — for example, "system
+    prompt" is exempted when used in educational contexts like "what is system
+    prompt engineering?"
+
+    @par Example: Detect prompt injection
+    @code{.py}
+PromptInjectionDetector detector("critical");
+hash<GuardrailResult> r = detector.evaluate("ignore all previous instructions");
+# r.passed == False (weight 0.8 > threshold 0.5)
+
+r = detector.evaluate("What is the system prompt engineering technique?");
+# r.passed == True (context-exempt, weight not counted)
+    @endcode
 
     @since QoreGuardrails 1.0
 */
 public class PromptInjectionDetector inherits AbstractGuardrailRule {
     public {
-        #! Common injection patterns (case-insensitive regex)
+        #! Weighted injection patterns with optional context exemptions
         const InjectionPatterns = (
-            "ignore\\s+(all\\s+)?previous\\s+instructions",
-            "ignore\\s+(all\\s+)?prior\\s+instructions",
-            "disregard\\s+(all\\s+)?previous",
-            "forget\\s+(all\\s+)?(your|previous)\\s+instructions",
-            "you\\s+are\\s+now\\s+",
-            "from\\s+now\\s+on[,]?\\s+you",
-            "pretend\\s+(you\\s+are|to\\s+be)",
-            "act\\s+as\\s+(if|though)\\s+you",
-            "new\\s+instructions:",
-            "system\\s*prompt",
-            "\\bDAN\\b",
-            "do\\s+anything\\s+now",
-            "jailbreak",
-            "bypass\\s+(your|the|all)\\s+(safety|content|guard)",
-            "override\\s+(your|the|all)\\s+(safety|rules|instructions)",
+            {"pattern": "ignore\\s+(all\\s+)?previous\\s+instructions", "weight": 0.8},
+            {"pattern": "ignore\\s+(all\\s+)?prior\\s+instructions", "weight": 0.8},
+            {"pattern": "disregard\\s+(all\\s+)?previous", "weight": 0.7},
+            {"pattern": "forget\\s+(all\\s+)?(your|previous)\\s+instructions", "weight": 0.8},
+            {"pattern": "you\\s+are\\s+now\\s+", "weight": 0.6},
+            {"pattern": "from\\s+now\\s+on[,]?\\s+you", "weight": 0.6},
+            {"pattern": "pretend\\s+(you\\s+are|to\\s+be)", "weight": 0.7},
+            {"pattern": "act\\s+as\\s+(if|though)\\s+you", "weight": 0.5},
+            {"pattern": "new\\s+instructions:", "weight": 0.7},
+            {"pattern": "system\\s*prompt", "weight": 0.3,
+                "context_exempt":
+                    "(?:what|how|explain|learn|teach|about).*system\\s*prompt"
+                    "|system\\s*prompt.*(?:technique|engineering|design|method|approach)"},
+            {"pattern": "\\bDAN\\b", "weight": 0.4},
+            {"pattern": "do\\s+anything\\s+now", "weight": 0.7},
+            {"pattern": "jailbreak", "weight": 0.8},
+            {"pattern": "bypass\\s+(your|the|all)\\s+(safety|content|guard)", "weight": 0.8},
+            {"pattern": "override\\s+(your|the|all)\\s+(safety|rules|instructions)", "weight": 0.8},
         );
     }
 
     private {
+        #! Confidence threshold for pattern-based detection
+        float pattern_threshold;
 %ifndef NoLlmUtils
         #! Optional LLM backend for classification
         *QoreLlmUtils::LlmBackend llm;
@@ -74,11 +88,14 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
 
     #! Creates a prompt injection detector
     /** @param severity violation severity level
-        @param params optional parameters (reserved for future use)
+        @param params optional parameters:
+            - \c pattern_threshold (float): minimum accumulated weight from
+              pattern matching to trigger a violation; default 0.5
         @param llm_config optional LlmBackendConfig for LLM-based classification
     */
     constructor(string severity = GS_CRITICAL, *hash<auto> params,
             *hash<auto> llm_config) : AbstractGuardrailRule(severity) {
+        pattern_threshold = params.pattern_threshold ?? 0.5;
 %ifndef NoLlmUtils
         if (llm_config) {
             llm = new QoreLlmUtils::LlmBackend(
@@ -99,18 +116,41 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
     hash<GuardrailResult> evaluate(string text, *hash<auto> ctx) {
         date start = now_us();
 
-        # Pattern-based heuristic check
+        # Pattern-based confidence scoring
         string lower_text = text.lwr();
-        foreach string pattern in (InjectionPatterns) {
-            if (regex(lower_text, pattern, RE_Caseless)) {
-                hash<GuardrailResult> result = makeFailResult(
-                    sprintf("potential prompt injection detected (pattern: %s)", pattern),
-                    NOTHING,
-                    {"detection_method": "pattern", "pattern": pattern},
-                );
-                result.duration_ms = getElapsedMs(start);
-                return result;
+        float total_weight = 0.0;
+        list<string> matched_patterns = ();
+
+        foreach hash<auto> entry in (InjectionPatterns) {
+            if (regex(lower_text, entry.pattern, RE_Caseless)) {
+                # Check context exemption
+                if (entry.context_exempt.val()
+                        && regex(lower_text, entry.context_exempt, RE_Caseless)) {
+                    continue;
+                }
+                total_weight += entry.weight;
+                push matched_patterns, entry.pattern;
             }
+        }
+
+        # Cap at 1.0
+        if (total_weight > 1.0) {
+            total_weight = 1.0;
+        }
+
+        if (total_weight >= pattern_threshold) {
+            hash<GuardrailResult> result = makeFailResult(
+                sprintf("potential prompt injection detected (confidence: %.0f%%)",
+                    total_weight * 100),
+                NOTHING,
+                {
+                    "detection_method": "pattern",
+                    "confidence": total_weight,
+                    "matched_patterns": matched_patterns,
+                },
+            );
+            result.duration_ms = getElapsedMs(start);
+            return result;
         }
 
         # LLM-based classification (if available)
@@ -177,7 +217,7 @@ public class PromptInjectionDetector inherits AbstractGuardrailRule {
                 result.duration_ms = getElapsedMs(start);
                 return result;
             }
-            # LLM failure is not a guardrail failure — fall through to pass
+            # LLM failure — fall through to pass
         }
 
         hash<GuardrailResult> result = makePassResult();
