@@ -5329,17 +5329,41 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_binary_mut(
     QoreValue res;
     switch (inst->binary_mut_op) {
         case LVBinaryMutOp::Push:
+        case LVBinaryMutOp::Unshift: {
+            // Auto-vivify NOTHING to empty list (mirror IR interpreter).
+            // Without this, ensureUnique() null-derefs on a NOTHING slot and
+            // `push list_member, val` crashes for members declared without an
+            // initializer (default value NOTHING, not []).
+            if (lvh.getType() == NT_NOTHING) {
+                const QoreTypeInfo* vti = lvh.getTypeInfo();
+                if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+                    const QoreTypeInfo* lti = vti == autoTypeInfo
+                        ? autoTypeInfo
+                        : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+                    if (lvh.assign(new QoreListNode(lti))) {
+                        break;
+                    }
+                }
+            }
+            if (lvh.getType() != NT_LIST) {
+                if (runtime_check_parse_option(PO_STRICT_ARGS)) {
+                    xsink->raiseException(
+                        inst->binary_mut_op == LVBinaryMutOp::Push
+                            ? "PUSH-ERROR" : "UNSHIFT-ERROR",
+                        "the lvalue argument is type \"%s\"; expecting \"list\"",
+                        lvh.getTypeName());
+                }
+                break;
+            }
             lvh.ensureUnique();
-            if (lvh.getType() == NT_LIST) {
-                lvh.getValue().get<QoreListNode>()->push(rhs.refSelf(), xsink);
+            QoreListNode* l = lvh.getValue().get<QoreListNode>();
+            if (inst->binary_mut_op == LVBinaryMutOp::Push) {
+                l->push(rhs.refSelf(), xsink);
+            } else {
+                l->insert(rhs.refSelf(), xsink);
             }
             break;
-        case LVBinaryMutOp::Unshift:
-            lvh.ensureUnique();
-            if (lvh.getType() == NT_LIST) {
-                lvh.getValue().get<QoreListNode>()->insert(rhs.refSelf(), xsink);
-            }
-            break;
+        }
         case LVBinaryMutOp::RegexSubst: {
             if (!lvh.checkType(NT_STRING)) {
                 break;
