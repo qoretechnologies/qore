@@ -30,13 +30,17 @@
 
 #include <qore/Qore.h>
 #include <qore/QoreSocketObject.h>
+#include <qore/QoreFuture.h>
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/ql_debug.h"
 #include "qore/intern/ql_type.h"
 #include "qore/intern/AsyncIoControllerPriv.h"
 #include "qore/intern/QC_Socket.h"
+#include "qore/intern/QC_Future.h"
+#include "qore/intern/QC_FutureImpl.h"
 
 #include <set>
+#include <thread>
 
 static inline void strindent(QoreString* s, int indent) {
     for (int i = 0; i < indent; i++) {
@@ -384,6 +388,108 @@ static void ut_asyncio_wait_for_processing_empty(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// --- q_future_get_blocking tests ---
+
+static void ut_future_get_blocking_resolved(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    // Create a Promise and its Future via the C++ API
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+    UT_ASSERT(c, future.operator->() != nullptr, "Future is non-null");
+
+    // Wrap the Future in a QoreObject (like FutureImpl would)
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Resolve the promise from a background thread after ~50ms
+    std::thread resolver([&promise]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        ExceptionSink tx;
+        promise->set(QoreValue((int64)42), &tx);
+        tx.clear();
+    });
+
+    // Block on the future with a 5s budget — should return 42 within ~50ms
+    int unused_us;
+    int64 start_s = q_epoch_us(unused_us);
+    int64 start_us = start_s * 1000000LL + unused_us;
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    resolver.join();
+    UT_ASSERT(c, !xsink, "q_future_get_blocking on resolved Future: no exception");
+    UT_ASSERT_EQ(c, (int64)42, result.getAsBigInt(),
+        "q_future_get_blocking returns the resolved value");
+    UT_ASSERT(c, elapsed_us >= 40000 && elapsed_us < 200000,
+        "q_future_get_blocking elapsed ~50ms (before resolution)");
+
+    result.discard(&xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_future_get_blocking_timeout(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Don't resolve the promise — wait should time out at 100ms
+    int unused_us;
+    int64 start_s = q_epoch_us(unused_us);
+    int64 start_us = start_s * 1000000LL + unused_us;
+    QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
+    int end_us_tick;
+    int64 end_s = q_epoch_us(end_us_tick);
+    int64 elapsed_us = (end_s * 1000000LL + end_us_tick) - start_us;
+
+    UT_ASSERT(c, xsink.isException(),
+        "q_future_get_blocking times out → FUTURE-TIMEOUT exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
+        "timeout exception is FUTURE-TIMEOUT");
+    UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
+    UT_ASSERT(c, elapsed_us >= 90000 && elapsed_us < 500000,
+        "q_future_get_blocking elapsed ~100ms on timeout");
+    xsink.clear();
+
+    // Resolve AFTER the timeout so the Future drops cleanly
+    promise->set(QoreValue((int64)1), &xsink);
+    xsink.clear();
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
+static void ut_future_get_blocking_error(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    ReferenceHolder<QorePromise> promise(new QorePromise(), &xsink);
+    ReferenceHolder<QoreFuture> future(promise->getFuture(&xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Promise/Future creation succeeds");
+
+    QoreObject* future_obj = new QoreObject(QC_FUTUREIMPL, getProgram(), future.release());
+
+    // Reject the promise with an error
+    promise->setError("TEST-ERROR", "test error description", QoreValue(), &xsink);
+    UT_ASSERT(c, !xsink, "setError succeeds");
+
+    // Block on the future — should raise the error immediately
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    UT_ASSERT(c, xsink.isException(),
+        "q_future_get_blocking on rejected Future: raises exception");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "TEST-ERROR"),
+        "exception has the Future's error code");
+    UT_ASSERT(c, result.isNothing(), "error returns NOTHING");
+    xsink.clear();
+
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "cleanup succeeds");
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -437,6 +543,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_timers(c);
     ut_asyncio_restart(c);
     ut_asyncio_concurrent_lifecycle(c);
+    ut_future_get_blocking_resolved(c);
+    ut_future_get_blocking_timeout(c);
+    ut_future_get_blocking_error(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
