@@ -4305,11 +4305,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (re && re->getPatternCStr()) {
                         llvm::Value* pattern_ptr = builder->CreateGlobalStringPtr(re->getPatternCStr());
                         llvm::Value* options_val = llvm::ConstantInt::get(i64_type, re->getOptions());
+                        // Plumb the regex global flag (e.g. /g) — lives separately from
+                        // PCRE options on QoreRegex. Without this, RegexExtract /g
+                        // returns only the first match in AOT.
+                        llvm::Value* global_val = llvm::ConstantInt::get(i32_type,
+                            re->isGlobal() ? 1 : 0);
                         auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
                             llvm::FunctionType::get(i64_type,
-                                {i32_type, ptr_type, i64_type, i64_type, ptr_type}, false));
+                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
-                            options_val, operand_boxed, xsink_arg});
+                            options_val, global_val, operand_boxed, xsink_arg});
                     } else {
                         // Fallback to slot-based dispatch
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);
@@ -9168,11 +9173,16 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     if (re && re->getPatternCStr()) {
                         llvm::Value* pattern_ptr = builder->CreateGlobalStringPtr(re->getPatternCStr());
                         llvm::Value* options_val = llvm::ConstantInt::get(i64_type, re->getOptions());
+                        // Plumb the regex global flag (e.g. /g) — lives separately from
+                        // PCRE options on QoreRegex. Without this, RegexExtract /g
+                        // returns only the first match in AOT.
+                        llvm::Value* global_val = llvm::ConstantInt::get(i32_type,
+                            re->isGlobal() ? 1 : 0);
                         auto helper = module.getOrInsertFunction("qore_rt_regex_op_by_pattern",
                             llvm::FunctionType::get(i64_type,
-                                {i32_type, ptr_type, i64_type, i64_type, ptr_type}, false));
+                                {i32_type, ptr_type, i64_type, i32_type, i64_type, ptr_type}, false));
                         result = builder->CreateCall(helper, {opcode_val, pattern_ptr,
-                            options_val, operand_boxed, xsink_arg});
+                            options_val, global_val, operand_boxed, xsink_arg});
                     } else {
                         // Fallback to slot-based dispatch
                         int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getExprSlot(expr_bits);

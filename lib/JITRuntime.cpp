@@ -5875,8 +5875,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* 
 // AOT mode: regex op with pattern string instead of expr slot.
 // Compiles the regex at each call (no caching — regex compilation is fast relative to
 // the string matching it precedes). Eliminates EXPR_TREE for regex expression slots.
+//
+// The `global` parameter mirrors QoreRegex::setGlobal(); without it, AOT-compiled
+// `=~ x/.../g` (regex extract) would only return the first match because the
+// freshly-constructed QoreRegex defaults to non-global. The flag lives on
+// QoreRegex separately from the PCRE options bitfield, so it must be plumbed
+// through explicitly.
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_by_pattern(int32_t opcode, const char* pattern,
-        int64_t options, uint64_t operand_bits, ExceptionSink* xsink) {
+        int64_t options, int32_t global, uint64_t operand_bits, ExceptionSink* xsink) {
     QoreValue operand = fromBits(operand_bits);
     QoreStringNodeValueHelper str(operand);
 
@@ -5885,6 +5891,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_by_pattern(int32_t opcode, const 
     QoreRegex regex(&pat_str, static_cast<int>(options), xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
+    }
+    if (global) {
+        regex.setGlobal();
     }
 
     QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
