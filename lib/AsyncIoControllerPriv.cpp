@@ -214,15 +214,24 @@ void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj) {
 }
 
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
-    // Hold a reference to the object's program to prevent premature program
-    // destruction while the callback is pending. Without this, the program
-    // can be destroyed (QoreProgramHelper dtor skips QTF_EXTERNAL_LIFECYCLE
-    // threads) while our worker still holds referenced QoreObjects, causing
-    // SIGSEGV on arm64 when evalMethod accesses freed program data.
+    // Hold a dependency reference to the object's program to keep the
+    // program struct alive (not freed) while the callback is pending.
+    // Without this, the program can be destroyed (QoreProgramHelper dtor
+    // skips QTF_EXTERNAL_LIFECYCLE threads) while our worker still holds
+    // referenced QoreObjects, causing SIGSEGV on arm64 when evalMethod
+    // accesses freed program data.
+    //
+    // IMPORTANT: use depRef (not ref) — a strong ref would prevent the
+    // main cleanup thread from running clearNamespaceData / del on the
+    // program while the worker is still processing.  When the worker's
+    // deref is the last strong ref, the worker triggers full program
+    // destruction on a worker thread, racing with the main thread's
+    // module cleanup path.  A dep ref keeps the struct alive without
+    // blocking the data-cleanup path.
     if (item.spop_obj) {
         item.pgm = item.spop_obj->getProgram();
         if (item.pgm) {
-            item.pgm->ref();
+            item.pgm->depRef();
         }
     }
 
@@ -247,7 +256,7 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             item.controller->deref(&xsink);
         }
         if (item.pgm) {
-            item.pgm->deref(&xsink);
+            item.pgm->depDeref();
         }
         return;
     }
@@ -547,14 +556,18 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             }
         }
 
-        // Release the program reference last.  Object derefs above may
-        // still need the program alive (e.g., QoreObject destructors
-        // running Qore code), which is why we defer the pgm deref until
-        // after those are complete — but we must have already decremented
-        // the per-program counter so waitForProgramIdle() sees this worker
-        // as idle when called from the Program destructor path.
+        // Release the program dependency reference last.  Object derefs
+        // above may still need the program struct alive (e.g., QoreObject
+        // destructors accessing program data), which is why we defer the
+        // dep deref until after those are complete.
+        //
+        // depDeref (not deref): the worker never triggers program data
+        // cleanup — only memory deallocation when the last dep ref drops.
+        // This prevents the race where the worker's final strong deref
+        // would call waitForTerminationAndClear on the worker thread,
+        // competing with the main cleanup thread's module destruction.
         if (async_item.pgm) {
-            async_item.pgm->deref(xsink);
+            async_item.pgm->depDeref();
         }
     }
 }
