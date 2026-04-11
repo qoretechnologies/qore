@@ -47,6 +47,11 @@ public hashdecl LlmBackendConfig {
     int timeout_ms = 120000;
     #! Anthropic API version header; default "2023-06-01"
     string anthropic_version = "2023-06-01";
+    #! Maximum retry attempts for transient errors (429, 5xx); default 3;
+    #! set to 0 to disable retries
+    int max_retries = 3;
+    #! Initial retry delay in milliseconds for exponential backoff; default 1000
+    int retry_delay_ms = 1000;
 }
 
 #! Result from an LLM completion call
@@ -119,6 +124,18 @@ public hashdecl ChatResponse {
     hash<auto> usage;
 }
 
+#! A streaming event from a chat completion
+public hashdecl ChatStreamEvent {
+    #! Event type from the SSE stream (e.g., "content_block_delta", "message_delta")
+    *string event;
+    #! Text delta (incremental text content in this chunk)
+    *string delta;
+    #! True when this is the final event (stream complete)
+    bool done = False;
+    #! Raw event data (the full parsed JSON from the SSE data field)
+    *hash<auto> raw;
+}
+
 #! Pluggable LLM backend for chat completions
 /** Provides a unified interface for making LLM chat completion calls across
     multiple providers.  Supports three backends:
@@ -170,6 +187,9 @@ public class LlmBackend {
         int timeout_ms;
         #! Anthropic API version
         string anthropic_version;
+        #! Retry config
+        int max_retries;
+        int retry_delay_ms;
 %ifndef NoRestClient
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
@@ -214,6 +234,8 @@ public class LlmBackend {
         connect_timeout_ms = config.connect_timeout_ms;
         timeout_ms = config.timeout_ms;
         anthropic_version = config.anthropic_version;
+        max_retries = config.max_retries;
+        retry_delay_ms = config.retry_delay_ms;
     }
 
     #! Makes a chat completion call and returns the result
@@ -266,7 +288,7 @@ public class LlmBackend {
 
         @throw LLM-ERROR if the chat request fails
 
-        @since QoreLlmUtils 1.1
+        @since QoreLlmUtils 1.0
     */
     hash<ChatResponse> chat(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools) {
@@ -278,6 +300,161 @@ public class LlmBackend {
                 return chatAnthropic(messages, tools);
         }
         throw "LLM-ERROR", sprintf("unsupported mode %y", mode);
+    }
+
+    #! Streams a chat completion via Server-Sent Events (SSE)
+    /** Sends a chat request with \c stream=true and returns events as they
+        arrive. Each event contains a text delta — the incremental text
+        generated so far. Use this for real-time chat interfaces where you
+        want to show the response as it's being generated.
+
+        @param messages list of @ref ChatMessage hashes
+        @param callback code called for each streaming event with a
+            @ref ChatStreamEvent hash; called with \c done=True when complete
+        @param tools optional tool definitions
+
+        @throw LLM-ERROR if the request fails
+        @throw LLM-DEPENDENCY-ERROR if streaming modules are not available
+
+        @par Example: Stream a response
+        @code{.py}
+%modern
+%requires QoreLlmUtils
+
+LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
+    "model": "gpt-4o"});
+llm.chatStream(
+    (<ChatMessage>{"role": "user", "content": "Tell me a story"},),
+    sub (hash<ChatStreamEvent> event) {
+        if (event.delta) {
+            print(event.delta);
+        }
+        if (event.done) {
+            printf("\n[done]\n");
+        }
+    },
+);
+        @endcode
+
+        @since QoreLlmUtils 1.0
+    */
+    chatStream(list<hash<ChatMessage>> messages, code callback,
+            *list<hash<ToolDefinition>> tools) {
+        if (mode == "qorus") {
+            throw "LLM-ERROR",
+                "streaming is not supported in Qorus mode; use chat() instead";
+        }
+%ifdef NoStreaming
+        throw "LLM-DEPENDENCY-ERROR",
+            "HttpClientStreamingIo module is required for streaming";
+%endif
+%ifndef NoStreaming
+%ifndef NoRestClient
+        ensureRestClient();
+
+        # Build the request body (same as chat but with stream=true)
+        hash<auto> body;
+        if (mode == "anthropic") {
+            body = buildAnthropicBody(messages, tools);
+            body.stream = True;
+        } else {
+            body = buildHttpBody(messages, tools);
+            body.stream = True;
+        }
+
+        # Build headers
+        hash<auto> hdr = {"Accept": "text/event-stream"};
+        if (mode == "anthropic") {
+            hdr."anthropic-version" = anthropic_version;
+            if (api_key.val()) {
+                hdr."x-api-key" = api_key;
+            }
+        } else {
+            if (api_key.val()) {
+                hdr."Authorization" = "Bearer " + api_key;
+            }
+        }
+
+        string endpoint = mode == "anthropic" ? "/v1/messages" : "/v1/chat/completions";
+
+        # Acquire stream and start SSE
+        HttpClientIo::HttpClientConnectionManager mgr = rest_client.getConnectionManager();
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+
+        # Serialize body
+        string json_body = make_json(body);
+        hdr."Content-Type" = "application/json";
+
+        stream.startStreaming("POST", endpoint, hdr, False, json_body);
+
+        HttpClientStreamingIo::SseStreamReader reader(stream);
+
+        while (True) {
+            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
+            if (!evt) {
+                callback(<ChatStreamEvent>{"done": True});
+                break;
+            }
+            if (evt.data == "[DONE]") {
+                callback(<ChatStreamEvent>{"done": True});
+                break;
+            }
+
+            # Parse the SSE data as JSON
+            *hash<auto> parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch () {
+                continue;
+            }
+
+            # Extract delta text based on provider format
+            *string delta;
+            if (mode == "anthropic") {
+                # Anthropic: {"type": "content_block_delta", "delta": {"text": "..."}}
+                if (parsed.type == "content_block_delta" && parsed.delta.text.val()) {
+                    delta = parsed.delta.text;
+                } else if (parsed.type == "message_stop") {
+                    callback(<ChatStreamEvent>{"done": True, "raw": parsed});
+                    break;
+                }
+            } else {
+                # OpenAI: {"choices": [{"delta": {"content": "..."}}]}
+                if (parsed.choices[0].delta.content.val()) {
+                    delta = parsed.choices[0].delta.content;
+                }
+                if (parsed.choices[0].finish_reason.val()) {
+                    callback(<ChatStreamEvent>{
+                        "done": True,
+                        "delta": delta,
+                        "raw": parsed,
+                    });
+                    break;
+                }
+            }
+
+            if (delta.val()) {
+                callback(<ChatStreamEvent>{
+                    "event": evt.event,
+                    "delta": delta,
+                    "raw": parsed,
+                });
+            }
+        }
+%endif
+%endif
+    }
+
+    #! Estimates the token count for a text string
+    /** Uses a simple heuristic of ~4 characters per token (typical for
+        English text with GPT-style tokenizers). For accurate counts, use
+        the tokenizer module's HFTokenizer directly.
+
+        @param text the text to estimate
+        @return estimated token count
+    */
+    static int estimateTokens(string text) {
+        return (text.length() + 3) / 4;
     }
 
     #! Ensures the REST client is initialized
@@ -333,7 +510,9 @@ public class LlmBackend {
 
         hash<auto> resp;
         try {
-            resp = rest_client.restPost("/v1/chat/completions", body, hdr);
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/chat/completions", body, hdr);
+            });
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("HTTP completion request failed: %s", ex.desc), ex;
         }
@@ -388,7 +567,9 @@ public class LlmBackend {
 
         hash<auto> resp;
         try {
-            resp = rest_client.restPost("/v1/messages", body, hdr);
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/messages", body, hdr);
+            });
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("Anthropic completion request failed: %s", ex.desc), ex;
         }
@@ -567,7 +748,9 @@ public class LlmBackend {
                 resp = call_static_method("UserApi", "callRestApi", "PUT",
                     endpoint, body);
             } else {
-                resp = rest_client.restPost(endpoint, body, hdr);
+                resp = withRetry(hash<auto> sub () {
+                    return rest_client.restPost(endpoint, body, hdr);
+                });
             }
         } catch (hash<ExceptionInfo> ex) {
             if (ex.err == "UNKNOWN-CLASS") {
@@ -763,7 +946,9 @@ public class LlmBackend {
 
         hash<auto> resp;
         try {
-            resp = rest_client.restPost("/v1/messages", body, hdr);
+            resp = withRetry(hash<auto> sub () {
+                return rest_client.restPost("/v1/messages", body, hdr);
+            });
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("Anthropic chat request failed: %s", ex.desc), ex;
         }
@@ -796,6 +981,215 @@ public class LlmBackend {
         };
 %endif
         throw "LLM-ERROR", "RestClient not available";
+    }
+    #! Executes an HTTP call with retry and exponential backoff for transient errors
+    /** Retries on 429 (rate limit) and 5xx (server error) responses.
+        Uses exponential backoff: delay * 2^attempt.
+
+        @param call a callable that performs the HTTP request and returns the response
+        @return the response from the successful call
+
+        @throw LLM-ERROR if all retry attempts fail
+    */
+    private auto withRetry(code call) {
+        int attempt = 0;
+        while (True) {
+            try {
+                return call();
+            } catch (hash<ExceptionInfo> ex) {
+                # Check if this is a retryable error
+                bool retryable = False;
+                if (ex.arg.typeCode() == NT_HASH) {
+                    int status = ex.arg.status_code ?? 0;
+                    if (status == 429 || status >= 500) {
+                        retryable = True;
+                    }
+                }
+
+                if (!retryable || attempt >= max_retries) {
+                    rethrow;
+                }
+
+                ++attempt;
+                # Exponential backoff: delay_ms * 2^(attempt-1)
+                int delay = retry_delay_ms * (1 << (attempt - 1));
+
+                # Check for Retry-After header (429 responses)
+                if (ex.arg.typeCode() == NT_HASH && ex.arg.headers."retry-after".val()) {
+                    int retry_after = ex.arg.headers."retry-after".toInt();
+                    if (retry_after > 0) {
+                        delay = retry_after * 1000;
+                    }
+                }
+
+                usleep(delay * 1000);  # usleep takes microseconds
+            }
+        }
+    }
+
+    #! Builds the HTTP/OpenAI message body for chatStream()
+    private hash<auto> buildHttpBody(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        list<hash<auto>> api_messages = ();
+        foreach hash<ChatMessage> msg in (messages) {
+            hash<auto!> api_msg();
+            api_msg.role = msg.role;
+            if (msg.content_parts) {
+                list<auto> parts = ();
+                foreach hash<ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": sprintf("data:%s;base64,%s",
+                                    part.mime_type ?? "image/png", b64),
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {"type": "text", "text": part.text};
+                    }
+                }
+                api_msg.content = parts;
+            } else if (msg.content.val()) {
+                api_msg.content = msg.content;
+            }
+            if (msg.tool_calls) {
+                list<auto> tc_list = ();
+                foreach hash<ChatToolCall> tc in (msg.tool_calls) {
+                    push tc_list, {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": make_json(tc.arguments ?? {}),
+                        },
+                    };
+                }
+                api_msg.tool_calls = tc_list;
+            }
+            if (msg.tool_call_id.val()) {
+                api_msg.tool_call_id = msg.tool_call_id;
+            }
+            if (msg.name.val() && msg.role == "tool") {
+                api_msg.name = msg.name;
+            }
+            push api_messages, api_msg;
+        }
+
+        hash<auto> body = {
+            "messages": api_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        };
+        if (model_name.val()) {
+            body.model = model_name;
+        }
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "type": "function",
+                    "function": {
+                        "name": td.name,
+                        "description": td.description ?? "",
+                        "parameters": td.parameters
+                            ?? {"type": "object", "properties": {}},
+                    },
+                };
+            }
+            body.tools = tool_defs;
+        }
+        return body;
+    }
+
+    #! Builds the Anthropic message body for chatStream()
+    private hash<auto> buildAnthropicBody(list<hash<ChatMessage>> messages,
+            *list<hash<ToolDefinition>> tools) {
+        *string sys_prompt;
+        list<hash<auto>> api_messages = ();
+        list<hash<auto>> pending_tool_results = ();
+
+        foreach hash<ChatMessage> msg in (messages) {
+            if (msg.role == "system") {
+                sys_prompt = msg.content;
+                continue;
+            }
+            if (msg.role != "tool" && pending_tool_results) {
+                push api_messages, {"role": "user", "content": pending_tool_results};
+                pending_tool_results = ();
+            }
+            if (msg.role == "tool") {
+                push pending_tool_results, {
+                    "type": "tool_result",
+                    "tool_use_id": msg.tool_call_id,
+                    "content": msg.content ?? "",
+                };
+                continue;
+            }
+            if (msg.role == "assistant" && msg.tool_calls) {
+                list<auto> content_blocks = ();
+                if (msg.content.val()) {
+                    push content_blocks, {"type": "text", "text": msg.content};
+                }
+                foreach hash<ChatToolCall> tc in (msg.tool_calls) {
+                    push content_blocks, {
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.arguments ?? {},
+                    };
+                }
+                push api_messages, {"role": "assistant", "content": content_blocks};
+                continue;
+            }
+            if (msg.content_parts) {
+                list<auto> parts = ();
+                foreach hash<ContentPart> part in (msg.content_parts) {
+                    if (part.type == "image" && part.data) {
+                        string b64 = make_base64_string(part.data);
+                        push parts, {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": part.mime_type ?? "image/png",
+                                "data": b64,
+                            },
+                        };
+                    } else if (part.type == "text" && part.text.val()) {
+                        push parts, {"type": "text", "text": part.text};
+                    }
+                }
+                push api_messages, {"role": msg.role, "content": parts};
+            } else {
+                push api_messages, {"role": msg.role, "content": msg.content ?? ""};
+            }
+        }
+        if (pending_tool_results) {
+            push api_messages, {"role": "user", "content": pending_tool_results};
+        }
+
+        hash<auto> body = {
+            "model": model_name ?? "claude-sonnet-4-20250514",
+            "max_tokens": max_tokens,
+            "messages": api_messages,
+        };
+        if (sys_prompt.val()) {
+            body.system = sys_prompt;
+        }
+        if (tools) {
+            list<auto> tool_defs = ();
+            foreach hash<ToolDefinition> td in (tools) {
+                push tool_defs, {
+                    "name": td.name,
+                    "description": td.description ?? "",
+                    "input_schema": td.parameters
+                        ?? {"type": "object", "properties": {}},
+                };
+            }
+            body.tools = tool_defs;
+        }
+        return body;
     }
 }
 

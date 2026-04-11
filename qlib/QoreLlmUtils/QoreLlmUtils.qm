@@ -34,6 +34,10 @@
 %define NoJson
 %endtry
 
+%try-module HttpClientStreamingIo
+%define NoStreaming
+%endtry
+
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
