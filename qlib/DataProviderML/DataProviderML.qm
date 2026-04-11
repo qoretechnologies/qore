@@ -1500,6 +1500,48 @@ module DataProviderML {
             ),
         });
 
+        # register document-ocr action
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": MLApp::AppName,
+            "path": "/document-ocr",
+            "action": "document-ocr",
+            "display_name": "Extract Text from Any Document",
+            "short_desc": "Reads text from PDFs, images, and scanned documents automatically",
+            "desc": "Extracts text from any document format your users might upload — PDF "
+                "files, photos of documents, scanned images, screenshots, and more.\n\n"
+                "The processor automatically detects the file type and applies the best "
+                "extraction strategy:\n"
+                "- **PDFs**: extracts the digital text layer (fast); scanned pages are "
+                "automatically rasterized and OCR'd\n"
+                "- **Images** (PNG, JPEG, TIFF, BMP, GIF, WebP): runs OCR directly\n"
+                "- **SVG files**: renders to image first, then OCR\n\n"
+                "Each record is enriched with:\n"
+                "- `document_text` — the full extracted text\n"
+                "- `document_format` — detected format (e.g., `PDF`, `JPEG`, `TIFF`)\n"
+                "- `document_pages` — number of pages\n"
+                "- `document_ocr_pages` — how many pages required OCR\n"
+                "- `document_confidence` — average OCR confidence (0.0 to 1.0)\n\n"
+                "**Optional modules:** `pdf` (for PDFs), `imagemagick` (for WebP, HEIC, "
+                "and 100+ other formats), `cairo` (for SVGs).",
+            "action_code": DPAT_PIPELINE_PROCESSOR,
+            "processor_capabilities": DPC_TRANSFORM,
+            "cls": "DataProviderML::QoreDocumentOcrProcessor",
+            "groups": (AppGroup::Analytics,),
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDocumentOcrProcessor::ConstructorOptions{"document_field",}, {
+                    "preselected": True,
+                    "required": True,
+                    "loc": "constructor",
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                QoreDocumentOcrProcessor::ConstructorOptions{
+                    "mime_type_field", "language", "dpi", "scanned_threshold",
+                }, {
+                    "loc": "constructor",
+                }
+            ),
+        });
+
         # register vision-extraction action
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": MLApp::AppName,
