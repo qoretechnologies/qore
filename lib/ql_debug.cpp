@@ -39,7 +39,19 @@
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/QoreHttp1ClientConnection.h"
 
+#include <arpa/inet.h>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <atomic>
+#include <functional>
 #include <set>
 #include <thread>
 
@@ -614,6 +626,291 @@ static void ut_promise_action_execute_error(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// --- Http1ClientConnection (Phase P2) tests ---
+//
+// These tests exercise the minimum-viable C++ HttpClientConnectionBase /
+// Http1ClientConnection end-to-end: bind a raw POSIX socket server on
+// 127.0.0.1, create a Qore::Http1ClientConnection pointed at it, submit a
+// GET request, and await the resulting Future via q_future_get_blocking.
+// This is the canary test for the full submit → Promise → Future →
+// q_future_get_blocking chain through a real H1 poll op.
+
+//! Minimal POSIX HTTP/1.1 echo server for Phase P2 unit tests.  Binds to
+//! 127.0.0.1:0, returns the ephemeral port, and runs a caller-supplied
+//! handler for a single accepted connection in a background thread.
+struct UtH1Server {
+    int listen_fd = -1;
+    int port = 0;
+    std::thread thr;
+    std::atomic<bool> thread_started{false};
+
+    //! Creates the listen socket on an ephemeral port.  Returns 0 on success.
+    int start() {
+        listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (listen_fd < 0) {
+            return -1;
+        }
+        int one = 1;
+        setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        if (bind(listen_fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        socklen_t alen = sizeof(addr);
+        if (getsockname(listen_fd, reinterpret_cast<sockaddr*>(&addr), &alen) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        port = ntohs(addr.sin_port);
+
+        if (listen(listen_fd, 1) < 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+            return -1;
+        }
+        return 0;
+    }
+
+    //! Spawns a background thread that accepts one client and calls
+    //! \a handler with the client fd.  The handler must close the fd.
+    void serveOnce(std::function<void(int)> handler) {
+        thread_started.store(true, std::memory_order_release);
+        thr = std::thread([this, handler = std::move(handler)]() {
+            int cfd = accept(listen_fd, nullptr, nullptr);
+            if (cfd >= 0) {
+                handler(cfd);
+                ::close(cfd);
+            }
+            if (listen_fd >= 0) {
+                ::close(listen_fd);
+                listen_fd = -1;
+            }
+        });
+    }
+
+    ~UtH1Server() {
+        if (thr.joinable()) {
+            thr.join();
+        }
+        if (listen_fd >= 0) {
+            ::close(listen_fd);
+            listen_fd = -1;
+        }
+    }
+};
+
+//! Reads an HTTP request line + headers from @a fd into @a buf (at most
+//! @a max bytes).  Returns the total bytes read, or -1 on error.  Blocks.
+static ssize_t ut_read_request_headers(int fd, char* buf, size_t max) {
+    size_t total = 0;
+    while (total < max) {
+        ssize_t n = recv(fd, buf + total, max - total, 0);
+        if (n <= 0) {
+            return -1;
+        }
+        total += (size_t)n;
+        buf[total < max ? total : max - 1] = '\0';
+        if (total >= 4 && strstr(buf, "\r\n\r\n") != nullptr) {
+            return (ssize_t)total;
+        }
+    }
+    return -1;
+}
+
+static void ut_http1_connection_simple_request(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        char buf[4096];
+        ssize_t n = ut_read_request_headers(cfd, buf, sizeof(buf));
+        if (n <= 0) {
+            return;
+        }
+        static const char* resp =
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 5\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "hello";
+        send(cfd, resp, strlen(resp), 0);
+    });
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Wait for the connection to become ready (5s budget)
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !xsink, "waitForReadyOrError succeeds (no error)");
+    UT_ASSERT(c, ready, "connection is ready");
+    if (!ready || xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // Submit a GET request
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "submitRequest succeeds");
+    UT_ASSERT(c, (bool)submit_result, "submitRequest returns a hash");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    UT_ASSERT(c, future_v.getType() == NT_OBJECT, "result has 'future' object");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    UT_ASSERT(c, future_obj != nullptr, "future is non-null");
+    if (!future_obj) {
+        return;
+    }
+    future_obj->ref();  // caller ref for q_future_get_blocking
+
+    // Block on the future with a 5s budget
+    QoreValue result = q_future_get_blocking(future_obj, 5000, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, !xsink, "q_future_get_blocking succeeds");
+    UT_ASSERT(c, result.getType() == NT_HASH, "response is a hash");
+    if (result.getType() == NT_HASH) {
+        const QoreHashNode* h = result.get<const QoreHashNode>();
+        int64 status = h->getKeyValue("status_code").getAsBigInt();
+        UT_ASSERT_EQ(c, (int64)200, status, "response status is 200");
+    }
+    result.discard(&xsink);
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_http1_connection_timeout(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    UtH1Server server;
+    if (server.start() != 0) {
+        UT_ASSERT(c, false, "test server bind/listen failed");
+        return;
+    }
+    int server_port = server.port;
+
+    server.serveOnce([](int cfd) {
+        // Accept, read the request, but never respond.  Sleep long enough
+        // for the client to hit its short Future timeout.
+        char buf[4096];
+        ut_read_request_headers(cfd, buf, sizeof(buf));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    });
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, ready && !xsink, "connection reaches ready");
+    if (!ready) {
+        xsink.clear();
+        return;
+    }
+
+    ReferenceHolder<QoreHashNode> submit_result(
+        conn->submitRequest("GET", "/", nullptr, nullptr, 0, &xsink), &xsink);
+    UT_ASSERT(c, !xsink && (bool)submit_result, "submitRequest succeeds");
+    if (!submit_result) {
+        xsink.clear();
+        return;
+    }
+    QoreValue future_v = submit_result->getKeyValue("future");
+    QoreObject* future_obj = future_v.getType() == NT_OBJECT
+        ? const_cast<QoreObject*>(future_v.get<const QoreObject>()) : nullptr;
+    if (!future_obj) {
+        UT_ASSERT(c, false, "future is non-null");
+        return;
+    }
+    future_obj->ref();
+
+    // Short Future timeout — server will not respond in time
+    QoreValue result = q_future_get_blocking(future_obj, 100, &xsink);
+    future_obj->deref(&xsink);
+    UT_ASSERT(c, xsink.isException(), "q_future_get_blocking raises on timeout");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    UT_ASSERT(c, err && !strcmp(err->c_str(), "FUTURE-TIMEOUT"),
+        "exception is FUTURE-TIMEOUT");
+    UT_ASSERT(c, result.isNothing(), "timeout returns NOTHING");
+    result.discard(&xsink);
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
+static void ut_http1_connection_connect_refused(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Bind an ephemeral port then immediately close the listen socket —
+    // the kernel will refuse subsequent connects to it (ECONNREFUSED).
+    int sfd = socket(AF_INET, SOCK_STREAM, 0);
+    UT_ASSERT(c, sfd >= 0, "reserve socket succeeds");
+    if (sfd < 0) {
+        return;
+    }
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+    int br = bind(sfd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+    UT_ASSERT(c, br == 0, "bind ephemeral port succeeds");
+    socklen_t alen = sizeof(addr);
+    getsockname(sfd, reinterpret_cast<sockaddr*>(&addr), &alen);
+    int dead_port = ntohs(addr.sin_port);
+    ::close(sfd);
+
+    ReferenceHolder<Http1ClientConnection> conn(
+        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
+    UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds (connect is async)");
+    if (xsink) {
+        xsink.clear();
+        return;
+    }
+
+    // waitForReadyOrError should fail with a connection error
+    bool ready = conn->waitForReadyOrError(5000, &xsink);
+    UT_ASSERT(c, !ready, "connection is not ready");
+    UT_ASSERT(c, xsink.isException(),
+        "waitForReadyOrError raises on connection refused");
+    const QoreStringNode* err = xsink.getExceptionErr().get<const QoreStringNode>();
+    // Error code comes through from the poll op's error info hash; the
+    // SocketConnectPollOperation raises SOCKET-CONNECT-ERROR on refused.
+    UT_ASSERT(c, err && strstr(err->c_str(), "CONNECT") != nullptr,
+        "exception code contains 'CONNECT'");
+    xsink.clear();
+
+    conn->closeConnection(&xsink);
+    xsink.clear();
+}
+
 static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     ExceptionSink xsink;
     AsyncIoControllerPriv* ctrl = new AsyncIoControllerPriv(false, &xsink);
@@ -672,6 +969,9 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_future_get_blocking_error(c);
     ut_promise_action_execute_then_get(c);
     ut_promise_action_execute_error(c);
+    ut_http1_connection_simple_request(c);
+    ut_http1_connection_timeout(c);
+    ut_http1_connection_connect_refused(c);
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);

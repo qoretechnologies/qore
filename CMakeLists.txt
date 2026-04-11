@@ -295,6 +295,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Http3ServerPollOperation.qpp
     lib/QC_HttpClientPingPollOperationBase.qpp
     lib/QC_Http2ClientPollOperationBase.qpp
+    lib/QC_HttpClientConnection.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
     lib/QC_LoggerInterfaceBase.qpp
@@ -946,6 +947,8 @@ set(LIBQORE_CPP_SRC
     lib/QoreLoggerBridge.cpp
     lib/QoreAsyncIoLogger.cpp
     lib/AsyncIoControllerPriv.cpp
+    lib/QoreHttpClientConnectionBase.cpp
+    lib/QoreHttp1ClientConnection.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -1255,6 +1258,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp1ClientConnection.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1548,6 +1553,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Http3ServerPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientPingPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnection.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
