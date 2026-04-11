@@ -1339,14 +1339,19 @@ int QuicSession::handleExpiryLocked(ExceptionSink* xsink) {
     if (rv != 0) {
         if (rv == NGTCP2_ERR_IDLE_CLOSE) {
             // Idle timeout is a normal condition — the connection should be
-            // closed gracefully without raising an exception.  The caller will
-            // detect the closed state via isClosed().
+            // closed gracefully without raising an exception.  Set idle_closed_
+            // so isClosed() reports closed on the next check: ngtcp2 does NOT
+            // transition conn->state on NGTCP2_ERR_IDLE_CLOSE (see
+            // ngtcp2_conn.c:11221), so ngtcp2_conn_in_{closing,draining}_period()
+            // both keep returning false.  Without this flag the caller's
+            // isClosed() check would still return false and the UDP socket would
+            // leak.
+            idle_closed_.store(true, std::memory_order_release);
             printd(5, "QuicSession::handleExpiry(): idle timeout (session %lld)\n",
                 (long long)session_id_);
             // RFC 9000 Section 10.1: idle timeout is a silent close — no
             // CONNECTION_CLOSE frame is sent.  Do NOT set pending_write_ here;
-            // ngtcp2 has already transitioned the connection to draining state
-            // and writePackets() would get NGTCP2_ERR_DRAINING.
+            // callers must observe isClosed() to tear the session down.
             return 0;
         }
         xsink->raiseException("QUIC-TIMER-ERROR", "ngtcp2_conn_handle_expiry failed: %s",
@@ -1381,6 +1386,18 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
                 return result;
             }
         }
+    }
+
+    // If handleExpiryLocked detected an idle close, skip writePacketsLocked —
+    // per RFC 9000 Section 10.1 the idle close is silent, and ngtcp2 has already
+    // stopped generating outbound packets for this connection.  Leave
+    // next_expiry at UINT64_MAX so the controller's 1s fallback poll picks it
+    // up quickly; the caller's next isClosed() check will see idle_closed_ and
+    // tear the session down.
+    if (idle_closed_.load(std::memory_order_acquire)) {
+        pending_write_.store(false, std::memory_order_release);
+        result.next_expiry = UINT64_MAX;
+        return result;
     }
 
     // Generate outgoing packets
@@ -2533,6 +2550,14 @@ bool QuicSession::isHandshakeComplete() const {
 }
 
 bool QuicSession::isClosed() const {
+    // idle_closed_ is checked first without acquiring the recursive mutex: it is
+    // set by handleExpiryLocked() when ngtcp2 reports NGTCP2_ERR_IDLE_CLOSE, which
+    // does NOT transition conn->state to CLOSING/DRAINING (see ngtcp2_conn.c:11221).
+    // Without this check, idle H3 client connections would leak their UDP socket
+    // forever because the controller's isClosed()-driven close path never fires.
+    if (idle_closed_.load(std::memory_order_acquire)) {
+        return true;
+    }
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (!conn_) {
         return true;
