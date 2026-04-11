@@ -37,6 +37,7 @@
 #include <qore/Qore.h>
 #include <qore/QoreURL.h>
 #include <qore/QoreHttpClientObject.h>
+#include <qore/HttpClientConnectionManager.h>
 #include "qore/intern/ql_misc.h"
 #include "qore/intern/QC_Socket.h"
 #include "qore/intern/QC_Queue.h"
@@ -1096,6 +1097,38 @@ struct qore_httpclient_priv {
         if (msock) {
             msock->socket->priv->setH2ActiveStreamId(stream_id);
         }
+    }
+
+    //! C++ connection manager for async-driven dispatch (Phase P7+).
+    /** Lazily created on first use via getConnMgr().  When present, sync
+        HTTPClient methods (P8-P11) delegate H1/H2/H3 work through it
+        instead of using the legacy sync socket dispatch.  The Qore-level
+        HttpClientIo module has its own manager with richer features
+        (retry, Alt-Svc, cookies); this one is the minimal C++ base for
+        the sync HTTPClient conversion.
+    */
+    std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
+
+    //! Returns the connection manager, creating it lazily if needed.
+    DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
+        if (!conn_mgr) {
+            HttpClientConnectionManagerBase::Options opts;
+            opts.protocol = HttpClientProtocol::H1;  // default; updated per http2_mode/http3_mode
+            opts.connect_timeout_ms = connect_timeout_ms;
+            opts.request_timeout_ms = timeout;
+            opts.idle_timeout_ms = 60000;
+            // Proxy URL from the existing connection info
+            if (proxy_connection.has_url()) {
+                char buf[512];
+                snprintf(buf, sizeof(buf), "%s://%s:%d",
+                    proxy_connection.ssl ? "https" : "http",
+                    proxy_connection.host.c_str(),
+                    proxy_connection.port);
+                opts.proxy_url = buf;
+            }
+            conn_mgr.reset(new HttpClientConnectionManagerBase(opts, xsink));
+        }
+        return *conn_mgr;
     }
 
     // persistent count
