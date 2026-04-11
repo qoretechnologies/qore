@@ -1450,6 +1450,12 @@ cargo install tree-sitter-cli@0.26.5
       - supports DecisionTree, RandomForest, GradientBoostedTrees (classification and regression)
       - GBT export handles binary (Sigmoid) and multiclass (Softmax) post-processing
       - enables interoperability with Python/TensorFlow/PyTorch via standard ONNX files
+    - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
+      - new module providing configurable agent execution strategies for LLM agents
+      - PlanningAgentStrategy: decompose → execute sub-tasks → synthesize
+      - ReflexionAgentStrategy: execute → evaluate completeness → correct
+      - ParallelToolDispatcher: concurrent tool execution with batching and timeouts
+      - token budget tracking with AGENT-BUDGET-EXCEEDED enforcement
     - @ref qoreguardrailsintro "QoreGuardrails" module
       - new module providing input/output guardrails for AI-powered chat endpoints
       - PiiDetector: pattern-based detection/redaction of email, phone, SSN, credit card

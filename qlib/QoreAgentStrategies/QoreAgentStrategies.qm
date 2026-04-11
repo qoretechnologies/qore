@@ -1,0 +1,90 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file QoreAgentStrategies.qm configurable agent execution strategies
+
+/*  QoreAgentStrategies.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum required Qore version
+%requires qore >= 2.0
+%modern
+
+%requires(reexport) QoreLlmUtils
+%requires json
+
+module QoreAgentStrategies {
+    version = "1.0.0";
+    desc = "user module providing configurable agent execution strategies "
+        "including planning, reflexion, and parallel tool dispatch";
+    author = "Qore Technologies, s.r.o.";
+    url = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage QoreAgentStrategies Module
+
+    @tableofcontents
+
+    @section qoreagentstrategiesintro QoreAgentStrategies Module Introduction
+
+    The %QoreAgentStrategies module provides configurable execution strategies
+    for LLM-based agents.  Each strategy defines how tool calls are dispatched
+    and how the agent's reasoning loop operates.
+
+    Strategies:
+    - @ref QoreAgentStrategies::PlanningAgentStrategy "PlanningAgentStrategy" —
+      decompose a query into sub-tasks, execute each, then synthesize
+    - @ref QoreAgentStrategies::ReflexionAgentStrategy "ReflexionAgentStrategy" —
+      execute, evaluate completeness, and correct if needed
+    - @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher" —
+      dispatch multiple tool calls concurrently
+
+    All strategies accept a @ref QoreAgentStrategies::AgentContext "AgentContext"
+    hash and a tool dispatch callable, making them independent of any specific
+    runtime (Qorus, standalone, etc.).
+
+    @par Example: Planning strategy
+    @code{.py}
+%requires QoreAgentStrategies
+
+LlmBackend llm(<LlmBackendConfig>{"mode": "http", "url": "http://localhost:8080",
+    "model": "gpt-4o"});
+
+code tool_dispatch = auto sub (string tool_name, hash<auto> args) {
+    # dispatch tool and return result
+    return {"result": "tool output"};
+};
+
+PlanningAgentStrategy strategy(llm, {"max_subtasks": 3, "token_budget": 50000});
+hash<AgentResult> result = strategy.execute(<AgentContext>{
+    "message": "Analyze Q1 revenue trends and compare with competitors",
+    "tools": ({"name": "search_db"}, {"name": "web_search"}),
+    "tool_dispatch": tool_dispatch,
+});
+printf("Response: %s\n", result.response);
+    @endcode
+
+    @section qoreagentstrategiesrelnotes QoreAgentStrategies Module Release Notes
+
+    @subsection qoreagentstrategies_1_0 QoreAgentStrategies Module Version 1.0
+    - Initial release with @ref QoreAgentStrategies::PlanningAgentStrategy "PlanningAgentStrategy",
+      @ref QoreAgentStrategies::ReflexionAgentStrategy "ReflexionAgentStrategy", and
+      @ref QoreAgentStrategies::ParallelToolDispatcher "ParallelToolDispatcher"
+*/

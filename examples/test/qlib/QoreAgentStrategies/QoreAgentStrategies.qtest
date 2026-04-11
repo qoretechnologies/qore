@@ -1,0 +1,367 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  QoreAgentStrategies.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%requires ../../../../qlib/QoreAgentStrategies
+%requires json
+%requires Util
+%requires QUnit
+
+%exec-class QoreAgentStrategiesTest
+
+#! Mock LLM that returns pre-configured responses in sequence
+class MockSequenceLlm inherits QoreLlmUtils::LlmBackend {
+    private {
+        list<string> responses;
+        int call_idx = 0;
+        int total_calls = 0;
+    }
+
+    constructor(list<string> resp_list)
+            : LlmBackend(<LlmBackendConfig>{"mode": "qorus"}) {
+        responses = resp_list;
+    }
+
+    hash<LlmCompletionResult> complete(string system_prompt, string user_prompt,
+            *hash<auto> output_schema) {
+        string content;
+        if (call_idx < responses.size()) {
+            content = responses[call_idx];
+        } else {
+            content = responses[responses.size() - 1];
+        }
+        ++call_idx;
+        ++total_calls;
+        return <LlmCompletionResult>{
+            "content": content,
+            "usage": {"prompt_tokens": 50, "completion_tokens": 30, "total_tokens": 80},
+        };
+    }
+
+    int getTotalCalls() {
+        return total_calls;
+    }
+}
+
+public class QoreAgentStrategiesTest inherits QUnit::Test {
+    constructor() : Test("QoreAgentStrategiesTest", "1.0") {
+        # PlanningAgentStrategy tests
+        addTestCase("PlanningAgentStrategy - basic execution", \planningBasicTest());
+        addTestCase("PlanningAgentStrategy - with tool dispatch", \planningToolTest());
+        addTestCase("PlanningAgentStrategy - max subtasks limit", \planningMaxSubtasksTest());
+        addTestCase("PlanningAgentStrategy - token budget", \planningBudgetTest());
+
+        # ReflexionAgentStrategy tests
+        addTestCase("ReflexionAgentStrategy - complete on first try", \reflexionCompleteTest());
+        addTestCase("ReflexionAgentStrategy - reflection corrects", \reflexionCorrectTest());
+        addTestCase("ReflexionAgentStrategy - max reflections", \reflexionMaxTest());
+
+        # ParallelToolDispatcher tests
+        addTestCase("ParallelToolDispatcher - sequential single tool", \parallelSingleTest());
+        addTestCase("ParallelToolDispatcher - parallel multiple tools",
+            \parallelMultipleTest());
+        addTestCase("ParallelToolDispatcher - error handling", \parallelErrorTest());
+        addTestCase("ParallelToolDispatcher - empty list", \parallelEmptyTest());
+        addTestCase("ParallelToolDispatcher - batch respects max_concurrent",
+            \parallelBatchTest());
+
+        # AgentContext/AgentResult hashdecl tests
+        addTestCase("AgentContext - hashdecl defaults", \contextDefaultsTest());
+
+        set_return_value(main());
+    }
+
+    # ===================== PlanningAgentStrategy Tests =====================
+
+    planningBasicTest() {
+        string plan_response = make_json({
+            "subtasks": (
+                {"description": "Search for data", "tool": "search"},
+                {"description": "Analyze results"},
+            ),
+        });
+        string synthesis_response = "Based on the analysis, here are the findings...";
+
+        MockSequenceLlm mock((plan_response, synthesis_response));
+        PlanningAgentStrategy strategy(mock, {"max_subtasks": 5, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Analyze the data",
+        });
+
+        assertTrue(result.response.val());
+        assertEq(synthesis_response, result.response);
+        assertEq("planning", result.metadata.strategy);
+        assertEq(2, result.metadata.subtask_count);
+        assertEq(2, mock.getTotalCalls());
+    }
+
+    planningToolTest() {
+        string plan_response = make_json({
+            "subtasks": (
+                {"description": "Search DB", "tool": "search_db",
+                    "args": {"query": "revenue"}},
+            ),
+        });
+        string synthesis_response = "Revenue was $1M";
+
+        MockSequenceLlm mock((plan_response, synthesis_response));
+
+        list<hash<auto>> dispatched_tools = ();
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            push dispatched_tools, {"name": name, "args": args};
+            return {"rows": 42};
+        };
+
+        PlanningAgentStrategy strategy(mock, {"token_budget": 0});
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Get revenue",
+            "tools": ({"name": "search_db", "description": "Search database"},),
+            "tool_dispatch": mock_dispatch,
+        });
+
+        assertEq(1, result.tool_calls.size());
+        assertEq("search_db", result.tool_calls[0].tool);
+        assertEq(42, result.tool_calls[0].result.rows);
+        assertEq(1, dispatched_tools.size());
+    }
+
+    planningMaxSubtasksTest() {
+        # Plan with 10 subtasks but max is 3
+        list<hash<auto>> subtasks = ();
+        for (int i = 0; i < 10; ++i) {
+            push subtasks, {"description": sprintf("task %d", i)};
+        }
+        string plan_response = make_json({"subtasks": subtasks});
+        string synthesis_response = "Done";
+
+        MockSequenceLlm mock((plan_response, synthesis_response));
+        PlanningAgentStrategy strategy(mock, {"max_subtasks": 3, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Do many things",
+        });
+
+        assertEq(3, result.metadata.subtask_count);
+    }
+
+    planningBudgetTest() {
+        # With budget of 50 tokens and each call using 80, first call succeeds
+        # (consumes 80) but second call should fail (80 >= 50 budget)
+        string plan_response = make_json({
+            "subtasks": ({"description": "task 1"},),
+        });
+
+        MockSequenceLlm mock((plan_response, "synthesis"));
+        PlanningAgentStrategy strategy(mock, {"token_budget": 50});
+
+        # First call (planning) uses 80 tokens which exceeds budget of 50,
+        # second call should be blocked
+        assertThrows("AGENT-BUDGET-EXCEEDED",
+            sub () {
+                strategy.execute(<AgentContext>{"message": "test"});
+            }
+        );
+    }
+
+    # ===================== ReflexionAgentStrategy Tests =====================
+
+    reflexionCompleteTest() {
+        string initial_response = "The answer is 42";
+        string reflection = make_json({
+            "complete": True,
+            "missing": "",
+            "corrections": "",
+        });
+
+        MockSequenceLlm mock((initial_response, reflection));
+        ReflexionAgentStrategy strategy(mock, {"max_reflections": 2, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "What is the answer?",
+        });
+
+        assertEq("The answer is 42", result.response);
+        assertEq("reflexion", result.metadata.strategy);
+        assertEq(0, result.metadata.reflections_done);
+        assertEq(2, mock.getTotalCalls());
+    }
+
+    reflexionCorrectTest() {
+        string initial_response = "Partial answer";
+        string reflection_incomplete = make_json({
+            "complete": False,
+            "missing": "missing details about X",
+            "corrections": "add information about X",
+        });
+        string corrected_response = "Complete answer with X details";
+        string reflection_complete = make_json({
+            "complete": True,
+            "missing": "",
+            "corrections": "",
+        });
+
+        MockSequenceLlm mock((
+            initial_response,
+            reflection_incomplete,
+            corrected_response,
+            reflection_complete,
+        ));
+        ReflexionAgentStrategy strategy(mock, {"max_reflections": 2, "token_budget": 0});
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Give full details",
+        });
+
+        assertEq("Complete answer with X details", result.response);
+        assertEq(1, result.metadata.reflections_done);
+        assertEq(4, mock.getTotalCalls());
+    }
+
+    reflexionMaxTest() {
+        # Always incomplete — should stop after max_reflections
+        string response = "Still incomplete";
+        string reflection = make_json({
+            "complete": False,
+            "missing": "still missing",
+            "corrections": "needs more",
+        });
+
+        MockSequenceLlm mock((response, reflection, response, reflection, response));
+        ReflexionAgentStrategy strategy(mock, {
+            "max_reflections": 2,
+            "token_budget": 0,
+        });
+
+        hash<AgentResult> result = strategy.execute(<AgentContext>{
+            "message": "Impossible to fully answer",
+        });
+
+        assertEq(2, result.metadata.reflections_done);
+        assertEq(2, result.metadata.max_reflections);
+    }
+
+    # ===================== ParallelToolDispatcher Tests =====================
+
+    parallelSingleTest() {
+        ParallelToolDispatcher dispatcher();
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            return {"name": name, "done": True};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "single_tool", "args": {"x": 1}},),
+            mock_dispatch,
+        );
+
+        assertEq(1, results.size());
+        assertEq("single_tool", results[0].name);
+        assertTrue(results[0].result.done);
+    }
+
+    parallelMultipleTest() {
+        ParallelToolDispatcher dispatcher({"max_concurrent": 5});
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            return {"name": name, "tid": gettid()};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "a"}, {"name": "b"}, {"name": "c"}),
+            mock_dispatch,
+        );
+
+        assertEq(3, results.size());
+        assertEq("a", results[0].name);
+        assertEq("b", results[1].name);
+        assertEq("c", results[2].name);
+        # All should have results
+        foreach hash<auto> r in (results) {
+            assertTrue(exists r.result);
+            assertFalse(exists r.error);
+        }
+    }
+
+    parallelErrorTest() {
+        ParallelToolDispatcher dispatcher();
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            if (name == "fail") {
+                throw "TOOL-ERROR", "intentional failure";
+            }
+            return {"ok": True};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(
+            ({"name": "good"}, {"name": "fail"}, {"name": "good2"}),
+            mock_dispatch,
+        );
+
+        assertEq(3, results.size());
+        assertTrue(exists results[0].result);
+        assertTrue(exists results[1].error);
+        assertTrue(results[1].error =~ /TOOL-ERROR/);
+        assertTrue(exists results[2].result);
+    }
+
+    parallelEmptyTest() {
+        ParallelToolDispatcher dispatcher();
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            return {};
+        };
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel((), mock_dispatch);
+        assertEq(0, results.size());
+    }
+
+    parallelBatchTest() {
+        # With max_concurrent=2 and 5 tools, should run in 3 batches
+        ParallelToolDispatcher dispatcher({"max_concurrent": 2});
+        Mutex m();
+        int max_concurrent_seen = 0;
+        int current_concurrent = 0;
+
+        code mock_dispatch = auto sub (string name, hash<auto> args) {
+            m.lock();
+            ++current_concurrent;
+            if (current_concurrent > max_concurrent_seen) {
+                max_concurrent_seen = current_concurrent;
+            }
+            m.unlock();
+
+            # Brief work
+            auto x = 1 + 1;
+
+            m.lock();
+            --current_concurrent;
+            m.unlock();
+            return {"name": name};
+        };
+
+        list<hash<auto>> tools = ();
+        for (int i = 0; i < 5; ++i) {
+            push tools, {"name": sprintf("tool_%d", i)};
+        }
+
+        list<hash<auto>> results = dispatcher.dispatchToolsParallel(tools, mock_dispatch);
+        assertEq(5, results.size());
+        # max_concurrent_seen should not exceed 2
+        assertTrue(max_concurrent_seen <= 2,
+            sprintf("max concurrent %d should be <= 2", max_concurrent_seen));
+    }
+
+    # ===================== Hashdecl Tests =====================
+
+    contextDefaultsTest() {
+        hash<AgentContext> ctx(<AgentContext>{
+            "message": "test",
+        });
+        assertEq("test", ctx.message);
+        assertEq(NOTHING, ctx.history);
+        assertEq(NOTHING, ctx.tools);
+        assertEq(NOTHING, ctx.tool_dispatch);
+        assertEq(NOTHING, ctx.user_context);
+    }
+}
