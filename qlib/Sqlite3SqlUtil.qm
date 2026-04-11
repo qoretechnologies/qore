@@ -764,6 +764,138 @@ auto v = c.name;
                     },
                 ),
             );
+
+            #! expression map overrides for SQLite3
+            const Sqlite3ExpressionMap = DefaultExpressionMap + {
+                # --- Type conversions (SQLite-specific CAST types) ---
+                DP_OP_TO_STRING: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_STRING,
+                        "display_name": "to string",
+                        "short_desc": "Converts a value to a string",
+                        "desc": "Converts a value to a string using SQLite CAST(x AS text)",
+                        "symbol": "toString",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as text)", exp0);
+                    },
+                },
+                DP_OP_TO_FLOAT: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_FLOAT,
+                        "display_name": "to float",
+                        "short_desc": "Converts a value to a floating-point number",
+                        "desc": "Converts a value to a float using SQLite CAST(x AS real)",
+                        "symbol": "toFloat",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."float",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as real)", exp0);
+                    },
+                },
+                DP_OP_TO_NUMBER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_NUMBER,
+                        "display_name": "to number",
+                        "short_desc": "Converts a value to an arbitrary-precision number",
+                        "desc": "Converts a value to a numeric type using SQLite CAST(x AS numeric)",
+                        "symbol": "toNumber",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."number",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as numeric)", exp0);
+                    },
+                },
+                # --- String manipulation (SQLite uses LENGTH, not CHAR_LENGTH) ---
+                DP_OP_LENGTH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_LENGTH,
+                        "display_name": "length",
+                        "short_desc": "Returns the character length of a string",
+                        "desc": "Returns the number of characters in a string using SQLite length()",
+                        "symbol": "length",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("length(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any"));
+                    },
+                },
+                # --- Date formatting (SQLite strftime) ---
+                DP_FUNC_FORMAT_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_FORMAT_DATE,
+                        "display_name": "format_date",
+                        "short_desc": "Formats a date as a string",
+                        "desc": "Formats a date/time value as a string using SQLite strftime(); "
+                            "format codes: YYYY (year), YY (2-digit year), MM (month), DD (day), "
+                            "HH (hour 24h), mm (minute), SS (second), us/ms (fractional seconds)",
+                        "symbol": "format_date",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."date");
+                        string fmt = Sqlite3Table::convertDateFormat(args[1]);
+                        return sprintf("strftime('%s', %s)", fmt, exp0);
+                    },
+                },
+                # --- String functions (SQLite uses substr() not ANSI substring()) ---
+                OP_SUBSTR: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": "substr",
+                        "display_name": "substr",
+                        "short_desc": "returns a substring from a string; args: string, int start char, "
+                            "[int length]",
+                        "desc": "returns a substring from a string; args: string, int start char, "
+                            "[int length]",
+                        "symbol": "substr",
+                        "groups": "Data Manipulation",
+                        "args": (
+                            DataProviderSignatureStringType,
+                            DataProviderSignatureIntValueType,
+                            DataProviderSignatureOptionalIntValueType,
+                        ),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."int");
+                        if (!exists args[2]) {
+                            return sprintf("substr(%s, %s)", exp0, exp1);
+                        }
+                        return sprintf("substr(%s, %s, %s)", exp0, exp1,
+                            info.table.getExpressionArg(\info, role, args[2],
+                                AbstractDataProviderTypeMap."int"));
+                    },
+                },
+            };
         }
 
         constructor(AbstractDatasource ds, string name, *hash<auto> opts) : AbstractTable(ds, name, opts) {
@@ -777,6 +909,11 @@ auto v = c.name;
         #! returns the column operator map for this object
         private hash getColumnOperatorMapImpl() {
             return Sqlite3CopMap;
+        }
+
+        #! Returns the expression map for SQLite3
+        hash<auto> getExpressionMap() {
+            return Sqlite3ExpressionMap;
         }
 
         private bool checkExistenceImpl() {
@@ -1163,6 +1300,28 @@ string str = table.getSqlValue(date);
             if (!exists str)
                 throw "VALUE-ERROR", sprintf("class Sqlite3Table cannot convert type %y to an SQL string (value: %y)", v.type(), v);
             return str;
+        }
+
+        #! Converts a Qore/DPQL date format string to a SQLite strftime() format string
+        /** @param fmt the Qore date format string (e.g., "YYYY-MM-DD HH:mm:SS.us")
+            @return the equivalent SQLite strftime() format string (e.g., "%Y-%m-%d %H:%M:%S.%f")
+
+            @since Sqlite3SqlUtil 1.1
+        */
+        static string convertDateFormat(string fmt) {
+            # replace longer tokens first to avoid partial matches (YYYY before YY)
+            fmt = regex_subst(fmt, "YYYY", "%Y", RE_Global);
+            fmt = regex_subst(fmt, "YY(?!YY)", "%y", RE_Global);
+            fmt = regex_subst(fmt, "MM", "%m", RE_Global);
+            fmt = regex_subst(fmt, "DD", "%d", RE_Global);
+            fmt = regex_subst(fmt, "HH", "%H", RE_Global);
+            fmt = regex_subst(fmt, "mm", "%M", RE_Global);
+            fmt = regex_subst(fmt, "SS", "%S", RE_Global);
+            fmt = regex_subst(fmt, "us", "%f", RE_Global);
+            fmt = regex_subst(fmt, "ms", "%f", RE_Global);
+            # escape single quotes for safe SQL embedding
+            fmt = regex_subst(fmt, "'", "''", RE_Global);
+            return fmt;
         }
 
         private bool emptyImpl() {

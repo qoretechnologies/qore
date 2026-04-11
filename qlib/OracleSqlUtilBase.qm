@@ -2683,6 +2683,434 @@ public class OracleTable inherits SqlUtil::AbstractTable {
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                 },
             },
+            # --- Comparison operators for Oracle ---
+            DP_OP_LIKE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_LIKE,
+                    "display_name": "like",
+                    "short_desc": "Returns True if the string matches the SQL LIKE pattern",
+                    "desc": "Returns True if the first argument matches the second using SQL LIKE pattern matching; "
+                        "optional third argument enables case-insensitive matching using upper()",
+                    "symbol": "like",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    if (args[2]) {
+                        return sprintf("upper(%s) like upper(%s)", exp0, exp1);
+                    }
+                    return sprintf("%s like %s", exp0, exp1);
+                },
+            },
+            DP_OP_REGEX_MATCH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_MATCH,
+                    "display_name": "regex match (=~)",
+                    "short_desc": "Returns True if the string matches the regular expression",
+                    "desc": "Returns True if the first argument matches the second as a regular expression; "
+                        "uses Oracle REGEXP_LIKE() function (with 'i' flag for case-insensitive)",
+                    "symbol": "=~",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                    if (case_insensitive) {
+                        return sprintf("regexp_like(%s, %s, 'i')", exp0, exp1);
+                    }
+                    return sprintf("regexp_like(%s, %s)", exp0, exp1);
+                },
+            },
+            DP_OP_REGEX_NMATCH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_NMATCH,
+                    "display_name": "regex non-match (!~)",
+                    "short_desc": "Returns True if the string does not match the regular expression",
+                    "desc": "Returns True if the first argument does not match the second as a regular "
+                        "expression; uses Oracle NOT REGEXP_LIKE() (with 'i' flag for case-insensitive)",
+                    "symbol": "!~",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                    if (case_insensitive) {
+                        return sprintf("not regexp_like(%s, %s, 'i')", exp0, exp1);
+                    }
+                    return sprintf("not regexp_like(%s, %s)", exp0, exp1);
+                },
+            },
+            DP_OP_REGEX_SUBST: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_SUBST,
+                    "display_name": "regex substitution",
+                    "short_desc": "Performs regex substitution on a string",
+                    "desc": "Performs regular expression substitution using Oracle REGEXP_REPLACE(); "
+                        "args: string, regex pattern, replacement, optional options list (\"g\" is default "
+                        "in Oracle, \"i\" for case-insensitive)",
+                    "symbol": "regexSubst",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."string");
+                    # build Oracle match_param flags from options list
+                    # Oracle REGEXP_REPLACE is global by default; "i" maps to 'i' match param
+                    string flags = "";
+                    if (exists args[3]) {
+                        foreach auto opt in (args[3]) {
+                            if (opt == "i") {
+                                flags += "i";
+                            }
+                        }
+                    }
+                    if (flags.val()) {
+                        return sprintf("regexp_replace(%s, %s, %s, 1, 0, '%s')", exp0, exp1, exp2, flags);
+                    }
+                    return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
+                },
+            },
+            DP_OP_CONTAINS: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_CONTAINS,
+                    "display_name": "contains",
+                    "short_desc": "Returns True if the string contains the given substring",
+                    "desc": "Returns True if the first argument contains the second as a substring; "
+                        "third argument enables case-insensitive matching when True (uses upper())",
+                    "symbol": "contains",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    if (args[2]) {
+                        return sprintf("upper(%s) like '%%' || upper(%s) || '%%'", exp0, exp1);
+                    }
+                    return sprintf("%s like '%%' || %s || '%%'", exp0, exp1);
+                },
+            },
+            DP_OP_STARTS_WITH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_STARTS_WITH,
+                    "display_name": "starts with",
+                    "short_desc": "Returns True if the string starts with the given characters",
+                    "desc": "Returns True if the first argument starts with the second; "
+                        "third argument enables case-insensitive matching when True (uses upper())",
+                    "symbol": "startsWith",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    if (args[2]) {
+                        return sprintf("upper(%s) like upper(%s) || '%%'", exp0, exp1);
+                    }
+                    return sprintf("%s like %s || '%%'", exp0, exp1);
+                },
+            },
+            DP_OP_ENDS_WITH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_ENDS_WITH,
+                    "display_name": "ends with",
+                    "short_desc": "Returns True if the string ends with the given characters",
+                    "desc": "Returns True if the first argument ends with the second; "
+                        "third argument enables case-insensitive matching when True (uses upper())",
+                    "symbol": "endsWith",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    if (args[2]) {
+                        return sprintf("upper(%s) like '%%' || upper(%s)", exp0, exp1);
+                    }
+                    return sprintf("%s like '%%' || %s", exp0, exp1);
+                },
+            },
+            # --- String manipulation operators for Oracle ---
+            DP_OP_REPLACE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REPLACE,
+                    "display_name": "string replace",
+                    "short_desc": "Replaces all occurrences of a string pattern",
+                    "desc": "Replaces all occurrences of the second argument with the third in the first; "
+                        "uses Oracle REPLACE() function",
+                    "symbol": "replace",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureStringType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."string");
+                    return sprintf("replace(%s, %s, %s)", exp0, exp1, exp2);
+                },
+            },
+            # --- Type conversion operators for Oracle ---
+            DP_OP_TO_STRING: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_STRING,
+                    "display_name": "to string",
+                    "short_desc": "Converts a value to a string",
+                    "desc": "Converts a value to text using Oracle TO_CHAR(x)",
+                    "symbol": "toString",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("to_char(%s)", exp0);
+                },
+            },
+            DP_OP_TO_INT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_INT,
+                    "display_name": "to int",
+                    "short_desc": "Converts a value to an integer",
+                    "desc": "Converts a value to an integer using Oracle CAST(x AS INTEGER)",
+                    "symbol": "toInt",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."int",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as integer)", exp0);
+                },
+            },
+            DP_OP_TO_FLOAT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_FLOAT,
+                    "display_name": "to float",
+                    "short_desc": "Converts a value to a floating-point number",
+                    "desc": "Converts a value to a float using Oracle CAST(x AS BINARY_DOUBLE)",
+                    "symbol": "toFloat",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."float",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as binary_double)", exp0);
+                },
+            },
+            DP_OP_TO_NUMBER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_NUMBER,
+                    "display_name": "to number",
+                    "short_desc": "Converts a value to an arbitrary-precision number",
+                    "desc": "Converts a value to a numeric type using Oracle TO_NUMBER(x)",
+                    "symbol": "toNumber",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."number",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("to_number(%s)", exp0);
+                },
+            },
+            DP_OP_TO_DATE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_DATE,
+                    "display_name": "to date",
+                    "short_desc": "Converts a value to a date/time",
+                    "desc": "Converts a value to a timestamp using Oracle CAST(x AS TIMESTAMP); "
+                        "if a format mask is given, uses TO_TIMESTAMP(x, mask) instead",
+                    "symbol": "toDate",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalStringType),
+                    "return_type": AbstractDataProviderTypeMap."date",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    if (exists args[1]) {
+                        string fmt = OracleTable::convertDateFormat(args[1]);
+                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                    }
+                    return sprintf("cast(%s as timestamp)", exp0);
+                },
+            },
+            DP_OP_TO_LOWER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_LOWER,
+                    "display_name": "to lower case",
+                    "short_desc": "Converts a string to lower case",
+                    "desc": "Returns the string converted to all lower case using Oracle LOWER()",
+                    "symbol": "lwr",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("lower(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string"));
+                },
+            },
+            DP_OP_TO_UPPER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_UPPER,
+                    "display_name": "to upper case",
+                    "short_desc": "Converts a string to upper case",
+                    "desc": "Returns the string converted to all upper case using Oracle UPPER()",
+                    "symbol": "upr",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("upper(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string"));
+                },
+            },
+            DP_OP_LENGTH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_LENGTH,
+                    "display_name": "length",
+                    "short_desc": "Returns the character length of a string",
+                    "desc": "Returns the number of characters in a string using Oracle LENGTH()",
+                    "symbol": "length",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."int",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("length(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any"));
+                },
+            },
+            # --- Control flow operators for Oracle ---
+            DP_OP_TERNARY: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TERNARY,
+                    "display_name": "ternary (?:)",
+                    "short_desc": "Conditional expression: returns second arg if first is true, third otherwise",
+                    "desc": "Evaluates the first argument as a boolean; if true, returns the second argument; "
+                        "otherwise returns the third argument; uses Oracle CASE WHEN ... THEN ... ELSE ... END",
+                    "symbol": "?:",
+                    "groups": "Logical",
+                    "args": (DataProviderSignatureBoolType, DataProviderSignatureAnyType,
+                        DataProviderSignatureAnyType),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string cond = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."bool");
+                    string true_val = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    string false_val = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("case when %s then %s else %s end", cond, true_val, false_val);
+                },
+            },
+            DP_OP_HAS_VALUE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_HAS_VALUE,
+                    "display_name": "has value",
+                    "short_desc": "Returns True if the argument is not null",
+                    "desc": "Returns True if the argument has a non-null value; uses Oracle IS NOT NULL",
+                    "symbol": "val",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any"));
+                },
+            },
+            # --- Additional date/string functions for Oracle ---
+            DP_FUNC_FORMAT_DATE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": DP_FUNC_FORMAT_DATE,
+                    "display_name": "format_date",
+                    "short_desc": "Formats a date as a string",
+                    "desc": "Formats a date/time value as a string using Oracle TO_CHAR(); "
+                        "format codes: YYYY (year), MM (month), DD (day), HH (hour 24h), "
+                        "mm (minute), SS (second), us (microseconds), ms (milliseconds)",
+                    "symbol": "format_date",
+                    "groups": "Date/Time",
+                    "role": ER_All,
+                    "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."date");
+                    string fmt = OracleTable::convertDateFormat(args[1]);
+                    return sprintf("to_char(%s, '%s')", exp0, fmt);
+                },
+            },
         };
 
         #! where operator specializations for Oracle
@@ -3511,6 +3939,23 @@ where i.owner = %v and i.table_name = %v", schema.upr(), name.upr());
         }
 
         return new Indexes(rv);
+    }
+
+    #! Converts a Qore/DPQL date format string to an Oracle TO_CHAR() format string
+    /** @param fmt the Qore date format string (e.g., "YYYY-MM-DD HH:mm:SS.us")
+        @return the equivalent Oracle format string (e.g., "YYYY-MM-DD HH24:MI:SS.FF6")
+
+        @since %Qore 2.3
+    */
+    static string convertDateFormat(string fmt) {
+        # use negative lookahead to avoid double-replacing "HH24" -> "HH2424"
+        fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
+        fmt = regex_subst(fmt, "mm", "MI", RE_Global);
+        fmt = regex_subst(fmt, "us", "FF6", RE_Global);
+        fmt = regex_subst(fmt, "ms", "FF3", RE_Global);
+        # escape single quotes for safe SQL embedding
+        fmt = regex_subst(fmt, "'", "''", RE_Global);
+        return fmt;
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash opts) {

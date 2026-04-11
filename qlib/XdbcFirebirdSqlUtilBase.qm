@@ -1409,6 +1409,317 @@ auto v = c.name;
                             info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
                     },
                 },
+                # --- String pattern matching operators for Firebird ---
+                DP_OP_LIKE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_LIKE,
+                        "display_name": "like",
+                        "short_desc": "Returns True if the string matches the SQL LIKE pattern",
+                        "desc": "Returns True if the first argument matches the second using SQL LIKE pattern matching; "
+                            "optional third argument enables case-insensitive matching using upper()",
+                        "symbol": "like",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureOptionalBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        if (args[2]) {
+                            return sprintf("upper(%s) like upper(%s)", exp0, exp1);
+                        }
+                        return sprintf("%s like %s", exp0, exp1);
+                    },
+                },
+                DP_OP_CONTAINS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_CONTAINS,
+                        "display_name": "contains",
+                        "short_desc": "Returns True if the string contains the given substring",
+                        "desc": "Returns True if the first argument contains the second as a substring; "
+                            "third argument enables case-insensitive matching when True (uses upper())",
+                        "symbol": "contains",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        if (args[2]) {
+                            return sprintf("upper(%s) like '%%' || upper(%s) || '%%'", exp0, exp1);
+                        }
+                        return sprintf("%s like '%%' || %s || '%%'", exp0, exp1);
+                    },
+                },
+                DP_OP_STARTS_WITH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_STARTS_WITH,
+                        "display_name": "starts with",
+                        "short_desc": "Returns True if the string starts with the given characters",
+                        "desc": "Returns True if the first argument starts with the second; "
+                            "third argument enables case-insensitive matching when True (uses upper())",
+                        "symbol": "startsWith",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        if (args[2]) {
+                            return sprintf("upper(%s) like upper(%s) || '%%'", exp0, exp1);
+                        }
+                        return sprintf("%s like %s || '%%'", exp0, exp1);
+                    },
+                },
+                DP_OP_ENDS_WITH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_ENDS_WITH,
+                        "display_name": "ends with",
+                        "short_desc": "Returns True if the string ends with the given characters",
+                        "desc": "Returns True if the first argument ends with the second; "
+                            "third argument enables case-insensitive matching when True (uses upper())",
+                        "symbol": "endsWith",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        if (args[2]) {
+                            return sprintf("upper(%s) like '%%' || upper(%s)", exp0, exp1);
+                        }
+                        return sprintf("%s like '%%' || %s", exp0, exp1);
+                    },
+                },
+                DP_OP_REPLACE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_REPLACE,
+                        "display_name": "string replace",
+                        "short_desc": "Replaces all occurrences of a string pattern",
+                        "desc": "Replaces all occurrences of the second argument with the third in the first; "
+                            "uses Firebird REPLACE() function",
+                        "symbol": "replace",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureStringType),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."string");
+                        return sprintf("replace(%s, %s, %s)", exp0, exp1, exp2);
+                    },
+                },
+                # --- Type conversion operators for Firebird ---
+                DP_OP_TO_STRING: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_STRING,
+                        "display_name": "to string",
+                        "short_desc": "Converts a value to a string",
+                        "desc": "Converts a value to a string using Firebird CAST(x AS VARCHAR(8191))",
+                        "symbol": "toString",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as varchar(8191))", exp0);
+                    },
+                },
+                DP_OP_TO_INT: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_INT,
+                        "display_name": "to int",
+                        "short_desc": "Converts a value to an integer",
+                        "desc": "Converts a value to an integer using Firebird CAST(x AS INTEGER)",
+                        "symbol": "toInt",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as integer)", exp0);
+                    },
+                },
+                DP_OP_TO_FLOAT: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_FLOAT,
+                        "display_name": "to float",
+                        "short_desc": "Converts a value to a floating-point number",
+                        "desc": "Converts a value to a float using Firebird CAST(x AS DOUBLE PRECISION)",
+                        "symbol": "toFloat",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."float",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as double precision)", exp0);
+                    },
+                },
+                DP_OP_TO_NUMBER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_NUMBER,
+                        "display_name": "to number",
+                        "short_desc": "Converts a value to an arbitrary-precision number",
+                        "desc": "Converts a value to a numeric type using Firebird CAST(x AS NUMERIC(18,4))",
+                        "symbol": "toNumber",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."number",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as numeric(18,4))", exp0);
+                    },
+                },
+                DP_OP_TO_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_DATE,
+                        "display_name": "to date",
+                        "short_desc": "Converts a value to a date/time",
+                        "desc": "Converts a value to a timestamp using Firebird CAST(x AS TIMESTAMP)",
+                        "symbol": "toDate",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as timestamp)", exp0);
+                    },
+                },
+                DP_OP_TO_BOOL: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_BOOL,
+                        "display_name": "to bool",
+                        "short_desc": "Converts a value to a boolean",
+                        "desc": "Converts a value to a boolean using Firebird CAST(x AS BOOLEAN) (Firebird 3.0+)",
+                        "symbol": "toBool",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as boolean)", exp0);
+                    },
+                },
+                # --- String manipulation operators for Firebird ---
+                DP_OP_TO_LOWER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_LOWER,
+                        "display_name": "to lower case",
+                        "short_desc": "Converts a string to lower case",
+                        "desc": "Returns the string converted to all lower case using Firebird lower()",
+                        "symbol": "lwr",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("lower(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                DP_OP_TO_UPPER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_UPPER,
+                        "display_name": "to upper case",
+                        "short_desc": "Converts a string to upper case",
+                        "desc": "Returns the string converted to all upper case using Firebird upper()",
+                        "symbol": "upr",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("upper(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                # --- Control flow operators for Firebird ---
+                DP_OP_TERNARY: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TERNARY,
+                        "display_name": "ternary (?:)",
+                        "short_desc": "Conditional expression: returns second arg if first is true, third otherwise",
+                        "desc": "Evaluates the first argument as a boolean; if true, returns the second argument; "
+                            "otherwise returns the third argument; uses Firebird CASE WHEN ... THEN ... ELSE ... END",
+                        "symbol": "?:",
+                        "groups": "Logical",
+                        "args": (DataProviderSignatureBoolType, DataProviderSignatureAnyType,
+                            DataProviderSignatureAnyType),
+                        "return_type": AbstractDataProviderTypeMap."any",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string cond = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."bool");
+                        string true_val = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        string false_val = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("case when %s then %s else %s end", cond, true_val, false_val);
+                    },
+                },
+                DP_OP_HAS_VALUE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_HAS_VALUE,
+                        "display_name": "has value",
+                        "short_desc": "Returns True if the argument is not null",
+                        "desc": "Returns True if the argument has a non-null value; uses Firebird IS NOT NULL",
+                        "symbol": "val",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any"));
+                    },
+                },
             };
         }
 
