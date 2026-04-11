@@ -34,13 +34,20 @@
 %requires(reexport) DataProvider
 %requires(reexport) RestClientIo
 
-%try-module json
+%try-module json >= 1.11
 %define NoJson
 %endtry
 
 %ifdef NoJson
-# Stub function when json module is not available
-auto sub make_json(auto val) { throw "JSON-ERROR", "the json module is required for this operation"; }
+# Stub function when json module is not available or older than 1.11 (pre-NDJSON)
+auto sub make_json(auto val) {
+    throw "JSON-ERROR", "the json module >= 1.11 is required for this operation";
+}
+%else
+# json >= 1.11 ships NdjsonDataProvider — used by the bulk API to stream NDJSON
+# request bodies via NdjsonStringWriter (O(n) streaming buffer) instead of
+# hand-rolled O(n²) string concatenation
+%requires NdjsonDataProvider
 %endif
 
 module ElasticSearchDataProvider {
@@ -250,6 +257,18 @@ module ElasticSearchDataProvider {
       @ref RestClient::AbstractRestClient "AbstractRestClient" subclass, so callers that
       already have a sync `RestClient` or an async `RestClientIo` can pass either via the
       `restclient` constructor option
+    - bulk NDJSON body construction now uses
+      @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" from the
+      `NdjsonDataProvider` module (shipped with `json` >= 1.11), switching the
+      bulk-request accumulator from O(n²) string concatenation to O(n) streaming
+      via @ref Qore::StringOutputStream "StringOutputStream"; this matters for large
+      @ref ElasticSearchDataProvider::ElasticSearchBulkDataProvider "ElasticSearchBulkDataProvider"
+      and @ref ElasticSearchDataProvider::ElasticSearchBulkOperation "ElasticSearchBulkOperation"
+      batches where the hand-rolled accumulator spent meaningful wall time in buffer
+      reallocation
+    - minimum `json` module version bumped to 1.11 (the version that introduced NDJSON
+      support); environments on older `json` will now get a clearer error pointing at the
+      version requirement instead of silently running the old slow path
 
     @subsection elasticsearchdataprovider_v1_1 ElasticSearchDataProvider v1.1
     - added support for the data provider action catalog API

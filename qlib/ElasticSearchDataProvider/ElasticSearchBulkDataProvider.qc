@@ -117,9 +117,15 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
     #! Formats the operations list as NDJSON
     /** @param operations list of operation hashes
         @return NDJSON string for the bulk request
+
+        @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
+            by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
+            buffering — so building the bulk body is O(n) in the number of operations
+            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            concatenation
     */
     private string formatOperations(list<hash<auto>> operations) {
-        string result = "";
+        NdjsonDataProvider::NdjsonStringWriter writer();
 
         foreach hash<auto> op in (operations) {
             string action = op.action;
@@ -156,7 +162,7 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
             }
 
             # Append action line
-            result += make_json({action: action_meta}) + "\n";
+            writer.write({action: action_meta});
 
             # Append document line (except for delete operations)
             if (action != "delete" && op.doc) {
@@ -175,14 +181,14 @@ public class ElasticSearchBulkDataProvider inherits ElasticSearchDataProviderBas
                     if (op.upsert) {
                         update_body.upsert = op.upsert;
                     }
-                    result += make_json(update_body) + "\n";
+                    writer.write(update_body);
                 } else {
-                    result += make_json(op.doc) + "\n";
+                    writer.write(op.doc);
                 }
             }
         }
 
-        return result;
+        return writer.getString();
     }
 
     #! Returns the description of a successful request message, if any

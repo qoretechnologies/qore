@@ -2080,7 +2080,7 @@ qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestCl
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
-qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider" "elastic-logo.svg")
+qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider" "elastic-logo.svg")
 qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-logo.svg")
 qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")

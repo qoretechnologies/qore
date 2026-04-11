@@ -104,18 +104,24 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
 
     #! Formats the buffered records as NDJSON for the bulk API
     /** @return the NDJSON string for the bulk request
+
+        @note uses @ref NdjsonDataProvider::NdjsonStringWriter "NdjsonStringWriter" — backed
+            by a @ref Qore::StringOutputStream "StringOutputStream" with geometric-growth
+            buffering — so building the bulk body is O(n) in the number of queued records
+            rather than the O(n²) cost of repeated `string += make_json(x) + "\n"`
+            concatenation
     */
     private string formatNDJSON() {
-        string result = "";
         if (!buf) {
-            return result;
+            return "";
         }
         auto first = buf.firstValue();
         if (!first) {
-            return result;
+            return "";
         }
         int count = first.lsize();
 
+        NdjsonDataProvider::NdjsonStringWriter writer();
         for (int i = 0; i < count; ++i) {
             # Build the record from column lists
             hash<auto> record = map {$1: buf{$1}[i]}, keys buf;
@@ -136,20 +142,20 @@ public class ElasticSearchBulkOperation inherits DataProvider::AbstractDataProvi
             };
 
             # Append action line
-            result += make_json(action) + "\n";
+            writer.write(action);
 
             # Append document line (except for delete operations)
             if (optype != "delete") {
                 if (optype == "update") {
                     # Update operations need the document wrapped in "doc"
-                    result += make_json({"doc": record}) + "\n";
+                    writer.write({"doc": record});
                 } else {
-                    result += make_json(record) + "\n";
+                    writer.write(record);
                 }
             }
         }
 
-        return result;
+        return writer.getString();
     }
 
     #! Handles errors from a bulk response
