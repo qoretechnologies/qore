@@ -3339,14 +3339,13 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            // Wait for read readiness with the outer Socket mutex released
-            // so concurrent async operations on the same Socket (writes or
-            // other directions) can make forward progress.  Direction-level
-            // exclusion via NB_RECV ensures no other thread starts a
-            // concurrent read on this SSL*.  Falls back to the direct path
-            // for bare QoreSocket instances with no outer_lock wired.
+            // Wait for read readiness.  Yield the outer lock only on
+            // non-multiplexed sockets.  H2 mux sockets share a single TLS
+            // connection between the I/O controller's epoll and handler
+            // threads; an independent ::poll() from waitReleasingLock()
+            // would compete for TLS records and cause stream starvation.
             int wait_rc;
-            if (qs.outer_lock) {
+            if (qs.outer_lock && !qs.h2_session) {
                 wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
                     true, false, timeout_ms, "Socket", mname, xsink);
             } else {
@@ -3367,11 +3366,9 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            // Same yielding-wait pattern as the WANT_READ branch above —
-            // direction-level exclusion via NB_SEND keeps concurrent SSL
-            // writes from clobbering the SSL* state.
+            // Same guard as WANT_READ: no lock-yielding on H2 mux sockets.
             int wait_rc;
-            if (qs.outer_lock) {
+            if (qs.outer_lock && !qs.h2_session) {
                 wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
                     false, true, timeout_ms, "Socket", mname, xsink);
             } else {
@@ -3461,13 +3458,10 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
     int err = SSL_get_error(ssl, rc);
 
     if (err == SSL_ERROR_WANT_READ) {
-        // Yield the outer Socket mutex during the wait so concurrent async
-        // ops on the same Socket can make forward progress.  Same rationale
-        // as doSSLRW() above — direction-level exclusion via NB_RECV
-        // already prevents concurrent same-direction SSL operations on
-        // this SSL*.
+        // Same H2 mux guard as doSSLRW: no lock-yielding when the socket
+        // has an H2 session — avoids TLS record contention with epoll.
         int wait_rc;
-        if (qs.outer_lock) {
+        if (qs.outer_lock && !qs.h2_session) {
             wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
                 true, false, timeout_ms, "Socket", mname, xsink);
         } else {
@@ -3485,7 +3479,7 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
 
     if (err == SSL_ERROR_WANT_WRITE) {
         int wait_rc;
-        if (qs.outer_lock) {
+        if (qs.outer_lock && !qs.h2_session) {
             wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
                 false, true, timeout_ms, "Socket", mname, xsink);
         } else {

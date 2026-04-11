@@ -2933,8 +2933,14 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     # --- option-parity Phase 1 tests ---
 
     testOptionUnknownKeyRejected() {
-        assertThrows("RESTCLIENTIO-OPTION-ERROR", "unknown RestClientIo option",
-            sub () { createClient({"not_a_real_option": 42}); });
+        # Unknown options are silently stripped (not rejected) so that
+        # subclass getOptions() can leave consumed service-specific keys
+        # (api_profile, encode_chars, etc.) without causing errors.
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({"not_a_real_option": 42});
+        on_exit rest.close();
+        assertTrue(True, "unknown option silently stripped");
+%endif
     }
 
     testOptionHttpVersionAlias() {
@@ -3001,12 +3007,15 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     }
 
     testOptionHttp1OnlyRejected() {
-        # Every H1-only option should be rejected with an explanatory message
+        # Http1-only options are silently stripped (not rejected) so that
+        # subclass constructors and connection adapters work without errors.
+%ifndef NoJson
         foreach string key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
-            string k = key;
-            assertThrows("RESTCLIENTIO-OPTION-ERROR", "not supported by RestClientIo",
-                sub () { createClient({k: True}); });
+            RestClientIo::RestClientIo rest = createClient({key: True});
+            rest.close();
         }
+        assertTrue(True, "Http1-only options silently stripped");
+%endif
     }
 
     testOptionTokenApiKeyHeader() {
