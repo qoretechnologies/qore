@@ -3027,7 +3027,13 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
         }
     }
 
-    // QoreDotEvalOperatorNode: obj.method(args) — serialize as DOT_EVAL_TARGET
+    // QoreDotEvalOperatorNode: obj.method(args) — serialize as DOT_EVAL_TARGET.
+    // The inline form (used when this node appears as an argument or sub-expression
+    // of another expression — e.g. STATIC_METHOD_CALL arg) must carry the full
+    // information needed to rebuild the AST at load time: class_path, method_name,
+    // is_pseudo, the target expression (`left`), and the argument list.  The slot
+    // map form (see write_slot_DOT_EVAL_TARGET) writes only the method identity
+    // because there the target and args are separate slots.
     if (auto* de = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
         MethodCallNode* mc = de->getMethodCall();
         if (mc) {
@@ -3036,6 +3042,29 @@ bool classifyAndWriteExpr(QoreAOTBinaryWriter& writer, const QoreValue& expr,
             writer.writeStringRef(qc ? qc->getPath() : "");
             writer.writeStringRef(mc->getName() ? mc->getName() : "");
             writer.writeU8(mc->isPseudo() ? 1 : 0);
+            // Target expression (left-hand side of the dot)
+            classifyAndWriteExpr(writer, de->getExpression(),
+                parent_locals, parent_globals, const_reverse_map);
+            // Method args: prefer the evaluated args list, fall back to parse_args
+            const QoreListNode* call_args = mc->getArgs();
+            const QoreParseListNode* parse_args = mc->getParseArgs();
+            size_t num_args = 0;
+            if (call_args) {
+                num_args = call_args->size();
+            } else if (parse_args) {
+                num_args = parse_args->size();
+            }
+            if (num_args > 255) {
+                num_args = 0;  // too many to encode — fall through to arg-less form
+            }
+            writer.writeU8(static_cast<uint8_t>(num_args));
+            for (size_t j = 0; j < num_args; ++j) {
+                QoreValue arg = call_args
+                    ? call_args->retrieveEntry(j)
+                    : parse_args->get(j);
+                classifyAndWriteExpr(writer, arg,
+                    parent_locals, parent_globals, const_reverse_map);
+            }
             return true;
         }
     }

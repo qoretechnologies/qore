@@ -42,6 +42,9 @@
 #include "qore/intern/qore_thread_intern.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreNamespaceIntern.h"
+#include "qore/intern/QoreClassIntern.h"
+#include "qore/intern/QoreDotEvalOperatorNode.h"
+#include "qore/intern/qore_list_private.h"
 
 // ============================================================================
 // FUNC_CALL (1)
@@ -1573,21 +1576,98 @@ static QoreValue read_expr_list_literal(AOTExprReadCtx& ctx) {
 // ============================================================================
 
 static bool write_expr_dot_eval_target(AOTExprWriteCtx& ctx) {
-    // Written by classifyAndWriteExpr when encountering QoreDotEvalOperatorNode
-    // in constructor/method arg contexts. The slot map handles this separately.
+    // Written by classifyAndWriteExpr in QoreAOTBinary.cpp when encountering a
+    // QoreDotEvalOperatorNode as an inline sub-expression. The writer there is
+    // responsible for emitting the full payload (class/method/is_pseudo + target
+    // expression + args); this entry is only here so the registry has a symbol.
     ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::DOT_EVAL_TARGET));
     return true;
 }
 
 static QoreValue read_expr_dot_eval_target(AOTExprReadCtx& ctx) {
-    // Read and skip the DOT_EVAL_TARGET fields: class_path, method_name, is_pseudo
-    // This expression cannot be fully reconstructed inline (missing object expression),
-    // but consuming the bytes correctly prevents cascading parse errors.
-    ctx.reader.readStringRef(ctx.ptr);  // class_path
-    ctx.reader.readStringRef(ctx.ptr);  // method_name
-    QoreAOTBinaryReader::readU8(ctx.ptr);  // is_pseudo flag
-    ctx.error = "DOT_EVAL_TARGET not supported as inline expression";
-    return QoreValue();
+    // Reconstruct an inline QoreDotEvalOperatorNode from class_path + method_name
+    // + is_pseudo + target expression + args list. The write side is in
+    // classifyAndWriteExpr in QoreAOTBinary.cpp.
+    const char* class_path = ctx.reader.readStringRef(ctx.ptr);
+    const char* method_name = ctx.reader.readStringRef(ctx.ptr);
+    uint8_t is_pseudo = QoreAOTBinaryReader::readU8(ctx.ptr);
+
+    // Target expression
+    std::string target_err;
+    QoreValue target = readOneExpr(ctx.reader, ctx.ptr, ctx.end, target_err, ctx.pgm,
+        ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+    if (!target_err.empty()) {
+        ctx.error = "DOT_EVAL_TARGET target: " + target_err;
+        target.discard(nullptr);
+        return QoreValue();
+    }
+
+    // Args list
+    uint8_t num_args = QoreAOTBinaryReader::readU8(ctx.ptr);
+    QoreParseListNode* pln = nullptr;
+    if (num_args > 0) {
+        pln = new QoreParseListNode(&loc_builtin);
+        for (uint8_t j = 0; j < num_args; ++j) {
+            std::string arg_err;
+            QoreValue arg = readOneExpr(ctx.reader, ctx.ptr, ctx.end, arg_err, ctx.pgm,
+                ctx.locals, ctx.num_locals, ctx.globals, ctx.num_globals);
+            if (!arg_err.empty()) {
+                ctx.error = "DOT_EVAL_TARGET arg " + std::to_string(j) + ": " + arg_err;
+                arg.discard(nullptr);
+                pln->deref();
+                target.discard(nullptr);
+                return QoreValue();
+            }
+            pln->add(arg, &loc_builtin);
+        }
+    }
+
+    if (!method_name || !*method_name) {
+        ctx.error = "DOT_EVAL_TARGET: empty method name";
+        if (pln) {
+            pln->deref();
+        }
+        target.discard(nullptr);
+        return QoreValue();
+    }
+
+    // Build MethodCallNode with parse_args list; call resolveParseArgs() to
+    // populate the evaluated args list so AbstractMethodCallNode::exec can find
+    // them at runtime (parseInit is never re-run for AOT-deserialized nodes).
+    MethodCallNode* mc = new MethodCallNode(&loc_builtin, strdup(method_name), pln);
+
+    // Try to resolve class + method for optimized dispatch. For regular
+    // (non-pseudo) calls these are pure optimizations: if left null,
+    // AbstractMethodCallNode::exec() falls back to dynamic method lookup on
+    // the target object's runtime class, and QoreDotEvalOperatorNode::
+    // evalWithBase() falls back to pseudo_classes_eval() for non-object base
+    // types.  For pseudo calls, we only tag the node as pseudo when we can
+    // resolve both class and method — otherwise the dynamic
+    // pseudo_classes_eval() path handles it correctly without needing
+    // the pseudo flag set.
+    const QoreClass* resolved_qc = nullptr;
+    const QoreMethod* resolved_m = nullptr;
+    if (class_path && *class_path) {
+        qore_program_private* pp = qore_program_private::get(*ctx.pgm);
+        const qore_ns_private* found_ns = nullptr;
+        resolved_qc = qore_root_ns_private::runtimeFindClass(
+            *pp->RootNS, class_path, found_ns);
+        if (resolved_qc) {
+            resolved_m = resolved_qc->findMethod(method_name);
+            if (!resolved_m) {
+                resolved_m = resolved_qc->findStaticMethod(method_name);
+            }
+        }
+    }
+    if (resolved_qc && resolved_m) {
+        mc->parseSetClassAndMethod(resolved_qc, resolved_m);
+        if (is_pseudo) {
+            mc->setPseudo(resolved_qc->getTypeInfo());
+        }
+    }
+    mc->resolveParseArgs();
+
+    return QoreValue(new QoreDotEvalOperatorNode(&loc_builtin, target, mc));
 }
 
 // ============================================================================
