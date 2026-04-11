@@ -439,6 +439,69 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                     return true;
                 }
             }
+            // NewComplexListNode: `list<T> m();` default-constructed complex list
+            if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
+                const char* type_path = QoreTypeInfo::getPath(ncl->typeInfo);
+                if (!type_path) {
+                    type_path = "";
+                }
+                // NewComplexListNode stores `args` as a single QoreValue that
+                // may be a list node or NOTHING. For empty-arg ctor calls
+                // (the common case, `list<T> m();`), args is NOTHING.
+                uint32_t nargs = 0;
+                const QoreListNode* arg_list = nullptr;
+                if (!ncl->args.isNothing()) {
+                    arg_list = ncl->args.getType() == NT_LIST
+                        ? ncl->args.get<const QoreListNode>() : nullptr;
+                    if (arg_list) {
+                        nargs = static_cast<uint32_t>(arg_list->size());
+                    }
+                }
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
+                writeU8(0); // kind: 0 = complex list
+                uint32_t tlen = static_cast<uint32_t>(strlen(type_path));
+                writeU32(tlen);
+                writeStringRef(type_path, tlen);
+                writeU32(nargs);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    writeValue(arg_list->retrieveEntry(i));
+                }
+                return true;
+            }
+            // NewComplexHashNode: `hash<K, V> m();` default-constructed complex hash
+            if (auto* nch = dynamic_cast<const NewComplexHashNode*>(node)) {
+                const char* type_path = QoreTypeInfo::getPath(nch->typeInfo);
+                if (!type_path) {
+                    type_path = "";
+                }
+                uint32_t nargs = nch->args ? static_cast<uint32_t>(nch->args->size()) : 0;
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
+                writeU8(1); // kind: 1 = complex hash
+                uint32_t tlen = static_cast<uint32_t>(strlen(type_path));
+                writeU32(tlen);
+                writeStringRef(type_path, tlen);
+                writeU32(nargs);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    writeValue(nch->args->get(i));
+                }
+                return true;
+            }
+            // NewHashDeclNode: `<MyHashdecl> m();` default-constructed hashdecl
+            if (auto* nhd = dynamic_cast<const NewHashDeclNode*>(node)) {
+                const TypedHashDecl* hd = nhd->hd;
+                std::string ns_path = hd ? hd->getNamespacePath() : std::string();
+                uint32_t nargs = nhd->args ? static_cast<uint32_t>(nhd->args->size()) : 0;
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT));
+                writeU8(2); // kind: 2 = hashdecl
+                uint32_t tlen = static_cast<uint32_t>(ns_path.size());
+                writeU32(tlen);
+                writeStringRef(ns_path.c_str(), tlen);
+                writeU32(nargs);
+                for (uint32_t i = 0; i < nargs; ++i) {
+                    writeValue(nhd->args->get(i));
+                }
+                return true;
+            }
             // Fall through to default if not serializable
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
             return true;
@@ -1005,6 +1068,99 @@ QoreValue QoreAOTBinaryReader::readValue(const uint8_t*& ptr, const uint8_t* end
                 socn->resolveParseArgs();
             }
             return QoreValue(socn);
+        }
+
+        case QoreAOTValueTag::VT_NEW_COMPLEX_DEFAULT: {
+            // Complex-type default construction: kind + type path + args.
+            // Kind 0 = complex list, 1 = complex hash, 2 = hashdecl.
+            if (ptr + 1 > end) {
+                error = "unexpected end of data reading complex_default kind";
+                return QoreValue();
+            }
+            uint8_t kind = readU8(ptr);
+            if (ptr + 8 > end) {
+                error = "unexpected end of data reading complex_default type path";
+                return QoreValue();
+            }
+            (void)readU32(ptr);  // path_len (unused — using string pool offset)
+            uint32_t path_offset = readU32(ptr);
+            const char* type_path = getString(path_offset);
+            if (!type_path) {
+                error = "invalid string offset for complex_default type path";
+                return QoreValue();
+            }
+            if (ptr + 4 > end) {
+                error = "unexpected end of data reading complex_default arg count";
+                return QoreValue();
+            }
+            uint32_t nargs = readU32(ptr);
+            // Read args (always, even if type resolution fails — must advance ptr)
+            std::vector<QoreValue> args;
+            args.reserve(nargs);
+            for (uint32_t i = 0; i < nargs; ++i) {
+                QoreValue arg = readValue(ptr, end, error);
+                if (!error.empty()) {
+                    for (auto& v : args) v.discard(nullptr);
+                    return QoreValue();
+                }
+                args.push_back(arg);
+            }
+            // Build a QoreParseListNode from the args (empty when nargs == 0).
+            QoreParseListNode* parse_args = nullptr;
+            if (nargs > 0) {
+                parse_args = new QoreParseListNode(&loc_builtin);
+                for (auto& v : args) {
+                    parse_args->add(v, &loc_builtin);
+                }
+                args.clear();
+            }
+            if (kind == 2) {
+                // Hashdecl: type_path is a namespace path to a hashdecl
+                QoreProgram* pgm = getProgram();
+                const QoreNamespace* pns = nullptr;
+                const TypedHashDecl* hd = pgm ? pgm->findHashDecl(type_path, pns) : nullptr;
+                if (!hd) {
+                    printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve hashdecl '%s'\n",
+                        type_path);
+                    if (parse_args) {
+                        parse_args->deref(nullptr);
+                    }
+                    return QoreValue();
+                }
+                NewHashDeclNode* nhd = new NewHashDeclNode(&loc_builtin, hd, parse_args, false);
+                return QoreValue(nhd);
+            }
+            // kind 0 or 1: resolve complex list/hash type
+            // qore_get_type_from_string_intern handles `list<T>`, `hash<T>`,
+            // etc. by looking up any class/hashdecl refs via the current
+            // program. We don't install ProgramRuntimeParseAccessHelper here:
+            // by the time readValue runs for a class member default, the
+            // current program is already the active program and taking parse
+            // access during deserialization can corrupt runtime state.
+            const QoreTypeInfo* ti = qore_get_type_from_string_intern(type_path);
+            if (!ti) {
+                printd(0, "AOT readValue VT_NEW_COMPLEX_DEFAULT: cannot resolve type '%s' (kind=%d)\n",
+                    type_path, (int)kind);
+                if (parse_args) {
+                    parse_args->deref(nullptr);
+                }
+                return QoreValue();
+            }
+            if (kind == 0) {
+                // NewComplexListNode stores args as a single QoreValue that's
+                // either NOTHING or a list of args. Mirror what the parser
+                // does in parseInitComplexListInitialization() for the empty
+                // case: just pass NOTHING, which evaluates to an empty list.
+                QoreValue list_args;
+                if (parse_args) {
+                    list_args = QoreValue(parse_args);
+                }
+                NewComplexListNode* ncl = new NewComplexListNode(&loc_builtin, ti, list_args);
+                return QoreValue(ncl);
+            }
+            // kind == 1: complex hash
+            NewComplexHashNode* nch = new NewComplexHashNode(&loc_builtin, ti, parse_args);
+            return QoreValue(nch);
         }
 
         case QoreAOTValueTag::VT_CONST_REF: {
@@ -1799,6 +1955,12 @@ static void writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             writer.writeStringRef(mi.first);
             writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
             writer.writeU8(static_cast<uint8_t>(mi.second->access));
+            // flags byte — bit 0 = transient
+            uint8_t mflags = 0;
+            if (mi.second->getTransient()) {
+                mflags |= 0x01;
+            }
+            writer.writeU8(mflags);
             // default initialization value
             if (mi.second->exp) {
                 writer.writeU8(1);
@@ -3950,6 +4112,14 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             qc = existing;
             class_already_existed = true;
             preexisting_classes.insert(i);
+        } else {
+            // Link the class back to its owning namespace. `classList.add`
+            // only puts the pointer in the map — it does NOT update the
+            // class's own ns pointer. Without this, QoreClass::getNamespacePath
+            // returns an empty string (priv->ns is null), breaking
+            // Serializable::serialize (it writes "" as _class, then
+            // deserialize fails with "Cannot find class ''").
+            qore_class_private::get(*qc)->setNamespaceConditional(ns_list[ns_idx]);
         }
         class_list[i] = qc;
 
@@ -3998,12 +4168,14 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
             const char* mname = reader.readStringRef(ptr);
             const char* mtype_path = reader.readStringRef(ptr);
             uint8_t maccess = QoreAOTBinaryReader::readU8(ptr);
+            uint8_t mflags = QoreAOTBinaryReader::readU8(ptr);
             uint8_t has_default = QoreAOTBinaryReader::readU8(ptr);
             QoreValue default_val;
             PendingInstanceMember pim;
             pim.name = mname ? mname : "";
             pim.type_path = mtype_path ? mtype_path : "";
             pim.access = maccess;
+            pim.flags = mflags;
             if (has_default) {
                 if (!readDeferredMemberDefault(reader, ptr, end, error,
                         default_val, pim)) {
@@ -4295,6 +4467,19 @@ bool QoreAOTBinaryDeserializer::resolveInstanceMembers(std::string& error) {
             pim.default_val = QoreValue();  // Clear to prevent double-deref
             priv->addMember(pim.name.c_str(), static_cast<ClassAccess>(pim.access), ti,
                 default_val);
+            // Apply member flags — specifically the transient flag, which
+            // excludes the member from Serializable::serialize(). Without
+            // this, `transient RWLock rwlock();` style members get serialized
+            // (and fail) at runtime because the flag is lost.
+            if (pim.flags & 0x01) {
+                QoreMemberInfo* new_mi = priv->members.find(pim.name.c_str());
+                if (new_mi) {
+                    new_mi->setTransient();
+                    if (!priv->has_transient_member) {
+                        priv->has_transient_member = true;
+                    }
+                }
+            }
 
             printd(5, "AOT deser: added instance member '%s' to class '%s'\n",
                 pim.name.c_str(), qc->getName());

@@ -139,6 +139,11 @@ enum class QoreAOTValueTag : uint8_t {
     //! shares a node pointer with another constant in the program reverse map.
     //! At load time, the value is resolved by looking up the referenced constant.
     VT_CONST_REF  = 16,
+    //! Complex-type default construction expression: NewComplexListNode /
+    //! NewComplexHashNode / NewHashDeclNode. Encoded as kind(u8) + type path +
+    //! num_args + recursive args. Used for class member initializers declared
+    //! with the constructor-call form, e.g. `list<auto> elems()`.
+    VT_NEW_COMPLEX_DEFAULT = 17,
 };
 
 //! Section header in the binary format
@@ -1054,6 +1059,7 @@ class QoreAOTBinaryDeserializer {
         std::string name;
         std::string type_path;
         uint8_t access;
+        uint8_t flags = 0;  // bit 0 = transient
         QoreValue default_val;
         //! When set, the member init is a `Class(args)` call whose target
         //! class is a forward reference to a class that has not yet been
