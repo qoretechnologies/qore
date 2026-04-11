@@ -1025,6 +1025,43 @@ extern "C" DLLEXPORT uint64_t qore_rt_cast_by_type_path(uint64_t inner_bits,
         return toBits(result);
     }
 
+    // Try complex hash cast, e.g. cast<hash<string, hash<X>>>(value).
+    // For these, `ti` is a complex hash type (value-typed hash); route through
+    // newComplexHashFromHash to clear nested hashdecl bindings and set the
+    // correct complexTypeInfo on the result.
+    if (ti && QoreTypeInfo::getUniqueReturnComplexHash(ti)) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_HASH) {
+            xsink->raiseException("RUNTIME-CAST-ERROR",
+                "cannot cast from type '%s' to '%s'",
+                inner.getTypeName(), type_path);
+            return toBits(QoreValue());
+        }
+        QoreHashNode* init_hash = inner.get<QoreHashNode>()->hashRefSelf();
+        QoreValue result = qore_hash_private::newComplexHashFromHash(ti, init_hash, xsink);
+        return toBits(result);
+    }
+
+    // Try complex list cast, e.g. cast<list<X>>(value).
+    if (ti && QoreTypeInfo::getUniqueReturnComplexList(ti)) {
+        if (inner.isNothing() && or_nothing) {
+            return toBits(QoreValue());
+        }
+        if (inner.getType() != NT_LIST) {
+            xsink->raiseException("RUNTIME-CAST-ERROR",
+                "cannot cast from type '%s' to '%s'",
+                inner.getTypeName(), type_path);
+            return toBits(QoreValue());
+        }
+        // List cast: return the value with the desired element type.
+        // newComplexListFromValue takes ownership of inner's ref.
+        QoreValue result = qore_list_private::newComplexListFromValue(ti,
+            inner.refSelf(), xsink);
+        return toBits(result);
+    }
+
     // Fallback: unsupported cast type
     xsink->raiseException("IR-CAST-ERROR", "cannot resolve cast type '%s'", type_path);
     return toBits(QoreValue());

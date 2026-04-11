@@ -1181,6 +1181,55 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveHashDeclType(const char* path) {
     return nullptr;
 }
 
+//! Normalise a complex type path string for runtime parsing.
+//!
+//! QoreTypeInfo::getPath() for user hashdecls returns fully-qualified names
+//! with a leading "::", e.g. "hash<::DataProvider::DataProviderExpressionInfo>".
+//! When the parser-based runtime resolver walks this into a NamedScope, the
+//! leading "::" becomes an empty first component, and
+//! qore_root_ns_private::runtimeFindHashDeclIntern(NamedScope) iterates
+//! nsmap looking for a namespace whose name is "" — which never matches, so
+//! the hashdecl is not found and the outer cast fails with IR-CAST-ERROR.
+//!
+//! This normalizer strips any "::" prefix from identifier components inside
+//! complex type paths (after "<" or ", "), which makes the nested hashdecl
+//! lookup succeed. It is a string-level fix contained to the AOT resolver
+//! path so shared runtime name-lookup code remains unchanged.
+static std::string normalize_aot_type_path(const char* path) {
+    std::string out;
+    if (!path) {
+        return out;
+    }
+    out.reserve(strlen(path));
+    size_t i = 0;
+    size_t n = strlen(path);
+    // Handle a possible leading "*::" / "::" on the outer type path.
+    if (n >= 2 && path[0] == ':' && path[1] == ':') {
+        i += 2;
+    } else if (n >= 3 && path[0] == '*' && path[1] == ':' && path[2] == ':') {
+        out.push_back('*');
+        i += 3;
+    }
+    while (i < n) {
+        char c = path[i];
+        out.push_back(c);
+        ++i;
+        // After "<" or "," (possibly followed by space), strip a "::" prefix.
+        bool at_arg_start = (c == '<');
+        if (c == ',' && i < n && path[i] == ' ') {
+            out.push_back(' ');
+            ++i;
+            at_arg_start = true;
+        } else if (c == ',') {
+            at_arg_start = true;
+        }
+        if (at_arg_start && i + 1 < n && path[i] == ':' && path[i + 1] == ':') {
+            i += 2;
+        }
+    }
+    return out;
+}
+
 const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
     // Handle object<ClassName> patterns directly by looking up the class
     // in the namespace tree. This works even before rebuildAllIndexes() is called.
@@ -1218,14 +1267,18 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
     // qore_get_type_from_string_intern() handles: list<T>, hash<T>, *T, reference<T>, etc.
     // We need to set up the program context so that class lookups like object<ClassName>
     // can find classes defined in the program's namespace tree.
+    // Normalize the path to strip leading "::" on nested hashdecl/enum refs
+    // (see the normaliser comment for the rationale).
+    std::string norm_path = normalize_aot_type_path(path);
+    const char* use_path = norm_path.c_str();
     if (pgm) {
         ExceptionSink xsink;
         ProgramRuntimeParseAccessHelper pah(&xsink, pgm);
         if (!xsink) {
-            return qore_get_type_from_string_intern(path);
+            return qore_get_type_from_string_intern(use_path);
         }
     }
-    return qore_get_type_from_string_intern(path);
+    return qore_get_type_from_string_intern(use_path);
 }
 
 const QoreTypeInfo* QoreAOTTypeResolver::resolve(const char* path, std::string& error) {
