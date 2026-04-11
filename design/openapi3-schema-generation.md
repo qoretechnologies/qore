@@ -126,6 +126,27 @@ Counter-examples that DO NOT parse:
 @return (hash<OrderResponse>):                # empty description
 ```
 
+#### Nested Hash Fields
+
+When a return type field is itself a named hash, its sub-fields can be listed at
+a deeper indentation level.  The hash field **must** use a named type
+(`hash TypeName` or `hash<TypeName>`) — an anonymous `hash` without a type name
+cannot have sub-fields:
+
+```
+@return (hash<OrderResponse>): the newly created order
+- order_id (int): Unique order identifier
+- billing (hash BillingInfo): Billing details
+  - address (string): Street address
+  - city (string): City
+  - total (float): Billing total
+- status (string): Order status
+```
+
+This defines `OrderResponse` with three top-level fields, where `billing` is a
+nested `BillingInfo` object with its own three fields.  The sub-fields use two
+additional spaces of indentation relative to their parent field.
+
 If the return value is a primitive, the same format applies:
 
 ```
