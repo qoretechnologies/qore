@@ -75,12 +75,12 @@ module SwaggerDataProvider {
     @section swaggerdataprovider_relnotes Release Notes
 
     @subsection swaggerdataprovider_v1_4 SwaggerDataProvider v1.4
-    - migrated from @ref RestClient::RestClient "RestClient" to
-      @ref RestClientIo::RestClientIo "RestClientIo" as the underlying REST transport;
-      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
-      Swagger-validated REST servers, and uses @ref RestClientIo::RestClientIo::restDoRawRequest()
-      "restDoRawRequest()" to pass pre-serialized operation bodies through without
-      triggering double schema validation
+    - migrated from @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x) to
+      @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as the
+      default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent request
+      multiplexing against Swagger-validated REST servers, and uses
+      @ref RestClientIo::RestClientIo::restDoRawRequest() "restDoRawRequest()" to pass
+      pre-serialized operation bodies through without triggering double schema validation
 
     @subsection swaggerdataprovider_v1_3 SwaggerDataProvider v1.3
     - implemented the \c lax_parsing option to try to parse invalid Swagger schemas

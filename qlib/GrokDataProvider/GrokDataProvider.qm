@@ -274,8 +274,8 @@ module GrokDataProvider {
 
     The %GrokDataProvider module provides a @ref dataproviderintro "data provider" API for xAI Grok services.
 
-    This module uses the async-capable @ref RestClientIo for HTTP communication, supporting HTTP/2 and HTTP/3
-    multiplexed connections.
+    This module uses the async-capable @ref RestClientIo for HTTP communication; it supports HTTP/1.x, HTTP/2,
+    and HTTP/3, with connection multiplexing on HTTP/2 and HTTP/3.
 
     @section grokdataprovider_examples Examples
 
@@ -321,7 +321,8 @@ stream.doRequest({
     - SSE streaming via DelayedObservable pattern
     - deferred completion retrieval
     - conversation context store for response continuation
-    - built with RestClientIo for async HTTP/2 and HTTP/3 support
+    - built with RestClientIo for async HTTP/1.x, HTTP/2, and HTTP/3 support (with
+      connection multiplexing on HTTP/2 and HTTP/3)
 */
 
 #! contains all public definitions in the GrokDataProvider module

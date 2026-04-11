@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file RestClientIo.qm Qore user module for REST clients over multiplexed HTTP/2 and HTTP/3
+#! @file RestClientIo.qm Qore user module providing an async REST client over HTTP/1.x, HTTP/2, and HTTP/3
 
 /*  RestClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
 
@@ -269,13 +269,17 @@ hash<RestResponseInfo> resp = f.get(30s);
         }
     }
 
-    #! REST client using multiplexed HTTP/2 and HTTP/3 connections
+    #! Async REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** This class implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface
-        using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
-        multiplexed HTTP/2 and HTTP/3 connections.
+        using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", which
+        provides a unified event-loop-based transport for HTTP/1.x, HTTP/2, and HTTP/3.
 
-        Multiple concurrent requests are multiplexed over shared connections rather than serializing
-        through a single HTTP/1.1 connection as @ref RestClient::RestClient "RestClient" does.
+        \c RestClientIo is the async evolution of @ref RestClient::RestClient "RestClient" and is the
+        recommended REST transport for new code. Whereas @ref RestClient::RestClient "RestClient" is
+        built on the built-in @ref Qore::HTTPClient "HTTPClient" class and therefore only speaks
+        HTTP/1.x synchronously, \c RestClientIo additionally supports HTTP/2 and HTTP/3, and
+        multiplexes multiple concurrent requests over shared connections whenever the negotiated
+        protocol allows it (HTTP/2 and HTTP/3).
 
         @par Constructor Options
         - \c url (required): the target URL (e.g., \c "https://api.example.com")
@@ -2976,7 +2980,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
     }
 }
 
-#! REST ping poll operation using RestClientIo for native HTTP/2 and HTTP/3 support
+#! REST ping poll operation using RestClientIo as the underlying async transport
 /** Pure async state machine — no background threads.  Uses CompositeAction
     (PromiseAction + EventNotifierAction) so the C++ I/O thread signals the
     EventNotifier when the HTTP response arrives, making Future::get() non-blocking

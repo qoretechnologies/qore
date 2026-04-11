@@ -79,12 +79,12 @@ module RestSchemaDataProvider {
     @section restschemamdataprovider_relnotes Release Notes
 
     @subsection restschemamdataprovider_v2_4 RestSchemaDataProvider v2.4
-    - migrated from @ref RestClient::RestClient "RestClient" to
-      @ref RestClientIo::RestClientIo "RestClientIo" as the underlying REST transport;
-      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
-      REST servers, and uses @ref RestClientIo::RestClientIo::restDoRawRequest()
-      "restDoRawRequest()" to pass pre-serialized operation bodies through without
-      triggering double schema validation
+    - migrated from @ref RestClient::RestClient "RestClient" (synchronous HTTP/1.x) to
+      @ref RestClientIo::RestClientIo "RestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3) as the
+      default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent request
+      multiplexing against REST servers, and uses
+      @ref RestClientIo::RestClientIo::restDoRawRequest() "restDoRawRequest()" to pass
+      pre-serialized operation bodies through without triggering double schema validation
 
     @subsection restschemamdataprovider_v2_3 RestSchemaDataProvider v2.3
     - initial release of the module supporting both Swagger 2.0 and OpenAPI 3.0 schemas

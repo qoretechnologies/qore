@@ -75,10 +75,10 @@ module AwsRestClientDataProvider {
     @section awsrestclientdataprovider_relnotes Release Notes
 
     @subsection awsrestclientdataprovider_v1_1 AwsRestClientDataProvider v1.1
-    - migrated from @ref AwsRestClient::AwsRestClient "AwsRestClient" to
-      @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" as the underlying REST transport;
-      transparently enables multiplexed HTTP/2 and HTTP/3 for concurrent requests against
-      the same AWS endpoint
+    - migrated from @ref AwsRestClient::AwsRestClient "AwsRestClient" (synchronous HTTP/1.x) to
+      @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3)
+      as the default REST transport; this enables HTTP/2 and HTTP/3 support with concurrent
+      request multiplexing against the same AWS endpoint
 
     @subsection awsrestclientdataprovider_v1_0 AwsRestClientDataProvider v1.0
     - initial release of the module

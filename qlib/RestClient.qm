@@ -411,7 +411,11 @@ public hashdecl RestResponseInfo {
 
 #! Abstract interface for REST clients
 /** This class defines a common API for REST clients that can be implemented by both
-    @ref RestClient (HTTP/1.1) and \c RestClientIo (HTTP/2/3 multiplexed).
+    @ref RestClient (synchronous HTTP/1.x transport, built on @ref Qore::HTTPClient "HTTPClient")
+    and \c RestClientIo (async transport supporting HTTP/1.x, HTTP/2, and HTTP/3 with connection
+    multiplexing on HTTP/2 and HTTP/3). \c RestClientIo is the recommended transport for new code
+    as it is the async evolution of \c RestClient and is the only transport that supports HTTP/2
+    and HTTP/3.
 
     @par Design
     GET, HEAD, and OPTIONS methods do not accept a body parameter, correcting the original
@@ -4478,12 +4482,16 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         return RestClient rest(getConnectionOptions(rtopts), !connect);
     }
 
-    #! Returns an async-I/O-capable REST client using multiplexed HTTP connections
+    #! Returns an async-I/O-capable REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** @param connect ignored — RestClientIo connections are established lazily on
         the first request via the HttpClientConnectionManager
         @param rtopts runtime options for connection acquisition
 
-        @return a @ref RestClientIo::RestClientIo "RestClientIo" object
+        @return a @ref RestClientIo::RestClientIo "RestClientIo" object — the async evolution of
+        @ref RestClient::RestClient "RestClient" supporting HTTP/1.x, HTTP/2, and HTTP/3, with
+        connection multiplexing on HTTP/2 and HTTP/3. Whereas @ref RestClient::RestClient "RestClient"
+        is synchronous and speaks HTTP/1.x only, \c RestClientIo is async and additionally supports
+        HTTP/2 and HTTP/3.
 
         @note RestClientIo uses a connection manager that establishes and pools
         connections on demand; there is no eager connection phase. The \a connect
@@ -4493,8 +4501,9 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     */
     private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
         load_module("RestClientIo");
-        # RestClient (sync) honors Http1OnlyOptions via HTTPClient; the async transport
-        # operates at the h2/h3 layer where these options cannot apply
+        # Http1OnlyOptions are HTTPClient-specific URI/encoding workarounds (inherited by the
+        # sync RestClient via HTTPClient) that do not carry over to the HttpClientIo-based
+        # RestClientIo transport — strip them from the RestClientIo option set
         hash<auto> opts = getConnectionOptions(rtopts) - keys AbstractRestClient::Http1OnlyOptions;
         return create_object("RestClientIo::RestClientIo", opts);
     }

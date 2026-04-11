@@ -550,9 +550,10 @@ module MewsRestDataProvider {
     @section mewsrestdataprovider_relnotes Release Notes
 
     @subsection mewsrestdataprovider_v1_1 MewsRestDataProvider v1.1
-    - migrated from @ref MewsRestClient::MewsRestClient "MewsRestClient" (sync) to
-      @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" (multiplexed HTTP/2 + HTTP/3)
-      as the underlying REST transport
+    - migrated from @ref MewsRestClient::MewsRestClient "MewsRestClient" (synchronous HTTP/1.x) to
+      @ref MewsRestClient::MewsRestClientIo "MewsRestClientIo" (async HTTP/1.x, HTTP/2, and HTTP/3,
+      with connection multiplexing on HTTP/2 and HTTP/3) as the default REST transport; this
+      enables HTTP/2 and HTTP/3 support against Mews REST endpoints
 
     @subsection mewsrestdataprovider_v1_0 MewsRestDataProvider v1.0
     - initial release of the module

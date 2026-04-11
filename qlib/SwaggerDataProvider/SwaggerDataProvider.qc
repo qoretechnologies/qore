@@ -74,10 +74,12 @@ public class SwaggerDataProvider inherits SwaggerDataProviderCommon {
                     DTT_ClientOnly: True,
                 }),
                 "desc": "The REST client object to use for API calls; accepts either a "
-                    "`RestClient` (HTTP/1.1 sync) or a `RestClientIo` (multiplexed HTTP/2 + HTTP/3) — "
-                    "both implement `AbstractRestClient`. If a `url` option is also provided, a sibling "
-                    "client is built via `AbstractRestClient::copyWithUrl()` so the supplied object is "
-                    "not mutated",
+                    "`RestClient` (synchronous HTTP/1.x transport) or a `RestClientIo` (async "
+                    "transport supporting HTTP/1.x, HTTP/2, and HTTP/3 with connection multiplexing "
+                    "on HTTP/2 and HTTP/3) — both implement `AbstractRestClient`. `RestClientIo` is "
+                    "the recommended transport for new code and is the only transport that supports "
+                    "HTTP/2 and HTTP/3. If a `url` option is also provided, a sibling client is built "
+                    "via `AbstractRestClient::copyWithUrl()` so the supplied object is not mutated",
             },
             "restclient_options": <DataProviderOptionInfo>{
                 "display_name": "REST Client Options",
