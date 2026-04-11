@@ -1165,6 +1165,18 @@ private:
     std::atomic<bool> early_data_ready_{false};       //!< true when 0-RTT TX key installed (can send early data)
     std::atomic<bool> goaway_sent_{false};           //!< true when final GOAWAY (submitShutdown) has been queued; false during notice-only phase
     std::atomic<bool> closed_{false};                //!< true when session is being torn down (abort); wakes blocked handlers
+    //! True when ngtcp2 reported NGTCP2_ERR_IDLE_CLOSE from handleExpiryLocked.
+    /** ngtcp2_conn_handle_expiry() returns NGTCP2_ERR_IDLE_CLOSE without transitioning
+        conn->state to CLOSING/DRAINING (see ngtcp2_conn.c:11221) — so
+        ngtcp2_conn_in_{closing,draining}_period() both keep returning false.  Without
+        a separate flag, isClosed() would keep returning false after idle timeout,
+        and the H3 client poll op would never transition to QCS::CLOSED, leaking
+        the UDP socket.  isClosed() also consults this flag so all existing callers
+        (including SocketQuicClientPollOperation's post-recv close check) correctly
+        react to silent idle closes. RFC 9000 Section 10.1: idle timeout is a silent
+        close — no CONNECTION_CLOSE frame is sent.
+    */
+    std::atomic<bool> idle_closed_{false};
     std::atomic<bool> goaway_received_{false};       //!< true when GOAWAY received from peer
     std::atomic<bool> path_migrated_{false};         //!< set by pathValidationCallback on SUCCESS; cleared by clearPathMigrated()
     //! Address change generation counter — incremented each time remote_addr_ is updated.

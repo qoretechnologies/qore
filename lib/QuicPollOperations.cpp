@@ -869,6 +869,18 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                         return nullptr;
                     }
 
+                    // sendPendingPackets runs the timer-expiry handler, which
+                    // may have transitioned the session to the idle-closed
+                    // state (RFC 9000 Section 10.1 silent close).  Check
+                    // immediately so the UDP fd is released in the same
+                    // continuePoll cycle instead of waiting another round.
+                    if (quic_session->isClosed()) {
+                        qcs_state = QCS::CLOSED;
+                        sock->priv->clearNonBlock();
+                        set_non_block = false;
+                        return nullptr;
+                    }
+
                     // Check again for completed streams
                     if (quic_session->hasCompletedStreams()) {
                         cached_stream = quic_session->takeCompletedStream();
