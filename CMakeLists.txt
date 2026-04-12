@@ -957,6 +957,7 @@ set(LIBQORE_CPP_SRC
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
+    lib/qore_git_revision.cpp
     lib/QoreTimeZoneManager.cpp
     lib/QoreString.cpp
     lib/QoreObject.cpp
@@ -1603,10 +1604,12 @@ if (SINGLE_COMPILATION_UNIT)
         file(APPEND ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp
             "#include \"${CMAKE_BINARY_DIR}/ql_alloc_tracking.cpp\"\n")
     endif ()
-    # AllocTracking.cpp defines global malloc/free symbols and must be compiled separately from the SCU
-    set(LIBQORE_EXTRA_SRC "")
+    # Files that must be compiled separately from the SCU:
+    # - qore_git_revision.cpp: so git hash changes only recompile this tiny file
+    # - AllocTracking.cpp: defines global malloc/free symbols
+    set(LIBQORE_EXTRA_SRC lib/qore_git_revision.cpp)
     if (ENABLE_ALLOC_TRACKING AND Backtrace_FOUND)
-        set(LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
+        list(APPEND LIBQORE_EXTRA_SRC lib/AllocTracking.cpp)
     endif ()
     add_library(libqore SHARED ${CMAKE_CURRENT_BINARY_DIR}/lib/single-compilation-unit.cpp ${LIBQORE_EXTRA_SRC} ${LIBQORE_SOURCE_HEADERS})
 else (SINGLE_COMPILATION_UNIT)

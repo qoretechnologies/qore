@@ -30,7 +30,6 @@
 */
 
 #include "qore/Qore.h"
-#include "qore/intern/git-revision.h"
 #include "qore/intern/qore_number_private.h"
 #include "qore/intern/QoreSignal.h"
 #include "qore/intern/QoreObjectIntern.h"
@@ -83,7 +82,8 @@ int qore_target_bits                 = TARGET_BITS;
 // obsolete: no more svn
 int qore_build_number                = 0;
 
-const char* qore_git_hash            = BUILD;
+// qore_git_hash is defined in qore_git_revision.cpp (separate TU to avoid
+// full SCU recompile on every commit)
 const char* qore_target_os           = TARGET_OS;
 const char* qore_target_arch         = TARGET_ARCH;
 const char* qore_module_dir          = MODULE_DIR;
