@@ -4810,12 +4810,23 @@ load_local_done:
                 // For weak assignments, cache the weak-wrapped value in slot cache
                 // so LoadLocal returns the WeakReferenceNode instead of calling
                 // eval() which unwraps it
-                if (local_inst->weak && val.getType() >= NT_WEAKREF
-                        && val.getType() <= NT_WEAKREF_LIST
+                if (local_inst->weak
+                        && (val.getType() == NT_WEAKREF
+                            || val.getType() == NT_WEAKREF_HASH
+                            || val.getType() == NT_WEAKREF_LIST)
                         && local_inst->slot_id != UINT32_MAX
                         && local_inst->slot_id < locals_slot_cache.size()) {
                     locals_slot_cache[local_inst->slot_id].discard(xsink);
                     locals_slot_cache[local_inst->slot_id] = val.hasNode() ? val.refSelf() : val;
+                }
+
+                // Drop the initial ownership ref from weak node creation;
+                // assignLocalVarValue() and the cache each took their own ref
+                if (local_inst->weak && val.hasNode()
+                        && (val.getType() == NT_WEAKREF
+                            || val.getType() == NT_WEAKREF_HASH
+                            || val.getType() == NT_WEAKREF_LIST)) {
+                    val.discard(xsink);
                 }
 
                 // If the variable holds a reference, assignLocalVarValue wrote through
@@ -5193,6 +5204,14 @@ load_local_done:
                 // Write-through: update the actual closure variable so changes
                 // are visible outside the IR interpreter's local cache.
                 assignClosureVarValue(local_inst->local, val, xsink);
+                // Drop the initial ownership ref from weak node creation;
+                // storeValue() and assignClosureVarValue() each took their own ref
+                if (local_inst->weak && val.hasNode()
+                        && (val.getType() == NT_WEAKREF
+                            || val.getType() == NT_WEAKREF_HASH
+                            || val.getType() == NT_WEAKREF_LIST)) {
+                    val.discard(xsink);
+                }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         prev_block = block;
@@ -5256,6 +5275,14 @@ load_local_done:
                 // Write-through: update the actual global variable so changes
                 // are visible outside the IR interpreter's local cache.
                 assignGlobalVarValue(var_inst->var, val, xsink);
+                // Drop the initial ownership ref from weak node creation;
+                // storeValue() and assignGlobalVarValue() each took their own ref
+                if (var_inst->weak && val.hasNode()
+                        && (val.getType() == NT_WEAKREF
+                            || val.getType() == NT_WEAKREF_HASH
+                            || val.getType() == NT_WEAKREF_LIST)) {
+                    val.discard(xsink);
+                }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         prev_block = block;
@@ -5318,6 +5345,14 @@ load_local_done:
                 storeValue(threadlocals, var_inst->var, val, xsink);
                 // Write-through: update the actual thread-local variable.
                 assignGlobalVarValue(var_inst->var, val, xsink);
+                // Drop the initial ownership ref from weak node creation;
+                // storeValue() and assignGlobalVarValue() each took their own ref
+                if (var_inst->weak && val.hasNode()
+                        && (val.getType() == NT_WEAKREF
+                            || val.getType() == NT_WEAKREF_HASH
+                            || val.getType() == NT_WEAKREF_LIST)) {
+                    val.discard(xsink);
+                }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
                         prev_block = block;
@@ -7849,6 +7884,21 @@ load_local_done:
 
                 // operands[0] is the base expression, operands[1..n-1] are arguments
                 QoreValue base = getIRValue(values, direct_inst->operands[0]);
+
+                // Unwrap weak references to get the underlying object —
+                // WeakReferenceNode is transparent for method dispatch
+                // (AST mode unwraps via evalImpl(); IR caches the raw node)
+                if (base.getType() == NT_WEAKREF) {
+                    QoreObject* o = base.get<const WeakReferenceNode>()->get();
+                    if (!o || !o->isValid()) {
+                        xsink->raiseException("OBJECT-ALREADY-DELETED",
+                            "cannot call method on a deleted weak reference");
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    base = QoreValue(o);
+                }
 
                 // Build NaN-boxed args array from operands[1..n-1]
                 int nargs = static_cast<int>(direct_inst->operands.size()) - 1;

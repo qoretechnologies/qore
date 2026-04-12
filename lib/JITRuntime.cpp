@@ -6562,6 +6562,19 @@ extern "C" DLLEXPORT uint64_t qore_rt_dot_eval_pseudo_method_direct(uint64_t bas
     assert(qc);
 
     QoreValue base = fromBits(base_bits);
+
+    // Unwrap weak references — pseudo method handlers expect the underlying value
+    if (base.getType() == NT_WEAKREF) {
+        QoreObject* o = base.get<const WeakReferenceNode>()->get();
+        if (!o || !o->isValid()) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED",
+                "cannot call %s::%s() on a deleted weak reference",
+                qc->getName(), method->getName());
+            return toBits(QoreValue());
+        }
+        base = QoreValue(o);
+    }
+
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     RuntimeConfig& rc = rc_get_current_ref();
 
@@ -6580,6 +6593,17 @@ DLLLOCAL uint64_t dot_eval_fallback_with_args(QoreValue base, const char* method
     ReferenceHolder<QoreListNode> arg_list(buildArgListFromNanBoxed(args, nargs, xsink), xsink);
     if (*xsink) {
         return toBits(QoreValue());
+    }
+
+    // Unwrap weak references — method dispatch should be transparent
+    if (base.getType() == NT_WEAKREF) {
+        QoreObject* o = base.get<const WeakReferenceNode>()->get();
+        if (!o || !o->isValid()) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED",
+                "cannot call '%s()' on a deleted weak reference", method_name);
+            return toBits(QoreValue());
+        }
+        base = QoreValue(o);
     }
 
     // For objects, use name-based method lookup with evalTmpArgs to preserve references
