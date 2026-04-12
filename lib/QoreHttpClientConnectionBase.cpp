@@ -90,6 +90,14 @@ QoreHashNode* HttpClientConnectionBase::submitRequest(const char* method, const 
     return nullptr;
 }
 
+int64_t HttpClientConnectionBase::submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    xsink->raiseException("HTTPCLIENT-NOT-IMPLEMENTED",
+        "submitRequestStreaming not implemented on this connection class");
+    return -1;
+}
+
 void HttpClientConnectionBase::closeConnection(ExceptionSink* xsink) {
     // Default: just transition the state machine to CLOSED.
     // C++ subclasses override to also abort the poll op and cancel the

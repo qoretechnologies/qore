@@ -695,14 +695,17 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
         ASYNC_IO_TRACE("H1 handleRecvHeader: ERROR %s: %s\n",
             err_str ? err_str->c_str() : "?", desc_str ? desc_str->c_str() : "?");
-        // Normalize ECONNRESET to SOCKET-CLOSED for compatibility with the
-        // legacy sync path, which gets EOF on read when the remote closes.
-        // Both mean the same thing: server closed the connection before
-        // sending a response.
+        // Normalize connection-close errors to SOCKET-CLOSED for
+        // compatibility with the legacy sync path, which gets EOF on read
+        // when the remote closes.
         const char* err_code = err_str ? err_str->c_str() : "HTTP1-RECV-ERROR";
-        if (err_str && !strcmp(err_str->c_str(), "SOCKET-RECV-ERROR") && desc_str
-                && strstr(desc_str->c_str(), "Connection reset by peer")) {
-            err_code = "SOCKET-CLOSED";
+        if (err_str && desc_str) {
+            if ((!strcmp(err_str->c_str(), "SOCKET-RECV-ERROR")
+                        && strstr(desc_str->c_str(), "Connection reset by peer"))
+                    || (!strcmp(err_str->c_str(), "SOCKET-HTTP-ERROR")
+                        && strstr(desc_str->c_str(), "remote end closed connection"))) {
+                err_code = "SOCKET-CLOSED";
+            }
         }
         setError(err_code,
             desc_str ? desc_str->c_str() : "header read failed", xsink);
@@ -1416,8 +1419,17 @@ void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink
     if (action) {
         ReferenceHolder<QoreHashNode> hdr_resp(new QoreHashNode(autoTypeInfo), xsink);
         hdr_resp->setKeyValue("status_code", response_status_code, xsink);
+        if (response_status_message) {
+            hdr_resp->setKeyValue("status_message", response_status_message->stringRefSelf(), xsink);
+        }
+        if (response_http_version) {
+            hdr_resp->setKeyValue("http_version", response_http_version->stringRefSelf(), xsink);
+        }
         if (response_headers) {
             hdr_resp->setKeyValue("headers", response_headers->hashRefSelf(), xsink);
+        }
+        if (response_headers_raw) {
+            hdr_resp->setKeyValue("headers_raw", response_headers_raw->hashRefSelf(), xsink);
         }
         hdr_resp->setKeyValue("protocol", new QoreStringNode("h1"), xsink);
         hdr_resp->setKeyValue("stream_id", (int64_t)stream_id, xsink);

@@ -245,6 +245,34 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         int timeout_ms, ExceptionSink* xsink);
 
+    //! Submits a streaming request and returns a Channel for reading
+    /** Like @ref request but uses Channel-based incremental delivery
+        for the response.  The caller reads headers, body chunks, and
+        end_stream sentinels from the returned channel.
+
+        @param method HTTP method
+        @param scheme URL scheme
+        @param host target hostname
+        @param port target port
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param xsink exception sink
+
+        @return hash with "stream_id" and "channel" (QoreChannel*, ref'd);
+            nullptr on error.  Caller must deref channel when done.
+
+        @since %Qore 2.3
+    */
+    //! @param channel_out receives a ref'd QoreChannel* for reading
+    //!     streaming response data.  Caller must deref when done.
+    //! @return stream ID on success, -1 on error
+    DLLEXPORT int64_t requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
+
     // --- Hook from connection close (called by Http1ClientConnection::onClosedHook) ---
 
     //! Called by a connection's @ref AbstractHttpPollConnectionPriv::onClosedHook

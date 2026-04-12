@@ -42,6 +42,7 @@
 class QoreHashNode;
 class QoreObject;
 class ExceptionSink;
+class QoreChannel;
 class HttpClientConnectionManagerBase;
 
 //! HTTP client protocol version
@@ -193,6 +194,25 @@ public:
     DLLEXPORT virtual QoreHashNode* submitRequest(const char* method, const char* path,
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink);
+
+    //! Submits a streaming request with Channel-based response delivery
+    /** Like @ref submitRequest but uses a @ref QoreChannel for incremental
+        response delivery (headers, body chunks, end_stream sentinel).
+
+        @param method HTTP method (GET, POST, etc.)
+        @param path request path
+        @param headers optional request headers
+        @param body optional complete request body
+        @param body_len body length in bytes
+        @param channel_out receives a ref'd QoreChannel* on success
+        @param xsink exception sink
+        @return stream ID on success; -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink);
 
     //! Close the connection and release controller resources
     /** After this call, @ref isClosed returns true and no further requests

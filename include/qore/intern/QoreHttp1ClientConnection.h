@@ -169,6 +169,10 @@ public:
         const QoreHashNode* headers, const void* body, size_t body_len,
         ExceptionSink* xsink) override;
 
+    DLLEXPORT int64_t submitRequestStreaming(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) override;
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:

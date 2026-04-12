@@ -470,7 +470,20 @@ public:
     }
 
 protected:
-    DLLLOCAL virtual ~QoreChannel() {}
+    DLLLOCAL virtual ~QoreChannel() {
+        // Drain any remaining buffered values to prevent leaks.
+        // Values can be left in the buffer when the channel is closed
+        // before all values are consumed (e.g., error paths, timeouts).
+        ExceptionSink xsink;
+        for (auto& v : buffer) {
+            v.discard(&xsink);
+        }
+        buffer.clear();
+        if (cap == 0 && unbuffered_has_value) {
+            unbuffered_value.discard(&xsink);
+            unbuffered_has_value = false;
+        }
+    }
 
 private:
     mutable QoreThreadLock lck;

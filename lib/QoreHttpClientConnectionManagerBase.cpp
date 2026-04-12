@@ -617,3 +617,24 @@ QoreHashNode* HttpClientConnectionManagerBase::request(const char* method,
     }
     return result.get<QoreHashNode>();
 }
+
+int64_t HttpClientConnectionManagerBase::requestStreaming(const char* method,
+        const char* scheme, const char* host, int port, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        QoreChannel*& channel_out, ExceptionSink* xsink) {
+    HttpClientConnectionBase* conn = acquireConnection(scheme, host, port, xsink);
+    if (!conn || *xsink) {
+        return -1;
+    }
+
+    int64_t stream_id = conn->submitRequestStreaming(method, path, headers,
+        body, body_len, channel_out, xsink);
+    if (*xsink || stream_id < 0) {
+        releaseConnection(conn);
+        return -1;
+    }
+
+    // The connection stays reserved until the stream completes — the caller
+    // is responsible for releasing it after draining the channel.
+    return stream_id;
+}
