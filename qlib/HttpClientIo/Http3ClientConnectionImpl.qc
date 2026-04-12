@@ -227,6 +227,12 @@ public class Http3ClientConnection inherits HttpClientConnection {
             throw "HTTP3-STATE-ERROR",
                 sprintf("cannot send data in state: %y", self.getConnectionState());
         }
+        # Check if the underlying QUIC session is dead before sending
+        if (poll_op.getSocket().isQuicSessionClosed()) {
+            self.setClosed();
+            throw "HTTP3-CONNECTION-CLOSED",
+                "QUIC session closed; connection evicted from pool";
+        }
         *object ctl;
         {
             AutoLock al(lock);

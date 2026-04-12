@@ -507,10 +507,16 @@ public class Http3ClientPollOperation inherits Http3ClientPollOperationBase, Htt
             throw "HTTP3-STATE-ERROR", sprintf("cannot send data in state: %y", self.getState());
         }
 
+        Socket sock = self.getSocket();
+        # Check if the underlying QUIC session is dead (CONNECTION_CLOSE received,
+        # idle timeout, or draining period) before attempting to send
+        if (sock.isQuicSessionClosed()) {
+            throw "HTTP3-CONNECTION-CLOSED", "QUIC connection is closed";
+        }
+
         log(LoggerLevel::DEBUG, "sending %d bytes on stream %d (end_stream=%y)",
             data ? data.size() : 0, stream_id, end_stream);
 
-        Socket sock = self.getSocket();
         return sock.sendQuicClientStreamData(stream_id, data, end_stream);
     }
 

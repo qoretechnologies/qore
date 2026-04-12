@@ -83,11 +83,19 @@ static void setPollTimeoutFromExpiry(QoreHashNode* poll_info, ngtcp2_tstamp expi
     } else {
         ngtcp2_tstamp now = QuicSession::timestamp();
         if (expiry <= now) {
-            timeout_ms = 1;  // fire immediately on next poll cycle
+            // Timer still in the past after processTimerAndWrite handled it.
+            // Don't set a sub-ms timeout — the timer work was already done
+            // and tight-polling won't help.  Use the default fallback so the
+            // poll blocks until the next packet arrives or the fallback fires.
+            // Matches curl's pattern: if expiry <= ts after handle+flush,
+            // no Curl_expire is set — the next I/O event wakes the loop.
+            timeout_ms = QUIC_NO_TIMER_POLL_MS;
         } else {
-            timeout_ms = static_cast<int64_t>((expiry - now) / 1000000);
-            if (timeout_ms == 0) {
-                timeout_ms = 1;
+            ngtcp2_duration timeout_ns = expiry - now;
+            timeout_ms = static_cast<int64_t>(timeout_ns / 1000000);
+            // Round up sub-millisecond durations to 1ms (curl pattern: line 933-934)
+            if (timeout_ns % 1000000) {
+                ++timeout_ms;
             }
         }
     }
@@ -641,11 +649,40 @@ QoreHashNode* SocketQuicClientPollOperation::trySetupEarlyHttp3(ExceptionSink* x
 
 QoreHashNode* SocketQuicClientPollOperation::flushAndReturnPollInfo(ExceptionSink* xsink,
         bool do_flush) {
+    // Check if the QUIC session is dead (CONNECTION_CLOSE received, idle timeout,
+    // or draining period).  Without this, continuePoll returns goal=0 (POLLIN)
+    // forever on a dead connection, causing a livelock in the async I/O controller.
+    if (quic_session->isClosed()) {
+        qcs_state = QCS::CLOSED;
+        if (set_non_block) {
+            sock->priv->clearNonBlock();
+            set_non_block = false;
+        }
+        return nullptr;
+    }
     ngtcp2_tstamp expiry = 0;
     int srv = 0;
     if (do_flush) {
         srv = sendPendingPackets(expiry, xsink);
         if (*xsink) {
+            return nullptr;
+        }
+        // Curl pattern (curl_ngtcp2.c:928): after handle_expiry + egress,
+        // re-check expiry.  If still in the past, do one more handle+flush
+        // cycle to drain any timers that re-armed during the write.
+        if (expiry != UINT64_MAX && expiry <= QuicSession::timestamp()) {
+            srv = sendPendingPackets(expiry, xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+        }
+        // Check for idle close after timer processing
+        if (quic_session->isClosed()) {
+            qcs_state = QCS::CLOSED;
+            if (set_non_block) {
+                sock->priv->clearNonBlock();
+                set_non_block = false;
+            }
             return nullptr;
         }
     } else {
@@ -993,6 +1030,12 @@ QoreHashNode* SocketQuicClientPollOperation::continuePoll(ExceptionSink* xsink) 
                 // Already reached goal; if called again, go back to reading.
                 // Non-blocking mode is maintained throughout (no toggle per
                 // response) — the QUIC socket always uses raw recvfrom/sendto
+                if (quic_session->isClosed()) {
+                    qcs_state = QCS::CLOSED;
+                    sock->priv->clearNonBlock();
+                    set_non_block = false;
+                    return nullptr;
+                }
                 if (quic_session->hasCompletedStreams()) {
                     cached_stream = quic_session->takeCompletedStream();
                     return flushAndReturnPollInfo(xsink);

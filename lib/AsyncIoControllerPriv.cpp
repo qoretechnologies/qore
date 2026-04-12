@@ -2618,10 +2618,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                 timeout_ms = 0;
             } else {
                 timeout_ms = (int)(remaining_us / 1000);
-                // When remaining_us < 1000, timeout_ms truncates to 0.
-                // This is correct: the deadline is sub-millisecond away,
-                // so poll immediately rather than oversleeping by up to 1ms.
-                // Not a busy loop — only triggers with a real pending deadline.
+                if (timeout_ms == 0) {
+                    timeout_ms = 1;
+                }
+            }
+        }
+
+        // Catch up processed_seq before blocking in poll.  Worker-thread submit()
+        // increments submit_seq AFTER pushing the command and notifying, so the
+        // Phase 1 snapshot (processed_seq = submit_seq) can read a stale value
+        // if the I/O thread processes the command before the worker increments.
+        // Without this re-check, poll(-1) would block indefinitely and
+        // waitForProcessing() would time out.
+        {
+            AutoLocker al(m);
+            int current_submit = submit_seq.load(std::memory_order_acquire);
+            if (processed_seq < current_submit && t.cmdq.empty()) {
+                processed_seq = current_submit;
+                processed_cond.broadcast();
             }
         }
 

@@ -668,6 +668,16 @@ public:
     DLLEXPORT int waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink);
 
+    //! Returns true if the QUIC session on this socket is closed or absent
+    /** Checks whether the QUIC connection has entered CLOSING, DRAINING, or
+        idle-closed state.  Returns true if no QUIC session exists.
+
+        @return true if the session is closed or absent
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT bool isQuicSessionClosed() const;
+
     //! Returns the first QUIC session ID for this socket (for client connections with one session)
     /** @return the session ID of the first (or only) QUIC session, 0 if no session is active
 

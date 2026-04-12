@@ -1356,6 +1356,15 @@ int QoreSocketObject::sendQuicClientStreamData(int64_t stream_id, const void* da
     return session->sendStreamData(stream_id, data, len, end_stream, xsink);
 }
 
+bool QoreSocketObject::isQuicSessionClosed() const {
+    AutoLocker al(priv->m);
+    qore_socket_private* sp = qore_socket_private::get(*priv->socket);
+    if (sp->quic_sessions.empty()) {
+        return true;
+    }
+    return sp->quic_sessions.begin()->second->isClosed();
+}
+
 int QoreSocketObject::waitForQuicClientStreamDrain(int64_t stream_id, int timeout_ms,
         ExceptionSink* xsink) {
     // Brief lock for session lookup; release before blocking wait

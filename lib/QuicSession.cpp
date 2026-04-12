@@ -1376,7 +1376,8 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 
     QuicTimerWriteResult result;
 
-    // Check and handle timer expiry
+    // Check and handle timer expiry (matches curl's pattern: handle once,
+    // then re-check after writePacketsLocked flushes the result).
     ngtcp2_tstamp expiry = getExpiryLocked();
     if (expiry != UINT64_MAX) {
         ngtcp2_tstamp now = timestamp();
