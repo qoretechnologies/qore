@@ -34,6 +34,40 @@
 #include "qore/intern/QC_Future.h"
 #include "qore/intern/QC_FutureImpl.h"
 
+QoreValue q_future_get_blocking(QoreObject* future_obj, int64 timeout_ms,
+        ExceptionSink* xsink) {
+    assert(future_obj);
+    assert(xsink);
+
+    // Fast path: if it's a FutureImpl (the default Promise backing), extract
+    // the C++ QoreFuture priv and call its get() directly.  No interpreter
+    // dispatch overhead.
+    ReferenceHolder<QoreFuture> f(
+        reinterpret_cast<QoreFuture*>(
+            future_obj->tryGetReferencedPrivateData(CID_FUTUREIMPL, xsink)),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (f) {
+        return f->get(timeout_ms, xsink);
+    }
+
+    // Slow path: custom Future subclass (e.g. HttpCancellableFuture) that
+    // overrides get(timeout).  Build a one-arg list and dispatch via
+    // evalMethod.  The caller already holds a reference to future_obj.
+    ReferenceHolder<QoreListNode> args(new QoreListNode(autoTypeInfo), xsink);
+    // Pass the timeout as a relative-date (milliseconds) so custom
+    // subclasses that accept `timeout` see the expected type.
+    args->push(
+        DateTimeNode::makeRelative(0, 0, 0, 0, 0, 0, timeout_ms * 1000),
+        xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return future_obj->evalMethod("get", *args, xsink);
+}
+
 //! Concrete Future implementation backed by a QoreFuture (Promise/Future pair)
 /** This is the standard Future implementation created by
     @ref Qore::Thread::Promise::getFuture() "Promise::getFuture()" and

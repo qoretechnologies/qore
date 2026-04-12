@@ -37,6 +37,9 @@ column_options:   # Optional: column creation options
 schema:
   name: MySchema              # Required: schema name
   version: "1.0.0"            # Required: version string
+  datasource: my-ds           # Required for oload; ignored by qschema
+                              #   (qschema takes the connection as a CLI arg; oload resolves
+                              #    this alias via its -D<alias>=<url> option map)
   version_table: schema_info  # Optional: table holding version (default: schema_version)
   version_column: version     # Optional: column holding version (default: version)
   version_where:              # Optional: where clause to find version row
@@ -55,22 +58,72 @@ Supported column types:
 | `timestamp` | Date/time with timezone | `Type::Date` |
 | `date` | Date only (Oracle/PostgreSQL native) | `Type::Date` + driver override |
 | `number` | Numeric (optional `size`, `scale`) | `SqlUtil::NUMERIC` |
+| `float` | Floating-point (double precision on pgsql) | `Type::Float` |
 | `blob` | Binary large object | `SqlUtil::BLOB` |
 | `clob` | Character large object | `SqlUtil::CLOB` |
+| `text` | Native TEXT on pgsql/mysql; CLOB elsewhere | `SqlUtil::CLOB` + driver override |
 | `binary` | Binary data | `Type::Binary` |
+| `vector` | pgvector dense vector (pgsql only) | `native_type: vector` |
+| `halfvec` | pgvector half-precision vector (pgsql only) | `native_type: halfvec` |
+| `sparsevec` | pgvector sparse vector (pgsql only) | `native_type: sparsevec` |
 
 ### Column Properties
 
 ```yaml
 columns:
   my_column:
-    type: varchar          # Required: column type
+    type: varchar          # Required: column type (or use driver: instead)
     size: 240              # Optional: column size (required for varchar, char)
     scale: 2               # Optional: numeric scale
     notnull: true          # Optional: NOT NULL constraint
     default_value: "A"     # Optional: default value
     comment: "Description" # Optional: column comment
+    populate: {field: name} # Optional: backfill expression for adding to non-empty tables
 ```
+
+### Populate Expressions
+
+When adding a NOT NULL column to a non-empty table, the database rejects the `ALTER TABLE ADD
+COLUMN` because existing rows would be NULL. The `populate` attribute automates the 3-step
+migration pattern: add the column as nullable, backfill existing rows, then set NOT NULL.
+
+The alignment layer only uses `populate` when the column is **genuinely new** (not already in the
+database). On subsequent alignments the column already exists and `populate` is ignored. The
+backfill uses `WHERE col IS NULL` for idempotency.
+
+Supported forms:
+
+```yaml
+# Field reference — copy from another column
+populate: {field: name}
+# → UPDATE t SET display_name = name WHERE display_name IS NULL
+
+# Literal value — fill with a constant
+populate: "active"
+# → UPDATE t SET status = 'active' WHERE status IS NULL
+
+# DPQL expression — rendered to SQL via the driver's expression map when possible,
+# otherwise evaluated client-side and passed as a bind value
+populate: {exp: upr, args: [{field: name}]}
+# → UPDATE t SET upper_name = upper(name) WHERE upper_name IS NULL
+
+populate: {exp: now}
+# → UPDATE t SET created = current_timestamp WHERE created IS NULL
+
+populate: {exp: coalesce, args: [{field: legacy_status}, "unknown"]}
+# → UPDATE t SET status = coalesce(legacy_status, 'unknown') WHERE status IS NULL
+
+# Per-driver SQL escape hatch — for DB-specific functions not in the expression map
+populate:
+  sql:
+    pgsql: "digest(name, 'sha256')"
+    oracle: "DBMS_CRYPTO.HASH(UTL_RAW.CAST_TO_RAW(name), 4)"
+    mysql: "UNHEX(SHA2(name, 256))"
+# → UPDATE t SET name_sha256 = digest(name, 'sha256') WHERE name_sha256 IS NULL  (on pgsql)
+```
+
+`populate` works with or without `notnull`. If `notnull: true` is set, the constraint is applied
+after the backfill. If `notnull` is not set, the backfill runs but no NOT NULL constraint is added.
 
 ## Table Definition
 
@@ -85,10 +138,26 @@ tables:
       name: pk_my_table
       columns: [id]
 
+    unique_constraints:      # Optional: named unique constraints (may be backed by an
+      uk_my_table:           #   index of the same name)
+        columns: [name]
+
     indexes:                 # Optional: secondary indexes
       idx_name:
         columns: [name]
         unique: true
+
+      # Example: pgvector IVFFlat index with method / opclass / WITH storage options
+      sk_chunks_embedding:
+        columns: [embedding]
+        method: ivfflat                       # access method (pgsql / mysql / oracle / mssql)
+        with:                                 # method-specific storage options
+          lists: 100
+        opclass:                              # per-column operator class (pgsql only)
+          embedding: vector_cosine_ops
+        driver:                               # per-driver override escape hatch
+          pgsql:
+            method: ivfflat
 
     foreign_constraints:     # Optional: foreign key constraints
       fk_other:
@@ -119,6 +188,9 @@ Auto-triggers generate standard database triggers for common patterns:
 - **`created: true`** — populates a `created` column with the current timestamp on INSERT
 - **`modified: true`** — populates a `modified` column with the current timestamp on INSERT and UPDATE
 - **`sequence_columns`** — populates columns from sequences when NULL on INSERT
+- **`insert_only: true`** — restrict the generated trigger to fire on INSERT only; useful for
+  append-only tables and for tables that carry a `modified` column the application maintains by
+  hand (without this key, a trigger with `modified: true` also fires on UPDATE)
 
 Trigger SQL is generated automatically for each database driver (PostgreSQL, Oracle, MySQL, MSSQL)
 by the `SqlUtil::generate_auto_triggers()` function.

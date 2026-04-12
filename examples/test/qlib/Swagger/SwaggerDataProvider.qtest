@@ -27,6 +27,9 @@ auto sub make_yaml(auto val) { throw "YAML-ERROR", "the yaml module is required 
 %requires ../../../../qlib/Swagger.qm
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/SwaggerDataProvider
 
 %exec-class SwaggerDataProviderTest

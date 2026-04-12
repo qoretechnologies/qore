@@ -70,8 +70,8 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
     }
 
     #! Create the object from the REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger, hash<auto> org, hash<auto> loc,
-            hash<auto> sensor)
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger, hash<auto> org,
+            hash<auto> loc, hash<auto> sensor)
             : EmpathicBuildingDataProviderBase(rest, logger),
               AbstractWatchDataProviderBase(
                   max((DataProviderDataContextHelper::getHash().poll_interval_ms ?? PollInterval) / 1000, 1)) {
@@ -146,9 +146,8 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
 
     #! Returns event data
     private hash<auto> getEvent() {
-        hash<auto> info;
         hash<auto> event = doRestCommand("GET", "v1/organizations/" + org.id + "/locations/" + loc.id
-            + "/sensors/" + sensor.id, NOTHING, \info).body;
+            + "/sensors/" + sensor.id, NOTHING).body;
         return EmpathicBuildingSensorDataProvider::getSensorData(event);
     }
 
@@ -163,13 +162,11 @@ public class EmpathicBuildingWatchSensorDataProvider inherits EmpathicBuildingDa
         @since DataProvider 3.0
     */
     private auto getExampleEventDataImpl(string event_id) {
-        hash<auto> info;
         try {
             return getEvent();
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            # translate RestClientIo error arg to the legacy "request-uri"/"response-code"/"response-body" shape
+            rethrow ex.err, ex.desc, mapRestErrorInfo(ex);
         }
     }
 }

@@ -744,10 +744,11 @@ class RestCmd {
         printf("  %s  this help text\n",
             color.key("-h, --help                "));
 
-        printf("\n%s uses RestClientIo for multiplexed HTTP/1.1, HTTP/2, and HTTP/3\n",
+        printf("\n%s uses RestClientIo for async HTTP/1.1, HTTP/2, and HTTP/3\n",
             color.dim("Note:"));
-        printf("connections with automatic protocol selection. Use -l (--literal) for\n");
-        printf("verbose HTTP request/response output (falls back to synchronous RestClient).\n");
+        printf("connections with automatic protocol selection and connection multiplexing\n");
+        printf("on HTTP/2 and HTTP/3. Use -l (--literal) for verbose HTTP request/response\n");
+        printf("output (falls back to synchronous RestClient).\n");
         exit(1);
     }
 

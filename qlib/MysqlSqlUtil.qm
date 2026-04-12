@@ -209,22 +209,42 @@ public namespace MysqlSqlUtil {
     #! represents a MySQL-specific index
     public class MysqlIndex inherits SqlUtil::AbstractIndex {
         public {
+            #! the native index type (e.g. \c "BTREE", \c "HASH", \c "FULLTEXT", \c "SPATIAL"); this mirrors
+            #! the MySQL catalog value and is the driver-default unless \c method is set explicitly by the user
             string type;
+
+            #! the explicit access method requested by the user via the generic \c method index option;
+            #! \c NOTHING means "use the driver default" and \c getCreateSql emits no \c USING clause
+            *string method;
         }
 
         #! creates the object from the arguments
-        constructor(string n_name, bool n_unique, hash n_cols, string n_type = "BTREE") : AbstractIndex(n_name, n_unique, n_cols) {
+        constructor(string n_name, bool n_unique, hash n_cols, string n_type = "BTREE", *string n_method)
+                : AbstractIndex(n_name, n_unique, n_cols) {
             type = n_type;
+            method = n_method;
         }
 
         #! returns a string that can be used to create the index in the database
         string getCreateSql(string table_name, *hash opt) {
-            return sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            string sql = sprintf("create %sindex %s", unique ? "unique " : "", name);
+            if (method.val()) {
+                sql += sprintf(" using %s", method.upr());
+            }
+            sql += sprintf(" on %s (%s)", table_name,
+                (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+            return sql;
         }
 
         #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
         private bool equalImpl(AbstractIndex ix) {
-            return type == cast<MysqlIndex>(ix).type;
+            MysqlIndex mix = cast<MysqlIndex>(ix);
+            # normalize MySQL index-type comparison: the catalog reports BTREE as the default, and an
+            # explicitly-requested method: btree should compare equal to a no-method index; "HASH" etc.
+            # are reported as type and/or method depending on which end of the round-trip we are on
+            string t1 = (method.val() ? method.upr() : type.upr());
+            string t2 = (mix.method.val() ? mix.method.upr() : mix.type.upr());
+            return t1 == t2;
         }
 
         #! returns a string that can be used to rename the index in the database; hwoever mysql does not support renaming indexes, so the index is dropped and recreated :(
@@ -1948,6 +1968,448 @@ end";
                                 AbstractDataProviderTypeMap."any"), args)));
                     },
                 },
+                # --- String pattern matching operators for MySQL ---
+                DP_OP_LIKE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_LIKE,
+                        "display_name": "like",
+                        "short_desc": "Returns True if the string matches the SQL LIKE pattern",
+                        "desc": "Returns True if the first argument matches the second using SQL LIKE pattern "
+                            "matching; optional third argument enables case-insensitive matching; MySQL LIKE "
+                            "is case-insensitive by default; use LIKE BINARY for case-sensitive",
+                        "symbol": "like",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureOptionalBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        # MySQL LIKE is case-insensitive by default; use BINARY for case-sensitive
+                        string op = args[2] ? "like" : "like binary";
+                        return sprintf("%s %s %s", exp0, op, exp1);
+                    },
+                },
+                DP_OP_REGEX_MATCH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_REGEX_MATCH,
+                        "display_name": "regex match (=~)",
+                        "short_desc": "Returns True if the string matches the regular expression",
+                        "desc": "Returns True if the first argument matches the second as a regular expression; "
+                            "uses MySQL REGEXP (case-insensitive by default) or REGEXP BINARY for "
+                            "case-sensitive",
+                        "symbol": "=~",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureOptionalStringListValueType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        # Use REGEXP / REGEXP BINARY for broad MySQL version support
+                        # (regexp_like() requires MySQL 8.0+)
+                        bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                        return case_insensitive
+                            ? sprintf("%s REGEXP %s", exp0, exp1)
+                            : sprintf("%s REGEXP BINARY %s", exp0, exp1);
+                    },
+                },
+                DP_OP_REGEX_NMATCH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_REGEX_NMATCH,
+                        "display_name": "regex non-match (!~)",
+                        "short_desc": "Returns True if the string does not match the regular expression",
+                        "desc": "Returns True if the first argument does not match the second as a regular "
+                            "expression; uses MySQL NOT REGEXP / REGEXP BINARY for case control",
+                        "symbol": "!~",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureOptionalStringListValueType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                        return case_insensitive
+                            ? sprintf("%s NOT REGEXP %s", exp0, exp1)
+                            : sprintf("%s NOT REGEXP BINARY %s", exp0, exp1);
+                    },
+                },
+                DP_OP_REGEX_SUBST: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_REGEX_SUBST,
+                        "display_name": "regex substitution",
+                        "short_desc": "Performs regex substitution on a string",
+                        "desc": "Performs regular expression substitution using regexp_replace(); "
+                            "args: string, regex pattern, replacement, optional "
+                            "options list (\"i\" for case-insensitive); always replaces all occurrences",
+                        "symbol": "regexSubst",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."string");
+                        # MariaDB/MySQL regexp_replace takes 3 args; case-insensitive
+                        # matching uses (?i) inline flag in the pattern
+                        bool case_insensitive = exists args[3] && inlist("i", args[3]);
+                        if (case_insensitive) {
+                            return sprintf("regexp_replace(%s, concat('(?i)', %s), %s)",
+                                exp0, exp1, exp2);
+                        }
+                        return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
+                    },
+                },
+                DP_OP_CONTAINS: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_CONTAINS,
+                        "display_name": "contains",
+                        "short_desc": "Returns True if the string contains the given substring",
+                        "desc": "Returns True if the first argument contains the second as a substring; "
+                            "optional third argument enables case-insensitive matching (default: True)",
+                        "symbol": "contains",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        # MySQL LIKE is case-insensitive by default; use BINARY for case-sensitive
+                        string op = args[2] ? "like" : "like binary";
+                        return sprintf("%s %s concat('%%', %s, '%%')", exp0, op, exp1);
+                    },
+                },
+                DP_OP_STARTS_WITH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_STARTS_WITH,
+                        "display_name": "starts with",
+                        "short_desc": "Returns True if the string starts with the given characters",
+                        "desc": "Returns True if the first argument starts with the second; "
+                            "optional third argument enables case-insensitive matching (default: True)",
+                        "symbol": "startsWith",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        # MySQL LIKE is case-insensitive by default; use BINARY for case-sensitive
+                        string op = args[2] ? "like" : "like binary";
+                        return sprintf("%s %s concat(%s, '%%')", exp0, op, exp1);
+                    },
+                },
+                DP_OP_ENDS_WITH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_ENDS_WITH,
+                        "display_name": "ends with",
+                        "short_desc": "Returns True if the string ends with the given characters",
+                        "desc": "Returns True if the first argument ends with the second; "
+                            "optional third argument enables case-insensitive matching (default: True)",
+                        "symbol": "endsWith",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                            DataProviderSignatureBoolType),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        # MySQL LIKE is case-insensitive by default; use BINARY for case-sensitive
+                        string op = args[2] ? "like" : "like binary";
+                        return sprintf("%s %s concat('%%', %s)", exp0, op, exp1);
+                    },
+                },
+                DP_OP_REPLACE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_REPLACE,
+                        "display_name": "string replace",
+                        "short_desc": "Replaces all occurrences of a string pattern",
+                        "desc": "Replaces all occurrences of the second argument with the third in the first; "
+                            "uses MySQL replace() function",
+                        "symbol": "replace",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                            DataProviderSignatureStringType),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string");
+                        string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."string");
+                        string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."string");
+                        return sprintf("replace(%s, %s, %s)", exp0, exp1, exp2);
+                    },
+                },
+                # --- Type conversion operators for MySQL ---
+                DP_OP_TO_STRING: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_STRING,
+                        "display_name": "to string",
+                        "short_desc": "Converts a value to a string",
+                        "desc": "Converts a value to a string using MySQL CAST(x AS CHAR)",
+                        "symbol": "toString",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as char)", exp0);
+                    },
+                },
+                DP_OP_TO_INT: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_INT,
+                        "display_name": "to int",
+                        "short_desc": "Converts a value to an integer",
+                        "desc": "Converts a value to an integer using MySQL CAST(x AS SIGNED INTEGER)",
+                        "symbol": "toInt",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as signed integer)", exp0);
+                    },
+                },
+                DP_OP_TO_FLOAT: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_FLOAT,
+                        "display_name": "to float",
+                        "short_desc": "Converts a value to a floating-point number",
+                        "desc": "Converts a value to a float using MySQL CAST(x AS DOUBLE) "
+                            "(requires MySQL 8.0.17+)",
+                        "symbol": "toFloat",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."float",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as double)", exp0);
+                    },
+                },
+                DP_OP_TO_NUMBER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_NUMBER,
+                        "display_name": "to number",
+                        "short_desc": "Converts a value to an arbitrary-precision number",
+                        "desc": "Converts a value to a decimal type using MySQL CAST(x AS DECIMAL(65,30))",
+                        "symbol": "toNumber",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."number",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as decimal(65,30))", exp0);
+                    },
+                },
+                DP_OP_TO_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_DATE,
+                        "display_name": "to date",
+                        "short_desc": "Converts a value to a date/time",
+                        "desc": "Converts a value to a datetime using MySQL CAST(x AS DATETIME); "
+                            "if a format mask is given, uses STR_TO_DATE(x, mask) instead",
+                        "symbol": "toDate",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalStringType),
+                        "return_type": AbstractDataProviderTypeMap."date",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        if (exists args[1]) {
+                            string fmt = MysqlTable::convertDateFormat(args[1]);
+                            return sprintf("str_to_date(%s, '%s')", exp0, fmt);
+                        }
+                        return sprintf("cast(%s as datetime)", exp0);
+                    },
+                },
+                DP_OP_TO_BOOL: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_BOOL,
+                        "display_name": "to bool",
+                        "short_desc": "Converts a value to a boolean",
+                        "desc": "Converts a value to a boolean equivalent using MySQL "
+                            "CAST(x AS SIGNED INTEGER); MySQL uses TINYINT(1) for booleans",
+                        "symbol": "toBool",
+                        "groups": "Data Conversion",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("cast(%s as signed integer)", exp0);
+                    },
+                },
+                # --- String manipulation operators for MySQL ---
+                DP_OP_TO_LOWER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_LOWER,
+                        "display_name": "to lower case",
+                        "short_desc": "Converts a string to lower case",
+                        "desc": "Returns the string converted to all lower case using MySQL lower()",
+                        "symbol": "lwr",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("lower(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                DP_OP_TO_UPPER: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TO_UPPER,
+                        "display_name": "to upper case",
+                        "short_desc": "Converts a string to upper case",
+                        "desc": "Returns the string converted to all upper case using MySQL upper()",
+                        "symbol": "upr",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureStringType,),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("upper(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."string"));
+                    },
+                },
+                DP_OP_LENGTH: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_LENGTH,
+                        "display_name": "length",
+                        "short_desc": "Returns the character length of a string",
+                        "desc": "Returns the number of characters in a string using MySQL char_length()",
+                        "symbol": "length",
+                        "groups": "Data Manipulation",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."int",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("char_length(%s)", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any"));
+                    },
+                },
+                # --- Control flow operators for MySQL ---
+                DP_OP_TERNARY: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_TERNARY,
+                        "display_name": "ternary (?:)",
+                        "short_desc": "Conditional expression: returns second arg if first is true, "
+                            "third otherwise",
+                        "desc": "Evaluates the first argument as a boolean; if true, returns the second "
+                            "argument; otherwise returns the third argument; uses MySQL "
+                            "CASE WHEN ... THEN ... ELSE ... END",
+                        "symbol": "?:",
+                        "groups": "Logical",
+                        "args": (DataProviderSignatureBoolType, DataProviderSignatureAnyType,
+                            DataProviderSignatureAnyType),
+                        "return_type": AbstractDataProviderTypeMap."any",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string cond = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."bool");
+                        string true_val = info.table.getExpressionArg(\info, role, args[1],
+                            AbstractDataProviderTypeMap."any");
+                        string false_val = info.table.getExpressionArg(\info, role, args[2],
+                            AbstractDataProviderTypeMap."any");
+                        return sprintf("case when %s then %s else %s end", cond, true_val, false_val);
+                    },
+                },
+                DP_OP_HAS_VALUE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Operator,
+                        "name": DP_OP_HAS_VALUE,
+                        "display_name": "has value",
+                        "short_desc": "Returns True if the argument is not null",
+                        "desc": "Returns True if the argument has a non-null value; uses MySQL IS NOT NULL",
+                        "symbol": "val",
+                        "groups": "Comparison",
+                        "args": (DataProviderSignatureAnyType,),
+                        "return_type": AbstractDataProviderTypeMap."bool",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."any"));
+                    },
+                },
+                # --- Additional date/string functions for MySQL ---
+                DP_FUNC_FORMAT_DATE: {
+                    "exp": <DataProviderExpressionInfo>{
+                        "type": DET_Function,
+                        "name": DP_FUNC_FORMAT_DATE,
+                        "display_name": "format_date",
+                        "short_desc": "Formats a date as a string",
+                        "desc": "Formats a date/time value as a string using MySQL date_format(); "
+                            "format codes: YYYY (year), YY (2-digit year), MM (month), DD (day), "
+                            "HH (hour 24h), mm (minute), SS (second), us (microseconds)",
+                        "symbol": "format_date",
+                        "groups": "Date/Time",
+                        "role": ER_All,
+                        "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                        "return_type": AbstractDataProviderTypeMap."string",
+                    },
+                    "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                        string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                            AbstractDataProviderTypeMap."date");
+                        string fmt = MysqlTable::convertDateFormat(args[1]);
+                        return sprintf("date_format(%s, '%s')", exp0, fmt);
+                    },
+                },
             };
 
             #! where operator specializations for MySQL
@@ -2011,6 +2473,25 @@ end";
         #! returns the name of the table to be used in SQL (with a possible qualifiers for schema, etc)
         string getSqlName() {
             return schema + "." + name;
+        }
+
+        #! Converts generic date format codes to MySQL DATE_FORMAT() specifiers
+        /** @param fmt the format string with generic codes: YYYY, YY, MM, DD, HH, mm, SS, us
+            @return the format string with MySQL-specific codes: %Y, %y, %m, %d, %H, %i, %s, %f
+        */
+        static string convertDateFormat(string fmt) {
+            # replace longer tokens first to avoid partial matches (YYYY before YY)
+            fmt = regex_subst(fmt, "YYYY", "%Y", RE_Global);
+            fmt = regex_subst(fmt, "YY", "%y", RE_Global);
+            fmt = regex_subst(fmt, "MM", "%m", RE_Global);
+            fmt = regex_subst(fmt, "DD", "%d", RE_Global);
+            fmt = regex_subst(fmt, "HH", "%H", RE_Global);
+            fmt = regex_subst(fmt, "mm", "%i", RE_Global);
+            fmt = regex_subst(fmt, "SS", "%s", RE_Global);
+            fmt = regex_subst(fmt, "us", "%f", RE_Global);
+            # escape single quotes for safe SQL embedding
+            fmt = regex_subst(fmt, "'", "''", RE_Global);
+            return fmt;
         }
 
         #! Returns the expression map for MySQL
@@ -2404,7 +2885,25 @@ end";
         }
 
         private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-            return new MysqlIndex(iname, enabled, ch, opt.index_type);
+            # MySQL does not support per-column operator classes or WITH-clause storage parameters on
+            # plain CREATE INDEX; reject those generic options with a clear error so users are not
+            # silently given a different index than they asked for
+            if (opt.with) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'with' option is not supported "
+                    "on MySQL; use driver: {mysql: {...}} to omit on MySQL only", iname);
+            }
+            if (opt.opclass) {
+                throw "INDEX-OPTION-ERROR", sprintf("index %y: the generic 'opclass' option is not supported "
+                    "on MySQL", iname);
+            }
+            if (opt.method.val()) {
+                string m = opt.method.upr();
+                if (m != "BTREE" && m != "HASH") {
+                    throw "INDEX-OPTION-ERROR", sprintf("index %y: MySQL only supports method: 'btree' or "
+                        "'hash' on plain CREATE INDEX; got %y", iname, opt.method);
+                }
+            }
+            return new MysqlIndex(iname, enabled, ch, opt.index_type ?? "BTREE", opt.method);
         }
 
         private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash ch, string table, hash tch, *hash opt) {

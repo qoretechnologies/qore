@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore MewsRestDataProvider module definition
 
-/** MewsRestTablesDataProvider.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** MewsRestTablesDataProvider.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -95,7 +95,7 @@ public class MewsRestTablesDataProvider inherits MewsRestDataProviderBase {
     }
 
     #! Creates the object from the REST client
-    constructor(MewsRestClient mews) : MewsRestDataProviderBase(mews) {
+    constructor(AbstractRestClient mews) : MewsRestDataProviderBase(mews) {
     }
 
     #! Returns the data provider name
@@ -105,7 +105,7 @@ public class MewsRestTablesDataProvider inherits MewsRestDataProviderBase {
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("Mews REST tables data provider for `%s`", rest.getSafeURL());
+        return sprintf("Mews REST tables data provider for `%s`", rest.getSafeUrl());
     }
 
     #! Return data provider summary info

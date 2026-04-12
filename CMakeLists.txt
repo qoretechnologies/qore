@@ -283,6 +283,8 @@ set(LIBQORE_QPP_SRC
     lib/QC_FilePollOperation.qpp
     lib/QC_DelegatingPollOperation.qpp
     lib/QC_AbstractHttpPollConnection.qpp
+    lib/QC_HttpClientConnectionBase.qpp
+    lib/QC_HttpClientConnectionManagerBase.qpp
     lib/QC_HttpIdlePollOperationBase.qpp
     lib/QC_HttpKeepAlivePollOperationBase.qpp
     lib/QC_HttpAcceptPollOperationBase.qpp
@@ -295,6 +297,7 @@ set(LIBQORE_QPP_SRC
     lib/QC_Http3ServerPollOperation.qpp
     lib/QC_HttpClientPingPollOperationBase.qpp
     lib/QC_Http2ClientPollOperationBase.qpp
+    lib/QC_HttpClientConnection.qpp
     lib/QC_EventLoop.qpp
     lib/QC_EventNotifier.qpp
     lib/QC_LoggerInterfaceBase.qpp
@@ -939,12 +942,18 @@ set(LIBQORE_CPP_SRC
     lib/QoreFile.cpp
     lib/QoreDir.cpp
     lib/QoreSocket.cpp
+    lib/SocketSyncPoll.cpp
     lib/QoreEventLoop.cpp
     lib/QoreEventNotifier.cpp
     lib/QoreIoUring.cpp
     lib/QoreLoggerBridge.cpp
     lib/QoreAsyncIoLogger.cpp
     lib/AsyncIoControllerPriv.cpp
+    lib/QoreHttpClientConnectionBase.cpp
+    lib/QoreHttp1ClientConnection.cpp
+    lib/QoreHttp2ClientConnection.cpp
+    lib/QoreHttp3ClientConnection.cpp
+    lib/QoreHttpClientConnectionManagerBase.cpp
     lib/QoreSandboxManager.cpp
     lib/DateTime.cpp
     lib/QoreLib.cpp
@@ -1247,12 +1256,18 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreFile.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreDir.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSocket.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/SocketSyncPoll.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventLoop.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreEventNotifier.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreIoUring.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLoggerBridge.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreAsyncIoLogger.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/AsyncIoControllerPriv.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionBase.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp1ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp2ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttp3ClientConnection.cpp\"
+#include \"${CMAKE_SOURCE_DIR}/lib/QoreHttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreSandboxManager.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/DateTime.cpp\"
 #include \"${CMAKE_SOURCE_DIR}/lib/QoreLib.cpp\"
@@ -1534,6 +1549,8 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_FilePollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_DelegatingPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_AbstractHttpPollConnection.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnectionManagerBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpIdlePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpKeepAlivePollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpAcceptPollOperationBase.cpp\"
@@ -1546,6 +1563,7 @@ if (SINGLE_COMPILATION_UNIT)
 #include \"${CMAKE_BINARY_DIR}/QC_Http3ServerPollOperation.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_Http2ClientPollOperationBase.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_HttpClientPingPollOperationBase.cpp\"
+#include \"${CMAKE_BINARY_DIR}/QC_HttpClientConnection.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventNotifier.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_EventLoop.cpp\"
 #include \"${CMAKE_BINARY_DIR}/QC_LoggerInterfaceBase.cpp\"
@@ -2062,6 +2080,7 @@ qore_user_module("qlib/ZohoInventoryRestClient.qm" "ConnectionProvider;Mime;Rest
 qore_user_module("qlib/ZohoInvoiceRestClient.qm" "ConnectionProvider;Mime;RestClient")
 qore_user_module("qlib/AwsRestClient.qm" "ConnectionProvider;RestClient;RestSchemaValidator;RestClientIo")
 qore_user_module("qlib/SwaggerDataProvider" "Swagger;RestClient;RestSchemaValidator;DataProvider")
+qore_user_module("qlib/OpenApi3DataProvider" "OpenApi3;RestClient;RestClientIo;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/AsyncApiDataProvider" "AsyncApi;WebSocketClient;DataProvider")
 qore_user_module("qlib/RestSchemaDataProvider" "Swagger;OpenApi3;RestClient;RestSchemaValidator;DataProvider")
 qore_user_module("qlib/BigCommerceDataProvider" "BigCommerceRestClient;RestClient;DataProvider" "bigcommerce-logo.svg")
@@ -2071,9 +2090,9 @@ qore_user_module("qlib/GorgiasDataProvider" "GorgiasRestClient;RestClient;RestCl
 qore_user_module("qlib/CdsRestDataProvider" "RestClient;CdsRestClient;RestSchemaValidator;DataProvider" "dynamics-logo.svg;business-central-logo.svg")
 qore_user_module("qlib/ServiceNowRestDataProvider" "RestClient;ServiceNowRestClient;RestSchemaValidator;DataProvider" "servicenow-logo-white.svg;servicenow-logo-black.svg")
 qore_user_module("qlib/RestClientDataProvider" "RestClient;DataProvider" "webhook-logo.svg")
-qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;DataProvider;ConnectionProvider" "elastic-logo.svg")
+qore_user_module("qlib/ElasticSearchDataProvider" "RestClient;RestClientIo;DataProvider;ConnectionProvider;NdjsonDataProvider" "elastic-logo.svg")
 qore_user_module("qlib/QdrantDataProvider" "RestClient;DataProvider" "qdrant-logo.svg")
-qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;DataProvider" "Haltian-EmpathicBuilding.svg")
+qore_user_module("qlib/EmpathicBuildingDataProvider" "RestClient;RestClientIo;DataProvider" "Haltian-EmpathicBuilding.svg")
 qore_user_module("qlib/GeneratorDataProvider" "DataProvider" "generator-logo.svg")
 qore_user_module("qlib/MemcachedDataProvider" "DataProvider" "memcached-logo.svg")
 qore_user_module("qlib/MongoDbDataProvider" "DataProvider;ConnectionProvider" "mongodb-logo.svg")

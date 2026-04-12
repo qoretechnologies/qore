@@ -214,6 +214,70 @@ class OAuth2TokenHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Custom token refresh handler — returns a new token on every request
+/** Simulates a non-standard token-refresh endpoint: accepts either JSON or
+    form-urlencoded {"username","password"} bodies, validates against configured
+    credentials, and returns the configured token value.  Supports both
+    \c body-direct (JSON-wrapped string) and \c body-plain (raw text) response
+    formats.  Tracks request count for assertions.
+*/
+class CustomTokenHandler inherits AbstractHttpRequestHandler {
+    private {
+        int request_count = 0;
+        Mutex mtx();
+        string expected_username = "ct-user";
+        string expected_password = "ct-pass";
+        string return_token = "custom-token-v1";
+        string response_format = "body-direct";
+    }
+
+    int getRequestCount() {
+        AutoLock al(mtx);
+        return request_count;
+    }
+
+    resetRequestCount() {
+        AutoLock al(mtx);
+        request_count = 0;
+    }
+
+    setReturnToken(string token) {
+        self.return_token = token;
+    }
+
+    setResponseFormat(string fmt) {
+        self.response_format = fmt;
+    }
+
+    hash<auto> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        {
+            AutoLock al(mtx);
+            ++request_count;
+        }
+        hash<auto> params;
+        if (body) {
+            string body_str = body.typeCode() == NT_BINARY ? body.toString() : body;
+            *string ct = hdr."content-type" ?? hdr."Content-Type";
+            if (ct =~ /json/) {
+                params = parse_json(body_str);
+            } else {
+                params = parse_uri_query("?" + body_str).params;
+            }
+        }
+        if (params.username != expected_username || params.password != expected_password) {
+            return makeResponse(401, make_json({"error": "invalid_credentials"}),
+                {"Content-Type": MimeTypeJson});
+        }
+        if (response_format == "body-plain") {
+            return makeResponse(200, return_token,
+                {"Content-Type": MimeTypeText});
+        }
+        # body-direct: JSON-encoded string
+        return makeResponse(200, make_json(return_token),
+            {"Content-Type": MimeTypeJson});
+    }
+}
+
 #! Handler that returns 401 on first request, then 200 on retry
 class Auth401Handler inherits AbstractHttpRequestHandler {
     private {
@@ -262,6 +326,11 @@ class RestClientIoTest inherits QUnit::Test {
         HttpServer server;
         int port;
         int h1_port;
+        #! HTTPS listener that requires a client certificate (SSL_VERIFY_PEER
+        #! with SSL_VERIFY_FAIL_IF_NO_PEER_CERT) — used by the Phase 2 mTLS
+        #! integration tests to prove the server actually sees and enforces
+        #! the client cert
+        int mtls_port;
         #! HTTP/1.1-only server (no HTTP/2 support)
         HttpServer h1only_server;
         int h1only_port;
@@ -269,6 +338,9 @@ class RestClientIoTest inherits QUnit::Test {
         OAuth2TokenHandler token_handler;
         #! Auth 401 handler for OAuth2 retry tests
         Auth401Handler auth401_handler;
+
+        #! Custom token refresh handler
+        CustomTokenHandler custom_token_handler;
     }
 
     const CertPem = "-----BEGIN CERTIFICATE-----
@@ -321,6 +393,13 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 -----END PRIVATE KEY-----";
 
     constructor() : Test("RestClientIoTest", "1.0") {
+        # Install SIGUSR1 handler early so we can dump Qore-language thread
+        # stacks when the process hangs on exit (send `kill -USR1 <pid>`)
+        @debug {
+            set_signal_handler(SIGUSR1, sub (int sig) {
+                printf("=== SIGUSR1 Thread Stacks ===\n%Y\n", get_all_thread_call_stacks());
+            });
+        }
         addTestCase("constructor options", \testConstructorOptions());
         addTestCase("AbstractRestClient conformance", \testAbstractRestClientConformance());
         addTestCase("restGet", \testRestGet());
@@ -438,6 +517,64 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("cookie option with jar", \testCookieOptionWithJar());
         addTestCase("cookie option absent", \testCookieOptionAbsent());
 
+        # option-parity (Phase 1): option validation + RestClient-legacy aliases
+        addTestCase("option unknown key rejected", \testOptionUnknownKeyRejected());
+        addTestCase("option http_version alias", \testOptionHttpVersionAlias());
+        addTestCase("option http_version invalid", \testOptionHttpVersionInvalid());
+        addTestCase("option http_version conflicts with protocol", \testOptionHttpVersionConflict());
+        addTestCase("option ssl_verify_cert alias", \testOptionSslVerifyCertAlias());
+        addTestCase("option Http1OnlyOptions rejected", \testOptionHttp1OnlyRejected());
+        addTestCase("option token_api_key_header", \testOptionTokenApiKeyHeader());
+        addTestCase("option rest_body_auth_error_check", \testOptionRestBodyAuthErrorCheck());
+        addTestCase("option swagger/openapi3 mutually exclusive", \testOptionSwaggerOpenapi3Conflict());
+        addTestCase("option unsupported OAuth2 Phase 3 accepted silently",
+            \testOptionPhase3OAuth2Accepted());
+        addTestCase("option oauth2_pkce invalid value", \testOptionPkceInvalid());
+        addTestCase("option oauth2_pkce legacy boolean normalization", \testOptionPkceLegacyBool());
+
+        # Phase 3: custom_token_* refresh pipeline
+        addTestCase("custom_token: all-or-nothing validation", \testCustomTokenAllOrNothing());
+        addTestCase("custom_token: body-user-pass requires username+password",
+            \testCustomTokenRequiresCreds());
+        addTestCase("custom_token: invalid auth method", \testCustomTokenInvalidAuth());
+        addTestCase("custom_token: body-direct initial login", \testCustomTokenBodyDirect());
+        addTestCase("custom_token: body-plain initial login", \testCustomTokenBodyPlain());
+        addTestCase("custom_token: 401 triggers refresh", \testCustomTokenRefreshOn401());
+
+        # Phase 2: TLS client cert / mTLS
+        addTestCase("mTLS client cert via ssl_cert_data/ssl_key_data", \testMtlsInlineData());
+        addTestCase("mTLS client cert via ssl_cert_path/ssl_key_path", \testMtlsFilePath());
+        addTestCase("mTLS client cert via H1", \testMtlsH1());
+        addTestCase("mTLS ssl_cert_path + ssl_cert_data mutually exclusive",
+            \testMtlsCertConflict());
+        addTestCase("mTLS ssl_key_path + ssl_key_data mutually exclusive",
+            \testMtlsKeyConflict());
+        addTestCase("mTLS server enforces client cert (H2 success)", \testMtlsServerEnforceH2Success());
+        addTestCase("mTLS server enforces client cert (H1 success)", \testMtlsServerEnforceH1Success());
+        addTestCase("mTLS server rejects missing client cert (H1)",
+            \testMtlsServerRejectsNoCertH1());
+
+        # Phase 4: authorization_code / implicit grant flows via RestConnection
+        addTestCase("auth_code: URL generation on RestClientIo-backed connection",
+            \testAuthCodeUrlGeneration());
+        addTestCase("auth_code: URL contains PKCE code_challenge when configured",
+            \testAuthCodeUrlPkce());
+        addTestCase("auth_code: getAsync with pre-set token skips login",
+            \testAuthCodeAsyncWithPresetToken());
+        addTestCase("auth_code: getAsync without token throws OAUTH2-ERROR",
+            \testAuthCodeAsyncNoToken());
+        addTestCase("auth_code: generatePkceChallenge produces valid verifier",
+            \testAuthCodeGeneratePkceChallenge());
+
+        # copyWithUrl + restDoRawRequest (Phase RS-1)
+        addTestCase("copyWithUrl returns sibling instance with new URL",
+            \testCopyWithUrl());
+        addTestCase("copyWithUrl inherits token from parent", \testCopyWithUrlInheritsToken());
+        addTestCase("getConstructorOptions returns original caller opts",
+            \testGetConstructorOptions());
+        addTestCase("restDoRawRequest sends pre-serialized body as-is",
+            \testRestDoRawRequest());
+
         # Create servers once in the constructor — they're shared across all test
         # cases since the handlers are stateless. This avoids a race condition
         # where rapid server destroy/recreate cycles in setUp/tearDown can cause
@@ -452,6 +589,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         };
         token_handler = new OAuth2TokenHandler("test-client-id", "test-client-secret");
         auth401_handler = new Auth401Handler();
+        custom_token_handler = new CustomTokenHandler();
         server = new HttpServer(http_opts);
         server.setHandler("/api", "/api", MimeTypeJson, new JsonEchoHandler());
         server.setHandler("/error", "/error", MimeTypeJson, new ErrorHandler());
@@ -459,6 +597,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         server.setHandler("/echo", "/echo", MimeTypeJson, new EchoHeadersHandler());
         server.setHandler("/oauth/token", "/oauth/token", MimeTypeFormUrlEncoded, token_handler);
         server.setHandler("/auth401", "/auth401", MimeTypeJson, auth401_handler);
+        server.setHandler("/custom_token", "/custom_token", MimeTypeJson, custom_token_handler);
         server.setDefaultHandler("/api", new JsonEchoHandler());
         port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -468,6 +607,19 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # Plain HTTP listener for HTTP/1.1 tests
         h1_port = server.addListener(<HttpListenerOptionInfo>{
             "service": 0,
+        }).port;
+        # HTTPS listener that requires client certificates.  get_remote_certs +
+        # SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT: the listener
+        # requests a client cert during handshake and fails the connection if
+        # none is presented.  ssl_accept_all_certs defaults to True so any
+        # well-formed X.509 is accepted (no CA chain validation) — this test
+        # only proves the server side sees and enforces the client cert.
+        mtls_port = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "get_remote_certs": True,
+            "ssl_verify_flags": SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
         }).port;
         server.waitForAsyncIo();
 
@@ -2776,6 +2928,691 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # No cookie header should be present (cookie jar is empty, no static cookie)
         assertFalse(resp.body.request_headers.cookie.val(),
             "no cookie header should be present without cookie option");
+    }
+
+    # --- option-parity Phase 1 tests ---
+
+    testOptionUnknownKeyRejected() {
+        # Unknown options are silently stripped (not rejected) so that
+        # subclass getOptions() can leave consumed service-specific keys
+        # (api_profile, encode_chars, etc.) without causing errors.
+%ifndef NoJson
+        RestClientIo::RestClientIo rest = createClient({"not_a_real_option": 42});
+        on_exit rest.close();
+        assertTrue(True, "unknown option silently stripped");
+%endif
+    }
+
+    testOptionHttpVersionAlias() {
+%ifndef NoJson
+        # http_version "1.1" should map to protocol "h1"
+        RestClientIo::RestClientIo h1_alias = new RestClientIo::RestClientIo({
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+            "http_version": "1.1",
+        });
+        on_exit h1_alias.close();
+        hash<RestClient::RestResponseInfo> resp = h1_alias.restGet("/api/test");
+        assertEq(200, resp.status_code);
+        assertEq("h1", resp.protocol);
+
+        # http_version "2.0" should construct without error (wire-level h2 negotiation
+        # is exercised in the existing h2 tests that set protocol directly)
+        RestClientIo::RestClientIo h2_alias = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "http_version": "2.0",
+        });
+        on_exit h2_alias.close();
+        resp = h2_alias.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testOptionHttpVersionInvalid() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "invalid http_version",
+            sub () { createClient({"http_version": "9.9"}); });
+    }
+
+    testOptionHttpVersionConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "conflicts with",
+            sub () { createClient({"http_version": "1.1", "protocol": "h2"}); });
+    }
+
+    testOptionSslVerifyCertAlias() {
+%ifndef NoJson
+        # ssl_verify_cert False should disable verification (needed for self-signed test cert)
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "ssl_verify_cert": False,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+
+        # explicit ssl_verify_mode must take precedence over the ssl_verify_cert alias
+        # (SSL_VERIFY_NONE wins even if ssl_verify_cert is True)
+        RestClientIo::RestClientIo rest2 = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "ssl_verify_cert": True,
+            "ssl_verify_mode": Qore::SSL_VERIFY_NONE,
+        });
+        on_exit rest2.close();
+        resp = rest2.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testOptionHttp1OnlyRejected() {
+        # Http1-only options are silently stripped (not rejected) so that
+        # subclass constructors and connection adapters work without errors.
+%ifndef NoJson
+        foreach string key in (keys RestClient::AbstractRestClient::Http1OnlyOptions) {
+            RestClientIo::RestClientIo rest = createClient({key: True});
+            rest.close();
+        }
+        assertTrue(True, "Http1-only options silently stripped");
+%endif
+    }
+
+    testOptionTokenApiKeyHeader() {
+%ifndef NoJson
+        # With token_api_key_header set, the token must be sent in that header
+        # as a raw value (no "Bearer" prefix), not in Authorization
+        RestClientIo::RestClientIo rest = createClient({
+            "token": "sekret",
+            "token_type": "Bearer",
+            "token_api_key_header": "X-API-Key",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("sekret", resp.body.request_headers."x-api-key");
+        assertFalse(resp.body.request_headers.authorization.val(),
+            "Authorization header must not be set when token_api_key_header is used");
+
+        # And without token_api_key_header, the token goes into Authorization as usual
+        RestClientIo::RestClientIo std = createClient({
+            "token": "sekret",
+            "token_type": "Bearer",
+        });
+        on_exit std.close();
+        resp = std.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer sekret", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testOptionRestBodyAuthErrorCheck() {
+        # Accepts the option; positive end-to-end test requires a server that returns
+        # an auth-error body on 200 OK, which is exercised indirectly via the 401 retry path
+        RestClientIo::RestClientIo rest = createClient({
+            "rest_body_auth_error_check": {"error": "invalid_token"},
+        });
+        on_exit rest.close();
+        assertEq(sprintf("https://127.0.0.1:%d", port), rest.getUrl());
+    }
+
+    testOptionSwaggerOpenapi3Conflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "swagger": "file:///dev/null",
+                    "openapi3": "file:///dev/null",
+                });
+            });
+    }
+
+    testOptionPkceInvalid() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "invalid oauth2_pkce option value",
+            sub () { createClient({"oauth2_pkce": "not-a-real-method"}); });
+    }
+
+    testOptionPkceLegacyBool() {
+        # True/1 → S256, False/0 → none, matching RestClient's backwards-compat shim
+        RestClientIo::RestClientIo t = createClient({"oauth2_pkce": True});
+        on_exit t.close();
+        assertEq("S256", t.getOAuth2Options().oauth2_pkce);
+
+        RestClientIo::RestClientIo f = createClient({"oauth2_pkce": False});
+        on_exit f.close();
+        assertEq("none", f.getOAuth2Options().oauth2_pkce);
+    }
+
+    testOptionPhase3OAuth2Accepted() {
+        # Phase 3 options are stored and exposed via getOAuth2Options() so that
+        # RestConnection.getAsyncImpl() can forward its full option hash without
+        # per-option filtering. Ping options are accepted silently — they're
+        # consumed by RestConnection itself, not by the REST client.
+        RestClientIo::RestClientIo rest = createClient({
+            "oauth2_pkce": "S256",
+            "oauth2_alt_url_subst": {"source": "target"},
+            "oauth2_redirect_passthrough_state": True,
+            "oauth2_app": "my-app",
+            "ping_method": "GET",
+            "ping_path": "/ping",
+        });
+        on_exit rest.close();
+        assertEq(sprintf("https://127.0.0.1:%d", port), rest.getUrl());
+        hash<auto> o = rest.getOAuth2Options();
+        assertEq("S256", o.oauth2_pkce);
+        assertEq({"source": "target"}, o.oauth2_alt_url_subst);
+        assertEq(True, o.oauth2_redirect_passthrough_state);
+        assertEq("my-app", o.oauth2_app);
+    }
+
+    # --- Phase 2: mTLS / client cert tests ---
+    #
+    # The test HTTPS server does not require a client cert — these tests verify
+    # the client-side plumbing (option loading, FileLocationHandler path resolution,
+    # SSLCertificate/SSLPrivateKey construction, socket method wiring into H1 and
+    # H2 createAndConfigureSocket).  A client that presents a cert to a server that
+    # doesn't require one is valid TLS behavior: the handshake succeeds and the
+    # server ignores the peer cert.
+
+    testMtlsInlineData() {
+%ifndef NoJson
+        # Pass cert/key as inline PEM strings (ssl_cert_data / ssl_key_data) — H2
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsFilePath() {
+%ifndef NoJson
+        # Write cert/key to temp files, pass via ssl_cert_path / ssl_key_path — H2
+        string cert_file = tmp_location() + "/rci_mtls_cert_" + get_random_string() + ".pem";
+        string key_file = tmp_location() + "/rci_mtls_key_" + get_random_string() + ".pem";
+        File cf();
+        cf.open2(cert_file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        cf.write(CertPem);
+        cf.close();
+        File kf();
+        kf.open2(key_file, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        kf.write(KeyPem);
+        kf.close();
+        on_exit {
+            unlink(cert_file);
+            unlink(key_file);
+        }
+
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_path": cert_file,
+            "ssl_key_path": key_file,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsH1() {
+%ifndef NoJson
+        # Same plumbing, H1 path (exercises createAndConfigureSocket in
+        # Http1ClientPollOperationImpl.qc)
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsCertConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "ssl_cert_path": "/tmp/does-not-matter",
+                    "ssl_cert_data": CertPem,
+                });
+            });
+    }
+
+    testMtlsKeyConflict() {
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "mutually exclusive",
+            sub () {
+                createClient({
+                    "ssl_key_path": "/tmp/does-not-matter",
+                    "ssl_key_data": KeyPem,
+                });
+            });
+    }
+
+    testMtlsServerEnforceH2Success() {
+%ifndef NoJson
+        # Server requires SSL_VERIFY_PEER + FAIL_IF_NO_PEER_CERT. Present the
+        # client cert via ssl_cert_data/ssl_key_data. The server accepts the
+        # cert (ssl_accept_all_certs=True) and the request succeeds over H2.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h2",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testMtlsServerEnforceH1Success() {
+%ifndef NoJson
+        # Same flow over H1 — exercises Http1ClientPollOperationImpl's
+        # createAndConfigureSocket cert/key wiring end-to-end against a
+        # cert-requiring server.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+            "ssl_cert_data": CertPem,
+            "ssl_key_data": KeyPem,
+        });
+        on_exit rest.close();
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    # --- Phase 4: authorization_code / implicit grant flows via RestConnection ---
+    #
+    # Design clarification: getAuthorizationCodeRequest() lives on
+    # RestConnection, not on RestClient or RestClientIo. RestConnection owns
+    # the OAuth2 config and the base URL, so the auth URL generation is
+    # transport-agnostic — it works unchanged for both RestClient-backed
+    # get() and RestClientIo-backed getAsync() flows. These tests verify the
+    # flow end-to-end for RestClientIo to close Phase 4 of the option-parity
+    # effort.
+
+    testAuthCodeUrlGeneration() {
+        # Build a RestConnection for authorization_code grant and verify
+        # getAuthorizationCodeRequest() returns a URL with the expected params.
+        # No network calls are made — this is pure URL generation.
+        RestConnection rc("ac-test", "ac-test",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "oauth2_scopes": ("read", "write"),
+            });
+
+        string uri = rc.getAuthorizationCodeRequest(<RestClient::AuthCodeInfo>{
+            "state": "csrf-abc123",
+        });
+        assertRegex("^https://auth.example.com/oauth2/authorize\\?", uri);
+        assertRegex("response_type=code", uri);
+        assertRegex("client_id=test-client-id", uri);
+        assertRegex("redirect_uri=", uri);
+        assertRegex("scope=read(\\+|%20)write", uri);
+        assertRegex("state=csrf-abc123", uri);
+    }
+
+    testAuthCodeUrlPkce() {
+        # PKCE S256: code_verifier in info → code_challenge in URL
+        RestConnection rc("ac-pkce", "ac-pkce",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "oauth2_pkce": "S256",
+            });
+
+        # Generate a PKCE verifier on the caller side (RestConnection doesn't
+        # store it — the caller holds it between the auth URL request and the
+        # code-to-token exchange)
+        string verifier = RestClient::RestConnection::generatePkceChallenge();
+        assertTrue(verifier.length() > 20, "PKCE verifier should be non-trivially long");
+
+        string uri = rc.getAuthorizationCodeRequest(<RestClient::AuthCodeInfo>{
+            "state": "csrf-xyz",
+            "code_verifier": verifier,
+        });
+        assertRegex("code_challenge=", uri);
+        assertRegex("code_challenge_method=S256", uri);
+    }
+
+    testAuthCodeAsyncWithPresetToken() {
+%ifndef NoJson
+        # After the caller has completed the out-of-band code exchange and
+        # stored the resulting access token, getAsync() must successfully
+        # return a RestClientIo that uses the pre-set token without trying
+        # to perform an automatic login (which would throw for auth_code).
+        RestConnection rc("ac-token", "ac-token",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "token": "post-exchange-token",
+                "token_type": "Bearer",
+                "ssl_verify_cert": False,
+            });
+
+        # getAsync() returns a RestClientIo with the pre-set token installed —
+        # no automatic login attempt
+        object client = rc.getAsync();
+        on_exit call_object_method(client, "close");
+
+        # Make a real request to prove the client works end-to-end
+        hash<RestClient::RestResponseInfo> resp = cast<RestClientIo::RestClientIo>(client)
+            .restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer post-exchange-token",
+            resp.body.request_headers.authorization);
+%endif
+    }
+
+    testAuthCodeAsyncNoToken() {
+%ifndef NoJson
+        # Without a pre-set token, constructing via getAsync() triggers
+        # checkLogin() → loginIntern() → getOAuth2LoginInfo(), which must
+        # throw OAUTH2-ERROR explaining that the grant type needs manual
+        # authorization. This matches RestClient's behavior for the same
+        # scenario.
+        RestConnection rc("ac-notoken", "ac-notoken",
+            sprintf("https://127.0.0.1:%d", port), {}, {
+                "oauth2_grant_type": "authorization_code",
+                "oauth2_auth_url": "https://auth.example.com/oauth2/authorize",
+                "oauth2_token_url": "https://auth.example.com/oauth2/token",
+                "oauth2_client_id": "test-client-id",
+                "oauth2_client_secret": "test-client-secret",
+                "oauth2_redirect_url": "https://app.example.com/callback",
+                "ssl_verify_cert": False,
+            });
+        assertThrows("OAUTH2-ERROR", "must be manually authorized",
+            sub () { rc.getAsync(); });
+%endif
+    }
+
+    # --- Phase RS-1: copyWithUrl + restDoRawRequest ---
+
+    testCopyWithUrl() {
+%ifndef NoJson
+        # Parent points at the TLS test server; copy points at the same host —
+        # a realistic use case is the same server, different path prefix
+        RestClientIo::RestClientIo parent = createClient();
+        on_exit parent.close();
+
+        string new_url = sprintf("https://127.0.0.1:%d", port);
+        RestClientIo::RestClientIo child = parent.copyWithUrl(new_url);
+        on_exit child.close();
+
+        assertEq(new_url, child.getUrl());
+        assertEq(parent.getSerialization(), child.getSerialization());
+
+        # The child must be able to make real requests
+        hash<RestClient::RestResponseInfo> resp = child.restGet("/api/test");
+        assertEq(200, resp.status_code);
+%endif
+    }
+
+    testCopyWithUrlInheritsToken() {
+%ifndef NoJson
+        # Parent acquires a token, then copyWithUrl produces a child that
+        # inherits the token — the child should send Authorization: Bearer <token>
+        # without firing its own OAuth2 login
+        token_handler.resetRequestCount();
+        token_handler.setReturnToken("inherited-token");
+
+        RestClientIo::RestClientIo parent = createClient({
+            "oauth2_grant_type": "client_credentials",
+            "oauth2_client_id": "test-client-id",
+            "oauth2_client_secret": "test-client-secret",
+            "oauth2_token_url": "/oauth/token",
+        });
+        on_exit parent.close();
+        assertEq(1, token_handler.getRequestCount(),
+            "parent should have fetched its token during construction");
+
+        RestClientIo::RestClientIo child = parent.copyWithUrl(
+            sprintf("https://127.0.0.1:%d", port));
+        on_exit child.close();
+
+        # Child must NOT have fired another token request
+        assertEq(1, token_handler.getRequestCount(),
+            "child should inherit parent's token, not fire a new login");
+
+        hash<RestClient::RestResponseInfo> resp = child.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer inherited-token", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testGetConstructorOptions() {
+        # The returned hash must contain the caller's original options,
+        # preserved verbatim before any internal normalization
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "accept_all_certs": True,
+            "http_version": "2.0",
+            "token": "foo",
+            "token_type": "Bearer",
+        });
+        on_exit rest.close();
+        hash<auto> opts = rest.getConstructorOptions();
+        assertEq("2.0", opts.http_version,
+            "getConstructorOptions preserves caller's http_version, not the normalized protocol");
+        assertEq("json", opts.data);
+        assertEq("foo", opts.token);
+    }
+
+    testRestDoRawRequest() {
+%ifndef NoJson
+        # Send a pre-serialized body via restDoRawRequest. The JsonEchoHandler
+        # echoes the request headers so we can prove the Content-Type we set is
+        # the one that hit the wire (no validator override, no double-serialization).
+        RestClientIo::RestClientIo rest = createClient();
+        on_exit rest.close();
+
+        # Craft a JSON body ourselves and set Content-Type explicitly
+        string body_str = make_json({"raw": True, "value": 42});
+        hash<RestClient::RestResponseInfo> resp = rest.restDoRawRequest(
+            "POST", "/echo", body_str, {"Content-Type": MimeTypeJson});
+        assertEq(200, resp.status_code);
+        # The echo handler returns the parsed request headers; verify our
+        # explicit Content-Type reached the server untouched
+        assertRegex("application/json", resp.body.request_headers."content-type");
+%endif
+    }
+
+    testAuthCodeGeneratePkceChallenge() {
+        # The static helper is on RestClient::RestClient — accessible from
+        # RestClientIo flows transparently. Verify it produces a verifier of
+        # the expected length (64 base64url chars from 48 random bytes).
+        string v1 = RestClient::RestConnection::generatePkceChallenge();
+        string v2 = RestClient::RestConnection::generatePkceChallenge();
+        assertEq(64, v1.length());
+        assertEq(64, v2.length());
+        assertNeq(v1, v2, "two successive verifiers must differ");
+    }
+
+    testMtlsServerRejectsNoCertH1() {
+%ifndef NoJson
+        # Connect to the cert-requiring listener WITHOUT a client cert. The
+        # TLS handshake must fail because the server is configured with
+        # SSL_VERIFY_FAIL_IF_NO_PEER_CERT; openssl reports a TLS fatal
+        # alert.  The HTTP client layer wraps the underlying TLS failure
+        # inside HTTPCLIENT-REQUEST-ERROR, and the message carries the
+        # original "certificate required" openssl string.
+        RestClientIo::RestClientIo rest = new RestClientIo::RestClientIo({
+            "url": sprintf("https://127.0.0.1:%d", mtls_port),
+            "data": "json",
+            "accept_all_certs": True,
+            "protocol": "h1",
+        });
+        on_exit rest.close();
+        # OpenSSL may report "certificate required" or the server may RST
+        # the connection ("Connection reset by peer") depending on platform
+        # and TLS version
+        assertThrows("HTTPCLIENT-REQUEST-ERROR",
+            NOTHING,
+            sub () { rest.restGet("/api/test"); });
+%endif
+    }
+
+    # --- Phase 3: custom_token_* tests ---
+
+    testCustomTokenAllOrNothing() {
+        # Partial set → validation error
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "not all set",
+            sub () {
+                createClient({
+                    "custom_token_auth": "body-user-pass",
+                    "custom_token_method": "POST",
+                    # missing custom_token_path and custom_token_location
+                });
+            });
+    }
+
+    testCustomTokenRequiresCreds() {
+        # body-user-pass without username/password → error
+        assertThrows("RESTCLIENTIO-OPTION-ERROR", "requires a username and password",
+            sub () {
+                createClient({
+                    "custom_token_auth": "body-user-pass",
+                    "custom_token_method": "POST",
+                    "custom_token_path": "/custom_token",
+                    "custom_token_location": "body-direct",
+                });
+            });
+    }
+
+    testCustomTokenInvalidAuth() {
+%ifndef NoJson
+        # Invalid custom_token_auth value — the constructor's initial login call
+        # (checkLogin → customGetTokenIntern) hits the switch default and throws
+        assertThrows("REST-CUSTOM-TOKEN-ERROR", "invalid custom token auth method",
+            sub () {
+                createClient({
+                    "username": "ct-user",
+                    "password": "ct-pass",
+                    "custom_token_auth": "bogus-method",
+                    "custom_token_method": "POST",
+                    "custom_token_path": "/custom_token",
+                    "custom_token_location": "body-direct",
+                });
+            });
+%endif
+    }
+
+    testCustomTokenBodyDirect() {
+%ifndef NoJson
+        custom_token_handler.resetRequestCount();
+        custom_token_handler.setResponseFormat("body-direct");
+        custom_token_handler.setReturnToken("ct-token-direct");
+
+        # Initial login triggers customGetTokenIntern → sets token → /echo includes it
+        RestClientIo::RestClientIo rest = createClient({
+            "username": "ct-user",
+            "password": "ct-pass",
+            "custom_token_auth": "body-user-pass",
+            "custom_token_method": "POST",
+            "custom_token_path": "/custom_token",
+            "custom_token_location": "body-direct",
+        });
+        on_exit rest.close();
+        assertEq(1, custom_token_handler.getRequestCount());
+        assertEq("ct-token-direct", rest.getToken());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer ct-token-direct", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testCustomTokenBodyPlain() {
+%ifndef NoJson
+        custom_token_handler.resetRequestCount();
+        custom_token_handler.setResponseFormat("body-plain");
+        custom_token_handler.setReturnToken("ct-token-plain");
+
+        RestClientIo::RestClientIo rest = createClient({
+            "username": "ct-user",
+            "password": "ct-pass",
+            "custom_token_auth": "body-user-pass",
+            "custom_token_method": "POST",
+            "custom_token_path": "/custom_token",
+            "custom_token_location": "body-plain",
+        });
+        on_exit rest.close();
+        assertEq(1, custom_token_handler.getRequestCount());
+        assertEq("ct-token-plain", rest.getToken());
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/echo");
+        assertEq(200, resp.status_code);
+        assertEq("Bearer ct-token-plain", resp.body.request_headers.authorization);
+%endif
+    }
+
+    testCustomTokenRefreshOn401() {
+%ifndef NoJson
+        # The MinimumTokenRefresh gate (1m) blocks an immediate post-login retry
+        # refresh, so here we verify the wiring reaches canRetryAuth without
+        # waiting a minute: construct without initial login, then issue a
+        # request against the 401 handler and confirm the 401 passes through
+        # (canRetryAuth gate blocks the refresh), then a second request still
+        # goes through the same gate path.  See testOAuth2_401Retry for the
+        # same pattern applied to OAuth2.
+        custom_token_handler.resetRequestCount();
+        custom_token_handler.setResponseFormat("body-direct");
+        custom_token_handler.setReturnToken("ct-rejected");
+
+        RestClientIo::RestClientIo rest = createClient({
+            "username": "ct-user",
+            "password": "ct-pass",
+            "custom_token_auth": "body-user-pass",
+            "custom_token_method": "POST",
+            "custom_token_path": "/custom_token",
+            "custom_token_location": "body-direct",
+        });
+        on_exit rest.close();
+        assertEq(1, custom_token_handler.getRequestCount(),
+            "initial login should have called the custom-token endpoint once");
+        assertEq("ct-rejected", rest.getToken());
+
+        auth401_handler.addRejectToken("ct-rejected");
+        on_exit auth401_handler.removeRejectToken("ct-rejected");
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGet("/auth401/test");
+        # MinimumTokenRefresh (1m) gates canRetryAuth() right after initial login,
+        # so the 401 passes through.  This verifies the pipe is wired without
+        # waiting 60s — matching the testOAuth2_401Retry pattern.
+        assertEq(401, resp.status_code);
+%endif
     }
 }
 

@@ -157,6 +157,18 @@ public:
         return active_stream_count;
     }
 
+    //! Sets the proactive idle timeout for this connection (microseconds).
+    /** When a connection has been idle (no pending request, no active stream)
+        for this duration, handleIdle() will close it proactively — matching
+        nginx's upstream keepalive_timeout behavior.  Provides defense-in-depth
+        against peers that never close idle connections.
+
+        @param timeout_us timeout in microseconds; <= 0 disables proactive timeout
+    */
+    DLLLOCAL void setIdleTimeout(int64_t timeout_us) {
+        idle_timeout_us = timeout_us;
+    }
+
     DLLLOCAL AbstractHttpPollConnectionPriv* getConnectionPriv() const {
         return connection_priv;
     }
@@ -215,6 +227,12 @@ private:
     //! Response status code
     int response_status_code = 0;
 
+    //! Response status message (e.g., "OK", "Not Found"); ref'd or nullptr
+    QoreStringNode* response_status_message = nullptr;
+
+    //! Response HTTP version string (e.g., "1.1", "1.0"); ref'd or nullptr
+    QoreStringNode* response_http_version = nullptr;
+
     //! Response headers (ref'd or nullptr, lowercase keys)
     QoreHashNode* response_headers = nullptr;
 
@@ -242,6 +260,22 @@ private:
 
     //! Remaining bytes for streaming body with Content-Length
     int64_t streaming_body_remaining = 0;
+
+    //! Proactive idle timeout (microseconds); -1 = no proactive timeout
+    /** Set by setIdleTimeout() after construction from the connection manager.
+        When the connection is in ReqState::IDLE with no pending request and
+        this many microseconds pass without activity, handleIdle() closes the
+        connection proactively with HTTP1-IDLE-TIMEOUT.  Mirrors nginx's
+        upstream keepalive_timeout; I/O thread only.
+    */
+    int64_t idle_timeout_us = -1;
+
+    //! Deadline for the current idle period (epoch us); 0 = not yet in idle wait
+    /** Set on first handleIdle entry with no pending request; cleared when a
+        pending request is picked up or the connection leaves the idle state.
+        I/O thread only.
+    */
+    int64_t idle_deadline_us = 0;
 
     // --- Shared data (under stream_lock) ---
 
@@ -321,6 +355,12 @@ private:
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void notifyPendingStreams(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void fireReadyCallback(ExceptionSink* xsink);
+
+    //! Arms the idle deadline (if not already armed) and annotates \a poll_info
+    //! with a poll_timeout_ms hint so the I/O controller wakes continuePoll()
+    //! when the deadline expires.  I/O thread only.  No-op if idle_timeout_us
+    //! is <= 0 or \a poll_info is nullptr.
+    DLLLOCAL QoreHashNode* armIdleDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
 
     //! Release the current inner operation
     DLLLOCAL void releaseCurrentOp(ExceptionSink* xsink);

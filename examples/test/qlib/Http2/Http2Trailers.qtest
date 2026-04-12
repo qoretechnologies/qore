@@ -212,8 +212,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
 
@@ -296,8 +298,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
 
@@ -370,8 +374,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
         assertEq("no-trailers", results.response.body, "body content");
@@ -446,8 +452,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
         assertEq(True, exists results.response.trailers, "trailers exist");
@@ -523,8 +531,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(True, exists results.response.trailers, "trailers exist");
         # Verify all trailer names are lowercase
@@ -608,8 +618,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
         assertEq(True, exists results.response.body, "body exists");
@@ -700,8 +712,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
         assertEq(True, exists results.response.body, "body exists");
@@ -781,8 +795,10 @@ class Http2TrailersTest inherits QUnit::Test {
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         assertEq(200, results.response.status_code, "status code");
         assertEq("plain-response", results.response.body, "body content");
@@ -801,6 +817,10 @@ class Http2TrailersTest inherits QUnit::Test {
         hash<auto> results;
         Mutex mx();
         Counter done(2);
+        # Gate server close until client has read all data — prevents
+        # GOAWAY race where the server's close() arrives while the client
+        # is between readData() calls, disrupting the H2 session.
+        Counter client_read_done(1);
 
         # Server: streaming response with body + trailers
         background sub() {
@@ -832,6 +852,8 @@ class Http2TrailersTest inherits QUnit::Test {
                 drivePoll(flush_op);
                 @assert(flush_op.goalReached());
 
+                # Wait for client to finish reading before closing
+                client_read_done.waitForZero(10s);
                 client.close();
             } catch (hash<ExceptionInfo> ex) {
                 AutoLock al(mx);
@@ -884,13 +906,17 @@ class Http2TrailersTest inherits QUnit::Test {
                 AutoLock al(mx);
                 results.client_error = sprintf("%s: %s", ex.err, ex.desc);
             }
+            # Signal server it's safe to close
+            client_read_done.dec();
             done.dec();
         }();
 
         done.waitForZero(30s);
 
-        assertFalse(exists results.server_error, "no server error");
-        assertFalse(exists results.client_error, "no client error");
+        assertFalse(exists results.server_error,
+            sprintf("no server error (error: %y)", results.server_error));
+        assertFalse(exists results.client_error,
+            sprintf("no client error (error: %y)", results.client_error));
 
         # Verify body was received
         assertEq(True, exists results.body, "body received");

@@ -61,17 +61,32 @@ void AbstractHttpPollConnectionPriv::onConnectionReady() {
 
 void AbstractHttpPollConnectionPriv::setClosed() {
     std::vector<std::pair<QoreEventNotifier*, QoreObject*>> to_notify;
+    bool fire_hook = false;
     {
         AutoLocker al(lock);
         state.store(CLOSED, std::memory_order_release);
         ready_cond.broadcast();
         to_notify = std::move(ready_notifiers);
+        // One-shot guard: fire onClosedHook on the first close transition
+        // only.  Subsequent setClosed() calls (e.g., I/O thread idle timeout
+        // races with app thread closeConnection) skip the hook to keep
+        // manager-side eviction idempotent.
+        if (!on_closed_hook_fired) {
+            on_closed_hook_fired = true;
+            fire_hook = true;
+        }
     }
     for (auto& [ptr, obj] : to_notify) {
         ptr->notify();
         ExceptionSink xsink;
         ptr->deref(&xsink);
         obj->deref(&xsink);
+    }
+    // Outside the lock — implementations may take other locks here.
+    // See AbstractHttpPollConnection.h docs and
+    // design/http-client-manager-cpp-port.md for the lock ordering rules.
+    if (fire_hook) {
+        onClosedHook();
     }
 }
 

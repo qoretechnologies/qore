@@ -1035,7 +1035,7 @@ public namespace RestSchemaValidator {
 
             @return the data field definition
         */
-        abstract AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+        abstract AbstractDataField getField(string name, *string desc, bool required = True, *object rest,
             auto default_value);
     }
 
@@ -1207,7 +1207,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns the data type for this schema
-        AbstractDataProviderType getDataType(bool required = True, *HTTPClient rest) {
+        AbstractDataProviderType getDataType(bool required = True, *object rest) {
             if (required) {
                 if (!dataType) {
                     if (orNothingDataType) {
@@ -1231,7 +1231,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns the data type for the given schema
-        private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *HTTPClient rest) {
+        private AbstractDataProviderType getDataTypeIntern(string path, bool required = True, *object rest) {
             if (type == "string") {
                 AbstractDataProviderType t = AbstractDataProviderType::get((required ? "" : "*") + "string");
                 if (required) {
@@ -1255,7 +1255,10 @@ public namespace RestSchemaValidator {
 
             auto def_body;
             if (rest) {
-                def_body = cast<object>(rest).preprocessRequestBody();
+                # preprocessRequestBody is now on AbstractRestClient (identity default);
+                # MewsRestClient-family subclasses override it to return the default body
+                # with injected auth-token fields used as required field defaults here
+                def_body = rest.preprocessRequestBody();
                 if (exists def_body && def_body.typeCode() != NT_HASH) {
                     remove def_body;
                 }
@@ -1296,7 +1299,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns a field definition from the schema parameter
-        AbstractDataField getField(string name, *string desc, bool required = True, *HTTPClient rest,
+        AbstractDataField getField(string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
             string rstr = required ? "Y" : "N";
             if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
@@ -1306,7 +1309,7 @@ public namespace RestSchemaValidator {
         }
 
         #! Returns a field definition from the schema parameter
-        AbstractDataField getField(string path, string name, *string desc, bool required = True, *HTTPClient rest,
+        AbstractDataField getField(string path, string name, *string desc, bool required = True, *object rest,
                 auto default_value) {
             string rstr = required ? "Y" : "N";
             if (*AbstractDataField rv = getCacheField(\fieldmap{name}, rstr)) {
@@ -1336,7 +1339,7 @@ public namespace RestSchemaValidator {
 
         #! Returns a field definition from the schema parameter
         private AbstractDataField getFieldIntern(string path, string name, *string desc, bool required = True,
-                *HTTPClient rest, auto default_value, *string rstr) {
+                *object rest, auto default_value, *string rstr) {
             if (!rstr) {
                 rstr = required ? "Y" : "N";
             }
@@ -1767,7 +1770,7 @@ public namespace RestSchemaValidator {
             @note \a rest must be a \c RestClient object; this parameter is declared with a base class to avoid a
             circular dependency between modules
         */
-        DataProvider::AbstractDataProvider getDataProvider(HTTPClient rest) {
+        DataProvider::AbstractDataProvider getDataProvider(object rest) {
             return getDataProviderImpl(rest);
         }
 
@@ -1808,7 +1811,7 @@ public namespace RestSchemaValidator {
             @note \a rest must be a \c RestClient object; this parameter is declared with a base class to avoid a
             circular dependency between modules
         */
-        private DataProvider::AbstractDataProvider getDataProviderImpl(HTTPClient rest) {
+        private DataProvider::AbstractDataProvider getDataProviderImpl(object rest) {
             throw "DATA-PROVIDER-ERROR", sprintf("the %s class does not support the data provider API",
                 self.className());
         }
@@ -1967,7 +1970,7 @@ public namespace RestSchemaValidator {
             @since RestSchemaValidator 2.4
         */
         abstract AbstractDataField getFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
-            bool required = True, *HTTPClient rest);
+            bool required = True, *object rest);
 
         #! Returns a field for header fields
         /** @param name the name of the field
@@ -2519,7 +2522,7 @@ public namespace RestSchemaValidator {
             @throws UNSUPPORTED-OPERATION the NullRestSchemaValidator does not support schema operations
         */
         AbstractDataField getFieldFromSchema(string name, *string desc, AbstractSchemaObject schema,
-                bool required = True, *HTTPClient rest) {
+                bool required = True, *object rest) {
             throw "UNSUPPORTED-OPERATION", "the NullRestSchemaValidator class does not support schema operations";
         }
 

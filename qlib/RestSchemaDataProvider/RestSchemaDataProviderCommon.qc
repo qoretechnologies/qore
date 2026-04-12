@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore RestSchemaDataProvider module definition
 
-/** RestSchemaDataProviderCommon.qc Copyright 2024 Qore Technologies, s.r.o.
+/** RestSchemaDataProviderCommon.qc Copyright 2024 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
         AbstractRestSchemaValidator schema;
 
         #! The REST client object for API calls
-        *RestClient::RestClient rest;
+        *RestClient::AbstractRestClient rest;
     }
 
     #! Creates the object
@@ -39,7 +39,7 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest) {
+    constructor(RestClient::AbstractRestClient rest) {
         self.rest = rest;
     }
 
@@ -56,13 +56,13 @@ public class RestSchemaDataProviderCommon inherits DataProvider::AbstractDataPro
         return schema;
     }
 
-    #! Returns the RestClient
-    *RestClient::RestClient tryGetRestClient() {
+    #! Returns the REST client
+    *RestClient::AbstractRestClient tryGetRestClient() {
         return rest;
     }
 
-    #! Sets the RestClient
-    setRestClient(RestClient::RestClient rest) {
+    #! Sets the REST client
+    setRestClient(RestClient::AbstractRestClient rest) {
         self.rest = rest;
     }
 

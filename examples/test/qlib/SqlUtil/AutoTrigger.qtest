@@ -17,6 +17,7 @@ class AutoTriggerTest inherits QUnit::Test {
         addTestCase("mssql trigger generation", \mssqlTests());
         addTestCase("all-drivers generation", \allDriversTests());
         addTestCase("insert-only mode", \insertOnlyTests());
+        addTestCase("insert-only via config key", \insertOnlyConfigKeyTests());
         addTestCase("empty config", \emptyConfigTests());
         addTestCase("created-only config", \createdOnlyTests());
         addTestCase("sequence-only config", \sequenceOnlyTests());
@@ -153,6 +154,39 @@ class AutoTriggerTest inherits QUnit::Test {
         hash<auto> mysql = SqlUtil::generate_auto_triggers("mysql", "test_table", config, True);
         assertTrue(mysql.triggers.hasKey("trig_test_table_insert"));
         assertFalse(mysql.triggers.hasKey("trig_test_table_update"));
+    }
+
+    insertOnlyConfigKeyTests() {
+        # the insert_only flag can also come from the config hash (not just the positional arg);
+        # useful for .ysm/.jsm schemas where the loader can't pass positional args
+        hash<auto> config = {
+            "created": True,
+            "modified": True,
+            "insert_only": True,
+            "sequence_columns": {"id": "seq_t"},
+        };
+
+        hash<auto> pgsql = SqlUtil::generate_auto_triggers("pgsql", "ins_only_t", config);
+        assertTrue(pgsql.triggers.trig_ins_only_t.contains("before insert on"));
+        assertFalse(pgsql.triggers.trig_ins_only_t.contains("or update"));
+        string func = pgsql.driver.pgsql.functions."trig_ins_only_t()";
+        assertFalse(func.contains("tg_op = 'UPDATE'"));
+        assertTrue(func.contains("nextval('seq_t')"));
+
+        hash<auto> oracle = SqlUtil::generate_auto_triggers("oracle", "ins_only_t", config);
+        assertTrue(oracle.triggers.trig_ins_only_t.contains("BEFORE INSERT ON"));
+        assertFalse(oracle.triggers.trig_ins_only_t.contains("OR UPDATE"));
+
+        hash<auto> mysql = SqlUtil::generate_auto_triggers("mysql", "ins_only_t", config);
+        assertTrue(mysql.triggers.hasKey("trig_ins_only_t_insert"));
+        assertFalse(mysql.triggers.hasKey("trig_ins_only_t_update"));
+
+        # the positional argument and the config key should OR together — either one forces
+        # insert_only
+        hash<auto> config_no_key = {"created": True, "modified": True};
+        hash<auto> forced = SqlUtil::generate_auto_triggers("pgsql", "ins_only_t", config_no_key, True);
+        assertTrue(forced.triggers.trig_ins_only_t.contains("before insert on"));
+        assertFalse(forced.triggers.trig_ins_only_t.contains("or update"));
     }
 
     emptyConfigTests() {
