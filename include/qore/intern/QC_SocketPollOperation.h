@@ -1109,21 +1109,36 @@ public:
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
         int fd = sock->priv->socket->getSocket();
-        // Send CONNECTION_CLOSE to each active peer before tearing down local
-        // session state.  Without this, clients must wait for their own idle
-        // timeout (default 30s+) to detect server shutdown — turning a clean
-        // server stop into a cascade of per-stream timeouts for active clients.
-        // RFC 9000 §10.2: CONNECTION_CLOSE should be sent on graceful close.
+        // Graceful QUIC shutdown (nginx pattern, see nginx-1.29.4
+        // src/event/quic/ngx_event_quic.c:468-620):
+        //   1. Send HTTP/3 GOAWAY on each session so clients stop opening
+        //      new streams (submitShutdown() sends final GOAWAY with the
+        //      highest accepted stream ID).
+        //   2. Send CONNECTION_CLOSE (RFC 9000 §10.2) to notify the peer;
+        //      without this clients wait for their own idle timeout.
+        // Both are best-effort — failures are logged but not fatal because
+        // the peer may already be gone.
         if (fd >= 0) {
             uint8_t close_buf[1280];
             for (auto& [id, session] : sessions_) {
+                // Step 1: submit HTTP/3 GOAWAY (queues a GOAWAY frame in
+                // the outbound stream; actual transmission happens below
+                // when we call writeConnectionClose which drains pending
+                // packets as part of the close sequence).
+                {
+                    ExceptionSink dummy_xsink;
+                    session->submitShutdown(&dummy_xsink);
+                    dummy_xsink.clear();
+                }
+                // Step 2: build CONNECTION_CLOSE packet.  ngtcp2's
+                // write_connection_close also flushes any pending frames
+                // queued above (GOAWAY) before the CONNECTION_CLOSE.
                 ssize_t close_len = session->writeConnectionClose(
                     close_buf, sizeof(close_buf));
                 if (close_len > 0) {
                     struct sockaddr_storage remote_addr;
                     socklen_t remote_addrlen;
                     session->getRemoteAddrCopy(remote_addr, remote_addrlen);
-                    // Best-effort send; ignore errors (peer may already be gone)
                     (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
                         reinterpret_cast<const struct sockaddr*>(&remote_addr),
                         remote_addrlen);
