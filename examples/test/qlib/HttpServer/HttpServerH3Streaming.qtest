@@ -253,6 +253,39 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that resets the stream instead of sending a response.
+/** Tests that the client receives a proper error (not an empty response) when
+    the server RSTs the QUIC stream via resetQuicStream().
+*/
+class ResetStreamHandler inherits AbstractHttpRequestHandler {
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        *Socket sock = cx."header-info".sock;
+
+        # Explicitly cancel the stream so the client sees RESET_STREAM instead
+        # of a normal response.  cancelQuicStream sends both RESET_STREAM and
+        # STOP_SENDING frames to the peer.
+        if (sock && session_id > 0) {
+            try {
+                sock.cancelQuicStream(session_id, stream_id);
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore — stream may already be closed
+            }
+        }
+
+        # Return a placeholder response — should not reach the client because
+        # the stream was reset
+        return makeResponse(200, "should-not-receive", {
+            "content-type": "text/plain",
+        });
+    }
+}
+
 #! Handler that reads one chunk and responds immediately (partial body read)
 class PartialReadHandler inherits AbstractHttpRequestHandler {
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -471,6 +504,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 bidirectional streaming (small)", \testH3BidiStreamingSmall());
         addTestCase("HTTP/3 bidirectional streaming (large)", \testH3BidiStreamingLarge());
         addTestCase("HTTP/3 bidirectional streaming concurrent", \testH3BidiConcurrent());
+        addTestCase("HTTP/3 stream reset propagates as error", \testH3StreamResetError());
 
         set_return_value(main());
     }
@@ -496,6 +530,8 @@ l50Xb2GWQesIt9k5jF5IOw==
         # Use exact-match paths (isregex=False) for the bidi handler to avoid
         # regex substring collision with the broader /echo handler
         server.setHandler("bidi-echo", "/bidi-echo", NOTHING, bidi_handler, NOTHING, False);
+        server.setHandler("reset-stream", "/reset-stream", NOTHING,
+            new ResetStreamHandler(), NOTHING, False);
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         server.setHandler("stream-response", "/stream-response", NOTHING,
             new StreamResponseHandler(mPayload));
@@ -1100,5 +1136,43 @@ l50Xb2GWQesIt9k5jF5IOw==
         list<hash<auto>> requests = handler.getReceivedRequests();
         assertEq(NumStreams, requests.size(),
             "bidi concurrent: all requests received");
+    }
+
+    #! Test 4.4: Stream reset from server must propagate as a client error
+    /** When the server calls resetQuicStream(), the client must receive an
+        error (HTTP3-STREAM-RESET or similar) — not an empty response body.
+        The client application cannot distinguish "empty but valid" from
+        "peer-reset" without this signal, leading to silent data loss.
+    */
+    testH3StreamResetError() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        bool got_error = False;
+        string err_str;
+        try {
+            hash<auto> resp = mgr.request(url, "POST", "/reset-stream",
+                {"Content-Type": "application/octet-stream"}, binary("test"));
+            # Should NOT reach here — server reset the stream
+            if (resp.body) {
+                err_str = sprintf("got response body instead of error: %y", resp.body);
+            } else {
+                err_str = sprintf("got empty response (status %d) instead of error",
+                    resp.status_code);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            got_error = True;
+            err_str = sprintf("%s: %s", ex.err, ex.desc);
+            if (m_options.verbose > 1) {
+                printf("  expected error: %s\n", err_str);
+            }
+        }
+        assertTrue(got_error,
+            sprintf("stream reset: client must get an error (got: %s)", err_str));
     }
 }

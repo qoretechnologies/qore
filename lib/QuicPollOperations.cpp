@@ -464,7 +464,17 @@ QoreValue SocketQuicClientPollOperation::getOutput() const {
     h->setKeyValue("stream_id", cached_stream->stream_id, nullptr);
 
     if (!cached_stream->error_message.empty()) {
-        h->setKeyValue("err", new QoreStringNode("QUIC-BODY-TOO-LARGE"), nullptr);
+        // Use a more specific error code for peer-reset streams; keep
+        // QUIC-BODY-TOO-LARGE for the request-body-exceeded case (legacy).
+        const char* err_code = "QUIC-STREAM-ERROR";
+        if (cached_stream->error_message.find("exceeded maximum size")
+                != std::string::npos) {
+            err_code = "QUIC-BODY-TOO-LARGE";
+        } else if (cached_stream->error_message.find("peer reset")
+                != std::string::npos) {
+            err_code = "QUIC-STREAM-RESET";
+        }
+        h->setKeyValue("err", new QoreStringNode(err_code), nullptr);
         h->setKeyValue("desc", new QoreStringNode(cached_stream->error_message), nullptr);
     }
 
