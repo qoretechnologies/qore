@@ -87,6 +87,8 @@ static_assert(QORE_IR_MAX_OPCODE == 357,
 #include <qore/intern/ParseReferenceNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
 #include <qore/intern/QoreBinaryLValueOperatorNode.h>
+#include <qore/intern/QoreRemoveOperatorNode.h>
+#include <qore/intern/QoreDeleteOperatorNode.h>
 
 //! Extract the base VarRefNode from a (possibly complex) lvalue expression tree.
 /** Walks the tree by following the "left" / "base" operand of operator nodes that
@@ -135,6 +137,12 @@ const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
         return extractLValueBaseVarRef(op->getExp());
     }
     if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
         return extractLValueBaseVarRef(op->getExp());
     }
     return nullptr;
