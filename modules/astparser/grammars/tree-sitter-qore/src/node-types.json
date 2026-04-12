@@ -6723,11 +6723,11 @@
   },
   {
     "type": "binary",
-    "named": true
+    "named": false
   },
   {
     "type": "binary",
-    "named": false
+    "named": true
   },
   {
     "type": "bool",
@@ -6767,11 +6767,13 @@
   },
   {
     "type": "comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "conditional_directive",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "const",
@@ -6799,11 +6801,11 @@
   },
   {
     "type": "date",
-    "named": true
+    "named": false
   },
   {
     "type": "date",
-    "named": false
+    "named": true
   },
   {
     "type": "default",
@@ -6855,11 +6857,11 @@
   },
   {
     "type": "float",
-    "named": true
+    "named": false
   },
   {
     "type": "float",
-    "named": false
+    "named": true
   },
   {
     "type": "foldl",
@@ -6923,7 +6925,8 @@
   },
   {
     "type": "line_comment",
-    "named": true
+    "named": true,
+    "extra": true
   },
   {
     "type": "list",
@@ -6959,11 +6962,11 @@
   },
   {
     "type": "nothing",
-    "named": true
+    "named": false
   },
   {
     "type": "nothing",
-    "named": false
+    "named": true
   },
   {
     "type": "null",
