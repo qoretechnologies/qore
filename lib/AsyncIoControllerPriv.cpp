@@ -140,9 +140,21 @@ static int64 get_epoch_us() {
     return secs * 1000000LL + us;
 }
 
+// --- SocketPollOperationBase::wakeIoThread ---
+
+void SocketPollOperationBase::wakeIoThread(ExceptionSink* xsink) {
+    if (io_controller && io_sock_obj) {
+        io_controller->wakeSocketByObject(io_sock_obj, xsink);
+    }
+}
+
 // --- PollInfo implementation ---
 
 void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
+    // Clear controller back-reference before dereffing
+    if (spop_base) {
+        spop_base->setIoController(nullptr, nullptr);
+    }
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -3260,6 +3272,11 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
                     pinfo.timeout_date_us = 0;
                     pinfo.has_qore_abort = cmd.submit_has_qore_abort;
                     pinfo.has_qore_on_complete = cmd.submit_has_qore_on_complete;
+
+                    // Set controller back-reference so wakeIoThread() works
+                    if (pinfo.spop_base) {
+                        pinfo.spop_base->setIoController(this, pinfo.sock_obj);
+                    }
 
                     // Queue for first continuePoll in Phase 1
                     t.new_entry_keys.push_back(cmd.key);

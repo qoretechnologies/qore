@@ -696,35 +696,16 @@ void Http2ClientPollOperationPriv::fireReadyCallback(ExceptionSink* xsink) {
 
 void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue* queue,
         QoreObject* queue_obj, QoreEventNotifier* notifier, QoreObject* notifier_obj) {
-    // If there's already a registration for this stream, update it
-    auto it = stream_queues.find(stream_id);
-    if (it != stream_queues.end()) {
-        if (it->second.notifier && it->second.notifier != notifier) {
-            ExceptionSink xsink;
-            it->second.notifier->deref(&xsink);
-        }
-        if (it->second.notifier_obj && it->second.notifier_obj != notifier_obj) {
-            ExceptionSink xsink;
-            it->second.notifier_obj->deref(&xsink);
-        }
-        if (it->second.queue != queue) {
-            ExceptionSink xsink;
-            it->second.queue->deref(&xsink);
-        }
-        if (it->second.queue_obj != queue_obj) {
-            ExceptionSink xsink;
-            it->second.queue_obj->deref(&xsink);
-        }
-        it->second = {queue, queue_obj, notifier, notifier_obj};
-    } else {
-        stream_queues[stream_id] = {queue, queue_obj, notifier, notifier_obj};
+    // Push to pending queue (sq_lock only — never held during I/O)
+    {
+        AutoLocker al(sq_lock);
+        pending_stream_registrations.push_back({stream_id, {queue, queue_obj, notifier, notifier_obj}});
     }
 
-    // Immediately drain any data already buffered in the H2 session for this
-    // stream. DATA frames may arrive in the same TCP segment as the CONNECT
-    // response. Without this drain, the data sits there until the next
-    // continuePoll cycle — which may never come because the SSL/TCP buffers
-    // are empty (analogous to the SSL data hole).
+    // Drain any data already buffered in the H2 session for this stream.
+    // DATA frames may arrive in the same TCP segment as the CONNECT response.
+    // queue->push() wakes the consumer directly; readHttp2StreamData() and
+    // Queue::push() are thread-safe — no lock needed.
     ExceptionSink xsink;
     while (true) {
         BinaryNode* data = sock_obj->readHttp2StreamData(stream_id, 0, &xsink);
@@ -744,11 +725,42 @@ void Http2ClientPollOperationPriv::registerStreamQueue(int32_t stream_id, Queue*
             xsink.clear();
             break;
         }
-        data_ready_streams.push_back(stream_id);
     }
+
+    // Wake the I/O thread so it applies the pending registration via
+    // continuePoll() → drainStreamQueues()
+    ExceptionSink wake_xsink;
+    wakeIoThread(&wake_xsink);
 }
 
 void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
+    // Apply pending registrations from app threads (under sq_lock briefly)
+    {
+        AutoLocker al(sq_lock);
+        for (auto& [sid, info] : pending_stream_registrations) {
+            auto it = stream_queues.find(sid);
+            if (it != stream_queues.end()) {
+                // Replace — deref old refs
+                if (it->second.notifier && it->second.notifier != info.notifier) {
+                    it->second.notifier->deref(xsink);
+                }
+                if (it->second.notifier_obj && it->second.notifier_obj != info.notifier_obj) {
+                    it->second.notifier_obj->deref(xsink);
+                }
+                if (it->second.queue != info.queue) {
+                    it->second.queue->deref(xsink);
+                }
+                if (it->second.queue_obj != info.queue_obj) {
+                    it->second.queue_obj->deref(xsink);
+                }
+                it->second = info;
+            } else {
+                stream_queues[sid] = info;
+            }
+        }
+        pending_stream_registrations.clear();
+    }
+
     if (stream_queues.empty()) {
         return;
     }
@@ -814,6 +826,14 @@ void Http2ClientPollOperationPriv::drainStreamQueues(ExceptionSink* xsink) {
 }
 
 void Http2ClientPollOperationPriv::clearStreamQueues(ExceptionSink* xsink) {
+    // Drain pending registrations so we clean up everything
+    {
+        AutoLocker al(sq_lock);
+        for (auto& [sid, info] : pending_stream_registrations) {
+            stream_queues[sid] = info;
+        }
+        pending_stream_registrations.clear();
+    }
     for (auto& [stream_id, info] : stream_queues) {
         // Push an error marker instead of NOTHING so consumers (e.g.,
         // WebSocketClientHcioPollOp) can distinguish "connection closed"
