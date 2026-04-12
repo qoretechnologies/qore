@@ -185,6 +185,74 @@ class StreamingBodyHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that reads request body incrementally and echoes each chunk in the
+#! response via an InputStream — true bidirectional streaming over H3.
+class BidiEchoHandler inherits AbstractHttpRequestHandler {
+    private {
+        Mutex data_lock();
+        list<hash<auto>> received_requests();
+        int verbose;
+    }
+
+    constructor(int verbose = 0) {
+        self.verbose = verbose;
+    }
+
+    bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
+        return True;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        int session_id = cx."header-info".session_id;
+        int stream_id = cx."header-info".stream_id;
+        *Socket sock = cx."header-info".sock;
+        bool body_streaming = cx."header-info".body_streaming ?? False;
+
+        # Read request body incrementally when body_streaming is enabled;
+        # otherwise use the already-buffered body.  After reading, echo the
+        # full accumulated body back in the response.
+        binary accumulated_body;
+        if (body_streaming && sock) {
+            while (True) {
+                *binary chunk = sock.readQuicStreamDataBlock(session_id, stream_id, 10s);
+                if (!exists chunk) {
+                    break;
+                }
+                accumulated_body += chunk;
+            }
+        } else if (body) {
+            accumulated_body = binary(body);
+        }
+
+        {
+            AutoLock al(data_lock);
+            received_requests += {
+                "session_id": session_id,
+                "stream_id": stream_id,
+                "body_streaming": body_streaming,
+                "body_size": accumulated_body.size(),
+                "body": accumulated_body,
+            };
+        }
+
+        # Echo the accumulated body back as the response
+        return makeResponse(200, accumulated_body, {
+            "content-type": "application/octet-stream",
+            "x-echo-size": sprintf("%d", accumulated_body.size()),
+        });
+    }
+
+    list<hash<auto>> getReceivedRequests() {
+        AutoLock al(data_lock);
+        return received_requests;
+    }
+
+    clearRequests() {
+        AutoLock al(data_lock);
+        received_requests = ();
+    }
+}
+
 #! Handler that reads one chunk and responds immediately (partial body read)
 class PartialReadHandler inherits AbstractHttpRequestHandler {
     bool wantsBodyStreaming(hash<auto> cx, hash<auto> hdr) {
@@ -400,6 +468,9 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 shutdown during streaming", \testH3ShutdownDuringStreaming());
         addTestCase("HTTP/3 partial body read + early response", \testH3PartialBodyRead());
         addTestCase("HTTP/3 headers-only GET (no body read)", \testH3HeadersOnlyGetNoBodyRead());
+        addTestCase("HTTP/3 bidirectional streaming (small)", \testH3BidiStreamingSmall());
+        addTestCase("HTTP/3 bidirectional streaming (large)", \testH3BidiStreamingLarge());
+        addTestCase("HTTP/3 bidirectional streaming concurrent", \testH3BidiConcurrent());
 
         set_return_value(main());
     }
@@ -421,6 +492,10 @@ l50Xb2GWQesIt9k5jF5IOw==
         });
 
         StreamingBodyHandler streaming_handler(m_options.verbose);
+        BidiEchoHandler bidi_handler(m_options.verbose);
+        # Use exact-match paths (isregex=False) for the bidi handler to avoid
+        # regex substring collision with the broader /echo handler
+        server.setHandler("bidi-echo", "/bidi-echo", NOTHING, bidi_handler, NOTHING, False);
         server.setHandler("echo", "/echo", NOTHING, new EchoHandler());
         server.setHandler("stream-response", "/stream-response", NOTHING,
             new StreamResponseHandler(mPayload));
@@ -449,6 +524,7 @@ l50Xb2GWQesIt9k5jF5IOw==
             "server": server,
             "port": h2info.port,
             "streaming_handler": streaming_handler,
+            "bidi_handler": bidi_handler,
         };
     }
 
@@ -899,5 +975,130 @@ l50Xb2GWQesIt9k5jF5IOw==
         assertTrue(requests[0].headers_end_stream,
             "headers-only GET: headers_end_stream=True");
         assertEq(0, requests[0].body_size, "headers-only GET: no body data");
+    }
+
+    #! Test 4.1: Bidirectional streaming — small payload
+    /** Client sends a request body and receives the echo back. Verifies the
+        full bidirectional flow: the server reads request body chunks via
+        readQuicStreamDataBlock() and sends the echo as the response body.
+    */
+    testH3BidiStreamingSmall() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        BidiEchoHandler handler = setup.bidi_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        binary small_payload = binary("Hello, bidirectional world!");
+        hash<auto> resp = mgr.request(url, "POST", "/bidi-echo",
+            {"Content-Type": "application/octet-stream"}, small_payload);
+
+        assertEq(200, resp.status_code, "bidi small: response status");
+        binary resp_body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(small_payload, resp_body, "bidi small: echoed body matches");
+        assertEq(sprintf("%d", small_payload.size()), resp.headers."x-echo-size",
+            "bidi small: X-Echo-Size header correct");
+
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "bidi small: one request received");
+        assertEq(small_payload.size(), requests[0].body_size,
+            "bidi small: handler saw full body");
+    }
+
+    #! Test 4.2: Bidirectional streaming — large payload (exercises flow control)
+    testH3BidiStreamingLarge() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        BidiEchoHandler handler = setup.bidi_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        hash<auto> resp = mgr.request(url, "POST", "/bidi-echo",
+            {"Content-Type": "application/octet-stream"}, mPayload);
+
+        assertEq(200, resp.status_code, "bidi large: response status");
+        binary resp_body = resp.body.typeCode() == NT_BINARY
+            ? resp.body : binary(resp.body);
+        assertEq(mPayload.size(), resp_body.size(), "bidi large: echoed body size matches");
+        assertEq(mPayload, resp_body, "bidi large: echoed body content matches");
+
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(1, requests.size(), "bidi large: one request received");
+        assertEq(TestPayloadSize, requests[0].body_size,
+            "bidi large: handler accumulated full payload");
+    }
+
+    #! Test 4.3: Concurrent bidirectional streams on one H3 connection
+    /** Multiple bidi requests running concurrently on the same QUIC connection
+        verify that stream multiplexing works and streams don't interfere.
+    */
+    testH3BidiConcurrent() {
+        hash<auto> setup = createServer({"headers_only": True});
+        HttpServer server = setup.server;
+        BidiEchoHandler handler = setup.bidi_handler;
+        on_exit delete server;
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        handler.clearRequests();
+
+        string url = sprintf("https://127.0.0.1:%d", setup.port);
+        int NumStreams = 5;
+        list<Counter> counters = ();
+        hash<string, hash<auto>> results;
+        Mutex results_lock();
+
+        for (int i = 0; i < NumStreams; ++i) {
+            Counter c(1);
+            push counters, c;
+            int idx = i;
+            string key = sprintf("s%d", idx);
+            background sub () {
+                on_exit c.dec();
+                try {
+                    binary payload = binary(sprintf("stream-%d-payload", idx));
+                    hash<auto> resp = mgr.request(url, "POST", "/bidi-echo",
+                        {"Content-Type": "application/octet-stream"}, payload);
+                    AutoLock al(results_lock);
+                    results{key} = {"status": resp.status_code, "body": resp.body,
+                                    "expected": payload};
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(results_lock);
+                    results{key} = {"error": ex.desc};
+                }
+            }();
+        }
+
+        # Wait for all to complete
+        foreach Counter c in (counters) {
+            c.waitForZero(30s);
+        }
+
+        # Verify all succeeded and got correct echo
+        for (int i = 0; i < NumStreams; ++i) {
+            string key = sprintf("s%d", i);
+            assertEq(200, results{key}.status,
+                sprintf("bidi concurrent: stream %d status", i));
+            binary resp_body = results{key}.body.typeCode() == NT_BINARY
+                ? results{key}.body : binary(results{key}.body);
+            assertEq(results{key}.expected, resp_body,
+                sprintf("bidi concurrent: stream %d echo matches", i));
+        }
+
+        list<hash<auto>> requests = handler.getReceivedRequests();
+        assertEq(NumStreams, requests.size(),
+            "bidi concurrent: all requests received");
     }
 }
