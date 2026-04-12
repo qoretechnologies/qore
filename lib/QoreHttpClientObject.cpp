@@ -1149,8 +1149,8 @@ struct qore_httpclient_priv {
 
     //! When true, send_internal delegates to the C++ conn_mgr for
     //! non-streaming request/response flows (all protocols, including proxy).
-    //! Opt-in via setConnMgrEnabled(true); default false pending resolution
-    //! of conn_mgr hang with RealTestHttpServer (tracked in design doc).
+    //! Default false: enabling requires resolving interaction between conn_mgr
+    //! connections and the legacy msock used by startPollConnect/startPollSendRecv.
     bool use_conn_mgr = false;
 
     //! Returns the connection manager, creating it lazily if needed.

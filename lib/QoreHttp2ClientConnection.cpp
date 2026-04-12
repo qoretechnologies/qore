@@ -191,7 +191,8 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
     info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
-    info->setKeyValue("to", DateTimeNode::makeRelative(0, 0, 0, 0, 0, 0, 0), xsink);
+    // Disable controller-level timeout; the H2 poll op manages its own idle timeout.
+    info->setKeyValue("to", -1, xsink);
     if (*xsink) {
         return -1;
     }

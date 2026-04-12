@@ -259,10 +259,11 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     info->setKeyValue("sock", sock_obj_holder->refSelf(), xsink);
     info->setKeyValue("spop", poll_obj_holder->refSelf(), xsink);
     info->setKeyValue("owner", new QoreStringNode(owner_to_use), xsink);
-    // No per-op timeout: the poll op itself drives the connect timeout and
-    // per-request timeouts are handled by q_future_get_blocking on the
-    // caller's side.
-    info->setKeyValue("to", DateTimeNode::makeRelative(0, 0, 0, 0, 0, 0, 0), xsink);
+    // Disable the controller-level timeout for this poll op.  The H1 poll
+    // op manages its own idle timeout via armIdleDeadline(), and per-request
+    // timeouts are handled by q_future_get_blocking on the caller's side.
+    // A negative "to" value tells the controller to never expire this entry.
+    info->setKeyValue("to", -1, xsink);
     if (*xsink) {
         return -1;
     }
