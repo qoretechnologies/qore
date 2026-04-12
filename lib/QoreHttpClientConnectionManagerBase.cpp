@@ -344,50 +344,25 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
         bool ssl_required, ExceptionSink* xsink) {
     // Phase P3: H1 only.  Phase P4 added H2 dispatch.  Phase P5 will
     // add H3 (Http3ClientConnection) here.
+    // Pass `this` as the manager so the back-pointer is set BEFORE the
+    // constructor submits to the I/O controller.  This eliminates the race
+    // window where the I/O thread fires onClosedHook before setManager.
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
         case HttpClientProtocol::H1:
-            conn = new Http1ClientConnection(host, port, ssl_required, xsink);
+            conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
             break;
         case HttpClientProtocol::H2:
             conn = new Http2ClientConnection(host, port, ssl_required,
-                opts_.max_streams_per_connection, xsink);
+                opts_.max_streams_per_connection, xsink, this);
             break;
         case HttpClientProtocol::H3:
             conn = new Http3ClientConnection(host, port,
-                opts_.max_streams_per_connection, xsink);
+                opts_.max_streams_per_connection, xsink, this);
             break;
     }
     if (*xsink) {
         ExceptionSink dx;
-        conn->deref(&dx);
-        dx.clear();
-        return nullptr;
-    }
-
-    // Register the manager back-pointer immediately so onClosedHook can
-    // dispatch to us if the connection closes between now and our return.
-    // setManager lives on HttpClientConnectionBase, so this works for
-    // any future H2/H3 connection class without per-protocol dispatch.
-    conn->setManager(this);
-
-    // Race window: the connection's I/O thread may have already closed
-    // the connection (e.g., immediate refused connect) between
-    // construction and the setManager call above.  In that case
-    // onClosedHook fired with manager_=nullptr and our pool eviction
-    // path was bypassed.  Detect and propagate the error here so the
-    // caller doesn't see a "ready" connection that's actually dead.
-    if (conn->isClosed()) {
-        // The connection's poll-op error info isn't exposed on the
-        // base class API, so we surface a generic CONNECT-ERROR here.
-        // A future phase may add a base-class getReferencedErrorInfo
-        // accessor if a downstream caller needs the underlying detail.
-        xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
-            "connection to %s:%d closed before manager registration",
-            host, port);
-        conn->setManager(nullptr);
-        ExceptionSink dx;
-        conn->closeConnection(&dx);
         conn->deref(&dx);
         dx.clear();
         return nullptr;

@@ -63,9 +63,14 @@ public:
         @param target_port target TCP port
         @param ssl_required if @c true, SSL/TLS is required (HTTPS)
         @param xsink exception sink — set on construction failure
+        @param mgr optional owning manager — if non-null, registered via
+            @ref setManager before the poll op is submitted to the I/O
+            controller, eliminating the race where the I/O thread fires
+            @ref onClosedHook before the caller can register a manager
     */
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, ExceptionSink* xsink);
+        bool ssl_required, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr = nullptr);
 
     DLLLOCAL virtual ~Http1ClientConnection();
 

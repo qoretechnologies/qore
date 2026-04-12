@@ -921,15 +921,16 @@ static void ut_http1_onclosed_hook_one_shot(UnitTestCounters& c) {
     ReferenceHolder<UtCountingManager> mgr(
         new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
         &xsink);
+    // Pass the manager to the constructor so it is registered BEFORE the
+    // poll op is submitted to the I/O controller — eliminates the race
+    // where the I/O thread fires onClosedHook before setManager.
     ReferenceHolder<Http1ClientConnection> conn(
-        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink), &xsink);
+        new Http1ClientConnection("127.0.0.1", dead_port, false, &xsink, *mgr), &xsink);
     UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
     if (xsink) {
         xsink.clear();
         return;
     }
-
-    conn->setManager(*mgr);
 
     // Wait for the connect to fail.  This drives setError → setClosed →
     // onClosedHook from the async I/O thread.
@@ -981,11 +982,10 @@ static void ut_http1_onclosed_hook_app_thread_close(UnitTestCounters& c) {
         new UtCountingManager(HttpClientConnectionManagerBase::Options{}, &xsink),
         &xsink);
     ReferenceHolder<Http1ClientConnection> conn(
-        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink), &xsink);
+        new Http1ClientConnection("127.0.0.1", server_port, false, &xsink, *mgr), &xsink);
     UT_ASSERT(c, !xsink, "Http1ClientConnection construction succeeds");
     if (xsink) { xsink.clear(); return; }
 
-    conn->setManager(*mgr);
     bool ready = conn->waitForReadyOrError(5000, &xsink);
     UT_ASSERT(c, ready && !xsink, "connection ready");
     if (xsink) xsink.clear();

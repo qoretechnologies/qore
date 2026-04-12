@@ -66,9 +66,11 @@ public:
         @param target_port target UDP port
         @param max_concurrent_streams advisory stream cap (0 = unlimited)
         @param xsink exception sink
+        @param mgr optional owning manager — registered before I/O submission
     */
     DLLLOCAL Http3ClientConnection(const char* target_host, int target_port,
-        int max_concurrent_streams, ExceptionSink* xsink);
+        int max_concurrent_streams, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr = nullptr);
 
     DLLLOCAL virtual ~Http3ClientConnection();
 

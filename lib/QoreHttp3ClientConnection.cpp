@@ -77,9 +77,13 @@ static int resolveAddressFamily(const char* host) {
 }
 
 Http3ClientConnection::Http3ClientConnection(const char* target_host, int target_port,
-        int max_concurrent_streams, ExceptionSink* xsink)
+        int max_concurrent_streams, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(target_host, target_port, /* ssl_required (always for H3) */ true),
       max_concurrent_streams_(max_concurrent_streams) {
+    if (mgr) {
+        setManager(mgr);
+    }
     if (buildAndSubmit(xsink)) {
         return;
     }

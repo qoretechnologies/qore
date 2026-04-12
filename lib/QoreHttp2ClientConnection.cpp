@@ -49,9 +49,13 @@ extern QoreClass* QC_HTTP2CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP2CLIENTPOLLOPERATIONBASE;
 
 Http2ClientConnection::Http2ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink)
+        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
       max_concurrent_streams_(max_concurrent_streams) {
+    if (mgr) {
+        setManager(mgr);
+    }
     if (buildAndSubmit(xsink)) {
         // Constructor failure: holders unwound, member pointers stay
         // nullptr, destructor will be a no-op.

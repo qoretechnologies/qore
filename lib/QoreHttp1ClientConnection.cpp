@@ -50,8 +50,15 @@ extern QoreClass* QC_HTTP1CLIENTPOLLOPERATIONBASE;
 extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 
 Http1ClientConnection::Http1ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, ExceptionSink* xsink)
+        bool ssl_required, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr)
     : HttpClientConnectionBase(target_host, target_port, ssl_required) {
+    // Set the manager BEFORE submitting to the I/O controller so that
+    // onClosedHook dispatches correctly even when the I/O thread
+    // processes a connect failure before we return to the caller.
+    if (mgr) {
+        setManager(mgr);
+    }
     if (buildAndSubmit(xsink)) {
         // buildAndSubmit raised an exception and left the partial state
         // clean (all refs released).  Caller must still deref this object.

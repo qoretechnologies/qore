@@ -86,9 +86,11 @@ public:
             per connection (0 = unlimited; the actual cap is also bounded
             by the server's @c MAX_CONCURRENT_STREAMS setting)
         @param xsink exception sink — set on construction failure
+        @param mgr optional owning manager — registered before I/O submission
     */
     DLLLOCAL Http2ClientConnection(const char* target_host, int target_port,
-        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink);
+        bool ssl_required, int max_concurrent_streams, ExceptionSink* xsink,
+        HttpClientConnectionManagerBase* mgr = nullptr);
 
     DLLLOCAL virtual ~Http2ClientConnection();
 
