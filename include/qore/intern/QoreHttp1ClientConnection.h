@@ -199,6 +199,26 @@ public:
     */
     DLLEXPORT void setTrailers(const QoreHashNode* trailers, ExceptionSink* xsink);
 
+    //! Submits a request with a caller-provided action (for poll-based APIs)
+    /** Like submitRequest() but uses the caller's action instead of creating
+        a PromiseAction internally.  Used by poll-based wrappers that need
+        a PromiseNotifierAction to signal an EventNotifier on completion.
+
+        @param method HTTP method
+        @param path request path
+        @param headers request headers
+        @param body request body (may be nullptr)
+        @param body_len body length
+        @param action the action to use (ownership transferred to poll op)
+        @param xsink exception sink
+        @return stream_id on success, -1 on error
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT int64_t submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink);
+
     DLLEXPORT void closeConnection(ExceptionSink* xsink) override;
 
 protected:

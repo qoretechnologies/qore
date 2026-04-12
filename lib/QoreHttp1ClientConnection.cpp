@@ -558,6 +558,52 @@ void Http1ClientConnection::setTrailers(const QoreHashNode* trailers, ExceptionS
     poll_op_priv->setTrailers(trailers, xsink);
 }
 
+int64_t Http1ClientConnection::submitRequestWithAction(const char* method, const char* path,
+        const QoreHashNode* headers, const void* body, size_t body_len,
+        AbstractAsyncAction* action, ExceptionSink* xsink) {
+    if (!poll_op_priv || isClosed()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is closed");
+        return -1;
+    }
+    if (!isReady()) {
+        action->deref(xsink);
+        xsink->raiseException("HTTPCLIENT-STATE-ERROR",
+            "cannot submit request: connection is not ready");
+        return -1;
+    }
+
+    int64_t stream_id = poll_op_priv->submitRequest(method, path, headers,
+        body, body_len, /* streaming */ false, action, /* max_streams */ 1,
+        /* streaming_send */ false, xsink);
+    if (*xsink || stream_id < 0) {
+        return -1;
+    }
+
+    releaseStreamReservation();
+
+    // Wake the I/O controller
+    if (sock_obj) {
+        ExceptionSink wake_xsink;
+        ReferenceHolder<QoreObject> ctl_obj_holder(
+            qore_get_async_io_controller_obj(&wake_xsink), &wake_xsink);
+        if (ctl_obj_holder) {
+            ReferenceHolder<AsyncIoControllerPriv> ctl_priv_holder(
+                static_cast<AsyncIoControllerPriv*>(
+                    ctl_obj_holder->getReferencedPrivateData(
+                        CID_ASYNCIOCONTROLLER, &wake_xsink)),
+                &wake_xsink);
+            if (ctl_priv_holder) {
+                ctl_priv_holder->wakeSocketByObject(sock_obj, &wake_xsink);
+            }
+        }
+        wake_xsink.clear();
+    }
+
+    return stream_id;
+}
+
 void Http1ClientConnection::closeConnection(ExceptionSink* xsink) {
     if (!poll_op_priv || isClosed()) {
         return;

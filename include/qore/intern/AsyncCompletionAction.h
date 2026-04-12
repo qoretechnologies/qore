@@ -129,4 +129,50 @@ private:
     QoreEventNotifier* notifier;
 };
 
+//! Resolves a Promise AND signals an EventNotifier on completion
+/** Combines data delivery (via Promise/Future) with pollable fd signaling
+    (via EventNotifier).  Used by poll-based APIs (startPollSendRecv) that
+    delegate to the conn_mgr: the I/O thread resolves the promise with the
+    response data and simultaneously signals the notifier so the caller's
+    poll loop wakes up.
+
+    @since %Qore 2.3
+*/
+class PromiseNotifierAction : public AbstractAsyncAction {
+public:
+    DLLLOCAL PromiseNotifierAction(QorePromise* promise, QoreEventNotifier* notifier)
+        : promise(promise), notifier(notifier) {
+        assert(promise);
+        assert(notifier);
+        promise->ref();
+        notifier->ref();
+    }
+
+    DLLLOCAL void execute(QoreValue output, ExceptionSink* xsink) override {
+        promise->set(output, xsink);
+        notifier->notify();
+    }
+
+    DLLLOCAL void executeError(const char* err, const char* desc,
+            ExceptionSink* xsink) override {
+        promise->setError(err, desc, QoreValue(), xsink);
+        notifier->notify();
+    }
+
+    DLLLOCAL void cleanup(ExceptionSink* xsink) override {
+        if (promise) {
+            promise->deref(xsink);
+            promise = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(xsink);
+            notifier = nullptr;
+        }
+    }
+
+private:
+    QorePromise* promise;
+    QoreEventNotifier* notifier;
+};
+
 #endif // _QORE_INTERN_ASYNCCOMPLETIONACTION_H

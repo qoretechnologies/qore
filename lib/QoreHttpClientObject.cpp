@@ -38,7 +38,13 @@
 #include <qore/QoreURL.h>
 #include <qore/QoreHttpClientObject.h>
 #include <qore/HttpClientConnectionManager.h>
+#include <qore/QoreFuture.h>
+#include <qore/AsyncCompletionAction.h>
 #include "qore/intern/QoreChannel.h"
+#include "qore/intern/QoreEventNotifier.h"
+#include "qore/intern/QC_EventNotifier.h"
+#include "qore/intern/QC_FutureImpl.h"
+#include "qore/intern/AsyncCompletionAction.h"
 #include "qore/intern/QoreHttp1ClientConnection.h"
 #include "qore/intern/ql_misc.h"
 #include "qore/intern/QC_Socket.h"
@@ -54,6 +60,8 @@
 
 #include "qore/intern/Http2Session.h"
 #include "qore/intern/QuicSession.h"
+
+#include <poll.h>
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
 
@@ -1429,9 +1437,24 @@ struct qore_httpclient_priv {
     DLLLOCAL void lock() { msock->m.lock(); }
     DLLLOCAL void unlock() { msock->m.unlock(); }
 
+    //! Creates a conn_mgr-backed poll operation for startPollSendRecv
+    DLLLOCAL QoreObject* startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
+            QoreHttpClientObject* client, const char* method, const char* path,
+            const void* data, size_t size, const QoreHashNode* headers);
+
+    //! Creates a conn_mgr-backed poll operation for startPollConnect
+    DLLLOCAL QoreObject* startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
+            QoreHttpClientObject* client);
+
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
+        // Delegate to conn_mgr when enabled
+        if (use_conn_mgr) {
+            return startPollSendRecvConnMgr(xsink, self, client,
+                method->c_str(), path ? path->c_str() : nullptr,
+                data, size, headers);
+        }
         poll_apis_used = true;
         client->ref();
         ReferenceHolder<HttpClientConnectSendRecvPollOperation> poller(
@@ -1458,8 +1481,10 @@ struct qore_httpclient_priv {
     }
 
     DLLLOCAL QoreObject* startPollConnect(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client) {
-        //printd(5, "qore_http_client_priv::startPoll() self: %p client: %p msock: %p (== %p)\n", self, client,
-        //    msock, client->priv);
+        // Delegate to conn_mgr when enabled
+        if (use_conn_mgr) {
+            return startPollConnectConnMgr(xsink, self, client);
+        }
 
         poll_apis_used = true;
         client->ref();
@@ -8483,8 +8508,8 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     if (!timeout_ms)
         timeout_ms = timeout;
 
-    // Delegate to conn_mgr for non-poll-API flows.
-    if (use_conn_mgr && !poll_apis_used) {
+    // Delegate to conn_mgr when enabled.
+    if (use_conn_mgr) {
         return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
             msg_body, data, size, send_callback, getbody, info, timeout_ms,
             recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
@@ -9073,6 +9098,460 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
     }
     return http_priv->send_internal(xsink, "send", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
         nullptr, getbody, info, http_priv->timeout, nullptr);
+}
+
+// --- conn_mgr-backed poll operations ---
+
+extern QoreClass* QC_EVENTNOTIFIER;
+
+//! Poll operation that delegates to the conn_mgr for startPollSendRecv/Connect
+class HttpClientConnMgrPollOp : public SocketPollOperationBase {
+public:
+    //! Constructor for sendRecv mode
+    HttpClientConnMgrPollOp(QoreFuture* future, QoreEventNotifier* notifier,
+            QoreObject* notifier_obj)
+        : future(future), notifier(notifier), notifier_obj(notifier_obj) {
+        assert(future);
+        assert(notifier);
+        assert(notifier_obj);
+        future->ref();
+        notifier->ref();
+        notifier_obj->ref();
+    }
+
+    //! Constructor for connect mode (already ready — signals immediately)
+    HttpClientConnMgrPollOp(QoreEventNotifier* notifier, QoreObject* notifier_obj)
+        : notifier(notifier), notifier_obj(notifier_obj), connect_mode(true) {
+        if (notifier) {
+            notifier->ref();
+            notifier->notify();  // signal immediately so first continuePoll completes
+        }
+        if (notifier_obj) {
+            notifier_obj->ref();
+        }
+    }
+
+    //! Constructor for deferred error mode
+    HttpClientConnMgrPollOp(const char* err, const char* desc,
+            QoreEventNotifier* notifier, QoreObject* notifier_obj)
+        : notifier(notifier), notifier_obj(notifier_obj), connect_mode(true),
+          deferred_err(err), deferred_desc(desc) {
+        if (notifier) {
+            notifier->ref();
+        }
+        if (notifier_obj) {
+            notifier_obj->ref();
+        }
+    }
+
+    ~HttpClientConnMgrPollOp() override {
+        // Clean up refs in destructor — called when the QoreObject derefs
+        // the private data.  Uses a local ExceptionSink since the destructor
+        // has no xsink parameter.
+        ExceptionSink xsink;
+        if (future) {
+            future->deref(&xsink);
+            future = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(&xsink);
+            notifier = nullptr;
+        }
+        if (notifier_obj) {
+            notifier_obj->deref(&xsink);
+            notifier_obj = nullptr;
+        }
+    }
+
+    void setConnectMode() { connect_mode = true; }
+
+    bool goalReached() const override {
+        return done || (future && future->isDone());
+    }
+
+    QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        // Check for deferred connection error
+        if (!deferred_err.empty()) {
+            xsink->raiseException(deferred_err.c_str(), deferred_desc.c_str());
+            done = true;
+            return nullptr;
+        }
+        if (done) {
+            return nullptr;
+        }
+        if (future && future->isDone()) {
+            done = true;
+            if (notifier) {
+                notifier->acknowledge(xsink);
+            }
+            return nullptr;
+        }
+        // Check if notifier has been signaled (for connect mode where
+        // there's no future to check)
+        if (!future && notifier) {
+            // Non-blocking check: try to peek the notifier fd
+            int fd = notifier->fd();
+            if (fd >= 0) {
+                struct pollfd pfd = {fd, POLLIN, 0};
+                int rc = ::poll(&pfd, 1, 0);
+                if (rc > 0 && (pfd.revents & POLLIN)) {
+                    notifier->acknowledge(xsink);
+                    done = true;
+                    return nullptr;
+                }
+            }
+        }
+
+        // Return poll info pointing to the notifier fd
+        ReferenceHolder<QoreHashNode> info(
+            new QoreHashNode(hashdeclSocketPollInfo, xsink), xsink);
+        info->setKeyValue("events", SOCK_POLLIN, xsink);
+        notifier_obj->ref();
+        info->setKeyValue("socket", notifier_obj, xsink);
+        return info.release();
+    }
+
+    void abort(ExceptionSink* xsink) override {
+        done = true;
+        cleanup(xsink);
+    }
+
+    QoreValue getOutput() const override {
+        if (!future || !future->isDone()) {
+            return QoreValue();
+        }
+        // Get the result from the future (non-blocking since isDone())
+        ExceptionSink xsink;
+        QoreValue rv = future->get(0, &xsink);
+        if (xsink) {
+            xsink.clear();
+            return QoreValue();
+        }
+        // Transform conn_mgr response to legacy getOutput format:
+        // {code: <int>, response-body: <binary>}
+        if (rv.getType() == NT_HASH) {
+            QoreHashNode* src = rv.get<QoreHashNode>();
+            ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), &xsink);
+            QoreValue sc = src->getKeyValue("status_code");
+            if (!sc.isNullOrNothing()) {
+                result->setKeyValue("code", sc.getAsBigInt(), &xsink);
+            }
+            QoreValue body = src->getKeyValue("body");
+            if (!body.isNullOrNothing()) {
+                result->setKeyValue("response-body", body.refSelf(), &xsink);
+            }
+            rv.discard(&xsink);
+            return result.release();
+        }
+        return rv;
+    }
+
+    const char* getStateImpl() const override {
+        if (!deferred_err.empty()) {
+            return "connecting";
+        }
+        if (done) {
+            return connect_mode ? "connected" : "received";
+        }
+        return connect_mode ? "connecting" : "sending";
+    }
+
+    void cleanup(ExceptionSink* xsink) {
+        if (future) {
+            future->deref(xsink);
+            future = nullptr;
+        }
+        if (notifier) {
+            notifier->deref(xsink);
+            notifier = nullptr;
+        }
+        if (notifier_obj) {
+            notifier_obj->deref(xsink);
+            notifier_obj = nullptr;
+        }
+    }
+
+private:
+    QoreFuture* future = nullptr;
+    QoreEventNotifier* notifier = nullptr;
+    QoreObject* notifier_obj = nullptr;
+    mutable bool done = false;
+    bool connect_mode = false;
+    std::string deferred_err;
+    std::string deferred_desc;
+};
+
+QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
+        QoreHttpClientObject* client, const char* method, const char* path,
+        const void* data, size_t size, const QoreHashNode* headers) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "startPollSendRecv", xsink);
+
+    con_info this_connection = connection;
+
+    // Build request headers
+    bool keep_alive = true;
+    bool host_override = false;
+    ReferenceHolder<QoreHashNode> nh(getRequestHeaders(xsink, headers,
+        enc, (data && size), false, keep_alive, host_override), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // Determine scheme and path
+    const char* scheme = this_connection.ssl ? "https" : "http";
+    QoreString pathstr(enc ? enc : QCS_UTF8);
+    bool path_already_encoded = false;
+    const char* msgpath = getMsgPath(xsink, this_connection, path, pathstr, path_already_encoded);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // Acquire connection
+    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+        this_connection.host.c_str(), this_connection.port, xsink);
+    if (!conn || *xsink) {
+        return nullptr;
+    }
+
+    // Wait for connection to be ready
+    conn->waitForReadyOrError(timeout, xsink);
+    if (*xsink || conn->isClosed()) {
+        if (!*xsink) {
+            xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+                "connection closed before poll send/recv request");
+        }
+        mgr.closeAndEvict(conn, xsink);
+        return nullptr;
+    }
+
+    // Cast to H1 connection
+    Http1ClientConnection* h1_conn = dynamic_cast<Http1ClientConnection*>(conn);
+    if (!h1_conn) {
+        xsink->raiseException("HTTPCLIENT-INTERNAL-ERROR",
+            "poll send/recv not supported on non-H1 connections");
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+
+    // Create EventNotifier + Promise + Future
+    ReferenceHolder<QoreEventNotifier> notifier_holder(
+        new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+
+    ReferenceHolder<QorePromise> promise_holder(new QorePromise(), xsink);
+    QorePromise* promise_raw = *promise_holder;
+    ReferenceHolder<QoreFuture> future_holder(promise_holder->getFuture(xsink), xsink);
+    if (*xsink) {
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+
+    // Create PromiseNotifierAction
+    PromiseNotifierAction* action = new PromiseNotifierAction(promise_raw, notifier_raw);
+
+    // Submit request with our action
+    int64_t stream_id = h1_conn->submitRequestWithAction(method, msgpath, *nh,
+        data, size, action, xsink);
+    if (*xsink || stream_id < 0) {
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+
+    // Wrap EventNotifier in a QoreObject for the "sock" member
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> notifier_obj(
+        new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+    // Create the poll op — constructor refs future, notifier, notifier_obj
+    QoreFuture* future_raw = *future_holder;
+    QoreEventNotifier* notifier_for_op = *notifier_holder;
+    ReferenceHolder<HttpClientConnMgrPollOp> poller(
+        new HttpClientConnMgrPollOp(future_raw, notifier_for_op,
+            notifier_obj->objectRefSelf()), xsink);
+
+    // Drop our local refs — poll op constructor took its own refs
+    // Promise: action's ref keeps it alive; drop ours
+    promise_holder.release()->deref(xsink);
+
+    // Wrap in SocketPollOperation QoreObject
+    SocketPollOperationBase* p = *poller;
+    ReferenceHolder<QoreObject> rv(
+        new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+    if (!*xsink) {
+        p->setSelf(*rv);
+        rv->setValue("sock", notifier_obj.release(), xsink);
+        rv->setValue("goal", new QoreStringNode("received"), xsink);
+    }
+    return rv.release();
+}
+
+QoreObject* qore_httpclient_priv::startPollConnectConnMgr(ExceptionSink* xsink, QoreObject* self,
+        QoreHttpClientObject* client) {
+    SocketSyncPoll::assertNotOnIoThread("HTTPClient", "startPollConnect", xsink);
+
+    con_info this_connection = connection;
+    const char* scheme = this_connection.ssl ? "https" : "http";
+
+    // Acquire connection (may still be CONNECTING)
+    HttpClientConnectionManagerBase& mgr = getConnMgr(xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // acquireConnection may fail synchronously if TCP connect is refused
+    // immediately; capture error and return a poll op that defers it to
+    // the continuePoll loop (matching legacy startPollConnect behavior)
+    ExceptionSink connect_xsink;
+    HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
+        this_connection.host.c_str(), this_connection.port, &connect_xsink);
+    if (!conn || connect_xsink) {
+        // Extract error info for deferred raising
+        std::string err_str = "SOCKET-CONNECT-ERROR";
+        std::string desc_str = "connection failed";
+        if (connect_xsink.isException()) {
+            QoreValue err_val = connect_xsink.getExceptionErr();
+            QoreValue desc_val = connect_xsink.getExceptionDesc();
+            if (err_val.getType() == NT_STRING) {
+                err_str = err_val.get<const QoreStringNode>()->c_str();
+            }
+            if (desc_val.getType() == NT_STRING) {
+                desc_str = desc_val.get<const QoreStringNode>()->c_str();
+            }
+        }
+        connect_xsink.clear();
+
+        ReferenceHolder<QoreEventNotifier> notifier_holder(
+            new QoreEventNotifier(xsink), xsink);
+        if (*xsink || !notifier_holder->isValid()) {
+            return nullptr;
+        }
+        notifier_holder->notify();
+
+        QoreEventNotifier* notifier_raw = *notifier_holder;
+        notifier_raw->ref();
+        ReferenceHolder<QoreObject> notifier_obj(
+            new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+        // Create poll op with deferred error
+        ReferenceHolder<HttpClientConnMgrPollOp> poller(
+            new HttpClientConnMgrPollOp(err_str.c_str(), desc_str.c_str(),
+                notifier_holder.release(), notifier_obj->objectRefSelf()), xsink);
+
+        SocketPollOperationBase* p = *poller;
+        ReferenceHolder<QoreObject> rv(
+            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+        if (!*xsink) {
+            p->setSelf(*rv);
+            rv->setValue("sock", notifier_obj.release(), xsink);
+            rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        }
+        return rv.release();
+    }
+
+    // If already ready, return a poll op that completes on first continuePoll
+    if (conn->isReady()) {
+        mgr.releaseConnection(conn);
+        ReferenceHolder<QoreEventNotifier> notifier_holder(
+            new QoreEventNotifier(xsink), xsink);
+        if (*xsink || !notifier_holder->isValid()) {
+            return nullptr;
+        }
+        QoreEventNotifier* notifier_raw = *notifier_holder;
+        notifier_raw->ref();
+        ReferenceHolder<QoreObject> notifier_obj(
+            new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+        ReferenceHolder<HttpClientConnMgrPollOp> poller(
+            new HttpClientConnMgrPollOp(notifier_holder.release(),
+                notifier_obj->objectRefSelf()), xsink);
+        SocketPollOperationBase* p = *poller;
+        ReferenceHolder<QoreObject> rv(
+            new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+        if (!*xsink) {
+            p->setSelf(*rv);
+            rv->setValue("sock", notifier_obj.release(), xsink);
+            rv->setValue("goal", new QoreStringNode("connect"), xsink);
+        }
+        return rv.release();
+    }
+
+    // Not ready yet — create EventNotifier and register for readiness
+    ReferenceHolder<QoreEventNotifier> notifier_holder(
+        new QoreEventNotifier(xsink), xsink);
+    if (*xsink || !notifier_holder->isValid()) {
+        mgr.releaseConnection(conn);
+        return nullptr;
+    }
+    QoreEventNotifier* notifier_raw = *notifier_holder;
+
+    // Wrap in QoreObject
+    notifier_raw->ref();
+    ReferenceHolder<QoreObject> notifier_obj(
+        new QoreObject(QC_EVENTNOTIFIER, getProgram(), notifier_raw), xsink);
+
+    // Register notifier on the connection's ready_notifiers
+    notifier_raw->ref();
+    notifier_obj->ref();
+    bool queued = conn->registerReadyNotifier(notifier_raw, *notifier_obj);
+    if (!queued) {
+        // Already decided (ready or failed) between our check and registration
+        notifier_raw->deref(xsink);
+        notifier_obj->deref(xsink);
+        mgr.releaseConnection(conn);
+        if (conn->isReady()) {
+            // Ready now — create a poll op that completes on first continuePoll
+            ReferenceHolder<QoreEventNotifier> n2_holder(
+                new QoreEventNotifier(xsink), xsink);
+            if (*xsink || !n2_holder->isValid()) {
+                return nullptr;
+            }
+            QoreEventNotifier* n2_raw = *n2_holder;
+            n2_raw->ref();
+            ReferenceHolder<QoreObject> n2_obj(
+                new QoreObject(QC_EVENTNOTIFIER, getProgram(), n2_raw), xsink);
+
+            ReferenceHolder<HttpClientConnMgrPollOp> poller(
+                new HttpClientConnMgrPollOp(n2_holder.release(),
+                    n2_obj->objectRefSelf()), xsink);
+            SocketPollOperationBase* p = *poller;
+            ReferenceHolder<QoreObject> rv(
+                new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+            if (!*xsink) {
+                p->setSelf(*rv);
+                rv->setValue("sock", n2_obj.release(), xsink);
+                rv->setValue("goal", new QoreStringNode("connect"), xsink);
+            }
+            return rv.release();
+        }
+        xsink->raiseException("HTTP-CLIENT-CONNECT-ERROR",
+            "connection failed during poll connect");
+        return nullptr;
+    }
+
+    mgr.releaseConnection(conn);
+
+    // Create poll op — no future for connect, just notifier signaling
+    ReferenceHolder<HttpClientConnMgrPollOp> poller(
+        new HttpClientConnMgrPollOp(nullptr,
+            notifier_holder.release(), notifier_obj->objectRefSelf()), xsink);
+    (*poller)->setConnectMode();
+
+    SocketPollOperationBase* p = *poller;
+    ReferenceHolder<QoreObject> rv(
+        new QoreObject(QC_SOCKETPOLLOPERATION, getProgram(), poller.release()), xsink);
+    if (!*xsink) {
+        p->setSelf(*rv);
+        rv->setValue("sock", notifier_obj.release(), xsink);
+        rv->setValue("goal", new QoreStringNode("connect"), xsink);
+    }
+    return rv.release();
 }
 
 QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink) {
