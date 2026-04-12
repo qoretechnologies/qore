@@ -872,6 +872,22 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_self_member(const char* member_name, 
     return toBits(val->needsEval() ? val->eval(xsink) : val.release());
 }
 
+// Variant that does NOT evaluate needsEval() values (e.g., WeakReferenceNode).
+// Returns the raw member value — safe when the result is used as a DotEval
+// base (all method dispatch helpers handle NT_WEAKREF).  Avoids creating a
+// temporary strong reference to the weak-ref target, which in the LLVM
+// codegen would live until function exit and prevent timely object destruction
+// (causing shutdown hangs for long-running functions like PipelineQueue::run()).
+extern "C" DLLEXPORT uint64_t qore_rt_load_self_member_for_call(const char* member_name, ExceptionSink* xsink) {
+    QoreObject* obj = runtime_get_stack_object();
+    assert(obj);
+    ValueHolder val(obj->getReferencedMemberNoMethod(member_name, xsink), xsink);
+    if (*xsink) {
+        return toBits(QoreValue());
+    }
+    return toBits(val.release());
+}
+
 // --- Static class variable access helper ---
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_static_var(QoreVarInfo* vi, const char* var_name, ExceptionSink* xsink) {

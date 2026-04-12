@@ -287,6 +287,20 @@ private:
     // are destroyed, preventing deferred-to-exit cleanup from keeping objects alive.
     std::unordered_map<const void*, std::vector<llvm::Value*>> local_cleanup_allocas;
 
+    // Remaining use count for each value register ID.  Used to track when a
+    // register's last use is reached, enabling early release of DotEval base
+    // cleanup allocas.
+    std::unordered_map<uint32_t, int> operand_remaining_uses;
+
+    // Set of register IDs that are ONLY used as DotEval bases (operands[0]
+    // of DotEvalMethodDirect, InvokeDotEvalMethodDirect, or Invoke with a
+    // DotEval invoke_opcode).  For these registers, LoadSelfMember uses the
+    // _for_call variant that returns the raw value without evaluating
+    // WeakReferenceNode — safe because all DotEval helpers handle NT_WEAKREF.
+    // This avoids creating temporary strong references from weak member
+    // dereferences that would keep objects alive for the function lifetime.
+    std::unordered_set<uint32_t> dot_eval_only_bases;
+
     // Allocas tracking active iterator pointers from IteratorCreate/IteratorCreateReverse.
     // On normal exit (IteratorNext done), the alloca is nulled out.
     // On abnormal exit (return/throw inside foreach body), emitIteratorCleanup()

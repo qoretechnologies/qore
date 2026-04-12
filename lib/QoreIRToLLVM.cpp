@@ -686,6 +686,7 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
     block_scoped_locals.clear();
     local_cleanup_allocas.clear();
     closure_pre_inst_flags.clear();
+    operand_remaining_uses.clear();
 
     // First pass: identify block-scoped locals (those with explicit UninstantiateLocal
     // or InstantiateLocal)
@@ -1869,6 +1870,91 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // null checks and TLS access internally per line change.
     }
 
+    // Compute remaining use counts for each register and identify registers
+    // that are only used as DotEval bases (safe for _for_call variant).
+    operand_remaining_uses.clear();
+    dot_eval_only_bases.clear();
+    // First: collect all register IDs used as DotEval bases
+    std::unordered_set<uint32_t> dot_eval_base_candidates;
+    std::unordered_set<uint32_t> non_dot_eval_uses;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst_ptr : block->instructions) {
+            if (!inst_ptr) {
+                continue;
+            }
+            for (const auto& op : inst_ptr->operands) {
+                operand_remaining_uses[op.id]++;
+            }
+            // Count non-operand value uses (stored in dedicated members, not operands)
+            switch (inst_ptr->opcode) {
+                case QoreIROpcode::Return: {
+                    const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst_ptr.get());
+                    if (ret->has_value) {
+                        operand_remaining_uses[ret->value.id]++;
+                    }
+                    break;
+                }
+                case QoreIROpcode::BrIf: {
+                    const auto* br = static_cast<const QoreIRBranchIfInstruction*>(inst_ptr.get());
+                    operand_remaining_uses[br->condition.id]++;
+                    break;
+                }
+                case QoreIROpcode::SwitchInt: {
+                    const auto* sw = static_cast<const QoreIRSwitchIntInstruction*>(inst_ptr.get());
+                    operand_remaining_uses[sw->switch_val.id]++;
+                    break;
+                }
+                case QoreIROpcode::SwitchString: {
+                    const auto* sw = static_cast<const QoreIRSwitchStringInstruction*>(inst_ptr.get());
+                    operand_remaining_uses[sw->switch_val.id]++;
+                    break;
+                }
+                case QoreIROpcode::Phi: {
+                    const auto* phi = static_cast<const QoreIRPhiInstruction*>(inst_ptr.get());
+                    for (const auto& inc : phi->incoming) {
+                        operand_remaining_uses[inc.value.id]++;
+                    }
+                    break;
+                }
+                default:
+                    break;
+            }
+
+            // Track which registers are used as DotEval bases vs other uses
+            bool is_dot_eval = false;
+            if (inst_ptr->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst_ptr->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                is_dot_eval = true;
+            } else if (inst_ptr->opcode == QoreIROpcode::Invoke && !inst_ptr->operands.empty()) {
+                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst_ptr.get());
+                if (isDotEvalInvokeOpcode(inv->invoke_opcode)) {
+                    is_dot_eval = true;
+                }
+            }
+
+            if (is_dot_eval && !inst_ptr->operands.empty()) {
+                // operands[0] is the base
+                dot_eval_base_candidates.insert(inst_ptr->operands[0].id);
+                // operands[1..] are args — these are non-DotEval uses
+                for (size_t i = 1; i < inst_ptr->operands.size(); ++i) {
+                    non_dot_eval_uses.insert(inst_ptr->operands[i].id);
+                }
+            } else {
+                // All operands of non-DotEval instructions are non-DotEval uses
+                for (const auto& op : inst_ptr->operands) {
+                    non_dot_eval_uses.insert(op.id);
+                }
+            }
+        }
+    }
+    // A register is a "DotEval-only base" if it appears as a base but never
+    // as a non-DotEval operand (including DotEval args)
+    for (uint32_t id : dot_eval_base_candidates) {
+        if (!non_dot_eval_uses.count(id)) {
+            dot_eval_only_bases.insert(id);
+        }
+    }
+
     // Lower each block
     for (const auto& block : func.blocks) {
         llvm::BasicBlock* llvm_block = block_map[block.get()];
@@ -1924,6 +2010,59 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                     fflush(stderr);
                 }
                 return false;
+            }
+
+            // Release DotEval BASE cleanup allocas at last use: when the base
+            // operand (operands[0]) of a DotEvalMethodDirect or InvokeDotEvalMethodDirect
+            // reaches its last use, release its cleanup alloca immediately.
+            // This is critical for weak member dereferences (LoadSelfMember on
+            // WeakReferenceNode members) — without early release, the temporary strong
+            // reference keeps the target object alive for the entire function lifetime,
+            // preventing destructor calls and causing shutdown hangs.
+            // We ONLY apply this for DotEval base values because:
+            // (1) DotEval results are independent of the base (no borrowing)
+            // (2) The method call is complete — base is fully consumed
+            // (3) Other instructions (StoreLocal) may produce results that BORROW
+            //     from their operand's cleanup alloca — releasing those is unsafe.
+            // Decrement use counts for ALL operands of every instruction
+            for (const auto& op : inst->operands) {
+                auto uses_it = operand_remaining_uses.find(op.id);
+                if (uses_it != operand_remaining_uses.end()) {
+                    --uses_it->second;
+                }
+            }
+            // Release DotEval BASE cleanup allocas at last use.
+            // Also covers Invoke instructions with DotEval invoke_opcodes
+            // (e.g., parent.logDebug(...) compiled as Invoke + DotEvalAny/DotEvalHash).
+            bool is_dot_eval_base_release = false;
+            if (inst->opcode == QoreIROpcode::DotEvalMethodDirect
+                    || inst->opcode == QoreIROpcode::InvokeDotEvalMethodDirect) {
+                is_dot_eval_base_release = true;
+            } else if (inst->opcode == QoreIROpcode::Invoke && !inst->operands.empty()) {
+                const auto* inv = static_cast<const QoreIRInvokeInstruction*>(inst);
+                if (isDotEvalInvokeOpcode(inv->invoke_opcode)) {
+                    is_dot_eval_base_release = true;
+                }
+            }
+            if (is_dot_eval_base_release
+                    && !inst->operands.empty()
+                    && !builder->GetInsertBlock()->getTerminator()) {
+                uint32_t base_id = inst->operands[0].id;
+                auto uses_it = operand_remaining_uses.find(base_id);
+                if (uses_it != operand_remaining_uses.end() && uses_it->second <= 0) {
+                    auto alloca_it = invoke_alloca_map.find(base_id);
+                    if (alloca_it != invoke_alloca_map.end()) {
+                        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                                llvm::FunctionType::get(void_type, {i64_type, ptr_type},
+                                    false));
+                        llvm::Value* old_val = builder->CreateLoad(i64_type,
+                                alloca_it->second);
+                        builder->CreateStore(
+                                llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                                alloca_it->second);
+                        builder->CreateCall(decref_fn, {old_val, xsink_arg});
+                    }
+                }
             }
         }
 
@@ -4610,7 +4749,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 assert(self_ref);
                 llvm::Constant* name_const = builder->CreateGlobalString(self_ref->str,
                         "self_member_name");
-                auto helper = module.getOrInsertFunction("qore_rt_load_self_member",
+                // Use _for_call variant for dot-eval-only bases (see LoadSelfMember case)
+                const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+                        ? "qore_rt_load_self_member_for_call"
+                        : "qore_rt_load_self_member";
+                auto helper = module.getOrInsertFunction(helper_name,
                         llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
                 result = builder->CreateCall(helper, {name_const, xsink_arg});
                 // LoadSelfMember doesn't modify locals — no reload needed
@@ -7296,7 +7439,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             const auto* sminst = static_cast<const QoreIRSelfMemberInstruction*>(inst);
             llvm::Constant* name_const = builder->CreateGlobalString(sminst->member_name,
                     "self_member_name");
-            auto helper = module.getOrInsertFunction("qore_rt_load_self_member",
+            // Use _for_call variant when this result is only used as a DotEval base.
+            // This returns raw values (including WeakReferenceNode) without evaluating
+            // them, avoiding temporary strong references from weak member dereferences.
+            // All DotEval helpers handle NT_WEAKREF correctly.
+            const char* helper_name = dot_eval_only_bases.count(inst->result.id)
+                    ? "qore_rt_load_self_member_for_call"
+                    : "qore_rt_load_self_member";
+            auto helper = module.getOrInsertFunction(helper_name,
                     llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
             llvm::Value* result = builder->CreateCall(helper, {name_const, xsink_arg});
             values[inst->result.id] = result;
