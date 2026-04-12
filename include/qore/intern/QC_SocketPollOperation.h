@@ -1108,6 +1108,28 @@ public:
         // Hold socket lock for the entire abort to prevent races with
         // concurrent socket destruction (lock ordering: priv->m → quic_sessions_lock)
         AutoLocker al(sock->priv->m);
+        int fd = sock->priv->socket->getSocket();
+        // Send CONNECTION_CLOSE to each active peer before tearing down local
+        // session state.  Without this, clients must wait for their own idle
+        // timeout (default 30s+) to detect server shutdown — turning a clean
+        // server stop into a cascade of per-stream timeouts for active clients.
+        // RFC 9000 §10.2: CONNECTION_CLOSE should be sent on graceful close.
+        if (fd >= 0) {
+            uint8_t close_buf[1280];
+            for (auto& [id, session] : sessions_) {
+                ssize_t close_len = session->writeConnectionClose(
+                    close_buf, sizeof(close_buf));
+                if (close_len > 0) {
+                    struct sockaddr_storage remote_addr;
+                    socklen_t remote_addrlen;
+                    session->getRemoteAddrCopy(remote_addr, remote_addrlen);
+                    // Best-effort send; ignore errors (peer may already be gone)
+                    (void)sendto(fd, close_buf, static_cast<size_t>(close_len), 0,
+                        reinterpret_cast<const struct sockaddr*>(&remote_addr),
+                        remote_addrlen);
+                }
+            }
+        }
         // Wake handler threads blocked in waitForStreamData()/waitForStreamDrain()
         // BEFORE removing sessions from the socket map
         for (auto& [id, session] : sessions_) {

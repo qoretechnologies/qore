@@ -253,6 +253,41 @@ class BidiEchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Handler that blocks until signaled so concurrent client requests stay
+#! pending while we tear down the server to simulate a crash.
+class SlowHandler inherits AbstractHttpRequestHandler {
+    private {
+        Counter m_ready;       # decremented once per request reaching the handler
+        Counter m_stop_signal; # handler exits as soon as this reaches 0
+    }
+
+    constructor(int concurrency) {
+        m_ready = new Counter(concurrency);
+        m_stop_signal = new Counter(1);
+    }
+
+    #! Reaches zero once all expected requests are in flight — the test
+    #! uses this to know when to simulate a server crash.
+    Counter getReadyCounter() {
+        return m_ready;
+    }
+
+    #! Called by the test to release blocked handlers so shutdown completes
+    #! immediately instead of waiting on a fixed sleep.
+    signalStop() {
+        m_stop_signal.dec();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        m_ready.dec();
+        # Wait until the test releases us (via signalStop).  Using a Counter
+        # instead of sleep(N) means the handler thread exits immediately once
+        # the test simulates the server crash — no fixed-duration delay.
+        m_stop_signal.waitForZero(60s);
+        return makeResponse(200, "never-reached", {"content-type": "text/plain"});
+    }
+}
+
 #! Handler that resets the stream instead of sending a response.
 /** Tests that the client receives a proper error (not an empty response) when
     the server RSTs the QUIC stream via resetQuicStream().
@@ -505,6 +540,7 @@ l50Xb2GWQesIt9k5jF5IOw==
         addTestCase("HTTP/3 bidirectional streaming (large)", \testH3BidiStreamingLarge());
         addTestCase("HTTP/3 bidirectional streaming concurrent", \testH3BidiConcurrent());
         addTestCase("HTTP/3 stream reset propagates as error", \testH3StreamResetError());
+        addTestCase("HTTP/3 multi-stream server crash cleanup", \testH3MultiStreamServerCrash());
 
         set_return_value(main());
     }
@@ -1136,6 +1172,107 @@ l50Xb2GWQesIt9k5jF5IOw==
         list<hash<auto>> requests = handler.getReceivedRequests();
         assertEq(NumStreams, requests.size(),
             "bidi concurrent: all requests received");
+    }
+
+    #! Test 4.5: Multi-stream connection death must fail ALL pending streams
+    /** When multiple H3 streams are in flight on the same connection and the
+        server disappears (crashes / stops), ALL streams must fail cleanly —
+        not hang waiting for individual responses.  Without proper multi-stream
+        cleanup, N streams each wait for their own timeout, turning a single
+        connection failure into N×timeout delays.
+    */
+    testH3MultiStreamServerCrash() {
+        int concurrency = 3;
+        # Create server with a slow handler that blocks all requests
+        HttpServer server(<HttpServerOptionInfo>{
+            "logger": mLogger,
+            "debug": True,
+            "quic_headers_only": True,
+        });
+        SlowHandler slow_handler(concurrency);
+        server.setHandler("slow", "/slow", NOTHING, slow_handler, NOTHING, False);
+        server.waitForAsyncIo();
+
+        hash<auto> info = server.addListener(<HttpListenerOptionInfo>{
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "enable_h3": True,
+        });
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", info.port);
+
+        HttpClientIo::HttpClientConnectionManager mgr = createH3Manager();
+        on_exit delete mgr;
+
+        # Launch concurrent requests in background; each call blocks in the
+        # handler's sleep(60).  Collect results in a hash keyed by stream id.
+        list<Counter> done = ();
+        hash<string, hash<auto>> results;
+        Mutex results_lock();
+        for (int i = 0; i < concurrency; ++i) {
+            Counter c(1);
+            push done, c;
+            int idx = i;
+            string key = sprintf("s%d", idx);
+            background sub () {
+                on_exit c.dec();
+                date start = now_us();
+                try {
+                    hash<auto> resp = mgr.request(url, "POST", "/slow",
+                        {"Content-Type": "application/octet-stream"},
+                        binary(sprintf("payload-%d", idx)));
+                    AutoLock al(results_lock);
+                    results{key} = {"ok": True, "status": resp.status_code,
+                                     "elapsed_us": (now_us() - start).durationMilliseconds()};
+                } catch (hash<ExceptionInfo> ex) {
+                    AutoLock al(results_lock);
+                    results{key} = {"err": ex.err, "desc": ex.desc,
+                                     "elapsed_us": (now_us() - start).durationMilliseconds()};
+                }
+            }();
+        }
+
+        # Wait for all requests to reach the handler (in flight)
+        slow_handler.getReadyCounter().waitForZero(10s);
+
+        # Now simulate server crash by stopping the server.  Release the
+        # blocked handler threads first so server shutdown doesn't wait on
+        # them — we're measuring client-side cleanup, not handler blocking.
+        date crash_time = now_us();
+        slow_handler.signalStop();
+        delete server;
+
+        # All pending client requests must fail cleanly within a reasonable
+        # time window — NOT wait for individual per-stream timeouts
+        foreach Counter c in (done) {
+            c.waitForZero(20s);
+        }
+        int total_elapsed_ms = (now_us() - crash_time).durationMilliseconds();
+
+        # Check results: all should have failed with an error, none succeeded
+        int error_count = 0;
+        int success_count = 0;
+        for (int i = 0; i < concurrency; ++i) {
+            string key = sprintf("s%d", i);
+            if (results{key}.err) {
+                ++error_count;
+            } else if (results{key}.ok) {
+                ++success_count;
+            }
+        }
+        assertEq(concurrency, error_count,
+            sprintf("multi-stream crash: all %d streams got an error (results: %y)",
+                concurrency, results));
+        assertEq(0, success_count,
+            "multi-stream crash: no stream succeeded after server crash");
+
+        # Cleanup time should be reasonable — under 15s for all streams combined.
+        # Without multi-stream cleanup, each stream waits its own request_timeout
+        # (typically 30-60s), so 3 streams would take 90-180s.
+        assertTrue(total_elapsed_ms < 15000,
+            sprintf("multi-stream crash: cleanup took %d ms (expected < 15000)",
+                total_elapsed_ms));
     }
 
     #! Test 4.4: Stream reset from server must propagate as a client error
