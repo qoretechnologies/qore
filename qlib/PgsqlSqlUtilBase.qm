@@ -416,20 +416,79 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
     public {
         #! the tablespace name of the index
         *string tablespace;
+
+        #! access method for the index (e.g. \c "btree", \c "hash", \c "gist", \c "gin", \c "brin",
+        #! \c "ivfflat", \c "hnsw"); \c NOTHING means the driver default (btree)
+        *string method;
+
+        #! method-specific storage parameters; rendered as \c "WITH (k1 = v1, ...)" in the CREATE INDEX
+        *hash<auto> with_options;
+
+        #! per-column operator class hash (column name → opclass name); PostgreSQL supports attaching an
+        #! operator class to each indexed column (e.g. \c {"embedding": "vector_cosine_ops"} for an ivfflat
+        #! index over a pgvector column)
+        *hash<string, string> opclass;
     }
 
     #! creates the object from the arguments
-    constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace) : AbstractIndex(n_name, n_unique, n_cols) {
+    constructor(string n_name, bool n_unique, hash n_cols, *string n_tablespace,
+            *string n_method, *hash<auto> n_with, *hash<string, string> n_opclass)
+            : AbstractIndex(n_name, n_unique, n_cols) {
         tablespace = n_tablespace;
+        method = n_method;
+        with_options = n_with;
+        opclass = n_opclass;
     }
 
     #! returns a string that can be used to create the index in the database
     string getCreateSql(string table_name, *hash opt) {
-        string sql = sprintf("create %sindex %s on %s (%s)", unique ? "unique " : "", name, table_name, (foldl $1 + ", " + $2, columns.getSqlColumnNameIterator()));
+        # build column list with optional per-column operator class; follow the same
+        # key → ddl_name resolution as Columns::getSqlColumnNameIterator() so reserved-word
+        # columns are still correctly quoted
+        string cols_sql;
+        {
+            list<string> parts = ();
+            HashIterator col_it = columns.iterator();
+            while (col_it.next()) {
+                string cn = col_it.getKey();
+                auto c = col_it.getValue();
+                string name_sql;
+                if (c.typeCode() == NT_OBJECT && c instanceof AbstractColumn) {
+                    AbstractColumn ac = c;
+                    name_sql = ac.ddl_name.val() ? ac.ddl_name : cn;
+                } else if (c.typeCode() == NT_HASH && c.ddl_name.val()) {
+                    name_sql = c.ddl_name;
+                } else {
+                    name_sql = cn;
+                }
+                if (opclass{cn}.val()) {
+                    parts += sprintf("%s %s", name_sql, opclass{cn});
+                } else {
+                    parts += name_sql;
+                }
+            }
+            cols_sql = parts.join(", ");
+        }
+
+        string sql = sprintf("create %sindex %s on %s", unique ? "unique " : "", name, table_name);
+        if (method.val()) {
+            sql += sprintf(" using %s", method);
+        }
+        sql += sprintf(" (%s)", cols_sql);
+
+        if (with_options) {
+            list<string> parts = ();
+            HashIterator wi(with_options);
+            while (wi.next()) {
+                parts += sprintf("%s = %s", wi.getKey(), wi.getValue());
+            }
+            sql += sprintf(" with (%s)", parts.join(", "));
+        }
 
         *string ts = opt.index_tablespace ? opt.index_tablespace : tablespace;
-        if (ts)
+        if (ts) {
             sql += sprintf(" tablespace %s", ts);
+        }
         return sql;
     }
 
@@ -440,6 +499,21 @@ public class PgsqlIndex inherits SqlUtil::AbstractIndex {
 
     #! returns @ref True "True" if the argument is equal to the current index, @ref False "False" if not
     private bool equalImpl(AbstractIndex ix) {
+        PgsqlIndex pix = cast<PgsqlIndex>(ix);
+        # normalize method comparison: NOTHING and "btree" are the PostgreSQL default
+        string m1 = method.val() ? method.lwr() : "btree";
+        string m2 = pix.method.val() ? pix.method.lwr() : "btree";
+        if (m1 != m2) {
+            return False;
+        }
+        # hash equality is order-sensitive in Qore, but storage options and opclasses are
+        # semantically order-independent, so compare key-by-key
+        if (!AbstractIndex::hashesEqualUnordered(with_options, pix.with_options)) {
+            return False;
+        }
+        if (!AbstractIndex::hashesEqualUnordered(opclass, pix.opclass)) {
+            return False;
+        }
         return True;
     }
 
@@ -1659,9 +1733,14 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
         );
 
         #! maps qore type names to PostgreSQL type names
+        # note: \c Type::Float maps to the short name \c "float" (not \c "double precision")
+        # so fresh column definitions match what \c getColumnsImpl reads back — \c PgsqlNameMap
+        # rewrites \c "double precision" to \c "float" for read-back, and having the forward
+        # path emit the same short name avoids spurious "alter column type" diffs on every
+        # alignment of a schema with floating-point columns
         const QoreTypeMap = (
             "integer": "bigint",
-            "float": "double precision",
+            "float": "float",
             "number": "numeric",
             "string": "varchar",
             "date": "timestamp",
@@ -2157,6 +2236,439 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                 "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
                     return sprintf("extract(second from %s)",
                         info.table.getExpressionArg(\info, role, args[0], AbstractDataProviderTypeMap."date"));
+                },
+            },
+            # --- String pattern matching operators for PostgreSQL ---
+            DP_OP_LIKE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_LIKE,
+                    "display_name": "like",
+                    "short_desc": "Returns True if the string matches the SQL LIKE pattern",
+                    "desc": "Returns True if the first argument matches the second using SQL LIKE pattern matching; "
+                        "optional third argument enables case-insensitive matching (PostgreSQL ILIKE)",
+                    "symbol": "like",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string op = args[2] ? "ilike" : "like";
+                    return sprintf("%s %s %s", exp0, op, exp1);
+                },
+            },
+            DP_OP_REGEX_MATCH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_MATCH,
+                    "display_name": "regex match (=~)",
+                    "short_desc": "Returns True if the string matches the regular expression",
+                    "desc": "Returns True if the first argument matches the second as a POSIX regular expression; "
+                        "uses PostgreSQL ~ operator (or ~* for case-insensitive)",
+                    "symbol": "=~",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                    return sprintf("%s %s %s", exp0, case_insensitive ? "~*" : "~", exp1);
+                },
+            },
+            DP_OP_REGEX_NMATCH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_NMATCH,
+                    "display_name": "regex non-match (!~)",
+                    "short_desc": "Returns True if the string does not match the regular expression",
+                    "desc": "Returns True if the first argument does not match the second as a POSIX regular "
+                        "expression; uses PostgreSQL !~ operator (or !~* for case-insensitive)",
+                    "symbol": "!~",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    bool case_insensitive = exists args[2] && inlist("i", args[2]);
+                    return sprintf("%s %s %s", exp0, case_insensitive ? "!~*" : "!~", exp1);
+                },
+            },
+            DP_OP_REGEX_SUBST: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REGEX_SUBST,
+                    "display_name": "regex substitution",
+                    "short_desc": "Performs regex substitution on a string",
+                    "desc": "Performs regular expression substitution using PostgreSQL regexp_replace(); "
+                        "args: string, regex pattern, replacement, optional options list (\"g\" for global, "
+                        "\"i\" for case-insensitive)",
+                    "symbol": "regexSubst",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureStringType, DataProviderSignatureOptionalStringListValueType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."string");
+                    # build PG flags string from options list
+                    string flags = "";
+                    if (exists args[3]) {
+                        foreach auto opt in (args[3]) {
+                            if (opt == "i") {
+                                flags += "i";
+                            } else if (opt == "g") {
+                                flags += "g";
+                            }
+                        }
+                    }
+                    if (flags.val()) {
+                        return sprintf("regexp_replace(%s, %s, %s, '%s')", exp0, exp1, exp2, flags);
+                    }
+                    return sprintf("regexp_replace(%s, %s, %s)", exp0, exp1, exp2);
+                },
+            },
+            DP_OP_CONTAINS: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_CONTAINS,
+                    "display_name": "contains",
+                    "short_desc": "Returns True if the string contains the given substring",
+                    "desc": "Returns True if the first argument contains the second as a substring; "
+                        "optional third argument enables case-insensitive matching (default: True)",
+                    "symbol": "contains",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string op = args[2] ? "ilike" : "like";
+                    return sprintf("%s %s '%%' || %s || '%%'", exp0, op, exp1);
+                },
+            },
+            DP_OP_STARTS_WITH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_STARTS_WITH,
+                    "display_name": "starts with",
+                    "short_desc": "Returns True if the string starts with the given characters",
+                    "desc": "Returns True if the first argument starts with the second; "
+                        "optional third argument enables case-insensitive matching (default: True)",
+                    "symbol": "startsWith",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    string op = args[2] ? "ilike" : "like";
+                    return sprintf("%s %s %s || '%%'", exp0, op, exp1);
+                },
+            },
+            DP_OP_ENDS_WITH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_ENDS_WITH,
+                    "display_name": "ends with",
+                    "short_desc": "Returns True if the string ends with the given characters",
+                    "desc": "Returns True if the first argument ends with the second; "
+                        "optional third argument enables case-insensitive matching (default: True)",
+                    "symbol": "endsWith",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureAnyType,
+                        DataProviderSignatureBoolType),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    string op = args[2] ? "ilike" : "like";
+                    return sprintf("%s %s '%%' || %s", exp0, op, exp1);
+                },
+            },
+            DP_OP_REPLACE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_REPLACE,
+                    "display_name": "string replace",
+                    "short_desc": "Replaces all occurrences of a string pattern",
+                    "desc": "Replaces all occurrences of the second argument with the third in the first; "
+                        "uses PostgreSQL replace() function",
+                    "symbol": "replace",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType, DataProviderSignatureStringType,
+                        DataProviderSignatureStringType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string");
+                    string exp1 = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."string");
+                    string exp2 = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."string");
+                    return sprintf("replace(%s, %s, %s)", exp0, exp1, exp2);
+                },
+            },
+            # --- Type conversion operators for PostgreSQL ---
+            DP_OP_TO_STRING: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_STRING,
+                    "display_name": "to string",
+                    "short_desc": "Converts a value to a string",
+                    "desc": "Converts a value to text using PostgreSQL CAST(x AS text)",
+                    "symbol": "toString",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as text)", exp0);
+                },
+            },
+            DP_OP_TO_INT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_INT,
+                    "display_name": "to int",
+                    "short_desc": "Converts a value to an integer",
+                    "desc": "Converts a value to an integer using PostgreSQL CAST(x AS integer)",
+                    "symbol": "toInt",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."int",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as integer)", exp0);
+                },
+            },
+            DP_OP_TO_FLOAT: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_FLOAT,
+                    "display_name": "to float",
+                    "short_desc": "Converts a value to a floating-point number",
+                    "desc": "Converts a value to a float using PostgreSQL CAST(x AS double precision)",
+                    "symbol": "toFloat",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."float",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as double precision)", exp0);
+                },
+            },
+            DP_OP_TO_NUMBER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_NUMBER,
+                    "display_name": "to number",
+                    "short_desc": "Converts a value to an arbitrary-precision number",
+                    "desc": "Converts a value to a numeric type using PostgreSQL CAST(x AS numeric)",
+                    "symbol": "toNumber",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."number",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as numeric)", exp0);
+                },
+            },
+            DP_OP_TO_DATE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_DATE,
+                    "display_name": "to date",
+                    "short_desc": "Converts a value to a date/time",
+                    "desc": "Converts a value to a timestamp using PostgreSQL CAST(x AS timestamp); "
+                        "if a format mask is given, uses to_timestamp(x, mask) instead",
+                    "symbol": "toDate",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType, DataProviderSignatureOptionalStringType),
+                    "return_type": AbstractDataProviderTypeMap."date",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    if (exists args[1]) {
+                        string fmt = PgsqlTable::convertDateFormat(args[1]);
+                        return sprintf("to_timestamp(%s, '%s')", exp0, fmt);
+                    }
+                    return sprintf("cast(%s as timestamp)", exp0);
+                },
+            },
+            DP_OP_TO_BOOL: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_BOOL,
+                    "display_name": "to bool",
+                    "short_desc": "Converts a value to a boolean",
+                    "desc": "Converts a value to a boolean using PostgreSQL CAST(x AS boolean)",
+                    "symbol": "toBool",
+                    "groups": "Data Conversion",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("cast(%s as boolean)", exp0);
+                },
+            },
+            # --- String manipulation operators for PostgreSQL ---
+            DP_OP_TO_LOWER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_LOWER,
+                    "display_name": "to lower case",
+                    "short_desc": "Converts a string to lower case",
+                    "desc": "Returns the string converted to all lower case using PostgreSQL lower()",
+                    "symbol": "lwr",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("lower(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string"));
+                },
+            },
+            DP_OP_TO_UPPER: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TO_UPPER,
+                    "display_name": "to upper case",
+                    "short_desc": "Converts a string to upper case",
+                    "desc": "Returns the string converted to all upper case using PostgreSQL upper()",
+                    "symbol": "upr",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureStringType,),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("upper(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."string"));
+                },
+            },
+            DP_OP_LENGTH: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_LENGTH,
+                    "display_name": "length",
+                    "short_desc": "Returns the character length of a string",
+                    "desc": "Returns the number of characters in a string using PostgreSQL char_length()",
+                    "symbol": "length",
+                    "groups": "Data Manipulation",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."int",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("char_length(%s)", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any"));
+                },
+            },
+            # --- Control flow operators for PostgreSQL ---
+            DP_OP_TERNARY: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_TERNARY,
+                    "display_name": "ternary (?:)",
+                    "short_desc": "Conditional expression: returns second arg if first is true, third otherwise",
+                    "desc": "Evaluates the first argument as a boolean; if true, returns the second argument; "
+                        "otherwise returns the third argument; uses PostgreSQL CASE WHEN ... THEN ... ELSE ... END",
+                    "symbol": "?:",
+                    "groups": "Logical",
+                    "args": (DataProviderSignatureBoolType, DataProviderSignatureAnyType,
+                        DataProviderSignatureAnyType),
+                    "return_type": AbstractDataProviderTypeMap."any",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string cond = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."bool");
+                    string true_val = info.table.getExpressionArg(\info, role, args[1],
+                        AbstractDataProviderTypeMap."any");
+                    string false_val = info.table.getExpressionArg(\info, role, args[2],
+                        AbstractDataProviderTypeMap."any");
+                    return sprintf("case when %s then %s else %s end", cond, true_val, false_val);
+                },
+            },
+            DP_OP_HAS_VALUE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Operator,
+                    "name": DP_OP_HAS_VALUE,
+                    "display_name": "has value",
+                    "short_desc": "Returns True if the argument is not null",
+                    "desc": "Returns True if the argument has a non-null value; uses PostgreSQL IS NOT NULL",
+                    "symbol": "val",
+                    "groups": "Comparison",
+                    "args": (DataProviderSignatureAnyType,),
+                    "return_type": AbstractDataProviderTypeMap."bool",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    return sprintf("%s is not null", info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."any"));
+                },
+            },
+            # --- Additional date/string functions for PostgreSQL ---
+            DP_FUNC_FORMAT_DATE: {
+                "exp": <DataProviderExpressionInfo>{
+                    "type": DET_Function,
+                    "name": DP_FUNC_FORMAT_DATE,
+                    "display_name": "format_date",
+                    "short_desc": "Formats a date as a string",
+                    "desc": "Formats a date/time value as a string using PostgreSQL to_char(); "
+                        "format codes: YYYY (year), MM (month), DD (day), HH (hour 24h), "
+                        "mm (minute), SS (second), us (microseconds)",
+                    "symbol": "format_date",
+                    "groups": "Date/Time",
+                    "role": ER_All,
+                    "args": (DataProviderSignatureDateType, DataProviderSignatureStringType),
+                    "return_type": AbstractDataProviderTypeMap."string",
+                },
+                "code": string sub (reference<hash<QueryInfo>> info, int role, list<auto> args) {
+                    string exp0 = info.table.getExpressionArg(\info, role, args[0],
+                        AbstractDataProviderTypeMap."date");
+                    string fmt = PgsqlTable::convertDateFormat(args[1]);
+                    return sprintf("to_char(%s, '%s')", exp0, fmt);
                 },
             },
         };
@@ -3161,11 +3673,16 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     private Indexes getIndexesImpl() {
         hash<auto> rv;
 
-        # get index descriptions
+        # get index descriptions; join pg_am to read the access method and use pg_get_indexdef to
+        # recover the non-default opclass and WITH (storage option) clauses so that indexes using
+        # pgvector access methods (ivfflat / hnsw) round-trip correctly through align / diff
         *hash<auto> qh = ds.select("SELECT i.relname index_name, d.indisunique, d.indisprimary, "
-            "pg_get_indexdef(i.oid, a.attnum, false) column_name, tablespace FROM pg_class t, pg_class i, "
-            "pg_index d, pg_attribute a, pg_indexes xs WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
-            "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relnamespace IN (SELECT oid FROM pg_namespace "
+            "pg_get_indexdef(i.oid, a.attnum, false) column_name, xs.tablespace, "
+            "am.amname access_method, pg_get_indexdef(i.oid, 0, false) indexdef "
+            "FROM pg_class t, pg_class i, pg_index d, pg_attribute a, pg_indexes xs, pg_am am "
+            "WHERE i.relkind = 'i' and i.relname = xs.indexname AND "
+            "d.indexrelid = i.oid and t.oid = d.indrelid AND i.relam = am.oid AND "
+            "i.relnamespace IN (SELECT oid FROM pg_namespace "
             "WHERE nspname IN (%v)) AND a.attrelid = i.oid AND t.relname = %v ORDER BY i.relname, attnum", schema,
             name);
 
@@ -3177,6 +3694,8 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                         "unique": row.indisunique,
                         "tablespace": row.tablespace,
                         "primary": row.indisprimary,
+                        "access_method": row.access_method,
+                        "indexdef": row.indexdef,
                     );
                 }
                 # issue #4348: strip quotes from columns using reserved words
@@ -3207,11 +3726,111 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
                         continue;
                     }
                 }
-                rv{i.key} = new PgsqlIndex(i.key, i.value.unique, i.value.columns, i.value.tablespace ? i.value.tablespace : NOTHING);
+
+                # parse the reconstructed DDL to recover opclass and WITH clause info
+                hash<auto> extra = PgsqlTable::parsePgIndexDef(i.value.indexdef);
+
+                # pgsql default access method is btree; normalize NOTHING and "btree" equivalently
+                *string method = (i.value.access_method.val() && i.value.access_method.lwr() != "btree")
+                    ? i.value.access_method
+                    : NOTHING;
+
+                # the parser returns opclass as an auto-typed hash slot; narrow to the constructor
+                # argument type so overload resolution binds cleanly
+                *hash<string, string> parsed_opclass;
+                if (extra.opclass.typeCode() == NT_HASH) {
+                    hash<string, string> tmp;
+                    foreach hash<auto> p in (extra.opclass.pairIterator()) {
+                        tmp{p.key} = p.value.toString();
+                    }
+                    parsed_opclass = tmp;
+                }
+
+                rv{i.key} = new PgsqlIndex(i.key, i.value.unique, i.value.columns,
+                    i.value.tablespace ? i.value.tablespace : NOTHING,
+                    method, extra.with_options, parsed_opclass);
             }
         }
 
         return new Indexes(rv);
+    }
+
+    #! parses the DDL returned by \c pg_get_indexdef to extract the WITH clause and non-default
+    #! per-column operator classes
+    /** @return a hash with \c with_options (\c *hash<auto>) and \c opclass (\c *hash<string, string>)
+    */
+    static hash<auto> parsePgIndexDef(string ddl) {
+        # hash<auto!> suppresses per-key type narrowing so that initially-NOTHING slots can later
+        # receive hash values without tripping a parse-type error
+        hash<auto!> rv = {
+            "with_options": NOTHING,
+            "opclass": NOTHING,
+        };
+
+        # extract the column list between "USING <method> (" and the matching ")"
+        *string col_list = (ddl =~ x/using\s+\w+\s*\(([^)]*)\)/i)[0];
+        if (col_list.val()) {
+            hash<string, string> opclasses;
+            foreach string spec in (col_list.split(",")) {
+                trim spec;
+                # non-default opclass appears as "colname opclass_name" after the column
+                # (function indexes look like "(expr)" and have no simple word boundary)
+                *list<*string> cm = (spec =~ x/^(\w+)\s+(\w+)$/);
+                if (cm && cm[0] && cm[1]) {
+                    opclasses{cm[0]} = cm[1];
+                }
+            }
+            if (opclasses) {
+                rv.opclass = opclasses;
+            }
+        }
+
+        # extract the WITH (...) clause if present; values may be quoted
+        *string with_body = (ddl =~ x/with\s*\(([^)]*)\)/i)[0];
+        if (with_body.val()) {
+            hash<auto!> with_h();
+            foreach string item in (with_body.split(",")) {
+                trim item;
+                *list<*string> kv = (item =~ x/^(\w+)\s*=\s*'?([^']*)'?$/);
+                if (kv && kv[0]) {
+                    string k = kv[0];
+                    string v = kv[1] ?? "";
+                    # coerce numeric literals back to their native types for hash comparison
+                    # stability (a user's .ysm writes "lists: 100" as an int; PG stores it as
+                    # a string 'lists'='100' in reloptions and returns it quoted from
+                    # pg_get_indexdef — we want equalImpl to match)
+                    if (v =~ /^-?\d+$/) {
+                        with_h{k} = int(v);
+                    } else if (v =~ /^-?\d+\.\d+$/) {
+                        with_h{k} = float(v);
+                    } else {
+                        with_h{k} = v;
+                    }
+                }
+            }
+            if (with_h) {
+                rv.with_options = with_h;
+            }
+        }
+
+        return rv;
+    }
+
+    #! Converts a Qore/DPQL date format string to a PostgreSQL to_char() format string
+    /** @param fmt the Qore date format string (e.g., "YYYY-MM-DD HH:mm:SS.us")
+        @return the equivalent PostgreSQL format string (e.g., "YYYY-MM-DD HH24:MI:SS.US")
+
+        @since %Qore 2.3
+    */
+    static string convertDateFormat(string fmt) {
+        # use negative lookahead to avoid double-replacing "HH24" → "HH2424"
+        fmt = regex_subst(fmt, "HH(?!24)", "HH24", RE_Global);
+        fmt = regex_subst(fmt, "mm", "MI", RE_Global);
+        fmt = regex_subst(fmt, "us", "US", RE_Global);
+        fmt = regex_subst(fmt, "ms", "MS", RE_Global);
+        # escape single quotes for safe SQL embedding
+        fmt = regex_subst(fmt, "'", "''", RE_Global);
+        return fmt;
     }
 
     private ForeignConstraints getForeignConstraintsImpl(*hash<auto> opts) {
@@ -3466,7 +4085,18 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
     }
 
     private AbstractIndex addIndexImpl(string iname, bool enabled, hash ch, *hash opt) {
-        return new PgsqlIndex(iname, enabled, ch, opt.index_tablespace);
+        # the generic 'opclass' option comes through opt as auto-typed; coerce to the declared
+        # hash<string, string> shape so the PgsqlIndex constructor binds cleanly
+        *hash<string, string> ocls;
+        if (opt.opclass.typeCode() == NT_HASH) {
+            hash<string, string> tmp;
+            foreach hash<auto> p in (opt.opclass.pairIterator()) {
+                tmp{p.key} = p.value.toString();
+            }
+            ocls = tmp;
+        }
+        return new PgsqlIndex(iname, enabled, ch, opt.index_tablespace,
+            opt.method, opt.with, ocls);
     }
 
     private AbstractForeignConstraint addForeignConstraintImpl(string cname, hash<auto> ch, string table,

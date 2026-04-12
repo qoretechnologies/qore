@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingSensorsDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingSensorsDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -58,8 +58,8 @@ public class EmpathicBuildingSensorsDataProvider inherits EmpathicBuildingDataPr
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger, hash<auto> org, hash<auto> loc)
-            : EmpathicBuildingDataProviderBase(rest, logger) {
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger, hash<auto> org,
+            hash<auto> loc) : EmpathicBuildingDataProviderBase(rest, logger) {
         self.org = org;
         self.loc = loc;
     }
@@ -72,7 +72,7 @@ public class EmpathicBuildingSensorsDataProvider inherits EmpathicBuildingDataPr
     #! Returns the data provider description
     *string getDesc() {
         return sprintf("EmpathicBuilding data provider for sensors for org: `%s` (%s), location `%s` (%s), and "
-            "url: `%s`", org.id, org.name, loc.id, loc.name, rest.getSafeURL());
+            "url: `%s`", org.id, org.name, loc.id, loc.name, rest.getSafeUrl());
     }
 
     #! Returns data provider static info
@@ -116,14 +116,12 @@ public class EmpathicBuildingSensorsDataProvider inherits EmpathicBuildingDataPr
             return sensormap;
         }
 
-        hash<auto> info;
         try {
             sensormap = cast<*hash<string, hash<auto>>>(map {($1.vendor_id ? ($1.vendor_id + "-" + $1.id) : $1.id): $1}, doRestCommand("GET", "v1/organizations/"
-                + org.id + "/locations/" + loc.id + "/sensors", NOTHING, \info).body) ?? {};
+                + org.id + "/locations/" + loc.id + "/sensors", NOTHING).body) ?? {};
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            *hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            # translate RestClientIo error arg to the legacy "request-uri"/"response-code"/"response-body" shape
+            rethrow ex.err, ex.desc, mapRestErrorInfo(ex);
         }
 
         return sensormap;

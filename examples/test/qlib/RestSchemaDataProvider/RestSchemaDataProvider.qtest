@@ -23,6 +23,9 @@
 %requires ../../../../qlib/OpenApi3.qm
 %requires ../../../../qlib/ConnectionProvider
 %requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/AsyncSocketIo
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/RestClientIo.qm
 %requires ../../../../qlib/RestSchemaDataProvider
 
 %exec-class RestSchemaDataProviderTest

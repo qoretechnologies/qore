@@ -214,15 +214,24 @@ void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj) {
 }
 
 void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
-    // Hold a reference to the object's program to prevent premature program
-    // destruction while the callback is pending. Without this, the program
-    // can be destroyed (QoreProgramHelper dtor skips QTF_EXTERNAL_LIFECYCLE
-    // threads) while our worker still holds referenced QoreObjects, causing
-    // SIGSEGV on arm64 when evalMethod accesses freed program data.
+    // Hold a dependency reference to the object's program to keep the
+    // program struct alive (not freed) while the callback is pending.
+    // Without this, the program can be destroyed (QoreProgramHelper dtor
+    // skips QTF_EXTERNAL_LIFECYCLE threads) while our worker still holds
+    // referenced QoreObjects, causing SIGSEGV on arm64 when evalMethod
+    // accesses freed program data.
+    //
+    // IMPORTANT: use depRef (not ref) — a strong ref would prevent the
+    // main cleanup thread from running clearNamespaceData / del on the
+    // program while the worker is still processing.  When the worker's
+    // deref is the last strong ref, the worker triggers full program
+    // destruction on a worker thread, racing with the main thread's
+    // module cleanup path.  A dep ref keeps the struct alive without
+    // blocking the data-cleanup path.
     if (item.spop_obj) {
         item.pgm = item.spop_obj->getProgram();
         if (item.pgm) {
-            item.pgm->ref();
+            item.pgm->depRef();
         }
     }
 
@@ -247,7 +256,7 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             item.controller->deref(&xsink);
         }
         if (item.pgm) {
-            item.pgm->deref(&xsink);
+            item.pgm->depDeref();
         }
         return;
     }
@@ -517,16 +526,22 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
         if (async_item.args) {
             async_item.args->deref(xsink);
         }
-        // Release program reference AFTER all object derefs — program must
-        // stay alive while we deref objects belonging to it
-        if (async_item.pgm) {
-            async_item.pgm->deref(xsink);
-        }
 
+        // Decrement per-program and per-dispatcher counters BEFORE the final
+        // program deref.  If this worker is holding the last reference to
+        // the Program and the deref triggers final Program destruction,
+        // that destruction calls aio_program_cleanup() →
+        // AsyncIoControllerPriv::cancelByProgram() → waitForProgramIdle(),
+        // which blocks until active_per_program[pgm] reaches 0.  With the
+        // old ordering (decrement after deref), the count still showed this
+        // worker as active during the Program destructor — the worker
+        // would wait for itself and deadlock.  Swapping the order keeps
+        // the Program alive via async_item.pgm until after the counter
+        // is decremented, so the destructor's waitForProgramIdle() sees 0
+        // and returns immediately.
         {
             AutoLocker al(m);
             --active_processing;
-            // Decrement per-program count and signal waiters
             if (async_item.pgm) {
                 auto it = active_per_program.find(async_item.pgm);
                 if (it != active_per_program.end()) {
@@ -539,6 +554,20 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             if (async_queue.empty() && active_processing == 0) {
                 idle_cond.broadcast();
             }
+        }
+
+        // Release the program dependency reference last.  Object derefs
+        // above may still need the program struct alive (e.g., QoreObject
+        // destructors accessing program data), which is why we defer the
+        // dep deref until after those are complete.
+        //
+        // depDeref (not deref): the worker never triggers program data
+        // cleanup — only memory deallocation when the last dep ref drops.
+        // This prevents the race where the worker's final strong deref
+        // would call waitForTerminationAndClear on the worker thread,
+        // competing with the main cleanup thread's module destruction.
+        if (async_item.pgm) {
+            async_item.pgm->depDeref();
         }
     }
 }
@@ -1812,6 +1841,17 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             break;  // Quit command received
         }
 
+        // Re-check cmdq after processCommands returns — the Vyukov MPSC
+        // queue has a push visibility window between tail.exchange() and
+        // prev->next.store() where drain()/empty() see the queue as empty
+        // even though a push is completing.  If acknowledge() consumed the
+        // notification during that window, the command would sit invisible
+        // until the next poll timeout (up to 10s).  This re-check catches
+        // the late-arriving item after the store completes.
+        if (!t.cmdq.empty()) {
+            continue;
+        }
+
         // --- PHASE 1: Snapshot under lock ---
         struct OpToPoll {
             std::string key;
@@ -1904,7 +1944,22 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             while (!t.timeout_heap.empty()) {
                 auto& top = t.timeout_heap.top();
                 if (top.deadline_us > now_us) {
-                    // Earliest unexpired timeout → sets poll_deadline_us
+                    // Future deadline — but check if the key is still in the
+                    // cache.  Stale entries (for connections that were removed
+                    // between the deadline push and now) must be skipped;
+                    // otherwise poll_deadline_us is set to a stale deadline and
+                    // the I/O thread sleeps until it expires, ignoring
+                    // intermediate work.  Confirmed as the root cause of the
+                    // scenario 4 intermittent 15-second delay in the
+                    // HttpServer.qtest asyncModeH1KeepAliveServerCloseTest.
+                    if (t.cache.find(top.key) == t.cache.end()) {
+                        ASYNC_IO_TRACE("StepC SKIP-STALE-FUTURE key='%s' "
+                            "deadline=%lld\n",
+                            top.key.c_str(), (long long)top.deadline_us);
+                        t.timeout_heap.pop();
+                        continue;
+                    }
+                    // Earliest unexpired non-stale timeout → sets poll_deadline_us
                     if (poll_deadline_us == 0 || top.deadline_us < poll_deadline_us) {
                         poll_deadline_us = top.deadline_us;
                     }
@@ -2824,6 +2879,16 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
             }
+
+            // Signal any remaining cancel waiters whose Cancel commands
+            // were pushed but not visible to drain() due to the Vyukov
+            // MPSC push visibility window (tail.exchange done, next.store
+            // pending).  Without this, waitCancel() blocks forever.
+            for (auto& [key, cond] : cancel_cond_map) {
+                cond->broadcast();
+                delete cond;
+            }
+            cancel_cond_map.clear();
         }
     }
 
@@ -3324,8 +3389,12 @@ bool AsyncIoControllerPriv::processCommands(IoThreadContext& t, ExceptionSink* x
             }
         }
 
-        // Acknowledge notifier — each command has already targeted specific
-        // sockets via wake_socket_hashes; no blanket re-poll needed
+        // Acknowledge notifier — consume the eventfd/pipe notification so
+        // that poll() doesn't busy-wake on stale counters.  Skipping
+        // acknowledge when the batch is empty was considered but rejected:
+        // it causes a busy-loop from accumulated stale notifications.
+        // The main-loop re-check after processCommands() catches items
+        // from the Vyukov MPSC push visibility window instead.
         t.notifier->acknowledge(xsink);
         if (*xsink) {
             xsink->clear();

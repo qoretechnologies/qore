@@ -133,7 +133,37 @@ public:
     }
 
     //! Transitions to CLOSED
+    /** Idempotent — safe to call multiple times.  On the first transition
+        from CONNECTING/READY to CLOSED, fires @ref onClosedHook() exactly
+        once after all internal locks are released and after all
+        @ref ready_notifiers have been signaled.  Subsequent calls are
+        no-ops with respect to the hook (notifiers and the broadcast still
+        run for backwards compatibility).
+    */
     DLLEXPORT void setClosed();
+
+    //! Virtual hook invoked exactly once on the first close transition.
+    /** Subclasses override this to react to closure (e.g., a connection
+        manager evicting the connection from its pool).  Called outside of
+        any internal lock held by this class — implementations may safely
+        acquire other locks, but should not block for long because
+        @ref setClosed may be invoked from the async I/O thread.
+
+        @par Lock ordering
+        Implementations must take their own internal locks BEFORE any
+        manager-level pool lock that might call back into this class.
+        See @c design/http-client-manager-cpp-port.md for the full lock
+        ordering rules.
+
+        @par One-shot semantics
+        Guaranteed to fire at most once per object lifetime.  Even if
+        @ref setClosed is called repeatedly (e.g., by both the I/O thread
+        on idle timeout and the app thread on @c closeConnection), the
+        hook fires once on the first call.
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT virtual void onClosedHook() {}
 
     // --- Lock-free accessors ---
 
@@ -191,6 +221,12 @@ private:
         onConnectionReady() and setClosed().
     */
     std::vector<std::pair<QoreEventNotifier*, QoreObject*>> ready_notifiers;
+
+    //! True after @ref onClosedHook has been invoked.
+    /** Protected by @c lock.  Set under the lock by @ref setClosed on the
+        first close transition; checked there to enforce one-shot semantics.
+    */
+    bool on_closed_hook_fired = false;
 };
 
 #endif // _QORE_ABSTRACTHTTPPOLLCONNECTION_H

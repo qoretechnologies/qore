@@ -787,6 +787,17 @@ long SSLSocketHelper::verifyPeerCertificate() const {
     return rc;
 }
 
+my_socket_priv::my_socket_priv(QoreSocket* s, QoreSSLCertificate* c, QoreSSLPrivateKey* p)
+        : socket(s), cert(c), pk(p) {
+    // Wire the back-pointer so sync I/O helpers can release this
+    // mutex during their poll-wait phase.  See qore_socket_private::outer_lock.
+    socket->priv->outer_lock = &m;
+}
+
+my_socket_priv::my_socket_priv() : socket(new QoreSocket) {
+    socket->priv->outer_lock = &m;
+}
+
 int my_socket_priv::checkOpen(ExceptionSink* xsink) {
     // must be called with the lock held
     assert(m.trylock());
@@ -3328,10 +3339,22 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
+            // Wait for read readiness.  Yield the outer lock only on
+            // non-multiplexed sockets.  H2 mux sockets share a single TLS
+            // connection between the I/O controller's epoll and handler
+            // threads; an independent ::poll() from waitReleasingLock()
+            // would compete for TLS records and cause stream starvation.
+            int wait_rc;
+            if (qs.outer_lock && !qs.h2_session) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    true, false, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
                 if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
@@ -3343,10 +3366,18 @@ int SSLSocketHelper::doSSLRW(ExceptionSink* xsink, const char* mname, void* buf,
                 rc = QSE_TIMEOUT;
                 break;
             }
-            if (!qs.isWriteFinished(timeout_ms, mname, xsink)) {
-                if (*xsink) {
-                    return -1;
-                }
+            // Same guard as WANT_READ: no lock-yielding on H2 mux sockets.
+            int wait_rc;
+            if (qs.outer_lock && !qs.h2_session) {
+                wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                    false, true, timeout_ms, "Socket", mname, xsink);
+            } else {
+                wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
+            }
+            if (*xsink) {
+                return -1;
+            }
+            if (wait_rc <= 0) {
                 if (do_timeout && timeout_ms > 0) {
                     se_timeout("Socket", mname, timeout_ms, xsink);
                 }
@@ -3427,24 +3458,38 @@ int SSLSocketHelper::doSSLUpgradeNonBlockingIO(int rc, const char* mname, int ti
     int err = SSL_get_error(ssl, rc);
 
     if (err == SSL_ERROR_WANT_READ) {
-        if (qs.isSocketDataAvailable(timeout_ms, mname, xsink)) {
-            return 0;
+        // Same H2 mux guard as doSSLRW: no lock-yielding when the socket
+        // has an H2 session — avoids TLS record contention with epoll.
+        int wait_rc;
+        if (qs.outer_lock && !qs.h2_session) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                true, false, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isSocketDataAvailable(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;
     }
 
     if (err == SSL_ERROR_WANT_WRITE) {
-        if (qs.isWriteFinished(timeout_ms, mname, xsink)) {
-            return 0;
+        int wait_rc;
+        if (qs.outer_lock && !qs.h2_session) {
+            wait_rc = SocketSyncPoll::waitReleasingLock(qs, *qs.outer_lock,
+                false, true, timeout_ms, "Socket", mname, xsink);
+        } else {
+            wait_rc = qs.isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
         }
-
         if (*xsink) {
             return -1;
+        }
+        if (wait_rc > 0) {
+            return 0;
         }
         se_timeout("Socket", mname, timeout_ms, xsink);
         return QSE_TIMEOUT;

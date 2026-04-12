@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore EmpathicBuildingDataProvider module definition
 
-/** EmpathicBuildingDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** EmpathicBuildingDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -26,20 +26,12 @@
 public namespace EmpathicBuildingDataProvider {
 #! The EmpathicBuilding data provider class
 public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDataProvider {
-    public {
-        #! IO errors for REST retries
-        const RetrySet = {
-            "SOCKET-SSL-ERROR": True,
-            "SOCKET-CLOSED": True,
-        };
-
-        #! Max retries
-        const MaxIoRetries = 5;
-    }
-
     private {
-        #! The REST client object for API calls
-        RestClient::RestClient rest;
+        #! The REST client — any @ref RestClient::AbstractRestClient "AbstractRestClient" subclass
+        /** May be a sync @ref RestClient::RestClient "RestClient" (HTTP/1.x) or an async
+            @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3 multiplexed).
+        */
+        RestClient::AbstractRestClient rest;
     }
 
     #! Creates the object
@@ -47,7 +39,7 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
     }
 
     #! Creates the object
-    constructor(RestClient::RestClient rest, *Logger::LoggerInterface logger) {
+    constructor(RestClient::AbstractRestClient rest, *Logger::LoggerInterface logger) {
         self.rest = rest;
         if (logger) {
             setLogger(logger);
@@ -62,14 +54,14 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
 
     #! Update any connection used by the data provider
     /** @param conn the new AbstractConnection object
-        @param connobj the new connection object itself (ex: RestClient for a "rest" connection)
+        @param connobj the new connection object itself (ex: an AbstractRestClient for a "rest" connection)
     */
     updateConnectionObjects(object conn, object connobj) {
-        if (!(connobj instanceof RestClient)) {
-            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires a \"RestClient\" object; got "
-                "%y instead", self.className(), connobj.className());
+        if (!(connobj instanceof RestClient::AbstractRestClient)) {
+            throw "UPDATE-CONNECTION-ERROR", sprintf("Data provider %y requires an \"AbstractRestClient\" "
+                "object; got %y instead", self.className(), connobj.className());
         }
-        rest = cast<RestClient>(connobj);
+        rest = cast<RestClient::AbstractRestClient>(connobj);
         rest.setLogger(logger);
     }
 
@@ -81,32 +73,30 @@ public class EmpathicBuildingDataProviderBase inherits DataProvider::AbstractDat
     }
 
     #! Makes a REST call and returns the response
-    private hash<auto> doRestCommand(string method, string path, auto body, reference<hash<auto>> info) {
-        int retries = 0;
-        while (True) {
-            try {
-                debug("REST %y %y (%y) body: %y", method, rest.getURL(), path, body);
-                return rest.doRequest(method, path, body, \info);
-            } catch (hash<ExceptionInfo> ex) {
-                if (retry(ex, \retries)) {
-                    continue;
-                }
-                rethrow;
-            }
-        }
+    /** Connection-level retries (socket errors, stale pooled connections, protocol fallback)
+        are handled by @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+        with up to 3 automatic retries — no application-level retry loop is needed.
+    */
+    private hash<RestClient::RestResponseInfo> doRestCommand(string method, string path, auto body) {
+        debug("REST %y %y (%y) body: %y", method, rest.getUrl(), path, body);
+        return rest.restDoRequest(method, path, body);
     }
 
-    #! Returns True if the error indicates that the operation should be retried
-    private bool retry(hash<ExceptionInfo> ex, reference<int> retries) {
-        if (RetrySet{ex.err}) {
-            if (++retries == MaxIoRetries) {
-                error("maximum retries exceeded (%d)", retries);
-                return False;
-            }
-            warn("technical error making REST call: %s: %s; retrying", ex.err, ex.desc);
-            return True;
+    #! Map a @ref RestClient::RestResponseInfo error arg to the legacy ex arg shape
+    /** The async @ref RestClientIo::RestClientIo "RestClientIo" transport throws
+        @ref RestClient::REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
+        in \c ex.arg; translate to the legacy \c "request-uri" / \c "response-code" /
+        \c "response-body" shape so callers do not need to change.
+    */
+    private static hash<auto> mapRestErrorInfo(hash<ExceptionInfo> ex) {
+        if (ex.arg.typeCode() != NT_HASH) {
+            return {};
         }
-        return False;
+        return {
+            "request-uri": ex.arg.request_path,
+            "response-code": ex.arg.status_code,
+            "response-body": ex.arg.body,
+        };
     }
 }
 }

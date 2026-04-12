@@ -97,6 +97,14 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         response_headers->deref(xsink);
         response_headers = nullptr;
     }
+    if (response_status_message) {
+        response_status_message->deref();
+        response_status_message = nullptr;
+    }
+    if (response_http_version) {
+        response_http_version->deref();
+        response_http_version = nullptr;
+    }
     if (response_body) {
         response_body->deref(xsink);
         response_body = nullptr;
@@ -460,6 +468,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
     }
 
     if (req_data) {
+        // Processing a request — reset the idle deadline so the next idle
+        // period starts fresh after the response completes.
+        idle_deadline_us = 0;
+
         // Before sending on a keep-alive connection, do a non-blocking recv to
         // detect server-initiated close (EOF).  This avoids sending a request on
         // a stale connection and waiting for a response that will never arrive.
@@ -521,8 +533,43 @@ QoreHashNode* Http1ClientPollOperationPriv::handleIdle(ExceptionSink* xsink) {
             peek_rc, errno, fd);
     }
 
+    // Proactive idle timeout check (nginx-style upstream keepalive_timeout).
+    // On subsequent entries (after a previous handleIdle or dispatchResponse
+    // has armed the deadline), close the connection if the deadline has
+    // elapsed.  Defense-in-depth for peers that never close idle connections.
+    if (idle_timeout_us > 0 && idle_deadline_us > 0 && h1_epoch_us() >= idle_deadline_us) {
+        ASYNC_IO_TRACE("H1 handleIdle: IDLE-TIMEOUT deadline reached fd=%d\n", fd);
+        sock_obj->close();
+        setError("HTTP1-IDLE-TIMEOUT",
+            "closing idle HTTP/1.1 connection after idle_timeout expired", xsink);
+        return nullptr;
+    }
+
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    // armIdleDeadline arms idle_deadline_us (if not already armed) and
+    // annotates poll_info with poll_timeout_ms so the controller wakes us
+    // at the deadline.
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+}
+
+QoreHashNode* Http1ClientPollOperationPriv::armIdleDeadline(QoreHashNode* poll_info,
+        ExceptionSink* xsink) {
+    if (idle_timeout_us <= 0 || !poll_info) {
+        return poll_info;
+    }
+    int64_t now_us = h1_epoch_us();
+    if (idle_deadline_us == 0) {
+        idle_deadline_us = now_us + idle_timeout_us;
+        ASYNC_IO_TRACE("H1 armIdleDeadline: arming now+%lldus fd=%d\n",
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+    }
+    int64_t remaining_us = idle_deadline_us - now_us;
+    int64_t timeout_ms = (remaining_us + 999) / 1000;
+    if (timeout_ms < 1) {
+        timeout_ms = 1;
+    }
+    poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+    return poll_info;
 }
 
 QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) {
@@ -689,6 +736,24 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
 
         QoreHashNode* hdr = hdr_val.get<QoreHashNode>();
         response_status_code = (int)hdr->getKeyValue("status_code").getAsBigInt();
+
+        // Capture status message and HTTP version for conn_mgr response format
+        if (response_status_message) {
+            response_status_message->deref();
+            response_status_message = nullptr;
+        }
+        QoreValue sm_val = hdr->getKeyValue("status_message");
+        if (sm_val.getType() == NT_STRING) {
+            response_status_message = sm_val.get<const QoreStringNode>()->stringRefSelf();
+        }
+        if (response_http_version) {
+            response_http_version->deref();
+            response_http_version = nullptr;
+        }
+        QoreValue hv_val = hdr->getKeyValue("http_version");
+        if (hv_val.getType() == NT_STRING) {
+            response_http_version = hv_val.get<const QoreStringNode>()->stringRefSelf();
+        }
 
         // Build response headers hash with lowercase keys
         if (response_headers) {
@@ -1249,6 +1314,12 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     // Build response hash
     ReferenceHolder<QoreHashNode> resp(new QoreHashNode(autoTypeInfo), xsink);
     resp->setKeyValue("status_code", response_status_code, xsink);
+    if (response_status_message) {
+        resp->setKeyValue("status_message", response_status_message->stringRefSelf(), xsink);
+    }
+    if (response_http_version) {
+        resp->setKeyValue("http_version", response_http_version->stringRefSelf(), xsink);
+    }
     if (response_headers) {
         resp->setKeyValue("headers", response_headers->hashRefSelf(), xsink);
     }
@@ -1293,9 +1364,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
         return nullptr;
     }
 
-    // Return to idle
+    // Return to idle — arm the proactive idle deadline so the controller
+    // wakes us up at the timeout (nginx upstream keepalive_timeout pattern).
+    idle_deadline_us = 0;  // fresh idle period after completing a request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
 void Http1ClientPollOperationPriv::dispatchStreamingHeaders(ExceptionSink* xsink) {
@@ -1376,8 +1449,11 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchStreamingEnd(ExceptionSink* 
         return nullptr;
     }
 
+    // Return to idle — arm the proactive idle deadline for nginx-style
+    // upstream keepalive_timeout behavior.
+    idle_deadline_us = 0;  // fresh idle period after completing a streaming request
     h1_state.store(H1State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return armIdleDeadline(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
 }
 
 void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
@@ -1386,6 +1462,14 @@ void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
         response_headers = nullptr;
     }
     response_status_code = 0;
+    if (response_status_message) {
+        response_status_message->deref();
+        response_status_message = nullptr;
+    }
+    if (response_http_version) {
+        response_http_version->deref();
+        response_http_version = nullptr;
+    }
     if (response_body) {
         response_body->deref(xsink);
         response_body = nullptr;
@@ -1405,6 +1489,15 @@ QoreValue Http1ClientPollOperationPriv::convertBodyEncoding(ExceptionSink* xsink
     // Check Content-Type for text-based types
     if (!response_headers) {
         return response_body->refSelf();
+    }
+
+    // Don't charset-convert compressed bodies — caller handles decompression first
+    QoreValue ce_val = response_headers->getKeyValue("content-encoding");
+    if (ce_val.getType() == NT_STRING) {
+        const char* ce = ce_val.get<const QoreStringNode>()->c_str();
+        if (ce && *ce && strcasecmp(ce, "identity")) {
+            return response_body->refSelf();
+        }
     }
 
     QoreValue ct_val = response_headers->getKeyValue("content-type");
@@ -1789,6 +1882,21 @@ bool Http1ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
 */
 nothing Http1ClientPollOperationBase::abort() {
     priv->abort(xsink);
+}
+
+//! Sets the proactive idle timeout for this connection.
+/** When the connection has been idle (no pending request, no active stream)
+    for this many milliseconds, handleIdle() will close it proactively with
+    an \c HTTP1-IDLE-TIMEOUT error.  Mirrors nginx's upstream
+    \c keepalive_timeout — defense-in-depth against peers that never close
+    idle keep-alive connections.
+
+    @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
+
+    @since %Qore 2.3
+*/
+nothing Http1ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
+    priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
 }
 
 //! Returns output from the inner operation

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchRecordIterator class definition
 
-/** ElasticSearchRecordIterator.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchRecordIterator.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -30,8 +30,8 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
     }
 
     private:internal {
-        #! The REST client object for API calls
-        RestClient::RestClient rest;
+        #! The REST client object for API calls — any @ref RestClient::AbstractRestClient subclass
+        RestClient::AbstractRestClient rest;
 
         #! current index name
         string name;
@@ -57,7 +57,7 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
         @param where_cond the where clause for the query, if any
         @param search_options search options; assumed to have already been processed for validity before this call
     */
-    constructor(RestClient::RestClient rest, string name, hash<auto> index,
+    constructor(RestClient::AbstractRestClient rest, string name, hash<auto> index,
             hash<string, DataProvider::AbstractDataField> record_type, *hash<auto> where_cond,
             *hash<auto> search_options)
             : AbstractDataProviderRecordIterator(search_options.requires_result, search_options.max_records) {
@@ -75,15 +75,22 @@ public class ElasticSearchRecordIterator inherits DataProvider::AbstractDataProv
 
         # make query
         *hash<auto> query_body = makeQuery(where_cond, search_options);
-        hash<auto> info;
         try {
             i = new ListHashIterator((map $1{"_id", "_score"} + $1._source,
-                rest.post(uri, query_body, \info).body.hits.hits));
+                rest.restPost(uri, query_body).body.hits.hits));
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
+            # ensure that any error response body is included in the exception; RestClientIo
+            # throws REST-RESPONSE-ERROR with a RestResponseInfo hashdecl in ex.arg, so extract
+            # the legacy-shaped response-code / response-body keys from it
             hash<auto> ex_arg = {
                 "query": query_body,
-            } + info{"response-code", "response-body"};
+            };
+            if (ex.arg.typeCode() == NT_HASH) {
+                ex_arg += {
+                    "response-code": ex.arg.status_code,
+                    "response-body": ex.arg.body,
+                };
+            }
             rethrow ex.err, ex.desc, ex_arg;
         }
     }

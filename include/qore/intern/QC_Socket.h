@@ -62,12 +62,9 @@ public:
     int non_block_accept_count = 0;
     bool valid = true;
 
-    DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr)
-            : socket(s), cert(c), pk(p) {
-    }
+    DLLLOCAL my_socket_priv(QoreSocket* s, QoreSSLCertificate* c = nullptr, QoreSSLPrivateKey* p = nullptr);
 
-    DLLLOCAL my_socket_priv() : socket(new QoreSocket) {
-    }
+    DLLLOCAL my_socket_priv();
 
     DLLLOCAL ~my_socket_priv() {
         if (cert) {

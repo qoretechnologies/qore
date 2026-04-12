@@ -34,6 +34,7 @@
 
 #include "qore/intern/qore_string_private.h"
 #include "qore/AbstractPollState.h"
+#include "qore/intern/SocketSyncPoll.h"
 #include "qore/QoreSocket.h"
 #include "qore/InputStream.h"
 #include "qore/OutputStream.h"
@@ -766,6 +767,49 @@ struct qore_socket_private {
     int in_op = -1,
         ssl_verify_mode = SSL_VERIFY_NONE;
 
+    //! Back-pointer to the outer my_socket_priv's mutex — used by sync I/O
+    //! helpers to release the lock during their poll wait phase.
+    /** Wired by my_socket_priv's constructor when this qore_socket_private
+        is owned by a my_socket_priv.  Null for bare QoreSocket instances
+        that are not wrapped in the object layer.  When null, sync helpers
+        fall back to holding the (non-existent) lock — no contamination
+        concern because there is no outer lock to contend for.
+
+        @since %Qore 2.3
+    */
+    QoreThreadLock* outer_lock = nullptr;
+
+    //! Generation counter bumped on every close / fd swap.
+    /** Sync I/O helpers that release outer_lock during their poll wait
+        phase must re-verify this counter after re-acquiring the lock: if
+        it has changed, the fd they were operating on has been replaced
+        (via close(), migration, etc.) and any captured socket state is
+        stale.  The correct response is to return QSE_NOT_OPEN.
+
+        Mirrors @ref SocketPollOperationBase::getFdGeneration() at the
+        socket level rather than the poll-op level.
+
+        @since %Qore 2.3
+    */
+    uint32_t fd_generation = 0;
+
+#ifdef DEBUG
+    //! Debug-only: when true, the next lock-yielding wait simulates an fd swap.
+    /** Tests set this flag via the debug Socket API to exercise the
+        fd_generation re-verification path in
+        @ref SocketSyncPoll::waitReleasingLock().  The flag is a
+        one-shot: the helper bumps @ref fd_generation and clears the
+        flag before entering its wait, so a single invocation produces
+        exactly one simulated swap.
+
+        @note DEBUG builds only.  The hook is unconditionally ignored
+        in release builds because the member does not exist there.
+
+        @since %Qore 2.3
+    */
+    bool debug_force_fd_swap_next_wait = false;
+#endif
+
     // issue #3512: the remote certificate captured
     QoreObject* remote_cert = nullptr;
 
@@ -794,12 +838,6 @@ struct qore_socket_private {
         This is set when receiving HTTP/2 protocol frames to avoid infinite recursion.
     */
     bool h2_receiving_frames = false;
-
-    //! Flag indicating HTTP/2 stream data is read by an external poll loop
-    /** When true, stream reads should not call receiveData() directly to avoid
-        concurrent HTTP/2 frame processing.
-    */
-    bool h2_stream_read_external = false;
 
     //! Maximum size for chunked HTTP body reads (0 = unlimited)
     /** When set, readHttpChunkedBodyBinary() and readHttpChunkedBody() will
@@ -1099,6 +1137,11 @@ struct qore_socket_private {
         }
         //printd(5, "qore_socket_private::close_and_reset(this: %p) close(%d) returned %d\n", this, sock, rc);
         sock = QORE_INVALID_SOCKET;
+        // Bump fd_generation so any sync I/O helper currently in its
+        // poll-wait phase (with outer_lock released) sees the generation
+        // change on re-acquire and returns QSE_NOT_OPEN instead of
+        // retrying on a dead fd.
+        ++fd_generation;
         if (buflen) {
             buflen = 0;
         }
@@ -1400,11 +1443,21 @@ struct qore_socket_private {
         }
 
         while (true) {
-            if (timeout_ms >= 0 && !isDataAvailable(timeout_ms, "accept", xsink)) {
-                if (*xsink)
+            if (timeout_ms >= 0) {
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout_ms, "Socket", "accept", xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout_ms, "accept", xsink) ? 1 : 0;
+                }
+                if (*xsink) {
                     return -1;
-                // do not throw exception here, NOTHING will be returned in Qore on timeout
-                return QSE_TIMEOUT; // -3
+                }
+                if (wait_rc <= 0) {
+                    // do not throw exception here, NOTHING will be returned in Qore on timeout
+                    return QSE_TIMEOUT; // -3
+                }
             }
 
             int rc = ::accept(sock, addr, size);
@@ -1428,16 +1481,24 @@ struct qore_socket_private {
             if (err == EINTR)
                 continue;
             // The listener may be non-blocking (async I/O controller).  Wait for a
-            // pending connection and retry.  isDataAvailable handles timeout_ms < 0
-            // as an infinite wait.
+            // pending connection and retry.  waitReleasingLock/isDataAvailable handle
+            // timeout_ms < 0 as an infinite wait.
             if (err == EAGAIN
 #if defined(EWOULDBLOCK) && EWOULDBLOCK != EAGAIN
                     || err == EWOULDBLOCK
 #endif
                     ) {
-                if (!isDataAvailable(timeout_ms, "accept", xsink)) {
-                    if (*xsink)
-                        return -1;
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout_ms, "Socket", "accept", xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout_ms, "accept", xsink) ? 1 : 0;
+                }
+                if (*xsink) {
+                    return -1;
+                }
+                if (wait_rc <= 0) {
                     return QSE_TIMEOUT;
                 }
                 continue;
@@ -1463,6 +1524,12 @@ struct qore_socket_private {
             }
             se_in_op_thread("Socket", "accept", xsink);
             return QSE_IN_OP_THREAD;
+        }
+        // Skipped when called from a non-blocking poll op with timeout_ms == 0;
+        // in that case the caller is an async poll state (SocketAcceptPollState)
+        // running on the I/O thread and the single-shot ::accept() doesn't block.
+        if (timeout_ms != 0) {
+            SocketSyncPoll::assertNotOnIoThread("Socket", "accept", xsink);
         }
 
         int rc;
@@ -1753,6 +1820,7 @@ struct qore_socket_private {
     DLLLOCAL int connectUNIX(const char* p, int sock_type, int protocol, ExceptionSink* xsink) {
         assert(xsink);
         assert(p);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "connect", xsink);
         QORE_TRACE("connectUNIX()");
 
 #ifdef _Q_WINDOWS
@@ -2055,39 +2123,17 @@ struct qore_socket_private {
         printd(5, "isDataAvailable() h2_session=%p isServer=%d h2_active=%d h2_recv=%d h2_cond=%d\n",
             h2_session.get(), h2_session ? h2_session->isServer() : -1, h2_active_stream_id, h2_receiving_frames, h2_cond);
         if (h2_cond) {
-            Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
-            printd(5, "isDataAvailable() stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
-            if (stream && !stream->body.empty()) {
-                return true;
-            }
-
-            if (h2_stream_read_external) {
-                return false;
-            }
-
-            // Check if raw socket has data (HTTP/2 frames)
-            bool sock_avail = isSocketDataAvailable(timeout_ms, mname, xsink);
-            printd(5, "isDataAvailable() isSocketDataAvailable(%d)=%d\n", timeout_ms, sock_avail);
-            if (sock_avail) {
-                if (*xsink) {
-                    return false;
-                }
-
-                // Process pending HTTP/2 frames
-                h2_receiving_frames = true;
-                int rv = h2_session->receiveData(100, xsink);
-                h2_receiving_frames = false;
-                printd(5, "isDataAvailable() receiveData rv=%d\n", rv);
-
-                if (*xsink) {
-                    return false;
-                }
-
-                // Re-check stream buffer
-                stream = h2_session->getStream(h2_active_stream_id);
-                printd(5, "isDataAvailable() after recv stream=%p body_size=%d\n", stream, stream ? (int)stream->body.size() : -1);
-                return stream && !stream->body.empty();
-            }
+            // Server-side HTTP/2 is fully async in the current architecture:
+            // handlers must read body data via @ref readHttp2StreamDataBlock()
+            // or use the pre-read `cx.header-info.body` field populated by
+            // HttpServerAsyncIo.  Calling sync isDataAvailable() on an
+            // H2-active server socket is a misuse — raise a clear error
+            // instead of running a sync recv/process loop under the outer
+            // mutex.
+            xsink->raiseException("SOCKET-H2-SYNC-ERROR",
+                "Socket::isDataAvailable() is not supported on an HTTP/2-active "
+                "server socket; use readHttp2StreamDataBlock() or the async "
+                "poll API instead");
             return false;
         }
         return isSocketDataAvailable(timeout_ms, mname, xsink);
@@ -2144,7 +2190,29 @@ struct qore_socket_private {
                     return -1;
                 }
 #else
-                int rc = asyncIoWait(timeout_ms, false, true, "Socket", "connectINETTimeout", xsink);
+                // Yield the outer Socket mutex during the connect wait when
+                // wired — a sync connect() on a handler thread used to block
+                // concurrent async ops on the same Socket for the full
+                // connect_timeout.  Falls back to direct asyncIoWait() for
+                // bare QoreSocket instances.  On POSIX waitReleasingLock
+                // returns > 0 on ready, 0 on timeout (no exception), < 0 on
+                // error/fd-swap (exception raised) — mirror asyncIoWait()'s
+                // return contract for the error-path branches below.
+                int rc;
+                if (outer_lock) {
+                    rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        false, true, timeout_ms, "Socket", "connectINETTimeout", xsink);
+                    if (rc == 0) {
+                        // Promote the tri-state "timeout" to the return code
+                        // the existing switch below expects from asyncIoWait()
+                        // ("rc > 0" ready, fall-through "else" for timeout).
+                        // Any value <= 0 that is not an error takes the
+                        // timeout branch; we set it to 0 which the "else"
+                        // arm handles.
+                    }
+                } else {
+                    rc = asyncIoWait(timeout_ms, false, true, "Socket", "connectINETTimeout", xsink);
+                }
 #endif
                 if (*xsink)
                     return -1;
@@ -2287,6 +2355,7 @@ struct qore_socket_private {
     DLLLOCAL int connectINET(const char* host, const char* service, int timeout_ms, ExceptionSink* xsink,
             int family = AF_UNSPEC, int type = SOCK_STREAM, int protocol = 0) {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "connect", xsink);
         family = q_get_af(family);
         type = q_get_sock_type(type);
 
@@ -2723,6 +2792,7 @@ struct qore_socket_private {
     DLLLOCAL int upgradeClientToSSLIntern(ExceptionSink* xsink, const char* mname, const char* sni_target_host,
             int timeout_ms, QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
+        SocketSyncPoll::assertNotOnIoThread("Socket", mname, xsink);
         SSLSocketHelperHelper sshh(this, true);
 
         int rc;
@@ -2753,6 +2823,7 @@ struct qore_socket_private {
     DLLLOCAL int upgradeServerToSSLIntern(ExceptionSink* xsink, const char* mname, int timeout_ms,
             QoreSSLCertificate* cert = nullptr, QoreSSLPrivateKey* pkey = nullptr) {
         assert(!ssl);
+        SocketSyncPoll::assertNotOnIoThread("Socket", mname, xsink);
         //printd(5, "qore_socket_private::upgradeServerToSSLIntern() this: %p mode: %d\n", this, ssl_verify_mode);
         SSLSocketHelperHelper sshh(this, true);
 
@@ -3114,75 +3185,25 @@ struct qore_socket_private {
             return (ssize_t)bs;
         }
 
-        // Read from HTTP/2 stream buffer when stream is active (but not when receiving protocol frames)
-        // NOTE: Only do HTTP/2 stream handling for server-side connections. For client connections,
-        // HTTPClient's readHttp2StreamData() handles the stream-level reading.
+        // Server-side HTTP/2 is fully async in the current architecture —
+        // handlers must read body data via @ref readHttp2StreamDataBlock()
+        // or use the pre-read `cx.header-info.body` field populated by
+        // HttpServerAsyncIo.  Calling sync recv() on an H2-active server
+        // socket is a misuse; raise a clear error.
+        //
+        // The `!h2_receiving_frames` gate lets the recursive brecv from
+        // h2_session->receiveData() bypass this check — that internal
+        // call needs the raw-socket path below.
         int32_t h2_active_stream_id = getH2ActiveStreamId();
-        bool h2_cond = h2_session && h2_session->isServer() && h2_active_stream_id > 0 && !h2_receiving_frames;
-        if (h2_cond) {
-            while (true) {
-                Http2StreamInfo* stream = h2_session->getStream(h2_active_stream_id);
-
-                if (stream && !stream->body.empty()) {
-                    // Return data from HTTP/2 stream buffer
-                    size_t bytes = std::min(bs, stream->body.size());
-                    memcpy(rbuf, stream->body.data(), bytes);
-                    stream->body.erase(stream->body.begin(), stream->body.begin() + bytes);
-                    buf = rbuf;
-                    if (do_event) {
-                        do_read_event((ssize_t)bytes, bytes);
-                    }
-                    return (ssize_t)bytes;
-                }
-
-                // If the stream is closed and no data remains, report EOF
-                if (stream && (stream->state == Http2StreamState::Closed || stream->body_complete)) {
-                    return 0;
-                }
-
-                if (h2_stream_read_external) {
-                    if (timeout >= 0) {
-                        if (!suppress_exception) {
-                            se_timeout("Socket", meth, timeout, xsink);
-                        }
-                        return QSE_TIMEOUT;
-                    }
-
-                    // Blocking read: wait for socket readability and retry
-                    if (!isSocketDataAvailable(1000, meth, xsink)) {
-                        if (*xsink) {
-                            return -1;
-                        }
-                    }
-                    continue;
-                }
-
-                // If no data buffered, receive more HTTP/2 frames
-                if (!stream || stream->body.empty()) {
-                    // Wait for raw socket data (HTTP/2 frames)
-                    if (timeout >= 0 && !isSocketDataAvailable(timeout, meth, xsink)) {
-                        if (*xsink) {
-                            return -1;
-                        }
-                        if (!suppress_exception) {
-                            se_timeout("Socket", meth, timeout, xsink);
-                        }
-                        return QSE_TIMEOUT;
-                    }
-
-                    // Set flag to prevent recursion when receiveData calls brecv
-                    h2_receiving_frames = true;
-                    int rv = h2_session->receiveData(timeout, xsink);
-                    h2_receiving_frames = false;
-
-                    if (rv < 0) {
-                        return -1;
-                    }
-
-                    // Re-fetch stream after receiving data
-                    stream = h2_session->getStream(h2_active_stream_id);
-                }
+        if (h2_session && h2_session->isServer() && h2_active_stream_id > 0
+                && !h2_receiving_frames) {
+            if (!suppress_exception) {
+                xsink->raiseException("SOCKET-H2-SYNC-ERROR",
+                    "Socket::%s() is not supported on an HTTP/2-active server "
+                    "socket; use readHttp2StreamDataBlock() or the async poll "
+                    "API instead", meth);
             }
+            return QSE_SSL_ERR;
         }
 
         // real socket reads are only done when the buffer is empty
@@ -3192,14 +3213,28 @@ struct qore_socket_private {
 
         ssize_t rc;
         if (!ssl) {
-            if (timeout >= 0 && !isDataAvailable(timeout, meth, xsink)) {
+            // Pre-read readiness wait.  If an outer_lock is wired (i.e. this
+            // socket is owned by a my_socket_priv), use the lock-yielding
+            // helper so concurrent async operations on the same Socket are
+            // not blocked for the duration of the wait.  Otherwise fall back
+            // to the direct isDataAvailable() path.
+            if (timeout >= 0) {
+                int wait_rc;
+                if (outer_lock) {
+                    wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                        true, false, timeout, "Socket", meth, xsink);
+                } else {
+                    wait_rc = isDataAvailable(timeout, meth, xsink) ? 1 : 0;
+                }
                 if (*xsink) {
                     return -1;
                 }
-                if (!suppress_exception) {
-                    se_timeout("Socket", meth, timeout, xsink);
+                if (wait_rc <= 0) {
+                    if (!suppress_exception) {
+                        se_timeout("Socket", meth, timeout, xsink);
+                    }
+                    return QSE_TIMEOUT;
                 }
-                return QSE_TIMEOUT;
             }
 
             while (true) {
@@ -3219,10 +3254,17 @@ struct qore_socket_private {
                             || errno == EWOULDBLOCK
 #endif
                             ) {
-                        if (!isDataAvailable(timeout, meth, xsink)) {
-                            if (*xsink) {
-                                return -1;
-                            }
+                        int wait_rc;
+                        if (outer_lock) {
+                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                                true, false, timeout, "Socket", meth, xsink);
+                        } else {
+                            wait_rc = isDataAvailable(timeout, meth, xsink) ? 1 : 0;
+                        }
+                        if (*xsink) {
+                            return -1;
+                        }
+                        if (wait_rc <= 0) {
                             if (!suppress_exception) {
                                 se_timeout("Socket", meth, timeout, xsink);
                             }
@@ -3393,6 +3435,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recv", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3464,6 +3507,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recv", xsink);
             return nullptr;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recv", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3529,6 +3573,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvBinary", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3585,6 +3630,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvBinary", xsink);
 
         PrivateQoreSocketThroughputHelper th(this, false);
 
@@ -3647,6 +3693,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "recvToOutputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "recvToOutputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -3689,6 +3736,7 @@ struct qore_socket_private {
 
     DLLLOCAL QoreStringNode* readHTTPHeaderString(ExceptionSink* xsink, int timeout, int source) {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "readHTTPHeaderString", xsink);
         ssize_t rc;
         QoreStringNodeHolder hdr(readHTTPData(xsink, "readHTTPHeaderString", timeout, rc));
         if (!hdr) {
@@ -3703,6 +3751,7 @@ struct qore_socket_private {
     DLLLOCAL QoreHashNode* readHTTPHeader(ExceptionSink* xsink, QoreHashNode* info, int timeout,
             ssize_t& rc, int source, const char* headers_raw_key = "headers-raw") {
         assert(xsink);
+        SocketSyncPoll::assertNotOnIoThread("Socket", "readHTTPHeader", xsink);
         QoreStringNodeHolder hdr(readHTTPData(xsink, "readHTTPHeader", timeout, rc));
         if (!hdr) {
             assert(*xsink);
@@ -4110,9 +4159,21 @@ struct qore_socket_private {
                         || errno == EWOULDBLOCK
 #endif
                         ) {
-                        if (!isWriteFinished(timeout_ms, mname, xsink)) {
-                            if (*xsink)
-                                return -1;
+                        // Wait for write readiness with the outer Socket
+                        // mutex released so concurrent async ops on the
+                        // same Socket can make forward progress.  Falls
+                        // back to the direct path for bare QoreSocket
+                        // instances with no outer_lock wired.
+                        int wait_rc;
+                        if (outer_lock) {
+                            wait_rc = SocketSyncPoll::waitReleasingLock(*this, *outer_lock,
+                                false, true, timeout_ms, cname, mname, xsink);
+                        } else {
+                            wait_rc = isWriteFinished(timeout_ms, mname, xsink) ? 1 : 0;
+                        }
+                        if (*xsink)
+                            return -1;
+                        if (wait_rc <= 0) {
                             se_timeout("Socket", mname, timeout_ms, xsink);
                             rc = QSE_TIMEOUT;
                             break;
@@ -4175,6 +4236,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, mname, xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         if (!size) {
             return 0;
         }
@@ -4238,6 +4300,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendFromInputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendFromInputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -4297,6 +4360,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendHttpChunkedBodyFromInputStream", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendHttpChunkedBodyFromInputStream", xsink);
 
         qore_socket_op_helper oh(this);
 
@@ -4391,6 +4455,7 @@ struct qore_socket_private {
             se_in_op_thread("Socket", "sendHttpChunkedBodyTrailer", xsink);
             return;
         }
+        SocketSyncPoll::assertNotOnIoThread("Socket", "sendHttpChunkedBodyTrailer", xsink);
 
         QoreString buf;
         if (!headers) {
@@ -4449,6 +4514,7 @@ struct qore_socket_private {
         const ResolvedCallReferenceNode* send_callback, InputStream* input_stream, size_t max_chunk_size,
         const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
         QoreThreadLock* l = nullptr, bool* aborted = nullptr) {
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         // prepare header string
         QoreString hdr(enc);
 
@@ -4470,6 +4536,7 @@ struct qore_socket_private {
         const void* data, size_t size, const ResolvedCallReferenceNode* send_callback, InputStream* input_stream,
         size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback, int source, int timeout_ms = -1,
         QoreThreadLock* l = nullptr, bool* aborted = nullptr) {
+        SocketSyncPoll::assertNotOnIoThread(cname, mname, xsink);
         // prepare header string
         QoreString hdr(enc);
 
@@ -4620,6 +4687,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, "readHTTPChunkedBodyBinary", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, "readHTTPChunkedBodyBinary", xsink);
 
         // reset "expecting HTTP chunked body" flag
         if (http_exp_chunked_body)
@@ -4816,6 +4884,7 @@ struct qore_socket_private {
             se_in_op_thread(cname, "readHTTPChunkedBody", xsink);
             return 0;
         }
+        SocketSyncPoll::assertNotOnIoThread(cname, "readHTTPChunkedBody", xsink);
 
         // reset "expecting HTTP chunked body" flag
         if (http_exp_chunked_body)

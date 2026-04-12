@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider module definition
 
-/** ElasticSearchIndexesDataProvider.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchIndexesDataProvider.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,7 +51,7 @@ public class ElasticSearchIndexesDataProvider inherits ElasticSearchDataProvider
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient::RestClient rest) : ElasticSearchDataProviderBase(rest) {
+    constructor(RestClient::AbstractRestClient rest) : ElasticSearchDataProviderBase(rest) {
     }
 
     #! Returns the data provider name
@@ -61,7 +61,7 @@ public class ElasticSearchIndexesDataProvider inherits ElasticSearchDataProvider
 
     #! Returns the data provider description
     *string getDesc() {
-        return sprintf("ElasticSearch data %s provider for `%s`", ProviderInfo.name, rest.getSafeURL());
+        return sprintf("ElasticSearch data %s provider for `%s`", ProviderInfo.name, rest.getSafeUrl());
     }
 
     #! Return data provider summary info
@@ -115,13 +115,10 @@ public class ElasticSearchIndexesDataProvider inherits ElasticSearchDataProvider
     /** @return a hash of indices
     */
     private *hash<auto> getAllIndices() {
-        hash<auto> info;
         try {
-            return rest.get("*", NOTHING, \info).body;
+            return rest.restGet("*").body;
         } catch (hash<ExceptionInfo> ex) {
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow ex.err, ex.desc, mapRestErrorInfo(ex);
         }
     }
 
@@ -129,17 +126,33 @@ public class ElasticSearchIndexesDataProvider inherits ElasticSearchDataProvider
     /** @return a hash of the given index or @ref nothing
     */
     private *hash<auto> getIndex(string name) {
-        hash<auto> info;
         try {
-            return rest.get(name, NOTHING, \info).body{name};
+            return rest.restGet(name).body{name};
         } catch (hash<ExceptionInfo> ex) {
-            if (info."response-code" == 404) {
+            if (ex.arg.typeCode() == NT_HASH && ex.arg.status_code == 404) {
                 return;
             }
-            # ensure that any error response body is included in the exception
-            hash<auto> ex_arg = info{"request-uri", "response-code", "response-body"};
-            rethrow ex.err, ex.desc, ex.arg + ex_arg;
+            rethrow ex.err, ex.desc, mapRestErrorInfo(ex);
         }
+    }
+
+    #! Map a @ref RestClient::RestResponseInfo error arg to the legacy ex arg shape
+    /** Historically @ref ElasticSearchIndexesDataProvider exceptions reported REST error
+        context via \c "request-uri" / \c "response-code" / \c "response-body" keys (populated
+        from @ref RestClient::RestClient::get() "RestClient::get()"'s \a info reference param).
+        The async @ref RestClientIo::RestClientIo "RestClientIo" transport instead throws
+        @ref RestClient::REST-RESPONSE-ERROR with a @ref RestClient::RestResponseInfo hashdecl
+        in \c ex.arg; translate to the legacy shape so callers do not need to change.
+    */
+    private static hash<auto> mapRestErrorInfo(hash<ExceptionInfo> ex) {
+        if (ex.arg.typeCode() != NT_HASH) {
+            return {};
+        }
+        return {
+            "request-uri": ex.arg.request_path,
+            "response-code": ex.arg.status_code,
+            "response-body": ex.arg.body,
+        };
     }
 }
 }

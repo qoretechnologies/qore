@@ -38,6 +38,13 @@
 
 /** @cond INTERNAL */
 
+// Returns epoch time in microseconds
+static inline int64_t h2_epoch_us() {
+    int us;
+    int64_t secs = q_epoch_us(us);
+    return secs * 1000000LL + us;
+}
+
 // ============================================================
 // Http2ClientPollOperationPriv implementation
 // ============================================================
@@ -535,17 +542,17 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         h2_state.store(H2State::WAIT_READ, std::memory_order_release);
         // Use C++ events when available — they include SOCK_POLLOUT if there
         // are pending sends (e.g., WINDOW_UPDATE after receiving data)
-        if (poll_info) {
-            return poll_info;
+        if (!poll_info) {
+            poll_info = getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
-        return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+        return applyIdleTimeout(poll_info, xsink);
     }
 
     if (poll_info) {
         // Valid I/O activity (e.g., WINDOW_UPDATE, PING) even if no
         // response output — reset the empty read counter
         empty_read_count = 0;
-        return poll_info;
+        return applyIdleTimeout(poll_info, xsink);
     }
 
     ++empty_read_count;
@@ -564,7 +571,61 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
     }
 
     h2_state.store(H2State::WAIT_READ, std::memory_order_release);
-    return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+    return applyIdleTimeout(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+}
+
+QoreHashNode* Http2ClientPollOperationPriv::applyIdleTimeout(QoreHashNode* poll_info,
+        ExceptionSink* xsink) {
+    if (idle_timeout_us <= 0 || !h2_confirmed.load(std::memory_order_acquire)) {
+        return poll_info;
+    }
+
+    int64_t now_us = h2_epoch_us();
+    bool expired = false;
+    bool armed_now = false;
+    {
+        AutoLocker al(stream_lock);
+        if (active_stream_count > 0) {
+            // Busy — reset the deadline so the next idle period starts fresh
+            idle_deadline_us = 0;
+            return poll_info;
+        }
+        // Idle — check/arm the deadline atomically with the stream-count read
+        if (idle_deadline_us == 0) {
+            idle_deadline_us = now_us + idle_timeout_us;
+            armed_now = true;
+        } else if (now_us >= idle_deadline_us) {
+            expired = true;
+        }
+    }
+
+    if (expired) {
+        ASYNC_IO_TRACE("H2 handleReading: IDLE-TIMEOUT deadline reached fd=%d\n",
+            sock_obj ? sock_obj->getSocket() : -1);
+        if (poll_info) {
+            poll_info->deref(xsink);
+        }
+        setError("HTTP2-IDLE-TIMEOUT",
+            "closing idle HTTP/2 connection after idle_timeout expired", xsink);
+        return nullptr;
+    }
+
+    if (armed_now) {
+        ASYNC_IO_TRACE("H2 handleReading: arming idle deadline now+%lldus fd=%d\n",
+            (long long)idle_timeout_us, sock_obj ? sock_obj->getSocket() : -1);
+    }
+
+    // Annotate poll_info so the controller wakes us at the deadline even if
+    // no socket events arrive.  Mirrors the nginx keepalive timer model.
+    if (poll_info) {
+        int64_t remaining_us = idle_deadline_us - now_us;
+        int64_t timeout_ms = (remaining_us + 999) / 1000;
+        if (timeout_ms < 1) {
+            timeout_ms = 1;
+        }
+        poll_info->setKeyValue("poll_timeout_ms", timeout_ms, xsink);
+    }
+    return poll_info;
 }
 
 void Http2ClientPollOperationPriv::abort(ExceptionSink* xsink) {
@@ -1004,6 +1065,25 @@ bool Http2ClientPollOperationBase::goalReached() [flags=RET_VALUE_ONLY] {
 */
 nothing Http2ClientPollOperationBase::abort() {
     priv->abort(xsink);
+}
+
+//! Sets the proactive idle timeout for this connection.
+/** When the connection has no active streams for this many milliseconds,
+    handleReading() will close it proactively with an \c HTTP2-IDLE-TIMEOUT
+    error.  Mirrors nginx's upstream \c keepalive_timeout — defense-in-depth
+    against peers that never close idle multiplexed connections.
+
+    Note that TCP-based H2 already gets peer-initiated close detection for
+    free via kernel FIN → \c epoll \c POLLIN → nghttp2 error path.  This
+    proactive timeout covers the degenerate case where a peer holds an idle
+    connection open indefinitely.
+
+    @param idle_timeout_ms timeout in milliseconds; <= 0 disables the proactive timeout
+
+    @since %Qore 2.3
+*/
+nothing Http2ClientPollOperationBase::setIdleTimeout(int idle_timeout_ms) {
+    priv->setIdleTimeout((int64_t)idle_timeout_ms * 1000);
 }
 
 //! Returns output from the inner operation

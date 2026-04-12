@@ -1279,7 +1279,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     #! Returns a data field definition from this schema
-    AbstractDataField getField(string fname, *string fdesc, bool freq = True, *HTTPClient rest, auto default_value) {
+    AbstractDataField getField(string fname, *string fdesc, bool freq = True, *object rest, auto default_value) {
         # Simple implementation - returns a basic field
         return new QoreDataField(fname, fdesc ?? desc, AbstractDataProviderType::get(type), default_value);
     }

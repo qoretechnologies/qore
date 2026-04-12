@@ -94,6 +94,18 @@ printf("%Y\n", ans.body);
 #! the MewsRestClient namespace contains all the objects in the MewsRestClient module
 public namespace MewsRestClient {
 #! Common base class for MewsRestClient functionality
+/** Holds the Mews-specific auth state (\c client_token, \c access_token, \c client)
+    shared between @ref MewsRestClient (synchronous RestClient-backed transport) and
+    @ref MewsRestClientIo (multiplexed RestClientIo-backed transport) via
+    multi-inheritance.
+
+    Each transport subclass also holds its own thin @ref preprocessRequestBody()
+    override that injects these fields into every outgoing request body —
+    duplicated on both subclasses because Qore's multi-inheritance method
+    resolution order prefers the leftmost parent (the REST client), which would
+    otherwise return the identity default from
+    @ref RestClient::AbstractRestClient::preprocessRequestBody().
+*/
 public class MewsRestClientBase {
     public {
         #! Connector REST API path prefix
@@ -101,6 +113,39 @@ public class MewsRestClientBase {
 
         #! Default client value
         const DefaultClient = sprintf("Qore %s", Qore::VersionString);
+    }
+
+    private {
+        #! Mews client token
+        string client_token;
+
+        #! Mews access token
+        string access_token;
+
+        #! Mews client value
+        string client = DefaultClient;
+    }
+
+    #! Validates and stores Mews-specific auth state from the option hash
+    /** @param opts the constructor options — must contain \c client_token and
+            \c access_token; an optional \c client value overrides @ref DefaultClient
+
+        @throw RESTCLIENT-ERROR if \c client_token or \c access_token is missing
+    */
+    constructor(hash<auto> opts) {
+        if (opts.client_token) {
+            client_token = opts.client_token;
+        } else {
+            throw "RESTCLIENT-ERROR", "missing 'client_token' option";
+        }
+        if (opts.access_token) {
+            access_token = opts.access_token;
+        } else {
+            throw "RESTCLIENT-ERROR", "missing 'access_token' option";
+        }
+        if (opts.client.typeCode() == NT_STRING && opts.client.val()) {
+            self.client = opts.client;
+        }
     }
 
     #! returns options for @ref MewsRestClient::MewsRestClient::constructor()
@@ -133,17 +178,6 @@ public class MewsRestClientBase {
     this module does not implement that flow.
 */
 public class MewsRestClient inherits RestClient::RestClient, MewsRestClientBase {
-    private {
-        #! Mews client token
-        string client_token;
-
-        #! Mews access token
-        string access_token;
-
-        #! Mews client values
-        string client = DefaultClient;
-    }
-
     #! creates the object with the given options
     /**
         @par Example:
@@ -157,20 +191,9 @@ MewsRestClient rest(opts);
 
         @throw RESTCLIENT-ERROR invalid option passed to constructor, unsupported data serialization, etc
     */
-    constructor(hash<auto> opts, *softbool do_not_connect) : RestClient(MewsRestClientBase::getOptions(opts), True) {
-        if (opts.client_token) {
-            client_token = opts.client_token;
-        } else {
-            throw "RESTCLIENT-ERROR", "missing 'client_token' option";
-        }
-        if (opts.access_token) {
-            access_token = opts.access_token;
-        } else {
-            throw "RESTCLIENT-ERROR", "missing 'access_token' option";
-        }
-        if (*string client = getString(opts, "client")) {
-            self.client = client;
-        }
+    constructor(hash<auto> opts, *softbool do_not_connect)
+            : RestClient(MewsRestClientBase::getOptions(opts), True),
+              MewsRestClientBase(opts) {
         if (validator instanceof NullRestSchemaValidator) {
             setConnectionPath(DefaultUriPathPrefix);
         }
@@ -209,7 +232,18 @@ MewsRestClient rest(opts);
         return RestClient::doRequest("POST", path, body, \info, NOTHING, hdr);
     }
 
-    #! Adds authorization keys to the request body
+    #! Injects the Mews auth tokens into every outgoing request body
+    /** Duplicated between @ref MewsRestClient and @ref MewsRestClientIo because
+        Qore's multi-inheritance method resolution picks the leftmost parent
+        (the REST client's identity default) when the same method lives on a
+        mixin. Both overrides read the field state inherited from
+        @ref MewsRestClientBase.
+
+        @param body the caller-supplied request body; must be @ref NOTHING or a hash
+
+        @return the body with \c ClientToken, \c AccessToken, and \c Client fields
+            prepended
+    */
     auto preprocessRequestBody(auto body) {
         if (!exists body || body.typeCode() == NT_HASH) {
             return {
@@ -442,11 +476,48 @@ public class MewsRestConnection inherits RestClient::RestConnection {
 */
 public class MewsRestClientIo inherits RestClientIo::RestClientIo, MewsRestClientBase {
     #! Creates the object with the given options
-    /** @param opts constructor options
+    /** @param opts constructor options; must contain \c client_token and \c access_token
+            for Mews auth (see @ref MewsRestClientBase::constructor())
         @param shared_mgr optional shared connection manager
+
+        @throw RESTCLIENT-ERROR if \c client_token or \c access_token is missing
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo(MewsRestClientBase::getOptions(opts), shared_mgr) {
+            : RestClientIo(MewsRestClientIo::stripMewsOptions(MewsRestClientBase::getOptions(opts)),
+                  shared_mgr),
+              MewsRestClientBase(opts) {
+    }
+
+    #! Injects the Mews auth tokens into every outgoing request body
+    /** Duplicated between @ref MewsRestClient and @ref MewsRestClientIo because
+        Qore's multi-inheritance method resolution picks the leftmost parent
+        (the REST client's identity default) when the same method lives on a
+        mixin. Both overrides read the field state inherited from
+        @ref MewsRestClientBase.
+
+        @param body the caller-supplied request body; must be @ref NOTHING or a hash
+
+        @return the body with \c ClientToken, \c AccessToken, and \c Client fields
+            prepended
+    */
+    auto preprocessRequestBody(auto body) {
+        if (!exists body || body.typeCode() == NT_HASH) {
+            return {
+                "ClientToken": client_token,
+                "AccessToken": access_token,
+                "Client": client,
+            } + body;
+        }
+        return body;
+    }
+
+    #! Returns a copy of the options with Mews-specific keys removed
+    /** Mirrors @ref AwsRestClient::AwsRestClientIo::stripAwsOptions() — strips
+        \c client_token, \c access_token, and \c client before forwarding the
+        option hash to the strict @ref RestClientIo::RestClientIo constructor.
+    */
+    static hash<auto> stripMewsOptions(hash<auto> opts) {
+        return opts - ("client_token", "access_token", "client");
     }
 }
 }

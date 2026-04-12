@@ -1,5 +1,5 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
-#! @file RestClientIo.qm Qore user module for REST clients over multiplexed HTTP/2 and HTTP/3
+#! @file RestClientIo.qm Qore user module providing an async REST client over HTTP/1.x, HTTP/2, and HTTP/3
 
 /*  RestClientIo.qm Copyright 2026 Qore Technologies, s.r.o.
 
@@ -33,6 +33,7 @@
 %requires Swagger >= 2.0
 %requires OpenApi3 >= 1.0
 %requires Mime >= 1.7
+%requires FileLocationHandler
 
 %try-module yaml >= 0.5
 %define NoYaml
@@ -268,13 +269,17 @@ hash<RestResponseInfo> resp = f.get(30s);
         }
     }
 
-    #! REST client using multiplexed HTTP/2 and HTTP/3 connections
+    #! Async REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** This class implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface
-        using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager" for
-        multiplexed HTTP/2 and HTTP/3 connections.
+        using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", which
+        provides a unified event-loop-based transport for HTTP/1.x, HTTP/2, and HTTP/3.
 
-        Multiple concurrent requests are multiplexed over shared connections rather than serializing
-        through a single HTTP/1.1 connection as @ref RestClient::RestClient "RestClient" does.
+        \c RestClientIo is the async evolution of @ref RestClient::RestClient "RestClient" and is the
+        recommended REST transport for new code. Whereas @ref RestClient::RestClient "RestClient" is
+        built on the built-in @ref Qore::HTTPClient "HTTPClient" class and therefore only speaks
+        HTTP/1.x synchronously, \c RestClientIo additionally supports HTTP/2 and HTTP/3, and
+        multiplexes multiple concurrent requests over shared connections whenever the negotiated
+        protocol allows it (HTTP/2 and HTTP/3).
 
         @par Constructor Options
         - \c url (required): the target URL (e.g., \c "https://api.example.com")
@@ -349,6 +354,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! True if this instance owns the connection manager (should close on close())
             bool owns_mgr = True;
+
+            #! Constructor options hash, kept for @ref copyWithUrl() and @ref getConstructorOptions()
+            /** Captured verbatim in the constructor so that a sibling instance can be
+                built with the same config via @ref copyWithUrl(). Immutable post-construction.
+            */
+            hash<auto> saved_opts;
 
             #! Target URL
             string url;
@@ -465,6 +476,53 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! Callback to notify the connection when options (tokens) are updated
             transient *code update_options;
+
+            #! Header name for sending the token as an API key (lowercased); NOTHING to use standard Authorization
+            *string token_api_key_header_val;
+
+            #! Key/value pattern that marks a 200-OK body as an auth failure (triggers token refresh)
+            *hash<auto> rest_body_auth_error_check;
+
+            #! URL substitution info applied to oauth2_alt_token_url by external tooling
+            /** Config-level pass-through; mirrors @ref RestClient::RestClient's field of the
+                same name.  Returned by @ref getOAuth2Options() for external programs (Qorus
+                connection management, etc.) to read.  Not consumed internally.
+            */
+            *hash<auto> oauth2_alt_url_subst;
+
+            #! OAuth2 PKCE (Proof Key for Code Exchange) method: @c "plain", @c "S256", or @c "none"
+            /** Validated at construction time against @ref PkceValueSet.  Consumed during
+                @c authorization_code grant flow when generating the authorization URL and
+                trading the code for a token.  RestClientIo does not yet implement
+                interactive @c authorization_code grant flows (see
+                @ref getOAuth2LoginInfo()); until that feature lands the PKCE value is
+                stored but no PKCE exchange is performed.
+            */
+            *string oauth2_pkce;
+
+            #! Whether the OAuth2 @c state parameter is sent via the @c redirect_uri or as a separate query arg
+            /** Config-level pass-through consumed by @c authorization_code / @c implicit
+                grant authorization URL generation; RestClientIo does not yet implement
+                those flows.  Stored so that external tooling that introspects via
+                @ref getOAuth2Options() sees the configured value.
+            */
+            *bool oauth2_redirect_passthrough_state;
+
+            #! External OAuth2 app name hint for external configuration tooling
+            /** Pure hint passed through via @ref getOAuth2Options() for external
+                programs that resolve OAuth2 configuration out-of-band.  Not consumed
+                internally.
+            */
+            *string oauth2_app;
+
+            #! Custom token refresh: authentication method (e.g., \c "body-user-pass")
+            *string custom_token_auth;
+            #! Custom token refresh: response location (\c "body-direct" or \c "body-plain")
+            *string custom_token_location;
+            #! Custom token refresh: HTTP method (\c "GET", \c "POST", etc.)
+            *string custom_token_method;
+            #! Custom token refresh: URI path relative to the client URL
+            *string custom_token_path;
         }
 
         public {
@@ -504,6 +562,138 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "Accept": Accept,
                 "User-Agent": RestClientIo::VersionString,
             };
+
+            #! Map of legacy @c http_version values to internal @c protocol codes
+            const HttpVersionMap = {
+                "auto": "auto",
+                "1.0": "h1",
+                "1.1": "h1",
+                "2.0": "h2",
+                "3.0": "h3",
+            };
+
+            #! Valid @c oauth2_pkce option values
+            /** Mirrors @ref RestClient::RestClient::PkceValueSet.
+            */
+            const PkceValueSet = {
+                "plain": True,
+                "S256": True,
+                "none": True,
+            };
+
+            #! Custom token refresh options (all-or-nothing); mirrors
+            #! @ref RestClient::RestClient::CustomTokenOptions
+            const CustomTokenOptions = {
+                "custom_token_auth": True,
+                "custom_token_method": True,
+                "custom_token_path": True,
+                "custom_token_location": True,
+            };
+
+            #! Canonical set of option keys accepted by @ref RestClientIo::constructor()
+            /** Unknown keys cause a @c RESTCLIENTIO-OPTION-ERROR at construction time. This set
+                intentionally mirrors the options declared by @ref RestClient::RestConnection
+                "RestConnection" so that @ref RestClient::RestConnection::getAsyncImpl()
+                "getAsyncImpl()" can pass its full options hash verbatim. Keys marked "accepted
+                but not honored" are valid options that RestClientIo has not yet implemented and
+                silently ignores — Phase 2 (TLS client certs) and Phase 3 (OAuth2 PKCE, custom
+                token refresh, etc.) will wire them up.
+
+                Subclasses that add their own options (e.g.,
+                @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo") must strip those keys
+                before calling the base constructor.
+            */
+            const KnownOptions = {
+                # Core transport / URL
+                "url": True,
+                "default_path": True,
+                "protocol": True,
+                "http_version": True,
+                "connect_timeout": True,
+                "timeout": True,
+                "proxy": True,
+                "max_connections_per_host": True,
+                "max_streams_per_connection": True,
+                "max_redirects": True,
+                "redirect_passthru": True,
+                "enable_cookies": True,
+                "cookie": True,
+                # TLS (verify mode, mTLS client cert/key all honored)
+                "ssl_verify_mode": True,
+                "ssl_verify_cert": True,
+                "accept_all_certs": True,
+                "ssl_cert_path": True,
+                "ssl_cert_data": True,
+                "ssl_cert_der": True,
+                "ssl_key_path": True,
+                "ssl_key_data": True,
+                "ssl_key_der": True,
+                "ssl_key_password": True,
+                # Logging
+                "logger": True,
+                # Serialization / encoding
+                "data": True,
+                "send_encoding": True,
+                "content_encoding": True,
+                "no_charset": True,
+                "error_passthru": True,
+                "allow_any_response": True,
+                # Headers
+                "headers": True,
+                # REST schema validator
+                "validator": True,
+                "swagger": True,
+                "openapi3": True,
+                "swagger_base_path": True,
+                "swagger_lax_parsing": True,
+                "validator_base_path": True,
+                # Auth (basic + token)
+                "username": True,
+                "password": True,
+                "token": True,
+                "token_type": True,
+                "token_api_key_header": True,
+                "rest_body_auth_error_check": True,
+                # OAuth2 (core honored)
+                "oauth2_grant_type": True,
+                "oauth2_client_id": True,
+                "oauth2_client_secret": True,
+                "oauth2_token_url": True,
+                "oauth2_alt_token_url": True,
+                "oauth2_scopes": True,
+                "oauth2_scope_separator_char": True,
+                "oauth2_auth_args": True,
+                "oauth2_token_args": True,
+                "oauth2_auth_url": True,
+                "oauth2_redirect_url": True,
+                "oauth2_auto_refresh": True,
+                "oauth2_token_use_basic_auth": True,
+                "oauth2_token_auth_secret_only": True,
+                "oauth2_token_expiry": True,
+                "oauth2_token_expiry_hint": True,
+                "oauth2_refresh_token": True,
+                # OAuth2 (stored + exposed via getOAuth2Options; authorization_code /
+                # implicit grant consumers not yet implemented in RestClientIo)
+                "oauth2_pkce": True,
+                "oauth2_alt_url_subst": True,
+                "oauth2_redirect_passthrough_state": True,
+                "oauth2_app": True,
+                # Custom token refresh — honored via customGetTokenIntern() during
+                # initial login and 401 retry; all-or-nothing validation at construction
+                "custom_token_auth": True,
+                "custom_token_location": True,
+                "custom_token_method": True,
+                "custom_token_path": True,
+                # Ping metadata (consumed by RestConnection, passed through unchanged)
+                "ping_method": True,
+                "ping_path": True,
+                "ping_headers": True,
+                "ping_body": True,
+                "disable_automatic_pings": True,
+                # Lifecycle
+                "skip_login": True,
+                "update_options": True,
+            };
         }
 
         #! Creates a new RestClientIo with the given options
@@ -517,6 +707,43 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @throw RESTCLIENTIO-ERROR if the \c url option is missing or invalid
         */
         constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr) {
+            # Capture caller options verbatim for copyWithUrl / getConstructorOptions;
+            # validation and normalization below mutate the local 'opts' but saved_opts
+            # preserves the caller's original intent for sibling construction
+            saved_opts = opts;
+
+            # Strip HTTP/1.x-only HTTPClient options that H2/H3 cannot honor
+            # and any unknown keys (e.g., service-specific options already
+            # consumed by subclass getOptions() calls like "api_profile",
+            # "encode_chars", "tenant", etc.)
+            opts -= keys RestClient::AbstractRestClient::Http1OnlyOptions;
+            opts -= keys (opts - (keys KnownOptions));
+
+            # Normalize http_version (RestClient legacy) → protocol (RestClientIo/HttpClientIo)
+            if (exists opts.http_version) {
+                if (!HttpVersionMap{opts.http_version}) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("invalid http_version %y; valid values: %y", opts.http_version,
+                            keys HttpVersionMap);
+                }
+                if (exists opts.protocol && opts.protocol != HttpVersionMap{opts.http_version}) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("http_version %y maps to protocol %y which conflicts with "
+                            "explicit protocol %y", opts.http_version,
+                            HttpVersionMap{opts.http_version}, opts.protocol);
+                }
+                opts.protocol = HttpVersionMap{opts.http_version};
+                remove opts.http_version;
+            }
+
+            # Normalize ssl_verify_cert (RestClient legacy bool) → ssl_verify_mode
+            if (exists opts.ssl_verify_cert && !exists opts.ssl_verify_mode) {
+                opts.ssl_verify_mode = opts.ssl_verify_cert.toBool()
+                    ? Qore::SSL_VERIFY_PEER
+                    : Qore::SSL_VERIFY_NONE;
+            }
+            remove opts.ssl_verify_cert;
+
             if (!opts.url) {
                 throw "RESTCLIENTIO-ERROR", "url option is required";
             }
@@ -537,10 +764,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 logger = cast<LoggerInterface>(opts.logger);
             }
 
+            # Set validator: explicit object takes precedence, otherwise load from swagger/openapi3
             if (opts.validator instanceof RestSchemaValidator::AbstractRestSchemaValidator) {
                 validator = cast<RestSchemaValidator::AbstractRestSchemaValidator>(opts.validator);
+                *string base_path = opts.swagger_base_path ?? opts.validator_base_path;
+                if (base_path) {
+                    validator.setBasePath(base_path);
+                }
             } else {
-                validator = new RestSchemaValidator::NullRestSchemaValidator();
+                if (opts.openapi3 && opts.swagger) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        "options 'openapi3' and 'swagger' are mutually exclusive";
+                }
+                *hash<auto> loader_opts = opts.swagger_lax_parsing ? {"parse_flags": -1} : NOTHING;
+                if (opts.openapi3) {
+                    validator = OpenApi3Loader::fromUrl(opts.openapi3, NOTHING, loader_opts);
+                } else if (opts.swagger) {
+                    validator = SwaggerLoader::fromUrl(opts.swagger, NOTHING, loader_opts);
+                } else {
+                    validator = new RestSchemaValidator::NullRestSchemaValidator();
+                }
+                *string base_path = opts.swagger_base_path ?? opts.validator_base_path;
+                if (base_path && !(validator instanceof RestSchemaValidator::NullRestSchemaValidator)) {
+                    validator.setBasePath(base_path);
+                }
             }
 
             headers += DefaultHeaders + opts.headers;
@@ -549,6 +796,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             if (opts.send_encoding) {
                 setSendEncoding(opts.send_encoding);
+            }
+
+            # Must be set before setToken() so it routes the initial token correctly
+            if (opts.token_api_key_header.val()) {
+                token_api_key_header_val = opts.token_api_key_header.lwr();
+            }
+
+            if (opts.rest_body_auth_error_check) {
+                rest_body_auth_error_check = opts.rest_body_auth_error_check;
             }
 
             if (opts.token) {
@@ -636,6 +892,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (opts.oauth2_refresh_token) {
                 refresh_token = opts.oauth2_refresh_token;
             }
+            if (opts.oauth2_alt_url_subst) {
+                oauth2_alt_url_subst = opts.oauth2_alt_url_subst;
+            }
+            if (opts.oauth2_app) {
+                oauth2_app = opts.oauth2_app;
+            }
+            if (exists opts.oauth2_redirect_passthrough_state) {
+                oauth2_redirect_passthrough_state = opts.oauth2_redirect_passthrough_state.toBool();
+            }
+            if (exists opts.oauth2_pkce) {
+                # Accept RestClient's backwards-compatible True/False/1/0 shorthand
+                if ((opts.oauth2_pkce === True) || (opts.oauth2_pkce == "1")) {
+                    oauth2_pkce = "S256";
+                } else if ((opts.oauth2_pkce === False) || (opts.oauth2_pkce == "0")) {
+                    oauth2_pkce = "none";
+                } else {
+                    if (!PkceValueSet{opts.oauth2_pkce}) {
+                        throw "RESTCLIENTIO-OPTION-ERROR",
+                            sprintf("invalid oauth2_pkce option value %y; valid values: %y",
+                                opts.oauth2_pkce, keys PkceValueSet);
+                    }
+                    oauth2_pkce = opts.oauth2_pkce;
+                }
+            }
             if (opts.username) {
                 username = opts.username;
             }
@@ -649,6 +929,28 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             # HTTP Basic auth: set if username provided and no OAuth2 grant type configured
             if (opts.username && (!oauth2_grant_type || oauth2_grant_type == "none")) {
                 setUserPassword(opts.username, opts.password);
+            }
+
+            # Custom token refresh: all-or-nothing validation + body-user-pass auth
+            # requires username/password
+            if ((*hash<auto> custom_token_opts = opts{keys CustomTokenOptions})) {
+                if (custom_token_opts.size() != CustomTokenOptions.size()) {
+                    throw "RESTCLIENTIO-OPTION-ERROR",
+                        sprintf("custom token options are not all set; all of must be set; have "
+                            "options: %y missing options: %y", custom_token_opts,
+                            CustomTokenOptions - keys custom_token_opts);
+                }
+                if (custom_token_opts.custom_token_auth == "body-user-pass") {
+                    if (!username.val() || !password.val()) {
+                        throw "RESTCLIENTIO-OPTION-ERROR",
+                            "custom token refresh auth method 'body-user-pass' requires a "
+                            "username and password to be set";
+                    }
+                }
+                custom_token_auth = custom_token_opts.custom_token_auth;
+                custom_token_location = custom_token_opts.custom_token_location;
+                custom_token_method = custom_token_opts.custom_token_method;
+                custom_token_path = custom_token_opts.custom_token_path;
             }
 
             if (shared_mgr) {
@@ -684,6 +986,60 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns the underlying connection manager
         HttpClientIo::HttpClientConnectionManager getConnectionManager() {
             return mgr;
+        }
+
+        #! Returns a copy of the constructor options this instance was built with
+        /** The returned hash is suitable for passing to the @ref RestClientIo
+            constructor to build a sibling instance — for example with a different
+            target URL. See @ref copyWithUrl() for the common case.
+
+            @return a copy of the options hash the caller passed to the constructor,
+                before any internal normalization (e.g., before \c http_version was
+                translated to \c protocol)
+        */
+        hash<auto> getConstructorOptions() {
+            return saved_opts;
+        }
+
+        #! Returns a new RestClientIo pointed at a different URL, sharing the connection manager
+        /** Builds a new RestClientIo instance with the same configuration as this
+            one (tokens, headers, validator, OAuth2 state, etc.) but with a different
+            target URL. The new instance shares this instance's connection manager,
+            so connections to hosts common to both URLs are reused from the pool.
+
+            This is the correct way to retarget an existing client when the immutable
+            URL design makes in-place mutation impossible.
+
+            @param new_url the new target URL
+
+            @return a new @ref RestClientIo instance with the updated URL
+
+            @note Initial OAuth2 login is skipped for the copy — it inherits the
+            parent's access token via the captured options. If the parent's token
+            is not valid for the new URL, the copy will refresh on the first
+            request via the normal 401 retry path.
+        */
+        RestClient::AbstractRestClient copyWithUrl(string new_url) {
+            hash<auto> opts = saved_opts + {
+                "url": new_url,
+                "skip_login": True,
+            };
+            # Inherit the parent's current token (acquired via initial login or
+            # a prior refresh) so the copy doesn't fire a duplicate OAuth2 login
+            {
+                AutoReadLock al(config_lock);
+                if (token_val.val()) {
+                    opts.token = token_val;
+                    opts.token_type = token_type_val;
+                    if (oauth2_token_expiry.val()) {
+                        opts.oauth2_token_expiry = oauth2_token_expiry;
+                    }
+                    if (refresh_token.val()) {
+                        opts.oauth2_refresh_token = refresh_token;
+                    }
+                }
+            }
+            return new RestClientIo(opts, mgr);
         }
 
         #! Returns the logger for this client
@@ -849,39 +1205,115 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
                 *hash<auto> hdr) {
+            return restDoRequestIntern(method, path, body, hdr, False);
+        }
+
+        #! Sends a REST request with a pre-serialized body; skips validator \c processRequest
+        /** Mirrors @ref RestClient::RestClient::doValidatedRequest() semantics: the
+            caller has already prepared and serialized the request body (and set the
+            \c Content-Type header appropriately); this method sends it as-is and
+            still runs response-side validation via the configured validator.
+
+            Use this when integrating with a higher-level request builder — for
+            example @ref RestSchemaDataProvider::RestSchemaRequestDataProvider which
+            validates and serializes against its own @c AbstractRestSchemaOperation
+            and doesn't want the client-side validator to repeat the work.
+
+            @param method HTTP method
+            @param path request path
+            @param body pre-serialized request body (or @ref NOTHING)
+            @param hdr request headers (caller is responsible for setting \c Content-Type)
+
+            @return the deserialized @ref RestClient::RestResponseInfo hash
+        */
+        hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+                *hash<auto> hdr) {
+            return restDoRequestIntern(method, path, body, hdr, True);
+        }
+
+        #! Internal: shared request path for @ref restDoRequest() and @ref restDoRawRequest()
+        private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path,
+                auto body, *hash<auto> hdr, bool raw) {
             ensureToken();
 
-            # 1. Snapshot config state and serialize body
-            hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            # 1. Snapshot config state and serialize body (or skip serialization for raw)
+            hash<auto> prepared = raw
+                ? prepareRawRequest(method, \path, body, \hdr)
+                : prepareRequest(method, \path, body, \hdr);
 
-            log(LoggerLevel::DEBUG, "restDoRequest() %s %s%s", method, url, path);
+            log(LoggerLevel::DEBUG, "%s() %s %s%s", raw ? "restDoRawRequest" : "restDoRequest",
+                method, url, path);
 
             # 2. Make HTTP request via multiplexed connection manager
-            hash<auto> raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+            hash<auto> raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
 
             # 3. If 401 and OAuth2 configured, try to refresh token and retry once
-            if (raw.status_code == 401 && canRetryAuth()) {
+            if (raw_resp.status_code == 401 && canRetryAuth()) {
                 try {
                     getNewTokenIntern();
                 } catch () {
                     # If refresh fails, return the original 401 response
-                    return buildResponse(raw, prepared.error_passthru,
+                    return buildResponse(raw_resp, prepared.error_passthru,
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
-                # Strip stale authorization from hdr — prepareRequest() merges as
+                # Strip stale auth header from hdr — prepareRequest() merges as
                 # hdr = {} + headers + hdr, so the old value would override the
                 # freshly-refreshed token in headers
-                hdr -= "authorization";
+                hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
-                prepared = prepareRequest(method, \path, body, \hdr);
-                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 4. Deserialize and return — pass request context for info fields
-            return buildResponse(raw, prepared.error_passthru,
+            # 4. Deserialize
+            hash<RestClient::RestResponseInfo> resp = buildResponse(raw_resp, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
+
+            # 5. Body-level auth error check on 200 OK: some servers return success with an error
+            # payload when the token has expired; refresh and retry once
+            if (isBodyAuthError(resp) && canRetryAuth()) {
+                try {
+                    getNewTokenIntern();
+                } catch () {
+                    return resp;
+                }
+                hdr -= getAuthHeaderName();
+                prepared = raw
+                    ? prepareRawRequest(method, \path, body, \hdr)
+                    : prepareRequest(method, \path, body, \hdr);
+                raw_resp = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                resp = buildResponse(raw_resp, prepared.error_passthru,
+                    prepared.allow_any_response, method, path, hdr,
+                    prepared.serialized_body);
+            }
+
+            return resp;
+        }
+
+        #! Returns the header name used to carry authentication tokens (lowercased)
+        private string getAuthHeaderName() {
+            AutoReadLock al(config_lock);
+            return token_api_key_header_val.val() ? token_api_key_header_val : "authorization";
+        }
+
+        #! Returns True if the response matches the configured body-level auth error pattern
+        private bool isBodyAuthError(hash<RestClient::RestResponseInfo> resp) {
+            *hash<auto> pattern;
+            {
+                AutoReadLock al(config_lock);
+                pattern = rest_body_auth_error_check;
+            }
+            if (!pattern) {
+                return False;
+            }
+            if (resp.body.typeCode() != NT_HASH) {
+                return False;
+            }
+            return resp.body{keys pattern} == pattern;
         }
 
         #! Sends an async generic REST request and returns a RestFuture
@@ -939,8 +1371,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             @param skip_ensure_token if True, skip synchronous OAuth2 token check (use existing token as-is)
 
             @return a Future that resolves to the response hash
-
-            @since %RestClientIo 1.1
         */
         Future restDoRequestAsync(string method, string path, auto body, *hash<auto> hdr,
                 *bool skip_ensure_token) {
@@ -1167,8 +1597,8 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                         prepared.allow_any_response, method, path, hdr,
                         prepared.serialized_body);
                 }
-                # Strip stale authorization from hdr (see restDoRequest comment)
-                hdr -= "authorization";
+                # Strip stale auth header from hdr (see restDoRequest comment)
+                hdr -= getAuthHeaderName();
                 # Re-snapshot headers with new token
                 prepared = prepareRequest(method, \path, body, \hdr);
                 sig = signer({"path": path, "body": prepared.serialized_body,
@@ -1177,10 +1607,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
             }
 
-            # 5. Deserialize and return
-            return buildResponse(raw, prepared.error_passthru,
+            # 5. Deserialize
+            hash<RestClient::RestResponseInfo> resp = buildResponse(raw, prepared.error_passthru,
                 prepared.allow_any_response, method, path, hdr,
                 prepared.serialized_body);
+
+            # 6. Body-level auth error retry (see restDoRequest)
+            if (isBodyAuthError(resp) && canRetryAuth()) {
+                try {
+                    getNewTokenIntern();
+                } catch () {
+                    return resp;
+                }
+                hdr -= getAuthHeaderName();
+                prepared = prepareRequest(method, \path, body, \hdr);
+                sig = signer({"path": path, "body": prepared.serialized_body,
+                    "hdr": hdr - shdr});
+                hdr{shdr} = sig;
+                raw = mgr.request(url, method, path, hdr, prepared.serialized_body);
+                resp = buildResponse(raw, prepared.error_passthru,
+                    prepared.allow_any_response, method, path, hdr,
+                    prepared.serialized_body);
+            }
+
+            return resp;
         }
 
         #! Sends an async signed REST request and returns a RestFuture
@@ -1279,7 +1729,7 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             return restDoRequestAsync("OPTIONS", path, NOTHING, hdr);
         }
 
-        #! Internal: snapshots config state and serializes the request body
+        #! Internal: snapshots config state and serializes the request body via the validator
         /** @param method HTTP method
             @param path request path
             @param body request body (optional)
@@ -1289,6 +1739,30 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         */
         private hash<auto> prepareRequest(string method, reference<string> path, auto body,
                 reference<*hash<auto>> hdr) {
+            return prepareRequestIntern(method, \path, body, \hdr, False);
+        }
+
+        #! Internal: snapshots config state; leaves pre-serialized body as-is
+        /** Used by @ref restDoRawRequest() for callers that have already prepared
+            and serialized the request body and want to skip the validator's
+            \c processRequest() step.
+
+            @param method HTTP method
+            @param path request path
+            @param body pre-serialized request body (or @ref NOTHING)
+            @param hdr reference to headers hash (merged with defaults; caller is
+                responsible for setting \c Content-Type)
+
+            @return a hash with \c serialized_body and \c error_passthru keys
+        */
+        private hash<auto> prepareRawRequest(string method, reference<string> path, *data body,
+                reference<*hash<auto>> hdr) {
+            return prepareRequestIntern(method, \path, body, \hdr, True);
+        }
+
+        #! Internal: shared prep path for @ref prepareRequest() and @ref prepareRawRequest()
+        private hash<auto> prepareRequestIntern(string method, reference<string> path, auto body,
+                reference<*hash<auto>> hdr, bool raw) {
             # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/")
             if (path.val() && path[0] != "/") {
                 path = "/" + path;
@@ -1326,14 +1800,23 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             *data serialized_body;
             if (exists body) {
-                hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
-                    method, path, body, hdr, req_sct);
-                serialized_body = req.body;
-                # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
-                if (!hdr."content-type") {
-                    hdr."content-type" = req.content;
+                if (raw) {
+                    # Pre-serialized body: caller owns serialization and Content-Type
+                    serialized_body = body;
+                } else {
+                    # Give subclasses a chance to transform the body (e.g.,
+                    # MewsRestClientIo injects auth tokens into every request)
+                    body = preprocessRequestBody(body);
+                    hash<RestSchemaValidator::RestRequestClientInfo> req = req_validator.processRequest(
+                        method, path, body, hdr, req_sct);
+                    serialized_body = req.body;
+                    # Use lowercase header keys for HTTP/2 and HTTP/3 compatibility
+                    if (!hdr."content-type") {
+                        hdr."content-type" = req.content;
+                    }
                 }
                 if (!req_no_charset && serialized_body.typeCode() == NT_STRING
+                        && hdr."content-type".val()
                         && hdr."content-type" !~ /;charset=/) {
                     hdr."content-type" += ";charset=" + serialized_body.encoding();
                 }
@@ -1521,7 +2004,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             AutoWriteLock al(config_lock);
             token_type_val = token_type;
             token_val = token;
-            headers += {"authorization": sprintf("%s %s", token_type, token)};
+            if (token_api_key_header_val.val()) {
+                # token_api_key_header: send raw token in the configured header; no type prefix
+                remove headers."authorization";
+                headers{token_api_key_header_val} = token;
+            } else {
+                headers += {"authorization": sprintf("%s %s", token_type, token)};
+            }
             if (new_refresh_token) {
                 self.refresh_token = new_refresh_token;
             }
@@ -1621,12 +2110,17 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "password": password,
                 "token": token_val,
                 "token_type": token_type_val,
+                "oauth2_alt_token_url": oauth2_alt_token_url,
+                "oauth2_alt_url_subst": oauth2_alt_url_subst,
+                "oauth2_app": oauth2_app,
                 "oauth2_auth_args": oauth2_auth_args,
                 "oauth2_auth_url": oauth2_auth_url,
                 "oauth2_auto_refresh": oauth2_auto_refresh,
                 "oauth2_client_id": oauth2_client_id,
                 "oauth2_client_secret": oauth2_client_secret,
                 "oauth2_grant_type": oauth2_grant_type,
+                "oauth2_pkce": oauth2_pkce,
+                "oauth2_redirect_passthrough_state": oauth2_redirect_passthrough_state,
                 "oauth2_redirect_url": oauth2_redirect_url,
                 "oauth2_refresh_token": refresh_token,
                 "oauth2_scopes": oauth2_scopes,
@@ -1636,7 +2130,6 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 "oauth2_token_expiry": oauth2_token_expiry,
                 "oauth2_token_expiry_hint": oauth2_token_expiry_hint,
                 "oauth2_token_url": oauth2_token_url,
-                "oauth2_alt_token_url": oauth2_alt_token_url,
                 "oauth2_token_use_basic_auth": oauth2_token_use_basic_auth,
             };
         }
@@ -1755,13 +2248,20 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private checkLogin() {
             *string grant_type;
             bool has_token;
+            bool has_custom_token;
             {
                 AutoReadLock al(config_lock);
                 grant_type = oauth2_grant_type;
                 has_token = token_val.val();
+                has_custom_token = custom_token_auth.val();
             }
-            if (!has_token && grant_type && grant_type != "none") {
+            if (has_token) {
+                return;
+            }
+            if (grant_type && grant_type != "none") {
                 loginIntern();
+            } else if (has_custom_token) {
+                customGetTokenIntern();
             }
         }
 
@@ -1794,9 +2294,15 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         #! Returns True if a 401 retry is possible
         private bool canRetryAuth() {
             AutoReadLock al(config_lock);
-            return oauth2_grant_type.val() && oauth2_grant_type != "none"
-                && oauth2_auto_refresh
-                && (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
+            bool has_oauth2 = oauth2_grant_type.val() && oauth2_grant_type != "none";
+            bool has_custom_token = custom_token_auth.val();
+            if (!has_oauth2 && !has_custom_token) {
+                return False;
+            }
+            if (has_oauth2 && !oauth2_auto_refresh) {
+                return False;
+            }
+            return (now_us() - token_timestamp) >= RestClient::RestClient::MinimumTokenRefresh;
         }
 
         #! Performs an OAuth2 token request
@@ -2041,14 +2547,19 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
         private hash<auto> getNewTokenIntern() {
             bool has_refresh;
             string grant_type;
+            bool has_custom_token;
             {
                 AutoReadLock al(config_lock);
                 has_refresh = refresh_token.val();
                 grant_type = oauth2_grant_type;
+                has_custom_token = custom_token_auth.val();
             }
             if (has_refresh) {
                 hash<auto> resp = doOAuth2TokenRequest(getOAuth2RefreshInfo());
                 return gotOAuth2LoginInfo(resp);
+            }
+            if (has_custom_token) {
+                return customGetTokenIntern();
             }
             if (grant_type == "authorization_code" || grant_type == "implicit") {
                 throw "OAUTH2-ERROR", sprintf("The current token is invalid; no refresh token is in "
@@ -2056,6 +2567,113 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
             # Try to get a new token via login
             return loginIntern();
+        }
+
+        #! Makes a custom token refresh request per the @c custom_token_* options
+        /** The response body is interpreted as the raw access token. For
+            @c body-direct, the token is read from a JSON-deserialized response.
+            For @c body-plain, the token is read from the raw (trimmed) text body.
+
+            @return the token response hash (with @c token_type and @c access_token fields)
+
+            @throw REST-TOKEN-ERROR if the response body is missing or the wrong type
+        */
+        private hash<auto> customGetTokenIntern() {
+            *string c_method;
+            *string c_path;
+            *string c_location;
+            *string c_auth;
+            *string uname;
+            *string pwd;
+            {
+                AutoReadLock al(config_lock);
+                c_method = custom_token_method;
+                c_path = custom_token_path;
+                c_location = custom_token_location;
+                c_auth = custom_token_auth;
+                uname = username;
+                pwd = password;
+            }
+            if (!c_method) {
+                throw "REST-LOGIN-ERROR", "custom token refresh method is not set";
+            }
+
+            hash<auto> body;
+            switch (c_auth) {
+                case "body-user-pass":
+                    body = {
+                        "username": uname,
+                        "password": pwd,
+                    };
+                    break;
+
+                default:
+                    throw "REST-CUSTOM-TOKEN-ERROR",
+                        sprintf("invalid custom token auth method: %y", c_auth);
+            }
+
+            # Serialize the body. body-plain uses text serialization; body-direct
+            # uses JSON. Both send the form fields via the corresponding content-type
+            string body_str;
+            hash<auto> req_hdr;
+            if (c_location == "body-plain") {
+                body_str = mime_get_form_urlencoded_string(body);
+                req_hdr = {
+                    "content-type": MimeTypeFormUrlEncoded,
+                    "accept": MimeTypeText,
+                };
+            } else if (c_location == "body-direct") {
+                body_str = make_json(body);
+                req_hdr = {
+                    "content-type": MimeTypeJson,
+                    "accept": MimeTypeJson,
+                };
+            } else {
+                throw "REST-TOKEN-ERROR",
+                    sprintf("invalid / unknown custom token location: %y", c_location);
+            }
+
+            # Direct HTTP request via connection manager — no restDoRequest recursion,
+            # no OAuth2 auth injection, no REST schema validation
+            log(LoggerLevel::DEBUG, "customGetTokenIntern() %s %s%s", c_method, url, c_path);
+            hash<auto> raw = mgr.request(url, c_method, c_path, req_hdr, body_str);
+            if (raw.status_code < 200 || raw.status_code >= 300) {
+                throw "REST-TOKEN-ERROR",
+                    sprintf("HTTP %d returned from custom token refresh %s %s",
+                        raw.status_code, c_method, c_path);
+            }
+
+            string token_text;
+            if (c_location == "body-plain") {
+                if (!raw.body) {
+                    throw "REST-TOKEN-ERROR", "no body returned from custom get token operation";
+                }
+                token_text = trim(raw.body.toString());
+                if (!token_text) {
+                    throw "REST-TOKEN-ERROR", "empty body returned from custom get token operation";
+                }
+            } else {
+                # body-direct: deserialize JSON and expect a raw string token
+                auto parsed;
+                try {
+                    parsed = parse_json(raw.body.toString());
+                } catch (hash<ExceptionInfo> ex) {
+                    throw "REST-TOKEN-ERROR",
+                        sprintf("failed to parse custom token response body: %s: %s",
+                            ex.err, ex.desc);
+                }
+                if (parsed.typeCode() != NT_STRING) {
+                    throw "REST-TOKEN-ERROR",
+                        sprintf("custom token response body type expected to be \"string\"; "
+                            "got %y instead", parsed.fullType());
+                }
+                token_text = parsed;
+            }
+
+            return gotOAuth2LoginInfo({
+                "token_type": "Bearer",
+                "access_token": token_text,
+            });
         }
 
         #! Processes an OAuth2 login response
@@ -2179,7 +2797,68 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             if (exists opts.enable_cookies && !opts.enable_cookies) {
                 mgr_opts.enable_cookies = False;
             }
+            # Load TLS client cert + private key for mutual TLS (mTLS)
+            *SSLCertificate client_cert = RestClientIo::loadSslCertificate(opts);
+            *SSLPrivateKey client_pk = RestClientIo::loadSslPrivateKey(opts);
+            if (client_cert) {
+                mgr_opts.client_cert = client_cert;
+            }
+            if (client_pk) {
+                mgr_opts.client_pk = client_pk;
+            }
             return new HttpClientIo::HttpClientConnectionManager(mgr_opts);
+        }
+
+        #! Loads an X.509 client certificate from \c ssl_cert_path or \c ssl_cert_data
+        /** @param opts the constructor options hash
+            @return a new @ref Qore::SSLCertificate instance, or NOTHING if no cert was
+                configured
+
+            @throw RESTCLIENTIO-OPTION-ERROR if \c ssl_cert_path and \c ssl_cert_data
+                are both set, or if file loading fails
+        */
+        static *SSLCertificate loadSslCertificate(hash<auto> opts) {
+            if (opts.ssl_cert_path && exists opts.ssl_cert_data) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    "options 'ssl_cert_path' and 'ssl_cert_data' are mutually exclusive";
+            }
+            *data cert_data;
+            if (opts.ssl_cert_path) {
+                cert_data = opts.ssl_cert_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(opts.ssl_cert_path)
+                    : FileLocationHandler::getTextFileFromLocation(opts.ssl_cert_path);
+            } else if (exists opts.ssl_cert_data) {
+                cert_data = opts.ssl_cert_data;
+            } else {
+                return;
+            }
+            return new SSLCertificate(cert_data);
+        }
+
+        #! Loads an X.509 private key from \c ssl_key_path or \c ssl_key_data
+        /** @param opts the constructor options hash
+            @return a new @ref Qore::SSLPrivateKey instance, or NOTHING if no key was
+                configured
+
+            @throw RESTCLIENTIO-OPTION-ERROR if \c ssl_key_path and \c ssl_key_data
+                are both set, or if file loading fails
+        */
+        static *SSLPrivateKey loadSslPrivateKey(hash<auto> opts) {
+            if (opts.ssl_key_path && exists opts.ssl_key_data) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    "options 'ssl_key_path' and 'ssl_key_data' are mutually exclusive";
+            }
+            *data key_data;
+            if (opts.ssl_key_path) {
+                key_data = opts.ssl_key_der
+                    ? FileLocationHandler::getBinaryFileFromLocation(opts.ssl_key_path)
+                    : FileLocationHandler::getTextFileFromLocation(opts.ssl_key_path);
+            } else if (exists opts.ssl_key_data) {
+                key_data = opts.ssl_key_data;
+            } else {
+                return;
+            }
+            return new SSLPrivateKey(key_data, opts.ssl_key_password);
         }
     }
 
@@ -2292,7 +2971,7 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
     }
 }
 
-#! REST ping poll operation using RestClientIo for native HTTP/2 and HTTP/3 support
+#! REST ping poll operation using RestClientIo as the underlying async transport
 /** Pure async state machine — no background threads.  Uses CompositeAction
     (PromiseAction + EventNotifierAction) so the C++ I/O thread signals the
     EventNotifier when the HTTP response arrives, making Future::get() non-blocking

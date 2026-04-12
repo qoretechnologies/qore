@@ -613,7 +613,7 @@ private:
     bool io_waiting;
     bool io_exiting;
     bool ready_flag;
-    int submit_seq;                       //!< Incremented on each submit() call
+    std::atomic<int> submit_seq;          //!< Incremented on each submit() call
     int processed_seq;                    //!< Updated by I/O thread after Phase 1 snapshot
     QoreCondition processed_cond;         //!< Signaled when processed_seq advances
     QoreLoggerBridge* logger;              //!< Referenced or nullptr

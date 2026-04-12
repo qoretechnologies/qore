@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore ElasticSearchDataProvider class definition
 
-/** ElasticSearchDataProviderBase.qc Copyright 2023 - 2024 Qore Technologies, s.r.o.
+/** ElasticSearchDataProviderBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated doContent-Typecumentation files (the "Software"),
@@ -27,7 +27,11 @@ public namespace ElasticSearchDataProvider {
 #! The ElasticSearch data provider base class
 public class ElasticSearchDataProviderBase inherits DataProvider::AbstractDataProvider {
     private {
-        RestClient rest;
+        #! The REST client — any @ref RestClient::AbstractRestClient "AbstractRestClient" subclass
+        /** May be a sync @ref RestClient::RestClient "RestClient" (HTTP/1.x) or an async
+            @ref RestClientIo::RestClientIo "RestClientIo" (HTTP/1.1/2/3 multiplexed).
+        */
+        RestClient::AbstractRestClient rest;
     }
 
     #! Creates the object
@@ -35,7 +39,7 @@ public class ElasticSearchDataProviderBase inherits DataProvider::AbstractDataPr
     }
 
     #! Creates the object from a REST connection
-    constructor(RestClient rest) {
+    constructor(RestClient::AbstractRestClient rest) {
         self.rest = rest;
     }
 
