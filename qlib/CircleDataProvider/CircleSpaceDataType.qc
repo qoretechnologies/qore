@@ -147,4 +147,165 @@ public class CircleRemoveMemberFromSpaceGroupRequestDataType inherits HashDataTy
     }
 }
 
+#! Circle create space request data type
+public class CircleCreateSpaceRequestDataType inherits HashDataType {
+    public {
+        #! Field definitions for creating a Circle space
+        const Fields = {
+            "name": {
+                "type": StringType,
+                "display_name": "Name",
+                "short_desc": "Space name",
+                "desc": "The name of the space",
+                "required": True,
+                "example_value": "General Discussion",
+            },
+            "is_private": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Is Private",
+                "short_desc": "Whether the space is private",
+                "desc": "Whether the space should be private. Default: `False`",
+            },
+            "is_hidden_from_non_members": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Hidden from Non-Members",
+                "short_desc": "Whether the space is hidden from non-members",
+                "desc": "Whether the space is hidden from users who are not members of it",
+            },
+            "is_hidden": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Is Hidden",
+                "short_desc": "Whether the space is hidden",
+                "desc": "Whether the space is completely hidden",
+            },
+            "emoji": {
+                "type": StringOrNothingType,
+                "display_name": "Emoji",
+                "short_desc": "Space emoji icon",
+                "desc": "An emoji to use as the space icon",
+                "example_value": "💬",
+            },
+            "space_type": {
+                "type": StringOrNothingType,
+                "display_name": "Space Type",
+                "short_desc": "Type of space",
+                "desc": "The type of space to create",
+                "allowed_values": (
+                    <AllowedValueInfo>{"value": "basic", "display_name": "Basic"},
+                    <AllowedValueInfo>{"value": "chat", "display_name": "Chat"},
+                    <AllowedValueInfo>{"value": "event", "display_name": "Event"},
+                    <AllowedValueInfo>{"value": "course", "display_name": "Course"},
+                    <AllowedValueInfo>{"value": "members", "display_name": "Members"},
+                    <AllowedValueInfo>{"value": "image", "display_name": "Image"},
+                ),
+            },
+            "is_post_disabled": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Posts Disabled",
+                "short_desc": "Whether posting is disabled",
+                "desc": "Whether member posting is disabled in this space",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Circle update space request data type
+public class CircleUpdateSpaceRequestDataType inherits HashDataType {
+    public {
+        #! Field definitions for updating a Circle space
+        const Fields = {
+            "id": {
+                "type": IntType,
+                "display_name": "Space ID",
+                "short_desc": "ID of the space to update",
+                "desc": "The unique identifier of the space to update",
+                "required": True,
+                "ref_data": "spaces",
+                "example_value": 12345,
+            },
+            "name": {
+                "type": StringOrNothingType,
+                "display_name": "Name",
+                "short_desc": "Space name",
+                "desc": "The name of the space",
+                "example_value": "Updated Space Name",
+            },
+            "is_private": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Is Private",
+                "short_desc": "Whether the space is private",
+                "desc": "Whether the space should be private",
+            },
+            "is_hidden_from_non_members": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Hidden from Non-Members",
+                "short_desc": "Whether the space is hidden from non-members",
+                "desc": "Whether the space is hidden from users who are not members of it",
+            },
+            "is_hidden": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Is Hidden",
+                "short_desc": "Whether the space is hidden",
+                "desc": "Whether the space is completely hidden",
+            },
+            "emoji": {
+                "type": StringOrNothingType,
+                "display_name": "Emoji",
+                "short_desc": "Space emoji icon",
+                "desc": "An emoji to use as the space icon",
+            },
+            "is_post_disabled": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Posts Disabled",
+                "short_desc": "Whether posting is disabled",
+                "desc": "Whether member posting is disabled in this space",
+            },
+            "hide_post_settings": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Hide Post Settings",
+                "short_desc": "Whether post settings are hidden",
+                "desc": "Whether to hide post settings in this space",
+            },
+            "hide_from_featured_areas": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Hide from Featured Areas",
+                "short_desc": "Whether to hide from featured areas",
+                "desc": "Whether to hide this space from featured areas in the community",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
+#! Circle delete space request data type
+public class CircleDeleteSpaceRequestDataType inherits HashDataType {
+    public {
+        #! Field definitions for deleting a Circle space
+        const Fields = {
+            "id": {
+                "type": IntType,
+                "display_name": "Space ID",
+                "short_desc": "ID of the space to delete",
+                "desc": "The unique identifier of the space to delete",
+                "required": True,
+                "ref_data": "spaces",
+            },
+        };
+    }
+
+    #! Creates the type
+    constructor() {
+        addQoreFields(Fields);
+    }
+}
+
 } # namespace CircleDataProvider

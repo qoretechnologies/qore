@@ -47,6 +47,7 @@ public class CircleDataProvider inherits CircleDataProviderBase {
             "comments": Class::forName("CircleCommentsDataProvider"),
             "members": Class::forName("CircleMembersDataProvider"),
             "spaces": Class::forName("CircleSpacesDataProvider"),
+            "communities": Class::forName("CircleCommunitiesDataProvider"),
             "create-post": Class::forName("CircleCreatePostDataProvider"),
             "update-post": Class::forName("CircleUpdatePostDataProvider"),
             "delete-post": Class::forName("CircleDeletePostDataProvider"),
@@ -61,6 +62,9 @@ public class CircleDataProvider inherits CircleDataProviderBase {
             "add-member-to-space-group": Class::forName("CircleAddMemberToSpaceGroupDataProvider"),
             "remove-member-from-space-group":
                 Class::forName("CircleRemoveMemberFromSpaceGroupDataProvider"),
+            "create-space": Class::forName("CircleCreateSpaceDataProvider"),
+            "update-space": Class::forName("CircleUpdateSpaceDataProvider"),
+            "delete-space": Class::forName("CircleDeleteSpaceDataProvider"),
             "send-message": Class::forName("CircleSendMessageDataProvider"),
             "execute-api-call": Class::forName("CircleExecuteApiCallDataProvider"),
             "events": Class::forName("CircleEventsContainerDataProvider"),

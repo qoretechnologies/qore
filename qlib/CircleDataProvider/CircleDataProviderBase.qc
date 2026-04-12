@@ -239,6 +239,7 @@ public class CircleDataProviderBase inherits DataProvider::AbstractDataProvider 
     #! Returns information on supported reference data
     *hash<string, bool> getSupportedReferenceData() {
         return {
+            "communities": True,
             "posts": True,
             "spaces": True,
             "members": True,
@@ -251,12 +252,32 @@ public class CircleDataProviderBase inherits DataProvider::AbstractDataProvider 
     private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type,
             *hash<auto> action_opts) {
         switch (type) {
+            case "communities": return getReferenceCommunities();
             case "posts": return getReferencePosts(action_opts);
             case "spaces": return getReferenceSpaces();
             case "members": return getReferenceMembers();
             case "space_groups": return getReferenceSpaceGroups();
             case "tags": return getReferenceTags();
         }
+    }
+
+    #! Returns available communities for reference data
+    private *list<hash<AllowedValueInfo>> getReferenceCommunities() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            list<hash<auto>> communities = fetchAllPages("communities", "records", NOTHING, 100);
+            foreach hash<auto> community in (communities) {
+                rv += <AllowedValueInfo>{
+                    "display_name": community.name ?? sprintf("Community %d", community.id),
+                    "short_desc": string(community.id),
+                    "value": int(community.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::WARN, "Failed to fetch communities reference data: %s: %s",
+                ex.err, ex.desc);
+        }
+        return rv;
     }
 
     #! Returns available posts for reference data

@@ -87,6 +87,7 @@ module CircleDataProvider {
                     "display_name": "Status",
                     "short_desc": "Filter by status",
                     "type": AbstractDataProviderTypeMap."*string",
+                    "preselected": True,
                     "allowed_values": (
                         <AllowedValueInfo>{"value": "published", "display_name": "Published"},
                         <AllowedValueInfo>{"value": "draft", "display_name": "Draft"},
@@ -445,6 +446,60 @@ module CircleDataProvider {
             },
         });
 
+        # Create a Space
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CircleDataProvider::AppName,
+            "path": "/create-space",
+            "action": "create-space",
+            "groups": "Spaces",
+            "display_name": "Create a Space",
+            "short_desc": "Create a new space",
+            "desc": "Creates a new space in a Circle community",
+            "action_code": DPAT_API,
+            "data_provider_info": CircleCreateSpaceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CircleSpaceDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CircleCreateSpaceRequestDataType::Fields),
+        });
+
+        # Update a Space
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CircleDataProvider::AppName,
+            "path": "/update-space",
+            "action": "update-space",
+            "groups": "Spaces",
+            "display_name": "Update a Space",
+            "short_desc": "Update an existing space",
+            "desc": "Updates an existing space in Circle",
+            "action_code": DPAT_API,
+            "data_provider_info": CircleUpdateSpaceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CircleSpaceDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CircleUpdateSpaceRequestDataType::Fields),
+        });
+
+        # Delete a Space
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CircleDataProvider::AppName,
+            "path": "/delete-space",
+            "action": "delete-space",
+            "groups": "Spaces",
+            "display_name": "Delete a Space",
+            "short_desc": "Delete a specific space",
+            "desc": "Permanently deletes a space from Circle",
+            "action_code": DPAT_API,
+            "data_provider_info": CircleDeleteSpaceDataProvider::ProviderInfo,
+            "get_output_type": AbstractDataProviderType sub () {
+                return new CircleDeleteSpaceResponseDataType();
+            },
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                CircleDeleteSpaceRequestDataType::Fields),
+        });
+
         # Add a Member to a Space
         DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
             "app": CircleDataProvider::AppName,
@@ -517,6 +572,56 @@ module CircleDataProvider {
             },
             "options": DataProviderActionCatalog::getActionOptionFromFields(
                 CircleRemoveMemberFromSpaceGroupRequestDataType::Fields),
+        });
+
+        # ========== COMMUNITY ACTIONS ==========
+
+        # List Communities
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CircleDataProvider::AppName,
+            "path": "/communities",
+            "action": "list-communities",
+            "groups": "Communities",
+            "display_name": "List Communities",
+            "short_desc": "List communities in the account",
+            "desc": "List communities accessible to the current API token",
+            "action_code": DPAT_FIND,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Community ID",
+                    "short_desc": "Get a specific community",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "ref_data": "communities",
+                    "preselected": True,
+                },
+                "limit": <ActionOptionInfo>{
+                    "display_name": "Limit",
+                    "short_desc": "Maximum results",
+                    "type": AbstractDataProviderTypeMap."*int",
+                    "preselected": True,
+                },
+            },
+        });
+
+        # Get a Community
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": CircleDataProvider::AppName,
+            "path": "/communities",
+            "action": "get-community",
+            "groups": "Communities",
+            "display_name": "Get a Community",
+            "short_desc": "Retrieve a specific community",
+            "desc": "Retrieve a single community by its ID",
+            "action_code": DPAT_FIND_SINGLE,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Community ID",
+                    "short_desc": "The community ID",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "required": True,
+                    "ref_data": "communities",
+                },
+            },
         });
 
         # ========== MESSAGING ACTIONS ==========

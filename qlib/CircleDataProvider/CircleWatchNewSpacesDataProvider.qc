@@ -25,7 +25,7 @@
 #! Contains all public definitions in the CircleDataProvider module
 public namespace CircleDataProvider {
 
-#! Space data type for watch events
+#! Space data type for watch events and API responses
 public class CircleSpaceDataType inherits HashDataType {
     public {
         const Fields = {
@@ -53,11 +53,47 @@ public class CircleSpaceDataType inherits HashDataType {
                 "short_desc": "Whether the space is private",
                 "desc": "Whether the space is private",
             },
+            "is_hidden": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Is Hidden",
+                "short_desc": "Whether the space is hidden",
+                "desc": "Whether the space is completely hidden",
+            },
+            "is_hidden_from_non_members": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Hidden from Non-Members",
+                "short_desc": "Whether the space is hidden from non-members",
+                "desc": "Whether the space is hidden from users who are not members of it",
+            },
+            "emoji": {
+                "type": StringOrNothingType,
+                "display_name": "Emoji",
+                "short_desc": "Space emoji icon",
+                "desc": "An emoji used as the space icon",
+            },
+            "space_type": {
+                "type": StringOrNothingType,
+                "display_name": "Space Type",
+                "short_desc": "Type of space",
+                "desc": "The type of the space",
+            },
+            "is_post_disabled": {
+                "type": SoftBoolOrNothingType,
+                "display_name": "Posts Disabled",
+                "short_desc": "Whether posting is disabled",
+                "desc": "Whether member posting is disabled in this space",
+            },
             "community_id": {
                 "type": IntOrNothingType,
                 "display_name": "Community ID",
                 "short_desc": "Community the space belongs to",
                 "desc": "The ID of the community this space belongs to",
+            },
+            "url": {
+                "type": StringOrNothingType,
+                "display_name": "URL",
+                "short_desc": "Space URL",
+                "desc": "The URL of the space",
             },
             "created_at": {
                 "type": StringOrNothingType,

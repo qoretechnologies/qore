@@ -202,10 +202,10 @@ public class CircleRestConnection inherits RestClient::RestConnection {
                     "title": "How to Generate Your API Token",
                     "intent": "info",
                     "content": "1. Log in to your Circle community at https://app.circle.so\n"
-                        "2. Go to **Settings** > **Developers** > **Tokens**\n"
-                        "3. Select **Admin V2** as the token type\n"
-                        "4. Click **Generate Token** and copy the value\n"
-                        "5. Paste the token into the **API Token** field\n\n"
+                        "2. Click on your community in the top-left corner\n"
+                        "3. Select **Developer** > **Tokens**\n"
+                        "4. Click **Create Token**, select **Admin V2** as the type\n"
+                        "5. Copy the token and paste it into the **API Token** field\n\n"
                         "**Important:**\n"
                         "- API access requires a **Business plan** or above\n"
                         "- Rate limit: 2,000 requests per 5 minutes per IP\n"
@@ -220,9 +220,9 @@ public class CircleRestConnection inherits RestClient::RestConnection {
                     "desc": "The Circle API token used for Bearer token authentication.\n\n"
                         "**To obtain your API token:**\n"
                         "1. Log in to your Circle community as an admin\n"
-                        "2. Go to **Settings** > **Developers** > **Tokens**\n"
-                        "3. Select **Admin V2** as the token type\n"
-                        "4. Generate a new token\n\n"
+                        "2. Click on your community in the top-left corner\n"
+                        "3. Select **Developer** > **Tokens**\n"
+                        "4. Click **Create Token** and select **Admin V2**\n\n"
                         "**Note:** API access requires a Business plan or above.\n\n"
                         "Rate limit: 2,000 requests per 5 minutes per IP",
                     "sensitive": True,

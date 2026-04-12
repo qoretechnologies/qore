@@ -55,6 +55,7 @@ public class CircleDataProviderTest inherits QUnit::Test {
         #! IDs of test resources to clean up
         *int testPostId;
         *int testCommentId;
+        *int testSpaceId;
     }
 
     constructor() : Test("CircleDataProvider Test", "1.0", \ARGV, MyOpts) {
@@ -70,6 +71,8 @@ public class CircleDataProviderTest inherits QUnit::Test {
         addTestCase("list comments tests", \listCommentsTests());
         addTestCase("list members tests", \listMembersTests());
         addTestCase("list spaces tests", \listSpacesTests());
+        addTestCase("list communities tests", \listCommunitiesTests());
+        addTestCase("space round-trip tests", \spaceRoundTripTests());
         addTestCase("post round-trip tests", \postRoundTripTests());
         addTestCase("execute API call tests", \executeApiCallTests());
         addTestCase("trigger example data tests", \triggerExampleDataTests());
@@ -158,6 +161,22 @@ public class CircleDataProviderTest inherits QUnit::Test {
         assertTrue(fields.hasKey("id"), "member type has id field");
         assertTrue(fields.hasKey("name"), "member type has name field");
         assertTrue(fields.hasKey("email"), "member type has email field");
+
+        CircleDataProvider::CircleSpaceDataType spaceType();
+        fields = spaceType.getFields();
+        assertTrue(fields.hasKey("id"), "space type has id field");
+        assertTrue(fields.hasKey("name"), "space type has name field");
+        assertTrue(fields.hasKey("slug"), "space type has slug field");
+        assertTrue(fields.hasKey("is_private"), "space type has is_private field");
+        assertTrue(fields.hasKey("community_id"), "space type has community_id field");
+        assertTrue(fields.hasKey("emoji"), "space type has emoji field");
+
+        CircleDataProvider::CircleCommunityDataType communityType();
+        fields = communityType.getFields();
+        assertTrue(fields.hasKey("id"), "community type has id field");
+        assertTrue(fields.hasKey("name"), "community type has name field");
+        assertTrue(fields.hasKey("slug"), "community type has slug field");
+        assertTrue(fields.hasKey("locale"), "community type has locale field");
     }
 
     dataTypeTests() {
@@ -201,6 +220,18 @@ public class CircleDataProviderTest inherits QUnit::Test {
         fields = apiCallReq.getFields();
         assertTrue(fields.hasKey("method"), "execute api call has method");
         assertTrue(fields.hasKey("path"), "execute api call has path");
+
+        CircleDataProvider::CircleCreateSpaceRequestDataType createSpaceReq();
+        fields = createSpaceReq.getFields();
+        assertTrue(fields.hasKey("name"), "create space has name");
+        assertTrue(fields.hasKey("is_private"), "create space has is_private");
+        assertTrue(fields.hasKey("emoji"), "create space has emoji");
+
+        CircleDataProvider::CircleUpdateSpaceRequestDataType updateSpaceReq();
+        fields = updateSpaceReq.getFields();
+        assertTrue(fields.hasKey("id"), "update space has id");
+        assertTrue(fields.hasKey("name"), "update space has name");
+        assertTrue(fields.hasKey("is_private"), "update space has is_private");
     }
 
     connectionTests() {
@@ -300,6 +331,91 @@ public class CircleDataProviderTest inherits QUnit::Test {
         assertTrue(results[0].id.typeCode() == NT_INT, "space id is int");
         assertTrue(results[0].hasKey("name"), "space record has name");
         assertTrue(results[0].hasKey("slug"), "space record has slug");
+    }
+
+    listCommunitiesTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider communities = prov.getChildProvider("communities");
+        assertEq("communities", communities.getName(), "communities provider name");
+
+        AbstractDataProviderRecordIterator it = communities.searchRecords(
+            NOTHING, {"limit": 5});
+        list<hash<auto>> results;
+        while (it.next()) {
+            results += it.getValue();
+        }
+        assertTrue(results.size() > 0, "list communities returned results");
+        assertTrue(results[0].hasKey("id"), "community record has id");
+        assertTrue(results[0].id.typeCode() == NT_INT, "community id is int");
+        assertTrue(results[0].hasKey("name"), "community record has name");
+        assertTrue(results[0].hasKey("slug"), "community record has slug");
+    }
+
+    spaceRoundTripTests() {
+        skipIfNoCredentials();
+
+        CircleDataProvider::CircleDataProvider prov = getProvider();
+        AbstractDataProvider spaces = prov.getChildProvider("spaces");
+
+        string test_name = "QoreTest Space " + string(now_us());
+
+        # CREATE
+        AbstractDataProvider createSpace = prov.getChildProvider("create-space");
+        hash<auto> created = createSpace.doRequest({
+            "name": test_name,
+            "is_private": True,
+        });
+        assertTrue(created.hasKey("id"), "created space has id");
+        testSpaceId = created.id;
+        assertEq(test_name, created.name, "created space name matches");
+
+        # GET (verify persistence)
+        AbstractDataProviderRecordIterator it = spaces.searchRecords(
+            NOTHING, {"id": testSpaceId});
+        hash<auto> fetched;
+        while (it.next()) {
+            fetched = it.getValue();
+        }
+        assertEq(testSpaceId, fetched.id, "fetched space id matches");
+        assertEq(test_name, fetched.name, "fetched space name matches");
+
+        # UPDATE
+        string updated_name = "QoreTest Updated Space " + string(now_us());
+        AbstractDataProvider updateSpace = prov.getChildProvider("update-space");
+        hash<auto> updated = updateSpace.doRequest({
+            "id": testSpaceId,
+            "name": updated_name,
+        });
+        assertTrue(updated.hasKey("id"), "updated space has id");
+
+        # GET (verify update persisted)
+        it = spaces.searchRecords(NOTHING, {"id": testSpaceId});
+        hash<auto> refetched;
+        while (it.next()) {
+            refetched = it.getValue();
+        }
+        assertEq(updated_name, refetched.name, "updated space name matches");
+
+        # DELETE
+        AbstractDataProvider delSpace = prov.getChildProvider("delete-space");
+        hash<auto> delResult = delSpace.doRequest({"id": testSpaceId});
+        assertEq(True, delResult.success, "delete space returned success");
+
+        # VERIFY GONE - search should return no results or throw
+        try {
+            it = spaces.searchRecords(NOTHING, {"id": testSpaceId});
+            *hash<auto> gone;
+            while (it.next()) {
+                gone = it.getValue();
+            }
+            assertTrue(!gone, "deleted space is gone");
+        } catch () {
+            # API may throw 404 for deleted space - this is also acceptable
+            assertTrue(True, "deleted space returns error");
+        }
+        testSpaceId = NOTHING;
     }
 
     postRoundTripTests() {
@@ -435,6 +551,14 @@ public class CircleDataProviderTest inherits QUnit::Test {
                 CircleDataProvider::CircleDataProvider prov = getProvider();
                 AbstractDataProvider delComment = prov.getChildProvider("delete-comment");
                 delComment.doRequest({"id": testCommentId});
+            } catch () {
+            }
+        }
+        if (testSpaceId) {
+            try {
+                CircleDataProvider::CircleDataProvider prov = getProvider();
+                AbstractDataProvider delSpace = prov.getChildProvider("delete-space");
+                delSpace.doRequest({"id": testSpaceId});
             } catch () {
             }
         }
