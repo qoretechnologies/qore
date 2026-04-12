@@ -527,6 +527,14 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item.args->deref(xsink);
         }
 
+        // Clear all thread-local data (program tld hash + thread_local vars + thread
+        // resources) to prevent data from leaking between unrelated tasks on the same
+        // worker thread.  This is the async I/O equivalent of the HTTP server's
+        // clearContextInfo() call after each request.
+        // NOTE: must be after all object derefs above, because destructors may run
+        // Qore code that accesses thread-local data.
+        clear_all_program_thread_local_data();
+
         // Decrement per-program and per-dispatcher counters BEFORE the final
         // program deref.  If this worker is holding the last reference to
         // the Program and the deref triggers final Program destruction,
