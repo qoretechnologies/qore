@@ -3925,9 +3925,15 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
 
     if (!skip_body_locals) {
         for (int i = (int)body_locals.size() - 1; i >= 0; --i) {
-            // Skip closure-use vars in AOT mode: the LLVM code already popped
-            // them via qore_rt_pop_closure_var_aot at block scope boundaries.
             if (has_aot && body_locals[i]->closureUse()) {
+                // AOT closure-use locals are managed by the LLVM code
+                // (emitLocalInstantiation/emitLocalUninstantiation).  On normal
+                // return the CVV is already popped.  On exception paths the LLVM
+                // epilogue may be skipped, so safely pop any remaining CVV here.
+                // thread_try_find_closure_var returns null if already popped.
+                if (thread_try_find_closure_var(body_locals[i]->getName())) {
+                    body_locals[i]->uninstantiate(xsink);
+                }
                 continue;
             }
             body_locals[i]->uninstantiate(xsink);

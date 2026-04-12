@@ -695,6 +695,20 @@ void QoreIRToLLVM::collectLocals(const QoreIRFunction& func) {
                     || inst_ptr->opcode == QoreIROpcode::InstantiateLocal)) {
                 const auto* linst = static_cast<const QoreIRLocalInstruction*>(inst_ptr.get());
                 if (linst->local) {
+                    // In AOT mode, closure-use locals need function-scope lifecycle
+                    // management (emitLocalInstantiation/emitLocalUninstantiation)
+                    // rather than block-scoped management.  Their InstantiateLocal
+                    // in the IR pushes a CVV onto the cvstack, but the matching
+                    // UninstantiateLocal may be skipped on return paths (CF_SKIP_LVARS).
+                    // By keeping them in entry_locals, emitLocalUninstantiation pops
+                    // them at every return site, and execJITWithDeopt serves as an
+                    // exception safety net.  The InstantiateLocal handler's runtime
+                    // call is idempotent (qore_rt_instantiate_local skips if already
+                    // on cvstack), so the double-call from emitLocalInstantiation +
+                    // InstantiateLocal handler is harmless.
+                    if (aot_mode && linst->local->closureUse()) {
+                        continue;
+                    }
                     block_scoped_locals.insert(reinterpret_cast<const void*>(linst->local));
                 }
             }
@@ -969,7 +983,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
 }
 
 void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
-    // Only uninstantiate entry-block locals at function exit.
+    // Uninstantiate entry-block locals at function exit.
     // Non-entry-block locals have their own UninstantiateLocal instructions
     // in the IR that handle their lifecycle.
     if (aot_mode) {
