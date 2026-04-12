@@ -1149,12 +1149,28 @@ struct qore_httpclient_priv {
 
     //! When true, send_internal delegates to the C++ conn_mgr for
     //! non-streaming request/response flows (all protocols, including proxy).
-    //! Default false: enabling requires resolving interaction between conn_mgr
-    //! connections and the legacy msock used by startPollConnect/startPollSendRecv.
-    bool use_conn_mgr = false;
+    //! Disabled when poll APIs are used (poll_apis_used flag) to preserve
+    //! legacy msock state for startPollConnect/startPollSendRecv.
+    bool use_conn_mgr = true;
+
+    //! Set when poll APIs (startPollConnect, startPollSendRecv) are used on
+    //! this HTTPClient.  Once set, send_internal falls back to the legacy
+    //! msock dispatch so that poll APIs (which use msock) find it connected.
+    bool poll_apis_used = false;
 
     //! Returns the connection manager, creating it lazily if needed.
     DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
+        // Check if SSL settings changed since the conn_mgr was created.
+        // If so, reset so a fresh connection is established with the new settings.
+        if (conn_mgr) {
+            const auto& opts = conn_mgr->getOptions();
+            if (opts.ssl_verify_mode != msock->socket->priv->ssl_verify_mode
+                    || opts.accept_all_certs != msock->socket->priv->ssl_accept_all_certs
+                    || opts.client_cert != msock->cert
+                    || opts.client_key != msock->pk) {
+                conn_mgr.reset();
+            }
+        }
         if (!conn_mgr) {
             HttpClientConnectionManagerBase::Options opts;
             // Derive protocol from the HTTPClient's mode settings
@@ -1404,6 +1420,7 @@ struct qore_httpclient_priv {
     DLLLOCAL QoreObject* startPollSendRecv(ExceptionSink* xsink, QoreObject* self, QoreHttpClientObject* client,
             const QoreString* method, const QoreString* path, const AbstractQoreNode* data_save, const void* data,
             size_t size, const QoreHashNode* headers, const QoreEncoding* enc = nullptr) {
+        poll_apis_used = true;
         client->ref();
         ReferenceHolder<HttpClientConnectSendRecvPollOperation> poller(
             new HttpClientConnectSendRecvPollOperation(xsink, client,
@@ -1432,6 +1449,7 @@ struct qore_httpclient_priv {
         //printd(5, "qore_http_client_priv::startPoll() self: %p client: %p msock: %p (== %p)\n", self, client,
         //    msock, client->priv);
 
+        poll_apis_used = true;
         client->ref();
         ReferenceHolder<SocketPollOperationBase> poller(new HttpClientConnectSendRecvPollOperation(xsink, client),
             xsink);
@@ -7507,8 +7525,16 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             if (*xsink) {
                 return nullptr;
             }
-            // Store a copy of the request headers (matching legacy send_internal behavior)
-            info->setKeyValue("headers", nh->copy(), xsink);
+            // Store a copy of the request headers with Host header added
+            // (matching legacy send_internal behavior).  Host is added only
+            // to the info copy — the poll op's submitRequest builds its own
+            // Host header on the wire from the target host:port.
+            ReferenceHolder<QoreHashNode> info_headers(nh->copy(), xsink);
+            if (!host_override) {
+                info_headers->setKeyValue("Host",
+                    getHostHeaderValueUnlocked(this_connection), xsink);
+            }
+            info->setKeyValue("headers", info_headers.release(), xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -7540,6 +7566,14 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             info->setKeyValue("response-headers", ans->refSelf(), xsink);
             if (*xsink) {
                 return nullptr;
+            }
+            // Populate response-headers-raw with original-case keys
+            QoreValue raw_hdrs = raw_resp->getKeyValue("headers_raw");
+            if (raw_hdrs.getType() == NT_HASH) {
+                info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
         }
 
@@ -7694,7 +7728,7 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     // Delegate to conn_mgr for non-streaming request/response flows.
     // Streaming (send_callback, recv_callback, InputStream, OutputStream)
     // still uses the legacy sync dispatch path until Phase 4.
-    if (use_conn_mgr && !send_callback && !recv_callback && !is && !os && !streaming) {
+    if (use_conn_mgr && !poll_apis_used && !send_callback && !recv_callback && !is && !os && !streaming) {
         return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
             msg_body, data, size, getbody, info, timeout_ms, obj);
     }

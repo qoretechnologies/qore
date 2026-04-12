@@ -51,8 +51,15 @@ extern qore_classid_t CID_HTTP1CLIENTPOLLOPERATIONBASE;
 
 Http1ClientConnection::Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, ExceptionSink* xsink,
-        HttpClientConnectionManagerBase* mgr)
+        HttpClientConnectionManagerBase* mgr,
+        const Http1SslConfig& ssl_config)
     : HttpClientConnectionBase(target_host, target_port, ssl_required) {
+    // Apply SSL config BEFORE buildAndSubmit so the socket has the correct
+    // settings when the I/O thread starts the SSL handshake.
+    ssl_verify_mode = ssl_config.verify_mode;
+    accept_all_certs = ssl_config.accept_all;
+    client_cert = ssl_config.cert;
+    client_key = ssl_config.key;
     // Set the manager BEFORE submitting to the I/O controller so that
     // onClosedHook dispatches correctly even when the I/O thread
     // processes a connect failure before we return to the caller.
@@ -68,9 +75,14 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
 
 Http1ClientConnection::Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, const char* proxy_host, int proxy_port,
-        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr,
+        const Http1SslConfig& ssl_config)
     : HttpClientConnectionBase(target_host, target_port, ssl_required),
       proxy_host(proxy_host), proxy_port(proxy_port) {
+    ssl_verify_mode = ssl_config.verify_mode;
+    accept_all_certs = ssl_config.accept_all;
+    client_cert = ssl_config.cert;
+    client_key = ssl_config.key;
     if (mgr) {
         setManager(mgr);
     }

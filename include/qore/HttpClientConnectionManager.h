@@ -204,6 +204,11 @@ public:
     */
     DLLEXPORT virtual void closeAll(ExceptionSink* xsink);
 
+    //! Returns the options used to create this manager.
+    DLLLOCAL const Options& getOptions() const {
+        return opts_;
+    }
+
     //! Returns the total number of pooled connections across all keys.
     DLLEXPORT int getPoolSize() const;
 

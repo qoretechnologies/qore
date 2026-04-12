@@ -97,6 +97,10 @@ void Http1ClientPollOperationPriv::cleanup(ExceptionSink* xsink) {
         response_headers->deref(xsink);
         response_headers = nullptr;
     }
+    if (response_headers_raw) {
+        response_headers_raw->deref(xsink);
+        response_headers_raw = nullptr;
+    }
     if (response_status_message) {
         response_status_message->deref();
         response_status_message = nullptr;
@@ -691,7 +695,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
         const QoreStringNode* desc_str = poll_xsink.getExceptionDesc().get<const QoreStringNode>();
         ASYNC_IO_TRACE("H1 handleRecvHeader: ERROR %s: %s\n",
             err_str ? err_str->c_str() : "?", desc_str ? desc_str->c_str() : "?");
-        setError(err_str ? err_str->c_str() : "HTTP1-RECV-ERROR",
+        // Normalize ECONNRESET to SOCKET-CLOSED for compatibility with the
+        // legacy sync path, which gets EOF on read when the remote closes.
+        // Both mean the same thing: server closed the connection before
+        // sending a response.
+        const char* err_code = err_str ? err_str->c_str() : "HTTP1-RECV-ERROR";
+        if (err_str && !strcmp(err_str->c_str(), "SOCKET-RECV-ERROR") && desc_str
+                && strstr(desc_str->c_str(), "Connection reset by peer")) {
+            err_code = "SOCKET-CLOSED";
+        }
+        setError(err_code,
             desc_str ? desc_str->c_str() : "header read failed", xsink);
         poll_xsink.clear();
         return nullptr;
@@ -760,6 +773,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             response_headers->deref(xsink);
         }
         response_headers = new QoreHashNode(autoTypeInfo);
+        if (response_headers_raw) {
+            response_headers_raw->deref(xsink);
+        }
+        response_headers_raw = nullptr;
 
         ConstHashIterator hi(hdr);
         while (hi.next()) {
@@ -774,6 +791,16 @@ QoreHashNode* Http1ClientPollOperationPriv::handleRecvHeader(ExceptionSink* xsin
             lc_key->tolwr();
             response_headers->setKeyValue(lc_key->c_str(), hi.get().refSelf(), xsink);
             lc_key->deref();
+        }
+
+        // Extract original-case headers from the info hash produced by
+        // processHttpHeaderString → convertHeaderToHash
+        QoreValue info_val = output->getKeyValue("info");
+        if (info_val.getType() == NT_HASH) {
+            QoreValue raw_val = info_val.get<const QoreHashNode>()->getKeyValue("headers-raw");
+            if (raw_val.getType() == NT_HASH) {
+                response_headers_raw = raw_val.get<QoreHashNode>()->hashRefSelf();
+            }
         }
 
         // Determine body transfer type
@@ -1323,6 +1350,9 @@ QoreHashNode* Http1ClientPollOperationPriv::dispatchResponse(ExceptionSink* xsin
     if (response_headers) {
         resp->setKeyValue("headers", response_headers->hashRefSelf(), xsink);
     }
+    if (response_headers_raw) {
+        resp->setKeyValue("headers_raw", response_headers_raw->hashRefSelf(), xsink);
+    }
     if (!body.isNullOrNothing()) {
         resp->setKeyValue("body", body, xsink);
     } else {
@@ -1460,6 +1490,10 @@ void Http1ClientPollOperationPriv::resetResponseState(ExceptionSink* xsink) {
     if (response_headers) {
         response_headers->deref(xsink);
         response_headers = nullptr;
+    }
+    if (response_headers_raw) {
+        response_headers_raw->deref(xsink);
+        response_headers_raw = nullptr;
     }
     response_status_code = 0;
     if (response_status_message) {
@@ -1669,15 +1703,27 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
             if (key[0] == ':') {
                 continue;
             }
-            req->sprintf("%s: ", key);
             QoreValue v = hi.get();
-            if (v.getType() == NT_STRING) {
-                req->concat(v.get<const QoreStringNode>()->c_str());
+            // Handle list values by emitting multiple header lines
+            if (v.getType() == NT_LIST) {
+                const QoreListNode* l = v.get<const QoreListNode>();
+                ConstListIterator li(l);
+                while (li.next()) {
+                    req->sprintf("%s: ", key);
+                    QoreStringValueHelper sv(li.getValue());
+                    req->concat(sv->c_str());
+                    req->concat("\r\n");
+                }
             } else {
-                QoreStringValueHelper sv(v);
-                req->concat(sv->c_str());
+                req->sprintf("%s: ", key);
+                if (v.getType() == NT_STRING) {
+                    req->concat(v.get<const QoreStringNode>()->c_str());
+                } else {
+                    QoreStringValueHelper sv(v);
+                    req->concat(sv->c_str());
+                }
+                req->concat("\r\n");
             }
-            req->concat("\r\n");
             if (!strcasecmp(key, "content-length")) {
                 has_content_length = true;
             }

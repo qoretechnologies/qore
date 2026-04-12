@@ -236,6 +236,9 @@ private:
     //! Response headers (ref'd or nullptr, lowercase keys)
     QoreHashNode* response_headers = nullptr;
 
+    //! Response headers with original case (ref'd or nullptr)
+    QoreHashNode* response_headers_raw = nullptr;
+
     //! Accumulated response body (ref'd or nullptr)
     BinaryNode* response_body = nullptr;
 

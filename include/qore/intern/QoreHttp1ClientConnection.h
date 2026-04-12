@@ -42,6 +42,21 @@ class QoreSSLCertificate;
 class QoreSSLPrivateKey;
 class Http1ClientPollOperationPriv;
 
+//! SSL/TLS configuration for Http1ClientConnection construction
+/** Passed to the constructor so SSL settings are applied to the socket
+    BEFORE the poll op is submitted to the I/O controller — eliminates the
+    race where the I/O thread starts the SSL handshake before configureSsl()
+    can run.
+
+    @since %Qore 2.3
+*/
+struct Http1SslConfig {
+    int verify_mode = 0;        //!< SSL_VERIFY_NONE or SSL_VERIFY_PEER etc.
+    bool accept_all = false;    //!< accept self-signed certificates
+    QoreSSLCertificate* cert = nullptr;  //!< client cert for mutual TLS (NOT ref'd by this struct)
+    QoreSSLPrivateKey* key = nullptr;    //!< client key for mutual TLS (NOT ref'd by this struct)
+};
+
 //! HTTP/1.1 C++ client connection
 /** Wraps a @ref Http1ClientPollOperationPriv and the socket it operates on,
     submits the poll op to the global AsyncIoController on construction, and
@@ -69,10 +84,12 @@ public:
             @ref setManager before the poll op is submitted to the I/O
             controller, eliminating the race where the I/O thread fires
             @ref onClosedHook before the caller can register a manager
+        @param ssl_config SSL configuration applied before submission
     */
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, ExceptionSink* xsink,
-        HttpClientConnectionManagerBase* mgr = nullptr);
+        HttpClientConnectionManagerBase* mgr = nullptr,
+        const Http1SslConfig& ssl_config = Http1SslConfig{});
 
     //! Creates a new HTTP/1.1 client connection via an HTTP proxy
     /** TCP connects to the proxy.  For HTTPS targets (@a ssl_required is
@@ -89,12 +106,14 @@ public:
         @param proxy_port proxy TCP port to connect to
         @param xsink exception sink — set on construction failure
         @param mgr optional owning manager
+        @param ssl_config SSL configuration applied before submission
 
         @since %Qore 2.3
     */
     DLLLOCAL Http1ClientConnection(const char* target_host, int target_port,
         bool ssl_required, const char* proxy_host, int proxy_port,
-        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr);
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr,
+        const Http1SslConfig& ssl_config = Http1SslConfig{});
 
     DLLLOCAL virtual ~Http1ClientConnection();
 

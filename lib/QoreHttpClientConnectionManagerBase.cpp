@@ -340,19 +340,19 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
         case HttpClientProtocol::H1: {
-            Http1ClientConnection* h1conn;
+            Http1SslConfig ssl_cfg;
+            ssl_cfg.verify_mode = opts_.ssl_verify_mode;
+            ssl_cfg.accept_all = opts_.accept_all_certs;
+            ssl_cfg.cert = opts_.client_cert;
+            ssl_cfg.key = opts_.client_key;
             if (proxy_info_) {
-                h1conn = new Http1ClientConnection(host, port, ssl_required,
+                conn = new Http1ClientConnection(host, port, ssl_required,
                     proxy_info_->host.c_str(), proxy_info_->port,
-                    xsink, this);
+                    xsink, this, ssl_cfg);
             } else {
-                h1conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
+                conn = new Http1ClientConnection(host, port, ssl_required,
+                    xsink, this, ssl_cfg);
             }
-            if (!*xsink) {
-                h1conn->configureSsl(opts_.ssl_verify_mode, opts_.accept_all_certs,
-                    opts_.client_cert, opts_.client_key);
-            }
-            conn = h1conn;
             break;
         }
         case HttpClientProtocol::H2:
