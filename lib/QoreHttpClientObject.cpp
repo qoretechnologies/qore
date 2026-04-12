@@ -1147,15 +1147,24 @@ struct qore_httpclient_priv {
     */
     std::unique_ptr<HttpClientConnectionManagerBase> conn_mgr;
 
-    //! When true, send_internal delegates to the C++ conn_mgr for simple
-    //! H1 request/response flows (no streaming, no proxy).
+    //! When true, send_internal delegates to the C++ conn_mgr for
+    //! non-streaming request/response flows (all protocols, including proxy).
+    //! Defaults to false until SSL settings, client certificates, encoding,
+    //! and other HTTPClient configuration are propagated to conn_mgr connections.
     bool use_conn_mgr = false;
 
     //! Returns the connection manager, creating it lazily if needed.
     DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
         if (!conn_mgr) {
             HttpClientConnectionManagerBase::Options opts;
-            opts.protocol = HttpClientProtocol::H1;  // default; updated per http2_mode/http3_mode
+            // Derive protocol from the HTTPClient's mode settings
+            if (http3_mode.load(std::memory_order_relaxed) == HTTP3_MODE_REQUIRED) {
+                opts.protocol = HttpClientProtocol::H3;
+            } else if (http2_mode == HTTP2_MODE_REQUIRED) {
+                opts.protocol = HttpClientProtocol::H2;
+            } else {
+                opts.protocol = HttpClientProtocol::H1;
+            }
             opts.connect_timeout_ms = connect_timeout_ms;
             opts.request_timeout_ms = timeout;
             opts.idle_timeout_ms = 60000;
@@ -7672,9 +7681,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
     if (!timeout_ms)
         timeout_ms = timeout;
 
-    // P10: delegate to conn_mgr for simple H1 requests (no streaming, no proxy)
-    if (use_conn_mgr && !send_callback && !recv_callback && !is && !os && !streaming
-            && !proxy_connection.has_url()) {
+    // Delegate to conn_mgr for non-streaming request/response flows.
+    // Streaming (send_callback, recv_callback, InputStream, OutputStream)
+    // still uses the legacy sync dispatch path until Phase 4.
+    if (use_conn_mgr && !send_callback && !recv_callback && !is && !os && !streaming) {
         return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
             msg_body, data, size, getbody, info, timeout_ms, obj);
     }
