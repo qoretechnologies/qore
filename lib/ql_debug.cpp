@@ -1644,6 +1644,194 @@ static void ut_asyncio_stop_clear(UnitTestCounters& c) {
     UT_ASSERT(c, !xsink, "cleanup succeeds");
 }
 
+// ============================================================
+// SocketIoMode enforcement unit tests
+// ============================================================
+
+//! Test that a socket in Async mode rejects sync operations
+static void ut_socket_iomode_async_blocks_sync(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    // Create a socket object
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Manually set I/O mode to Async (simulates what a poll op does)
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Async;
+    }
+
+    // checkNonBlock (sync entry point) should raise SOCKET-ASYNC-MODE-ERROR
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->checkNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "checkNonBlock returns -1 when io_mode=Async");
+        UT_ASSERT(c, (bool)xsink, "checkNonBlock raises exception when io_mode=Async");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
+            "exception is SOCKET-ASYNC-MODE-ERROR");
+        xsink.clear();
+    }
+
+    // Reset and verify directional checkNonBlock also checks
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->checkNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == -1, "directional checkNonBlock returns -1 when io_mode=Async");
+        UT_ASSERT(c, (bool)xsink, "directional checkNonBlock raises exception");
+        xsink.clear();
+    }
+
+    // Reset io_mode before cleanup
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Unclaimed;
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that a socket in Sync mode rejects async operations
+static void ut_socket_iomode_sync_blocks_async(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Manually set I/O mode to Sync
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Sync;
+    }
+
+    // setNonBlock (async entry point) should raise SOCKET-SYNC-MODE-ERROR
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink);
+        UT_ASSERT(c, rv == -1, "setNonBlock returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "setNonBlock raises exception when io_mode=Sync");
+        const QoreValue err_val = xsink.getExceptionErr();
+        const QoreStringNode* err = err_val.get<const QoreStringNode>();
+        UT_ASSERT(c, err && *err == "SOCKET-SYNC-MODE-ERROR",
+            "exception is SOCKET-SYNC-MODE-ERROR");
+        xsink.clear();
+    }
+
+    // Also check directional setNonBlock
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlock(&xsink, NB_RECV);
+        UT_ASSERT(c, rv == -1, "directional setNonBlock returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "directional setNonBlock raises exception");
+        xsink.clear();
+    }
+
+    // Also check setNonBlockAccept
+    {
+        AutoLocker al(sp->m);
+        int rv = sp->setNonBlockAccept(&xsink);
+        UT_ASSERT(c, rv == -1, "setNonBlockAccept returns -1 when io_mode=Sync");
+        UT_ASSERT(c, (bool)xsink, "setNonBlockAccept raises exception");
+        xsink.clear();
+    }
+
+    // Reset io_mode before cleanup
+    {
+        AutoLocker al(sp->m);
+        sp->io_mode = SocketIoMode::Unclaimed;
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that Unclaimed mode allows both sync and async
+static void ut_socket_iomode_unclaimed_allows_both(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // Verify default is Unclaimed
+    {
+        AutoLocker al(sp->m);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "default io_mode is Unclaimed");
+
+        // checkSyncAllowed should pass
+        int rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == 0, "checkSyncAllowed passes when Unclaimed");
+        UT_ASSERT(c, !xsink, "no exception from checkSyncAllowed");
+
+        // checkAsyncAllowed should pass
+        rv = sp->checkAsyncAllowed(&xsink);
+        UT_ASSERT(c, rv == 0, "checkAsyncAllowed passes when Unclaimed");
+        UT_ASSERT(c, !xsink, "no exception from checkAsyncAllowed");
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
+//! Test that setNonBlock claims Async mode and clearNonBlock resets to Unclaimed
+static void ut_socket_iomode_async_lifecycle(UnitTestCounters& c) {
+    ExceptionSink xsink;
+
+    QoreSocketObject* sock = new QoreSocketObject;
+    QoreObject* sock_obj = new QoreObject(QC_SOCKET, getProgram(), sock);
+    my_socket_priv* sp = my_socket_priv::getPriv(*sock);
+
+    // setNonBlock should claim Async mode
+    {
+        AutoLocker al(sp->m);
+
+        int rv = sp->setNonBlock(&xsink, NB_SEND);
+        UT_ASSERT(c, rv == 0, "setNonBlock(NB_SEND) succeeds on Unclaimed socket");
+        UT_ASSERT(c, !xsink, "no exception from setNonBlock");
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode is Async after setNonBlock");
+
+        // Sync operations should now be blocked
+        rv = sp->checkSyncAllowed(&xsink);
+        UT_ASSERT(c, rv == -1, "checkSyncAllowed fails when Async");
+        xsink.clear();
+
+        // clearNonBlock should reset to Unclaimed
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets to Unclaimed after clearNonBlock");
+    }
+
+    // Test that clearing partial flags doesn't reset when other flags remain
+    {
+        AutoLocker al(sp->m);
+
+        // Set two directions
+        sp->setNonBlock(NB_SEND);
+        sp->setNonBlock(NB_RECV);
+        sp->io_mode = SocketIoMode::Async;
+
+        // Clear just one direction — should stay Async
+        sp->clearNonBlock(NB_SEND);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Async,
+            "io_mode stays Async when non_block_flags still set");
+
+        // Clear the last direction — should reset to Unclaimed
+        sp->clearNonBlock(NB_RECV);
+        UT_ASSERT(c, sp->io_mode == SocketIoMode::Unclaimed,
+            "io_mode resets to Unclaimed when all flags cleared");
+    }
+
+    sock_obj->deref(&xsink);
+    xsink.clear();
+}
+
 #ifdef DEBUG
 //! Debug-only: arm a one-shot fd-swap simulation on the next lock-yielding wait of @a sock.
 /** Tests use this to exercise the fd_generation re-verification path in
@@ -1708,6 +1896,10 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_asyncio_logger(c);
     ut_asyncio_wait_for_processing_empty(c);
     ut_asyncio_stop_clear(c);
+    ut_socket_iomode_async_blocks_sync(c);
+    ut_socket_iomode_sync_blocks_async(c);
+    ut_socket_iomode_unclaimed_allows_both(c);
+    ut_socket_iomode_async_lifecycle(c);
 
     QoreHashNode* result = new QoreHashNode(autoTypeInfo);
     result->setKeyValue("test_count", c.test_count, xsink);
