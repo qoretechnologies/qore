@@ -812,6 +812,29 @@ static void assignLocalVarValue(LocalVar* var, const QoreValue& value, Exception
     helper.assign(stored);
 }
 
+// Variant of assignLocalVarValue that TRANSFERS ownership of value's reference
+// instead of ref'ing. Caller must not deref value after this call.
+// Returns true if the value was consumed (assigned or discarded on failure).
+//
+// This variant is needed for COW paths where the caller has a freshly-copied
+// unique container (refcount 1). Passing via assignLocalVarValue's refSelf
+// would bump refcount to 2, causing LValueHelper::assign to take the "non-unique"
+// branch for typed lvalues (e.g., hash<auto!>) and create an extra copy —
+// leaving the caller's pointer dangling after helper's saveTemp consumes it.
+static void assignLocalVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
+    if (!var) {
+        value.discard(xsink);
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (var->getLValue(helper, false, true)) {
+        value.discard(xsink);
+        return;
+    }
+    // Transfer: no refSelf. helper.assign takes ownership of the passed ref.
+    helper.assign(value);
+}
+
 // Write-through for closure variable stores: writes the value to the actual
 // ClosureVarValue so that changes are visible outside the IR interpreter.
 static void assignClosureVarValue(LocalVar* var, const QoreValue& value, ExceptionSink* xsink) {
@@ -853,6 +876,41 @@ static void assignClosureVarValue(LocalVar* var, const QoreValue& value, Excepti
     }
     QoreValue stored = value.hasNode() ? value.refSelf() : value;
     helper.assign(stored);
+}
+
+// Variant of assignClosureVarValue that TRANSFERS ownership of value's reference.
+// See assignLocalVarValueTransfer for rationale.
+static void assignClosureVarValueTransfer(LocalVar* var, QoreValue value, ExceptionSink* xsink) {
+    if (!var) {
+        value.discard(xsink);
+        return;
+    }
+    ClosureVarValue* cv = nullptr;
+    if (thread_has_runtime_closure_env()) {
+        cv = thread_try_get_runtime_closure_var(var);
+    }
+    if (!cv) {
+        cv = thread_try_find_closure_var(var->getName());
+        if (!cv) {
+            cv = thread_try_get_runtime_closure_var(var);
+        }
+    }
+    if (!cv) {
+        // Fall back to local stack assignment
+        LValueHelper helper(xsink);
+        if (var->getLValue(helper, false, false)) {
+            value.discard(xsink);
+            return;
+        }
+        helper.assign(value);
+        return;
+    }
+    LValueHelper helper(xsink);
+    if (cv->getLValue(helper, false)) {
+        value.discard(xsink);
+        return;
+    }
+    helper.assign(value);
 }
 
 // Write-through for global variable stores: writes the value to the actual
@@ -3624,25 +3682,27 @@ load_local_done:
                     // At this point, refcount = TLS (1) only (no artificial refs held).
                     // Trigger COW if there are additional external references beyond TLS.
                     if (h->reference_count() > 1) {
-                        // COW: create unique copy and update the local variable
-                        QoreHashNode* new_h = h->copy();
+                        // COW: create unique copy and update the local variable.
+                        // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
+                        // in LValueHelper::assign takes the "unique" in-place branch for
+                        // hash<auto!> etc., leaving new_h in TLS at refcount 1.
+                        QoreHashNode* new_h = h->copy();  // refcount 1, unique
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        // VT_CLOSURE containers require assignClosureVarValue() for correct
-                        // scope lookup via thread_find_closure_var()
                         if (hks_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
-                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
                         if (xsink && *xsink) {
-                            new_h->deref(xsink);
+                            // new_h's ref was consumed by assign*Transfer (either stored
+                            // in TLS or discarded on failure). Do not deref here.
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
                             return false;
                         }
-                        // Release copy()'s ref; TLS now owns the new_h
-                        new_h->deref(xsink);
+                        // new_h is now in TLS with refcount 1 — safe for setKeyValue's
+                        // reference_count() == 1 assertion.
                         h = new_h;
                     }
 
@@ -3716,21 +3776,20 @@ load_local_done:
                 if (hash_val.getType() == NT_HASH) {
                     QoreHashNode* h = hash_val.get<QoreHashNode>();
                     if (h->reference_count() > 1) {
-                        QoreHashNode* new_h = h->copy();
+                        // COW: see HashKeyStore above for rationale on *Transfer variants
+                        QoreHashNode* new_h = h->copy();  // refcount 1, unique
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
                         if (hksd_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
-                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
                         if (xsink && *xsink) {
-                            new_h->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
                             return false;
                         }
-                        new_h->deref(xsink);
                         h = new_h;
                     }
                     // Check hashdecl key validity before assignment
@@ -3817,25 +3876,21 @@ load_local_done:
                     // At this point, refcount = TLS (1) only (no artificial refs held).
                     // Trigger COW if there are additional external references beyond TLS.
                     if (l->reference_count() > 1) {
-                        // COW: create unique copy and update the local variable
-                        QoreListNode* new_l = l->copy();
+                        // COW: see HashKeyStore above for rationale on *Transfer variants.
+                        // Same bug applies to list<auto!> type coercion in LValueHelper::assign.
+                        QoreListNode* new_l = l->copy();  // refcount 1, unique
                         LocalVar* lv = const_cast<LocalVar*>(
                             reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        // VT_CLOSURE containers require assignClosureVarValue() for correct
-                        // scope lookup via thread_find_closure_var()
                         if (lis_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_l), xsink);
+                            assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
                         } else {
-                            assignLocalVarValue(lv, QoreValue(new_l), xsink);
+                            assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
                         }
                         if (xsink && *xsink) {
-                            new_l->deref(xsink);
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
                             return false;
                         }
-                        // Release copy()'s ref; TLS now owns the new_l
-                        new_l->deref(xsink);
                         l = new_l;
                     }
 
