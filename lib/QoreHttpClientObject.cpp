@@ -9137,14 +9137,27 @@ class HttpClientConnMgrPollOp : public SocketPollOperationBase {
 public:
     //! Constructor for sendRecv mode (or connect-waiting mode with future=nullptr)
     //! @param priv_ref HTTPClient priv back-reference for user-disconnect detection
+    //! @param was_connecting true if the connection was still CONNECTING when
+    //!        submitted (fresh connection) — used to report initial state as
+    //!        "connecting" until first continuePoll.  false for reused pool
+    //!        connections which report "sending" immediately.
+    //! @param client_obj HTTPClient QoreObject (ref'd) — used to detect
+    //!        OBJECT-ALREADY-DELETED when the client is destroyed during poll.
     HttpClientConnMgrPollOp(QoreFuture* future, QoreEventNotifier* notifier,
-            qore_httpclient_priv* priv_ref = nullptr)
-        : future(future), notifier(notifier), priv_ref(priv_ref) {
+            qore_httpclient_priv* priv_ref = nullptr,
+            bool was_connecting = false,
+            QoreObject* client_obj = nullptr)
+        : future(future), notifier(notifier), priv_ref(priv_ref),
+          was_connecting_at_submit(was_connecting),
+          client_obj(client_obj) {
         assert(notifier);
         if (future) {
             future->ref();
         }
         notifier->ref();
+        if (client_obj) {
+            client_obj->ref();
+        }
     }
 
     //! Constructor for connect mode (already ready — signals immediately)
@@ -9178,6 +9191,10 @@ public:
             notifier->deref(&xsink);
             notifier = nullptr;
         }
+        if (client_obj) {
+            client_obj->deref(&xsink);
+            client_obj = nullptr;
+        }
     }
 
     void setConnectMode() { connect_mode = true; }
@@ -9187,6 +9204,19 @@ public:
     }
 
     QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        // First poll transitions state from "connecting" to "sending" for
+        // fresh connections (matches legacy poll op semantics).
+        first_poll_done = true;
+
+        // Check if HTTPClient has been deleted (matches legacy semantics
+        // where continuePoll on a poll op with a deleted client throws).
+        if (client_obj && !client_obj->isValid()) {
+            xsink->raiseException("OBJECT-ALREADY-DELETED",
+                "HTTPClient has been deleted; poll operation aborted");
+            done = true;
+            return nullptr;
+        }
+
         // Check for deferred connection error
         if (!deferred_err.empty()) {
             xsink->raiseException(deferred_err.c_str(), deferred_desc.c_str());
@@ -9364,6 +9394,14 @@ public:
         if (done) {
             return connect_mode ? "connected" : "received";
         }
+        // Report "connecting" for fresh connections until first continuePoll.
+        // This matches legacy poll op semantics where a new connection starts
+        // in "connecting" state and transitions to "sending" after the first
+        // poll iteration.  Reused pool connections skip this and go straight
+        // to "sending".
+        if (was_connecting_at_submit && !first_poll_done && !connect_mode) {
+            return "connecting";
+        }
         return connect_mode ? "connecting" : "sending";
     }
 
@@ -9384,6 +9422,16 @@ private:
     qore_httpclient_priv* priv_ref = nullptr;  // back-ref for user-disconnect detection
     mutable bool done = false;
     bool connect_mode = false;
+    //! True if the connection was CONNECTING when the request was submitted.
+    //! Used by getStateImpl to report "connecting" instead of "sending"
+    //! until first continuePoll call (matches legacy poll op semantics).
+    mutable bool was_connecting_at_submit = false;
+    //! True after first continuePoll — transitions state from "connecting"
+    //! to normal state reporting.
+    mutable bool first_poll_done = false;
+    //! HTTPClient QoreObject (ref'd) — used to detect OBJECT-ALREADY-DELETED
+    //! when the client is destroyed while the poll op is still active.
+    QoreObject* client_obj = nullptr;
     std::string deferred_err;
     std::string deferred_desc;
 };
@@ -9419,6 +9467,10 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     if (*xsink) {
         return nullptr;
     }
+    // Check pool size BEFORE acquire — if empty, acquireConnection will
+    // create a fresh connection (CONNECTING state).  Used below for state
+    // reporting (matches legacy "connecting" vs "sending" semantics).
+    int pool_size_before = mgr.getPoolSize();
     HttpClientConnectionBase* conn = mgr.acquireConnection(scheme,
         this_connection.host.c_str(), this_connection.port, xsink);
     if (!conn || *xsink) {
@@ -9451,11 +9503,14 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     QoreFuture* future_raw = *future_holder;
     QoreEventNotifier* notifier_for_op = *notifier_holder;
 
-    // Wait for connection to be ready (may block for new connections, but
-    // callers expect this on a poll-based API for the connection phase —
-    // the test at line 585 expects "sending" state right after startPoll
-    // for reused connections; line 695's "connecting" expectation is a
-    // known semantic difference with conn_mgr async dispatch).
+    // Fresh-connection detection: if the pool size was 0 when we acquired,
+    // acquireConnection created a new connection (which starts in CONNECTING
+    // state).  Report state as "connecting" for these fresh connections to
+    // match legacy poll op semantics.  For reused pool connections (size>0),
+    // report "sending" since the connection is already established.
+    bool was_connecting = (pool_size_before == 0);
+
+    // Wait for connection to be ready
     conn->waitForReadyOrError(timeout, xsink);
     if (*xsink || conn->isClosed()) {
         if (!*xsink) {
@@ -9482,7 +9537,8 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
         mgr.releaseConnection(conn);
         return nullptr;
     }
-    poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op, this);
+    poller = new HttpClientConnMgrPollOp(future_raw, notifier_for_op, this,
+        was_connecting, self);
 
     // Drop our local refs — poll op constructor took its own refs
     // Promise: action's ref (or deferred's ref) keeps it alive; drop ours
