@@ -8,6 +8,7 @@
 %modern
 %requires ../../../../qlib/QoreTokenizerUtils
 %requires tokenizer
+%requires ml
 %requires Util
 %requires QUnit
 
@@ -462,14 +463,17 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         });
 
         # ONNX mode with valid config but nonexistent model file
-        assertThrows("ML-ONNX-ERROR", sub() {
-            new QoreTokenizerUtils::EmbeddingModel(
-                <QoreTokenizerUtils::EmbeddingConfig>{
-                    "mode": "onnx",
-                    "model_path": "/nonexistent.onnx",
-                    "tokenizer_config": tokenizer_config,
-                });
-        });
+        # (only testable when ONNX Runtime is compiled in)
+        if (ML::ml_get_capabilities().has_onnx) {
+            assertThrows("ML-ONNX-ERROR", sub() {
+                new QoreTokenizerUtils::EmbeddingModel(
+                    <QoreTokenizerUtils::EmbeddingConfig>{
+                        "mode": "onnx",
+                        "model_path": "/nonexistent.onnx",
+                        "tokenizer_config": tokenizer_config,
+                    });
+            });
+        }
     }
 
     embeddingEmptyBatchTest() {
@@ -532,14 +536,17 @@ public class QoreTokenizerUtilsTest inherits QUnit::Test {
         });
 
         # ONNX mode with valid config but nonexistent model file
-        assertThrows("ML-ONNX-ERROR", sub() {
-            new QoreTokenizerUtils::CrossEncoderReranker(
-                <QoreTokenizerUtils::RerankerConfig>{
-                    "mode": "onnx",
-                    "model_path": "/nonexistent.onnx",
-                    "tokenizer_config": tokenizer_config,
-                });
-        });
+        # (only testable when ONNX Runtime is compiled in)
+        if (ML::ml_get_capabilities().has_onnx) {
+            assertThrows("ML-ONNX-ERROR", sub() {
+                new QoreTokenizerUtils::CrossEncoderReranker(
+                    <QoreTokenizerUtils::RerankerConfig>{
+                        "mode": "onnx",
+                        "model_path": "/nonexistent.onnx",
+                        "tokenizer_config": tokenizer_config,
+                    });
+            });
+        }
     }
 
     rerankerEmptyTest() {
