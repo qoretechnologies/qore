@@ -6668,28 +6668,97 @@ load_local_done:
                             break;
                         }
                         case LVUnaryOp::Trim: {
-                            if (!lvh.checkType(NT_STRING)) {
-                                break;
+                            qore_type_t vtype = lvh.getType();
+                            if (vtype == NT_STRING) {
+                                lvh.ensureUnique();
+                                QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                                if (str && str->trim(xsink)) {
+                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                    cleanupLocalCaches();
+                                    return false;
+                                }
+                            } else if (vtype == NT_LIST) {
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                if (l) {
+                                    qore_list_private* ll = qore_list_private::get(*l);
+                                    for (size_t i = 0, e = l->size(); i < e; ++i) {
+                                        QoreValue& v = ll->getEntryReference(i);
+                                        if (v.getType() == NT_STRING) {
+                                            ensure_unique(v, xsink);
+                                            if (v.get<QoreStringNode>()->trim(xsink)) {
+                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                                cleanupLocalCaches();
+                                                return false;
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (vtype == NT_HASH) {
+                                lvh.ensureUnique();
+                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                if (h) {
+                                    HashIterator hi(h);
+                                    while (hi.next()) {
+                                        if (hi.get().getType() == NT_STRING) {
+                                            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                            ensure_unique(v, xsink);
+                                            if (v.get<QoreStringNode>()->trim(xsink)) {
+                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                                                cleanupLocalCaches();
+                                                return false;
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            lvh.ensureUnique();
-                            QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
-                            if (str) {
-                                str->trim();
-                            }
+                            res = lvh.getReferencedValue();
                             break;
                         }
                         case LVUnaryOp::Chomp: {
-                            if (!lvh.checkType(NT_STRING)) {
-                                break;
-                            }
-                            lvh.ensureUnique();
-                            QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
-                            if (str) {
-                                // chomp removes trailing \n or \r\n
-                                qore_size_t len = str->size();
-                                if (len > 0 && str->c_str()[len - 1] == '\n') {
-                                    str->terminate(len > 1 && str->c_str()[len - 2] == '\r'
-                                        ? len - 2 : len - 1);
+                            qore_type_t vtype = lvh.getType();
+                            if (vtype == NT_STRING) {
+                                lvh.ensureUnique();
+                                QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                                if (str) {
+                                    res = QoreValue(static_cast<int64>(str->chomp()));
+                                }
+                            } else if (vtype == NT_LIST) {
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                if (l) {
+                                    int64 count = 0;
+                                    qore_list_private* ll = qore_list_private::get(*l);
+                                    for (size_t i = 0, e = l->size(); i < e; ++i) {
+                                        QoreValue& v = ll->getEntryReference(i);
+                                        if (v.getType() == NT_STRING) {
+                                            ensure_unique(v, xsink);
+                                            count += static_cast<int64>(
+                                                v.get<QoreStringNode>()->chomp());
+                                        }
+                                    }
+                                    res = QoreValue(count);
+                                }
+                            } else if (vtype == NT_HASH) {
+                                lvh.ensureUnique();
+                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                if (h) {
+                                    int64 count = 0;
+                                    HashIterator hi(h);
+                                    while (hi.next()) {
+                                        if (hi.get().getType() == NT_STRING) {
+                                            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                            QoreStringNode* vs = v.get<QoreStringNode>();
+                                            if (!vs->is_unique()) {
+                                                QoreStringNode* old = vs;
+                                                vs = vs->copy();
+                                                old->deref();
+                                                v = vs;
+                                            }
+                                            count += static_cast<int64>(vs->chomp());
+                                        }
+                                    }
+                                    res = QoreValue(count);
                                 }
                             }
                             break;
