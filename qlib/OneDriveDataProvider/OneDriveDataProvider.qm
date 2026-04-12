@@ -99,6 +99,7 @@ module OneDriveDataProvider {
                     "desc": "The ID of the folder to list items from. If omitted, lists items from the "
                         "drive root",
                     "preselected": True,
+                    "ref_data": "folders",
                 },
                 "search_query": <ActionOptionInfo>{
                     "display_name": "Search Query",

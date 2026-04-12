@@ -126,6 +126,63 @@ public class OneDriveDataProviderBase inherits DataProvider::AbstractDataProvide
         LoggerWrapper::setLogger(logger);
     }
 
+    #! Returns the reference data types supported by this provider
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "folders": True,
+            "drives": True,
+        };
+    }
+
+    #! Returns reference data for the given type
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "folders": return getReferenceFolders();
+            case "drives": return getReferenceDrives();
+        }
+    }
+
+    #! Returns reference data for folders (lists folders from root)
+    private *list<hash<AllowedValueInfo>> getReferenceFolders() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            string path = "me/drive/root/children?$top=200&$filter=folder%20ne%20null"
+                "&$select=id,name,parentReference";
+            hash<auto> response = doRestCommand("GET", path);
+            foreach hash<auto> item in (response.body.value) {
+                rv += <AllowedValueInfo>{
+                    "display_name": item.name,
+                    "short_desc": item.name,
+                    "desc": item.name,
+                    "value": string(item.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceFolders: error: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
+    #! Returns reference data for drives
+    private *list<hash<AllowedValueInfo>> getReferenceDrives() {
+        list<hash<AllowedValueInfo>> rv = ();
+        try {
+            hash<auto> response = doRestCommand("GET", "me/drives?$select=id,name,driveType");
+            foreach hash<auto> drive in (response.body.value) {
+                string display = drive.name ?? drive.driveType ?? drive.id;
+                rv += <AllowedValueInfo>{
+                    "display_name": display,
+                    "short_desc": sprintf("%s (%s)", display, drive.driveType ?? "unknown"),
+                    "desc": sprintf("%s (%s)", display, drive.driveType ?? "unknown"),
+                    "value": string(drive.id),
+                };
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            log(LoggerLevel::DEBUG, "getReferenceDrives: error: %s: %s", ex.err, ex.desc);
+        }
+        return rv;
+    }
+
     #! Makes a REST call and returns the response; handles rate limit and I/O errors
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
         int retries = 0;

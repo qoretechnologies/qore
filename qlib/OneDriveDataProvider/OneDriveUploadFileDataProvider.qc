@@ -49,6 +49,7 @@ public class OneDriveUploadFileRequestDataType inherits HashDataType {
                 "short_desc": "The parent folder ID",
                 "desc": "The ID of the parent folder. If omitted, the file is uploaded to the drive root",
                 "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "folders",
             },
             "content_type": {
                 "display_name": "Content Type",

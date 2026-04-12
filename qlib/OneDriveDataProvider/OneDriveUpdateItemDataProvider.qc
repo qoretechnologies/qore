@@ -55,6 +55,7 @@ public class OneDriveUpdateItemRequestDataType inherits HashDataType {
                 "desc": "The ID of the destination folder to move the item to. Set this to move an item "
                     "to a different folder",
                 "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "folders",
             },
         };
     }

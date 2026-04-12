@@ -50,12 +50,14 @@ public class OneDriveCopyItemRequestDataType inherits HashDataType {
                 "desc": "The unique identifier of the destination drive. Required when copying to a "
                     "different drive",
                 "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "drives",
             },
             "parent_id": {
                 "display_name": "Destination Folder ID",
                 "short_desc": "Target folder ID for the copy",
                 "desc": "The ID of the destination folder. If omitted, the item is copied to the drive root",
                 "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "folders",
             },
             "conflict_behavior": {
                 "display_name": "Conflict Behavior",

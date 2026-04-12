@@ -47,6 +47,7 @@ public class OneDriveCreateFolderRequestDataType inherits HashDataType {
                 "short_desc": "The parent folder ID",
                 "desc": "The ID of the parent folder. If omitted, the folder is created in the drive root",
                 "type": AbstractDataProviderTypeMap."*string",
+                "ref_data": "folders",
             },
             "conflict_behavior": {
                 "display_name": "Conflict Behavior",

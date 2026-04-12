@@ -120,6 +120,7 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         addTestCase("update item", \updateItemTest());
         addTestCase("copy item", \copyItemTest());
         addTestCase("search items", \searchItemsTest());
+        addTestCase("reference data", \referenceDataTest());
         addTestCase("connection scheme", \connectionSchemeTest());
         addTestCase("live connection ping", \liveConnectionPingTest());
         addTestCase("live get drive info", \liveGetDriveInfoTest());
@@ -609,6 +610,60 @@ public class OneDriveDataProviderTest inherits QUnit::Test {
         # test with search_query
         dp.searchRecords(NOTHING, {"search_query": "budget"});
         assertRegex("me/drive/root/search", rest.last_path);
+%endif
+    }
+
+    referenceDataTest() {
+        checkModule();
+%ifndef NoJson
+        # verify getSupportedReferenceData returns expected types
+        FakeOneDriveRestClientIo rest();
+        OneDriveDataProvider::OneDriveDataProvider prov(rest);
+        *hash<string, bool> ref_types = prov.getSupportedReferenceData();
+        assertTrue(ref_types.folders, "supports folders reference data");
+        assertTrue(ref_types.drives, "supports drives reference data");
+
+        # test folders reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "folder1", "name": "Documents", "parentReference": {"driveId": "d1"}},
+                {"id": "folder2", "name": "Photos", "parentReference": {"driveId": "d1"}},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> folders = prov.getReferenceData("folders");
+        assertEq(2, folders.size(), "got 2 folders");
+        assertEq("Documents", folders[0].display_name);
+        assertEq("folder1", folders[0].value);
+        assertEq("Photos", folders[1].display_name);
+        assertEq("folder2", folders[1].value);
+
+        # test drives reference data with mock response
+        rest.response_body = {
+            "value": (
+                {"id": "drive1", "name": "OneDrive", "driveType": "personal"},
+            ),
+        };
+        *list<hash<AllowedValueInfo>> drives = prov.getReferenceData("drives");
+        assertEq(1, drives.size(), "got 1 drive");
+        assertEq("OneDrive", drives[0].display_name);
+        assertEq("drive1", drives[0].value);
+
+        # verify ref_data attributes on action options
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "create-folder"
+        );
+        assertEq("folders", action.options.parent_id.ref_data, "create-folder parent_id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "copy-item"
+        );
+        assertEq("folders", action.options.parent_id.ref_data, "copy-item parent_id has ref_data");
+        assertEq("drives", action.options.parent_drive_id.ref_data, "copy-item parent_drive_id has ref_data");
+
+        action = DataProviderActionCatalog::getAppAction(
+            OneDriveDataProvider::OneDriveDataProvider::AppName, "search-items"
+        );
+        assertEq("folders", action.options.folder_id.ref_data, "search-items folder_id has ref_data");
 %endif
     }
 
