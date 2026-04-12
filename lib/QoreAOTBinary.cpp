@@ -5208,7 +5208,8 @@ static bool readAndSetupVariantSignature(
             const char* cfqn = reader.readStringRef(ptr);
             ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, cfqn);
             if (ce) {
-                param_defaults[j] = QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce));
+                param_defaults[j] = QoreValue(new RuntimeConstantRefNode(&loc_builtin, ce,
+                    /*aot_deferred=*/true));
             } else {
                 printd(0, "AOT deser: cannot resolve default const ref '%s'\n",
                     cfqn ? cfqn : "(null)");
@@ -5226,7 +5227,8 @@ static bool readAndSetupVariantSignature(
             const char* mname = reader.readStringRef(ptr);
             ConstantEntry* ce = aot_resolve_constant_by_fqn(pgm, cfqn);
             if (ce && mname && *mname) {
-                auto* rcr = new RuntimeConstantRefNode(&loc_builtin, ce);
+                auto* rcr = new RuntimeConstantRefNode(&loc_builtin, ce,
+                    /*aot_deferred=*/true);
                 auto* mc = new MethodCallNode(&loc_builtin, strdup(mname),
                     (QoreParseListNode*)nullptr);
                 auto* de = new QoreDotEvalOperatorNode(&loc_builtin, QoreValue(rcr), mc);
