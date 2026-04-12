@@ -1160,6 +1160,16 @@ struct qore_httpclient_priv {
     //! msock dispatch so that poll APIs (which use msock) find it connected.
     bool poll_apis_used = false;
 
+    //! Channel for conn_mgr streaming receive (sendAndStream mode).
+    /** When non-null, readHTTPChunk/readServerSentEvent read from this
+        channel instead of the raw socket.  Set by send_internal_conn_mgr
+        when streaming=true; cleared by clearStreamingChannel().
+    */
+    QoreChannel* streaming_recv_channel = nullptr;
+
+    //! Buffer for accumulating partial SSE event text across channel messages
+    std::string sse_recv_buffer;
+
     //! Returns the connection manager, creating it lazily if needed.
     DLLLOCAL HttpClientConnectionManagerBase& getConnMgr(ExceptionSink* xsink) {
         // Check if SSL settings changed since the conn_mgr was created.
@@ -1620,6 +1630,18 @@ struct qore_httpclient_priv {
             clearH2Session();
         }
         disconnectQuic();
+        clearStreamingChannel();
+    }
+
+    //! Clears the streaming receive channel, closing it if open
+    DLLLOCAL void clearStreamingChannel() {
+        if (streaming_recv_channel) {
+            streaming_recv_channel->close();
+            ExceptionSink xsink;
+            streaming_recv_channel->deref(&xsink);
+            streaming_recv_channel = nullptr;
+        }
+        sse_recv_buffer.clear();
     }
 
     // Disconnect QUIC session and clean up state
@@ -2406,7 +2428,8 @@ struct qore_httpclient_priv {
         const char* mpath, const QoreHashNode* headers, const QoreStringNode* msg_body, const void* data,
         unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody, QoreHashNode* info,
         int timeout_ms, const ResolvedCallReferenceNode* recv_callback, QoreObject* obj, OutputStream* os,
-        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback);
+        InputStream* is, size_t max_chunk_size, const ResolvedCallReferenceNode* trailer_callback,
+        bool streaming = false);
 
     //! Send a request and get response using HTTP/2
     DLLLOCAL QoreHashNode* sendHttp2MessageAndGetResponse(const char* mname, const char* meth, const char* mpath,
@@ -7470,7 +7493,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         const void* data, unsigned size, const ResolvedCallReferenceNode* send_callback, bool getbody,
         QoreHashNode* info, int timeout_ms, const ResolvedCallReferenceNode* recv_callback,
         QoreObject* obj, OutputStream* os, InputStream* is, size_t max_chunk_size,
-        const ResolvedCallReferenceNode* trailer_callback) {
+        const ResolvedCallReferenceNode* trailer_callback, bool streaming) {
     SocketSyncPoll::assertNotOnIoThread("HTTPClient", mname, xsink);
 
     con_info this_connection = connection;
@@ -7555,7 +7578,9 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
         if (send_callback || is) {
             // Streaming send path: use chunked TE with incremental body push
-            bool streaming_recv = (recv_callback || os) ? true : false;
+            // streaming_recv also set when streaming=true (sendAndStream) to
+            // use Channel-based delivery for the response
+            bool streaming_recv = (recv_callback || os || streaming) ? true : false;
 
             // Acquire connection manually (can't use mgr.request() because
             // body must be pushed between submit and future-get)
@@ -7821,6 +7846,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                                 && code != 304) {
                             channel->close();
                             channel_done = true;
+                            break;
+                        }
+
+                        // sendAndStream mode: store channel for later reads,
+                        // don't drain the body
+                        if (streaming) {
+                            clearStreamingChannel();
+                            channel->ref();
+                            streaming_recv_channel = *channel;
                             break;
                         }
                         continue;
@@ -8159,6 +8193,112 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 }
                 break;
             }
+        } else if (streaming) {
+            // sendAndStream path: submit as streaming, read only headers,
+            // store the channel for later readHTTPChunk/readServerSentEvent
+            QoreChannel* channel_raw = nullptr;
+            int64_t stream_id = mgr.requestStreaming(meth, scheme,
+                this_connection.host.c_str(), this_connection.port,
+                msgpath, *nh, body_ptr, body_len, channel_raw, xsink);
+            if (*xsink || stream_id < 0 || !channel_raw) {
+                return nullptr;
+            }
+            ReferenceHolder<QoreChannel> channel(channel_raw, xsink);
+            bool channel_done = false;
+
+            // Read only headers from the channel — body stays for later reads
+            while (true) {
+                bool timed_out = false;
+                bool has_value = false;
+                ValueHolder rv(channel->recv(timeout_ms, xsink, timed_out, has_value), xsink);
+                if (*xsink) {
+                    channel->close();
+                    return nullptr;
+                }
+                if (timed_out) {
+                    channel->close();
+                    xsink->raiseException("HTTP-CLIENT-TIMEOUT",
+                        "timed out after %dms waiting for streaming response headers",
+                        timeout_ms);
+                    return nullptr;
+                }
+                if (!has_value) {
+                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                        "connection closed before response headers received");
+                    return nullptr;
+                }
+
+                if (rv->getType() != NT_HASH) {
+                    continue;
+                }
+                QoreHashNode* h = rv->get<QoreHashNode>();
+
+                // Check for error
+                QoreValue err_val = h->getKeyValue("err");
+                if (!err_val.isNullOrNothing()) {
+                    channel->close();
+                    const char* err_str = err_val.getType() == NT_STRING
+                        ? err_val.get<const QoreStringNode>()->c_str()
+                        : "HTTP-CLIENT-RECEIVE-ERROR";
+                    QoreValue desc_val = h->getKeyValue("desc");
+                    const char* desc_str = desc_val.getType() == NT_STRING
+                        ? desc_val.get<const QoreStringNode>()->c_str()
+                        : "streaming request failed";
+                    xsink->raiseException(err_str, desc_str);
+                    return nullptr;
+                }
+
+                // Check for response headers
+                QoreValue sc_val = h->getKeyValue("status_code");
+                if (!sc_val.isNullOrNothing()) {
+                    ans = transformConnMgrResponse(h, xsink);
+                    if (*xsink) {
+                        channel->close();
+                        return nullptr;
+                    }
+                    code = (int)sc_val.getAsBigInt();
+
+                    if (processContentType(xsink, **ans)) {
+                        channel->close();
+                        return nullptr;
+                    }
+
+                    if (info) {
+                        info->setKeyValue("response-headers", ans->refSelf(), xsink);
+                        QoreValue raw_hdrs = h->getKeyValue("headers_raw");
+                        if (raw_hdrs.getType() == NT_HASH) {
+                            info->setKeyValue("response-headers-raw",
+                                raw_hdrs.refSelf(), xsink);
+                        }
+                    }
+
+                    // Check for redirect
+                    if (!redirect_passthru && code >= 300 && code < 400
+                            && code != 304) {
+                        channel->close();
+                        channel_done = true;
+                    } else {
+                        // Store the channel for later reads via
+                        // readHTTPChunk / readServerSentEvent
+                        clearStreamingChannel();
+                        channel->ref();
+                        streaming_recv_channel = *channel;
+                    }
+                    break;
+                }
+            }
+
+            if (channel_done && !redirect_passthru && code >= 300
+                    && code < 400 && code != 304) {
+                // redirect — falls through to redirect block below
+            } else {
+                if (!ans) {
+                    xsink->raiseException("HTTP-CLIENT-RECEIVE-ERROR",
+                        "no response received from streaming request");
+                    return nullptr;
+                }
+                break;
+            }
         } else {
             // Non-streaming path: submit and await complete response
             ReferenceHolder<QoreHashNode> raw_resp(
@@ -8344,12 +8484,10 @@ QoreHashNode* qore_httpclient_priv::send_internal(ExceptionSink* xsink, const ch
         timeout_ms = timeout;
 
     // Delegate to conn_mgr for non-poll-API flows.
-    // Gated out flows (still use legacy dispatch):
-    //  - streaming: sendAndStream/startPollSendRecv (raw socket semantics)
-    if (use_conn_mgr && !poll_apis_used && !streaming) {
+    if (use_conn_mgr && !poll_apis_used) {
         return send_internal_conn_mgr(xsink, mname, meth, mpath, headers,
             msg_body, data, size, send_callback, getbody, info, timeout_ms,
-            recv_callback, obj, os, is, max_chunk_size, trailer_callback);
+            recv_callback, obj, os, is, max_chunk_size, trailer_callback, streaming);
     }
 
     SafeLocker sl(msock->m);
@@ -8935,6 +9073,192 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
     }
     return http_priv->send_internal(xsink, "send", meth, new_path, headers, *tstr, tstr->c_str(), tstr->size(),
         nullptr, getbody, info, http_priv->timeout, nullptr);
+}
+
+QoreHashNode* QoreHttpClientObject::readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    if (!http_priv->streaming_recv_channel) {
+        // No channel — not in conn_mgr streaming mode
+        return nullptr;
+    }
+
+    QoreChannel* ch = http_priv->streaming_recv_channel;
+
+    bool timed_out = false;
+    bool has_value = false;
+    ValueHolder rv(ch->recv(timeout_ms <= 0 ? 0 : timeout_ms, xsink, timed_out, has_value), xsink);
+    if (*xsink) {
+        http_priv->clearStreamingChannel();
+        return nullptr;
+    }
+    if (timed_out) {
+        xsink->raiseException("SOCKET-TIMEOUT",
+            "timed out after %dms waiting for HTTP chunk data", timeout_ms);
+        return nullptr;
+    }
+    if (!has_value) {
+        // Channel closed = EOF
+        http_priv->clearStreamingChannel();
+        return new QoreHashNode(autoTypeInfo);
+    }
+
+    if (rv->getType() != NT_HASH) {
+        // Skip non-hash values (recurse)
+        return readHTTPChunkConnMgr(timeout_ms, xsink);
+    }
+    QoreHashNode* h = rv->get<QoreHashNode>();
+
+    // Check for error
+    QoreValue err_val = h->getKeyValue("err");
+    if (!err_val.isNullOrNothing()) {
+        http_priv->clearStreamingChannel();
+        const char* err_str = err_val.getType() == NT_STRING
+            ? err_val.get<const QoreStringNode>()->c_str()
+            : "HTTP-CLIENT-RECEIVE-ERROR";
+        QoreValue desc_val = h->getKeyValue("desc");
+        const char* desc_str = desc_val.getType() == NT_STRING
+            ? desc_val.get<const QoreStringNode>()->c_str()
+            : "streaming request failed";
+        xsink->raiseException(err_str, desc_str);
+        return nullptr;
+    }
+
+    // Check for body data
+    QoreValue body_val = h->getKeyValue("body");
+    if (!body_val.isNullOrNothing()) {
+        ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+        result->setKeyValue("body", body_val.refSelf(), xsink);
+        return result.release();
+    }
+
+    // Check for end_stream
+    QoreValue end_val = h->getKeyValue("end_stream");
+    if (!end_val.isNullOrNothing()) {
+        http_priv->clearStreamingChannel();
+        return new QoreHashNode(autoTypeInfo);  // empty = EOF
+    }
+
+    // Unknown message type — skip (recurse)
+    return readHTTPChunkConnMgr(timeout_ms, xsink);
+}
+
+QoreHashNode* QoreHttpClientObject::readServerSentEventConnMgr(const QoreStringNode* content_encoding,
+        int timeout_ms, ExceptionSink* xsink) {
+    if (!http_priv->streaming_recv_channel) {
+        return nullptr;
+    }
+
+    // Check buffer for complete SSE event (double newline delimiter)
+    while (true) {
+        size_t sep = http_priv->sse_recv_buffer.find("\n\n");
+        if (sep != std::string::npos) {
+            std::string event_text = http_priv->sse_recv_buffer.substr(0, sep + 2);
+            http_priv->sse_recv_buffer.erase(0, sep + 2);
+            // Parse SSE event using the static Socket method
+            SimpleRefHolder<QoreStringNode> event_str(
+                new QoreStringNode(event_text.c_str(), event_text.size(), QCS_UTF8));
+            return qore_socket_private::parseServerSentEvent(xsink, **event_str);
+        }
+
+        // Read more data from channel
+        ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
+        if (*xsink) {
+            return nullptr;
+        }
+        if (!chunk) {
+            return nullptr;
+        }
+
+        QoreValue body_val = chunk->getKeyValue("body");
+        if (body_val.isNullOrNothing()) {
+            // EOF — parse any remaining buffer
+            if (!http_priv->sse_recv_buffer.empty()) {
+                std::string remaining = http_priv->sse_recv_buffer;
+                http_priv->sse_recv_buffer.clear();
+                SimpleRefHolder<QoreStringNode> event_str(
+                    new QoreStringNode(remaining.c_str(), remaining.size(), QCS_UTF8));
+                return qore_socket_private::parseServerSentEvent(xsink, **event_str);
+            }
+            return nullptr;
+        }
+
+        // Append body to buffer
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* bin = body_val.get<const BinaryNode>();
+            http_priv->sse_recv_buffer.append(
+                reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+        } else if (body_val.getType() == NT_STRING) {
+            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            http_priv->sse_recv_buffer.append(str->c_str(), str->size());
+        }
+    }
+}
+
+QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    if (!http_priv->streaming_recv_channel) {
+        return nullptr;
+    }
+
+    // Drain all chunks into a string
+    QoreStringNode* body = new QoreStringNode();
+    while (true) {
+        ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
+        if (*xsink) {
+            body->deref(xsink);
+            return nullptr;
+        }
+        if (!chunk) {
+            break;
+        }
+        QoreValue body_val = chunk->getKeyValue("body");
+        if (body_val.isNullOrNothing()) {
+            break;  // EOF
+        }
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* bin = body_val.get<const BinaryNode>();
+            body->concat(reinterpret_cast<const char*>(bin->getPtr()), bin->size());
+        } else if (body_val.getType() == NT_STRING) {
+            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            body->concat(str->c_str(), str->size());
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("body", body, xsink);
+    return result.release();
+}
+
+QoreHashNode* QoreHttpClientObject::readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink) {
+    if (!http_priv->streaming_recv_channel) {
+        return nullptr;
+    }
+
+    // Drain all chunks into a binary node
+    BinaryNode* body = new BinaryNode();
+    while (true) {
+        ReferenceHolder<QoreHashNode> chunk(readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
+        if (*xsink) {
+            body->deref(xsink);
+            return nullptr;
+        }
+        if (!chunk) {
+            break;
+        }
+        QoreValue body_val = chunk->getKeyValue("body");
+        if (body_val.isNullOrNothing()) {
+            break;  // EOF
+        }
+        if (body_val.getType() == NT_BINARY) {
+            const BinaryNode* bin = body_val.get<const BinaryNode>();
+            body->append(bin->getPtr(), bin->size());
+        } else if (body_val.getType() == NT_STRING) {
+            const QoreStringNode* str = body_val.get<const QoreStringNode>();
+            body->append(str->c_str(), str->size());
+        }
+    }
+
+    ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
+    result->setKeyValue("body", body, xsink);
+    return result.release();
 }
 
 QoreHashNode* QoreHttpClientObject::sendAndStream(const char* meth, const char* new_path, const QoreHashNode* headers,

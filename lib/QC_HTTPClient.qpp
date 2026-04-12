@@ -1448,6 +1448,127 @@ hash<auto> HTTPClient::sendAndStream(string method, *string path, *data body, *h
     return *xsink ? QoreValue() : rv.release();
 }
 
+//! Reads a single HTTP chunk; overrides Socket::readHTTPChunk to support conn_mgr streaming
+/** When a conn_mgr streaming channel is active (from a prior sendAndStream call),
+    reads the next body chunk from the channel.  Otherwise delegates to Socket::readHTTPChunk.
+
+    @param timeout_ms timeout for the read operation
+
+    @return a hash with the "body" key containing the chunk data, or an empty hash for EOF
+
+    @since %Qore 2.3
+*/
+hash<auto> HTTPClient::readHTTPChunk(timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkConnMgr(timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        return rv.release();
+    }
+    // Fall back to Socket::readHTTPChunk
+    return client->readHttpChunk(timeout_ms, xsink);
+}
+
+//! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
+/** @param content_encoding optional content-encoding for decompression
+    @param timeout_ms timeout for the read operation
+    @return SseMessageInfo hash or NOTHING for EOF
+    @since %Qore 2.3
+*/
+*hash<SseMessageInfo> HTTPClient::readServerSentEvent(*string content_encoding, timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(
+        client->readServerSentEventConnMgr(content_encoding, timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        return rv.release();
+    }
+    // Fall back to Socket::readServerSentEvent
+    return client->readServerSentEvent(xsink, content_encoding, timeout_ms);
+}
+
+//! Reads a Server-Sent Event; overrides Socket::readServerSentEvent to support conn_mgr streaming
+/** @param timeout_ms timeout for the read operation
+    @return SseMessageInfo hash or NOTHING for EOF
+    @since %Qore 2.3
+*/
+*hash<SseMessageInfo> HTTPClient::readServerSentEvent(timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(
+        client->readServerSentEventConnMgr(nullptr, timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        return rv.release();
+    }
+    // Fall back to Socket::readServerSentEvent
+    return client->readServerSentEvent(xsink, nullptr, timeout_ms);
+}
+
+//! Reads a full HTTP chunked body; overrides Socket::readHTTPChunkedBody to support conn_mgr
+/** @param timeout_ms timeout for the read operation
+    @return hash with "body" key containing the accumulated body
+    @since %Qore 2.3
+*/
+hash<auto> HTTPClient::readHTTPChunkedBody(timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyConnMgr(timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        return rv.release();
+    }
+    return client->readHTTPChunkedBody(timeout_ms, xsink);
+}
+
+//! Reads a full HTTP chunked body as binary; overrides Socket::readHTTPChunkedBodyBinary
+/** @param timeout_ms timeout for the read operation
+    @return hash with "body" key containing the accumulated binary body
+    @since %Qore 2.3
+*/
+hash<auto> HTTPClient::readHTTPChunkedBodyBinary(timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        return rv.release();
+    }
+    return client->readHTTPChunkedBodyBinary(timeout_ms, xsink);
+}
+
+//! Reads binary data; overrides Socket::recvBinary to support conn_mgr streaming
+/** When a conn_mgr streaming channel is active, drains channel data up to \a size bytes.
+    Otherwise falls through to Socket::recvBinary.
+
+    @param size number of bytes to read; 0 = read all available
+    @param timeout_ms timeout for the read operation
+    @return binary data
+
+    @since %Qore 2.3
+*/
+binary HTTPClient::recvBinary(softint size = 0, timeout timeout_ms = -1) {
+    ReferenceHolder<QoreHashNode> rv(client->readHTTPChunkedBodyBinaryConnMgr(timeout_ms, xsink), xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (rv) {
+        QoreValue body_val = rv->getKeyValue("body");
+        if (body_val.getType() == NT_BINARY) {
+            return body_val.refSelf();
+        }
+        return QoreValue(new BinaryNode());
+    }
+    // Fall back to Socket::recvBinary
+    if (size) {
+        return client->recvBinary(size, timeout_ms, xsink);
+    }
+    BinaryNode* b = client->recvBinary(timeout_ms, xsink);
+    return b ? QoreValue(b) : QoreValue(new BinaryNode());
+}
+
 //! Sends an HTTP request with the specified method and chunked message body as given by a send callback and returns headers and any body received as a response in a hash format
 /** If a connection has not already been established, an internal call to HTTPClient::connect() will be made before sending the message
 

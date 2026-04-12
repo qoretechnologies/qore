@@ -647,6 +647,48 @@ public:
             OutputStream *os, InputStream* is, size_t max_chunk_size,
             const ResolvedCallReferenceNode* trailer_callback, ExceptionSink* xsink);
 
+    //! Reads a single HTTP chunk from the conn_mgr streaming channel or the raw socket
+    /** When a streaming channel is active (set by sendAndStream via conn_mgr),
+        reads the next body chunk from the channel.  Otherwise falls through to
+        the Socket-level readHTTPChunk.
+
+        @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key, or empty hash for EOF
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkConnMgr(int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads a Server-Sent Event from the conn_mgr streaming channel or the raw socket
+    /** @param content_encoding optional content-encoding for decompression
+        @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return SseMessageInfo hash or nullptr for EOF
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readServerSentEventConnMgr(const QoreStringNode* content_encoding,
+        int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads the full chunked body from the conn_mgr streaming channel or the raw socket
+    /** @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key containing accumulated body
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkedBodyConnMgr(int timeout_ms, ExceptionSink* xsink);
+
+    //! Reads the full chunked body as binary from the conn_mgr streaming channel or the raw socket
+    /** @param timeout_ms timeout in milliseconds; -1 = use default
+        @param xsink exception sink
+        @return hash with "body" key containing accumulated binary body
+
+        @since %Qore 2.3
+    */
+    DLLEXPORT QoreHashNode* readHTTPChunkedBodyBinaryConnMgr(int timeout_ms, ExceptionSink* xsink);
+
     //! sends an HTTP "GET" method and returns the value of the message body returned
     /** if you need to get all the headers received, then use QoreHttpClientObject::send() instead
         @param path the path string to send in the header
