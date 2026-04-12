@@ -2757,13 +2757,19 @@ static bool extractLValuePath(const QoreValue& expr,
 
     // Navigation: QoreHashObjectDereferenceOperatorNode (container{key})
     if (auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        const QoreValue right = hd->getRight();
+        // Multi-key hash slice (e.g. h{"a","b"}) — right side is a list; LValuePath
+        // only handles single-key navigation, so reject and let the caller fall back
+        // to the AST-eval path which handles multi-key remove/delete correctly.
+        if (right.hasNode() && (right.getType() == NT_LIST || right.getType() == NT_PARSE_LIST)) {
+            return false;
+        }
         // Recurse on left side (container)
         if (!extractLValuePath(hd->getLeft(), path, dynamic_operands)) {
             return false;
         }
         // Add hash key step
         LVPathStep step;
-        const QoreValue right = hd->getRight();
         if (right.hasNode() && right.getType() == NT_STRING) {
             step.kind = LVPathStepKind::HashKeyConst;
             step.name = right.get<const QoreStringNode>()->c_str();
@@ -2779,6 +2785,13 @@ static bool extractLValuePath(const QoreValue& expr,
 
     // Navigation: QoreSquareBracketsOperatorNode (container[index])
     if (auto* sb = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        const QoreValue right = sb->getRight();
+        // Multi-index slice (e.g. l[1,3,5] or str[1,45,3..4,x,5]) — right side is a
+        // list or parse list; LValuePath only handles single-index navigation, so reject
+        // and let the caller fall back to the AST-eval path.
+        if (right.hasNode() && (right.getType() == NT_LIST || right.getType() == NT_PARSE_LIST)) {
+            return false;
+        }
         // Recurse on left side (container)
         if (!extractLValuePath(sb->getLeft(), path, dynamic_operands)) {
             return false;
@@ -2786,7 +2799,7 @@ static bool extractLValuePath(const QoreValue& expr,
         // Add list index step
         LVPathStep step;
         step.kind = LVPathStepKind::ListIndex;
-        dynamic_operands.push_back(sb->getRight());
+        dynamic_operands.push_back(right);
         path.push_back(step);
         return true;
     }
