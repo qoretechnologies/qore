@@ -8130,7 +8130,12 @@ QoreIRValue QoreIRLowering::tryEmitLValuePathOp(QoreIROpcode opcode, const QoreV
     for (auto& dv : dyn_vals) {
         path_inst->operands.push_back(dv);
     }
-    // Return a sentinel value (the RHS or a dummy for unary ops)
+    // Compound ops compute a new value (e.g. +=, -=): return the instruction's result
+    // so the caller uses the actual computed value, not the RHS.
+    // Assignment and unary ops: assignment returns the RHS, unary returns path_inst->result.
+    if (opcode == QoreIROpcode::LValuePathCompound) {
+        return path_inst->result;
+    }
     return rhs ? *rhs : path_inst->result;
 }
 

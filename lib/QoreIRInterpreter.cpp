@@ -6316,28 +6316,30 @@ load_local_done:
                 QoreValue val = getIRValue(values, path_inst->operands[0]);
                 ValueHolder val_holder(val.refSelf(), xsink);
 
-                LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
+                // Scope the LValueHelper so it releases the object lock
+                // BEFORE cache invalidation (which may deref objects and
+                // try to acquire the same lock for GC scanning).
+                {
+                    LValueHelper lvh(xsink);
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                 }
-                if (lvh.assign(val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
+                // lvh is now destructed — object lock released
 
                 // Cache invalidation: broad for reference roots (write-through can modify
                 // any variable), targeted for non-reference roots.
-                // NOTE: can't use cleanupLocalCaches() here — LValueHelper still holds lock.
-                // Only clear locals_slot_cache (not globals/closures) to avoid lock conflicts.
                 if (path_inst->hasLocalTarget()) {
                     bool is_ref = !path_inst->path.empty() && path_inst->path[0].type_info
                         && QoreTypeInfo::isReference(path_inst->path[0].type_info);
                     if (is_ref) {
-                        // Broad invalidation for reference write-through:
-                        // 1. Local slot cache (the target variable's cached value)
                         for (size_t j = 0; j < locals_slot_cache.size(); ++j) {
                             if (j < locals_ir_only.size() && locals_ir_only[j]) {
                                 continue;
@@ -6345,9 +6347,6 @@ load_local_done:
                             locals_slot_cache[j].discard(xsink);
                             locals_slot_cache[j] = QoreValue();
                         }
-                        // 2. Closures and globals caches (LoadClosure/LoadGlobal read
-                        //    from these caches; reference write-through updates the
-                        //    actual storage but not these caches)
                         cleanupStoredValues(closures, xsink);
                         cleanupStoredValues(globals, xsink);
                     } else {
@@ -6392,57 +6391,58 @@ load_local_done:
                 }
                 QoreValue rhs = getIRValue(values, path_inst->operands[0]);
                 ValueHolder rhs_holder(rhs.refSelf(), xsink);
-                // No pre-invalidation of locals_slot_cache — it destroys IR-only
-                // locals (loop counters etc.) that don't have variable stack backing.
-                // The lock handoff via navigatePath is sufficient for correctness.
-                LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
                 QoreValue res;
-                switch (path_inst->compound_op) {
-                    case LVCompoundOp::AddAssign:
-                        res = doPlusEqualsOnLValue(lvh, rhs, xsink);
-                        break;
-                    case LVCompoundOp::SubAssign:
-                        res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-                        break;
-                    default: {
-                        // For other compound ops (mul, div, mod, and, or, xor, shl, shr),
-                        // use type-specific LValueHelper methods
-                        qore_type_t vtype = lvh.getType();
-                        if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                            switch (path_inst->compound_op) {
-                                case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
-                                case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
-                                default: res = QoreValue(); break;
+                // Scope the LValueHelper so it releases the object lock
+                // BEFORE cache invalidation (which may deref objects and
+                // try to acquire the same lock for GC scanning).
+                {
+                    LValueHelper lvh(xsink);
+                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size(), false)) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
+                    switch (path_inst->compound_op) {
+                        case LVCompoundOp::AddAssign:
+                            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+                            break;
+                        case LVCompoundOp::SubAssign:
+                            res = doMinusEqualsOnLValue(lvh, rhs, xsink);
+                            break;
+                        default: {
+                            qore_type_t vtype = lvh.getType();
+                            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+                                switch (path_inst->compound_op) {
+                                    case LVCompoundOp::MulAssign: lvh.multiplyEqualsNumber(rhs); break;
+                                    case LVCompoundOp::DivAssign: lvh.divideEqualsNumber(rhs); break;
+                                    default: res = QoreValue(); break;
+                                }
+                            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                                double rv = rhs.getAsFloat();
+                                switch (path_inst->compound_op) {
+                                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
+                                    default: res = QoreValue(); break;
+                                }
+                            } else {
+                                int64 rv = rhs.getAsBigInt();
+                                switch (path_inst->compound_op) {
+                                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                                    case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
+                                    case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
+                                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
+                                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
+                                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
+                                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
+                                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                                    default: break;
+                                }
                             }
-                        } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                            double rv = rhs.getAsFloat();
-                            switch (path_inst->compound_op) {
-                                case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                case LVCompoundOp::DivAssign: res = lvh.divideEqualsFloat(rv); break;
-                                default: res = QoreValue(); break;
-                            }
-                        } else {
-                            int64 rv = rhs.getAsBigInt();
-                            switch (path_inst->compound_op) {
-                                case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                case LVCompoundOp::DivAssign: res = lvh.divideEqualsBigInt(rv); break;
-                                case LVCompoundOp::ModAssign: res = lvh.modulaEqualsBigInt(rv); break;
-                                case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                                case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                                case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                                case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                                case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                                default: break;
-                            }
+                            break;
                         }
-                        break;
                     }
                 }
+                // lvh is now destructed — object lock released
                 if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
@@ -6509,41 +6509,39 @@ load_local_done:
                     // remove/delete the key/element. LValueHelper::remove() only clears
                     // the value without removing the hash key; we need container-level removal.
                     LValueHelper lvh(xsink);
-                    // Navigate to parent (all steps except the last)
-                    if (lvh.navigatePath(path_inst->path.data(), path_inst->path.size() - 1, false)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    // Now remove/delete the final key/element from the container
-                    const LVPathStep& last_step = path_inst->path.back();
-                    lvh.ensureUnique();
-                    if (last_step.kind == LVPathStepKind::HashKeyConst
-                            || last_step.kind == LVPathStepKind::HashKey) {
+                    // Navigate to parent (for_remove=true: don't vivify intermediates)
+                    if (!lvh.navigatePath(path_inst->path.data(), path_inst->path.size() - 1, true)) {
+                        // Now remove/delete the final key/element from the container
+                        const LVPathStep& last_step = path_inst->path.back();
                         QoreValue container = lvh.getValue();
-                        if (container.getType() == NT_HASH) {
-                            QoreHashNode* h = container.get<QoreHashNode>();
+                        qore_type_t ct = container.getType();
+                        if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
+                            lvh.ensureUnique();
+                            QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                             res = h->takeKeyValue(last_step.name.c_str());
                             if (path_inst->unary_op == LVUnaryOp::Delete) {
                                 res.discard(xsink);
                                 res = QoreValue();
                             }
-                        }
-                    } else if (last_step.kind == LVPathStepKind::ListIndex) {
-                        QoreValue container = lvh.getValue();
-                        if (container.getType() == NT_LIST) {
-                            QoreListNode* l = container.get<QoreListNode>();
+                        } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
+                            lvh.ensureUnique();
+                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
                             size_t idx = static_cast<size_t>(last_step.slot_id);
                             if (idx < l->size()) {
-                                // For remove: take the value. For delete: just set to NOTHING
                                 if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                    // Get value before clearing
                                     res = l->retrieveEntry(idx).refSelf();
                                 }
                                 l->setEntry(idx, QoreValue(), xsink);
                             }
                         }
+                        // NT_NOTHING or other parent types: nothing to remove, fall through
+                    } else if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
                     }
+                    // navigatePath failed without exception: parent doesn't exist, skip
                 } else if (is_remove) {
                     // Single-step path: navigate to the variable itself and clear
                     LValueHelper lvh(xsink);
@@ -6587,10 +6585,58 @@ load_local_done:
                         return false;
                     }
                     switch (path_inst->unary_op) {
-                        case LVUnaryOp::PreInc: res = lvh.preIncrementBigInt(); break;
-                        case LVUnaryOp::PreDec: res = lvh.preDecrementBigInt(); break;
-                        case LVUnaryOp::PostInc: res = lvh.postIncrementBigInt(); break;
-                        case LVUnaryOp::PostDec: res = lvh.postDecrementBigInt(); break;
+                        case LVUnaryOp::PreInc: {
+                            qore_type_t t = lvh.getType();
+                            if (t == NT_NUMBER) {
+                                lvh.preIncrementNumber();
+                                res = lvh.getReferencedValue();
+                            } else if (t == NT_FLOAT) {
+                                res = lvh.preIncrementFloat();
+                            } else {
+                                res = lvh.preIncrementBigInt();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::PreDec: {
+                            qore_type_t t = lvh.getType();
+                            if (t == NT_NUMBER) {
+                                lvh.preDecrementNumber();
+                                res = lvh.getReferencedValue();
+                            } else if (t == NT_FLOAT) {
+                                res = lvh.preDecrementFloat();
+                            } else {
+                                res = lvh.preDecrementBigInt();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::PostInc: {
+                            qore_type_t t = lvh.getType();
+                            if (t == NT_NUMBER) {
+                                QoreNumberNode* n = lvh.postIncrementNumber(true);
+                                if (n) {
+                                    res = n;
+                                }
+                            } else if (t == NT_FLOAT) {
+                                res = lvh.postIncrementFloat();
+                            } else {
+                                res = lvh.postIncrementBigInt();
+                            }
+                            break;
+                        }
+                        case LVUnaryOp::PostDec: {
+                            qore_type_t t = lvh.getType();
+                            if (t == NT_NUMBER) {
+                                QoreNumberNode* n = lvh.postDecrementNumber(true);
+                                if (n) {
+                                    res = n;
+                                }
+                            } else if (t == NT_FLOAT) {
+                                res = lvh.postDecrementFloat();
+                            } else {
+                                res = lvh.postDecrementBigInt();
+                            }
+                            break;
+                        }
                         case LVUnaryOp::Shift: {
                             if (lvh.getType() != NT_LIST) {
                                 break;
@@ -10027,6 +10073,11 @@ QoreValue QoreIRInterpreter::evalBinary(QoreIROpcode op, const QoreValue& left, 
         case QoreIROpcode::ListIndexDynamic: {
             // Dynamic list/container index: container[index]
             // Must match doSquareBrackets() semantics: negative indices count from end
+            // Multi-index access (e.g. l[3,1,4]): delegate to doSquareBrackets for
+            // correct list/string/binary/hash multi-index handling
+            if (right.getType() == NT_LIST) {
+                return QoreSquareBracketsOperatorNode::doSquareBrackets(left, right, true, xsink);
+            }
             qore_type_t bt = left.getType();
             if (bt == NT_LIST) {
                 const QoreListNode* l = left.get<const QoreListNode>();

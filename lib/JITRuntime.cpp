@@ -5287,10 +5287,58 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             return toBits(QoreValue());
         }
         switch (inst->unary_op) {
-            case LVUnaryOp::PreInc: res = lvh.preIncrementBigInt(); break;
-            case LVUnaryOp::PreDec: res = lvh.preDecrementBigInt(); break;
-            case LVUnaryOp::PostInc: res = lvh.postIncrementBigInt(); break;
-            case LVUnaryOp::PostDec: res = lvh.postDecrementBigInt(); break;
+            case LVUnaryOp::PreInc: {
+                qore_type_t t = lvh.getType();
+                if (t == NT_NUMBER) {
+                    lvh.preIncrementNumber();
+                    res = lvh.getReferencedValue();
+                } else if (t == NT_FLOAT) {
+                    res = lvh.preIncrementFloat();
+                } else {
+                    res = lvh.preIncrementBigInt();
+                }
+                break;
+            }
+            case LVUnaryOp::PreDec: {
+                qore_type_t t = lvh.getType();
+                if (t == NT_NUMBER) {
+                    lvh.preDecrementNumber();
+                    res = lvh.getReferencedValue();
+                } else if (t == NT_FLOAT) {
+                    res = lvh.preDecrementFloat();
+                } else {
+                    res = lvh.preDecrementBigInt();
+                }
+                break;
+            }
+            case LVUnaryOp::PostInc: {
+                qore_type_t t = lvh.getType();
+                if (t == NT_NUMBER) {
+                    QoreNumberNode* n = lvh.postIncrementNumber(true);
+                    if (n) {
+                        res = n;
+                    }
+                } else if (t == NT_FLOAT) {
+                    res = lvh.postIncrementFloat();
+                } else {
+                    res = lvh.postIncrementBigInt();
+                }
+                break;
+            }
+            case LVUnaryOp::PostDec: {
+                qore_type_t t = lvh.getType();
+                if (t == NT_NUMBER) {
+                    QoreNumberNode* n = lvh.postDecrementNumber(true);
+                    if (n) {
+                        res = n;
+                    }
+                } else if (t == NT_FLOAT) {
+                    res = lvh.postDecrementFloat();
+                } else {
+                    res = lvh.postDecrementBigInt();
+                }
+                break;
+            }
             case LVUnaryOp::Shift:
                 if (lvh.getType() == NT_LIST) {
                     lvh.ensureUnique();
