@@ -3505,9 +3505,38 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         *InputStream is;
         if (body instanceof InputStream) {
             is = body;
-            # Unassign thread affinity while still on the handler thread
-            # so the I/O controller thread can access it later
-            is.unassignThread();
+            # Architectural rule: the I/O thread must NEVER call readHelper()
+            # on a non-I/O-thread-safe InputStream (e.g. a Qore-defined
+            # InputStream subclass or CallbackInputStream wrapping user code).
+            # Downstream paths — sendAsyncResponse(), sendResponseSync(),
+            # sendMultiplexedResponse() — all route the stream to an I/O-
+            # thread poll op (startPollSendHttp2StreamingResponse,
+            # startPollQuicSendStreamingResponse, etc).  Materialize here
+            # on the handler worker thread so only memory-backed streams
+            # (isIoThreadSafe() == True) ever reach the I/O thread.
+            #
+            # The stream is already thread-assigned to this worker thread
+            # (either because the handler created it here, or because it
+            # was created elsewhere and never reassigned — in which case
+            # read() will raise STREAM-THREAD-ERROR, which is a legitimate
+            # error to surface: a handler must not hand back a stream
+            # bound to some other thread).
+            if (!is.isIoThreadSafe()) {
+                binary buf;
+                while (*binary chunk = is.read(65536)) {
+                    buf += chunk;
+                }
+                if (buf.size() > 0) {
+                    is = new BinaryInputStream(buf);
+                    is.unassignThread();
+                } else {
+                    delete is;
+                }
+            } else {
+                # Unassign thread affinity while still on the handler thread
+                # so the I/O controller thread can access it later
+                is.unassignThread();
+            }
             body = NOTHING;
         }
         listener.log("doResponse: capturing async response code=%d body_size=%d has_stream=%y",
@@ -5074,10 +5103,12 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 auto sub() { return cb(); }, s);
         }
 
-        # Materialize non-I/O-thread-safe InputStreams into memory.
-        # Handler threads must NEVER do blocking socket I/O on multiplexed
-        # connections — the I/O thread needs the socket/session mutex to
-        # process incoming data, and blocking sends cause deadlock.
+        # Defense in depth: doResponse() already materializes
+        # non-I/O-thread-safe InputStreams into BinaryInputStream on the
+        # handler thread.  This fallback guards callers that bypass
+        # doResponse() (e.g. send_callback → CallbackInputStream wrapping
+        # built at this layer) — it must stay in place until every upstream
+        # path is proven to go through doResponse().
         if (response.input_stream && !response.input_stream.isIoThreadSafe()) {
             response.input_stream.reassignThread();
             binary buf;

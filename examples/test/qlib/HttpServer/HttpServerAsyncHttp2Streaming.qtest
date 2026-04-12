@@ -134,6 +134,103 @@ class ErrorStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Non-I/O-thread-safe InputStream that records every TID that calls
+#! read().  Used to verify the architectural rule: blocking reads on
+#! non-pollable Qore-defined InputStreams MUST happen on a worker thread,
+#! NEVER on the async I/O thread.
+/** Qore-defined InputStream subclasses default to isIoThreadSafe()=false,
+    so this stream exercises the server's materialization path.  We
+    record all reader TIDs and assert none of them match the server's
+    known I/O-controller thread TIDs.
+*/
+class TidRecordingInputStream inherits InputStream {
+    public {
+        Mutex m_lock();
+        list<int> m_reader_tids();
+        binary m_payload;
+        bool m_done = False;
+        int m_delay_ms = 0;
+    }
+
+    constructor(binary payload, int delay_ms = 0) {
+        m_payload = payload;
+        m_delay_ms = delay_ms;
+    }
+
+    *binary read(int limit) {
+        {
+            AutoLock al(m_lock);
+            m_reader_tids += gettid();
+        }
+        if (m_done) {
+            return NOTHING;
+        }
+        if (m_delay_ms > 0) {
+            usleep(m_delay_ms * 1000);
+        }
+        m_done = True;
+        return m_payload;
+    }
+
+    int peek() {
+        return m_done ? -1 : (m_payload.size() > 0 ? m_payload[0] : -1);
+    }
+
+    list<int> getReaderTids() {
+        AutoLock al(m_lock);
+        return m_reader_tids;
+    }
+}
+
+#! Handler that returns a TidRecordingInputStream so the test can verify
+#! read() was called from the handler worker thread, not the I/O thread.
+/** The stream is constructed inside handleRequest() so its thread
+    affinity is set to the handler worker thread (not the main test
+    thread).  The stream itself is exposed back to the test via a
+    Counter-guarded handoff so the test can retrieve the reader-TID list
+    after the response completes.
+*/
+class TidStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        Mutex m_lock();
+        Counter m_done(1);
+        TidRecordingInputStream m_stream;
+        int m_handler_tid = 0;
+        binary m_payload;
+        int m_delay_ms;
+    }
+
+    constructor(binary payload, int delay_ms = 0) {
+        m_payload = payload;
+        m_delay_ms = delay_ms;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        # Construct the stream inside the handler so its thread affinity
+        # is the current worker thread — any read() on a different thread
+        # would raise STREAM-THREAD-ERROR, surfacing an I/O-thread violation.
+        TidRecordingInputStream local_stream(m_payload, m_delay_ms);
+        {
+            AutoLock al(m_lock);
+            m_stream = local_stream;
+            m_handler_tid = gettid();
+        }
+        return makeResponse(200, local_stream, {
+            "Content-Type": "application/octet-stream",
+        });
+    }
+
+    TidRecordingInputStream getStream() {
+        AutoLock al(m_lock);
+        return m_stream;
+    }
+
+    int getHandlerTid() {
+        AutoLock al(m_lock);
+        return m_handler_tid;
+    }
+}
+
 #! AbstractStreamRequest subclass for the H2 connect+ CallbackInputStream
 #! response path.  Mirrors the H3 ConnectStreamRequest in
 #! HttpServerH3Streaming.qtest; the server-side code path differs
@@ -368,6 +465,8 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             \testH2CallbackInputStreamConnectProtocolLarge());
         addTestCase("H2 bidi: handler reads request + emits response",
             \testH2BidiInterleavedRequestResponse());
+        addTestCase("H2 non-pollable InputStream read() runs on worker thread",
+            \testH2NonPollableStreamReadsOnWorker());
 
         set_return_value(main());
     }
@@ -723,6 +822,56 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         int actual_size = resp.body.typeCode() == NT_BINARY
             ? resp.body.size() : resp.body.length();
         assertEq(expected_size, actual_size, "large connect+ response body size");
+    }
+
+    #! Verifies the architectural rule: when a handler returns a Qore-defined
+    #! (non-I/O-thread-safe) InputStream as the response body, the stream's
+    #! read() method MUST execute on the handler worker thread — never on
+    #! the async I/O thread.  This is enforced by materializing the stream
+    #! in doResponse() on the handler thread before the response is handed
+    #! off to the I/O controller.
+    /** The test attaches a fresh TidRecordingInputStream to a path-specific
+        handler, makes one request, and asserts: (a) read() was called at
+        least once, (b) every caller TID matches the handler's own TID —
+        which is by definition the worker thread that ran handleRequest().
+        Pre-fix behaviour with a missing materialization step would call
+        read() on the async I/O thread; TIDs would diverge and the test
+        would fail.
+    */
+    testH2NonPollableStreamReadsOnWorker() {
+        int payload_size = 16 * 1024;  # 16 KB — non-trivial but fast
+        binary payload = binary(strmul("W", payload_size));
+        TidStreamHandler handler(payload, 50);  # 50ms delay inside read()
+
+        # Register under a unique path so the test doesn't share state with
+        # other tests (classic HttpServer mServer is shared via globalSetUp).
+        mServer.setHandler("tid-stream", "/tid-stream", NOTHING, handler, NOTHING, False);
+        on_exit {
+            try {
+                mServer.removeHandler("tid-stream");
+            } catch () {}
+        }
+
+        RestClient rc = getClient(30000);
+        on_exit delete rc;
+        hash<auto> resp = rc.get("/tid-stream");
+        assertEq(200, resp.status_code, "tid-stream: status code");
+        int body_size = resp.body.typeCode() == NT_BINARY
+            ? resp.body.size() : resp.body.length();
+        assertEq(payload_size, body_size, "tid-stream: body size");
+
+        # Core architectural assertion: the handler's read() callers are
+        # all the same TID as the handler itself (the worker thread).
+        list<int> reader_tids = handler.getStream().getReaderTids();
+        int handler_tid = handler.getHandlerTid();
+        assertTrue(reader_tids.size() > 0, "tid-stream: read() was called");
+        assertGt(0, handler_tid, "tid-stream: handler recorded its own TID");
+        foreach int tid in (reader_tids) {
+            assertEq(handler_tid, tid,
+                sprintf("tid-stream: read() caller TID %d matches handler TID %d "
+                    "(must run on worker thread, not I/O thread)",
+                    tid, handler_tid));
+        }
     }
 
     #! True bidi: client POSTs 5 text chunks; handler reads each chunk via
