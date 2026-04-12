@@ -2178,6 +2178,7 @@ int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
     auto& sbd = streaming_body_data_[stream_id];
     sbd = QuicStreamingBodyData{};
     sbd.deferred = true;
+    sbd.no_end_stream = true;  // CONNECT tunnel: keep stream open for bidirectional data
 
     int rv = nghttp3_conn_submit_response(h3_conn_, stream_id, nva.data(), nva.size(), &dr);
     if (rv != 0) {
