@@ -1341,9 +1341,16 @@ extern "C" DLLEXPORT void qore_rt_pop_implicit_arg(uint64_t old_context_bits, Ex
         const_cast<QoreListNode*>(current)->deref(xsink);
     }
 
-    // Restore old context
+    // Restore old context — the old_context was refSelf'd by
+    // qore_rt_set_implicit_argv / qore_rt_push_implicit_arg to keep it alive
+    // while it was saved. Now that it's restored to current_implicit_arg,
+    // release the extra ref. The pointer remains valid because the caller
+    // (ArgvContextHelper or argvid on the lvstack) still holds its own ref.
     QoreListNode* old_argv = old_context.get<QoreListNode>();
     thread_set_implicit_args(old_argv);
+    if (old_argv) {
+        old_argv->deref(xsink);
+    }
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_push_implicit_element(int64_t index, ExceptionSink* xsink) {
