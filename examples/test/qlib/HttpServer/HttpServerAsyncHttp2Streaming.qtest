@@ -134,6 +134,154 @@ class ErrorStreamHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! AbstractStreamRequest subclass for the H2 connect+ CallbackInputStream
+#! response path.  Mirrors the H3 ConnectStreamRequest in
+#! HttpServerH3Streaming.qtest; the server-side code path differs
+#! (submitHttp2StreamingResponseWithStream vs submitQuicStreamingResponseWithStream)
+#! but the handler contract is identical.
+class H2ConnectStreamRequest inherits AbstractStreamRequest {
+    private {
+        int chunk_count;
+        int chunk_size;
+        int emitted = 0;
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s,
+            hash<auto> cx, hash<auto> hdr, auto body, int chunk_count, int chunk_size)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+        self.chunk_count = chunk_count;
+        self.chunk_size = chunk_size;
+    }
+
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "application/connect+x",
+                "Transfer-Encoding": "chunked",
+            },
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {}
+
+    private auto sendImpl() {
+        if (emitted >= chunk_count) {
+            return NOTHING;
+        }
+        int sz = chunk_size;
+        binary header = <01>
+            + binary(chr((sz >> 24) & 0xff))
+            + binary(chr((sz >> 16) & 0xff))
+            + binary(chr((sz >> 8) & 0xff))
+            + binary(chr(sz & 0xff));
+        binary frame = header + binary(strmul(chr(ord("A") + emitted), sz));
+        emitted++;
+        return frame;
+    }
+}
+
+#! H2 handler wiring H2ConnectStreamRequest into the streaming pipeline.
+class H2CallbackStreamResponseHandler inherits AbstractHttpRequestHandler {
+    private {
+        int chunk_count;
+        int chunk_size;
+    }
+
+    constructor(int chunk_count = 3, int chunk_size = 1024)
+            : AbstractHttpRequestHandler(NOTHING, True) {
+        self.chunk_count = chunk_count;
+        self.chunk_size = chunk_size;
+    }
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        return new H2ConnectStreamRequest(listener, self, s, cx, hdr, body,
+            chunk_count, chunk_size);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected for stream handler",
+            {"Content-Type": "text/plain"});
+    }
+}
+
+#! AbstractStreamRequest subclass for H2 true-bidi.  Reads request body
+#! chunks via recvImpl and emits one length-prefixed uppercased frame
+#! per received chunk via sendImpl.
+class H2BidiInterleaveStreamRequest inherits AbstractStreamRequest {
+    private {
+        Queue m_recv_queue();
+    }
+
+    constructor(HttpListenerInterface listener, AbstractHttpRequestHandler handler, Socket s,
+            hash<auto> cx, hash<auto> hdr, auto body)
+            : AbstractStreamRequest(listener, handler, s, cx, hdr, body) {
+    }
+
+    bool needsContentEncoding() {
+        return False;
+    }
+
+    private hash<HttpHandlerResponseInfo> getResponseHeaderMessageImpl() {
+        return <HttpHandlerResponseInfo>{
+            "code": 200,
+            "hdr": {
+                "Content-Type": "application/connect+bidi",
+                "Transfer-Encoding": "chunked",
+            },
+        };
+    }
+
+    private nothing recvImpl(hash<auto> v) {
+        if (!exists v.data || (v.hasKey("hdr") && !exists v.hdr)) {
+            m_recv_queue.push(NOTHING);
+            return;
+        }
+        m_recv_queue.push(v.data);
+    }
+
+    private auto sendImpl() {
+        *binary chunk = m_recv_queue.get(30s);
+        if (!exists chunk) {
+            return NOTHING;
+        }
+        binary upper = binary();
+        for (int i = 0; i < chunk.size(); ++i) {
+            int c = chunk[i];
+            if (c >= ord("a") && c <= ord("z")) {
+                c -= 32;
+            }
+            upper += binary(chr(c));
+        }
+        int sz = upper.size();
+        binary header = <02>
+            + binary(chr((sz >> 24) & 0xff))
+            + binary(chr((sz >> 16) & 0xff))
+            + binary(chr((sz >> 8) & 0xff))
+            + binary(chr(sz & 0xff));
+        return header + upper;
+    }
+}
+
+class H2BidiInterleaveHandler inherits AbstractHttpRequestHandler {
+    constructor() : AbstractHttpRequestHandler(NOTHING, True) {}
+
+    private AbstractStreamRequest getStreamRequestImpl(HttpListenerInterface listener, Socket s,
+            hash<auto> cx, hash<auto> hdr, *data body) {
+        return new H2BidiInterleaveStreamRequest(listener, self, s, cx, hdr, body);
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(500, "unexpected for stream handler",
+            {"Content-Type": "text/plain"});
+    }
+}
+
 class HttpServerAsyncHttp2StreamingTest inherits QUnit::Test {
     private {
         HttpServer mServer;
@@ -213,6 +361,14 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         addTestCase("pollable FileInputStream streaming", \testFileInputStreamStreaming());
         addTestCase("pollable FileInputStream large multi-chunk", \testFileInputStreamLargeStreaming());
 
+        # Bidi streaming tests — AbstractStreamRequest + CallbackInputStream
+        addTestCase("H2 CallbackInputStream connect+ response body",
+            \testH2CallbackInputStreamConnectProtocol());
+        addTestCase("H2 CallbackInputStream connect+ large response",
+            \testH2CallbackInputStreamConnectProtocolLarge());
+        addTestCase("H2 bidi: handler reads request + emits response",
+            \testH2BidiInterleavedRequestResponse());
+
         set_return_value(main());
     }
 
@@ -236,6 +392,15 @@ OKKqgBjNAlYDdPhOy8O8Agk=
         mServer.setHandler("empty-stream", "/empty-stream", NOTHING, new EmptyStreamHandler());
         mServer.setHandler("error-stream", "/error-stream", NOTHING, new ErrorStreamHandler());
         mServer.setHandler("file-stream", "/file-stream", NOTHING, new FileStreamHandler(mTmpDir));
+
+        # Bidi handler registrations (exact-match paths — do not use regex-substring
+        # matching that would collide with the broader stream/error handlers)
+        mServer.setHandler("cb-stream", "/cb-stream", NOTHING,
+            new H2CallbackStreamResponseHandler(3, 1024), NOTHING, False);
+        mServer.setHandler("cb-stream-large", "/cb-stream-large", NOTHING,
+            new H2CallbackStreamResponseHandler(16, 32 * 1024), NOTHING, False);
+        mServer.setHandler("bidi-interleave", "/bidi-interleave", NOTHING,
+            new H2BidiInterleaveHandler(), NOTHING, False);
 
         mSslPort = mServer.addListener(<HttpListenerOptionInfo>{
             "service": 0,
@@ -494,5 +659,103 @@ OKKqgBjNAlYDdPhOy8O8Agk=
             body_str = resp.body;
         }
         assertEq(strmul("F", size), body_str, "large file stream body content");
+    }
+
+    private HTTPClient getRawClient(*int timeout_ms) {
+        return new HTTPClient({
+            "url": mSslUrl,
+            "ssl_verify_cert": False,
+            "timeout": timeout_ms ?? 30000,
+            "http_version": "2.0",
+        });
+    }
+
+    #! H2 analogue of testH3CallbackInputStreamConnectProtocol.  Goes through
+    #! AbstractStreamRequest::sendResponse() with needsContentEncoding()=false
+    #! and Content-Type: application/connect+x, producing a response whose
+    #! body is a CallbackInputStream.  Must deliver intact and leave the
+    #! connection reusable for a follow-up request.
+    testH2CallbackInputStreamConnectProtocol() {
+        HTTPClient hc = getRawClient(30000);
+        on_exit delete hc;
+
+        hash<auto> info;
+        hash<auto> resp;
+        try {
+            resp = hc.send(NOTHING, "GET", "/cb-stream", NOTHING, False, \info);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("H2 CallbackInputStream response failed: %s: %s", ex.err, ex.desc));
+        }
+        assertEq(200, resp.status_code, "H2 CallbackInputStream: status code");
+
+        int expected_size = 3 * (1 + 4 + 1024);
+        int actual_size = resp.body.typeCode() == NT_BINARY
+            ? resp.body.size() : resp.body.length();
+        assertEq(expected_size, actual_size, "H2 CallbackInputStream: body size");
+
+        # Second request on same connection — verifies the connection is
+        # reusable after a streamed InputStream response
+        hash<auto> resp2 = hc.send(NOTHING, "GET", "/cb-stream", NOTHING, False);
+        assertEq(200, resp2.status_code, "H2 CallbackInputStream: second request status");
+        int actual_size2 = resp2.body.typeCode() == NT_BINARY
+            ? resp2.body.size() : resp2.body.length();
+        assertEq(expected_size, actual_size2,
+            "H2 CallbackInputStream: second request body size");
+    }
+
+    #! Large payload variant — stresses H2 flow-control windows and
+    #! materialization buffer size.  If the server closes the connection
+    #! for "too-large" streamed responses, this surfaces it.
+    testH2CallbackInputStreamConnectProtocolLarge() {
+        HTTPClient hc = getRawClient(60000);
+        on_exit delete hc;
+
+        hash<auto> resp;
+        try {
+            resp = hc.send(NOTHING, "GET", "/cb-stream-large", NOTHING, False);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("H2 CallbackInputStream large response failed: %s: %s",
+                ex.err, ex.desc));
+        }
+        assertEq(200, resp.status_code, "large connect+ response status");
+
+        int expected_size = 16 * (1 + 4 + 32 * 1024);
+        int actual_size = resp.body.typeCode() == NT_BINARY
+            ? resp.body.size() : resp.body.length();
+        assertEq(expected_size, actual_size, "large connect+ response body size");
+    }
+
+    #! True bidi: client POSTs 5 text chunks; handler reads each chunk via
+    #! recvImpl and emits an uppercased length-prefixed frame via sendImpl.
+    #! Verifies no hang, correct transformation, and connection reusability.
+    testH2BidiInterleavedRequestResponse() {
+        HTTPClient hc = getRawClient(30000);
+        on_exit delete hc;
+
+        list<string> chunks = ("alpha", "beta", "gamma", "delta", "epsilon");
+        binary req_body = binary();
+        foreach string c in (chunks) {
+            req_body += binary(c);
+        }
+
+        hash<auto> resp;
+        try {
+            resp = hc.send(req_body, "POST", "/bidi-interleave",
+                {"Content-Type": "application/connect+bidi"}, False);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("H2 bidi interleave failed: %s: %s", ex.err, ex.desc));
+        }
+        assertEq(200, resp.status_code, "bidi: status");
+
+        int actual_size = resp.body.typeCode() == NT_BINARY
+            ? resp.body.size() : resp.body.length();
+        assertTrue(actual_size > 0, "bidi: non-empty response body");
+
+        binary body_bin = resp.body.typeCode() == NT_BINARY
+            ? resp.body
+            : binary(resp.body);
+        string body_str = body_bin.toString();
+        assertTrue(body_str.find("ALPHA") >= 0, "bidi: ALPHA present");
+        assertTrue(body_str.find("EPSILON") >= 0, "bidi: EPSILON present");
     }
 }
