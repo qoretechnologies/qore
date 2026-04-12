@@ -2251,6 +2251,10 @@ float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
     @since ml 1.0
 */
 list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
+    if (!v->size()) {
+        xsink->raiseException("ML-VECTOR-ERROR", "input vector is empty");
+        return QoreValue();
+    }
     VectorXd vec = qoreListToVector(v, xsink);
     if (*xsink) { return QoreValue(); }
     double norm = vec.norm();

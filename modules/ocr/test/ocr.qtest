@@ -20,7 +20,7 @@ public class OcrModuleTest inherits QUnit::Test {
     constructor() : Test("OcrModuleTest", "1.0") {
         test_image_path = normalize_dir(get_script_dir() + "/test_image.png");
 
-        addTestCase("ocr_has_tesseract", \hasTeserractTest());
+        addTestCase("ocr_has_tesseract", \hasTesseractTest());
         addTestCase("TesseractEngine - constructor", \constructorTest());
         addTestCase("TesseractEngine - constructor bad language", \constructorBadLangTest());
         addTestCase("TesseractEngine - getCapabilities", \capabilitiesTest());
@@ -36,7 +36,7 @@ public class OcrModuleTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    hasTeserractTest() {
+    hasTesseractTest() {
         assertTrue(Ocr::ocr_has_tesseract());
     }
 
