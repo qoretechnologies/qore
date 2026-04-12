@@ -1234,25 +1234,47 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
             }
             case LVPathStepKind::ListIndex: {
                 // For list index, we need to ensure unique and access the element
-                if (t != NT_LIST) {
+                QoreListNode* l = nullptr;
+                if (t == NT_LIST) {
+                    ensureUnique();
+                    l = getValue().get<QoreListNode>();
+                } else {
                     if (for_remove) {
                         return -1;
                     }
-                    // create list if needed
+                    // if the lvalue is not already a list, then make it one
+                    // but first make sure the lvalue can be converted to a list
                     if (!QoreTypeInfo::parseAcceptsReturns(typeInfo, NT_LIST)) {
                         vl.xsink->raiseException("LVALUE-ERROR",
                             "cannot convert to list for index access");
                         return -1;
                     }
-                }
-                ensureUnique();
-                QoreListNode* l = getValue().get<QoreListNode>();
-                if (!l) {
-                    if (for_remove) {
-                        return -1;
+                    // auto-vivify: create list with appropriate type
+                    if (!getValue()) {
+                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
+                            || typeInfo == listOrNothingTypeInfo) {
+                            assignNodeIntern((l = new QoreListNode));
+                        } else {
+                            const QoreTypeInfo* sti = typeInfo == autoTypeInfo
+                                ? autoTypeInfo
+                                : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
+                            if (sti) {
+                                assignNodeIntern((l = new QoreListNode(sti)));
+                            }
+                        }
                     }
-                    l = new QoreListNode(autoTypeInfo);
-                    assignNodeIntern(l);
+                    if (!l) {
+                        // save the old value for dereferencing outside locks
+                        saveTemp(getValue().getInternalNode());
+                        const QoreTypeInfo* valueTypeInfo;
+                        if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
+                            || typeInfo == listOrNothingTypeInfo) {
+                            valueTypeInfo = nullptr;
+                        } else {
+                            valueTypeInfo = autoTypeInfo;
+                        }
+                        assignNodeIntern((l = new QoreListNode(valueTypeInfo)));
+                    }
                 }
                 // step.slot_id holds the index value (set by caller from operand)
                 int64_t idx = step.slot_id;  // Temporary: index passed via slot_id
