@@ -573,6 +573,29 @@ public hashdecl HttpServerOptionInfo {
         @since HttpServer 1.6
     */
     bool quic_headers_only = False;
+
+    #! Enable the streaming response producer (true incremental delivery without materialization)
+    /** When @ref True "True", response bodies of type @ref Qore::InputStream "InputStream"
+        that are not I/O-thread-safe (e.g. @ref HttpServer::CallbackInputStream "CallbackInputStream"
+        or a user-defined subclass) are delivered via a dedicated producer worker
+        thread that streams chunks directly to the H2/H3 session's send buffer.
+        Backpressure is driven by the peer's flow-control window; the producer
+        blocks on @ref Qore::Socket::waitForHttp2StreamDrain() "waitForHttp2StreamDrain()"
+        or @ref Qore::Socket::waitForQuicStreamDrain() "waitForQuicStreamDrain()"
+        when the buffer is full.
+
+        When @ref False "False" (the default), such streams are materialized
+        into a @ref Qore::BinaryInputStream "BinaryInputStream" on the handler
+        worker thread — safe but buffers the entire body in memory, which is
+        unsuitable for multi-GB or long-running streaming responses.
+
+        The producer path is required for enterprise integration workloads
+        (DataStream over HTTP/2 or HTTP/3, gRPC-over-Connect, any large or
+        open-ended streaming response).
+
+        @since HttpServer 1.6
+    */
+    bool use_stream_producer = False;
 }
 
 #! The HttpServer class implements a multithreaded HTTP server
@@ -748,6 +771,9 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         #! Default max-age for Alt-Svc header (seconds)
         int alt_svc_max_age = 3600;
+
+        #! Enable producer-based streaming response delivery (Phase A feature flag)
+        bool use_stream_producer = False;
 
         #! Map of TCP listener ID -> auto-created QUIC listener ID
         /** Keys are string listener IDs (Qore auto-converts int keys to strings
@@ -932,6 +958,13 @@ public class HttpServer inherits HttpServer::AbstractLogger {
     */
     int getMaxRequestBodySize() {
         return max_request_body_size;
+    }
+
+    #! Returns @ref True if streaming response producer delivery is enabled
+    /** @since HttpServer 1.6
+    */
+    bool usingStreamProducer() {
+        return use_stream_producer;
     }
 
     #! Sets the maximum request body size in bytes (0 = unlimited)
@@ -2177,6 +2210,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         debug = opts.debug;
         hdr = opts.hdr;
         protect_last_listener = opts.protect_last_listener ?? False;
+        use_stream_producer = opts.use_stream_producer ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         if (opts.ttl) {
             setTtl(opts.ttl);
@@ -3508,12 +3542,19 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # Architectural rule: the I/O thread must NEVER call readHelper()
             # on a non-I/O-thread-safe InputStream (e.g. a Qore-defined
             # InputStream subclass or CallbackInputStream wrapping user code).
-            # Downstream paths — sendAsyncResponse(), sendResponseSync(),
-            # sendMultiplexedResponse() — all route the stream to an I/O-
-            # thread poll op (startPollSendHttp2StreamingResponse,
-            # startPollQuicSendStreamingResponse, etc).  Materialize here
-            # on the handler worker thread so only memory-backed streams
-            # (isIoThreadSafe() == True) ever reach the I/O thread.
+            # Two enforcement strategies:
+            #
+            #   - When use_stream_producer is enabled: defer the stream
+            #     intact.  sendMultiplexedResponse() spawns a
+            #     StreamResponseProducer on a dedicated worker thread to
+            #     drain it without buffering.  The I/O thread still only
+            #     sees memory-backed buffers (via sendHttp2StreamData /
+            #     submitQuicStreamData) — the architectural rule holds.
+            #
+            #   - When use_stream_producer is disabled (legacy default):
+            #     materialize here on the handler worker thread so only
+            #     memory-backed streams reach the I/O thread.  Safe but
+            #     buffers the entire body; unsuitable for large streams.
             #
             # The stream is already thread-assigned to this worker thread
             # (either because the handler created it here, or because it
@@ -3521,7 +3562,7 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             # read() will raise STREAM-THREAD-ERROR, which is a legitimate
             # error to surface: a handler must not hand back a stream
             # bound to some other thread).
-            if (!is.isIoThreadSafe()) {
+            if (!is.isIoThreadSafe() && !use_stream_producer) {
                 binary buf;
                 while (*binary chunk = is.read(65536)) {
                     buf += chunk;
@@ -3554,6 +3595,186 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         listener.logResponse(cx, rv);
     }
     #! @endcond
+}
+
+#! Dedicated worker that streams a non-I/O-thread-safe InputStream response body
+#! as HTTP/2 DATA frames or HTTP/3 QUIC stream data without materialization
+/** Runs on its own background thread so blocking @ref Qore::InputStream::read() "read()"
+    calls never execute on the async I/O thread (architectural invariant).
+
+    The producer reads chunks from the InputStream and calls
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" (HTTP/2)
+    or @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" (HTTP/3)
+    to push frames into the session's internal send buffer.  The I/O thread
+    drains that buffer to the socket as part of its normal poll loop.
+
+    Backpressure: when the session's buffer is full, the send primitive either
+    returns @c 1 (HTTP/3) or raises @c HTTP2-FLOW-CONTROL (HTTP/2).  In both
+    cases the producer blocks on @ref Qore::Socket::waitForHttp2StreamDrain()
+    "waitForHttp2StreamDrain()" / @ref Qore::Socket::waitForQuicStreamDrain()
+    "waitForQuicStreamDrain()" until the peer's window advances, then retries
+    the same chunk (no data loss).
+
+    Error handling: any exception from @c read() or a stream-level send error
+    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
+    "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
+    "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
+
+    Lifecycle: the producer holds the InputStream's thread affinity for the
+    duration of its @c run() method.  On exit (EOF, error, or abort) it
+    releases the affinity and decrements the @c done Counter so callers can
+    wait for completion.
+*/
+class StreamResponseProducer {
+    public {
+        #! Reaches zero when the producer has finished (EOF, error, or abort)
+        Counter done(1);
+    }
+
+    private {
+        Socket sock;
+        int stream_id;
+        *int session_id;   # HTTP/3: non-null; HTTP/2: NOTHING
+        InputStream is;
+        *code io_wake;
+        *hash<ExceptionInfo> error_info;
+
+        #! Size of each chunk pulled from the InputStream
+        int chunk_size = 65536;
+        #! Per-drain wait timeout in milliseconds (CV signaled by the I/O thread)
+        int drain_timeout_ms = 30000;
+        #! Safety cap on consecutive drain retries per chunk (bounds total block time)
+        int max_drain_retries = 60;
+    }
+
+    #! Creates the producer; call @ref start() to dispatch the background worker
+    constructor(Socket sock, int stream_id, *int session_id, InputStream is,
+            *code io_wake) {
+        self.sock = sock;
+        self.stream_id = stream_id;
+        self.session_id = session_id;
+        self.is = is;
+        self.io_wake = io_wake;
+    }
+
+    #! Spawns the producer on a background thread
+    start() {
+        background run();
+    }
+
+    #! Blocks the caller until the producer has finished; returns any error
+    /** @param t timeout for the wait (default 120s)
+        @return the exception hash if the producer failed with an error,
+        @ref nothing if it completed successfully
+    */
+    *hash<ExceptionInfo> waitForDone(timeout t = 120s) {
+        done.waitForZero(t);
+        return error_info;
+    }
+
+    #! Main producer loop — runs on the background thread
+    private run() {
+        on_exit {
+            # Release the InputStream's thread affinity so the caller (or the
+            # Qore garbage collector) can dispose of it safely.  Tolerate
+            # failures: the stream may already have been detached if it was
+            # never reassigned (e.g. early error).
+            try {
+                is.unassignThread();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore; best-effort release
+            }
+            done.dec();
+        }
+        try {
+            # Claim the InputStream.  The caller must have called unassignThread()
+            # before handing the stream to us.
+            is.reassignThread();
+            while (True) {
+                *binary chunk = is.read(chunk_size);
+                if (!exists chunk) {
+                    # EOF — signal the peer by sending a zero-length frame with
+                    # end_stream=True
+                    sendWithBackpressure(binary(), True);
+                    return;
+                }
+                sendWithBackpressure(chunk, False);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            error_info = ex;
+            # Tell the peer the stream is over — otherwise the client may hang
+            # waiting for more data.  Failures here are expected if the stream
+            # is already closed (peer RST, session shutdown) and are ignored.
+            try {
+                resetStream();
+            } catch (hash<ExceptionInfo> reset_ex) {
+                # stream likely already closed; swallow
+            }
+        }
+    }
+
+    #! Sends a chunk, blocking on drain if the session buffer is full
+    /** HTTP/2 and HTTP/3 report backpressure differently:
+        - HTTP/3 @c Socket::submitQuicStreamData returns @c int (0 ok, 1 full).
+        - HTTP/2 @c Socket::sendHttp2StreamData returns @c nothing and raises
+          @c HTTP2-FLOW-CONTROL on buffer-full (1 MB per-stream cap).
+        Both cases funnel into the same retry-with-drain loop below.
+    */
+    private sendWithBackpressure(binary data, bool end_stream) {
+        int retries = 0;
+        while (True) {
+            bool backpressure = False;
+            try {
+                if (session_id) {
+                    int rv = sock.submitQuicStreamData(session_id, stream_id,
+                        data, end_stream);
+                    if (rv == 1) {
+                        backpressure = True;
+                    } else if (rv != 0) {
+                        throw "STREAM-SEND-ERROR",
+                            sprintf("unexpected rv=%d from submitQuicStreamData on "
+                                "stream %d", rv, stream_id);
+                    }
+                } else {
+                    sock.sendHttp2StreamData(stream_id, data, end_stream);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    backpressure = True;
+                } else {
+                    rethrow;
+                }
+            }
+            if (io_wake) {
+                io_wake();
+            }
+            if (!backpressure) {
+                return;
+            }
+            if (++retries > max_drain_retries) {
+                throw "STREAM-BACKPRESSURE-TIMEOUT",
+                    sprintf("stream %d buffer still full after %d drain attempts; "
+                        "peer may be stalled or disconnected", stream_id, retries);
+            }
+            # Block until the I/O thread signals that buffer space is available.
+            # waitForStreamDrain is CV-based (no polling) and wakes as soon as
+            # the peer's flow-control window advances.
+            if (session_id) {
+                sock.waitForQuicStreamDrain(session_id, stream_id, drain_timeout_ms);
+            } else {
+                sock.waitForHttp2StreamDrain(stream_id, drain_timeout_ms);
+            }
+        }
+    }
+
+    #! Sends a stream-level reset to the peer (best-effort)
+    private resetStream() {
+        if (session_id) {
+            sock.cancelQuicStream(session_id, stream_id);
+        } else {
+            sock.resetHttp2Stream(stream_id);
+        }
+    }
 }
 
 class HttpPersistentHandlerInfo {
@@ -5103,29 +5324,64 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
                 auto sub() { return cb(); }, s);
         }
 
-        # Defense in depth: doResponse() already materializes
-        # non-I/O-thread-safe InputStreams into BinaryInputStream on the
-        # handler thread.  This fallback guards callers that bypass
-        # doResponse() (e.g. send_callback → CallbackInputStream wrapping
-        # built at this layer) — it must stay in place until every upstream
-        # path is proven to go through doResponse().
+        # Non-I/O-thread-safe InputStream delivery strategy.  Two paths:
+        #
+        #   1. Producer path (use_stream_producer = True, the new streaming
+        #      path): submit headers only, spawn a StreamResponseProducer
+        #      that reads from the InputStream on a dedicated worker thread
+        #      and pushes DATA frames to the session buffer via
+        #      sendHttp2StreamData / submitQuicStreamData.  Memory stays
+        #      bounded by the peer's flow-control window; TTFB ≈ one RTT
+        #      after the handler produces its first byte.
+        #
+        #   2. Materialization path (default, legacy): drain the full
+        #      stream into a BinaryInputStream on the handler thread, then
+        #      hand the memory-backed stream to the I/O thread.  Safe but
+        #      buffers the entire body in memory — unsuitable for large
+        #      or open-ended streams.
+        #
+        # Both paths exist because Phase A keeps the legacy path as the
+        # default; the producer path is opt-in via HttpServerOptionInfo.
+        # use_stream_producer.  Subsequent phases make it the default and
+        # delete the materialization code.
+        *StreamResponseProducer producer;
         if (response.input_stream && !response.input_stream.isIoThreadSafe()) {
-            response.input_stream.reassignThread();
-            binary buf;
-            while (*binary chunk = response.input_stream.read(65536)) {
-                buf += chunk;
-            }
-            response.input_stream.unassignThread();
-            if (buf.size() > 0) {
-                response.input_stream = new BinaryInputStream(buf);
-            } else {
+            if (serv.usingStreamProducer()) {
+                # Unassign the stream's thread affinity so the producer
+                # worker thread can claim it via reassignThread().
+                response.input_stream.unassignThread();
+                producer = new StreamResponseProducer(s, stream_id,
+                    header_info.http3 ? header_info.session_id : NOTHING,
+                    response.input_stream, io_wake);
+                # Remove from response so the downstream submit paths
+                # take the "headers only + no body" branch — the producer
+                # will push DATA frames directly.
                 remove response.input_stream;
+            } else {
+                # Materialize on the handler thread (legacy path).
+                response.input_stream.reassignThread();
+                binary buf;
+                while (*binary chunk = response.input_stream.read(65536)) {
+                    buf += chunk;
+                }
+                response.input_stream.unassignThread();
+                if (buf.size() > 0) {
+                    response.input_stream = new BinaryInputStream(buf);
+                } else {
+                    remove response.input_stream;
+                }
             }
         }
 
         if (header_info.http3) {
             int session_id = header_info.session_id;
-            if (response.input_stream) {
+            if (producer) {
+                # Producer path: submit headers without END_STREAM, then
+                # spawn the producer to push DATA frames.
+                s.submitQuicResponseStreaming(session_id, stream_id, response.code, hdr);
+                producer.start();
+                io_wake();
+            } else if (response.input_stream) {
                 int rv = s.submitQuicStreamingResponseWithStream(
                     session_id, stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
@@ -5145,7 +5401,13 @@ public class HttpListener inherits Qore::Socket, HttpServer::HttpListenerInterfa
             }
         } else {
             # HTTP/2
-            if (response.input_stream) {
+            if (producer) {
+                # Producer path: submit headers without END_STREAM, then
+                # spawn the producer to push DATA frames.
+                s.submitHttp2StreamingResponseHeaders(stream_id, response.code, hdr);
+                producer.start();
+                io_wake();
+            } else if (response.input_stream) {
                 int rv = s.submitHttp2StreamingResponseWithStream(
                     stream_id, response.code, hdr, response.input_stream);
                 if (rv) {
