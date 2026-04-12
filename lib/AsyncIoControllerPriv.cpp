@@ -514,12 +514,6 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             work_xsink.clear();
         }
 
-        // Clear all thread-local data (program tld hash + thread_local vars + thread
-        // resources) to prevent data from leaking between unrelated tasks on the same
-        // worker thread.  This is the async I/O equivalent of the HTTP server's
-        // clearContextInfo() call after each request.
-        clear_all_program_thread_local_data();
-
         if (async_item.spop_obj) {
             async_item.spop_obj->deref(xsink);
         }
