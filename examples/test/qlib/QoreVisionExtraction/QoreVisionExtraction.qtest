@@ -19,7 +19,7 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         addTestCase("VisionLlmClient - valid http config", \visionValidHttpTest());
         addTestCase("VisionLlmClient - valid anthropic config", \visionValidAnthropicTest());
         addTestCase("VisionLlmClient - openai backward compat", \visionOpenaiCompatTest());
-        addTestCase("VisionLlmClient - qorus mode", \visionQorusModeTest());
+        addTestCase("VisionLlmClient - callback mode", \visionCallbackModeTest());
         addTestCase("VisionLlmClient - custom system prompt", \visionCustomPromptTest());
         addTestCase("VisionLlmConfig - defaults", \visionConfigDefaultsTest());
 
@@ -68,8 +68,8 @@ public class QoreVisionExtractionTest inherits QUnit::Test {
         assertTrue(True);
     }
 
-    visionQorusModeTest() {
-        # Qorus mode should construct without error (fails at call time)
+    visionCallbackModeTest() {
+        # Callback mode should construct without error (fails at call time)
         VisionLlmClient client(<VisionLlmConfig>{
             "mode": "callback", "api_callback": hash<auto> sub (string m, string p, hash<auto> b) { return {}; },
             "model": "gpt-4o",

@@ -2264,10 +2264,11 @@ list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
     return eigenVectorToQoreList(vec);
 }
 
-//! Mean-pools a matrix of token embeddings weighted by an attention mask
-/** Computes the weighted average of rows (token embeddings) where the weight
-    for each row is the corresponding attention mask value.  This is the
-    standard pooling operation for sentence embeddings from transformer models.
+//! Mean-pools token embeddings using a binary attention mask
+/** Computes the average of rows (token embeddings) selected by the attention
+    mask.  Rows with a non-zero mask value are included in the mean; rows with
+    a zero mask value are excluded.  This is the standard pooling operation for
+    sentence embeddings from transformer models.
 
     @param embeddings list of token embedding vectors (one per token)
     @param mask attention mask (1 for real tokens, 0 for padding); same length

@@ -1876,11 +1876,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
 
         // Merge deferred SSL hashes into ready set — these were posted by the
         // previous iteration's Phase 3 when continuePoll left SSL-buffered data.
-        // Track which hashes were deferred to avoid re-deferring the same socket
-        // (which would cause a busy loop for partial SSL/TLS records)
-        std::unordered_set<std::string> already_deferred;
         if (!ssl_deferred_hashes.empty()) {
-            already_deferred = ssl_deferred_hashes;
             ready_socket_hashes.insert(ssl_deferred_hashes.begin(), ssl_deferred_hashes.end());
             ssl_deferred_hashes.clear();
         }
@@ -2391,9 +2387,24 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                             sock_hash = pinfo.cached_sock_hash;
                         }
 
-                        // Defer SSL pending check to next iteration (nginx pattern)
-                        if (pinfo.sock && pinfo.sock->hasPendingData()
-                                && !already_deferred.count(sock_hash)) {
+                        // Defer SSL pending check to next iteration (nginx pattern).
+                        // We always re-defer when hasPendingData() is true — the
+                        // previous `already_deferred` guard was too aggressive:
+                        // it blocked re-deferring after a single extra iteration,
+                        // but HTTP/2 sessions can have pending protocol work
+                        // (WINDOW_UPDATE, SETTINGS_ACK via wantWrite()) that
+                        // requires multiple iterations to flush.  Without re-
+                        // deferring, the peer stalls waiting for flow control
+                        // credits and the connection deadlocks.
+                        //
+                        // Busy-loop prevention: ssl_deferred_hashes triggers
+                        // poll(timeout_ms=0), but hasPendingData() returns false
+                        // as soon as the pending work is flushed, so the loop is
+                        // self-terminating.  For true partial-TLS-record scenarios
+                        // (SSL_pending>0 but not enough for a complete H2 frame),
+                        // continuePoll will read the remaining bytes, clearing
+                        // SSL_pending, and subsequent iterations won't re-defer.
+                        if (pinfo.sock && pinfo.sock->hasPendingData()) {
                             ssl_deferred_hashes.insert(sock_hash);
                         }
 

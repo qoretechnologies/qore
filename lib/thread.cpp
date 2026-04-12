@@ -3362,6 +3362,9 @@ void ThreadProgramData::clearAllProgramThreadData(ExceptionSink* xsink) {
 
 void clear_all_program_thread_local_data() {
     ThreadData* td = thread_data.get();
+    if (!td) {
+        return;
+    }
 
     // NOTE: do NOT clear td->runtime_loc here — it is needed for exception call stack
     // generation if subsequent cleanup code (e.g. object destructors) throws
