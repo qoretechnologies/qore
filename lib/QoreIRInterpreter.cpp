@@ -3725,26 +3725,29 @@ load_local_done:
                     // (it's held by TLS and managed separately)
                     values[hks_inst->operands[0].id] = QoreValue();
                 } else if (hash_val.isNothing()) {
-                    // Auto-vivify: create new hash, set key, assign to variable
+                    // Auto-vivify: create new hash, set key, assign to variable.
+                    // Use *Transfer so typed lvalues (hash<auto!>) take the unique
+                    // in-place branch in LValueHelper::assign — no extra copy.
                     QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
                     new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
-                    if (!(xsink && *xsink)) {
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        if (hks_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
-                        } else {
-                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
-                        }
-                    }
                     if (xsink && *xsink) {
                         new_h->deref(xsink);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
-                    // Release our ref; TLS now owns new_h
-                    new_h->deref(xsink);
+                    LocalVar* lv = const_cast<LocalVar*>(
+                        reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
+                    if (hks_inst->container->getType() == VT_CLOSURE) {
+                        assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                    } else {
+                        assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     clearLoadSlots(hks_inst->container_slot_id);
                     uint32_t csid = hks_inst->container_slot_id;
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -3806,25 +3809,28 @@ load_local_done:
                     }
                     values[hksd_inst->operands[0].id] = QoreValue();
                 } else if (hash_val.isNothing()) {
-                    // Auto-vivify: create new hash, set key, assign to variable
+                    // Auto-vivify: use *Transfer so typed lvalues (hash<auto!>)
+                    // take the unique in-place branch — no extra copy.
                     QoreHashNode* new_h = new QoreHashNode(autoTypeInfo);
                     new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
-                    if (!(xsink && *xsink)) {
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
-                        if (hksd_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_h), xsink);
-                        } else {
-                            assignLocalVarValue(lv, QoreValue(new_h), xsink);
-                        }
-                    }
                     if (xsink && *xsink) {
                         new_h->deref(xsink);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
-                    new_h->deref(xsink);
+                    LocalVar* lv = const_cast<LocalVar*>(
+                        reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
+                    if (hksd_inst->container->getType() == VT_CLOSURE) {
+                        assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                    } else {
+                        assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     clearLoadSlots(hksd_inst->container_slot_id);
                     uint32_t csid = hksd_inst->container_slot_id;
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
@@ -3928,13 +3934,13 @@ load_local_done:
                     // (it's held by TLS and managed separately)
                     values[lis_inst->operands[0].id] = QoreValue();
                 } else if (list_val.isNothing()) {
-                    // Auto-vivify: create new list, set element, assign to variable
-                    // Use the container variable's declared type to derive the proper
-                    // element type (e.g. softlist<bool> → list<bool>, not list<auto>)
+                    // Auto-vivify: use container's declared type so the element
+                    // type comes out right (softlist<bool> → list<bool>, not list<auto>).
+                    // Use *Transfer so typed lvalues (list<auto!>) take the unique
+                    // in-place branch — no extra copy.
                     const QoreTypeInfo* varTI = lis_inst->container->getTypeInfo();
                     const QoreTypeInfo* elemTI = QoreTypeInfo::getReturnComplexListOrNothing(varTI);
                     QoreListNode* new_l = new QoreListNode(elemTI ? elemTI : autoTypeInfo);
-                    // Apply element type coercion if the list has a typed value type
                     {
                         const QoreTypeInfo* vti = qore_list_private::get(*new_l)->getValueTypeInfo();
                         QoreValue entry = val.refSelf();
@@ -3949,22 +3955,24 @@ load_local_done:
                             entry.discard(xsink);
                         }
                     }
-                    if (!(xsink && *xsink)) {
-                        LocalVar* lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
-                        if (lis_inst->container->getType() == VT_CLOSURE) {
-                            assignClosureVarValue(lv, QoreValue(new_l), xsink);
-                        } else {
-                            assignLocalVarValue(lv, QoreValue(new_l), xsink);
-                        }
-                    }
                     if (xsink && *xsink) {
                         new_l->deref(xsink);
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         cleanupLocalCaches();
                         return false;
                     }
-                    new_l->deref(xsink);
+                    LocalVar* lv = const_cast<LocalVar*>(
+                        reinterpret_cast<const LocalVar*>(lis_inst->container->ref.id));
+                    if (lis_inst->container->getType() == VT_CLOSURE) {
+                        assignClosureVarValueTransfer(lv, QoreValue(new_l), xsink);
+                    } else {
+                        assignLocalVarValueTransfer(lv, QoreValue(new_l), xsink);
+                    }
+                    if (xsink && *xsink) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        cleanupLocalCaches();
+                        return false;
+                    }
                     clearLoadSlots(lis_inst->container_slot_id);
                     uint32_t csid = lis_inst->container_slot_id;
                     if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
