@@ -2072,12 +2072,26 @@ static void writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         }
         writer.writeU32(num_members);
         {
-            TypedHashDeclMemberIterator tmi(*hd);
-            while (tmi.next()) {
-                writer.writeStringRef(tmi.getName());
-                writer.writeStringRef(getTypePath(tmi.getMember().getTypeInfo()));
-                // default values not serialized at this phase - marked as no default
-                writer.writeU8(0);
+            // Access the hashdecl's private map directly so we can reach each
+            // member's init expression (not just the public reflection API,
+            // which only exposes the evaluated default value). Serializing the
+            // expression lets writeValue encode e.g. `list<auto>()` via
+            // VT_NEW_COMPLEX_DEFAULT and reconstruct the exact initializer on
+            // load. Missing hashdecl member defaults caused hashdecl-typed
+            // values (e.g. DataProviderPipelineFactory::PipelineQueueInfo::elems)
+            // to deserialize as NOTHING, breaking downstream `.last()` and
+            // similar container operations.
+            const typed_hash_decl_private* hdp = typed_hash_decl_private::get(*hd);
+            const HashDeclMemberMap& mm = hdp->getMembers();
+            for (auto& mi : mm.member_list) {
+                writer.writeStringRef(mi.first);
+                writer.writeStringRef(getTypePath(mi.second->getTypeInfo()));
+                if (mi.second->exp) {
+                    writer.writeU8(1);
+                    writer.writeValue(mi.second->exp);
+                } else {
+                    writer.writeU8(0);
+                }
             }
         }
     }
@@ -5591,6 +5605,43 @@ bool QoreAOTBinaryDeserializer::commitDeserializedClasses(std::string& error) {
         qore_class_private* priv = qore_class_private::get(*qc);
         // Signatures already resolved by readAndSetupVariantSignature — just set initialized
         priv->initialized = true;
+        // Force has_new_user_changes so parseCommit() runs its full path:
+        //   - addLocalMembersForInit() populates member_init_list (so
+        //     `string name = "p"` defaults aren't silently dropped)
+        //   - parseCommitMethod() moves pending variants to committed vlist
+        //   - checkAssignSpecial() binds priv->constructor / destructor / copy
+        //     / methodGate / memberGate / memberNotification pointers from the
+        //     method map, so block-exit destructors (and the other special
+        //     methods) actually run on AOT-deserialized class instances.
+        // In source parse this flag is set by addUserMethod() for ANY newly
+        // added method; mirror that here for every newly deserialized class.
+        // addMember() only bumps has_sig_changes, which is not sufficient.
+        priv->has_new_user_changes = true;
+        // Populate each method's inheritance list (ilist) from base-class methods
+        // with the same name.  In source parse this is done in initializeHierarchy()
+        // via parseAddAncestors(); the AOT deserializer skips that path, so without
+        // this step an overloaded method that the derived class overrides for only
+        // SOME variants cannot dispatch to the inherited parent variants.
+        // Concrete symptom: HashDeclDataType overrides
+        //   isAssignableFrom(AbstractDataProviderType)
+        // but inherits
+        //   isAssignableFrom(Type)
+        // from AbstractDataProviderType; calling the Type overload at runtime
+        // raises RUNTIME-OVERLOAD-ERROR because the ilist only sees the derived
+        // variant. Runs in topo order — parent hm is populated first.
+        // Special methods (constructor/destructor/copy) are skipped by
+        // initializeHierarchy; mirror that via checkSpecial().
+        if (priv->scl) {
+            for (auto& mi : priv->hm) {
+                const char* mn = mi.second->getName();
+                if (strcmp(mn, "constructor") && strcmp(mn, "destructor") && strcmp(mn, "copy")) {
+                    priv->parseAddAncestors(mi.second);
+                }
+            }
+            for (auto& mi : priv->shm) {
+                priv->parseAddStaticAncestors(mi.second);
+            }
+        }
         // Commits all pending method variants (hm, shm maps); handles base-class recursion
         priv->parseCommit();
         printd(5, "AOT deser: committed class '%s' constructor=%p hm.size=%d\n",

@@ -1437,11 +1437,19 @@ static QoreAOTContext* buildContextFromSlotMap(
                     ctx->owned_call_target_strings.emplace_back(ref2);
                     ctx->call_targets[i].method_name = ctx->owned_call_target_strings.back().c_str();
                 }
-                // Resolve variant from method if available
+                // Resolve variant from method only when the method has exactly
+                // ONE variant — safe fast-dispatch shortcut. For overloaded
+                // methods, leave variant null so the runtime does proper
+                // arg-type-based overload resolution via findVariant. Falling
+                // back to first() is unsafe: try_dispatch_method_fast binds
+                // caller args directly to the picked variant's signature, so
+                // a 2-arg call against a 1-arg first() variant silently
+                // misbinds parameters (see the dot-eval inline site for the
+                // full explanation).
                 if (method) {
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *method)->getFunction();
-                    if (mfb && mfb->numVariants() > 0) {
+                    if (mfb && mfb->numVariants() == 1) {
                         ctx->call_targets[i].variant = mfb->first();
                     }
                 }
@@ -2172,7 +2180,8 @@ static QoreAOTContext* buildContextFromSlotMap(
     // Tolerating this is safe because the LLVM code doesn't use the slot for the
     // binary-op path (it uses qore_rt_binary_op directly).
     bool is_init_func = (strncmp(name, "__const_init::", 14) == 0
-        || strncmp(name, "__svar_init::", 12) == 0);
+        || strncmp(name, "__svar_init::", 12) == 0
+        || strncmp(name, "__module_init::", 15) == 0);
     for (auto& dt : deferred_expr_trees) {
         ExprTreeDeserializer deser(dt.blob_data, dt.blob_size, pgm, ctx);
         uint64_t bits = deser.deserialize();
@@ -2245,11 +2254,22 @@ static QoreAOTContext* buildContextFromSlotMap(
                 ctx->call_targets[i].variant = mc->getVariant();
                 ctx->call_targets[i].is_pseudo = mc->isPseudo();
                 ctx->call_targets[i].method_name = mc->getName();
-                // Resolve variant from method if not set (needed for fast dispatch)
+                // Resolve variant from method only when the method has exactly
+                // ONE variant — in that case, picking first() is safe and enables
+                // the fast-dispatch path. For overloaded methods, leave variant
+                // null so the runtime does proper arg-type-based overload
+                // resolution via evalTmpArgs. Falling back to first() for
+                // overloaded methods is UNSAFE: try_dispatch_method_fast uses
+                // the variant's signature directly to bind args, so a 2-arg
+                // call against a 1-arg first() variant binds the first arg to
+                // the wrong parameter slot (e.g. `pipe.append(id, elem)` got
+                // routed to `append(Processor)` with id standing in for
+                // processor — a plain integer — producing
+                // `append(integer, integer)` overload errors).
                 if (ctx->call_targets[i].method && !ctx->call_targets[i].variant) {
                     MethodFunctionBase* mfb = qore_method_private::get(
                         *ctx->call_targets[i].method)->getFunction();
-                    if (mfb && mfb->numVariants() > 0) {
+                    if (mfb && mfb->numVariants() == 1) {
                         ctx->call_targets[i].variant = mfb->first();
                     }
                 }
@@ -4082,15 +4102,16 @@ static void registerAOTFunctionsFromSlotMaps(
             std::string class_name = fname_str.substr(0, sep);
             std::string method_name = fname_str.substr(sep + 2);
 
-            // Destructors and copy methods need their specific variant types with
-            // full AST context. Skip slot map registration for these; leave
-            // uvb=nullptr so buildContextFromSlotMap runs (to advance ptr) but
-            // registration is skipped.
-            // Note: constructors ARE registered from slot maps — the AOT-compiled
-            // constructor body includes all logic (including base constructor calls
-            // if any). The BCAList is not needed at runtime.
-            bool skip_special_method = (method_name == "destructor"
-                || method_name == "copy");
+            // All special methods (constructor, destructor, copy) are registered
+            // from slot maps.  The deserializer creates proper variant types
+            // (UserConstructorVariant, UserDestructorVariant, UserCopyVariant)
+            // and each dispatch path (evalConstructor/evalDestructor/evalCopy →
+            // evalIntern) correctly invokes the registered AOT function through
+            // the tiered cache.  Without registration, evalIntern silently
+            // no-ops on source-stripped AOT because statements=nullptr AND
+            // cached_aot_fn=nullptr — causing destructors to not run and copy
+            // methods to produce empty objects.
+            bool skip_special_method = false;
 
             qore_program_private* pp = qore_program_private::get(*pgm);
             const qore_ns_private* found_ns = nullptr;
@@ -4291,7 +4312,8 @@ static void registerAOTFunctionsFromSlotMaps(
         } else if (ctx) {
             // Check if this is an init function (for constants/static vars)
             bool is_init_func = (strncmp(func_name, "__const_init::", 14) == 0
-                || strncmp(func_name, "__svar_init::", 13) == 0);
+                || strncmp(func_name, "__svar_init::", 13) == 0
+                || strncmp(func_name, "__module_init::", 15) == 0);
             if (is_init_func && init_func_contexts) {
                 AOTInitFuncExecInfo info;
                 info.ctx = ctx;
@@ -6741,6 +6763,59 @@ static qore_ns_private* findNamespaceByPath(qore_ns_private* root, const std::st
     return current;
 }
 
+//! Walk every class in the namespace tree and force evalInit() on every static var.
+/** Mirrors what source-mode parseCommitRuntimeInit does. AOT-deserialized
+    QoreVarInfo entries never carry an `exp` (the init expression is compiled
+    separately as a STATIC_VAR init function). For vars that have a STATIC_VAR
+    init function, the init function already ran (pass 0) and set eval_init=true.
+    For vars with no init expression at all, eval_init is still false here.
+
+    If we leave eval_init=false, the FIRST user-script read of the static var
+    triggers `getReferencedValue` → `evalInit` → `init()` → `val.set(typeInfo)`
+    which silently RESETS any value previously written into the slot (e.g.
+    by a MODULE_INIT closure assigning `Storage::obj = new Thing(...)`).
+
+    Calling evalInit here when eval_init=false runs the empty-exp branch
+    (`init()`), which sets up container types (empty list/hash for non-nullable
+    list/hash) and marks eval_init=true. Subsequent reads return the stored
+    value untouched.
+*/
+static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsink) {
+    if (!ns) {
+        return;
+    }
+    ClassListIterator cli(ns->classList);
+    while (cli.next()) {
+        QoreClass* qc = cli.get();
+        if (!qc) {
+            continue;
+        }
+        qore_class_private* qcp = qore_class_private::get(*qc);
+        if (qcp->sys) {
+            continue;
+        }
+        for (auto& vi : qcp->vars.member_list) {
+            if (!vi.second || vi.second->eval_init) {
+                continue;
+            }
+            // Empty-exp path inside evalInit just calls init() (set typeinfo,
+            // create empty container for non-nullable hash/list) and marks
+            // eval_init=true. AOT-deserialized vars never have exp set, so
+            // this is always the path taken.
+            vi.second->evalInit(vi.first, xsink);
+            if (xsink && xsink->isException()) {
+                xsink->clear();
+            }
+        }
+    }
+    for (auto ni = ns->nsl.nsmap.begin(); ni != ns->nsl.nsmap.end(); ++ni) {
+        QoreNamespace* child = ni->second;
+        if (child) {
+            preInitStaticVarsInNamespace(qore_ns_private::get(*child), xsink);
+        }
+    }
+}
+
 //! Execute collected init functions and store results in target constants/static vars
 /** Called after AOT function registration to initialize constants and static vars
     whose values come from lowered init expressions (delayed_eval constants, object
@@ -6779,8 +6854,31 @@ static void executeInitFunctions(
     int executed = 0;
     int failed = 0;
 
+    // Execute in two passes so the module init closure (MODULE_INIT) runs
+    // AFTER all constant/static-var inits complete. The closure body may
+    // reference constants whose values come from regular init funcs (e.g.
+    // DataProvider.qm's init closure references AutoType from Qore::Reflection
+    // and assigns to AbstractDataProviderType::anyDataType).
+    for (int pass = 0; pass < 2; ++pass) {
+    const bool run_module_init = (pass == 1);
+    // Between pass 0 (STATIC_VAR / NS_CONSTANT / CLASS_CONSTANT) and pass 1
+    // (MODULE_INIT closures), force evalInit() on every static var that the
+    // STATIC_VAR pass didn't touch. AOT deserialization leaves vars without
+    // an init expression at eval_init=false; the first user-script read would
+    // otherwise call init() and silently wipe whatever the MODULE_INIT closure
+    // wrote into the slot (object writes to *Thing static vars vanish, but
+    // simple types initialised in pass 0 work fine because eval_init=true).
+    if (run_module_init) {
+        ExceptionSink local_xs;
+        preInitStaticVarsInNamespace(root_ns, &local_xs);
+        local_xs.clear();
+    }
     // Execute in descriptor order (matches compilation/parser order)
     for (auto& desc : descriptors) {
+        bool is_module_init = (desc.target_type == AOTCompiledInitFunc::MODULE_INIT);
+        if (is_module_init != run_module_init) {
+            continue;
+        }
         auto it = exec_map.find(desc.name);
         if (it == exec_map.end()) {
             continue;
@@ -6792,7 +6890,29 @@ static void executeInitFunctions(
         printd(5, "AOT init: calling '%s' fn_ptr=%p ctx=%p\n",
             desc.name.c_str(), (void*)info->fn_ptr, (void*)info->ctx);
         ExceptionSink xsink;
-        uint64_t raw_result = info->fn_ptr(info->ctx, &xsink);
+        uint64_t raw_result = 0;
+        if (is_module_init) {
+            // The compiled closure body expects its body locals to be
+            // pre-instantiated on the thread's lvstack (mimicking evalTiered's
+            // contract with regular functions). Manually instantiate each
+            // body local before the call and uninstantiate after.
+            int instantiated = 0;
+            for (LocalVar* lv : info->ctx->all_body_locals) {
+                if (lv) {
+                    lv->instantiate(QoreParseOptions());
+                    ++instantiated;
+                }
+            }
+            raw_result = info->fn_ptr(info->ctx, &xsink);
+            for (int k = instantiated - 1; k >= 0; --k) {
+                LocalVar* lv = info->ctx->all_body_locals[k];
+                if (lv) {
+                    lv->uninstantiate(&xsink);
+                }
+            }
+        } else {
+            raw_result = info->fn_ptr(info->ctx, &xsink);
+        }
         printd(5, "AOT init: '%s' returned raw=%llu\n", desc.name.c_str(), (unsigned long long)raw_result);
 
         if (xsink.isException()) {
@@ -6911,8 +7031,20 @@ static void executeInitFunctions(
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
                 break;
             }
+
+            case AOTCompiledInitFunc::MODULE_INIT: {
+                // Module init closures run for side effects only — discard the
+                // return value. The compiled body already mutated program state
+                // (e.g. assigned static members, called registerFactory, etc.).
+                result.discard(&xsink);
+                ++executed;
+                printd(2, "AOT init: executed module init closure for '%s'\n",
+                    desc.ns_path.c_str());
+                break;
+            }
         }
     }
+    }  // end two-pass loop
 
     // Clean up init function contexts
     for (auto& info : exec_infos) {

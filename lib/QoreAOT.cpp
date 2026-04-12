@@ -699,6 +699,153 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     return 0;
 }
 
+//! Compile a module init closure's body as an AOT init function.
+/** At qcc time, the module init closure has been fully parsed. We extract its
+    UserClosureVariant (which inherits from UserVariantBase), lower its statement
+    block to IR using tryLowerFunction, compile to LLVM, and record an
+    AOTCompiledInitFunc with target_type=MODULE_INIT. At runtime, the init-func
+    execution loop in qore_aot_module_init_v3 will invoke this function and
+    discard the return value — the closure body runs for its side effects.
+
+    Top-level module init closures have no captured variables (no enclosing scope)
+    so the closure-vs-function impedance mismatch is minimal. The closure body
+    references this module's classes/static-vars/constants by FQN, which resolve
+    through the AOT slot map at load time against the local program's namespace
+    tree — no cross-program class identity issues.
+
+    @param init_c the init closure value (must be NT_CLOSURE holding QoreClosureParseNode)
+    @param mod_name the module name (used to build the unique init function name)
+    @param pgm the QoreProgram used for IR lowering context
+    @param ctx the LLVM context
+    @param module the LLVM module
+    @param di_builder the shared debug info builder
+    @param di_cu the shared debug info compile unit
+    @param compiled_init_funcs output vector to append the compiled init func to
+    @param const_reverse_map optional constant reverse map for slot extraction
+    @return true on success, false on any failure (non-fatal — caller continues)
+*/
+static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const char* mod_name,
+        QoreProgram* pgm, llvm::LLVMContext& ctx, llvm::Module& module,
+        llvm::DIBuilder& di_builder, llvm::DICompileUnit* di_cu,
+        std::vector<AOTCompiledInitFunc>& compiled_init_funcs,
+        const AOTConstantReverseMap* const_reverse_map) {
+    if (init_c.getType() != NT_CLOSURE) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init of '%s' is not a closure (type=%s)\n",
+                mod_name, init_c.getTypeName());
+        }
+        return false;
+    }
+    const QoreClosureParseNode* cpn = dynamic_cast<const QoreClosureParseNode*>(
+        init_c.getInternalNode());
+    if (!cpn) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init of '%s' not a QoreClosureParseNode\n", mod_name);
+        }
+        return false;
+    }
+    UserClosureFunction* uclf = cpn->getFunction();
+    if (!uclf || uclf->numVariants() == 0) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init closure of '%s' has no variants\n", mod_name);
+        }
+        return false;
+    }
+    AbstractQoreFunctionVariant* variant = uclf->first();
+    UserVariantBase* uvb = variant ? variant->getUserVariantBase() : nullptr;
+    if (!uvb || !uvb->hasBody()) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init closure of '%s' has no body\n", mod_name);
+        }
+        return false;
+    }
+
+    std::string init_name = std::string("__module_init::") + mod_name;
+
+    QoreIRFunction* ir_func = nullptr;
+    std::string lower_error;
+    if (tryLowerFunction(uvb, init_name.c_str(), pgm, ir_func, lower_error) != 0 || !ir_func) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init IR lowering failed for '%s': %s\n",
+                mod_name, lower_error.c_str());
+        }
+        return false;
+    }
+
+    // tryLowerFunction marks body locals as pre_instantiated (the LLVM lowerer
+    // loads their initial value from the runtime thread-local var stack,
+    // assuming evalTiered set them up). Init functions are called directly
+    // from the init-exec loop with no evalTiered wrapper — we handle the
+    // instantiation ourselves in executeInitFunctions for MODULE_INIT entries
+    // by iterating ctx->all_body_locals and calling instantiate/uninstantiate
+    // around the call.
+
+    AOTSlotMap slots;
+    buildAOTSlotMap(*ir_func, slots);
+
+    QoreIRToLLVM lowerer(ctx);
+    lowerer.setAOTMode(&slots);
+    // Module init closures can contain on_exit / on_error / on_success handlers;
+    // deferred_exception_checking would bypass handler execution on the exception
+    // path (see main function-compilation site for details).
+    bool mi_has_obe = false;
+    for (const auto& bb : ir_func->blocks) {
+        for (const auto& inst : bb->instructions) {
+            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                mi_has_obe = true;
+                break;
+            }
+        }
+        if (mi_has_obe) {
+            break;
+        }
+    }
+    lowerer.setDeferredExceptionChecking(!mi_has_obe);
+    lowerer.setSharedDebugInfo(&di_builder, di_cu);
+    if (getenv("QORE_AOT_DUMP_IR")) {
+        fprintf(stderr, "=== IR for module init %s ===\n", init_name.c_str());
+        QoreIRPrinter::print(*ir_func, std::cerr);
+        fprintf(stderr, "=================\n");
+    }
+
+    std::string llvm_error;
+    bool ok = lowerer.lowerFunction(*ir_func, module, llvm_error);
+    if (!ok) {
+        if (getenv("QORE_AOT_DEBUG")) {
+            fprintf(stderr, "AOT: module init LLVM lowering failed for '%s': %s\n",
+                mod_name, llvm_error.c_str());
+        }
+        delete ir_func;
+        return false;
+    }
+
+    AOTCompiledInitFunc cif;
+    cif.name = init_name;
+    cif.llvm_symbol = ir_func->name;
+    cif.num_locals = static_cast<int>(slots.local_slots.size());
+    cif.num_globals = static_cast<int>(slots.global_slots.size());
+    cif.num_exprs = static_cast<int>(slots.expr_slots.size());
+    cif.num_stmts = static_cast<int>(slots.stmt_slots.size());
+    cif.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
+    cif.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+    extractAOTSlotIdentities(*ir_func, slots, uvb, cif.slot_ids, const_reverse_map);
+    cif.num_exprs = static_cast<int>(cif.slot_ids.exprs.size());
+    cif.num_locals = static_cast<int>(cif.slot_ids.locals.size());
+    cif.num_globals = static_cast<int>(cif.slot_ids.globals.size());
+    cif.feature_flags = scanIRFeatureFlags(*ir_func);
+    cif.target_type = AOTCompiledInitFunc::MODULE_INIT;
+    cif.ns_path = mod_name;
+    cif.item_name.clear();
+
+    compiled_init_funcs.push_back(std::move(cif));
+    if (getenv("QORE_AOT_DEBUG")) {
+        fprintf(stderr, "AOT: compiled module init closure for '%s' as '%s'\n",
+            mod_name, init_name.c_str());
+    }
+    delete ir_func;
+    return true;
+}
+
 //! Walk a namespace and compile all user functions to LLVM IR using AOT mode
 //! Check if an item should be skipped because it belongs to a different module
 /** @param item_module the module name from getModuleName() (nullptr if script-local)
@@ -877,7 +1024,24 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 // This prevents LLVM SimplifyCFG from hanging on functions with 200+ BBs.
                 // Safe: only defers checks for code outside try blocks; code inside try blocks
                 // still gets immediate checks via emitExceptionCheck's !inst->exception_target condition.
-                lowerer.setDeferredExceptionChecking(true);
+                // **Except** when the function has `on_exit` / `on_error` / `on_success`
+                // handlers. Deferring past a throwing call would bypass handler execution
+                // (ScopeExit with inline_lowered=true pops handlers without firing them,
+                // leaving locks held, resources leaked, etc.). Scan for OnBlockExit and
+                // disable deferral if found.
+                bool has_obe = false;
+                for (const auto& bb : ir_func->blocks) {
+                    for (const auto& inst : bb->instructions) {
+                        if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                            has_obe = true;
+                            break;
+                        }
+                    }
+                    if (has_obe) {
+                        break;
+                    }
+                }
+                lowerer.setDeferredExceptionChecking(!has_obe);
                 if (!fast_entry_name.empty()) {
                     lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
                 }
@@ -950,7 +1114,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM fast_lowerer(ctx);
                     fast_lowerer.setAOTMode(&slots);
                     fast_lowerer.setSharedDebugInfo(&di_builder, di_cu);
-                    fast_lowerer.setDeferredExceptionChecking(true);  // See comment above
+                    fast_lowerer.setDeferredExceptionChecking(!has_obe);  // See comment above
                     fast_lowerer.setFastEntryMode(fast_entry_name, &param_map);
                     fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name);
                     std::string fast_error;
@@ -1091,7 +1255,20 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     QoreIRToLLVM lowerer(ctx);
                     lowerer.setAOTMode(&slots);
                     lowerer.setSharedDebugInfo(&di_builder, di_cu);
-                    lowerer.setDeferredExceptionChecking(true);  // See comment in function compilation above
+                    // See comment in function compilation above about OnBlockExit guard
+                    bool has_obe = false;
+                    for (const auto& bb : ir_func->blocks) {
+                        for (const auto& inst : bb->instructions) {
+                            if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                                has_obe = true;
+                                break;
+                            }
+                        }
+                        if (has_obe) {
+                            break;
+                        }
+                    }
+                    lowerer.setDeferredExceptionChecking(!has_obe);
                     std::string llvm_error;
                     // Count total IR instructions and warn for large functions
                     size_t total_ir_insts = 0;
@@ -2038,7 +2215,20 @@ bool QoreAOT::compile(QoreProgram* pgm,
                 QoreIRToLLVM llvm_lowerer(ctx);
                 llvm_lowerer.setAOTMode(&slots);
                 llvm_lowerer.setSharedDebugInfo(&di_builder, di_cu);
-                llvm_lowerer.setDeferredExceptionChecking(true);  // See comment in function compilation above
+                // See comment in function compilation above about OnBlockExit guard
+                bool has_obe = false;
+                for (const auto& bb : ir_func->blocks) {
+                    for (const auto& inst : bb->instructions) {
+                        if (inst->opcode == QoreIROpcode::OnBlockExit) {
+                            has_obe = true;
+                            break;
+                        }
+                    }
+                    if (has_obe) {
+                        break;
+                    }
+                }
+                llvm_lowerer.setDeferredExceptionChecking(!has_obe);
                 std::string llvm_error;
                 if (llvm_lowerer.lowerFunction(*ir_func, *module, llvm_error)) {
                     AOTCompiledFunc cf;
@@ -3187,6 +3377,9 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // because the parser static_casts to it)
     // Note: Do NOT call setNameInit() here - the scanner calls it when it parses
     // the "module Name" declaration, and calling it twice triggers an assertion.
+    // Capture the module init closure value here so it survives past mod_ctx
+    // scope end (which discards it). ValueHolder releases on scope exit.
+    ValueHolder init_c_holder(nullptr);
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), label, *qpgm, xsink);
 
@@ -3196,6 +3389,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
         qpgm->parsePending(source_text, label, &xsink, &wsink, QP_WARN_DEFAULT);
         if (!xsink.isException()) {
             qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+        }
+
+        // Capture init closure before mod_ctx destroys it
+        if (!xsink.isException() && mod_ctx.hasInit()) {
+            init_c_holder = mod_ctx.init_c.refSelf();
         }
 
         mod_ctx.close();
@@ -3277,6 +3475,15 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (!found_any) {
         error = "no module namespaces found after parsing (expected at least '" + mod_info.name + "')";
         return false;
+    }
+
+    // Compile module init closure (if any) as an AOT init function so its
+    // side effects run at load time (e.g. DataProvider.qm assigns
+    // AbstractDataProviderType::anyDataType = new QoreDataType(AutoType)).
+    if (init_c_holder) {
+        compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+            *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+            &const_reverse_map);
     }
 
     reportAOTCompileStats("module compilation", compiled_count, total_funcs,
@@ -3526,6 +3733,9 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     qpgm->setScriptPath(qm_path.c_str());
 
     // Step 6: Parse with QoreUserModuleDefContextHelper for proper module context
+    // Capture the module init closure value so it survives past mod_ctx scope end
+    // (which discards it). ValueHolder releases on scope exit.
+    ValueHolder init_c_holder(nullptr);
     {
         QoreUserModuleDefContextHelper mod_ctx(mod_info.name.c_str(), qm_path.c_str(), *qpgm, xsink);
 
@@ -3607,6 +3817,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
             return false;
         }
 
+        // Capture init closure before mod_ctx destroys it
+        if (mod_ctx.hasInit()) {
+            init_c_holder = mod_ctx.init_c.refSelf();
+        }
+
         mod_ctx.close();
 
         // Handle warnings
@@ -3677,6 +3892,14 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
         if (!found_any) {
             error = "no module namespaces found after parsing (expected at least '" + mod_name + "')";
             return false;
+        }
+
+        // Compile module init closure (if any) as an AOT init function so its
+        // side effects run at load time.
+        if (init_c_holder) {
+            compileModuleInitClosureAsInitFunc(*init_c_holder, mod_info.name.c_str(),
+                *qpgm, ctx, *module, di_builder, di_cu, compiled_init_funcs,
+                &const_reverse_map);
         }
 
         reportAOTCompileStats("split module compilation", compiled_count, total_funcs,

@@ -949,6 +949,7 @@ struct AOTCompiledInitFunc {
         NS_CONSTANT = 0,      //!< namespace-level constant
         CLASS_CONSTANT = 1,   //!< class-level constant
         STATIC_VAR = 2,       //!< static class variable
+        MODULE_INIT = 3,      //!< module init closure body (side-effects only, return discarded)
     };
     TargetType target_type = NS_CONSTANT;
     std::string ns_path;            //!< namespace path or class path
