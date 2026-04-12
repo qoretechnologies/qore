@@ -190,12 +190,10 @@ public class LlmBackend {
         #! Retry config
         int max_retries;
         int retry_delay_ms;
-%ifndef NoRestClient
         #! REST client for HTTP/Anthropic modes (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
         Mutex rest_mutex();
-%endif
     }
 
     #! Creates an LlmBackend with the given configuration
@@ -216,10 +214,6 @@ public class LlmBackend {
                 throw "LLM-CONFIG-ERROR",
                     sprintf("url is required for %y mode", mode);
             }
-%ifdef NoRestClient
-            throw "LLM-DEPENDENCY-ERROR",
-                "RestClient module is required for HTTP/Anthropic mode but is not available";
-%endif
 %ifdef NoJson
             throw "LLM-DEPENDENCY-ERROR",
                 "json module is required for HTTP/Anthropic mode but is not available";
@@ -344,12 +338,6 @@ llm.chatStream(
             throw "LLM-ERROR",
                 "streaming is not supported in Qorus mode; use chat() instead";
         }
-%ifdef NoStreaming
-        throw "LLM-DEPENDENCY-ERROR",
-            "HttpClientStreamingIo module is required for streaming";
-%endif
-%ifndef NoStreaming
-%ifndef NoRestClient
         ensureRestClient();
 
         # Build the request body (same as chat but with stream=true)
@@ -441,8 +429,6 @@ llm.chatStream(
                 });
             }
         }
-%endif
-%endif
     }
 
     #! Estimates the token count for a text string
@@ -469,7 +455,6 @@ llm.chatStream(
 
     #! Ensures the REST client is initialized
     private ensureRestClient() {
-%ifndef NoRestClient
         if (!rest_client) {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
@@ -482,13 +467,11 @@ llm.chatStream(
                 });
             }
         }
-%endif
     }
 
     #! Completes via OpenAI-compatible /v1/chat/completions endpoint
     private hash<LlmCompletionResult> completeHttp(string system_prompt, string user_prompt,
             *hash<auto> output_schema) {
-%ifndef NoRestClient
         ensureRestClient();
 
         hash<auto> body = {
@@ -534,14 +517,11 @@ llm.chatStream(
             "content": content,
             "usage": usage,
         };
-%endif
-        throw "LLM-ERROR", "RestClient not available";
     }
 
     #! Completes via Anthropic Messages API /v1/messages
     private hash<LlmCompletionResult> completeAnthropic(string system_prompt, string user_prompt,
             *hash<auto> output_schema) {
-%ifndef NoRestClient
         ensureRestClient();
 
         hash<auto> body = {
@@ -604,8 +584,6 @@ llm.chatStream(
             "content": content,
             "usage": usage,
         };
-%endif
-        throw "LLM-ERROR", "RestClient not available";
     }
 
     #! Completes via Qorus AI Gateway
@@ -662,7 +640,6 @@ llm.chatStream(
     #! Chat via OpenAI-compatible endpoint (also used for Qorus mode)
     private hash<ChatResponse> chatHttp(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools) {
-%ifndef NoRestClient
         if (mode != "qorus") {
             ensureRestClient();
         }
@@ -819,14 +796,11 @@ llm.chatStream(
             "tool_calls": parsed_tool_calls,
             "usage": response_data.usage ?? {},
         };
-%endif
-        throw "LLM-ERROR", "RestClient not available";
     }
 
     #! Chat via Anthropic Messages API
     private hash<ChatResponse> chatAnthropic(list<hash<ChatMessage>> messages,
             *list<hash<ToolDefinition>> tools) {
-%ifndef NoRestClient
         ensureRestClient();
 
         # Extract system message and build Anthropic message list
@@ -989,8 +963,6 @@ llm.chatStream(
             "tool_calls": parsed_tool_calls,
             "usage": resp.body.usage ?? {},
         };
-%endif
-        throw "LLM-ERROR", "RestClient not available";
     }
     #! Executes an HTTP call with retry and exponential backoff for transient errors
     /** Retries on 429 (rate limit) and 5xx (server error) responses.

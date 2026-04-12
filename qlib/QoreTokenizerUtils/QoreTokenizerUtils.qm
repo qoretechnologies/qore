@@ -28,9 +28,7 @@
 
 %requires tokenizer
 
-%try-module RestClientIo
-%define NoRestClient
-%endtry
+%requires RestClientIo
 
 %try-module json
 %define NoJson

@@ -82,12 +82,10 @@ public class OcrEngine {
         *string api_key;
         int connect_timeout_ms;
         int timeout_ms;
-%ifndef NoRestClient
         #! REST client (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization
         Mutex rest_mutex();
-%endif
     }
 
     #! Creates an OcrEngine with the given configuration
@@ -115,10 +113,6 @@ public class OcrEngine {
             if (!config.url.val()) {
                 throw "OCR-CONFIG-ERROR", "url is required for HTTP mode";
             }
-%ifdef NoRestClient
-            throw "OCR-DEPENDENCY-ERROR",
-                "RestClientIo module is required for HTTP mode but is not available";
-%endif
             url = config.url;
             api_key = config.api_key;
             connect_timeout_ms = config.connect_timeout_ms;
@@ -157,7 +151,6 @@ public class OcrEngine {
 
     #! Extracts text via HTTP OCR endpoint
     private hash<OcrResult> extractTextHttp(binary image_data) {
-%ifndef NoRestClient
         ensureRestClient();
 
         # Send image as base64 in JSON body
@@ -181,13 +174,10 @@ public class OcrEngine {
             "text": resp.body.text ?? "",
             "confidence": (resp.body.confidence ?? 0).toFloat(),
         };
-%endif
-        throw "OCR-ERROR", "RestClientIo not available";
     }
 
     #! Ensures the REST client is initialized
     private ensureRestClient() {
-%ifndef NoRestClient
         if (!rest_client) {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
@@ -200,7 +190,6 @@ public class OcrEngine {
                 });
             }
         }
-%endif
     }
 }
 

@@ -89,12 +89,10 @@ public class EmbeddingModel {
         string pooling_strategy;
         #! Cached embedding dimension (detected on first call)
         *int dimension;
-%ifndef NoRestClient
         #! REST client for HTTP mode (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
-%endif
         #! ONNX model for local inference
         *ML::OnnxModel onnx_model;
         #! HuggingFace tokenizer for ONNX mode
@@ -118,10 +116,6 @@ public class EmbeddingModel {
             if (!config.url.val()) {
                 throw "EMBEDDING-CONFIG-ERROR", "url is required for HTTP mode";
             }
-%ifdef NoRestClient
-            throw "EMBEDDING-DEPENDENCY-ERROR",
-                "RestClient module is required for HTTP mode but is not available";
-%endif
 %ifdef NoJson
             throw "EMBEDDING-DEPENDENCY-ERROR",
                 "json module is required for HTTP mode but is not available";
@@ -188,7 +182,6 @@ public class EmbeddingModel {
 
     #! Ensures the REST client is initialized (lazy creation to avoid connecting in constructor)
     private ensureRestClient() {
-%ifndef NoRestClient
         if (!rest_client) {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
@@ -201,7 +194,6 @@ public class EmbeddingModel {
                 });
             }
         }
-%endif
     }
 
     #! Embeds texts via local ONNX model
@@ -288,7 +280,6 @@ public class EmbeddingModel {
 
     #! Embeds texts via HTTP endpoint
     private list<list<float>> embedBatchHttp(list<string> texts) {
-%ifndef NoRestClient
         ensureRestClient();
         switch (endpoint_format) {
             case "openai":
@@ -306,11 +297,8 @@ public class EmbeddingModel {
                     rethrow;
                 }
         }
-%endif
-        throw "EMBEDDING-ERROR", "RestClientIo not available";
     }
 
-%ifndef NoRestClient
     #! Calls the OpenAI-compatible /v1/embeddings endpoint
     private list<list<float>> callOpenAiEndpoint(list<string> texts) {
         hash<auto> body = {
@@ -366,7 +354,6 @@ public class EmbeddingModel {
         }
         return result;
     }
-%endif
 }
 
 } # namespace QoreTokenizerUtils

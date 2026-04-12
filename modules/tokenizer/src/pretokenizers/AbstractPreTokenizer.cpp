@@ -23,19 +23,6 @@ using namespace QoreTokenizer;
 
 namespace QoreTokenizer {
 
-//! Pass-through pre-tokenizer: returns the entire input as a single token
-/** Used as a stub for pre-tokenizer types that are not yet fully implemented
-    (Punctuation, Digits, Split).
-*/
-class PassthroughPreTokenizer : public AbstractPreTokenizer {
-public:
-    std::vector<PreToken> pretokenize(const std::string& input) const override {
-        if (input.empty()) {
-            return {};
-        }
-        return {{input, 0, input.size()}};
-    }
-};
 
 std::unique_ptr<AbstractPreTokenizer> AbstractPreTokenizer::fromConfig(const QoreHashNode* config,
         ExceptionSink* xsink) {

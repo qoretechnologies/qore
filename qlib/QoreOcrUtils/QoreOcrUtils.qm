@@ -30,9 +30,7 @@
 %define NoOcr
 %endtry
 
-%try-module RestClientIo
-%define NoRestClient
-%endtry
+%requires RestClientIo
 
 %try-module json
 %define NoJson
@@ -49,7 +47,6 @@
 %try-module cairo
 %define NoCairo
 %endtry
-
 module QoreOcrUtils {
     version = "1.0.0";
     desc = "user module providing an OCR abstraction layer with native "

@@ -89,12 +89,10 @@ public class CrossEncoderReranker {
         int max_length;
         #! Activation function for ONNX scoring
         string activation;
-%ifndef NoRestClient
         #! REST client (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
         #! Mutex for thread-safe lazy initialization of rest_client
         Mutex rest_mutex();
-%endif
         #! ONNX model for local inference
         *ML::OnnxModel onnx_model;
         #! HuggingFace tokenizer for ONNX mode
@@ -118,10 +116,6 @@ public class CrossEncoderReranker {
             if (!config.url.val()) {
                 throw "RERANKER-CONFIG-ERROR", "url is required for HTTP mode";
             }
-%ifdef NoRestClient
-            throw "RERANKER-DEPENDENCY-ERROR",
-                "RestClient module is required for HTTP mode but is not available";
-%endif
             url = config.url;
             api_key = config.api_key;
             connect_timeout_ms = config.connect_timeout_ms;
@@ -307,7 +301,6 @@ public class CrossEncoderReranker {
 
     #! Scores via HTTP endpoint
     private list<float> scoreHttp(string query, list<string> passages) {
-%ifndef NoRestClient
         ensureRestClient();
 
         # Standard reranker API format (compatible with most reranker services)
@@ -339,13 +332,10 @@ public class CrossEncoderReranker {
         }
 
         throw "RERANKER-ERROR", "unexpected response format from reranker endpoint";
-%endif
-        throw "RERANKER-ERROR", "RestClient not available";
     }
 
     #! Ensures the REST client is initialized
     private ensureRestClient() {
-%ifndef NoRestClient
         if (!rest_client) {
             rest_mutex.lock();
             on_exit rest_mutex.unlock();
@@ -358,7 +348,6 @@ public class CrossEncoderReranker {
                 });
             }
         }
-%endif
     }
 }
 
