@@ -36,16 +36,8 @@
 %define NoJson
 %endtry
 
-%try-module pdf
-%define NoPdf
-%endtry
-
 %try-module imagemagick
 %define NoImageMagick
-%endtry
-
-%try-module cairo
-%define NoCairo
 %endtry
 module QoreOcrUtils {
     version = "1.0.0";
