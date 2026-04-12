@@ -537,13 +537,28 @@ int SocketQuicClientPollOperation::flushPendingWrites(ExceptionSink* xsink) {
     if (!quic_session || !quic_session->hasPendingWrite()) {
         return 0;
     }
-    ngtcp2_tstamp next_expiry;
-    int rv = sendPendingPackets(next_expiry, xsink);
-    if (rv < 0) {
-        return -1;
+    // Use a local batch — NOT the member pkt_batch_ — because this method
+    // can be called from any thread (app thread) while the I/O thread is
+    // concurrently using pkt_batch_ in sendPendingPackets() via continuePoll().
+    // Sharing pkt_batch_ without synchronization causes a data race where
+    // the I/O thread captures batch.size(), then this thread clears/refills
+    // pkt_batch_, and the I/O thread's packetData() hits an out-of-bounds
+    // assert (QuicCommon.h:95).
+    QuicPacketBatch flush_batch;
+    auto result = quic_session->processTimerAndWrite(flush_batch, xsink);
+    if (result.error || flush_batch.empty()) {
+        return 0;
     }
-    // rv == SOCK_POLLOUT means partial send — acceptable for flush purposes,
-    // the I/O thread will pick up the remainder
+    int fd = sock->priv->socket->getSocket();
+    int sent = sendQuicPacketsBatch(fd, flush_batch, nullptr, 0);
+    if (sent < 0) {
+        if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            xsink->raiseErrnoException("QUIC-SEND-ERROR", errno,
+                "sendto/sendmmsg() failed in flushPendingWrites");
+            return -1;
+        }
+    }
+    // Partial or EAGAIN acceptable — the I/O thread will pick up the remainder
     return 0;
 }
 
