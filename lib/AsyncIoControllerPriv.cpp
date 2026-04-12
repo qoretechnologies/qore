@@ -2454,7 +2454,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             }
 
             // Re-queue ready sockets that returned poll_info (try again).
-            // On macOS, kqueue's EVFILT_WRITE for non-blocking connect is
+            // On macOS/BSD, kqueue's EVFILT_WRITE for non-blocking connect is
             // effectively edge-triggered: the event fires once when the
             // connect completes, then won't re-fire.  The poll operation's
             // internal check (asyncIoWait with a separate kqueue instance +
@@ -2465,16 +2465,26 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
             // (not ssl_deferred_hashes) to bypass the already_deferred
             // guard — the connect will succeed within a few iterations,
             // making this self-terminating.
+            //
+            // On Linux (epoll level-triggered), this re-queue is
+            // counterproductive: epoll reliably fires again whenever the fd
+            // is still writable, so manually re-queuing just causes a busy
+            // loop.  Concretely: QUIC server ops routinely return
+            // events=POLLIN|POLLOUT because they always want to try sending
+            // queued packets; re-queuing them every iteration tight-spins
+            // until the packet batch drains.  Level-triggered epoll already
+            // does the right thing for POLLOUT on Linux, so skip the
+            // workaround there.
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
             for (auto& result : poll_results) {
                 if (result.was_ready && result.new_poll_info && !result.completed
                         && !result.ex_hash) {
-                    // Only re-queue for POLLOUT (non-blocking connect completion).
-                    // POLLIN operations (reading on established connections) work
-                    // correctly with level-triggered kqueue and must NOT be
-                    // re-queued — doing so creates a busy loop that starves other
-                    // operations (e.g., WebSocket message delivery).
+                    // Only re-queue for POLLOUT-only (non-blocking connect
+                    // completion).  Ops that also want POLLIN will be
+                    // re-triggered by the POLLIN side; re-queuing them here
+                    // starves other operations.
                     int events = (int)result.new_poll_info->getKeyValue("events").getAsBigInt();
-                    if (events & SOCK_POLLOUT) {
+                    if ((events & SOCK_POLLOUT) && !(events & SOCK_POLLIN)) {
                         auto it = t.cache.find(result.key);
                         if (it != t.cache.end() && !it->second.cached_sock_hash.empty()) {
                             t.wake_socket_hashes.insert(it->second.cached_sock_hash);
@@ -2482,6 +2492,7 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     }
                 }
             }
+#endif
 
             // Check autostop (only if no deliveries pending — recheck after delivery)
             // cache and cmdq are I/O-thread-only; timer_info_map/autostop_flag need lock.
