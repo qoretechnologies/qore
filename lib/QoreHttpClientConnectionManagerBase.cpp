@@ -339,15 +339,22 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // window where the I/O thread fires onClosedHook before setManager.
     HttpClientConnectionBase* conn = nullptr;
     switch (opts_.protocol) {
-        case HttpClientProtocol::H1:
+        case HttpClientProtocol::H1: {
+            Http1ClientConnection* h1conn;
             if (proxy_info_) {
-                conn = new Http1ClientConnection(host, port, ssl_required,
+                h1conn = new Http1ClientConnection(host, port, ssl_required,
                     proxy_info_->host.c_str(), proxy_info_->port,
                     xsink, this);
             } else {
-                conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
+                h1conn = new Http1ClientConnection(host, port, ssl_required, xsink, this);
             }
+            if (!*xsink) {
+                h1conn->configureSsl(opts_.ssl_verify_mode, opts_.accept_all_certs,
+                    opts_.client_cert, opts_.client_key);
+            }
+            conn = h1conn;
             break;
+        }
         case HttpClientProtocol::H2:
             // H2 proxy support requires a CONNECT tunnel established via
             // H1, then upgrading to H2 inside the tunnel — the Qore-level

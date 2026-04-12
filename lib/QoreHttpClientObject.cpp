@@ -1149,8 +1149,8 @@ struct qore_httpclient_priv {
 
     //! When true, send_internal delegates to the C++ conn_mgr for
     //! non-streaming request/response flows (all protocols, including proxy).
-    //! Defaults to false until SSL settings, client certificates, encoding,
-    //! and other HTTPClient configuration are propagated to conn_mgr connections.
+    //! Opt-in via setConnMgrEnabled(true); default false pending resolution
+    //! of conn_mgr hang with RealTestHttpServer (tracked in design doc).
     bool use_conn_mgr = false;
 
     //! Returns the connection manager, creating it lazily if needed.
@@ -1168,6 +1168,11 @@ struct qore_httpclient_priv {
             opts.connect_timeout_ms = connect_timeout_ms;
             opts.request_timeout_ms = timeout;
             opts.idle_timeout_ms = 60000;
+            // SSL settings from the HTTPClient
+            opts.ssl_verify_mode = msock->socket->priv->ssl_verify_mode;
+            opts.accept_all_certs = msock->socket->priv->ssl_accept_all_certs;
+            opts.client_cert = msock->cert;
+            opts.client_key = msock->pk;
             // Proxy URL from the existing connection info
             if (proxy_connection.has_url()) {
                 char buf[512];
@@ -7495,10 +7500,15 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         // Determine scheme
         const char* scheme = this_connection.ssl ? "https" : "http";
 
-        // Populate request-uri in info hash
+        // Populate request-uri and request headers in info hash
         if (info) {
             info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", meth,
                 msgpath && msgpath[0] ? msgpath : "/", http11 ? "1.1" : "1.0"), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            // Store a copy of the request headers (matching legacy send_internal behavior)
+            info->setKeyValue("headers", nh->copy(), xsink);
             if (*xsink) {
                 return nullptr;
             }

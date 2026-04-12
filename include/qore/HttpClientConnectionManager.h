@@ -47,6 +47,8 @@
 
 class ExceptionSink;
 class QoreHashNode;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
 
 //! C++ HTTP client connection manager — Phase P3 of the porting plan.
 /** Implements the connection pool, per-key creation serialization, proxy
@@ -117,6 +119,21 @@ public:
         //! Optional proxy URL (e.g., "http://proxy.example.com:8080");
         //! empty string means no proxy.  Parsed in the constructor.
         std::string proxy_url;
+
+        //! SSL certificate verification mode (SSL_VERIFY_NONE or SSL_VERIFY_PEER).
+        //! Default is SSL_VERIFY_NONE to match the legacy HTTPClient behavior.
+        int ssl_verify_mode = 0;  // SSL_VERIFY_NONE
+
+        //! If true, accept all SSL certificates including self-signed.
+        bool accept_all_certs = false;
+
+        //! Client certificate for mutual TLS (ref'd; nullptr = no client cert).
+        //! The manager holds a reference while it's alive and passes it to new
+        //! connections.
+        QoreSSLCertificate* client_cert = nullptr;
+
+        //! Client private key for mutual TLS (ref'd; nullptr = no key).
+        QoreSSLPrivateKey* client_key = nullptr;
     };
 
     //! Creates a new manager with the given options.

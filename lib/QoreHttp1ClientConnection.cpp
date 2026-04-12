@@ -79,6 +79,31 @@ Http1ClientConnection::Http1ClientConnection(const char* target_host, int target
     }
 }
 
+void Http1ClientConnection::configureSsl(int verify_mode, bool accept_all,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* key) {
+    ssl_verify_mode = verify_mode;
+    accept_all_certs = accept_all;
+    client_cert = cert;
+    client_key = key;
+    // Apply to the socket immediately — safe to call while the TCP connect
+    // is in progress because SSL settings only take effect during the
+    // handshake (which starts after TCP connect completes).  The poll op's
+    // continuePoll on the I/O thread reads these from the socket under its
+    // own state lock, so there's no data race.
+    if (sock_priv) {
+        sock_priv->setSslVerifyMode(verify_mode);
+        sock_priv->acceptAllCertificates(accept_all);
+        if (cert) {
+            cert->ref();
+            sock_priv->setCertificate(cert);
+        }
+        if (key) {
+            key->ref();
+            sock_priv->setPrivateKey(key);
+        }
+    }
+}
+
 Http1ClientConnection::~Http1ClientConnection() {
     ExceptionSink xsink;
     closeConnection(&xsink);
@@ -111,6 +136,22 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
     QoreSocketObject* sock_priv_raw = *sock_priv_holder;
     ReferenceHolder<QoreObject> sock_obj_holder(
         new QoreObject(QC_SOCKET, pgm, sock_priv_holder.release()), xsink);
+
+    // 1b. Apply SSL configuration to the socket before connect.
+    //     These settings take effect when the poll op starts the SSL handshake
+    //     (after TCP connect or after CONNECT tunnel for proxied HTTPS).
+    //     The fields are set either by direct member init (standalone use) or
+    //     by configureSsl() called from the manager after construction.
+    sock_priv_raw->setSslVerifyMode(ssl_verify_mode);
+    sock_priv_raw->acceptAllCertificates(accept_all_certs);
+    if (client_cert) {
+        client_cert->ref();
+        sock_priv_raw->setCertificate(client_cert);
+    }
+    if (client_key) {
+        client_key->ref();
+        sock_priv_raw->setPrivateKey(client_key);
+    }
 
     // 2. Build the TCP connect target string "host:port".
     //    When a proxy is configured, we connect to the proxy, not the target.

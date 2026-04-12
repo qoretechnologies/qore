@@ -38,6 +38,8 @@
 #include <string>
 
 class QoreSocketObject;
+class QoreSSLCertificate;
+class QoreSSLPrivateKey;
 class Http1ClientPollOperationPriv;
 
 //! HTTP/1.1 C++ client connection
@@ -121,6 +123,21 @@ public:
         }
     }
 
+    //! Configures SSL settings on this connection's socket
+    /** Must be called before the connection reaches the SSL handshake state.
+        Safe to call immediately after construction — TCP connect is async
+        and the SSL handshake doesn't start until TCP connect completes.
+
+        @param verify_mode SSL verification mode (SSL_VERIFY_NONE or SSL_VERIFY_PEER)
+        @param accept_all if true, accept self-signed certificates
+        @param cert client certificate for mutual TLS (will be ref'd; nullptr = none)
+        @param key client private key for mutual TLS (will be ref'd; nullptr = none)
+
+        @since %Qore 2.3
+    */
+    DLLLOCAL void configureSsl(int verify_mode, bool accept_all,
+        QoreSSLCertificate* cert, QoreSSLPrivateKey* key);
+
     // --- HttpClientConnectionBase overrides ---
 
     HttpClientProtocol getProtocol() const override {
@@ -172,6 +189,18 @@ private:
 
     //! Proxy TCP port (only used when @ref proxy_host is non-empty)
     int proxy_port = 0;
+
+    //! SSL certificate verification mode for connections created by this object
+    int ssl_verify_mode = 0;  // SSL_VERIFY_NONE
+
+    //! Accept all SSL certificates including self-signed
+    bool accept_all_certs = false;
+
+    //! Client certificate for mutual TLS (ref'd; nullptr = no cert)
+    QoreSSLCertificate* client_cert = nullptr;
+
+    //! Client private key for mutual TLS (ref'd; nullptr = no key)
+    QoreSSLPrivateKey* client_key = nullptr;
 
     //! Builds the C++ pieces and submits to the controller.  Called from
     //! the constructor.
