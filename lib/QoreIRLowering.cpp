@@ -7208,6 +7208,20 @@ QoreIRValue QoreIRLowering::lowerRemove(const QoreValue& expr, std::string& erro
             op->getExp(), nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::Remove);
         if (path_result.isValid()) {
             markLocalUnassignmentFromExpression(op->getExp());
+            // When the return value is not used (ExpressionStatement), invalidate the
+            // result slot so the IR interpreter discards the removed value immediately
+            // instead of deferring to cleanup.  Without this, the removed value stays
+            // alive until function exit, which breaks patterns like weak references
+            // where the destructor must fire as soon as the last strong ref is dropped.
+            if (!op->needsReturnValue()) {
+                auto& insts = builder.getBlock()->instructions;
+                if (!insts.empty()) {
+                    auto* path_inst = dynamic_cast<QoreIRLValuePathInstruction*>(insts.back().get());
+                    if (path_inst) {
+                        path_inst->result = QoreIRValue(0);  // invalid → IR interpreter discards
+                    }
+                }
+            }
             return path_result;
         }
     }
