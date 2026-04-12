@@ -446,14 +446,24 @@ llm.chatStream(
     }
 
     #! Estimates the token count for a text string
-    /** Uses a simple heuristic of ~4 characters per token (typical for
-        English text with GPT-style tokenizers). For accurate counts, use
-        the tokenizer module's HFTokenizer directly.
+    /** When a tokenizer is provided, returns the exact token count.
+        Otherwise uses a heuristic of ~4 characters per token (typical
+        for English text with GPT-style tokenizers).
 
         @param text the text to estimate
-        @return estimated token count
+        @param tokenizer optional HuggingFace tokenizer for exact counting;
+            pass a \c Tokenizer::HFTokenizer instance for accurate results
+        @return token count (exact with tokenizer, approximate without)
     */
-    static int estimateTokens(string text) {
+    static int estimateTokens(string text, *auto tokenizer) {
+        if (tokenizer) {
+            try {
+                hash<auto> enc = call_object_method(tokenizer, "encode", text);
+                return enc.input_ids.size();
+            } catch () {
+                # Fall through to heuristic
+            }
+        }
         return (text.length() + 3) / 4;
     }
 

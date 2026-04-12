@@ -2330,6 +2330,77 @@ list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
     return eigenVectorToQoreList(sum);
 }
 
+//! Max-pools a matrix of token embeddings weighted by an attention mask
+/** Computes the element-wise maximum across rows (token embeddings) where
+    the corresponding attention mask is non-zero.  Used for max-pooling
+    sentence embeddings from transformer models.
+
+    @param embeddings list of token embedding vectors (one per token)
+    @param mask attention mask (1 for real tokens, 0 for padding)
+    @return the max-pooled vector
+
+    @throw ML-VECTOR-ERROR if dimensions don't match or embeddings is empty
+
+    @par Example:
+    @code{.py}
+    list<float> pooled = ml_max_pool(
+        ((1.0, 5.0), (3.0, 2.0), (0.0, 0.0)),
+        (1, 1, 0),
+    );
+    # pooled = (3.0, 5.0) — element-wise max of first two rows
+    @endcode
+
+    @since ml 1.0
+*/
+list<float> ml_max_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+    if (!embeddings->size()) {
+        xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
+        return QoreValue();
+    }
+    if (embeddings->size() != mask->size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "embeddings and mask must have the same length: %d vs %d",
+            (int)embeddings->size(), (int)mask->size());
+        return QoreValue();
+    }
+
+    // Get dimension from first row
+    QoreValue first = embeddings->retrieveEntry(0);
+    const QoreListNode* first_list = first.get<const QoreListNode>();
+    if (!first_list) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "embeddings must be a list of lists");
+        return QoreValue();
+    }
+    size_t dim = first_list->size();
+
+    // Initialize with very negative values
+    VectorXd max_vals = VectorXd::Constant(dim, -1e30);
+    bool has_any = false;
+
+    for (size_t i = 0; i < embeddings->size(); ++i) {
+        int m = (int)mask->retrieveEntry(i).getAsBigInt();
+        if (m) {
+            VectorXd row = qoreListToVector(
+                embeddings->retrieveEntry(i).get<const QoreListNode>(), xsink);
+            if (*xsink) { return QoreValue(); }
+            if ((size_t)row.size() != dim) {
+                xsink->raiseException("ML-VECTOR-ERROR",
+                    "all embeddings must have the same dimension: expected %d, got %d at index %d",
+                    (int)dim, (int)row.size(), (int)i);
+                return QoreValue();
+            }
+            max_vals = max_vals.cwiseMax(row);
+            has_any = true;
+        }
+    }
+
+    if (!has_any) {
+        max_vals = VectorXd::Zero(dim);
+    }
+    return eigenVectorToQoreList(max_vals);
+}
+
 //! Computes cosine similarity between a query vector and a batch of vectors
 /** Efficiently computes cosine similarity between one query vector and
     multiple candidate vectors.  Much faster than calling ml_cosine_similarity()

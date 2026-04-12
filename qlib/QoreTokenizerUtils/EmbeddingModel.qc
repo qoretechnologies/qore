@@ -43,6 +43,11 @@ public hashdecl EmbeddingConfig {
     *hash<auto> tokenizer_config;
     #! Maximum input tokens (longer inputs are truncated); default 512
     int max_tokens = 512;
+    #! HTTP endpoint format: "auto" (try OpenAI then bge-m3 fallback),
+    #! "openai" (only /v1/embeddings), "bge" (only /embed); default "auto"
+    string endpoint_format = "auto";
+    #! ONNX pooling strategy: "mean" (default), "cls" (first token), "max" (element-wise max)
+    string pooling_strategy = "mean";
     #! HTTP connect timeout in milliseconds; default 10000
     int connect_timeout_ms = 10000;
     #! HTTP request timeout in milliseconds; default 120000
@@ -78,6 +83,10 @@ public class EmbeddingModel {
         int timeout_ms;
         #! Maximum input tokens for ONNX mode
         int max_tokens;
+        #! HTTP endpoint format
+        string endpoint_format;
+        #! ONNX pooling strategy
+        string pooling_strategy;
         #! Cached embedding dimension (detected on first call)
         *int dimension;
 %ifndef NoRestClient
@@ -120,6 +129,7 @@ public class EmbeddingModel {
             url = config.url;
             model_name = config.model;
             api_key = config.api_key;
+            endpoint_format = config.endpoint_format;
             connect_timeout_ms = config.connect_timeout_ms;
             timeout_ms = config.timeout_ms;
         } else if (mode == "onnx") {
@@ -131,6 +141,7 @@ public class EmbeddingModel {
                     "tokenizer_config is required for ONNX mode";
             }
             max_tokens = config.max_tokens;
+            pooling_strategy = config.pooling_strategy;
             onnx_model = new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
@@ -242,10 +253,24 @@ public class EmbeddingModel {
             # Get the last hidden state (typically the first output)
             auto hidden_states = result.last_hidden_state ?? result{result.firstKey()};
 
-            # Mean-pool and L2-normalize using C++ vector math from ml module
+            # Pool and L2-normalize using C++ vector math from ml module
             for (int i = 0; i < batch_input_ids.size(); ++i) {
-                list<float> pooled = ML::ml_mean_pool(
-                    hidden_states[i], batch_attention_mask[i]);
+                list<float> pooled;
+                switch (pooling_strategy) {
+                    case "cls":
+                        # CLS token pooling — use the first token's embedding
+                        pooled = hidden_states[i][0];
+                        break;
+                    case "max":
+                        # Max pooling — element-wise max across masked tokens
+                        pooled = ML::ml_max_pool(
+                            hidden_states[i], batch_attention_mask[i]);
+                        break;
+                    default:
+                        # Mean pooling (default)
+                        pooled = ML::ml_mean_pool(
+                            hidden_states[i], batch_attention_mask[i]);
+                }
                 list<float> normalized = ML::ml_l2_normalize(pooled);
 
                 if (!dimension) {
@@ -265,18 +290,24 @@ public class EmbeddingModel {
     private list<list<float>> embedBatchHttp(list<string> texts) {
 %ifndef NoRestClient
         ensureRestClient();
-        # Try OpenAI-compatible endpoint first
-        try {
-            return callOpenAiEndpoint(texts);
-        } catch (hash<ExceptionInfo> ex) {
-            # If 404, try native bge-m3 endpoint
-            if (ex.arg.status_code == 404) {
+        switch (endpoint_format) {
+            case "openai":
+                return callOpenAiEndpoint(texts);
+            case "bge":
                 return callBgeM3Endpoint(texts);
-            }
-            rethrow;
+            default:
+                # "auto" — try OpenAI first, fall back to bge-m3 on 404
+                try {
+                    return callOpenAiEndpoint(texts);
+                } catch (hash<ExceptionInfo> ex) {
+                    if (ex.arg.typeCode() == NT_HASH && ex.arg.status_code == 404) {
+                        return callBgeM3Endpoint(texts);
+                    }
+                    rethrow;
+                }
         }
 %endif
-        throw "EMBEDDING-ERROR", "RestClient not available";
+        throw "EMBEDDING-ERROR", "RestClientIo not available";
     }
 
 %ifndef NoRestClient

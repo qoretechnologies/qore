@@ -68,8 +68,21 @@ public class SemanticDocumentChunker inherits StructuredDocumentChunker {
         #! Number of sentences per segment for embedding
         int segment_size;
 
-        #! Regex for sentence splitting
-        const SentenceRegex = "([.!?]+)\\s+";
+        #! Regex for sentence splitting — abbreviation-aware
+        /** Uses negative lookbehinds to avoid splitting on common abbreviations
+            (Dr., Mr., etc.), single-letter initials (A. Smith), and decimal
+            numbers (3.14). Requires the next segment to start with an uppercase
+            letter, quote, or parenthesis.
+        */
+        const SentenceRegex =
+            "(?<!\\b(?:Dr|Mr|Mrs|Ms|Prof|Rev|Gen|Gov|Sgt|Sr|Jr|St|vs|etc|al|"
+            "Inc|Corp|Ltd|Co|Vol|Fig|Eq|No|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|"
+            "Oct|Nov|Dec))"
+            "(?<!\\b[A-Z])"
+            "(?<!\\d)"
+            "([.!?]+)"
+            "\\s+"
+            "(?=[A-Z\"(])";
     }
 
     #! Creates a SemanticDocumentChunker

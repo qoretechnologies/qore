@@ -38,6 +38,9 @@ public hashdecl RerankerConfig {
     *hash<auto> tokenizer_config;
     #! Maximum sequence length for query+passage pairs; default 512
     int max_length = 512;
+    #! Activation function for ONNX logits: "sigmoid" (default, binary relevance),
+    #! "softmax" (multi-class ranking), or "none" (raw logits)
+    string activation = "sigmoid";
     #! HTTP connect timeout in milliseconds; default 10000
     int connect_timeout_ms = 10000;
     #! HTTP request timeout in milliseconds; default 60000
@@ -84,6 +87,8 @@ public class CrossEncoderReranker {
         int timeout_ms;
         #! Maximum sequence length for ONNX mode
         int max_length;
+        #! Activation function for ONNX scoring
+        string activation;
 %ifndef NoRestClient
         #! REST client (lazy-initialized)
         *RestClientIo::RestClientIo rest_client;
@@ -130,6 +135,7 @@ public class CrossEncoderReranker {
                     "tokenizer_config is required for ONNX mode";
             }
             max_length = config.max_length;
+            activation = config.activation;
             onnx_model = new ML::OnnxModel(config.model_path);
             onnx_tokenizer = new Tokenizer::HFTokenizer(config.tokenizer_config);
         }
@@ -275,8 +281,21 @@ public class CrossEncoderReranker {
                     } else {
                         raw = logit_row.toFloat();
                     }
-                    # Sigmoid: score = 1 / (1 + exp(-x))
-                    push all_scores, 1.0 / (1.0 + exp(-raw));
+                    # Apply configured activation function
+                    switch (activation) {
+                        case "sigmoid":
+                            push all_scores, 1.0 / (1.0 + exp(-raw));
+                            break;
+                        case "none":
+                            push all_scores, raw;
+                            break;
+                        case "softmax":
+                            # For single-output models, softmax degenerates to sigmoid
+                            push all_scores, 1.0 / (1.0 + exp(-raw));
+                            break;
+                        default:
+                            push all_scores, 1.0 / (1.0 + exp(-raw));
+                    }
                 }
             }
 
