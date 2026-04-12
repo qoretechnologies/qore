@@ -1434,26 +1434,55 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Materialize non-I/O-thread-safe InputStreams into memory.
-                # Handler threads must NEVER do blocking socket I/O on multiplexed
-                # connections — the I/O thread needs the socket/session mutex to
-                # process incoming data, and blocking sends cause deadlock.
+                # Non-I/O-thread-safe InputStream handling (see doResponse() in
+                # HttpServer.qm for the architectural rule).  Two paths:
+                #
+                #   1. Producer path (use_stream_producer = True): submit
+                #      headers only and spawn a StreamResponseProducer to
+                #      push DATA frames incrementally.  Memory is bounded by
+                #      the peer's flow-control window; no materialization.
+                #
+                #   2. Materialization path (default): drain the stream on
+                #      the handler thread and replace with a BinaryInputStream.
+                #      Safe but buffers the entire body in memory — unsuitable
+                #      for large or open-ended streams.
+                bool stream_producer_active = False;
                 if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
-                    result.input_stream.unassignThread();
-                    if (buf.size() > 0) {
-                        result.input_stream = new BinaryInputStream(buf);
-                    } else {
+                    if (result.use_stream_producer) {
+                        hash<auto> resp_hdr = result.hdr ?? {};
+                        remove resp_hdr."Transfer-Encoding";
+                        cinfo.sock.submitQuicResponseStreaming(session_id, stream_id,
+                            result.code, resp_hdr);
+                        result.input_stream.unassignThread();
+                        HttpServer::StreamResponseProducer producer(cinfo.sock,
+                            stream_id, session_id, result.input_stream,
+                            sub () { controller.wakeSocket(cinfo.sock); });
+                        producer.start();
                         remove result.input_stream;
-                        result.body = NOTHING;
+                        stream_producer_active = True;
+                    } else {
+                        # Materialize on the handler thread (legacy path)
+                        result.input_stream.reassignThread();
+                        binary buf;
+                        while (*binary chunk = result.input_stream.read(65536)) {
+                            buf += chunk;
+                        }
+                        result.input_stream.unassignThread();
+                        if (buf.size() > 0) {
+                            result.input_stream = new BinaryInputStream(buf);
+                        } else {
+                            remove result.input_stream;
+                            result.body = NOTHING;
+                        }
                     }
                 }
 
-                if (result.input_stream) {
+                if (stream_producer_active) {
+                    # Producer is already running; it submits DATA frames and
+                    # END_STREAM on its own.  Nothing more to do on this thread
+                    # — wake the I/O thread so it flushes what's already queued.
+                    controller.wakeSocket(cinfo.sock);
+                } else if (result.input_stream) {
                     hash<auto> resp_hdr = result.hdr ?? {};
                     remove resp_hdr."Transfer-Encoding";
                     int rv = cinfo.sock.submitQuicStreamingResponseWithStream(
@@ -3291,26 +3320,53 @@ public class HttpAsyncSocketIoController {
                     remove result.hdr."Transfer-Encoding";
                 }
 
-                # Materialize non-I/O-thread-safe InputStreams into memory.
-                # Handler threads must NEVER do blocking socket I/O on multiplexed
-                # connections — the I/O thread needs the socket/session mutex to
-                # process incoming ACKs, and blocking sends cause deadlock.
-                # Read the full body here (on the handler thread), wrap in
-                # BinaryInputStream (I/O-thread-safe), then the submit path below
-                # hands it to the I/O thread for non-blocking send.
+                # Non-I/O-thread-safe InputStream handling.  Two paths (see
+                # doResponse() in HttpServer.qm for the architectural rule):
+                #
+                #   1. Producer path (use_stream_producer = True): submit
+                #      headers only and spawn a StreamResponseProducer to
+                #      push DATA frames incrementally.  Memory is bounded by
+                #      the peer's flow-control window.
+                #
+                #   2. Materialization path (default): drain the stream on
+                #      the handler thread and replace with a BinaryInputStream.
+                #      Safe but buffers the entire body in memory.
+                bool stream_producer_active = False;
                 if (result.input_stream && !result.input_stream.isIoThreadSafe()) {
-                    result.input_stream.reassignThread();
-                    binary buf;
-                    while (*binary chunk = result.input_stream.read(65536)) {
-                        buf += chunk;
-                    }
-                    result.input_stream.unassignThread();
-                    if (buf.size() > 0) {
-                        result.input_stream = new BinaryInputStream(buf);
-                    } else {
+                    if (result.use_stream_producer) {
+                        hash<auto> resp_hdr = result.hdr ?? {};
+                        remove resp_hdr."Transfer-Encoding";
+                        cinfo.sock.submitHttp2StreamingResponseHeaders(stream_id,
+                            result.code, resp_hdr);
+                        result.input_stream.unassignThread();
+                        HttpServer::StreamResponseProducer producer(cinfo.sock,
+                            stream_id, NOTHING, result.input_stream,
+                            sub () { controller.wakeSocket(cinfo.sock); });
+                        producer.start();
                         remove result.input_stream;
-                        result.body = NOTHING;
+                        stream_producer_active = True;
+                    } else {
+                        # Materialize on the handler thread (legacy path)
+                        result.input_stream.reassignThread();
+                        binary buf;
+                        while (*binary chunk = result.input_stream.read(65536)) {
+                            buf += chunk;
+                        }
+                        result.input_stream.unassignThread();
+                        if (buf.size() > 0) {
+                            result.input_stream = new BinaryInputStream(buf);
+                        } else {
+                            remove result.input_stream;
+                            result.body = NOTHING;
+                        }
                     }
+                }
+
+                if (stream_producer_active) {
+                    # Producer is already running; wake I/O thread to flush
+                    # whatever the producer has already queued.
+                    controller.wakeSocket(cinfo.sock);
+                    return;
                 }
 
                 # Submit InputStream to I/O thread for non-blocking streaming

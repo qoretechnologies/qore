@@ -1916,6 +1916,171 @@ public class CallbackInputStream inherits InputStream {
     }
 }
 
+#! Dedicated worker that streams a non-I/O-thread-safe InputStream response body
+#! as HTTP/2 DATA frames or HTTP/3 QUIC stream data without materialization
+/** Runs on its own background thread so blocking @ref Qore::InputStream::read() "read()"
+    calls never execute on the async I/O thread (architectural invariant).
+
+    The producer reads chunks from the InputStream and calls
+    @ref Qore::Socket::sendHttp2StreamData() "sendHttp2StreamData()" (HTTP/2)
+    or @ref Qore::Socket::submitQuicStreamData() "submitQuicStreamData()" (HTTP/3)
+    to push frames into the session's internal send buffer.  The I/O thread
+    drains that buffer to the socket as part of its normal poll loop.
+
+    Backpressure: when the session's buffer is full, the send primitive either
+    returns @c 1 (HTTP/3) or raises @c HTTP2-FLOW-CONTROL (HTTP/2).  In both
+    cases the producer blocks on @ref Qore::Socket::waitForHttp2StreamDrain()
+    "waitForHttp2StreamDrain()" / @ref Qore::Socket::waitForQuicStreamDrain()
+    "waitForQuicStreamDrain()" until the peer's window advances, then retries
+    the same chunk (no data loss).
+
+    Error handling: any exception from @c read() or a stream-level send error
+    triggers a per-stream reset via @ref Qore::Socket::resetHttp2Stream()
+    "resetHttp2Stream()" or @ref Qore::Socket::cancelQuicStream()
+    "cancelQuicStream()" — the peer sees a clean RST, never a silent hang.
+
+    Lifecycle: the producer holds the InputStream's thread affinity for the
+    duration of its @c run() method.  On exit (EOF, error, or abort) it
+    releases the affinity and decrements the @c done Counter so callers can
+    wait for completion.
+
+    @since HttpServerUtil 2.3
+*/
+public class StreamResponseProducer {
+    public {
+        #! Reaches zero when the producer has finished (EOF, error, or abort)
+        Counter done(1);
+
+        #! TID of the producer worker thread (set once run() begins)
+        int producer_tid = 0;
+    }
+
+    private {
+        Socket sock;
+        int stream_id;
+        *int session_id;   # HTTP/3: non-null; HTTP/2: NOTHING
+        InputStream is;
+        *code io_wake;
+        *hash<ExceptionInfo> error_info;
+
+        #! Size of each chunk pulled from the InputStream
+        int chunk_size = 65536;
+        #! Per-drain wait timeout in milliseconds (CV signaled by the I/O thread)
+        int drain_timeout_ms = 30000;
+        #! Safety cap on consecutive drain retries per chunk (bounds total block time)
+        int max_drain_retries = 60;
+    }
+
+    #! Creates the producer; call @ref start() to dispatch the background worker
+    constructor(Socket sock, int stream_id, *int session_id, InputStream is,
+            *code io_wake) {
+        self.sock = sock;
+        self.stream_id = stream_id;
+        self.session_id = session_id;
+        self.is = is;
+        self.io_wake = io_wake;
+    }
+
+    #! Spawns the producer on a background thread
+    start() {
+        # Capture `self` in a closure reference so the object stays alive
+        # for the duration of the background task.
+        StreamResponseProducer me = self;
+        background sub () { me.run(); }();
+    }
+
+    #! Blocks the caller until the producer has finished; returns any error
+    *hash<ExceptionInfo> waitForDone(timeout t = 120s) {
+        done.waitForZero(t);
+        return error_info;
+    }
+
+    #! Main producer loop — runs on the background thread
+    private run() {
+        producer_tid = gettid();
+        on_exit {
+            try {
+                is.unassignThread();
+            } catch (hash<ExceptionInfo> ex) {
+                # ignore; best-effort release
+            }
+            done.dec();
+        }
+        try {
+            is.reassignThread();
+            while (True) {
+                *binary chunk = is.read(chunk_size);
+                if (!exists chunk) {
+                    sendWithBackpressure(binary(), True);
+                    return;
+                }
+                sendWithBackpressure(chunk, False);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            error_info = ex;
+            try {
+                resetStream();
+            } catch (hash<ExceptionInfo> reset_ex) {
+                # stream likely already closed; swallow
+            }
+        }
+    }
+
+    #! Sends a chunk, blocking on drain if the session buffer is full
+    private sendWithBackpressure(binary data, bool end_stream) {
+        int retries = 0;
+        while (True) {
+            bool backpressure = False;
+            try {
+                if (session_id) {
+                    int rv = sock.submitQuicStreamData(session_id, stream_id,
+                        data, end_stream);
+                    if (rv == 1) {
+                        backpressure = True;
+                    } else if (rv != 0) {
+                        throw "STREAM-SEND-ERROR",
+                            sprintf("unexpected rv=%d from submitQuicStreamData on "
+                                "stream %d", rv, stream_id);
+                    }
+                } else {
+                    sock.sendHttp2StreamData(stream_id, data, end_stream);
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "HTTP2-FLOW-CONTROL") {
+                    backpressure = True;
+                } else {
+                    rethrow;
+                }
+            }
+            if (io_wake) {
+                io_wake();
+            }
+            if (!backpressure) {
+                return;
+            }
+            if (++retries > max_drain_retries) {
+                throw "STREAM-BACKPRESSURE-TIMEOUT",
+                    sprintf("stream %d buffer still full after %d drain attempts; "
+                        "peer may be stalled or disconnected", stream_id, retries);
+            }
+            if (session_id) {
+                sock.waitForQuicStreamDrain(session_id, stream_id, drain_timeout_ms);
+            } else {
+                sock.waitForHttp2StreamDrain(stream_id, drain_timeout_ms);
+            }
+        }
+    }
+
+    #! Sends a stream-level reset to the peer (best-effort)
+    private resetStream() {
+        if (session_id) {
+            sock.cancelQuicStream(session_id, stream_id);
+        } else {
+            sock.resetHttp2Stream(stream_id);
+        }
+    }
+}
+
 #! abstract class that all HTTP request handler objects must inherit from
 /** Reimplement handleRequest() in subclasses
 
