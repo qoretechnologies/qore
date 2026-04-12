@@ -2231,4 +2231,163 @@ float ml_manhattan_distance(list<auto> a, list<auto> b) [dom=DEFAULT] {
     return ::ml_manhattan_distance(va, vb);
 }
 
+//! L2-normalizes a vector (unit vector in the same direction)
+/** Divides each element by the vector's Euclidean norm so the result has
+    magnitude 1.0.  Used for normalizing embedding vectors before cosine
+    similarity comparisons (cosine similarity of L2-normalized vectors equals
+    their dot product).
+
+    @param v the input vector
+    @return the L2-normalized vector (same length, magnitude 1.0)
+
+    @throw ML-VECTOR-ERROR if the vector is empty
+
+    @par Example:
+    @code{.py}
+    list<float> unit = ml_l2_normalize((3.0, 4.0));
+    # unit = (0.6, 0.8) — magnitude is 1.0
+    @endcode
+
+    @since ml 1.0
+*/
+list<float> ml_l2_normalize(list<auto> v) [dom=DEFAULT] {
+    VectorXd vec = qoreListToVector(v, xsink);
+    if (*xsink) { return QoreValue(); }
+    double norm = vec.norm();
+    if (norm > 0.0) {
+        vec /= norm;
+    }
+    return eigenVectorToQoreList(vec);
+}
+
+//! Mean-pools a matrix of token embeddings weighted by an attention mask
+/** Computes the weighted average of rows (token embeddings) where the weight
+    for each row is the corresponding attention mask value.  This is the
+    standard pooling operation for sentence embeddings from transformer models.
+
+    @param embeddings list of token embedding vectors (one per token)
+    @param mask attention mask (1 for real tokens, 0 for padding); same length
+        as embeddings
+    @return the mean-pooled vector (same dimension as each embedding)
+
+    @throw ML-VECTOR-ERROR if dimensions don't match or embeddings is empty
+
+    @par Example:
+    @code{.py}
+    list<float> pooled = ml_mean_pool(
+        ((1.0, 2.0), (3.0, 4.0), (0.0, 0.0)),  # 3 token embeddings
+        (1, 1, 0),  # mask: first two are real, third is padding
+    );
+    # pooled = (2.0, 3.0) — average of first two rows
+    @endcode
+
+    @since ml 1.0
+*/
+list<float> ml_mean_pool(list<auto> embeddings, list<auto> mask) [dom=DEFAULT] {
+    if (!embeddings->size()) {
+        xsink->raiseException("ML-VECTOR-ERROR", "embeddings list is empty");
+        return QoreValue();
+    }
+    if (embeddings->size() != mask->size()) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "embeddings and mask must have the same length: %d vs %d",
+            (int)embeddings->size(), (int)mask->size());
+        return QoreValue();
+    }
+
+    // Get embedding dimension from first row
+    QoreValue first = embeddings->retrieveEntry(0);
+    const QoreListNode* first_list = first.get<const QoreListNode>();
+    if (!first_list) {
+        xsink->raiseException("ML-VECTOR-ERROR",
+            "embeddings must be a list of lists");
+        return QoreValue();
+    }
+    size_t dim = first_list->size();
+    VectorXd sum = VectorXd::Zero(dim);
+    double mask_sum = 0.0;
+
+    for (size_t i = 0; i < embeddings->size(); ++i) {
+        int m = (int)mask->retrieveEntry(i).getAsBigInt();
+        if (m) {
+            VectorXd row = qoreListToVector(
+                embeddings->retrieveEntry(i).get<const QoreListNode>(), xsink);
+            if (*xsink) { return QoreValue(); }
+            if ((size_t)row.size() != dim) {
+                xsink->raiseException("ML-VECTOR-ERROR",
+                    "all embeddings must have the same dimension: expected %d, got %d at index %d",
+                    (int)dim, (int)row.size(), (int)i);
+                return QoreValue();
+            }
+            sum += row;
+            mask_sum += 1.0;
+        }
+    }
+
+    if (mask_sum > 0.0) {
+        sum /= mask_sum;
+    }
+    return eigenVectorToQoreList(sum);
+}
+
+//! Computes cosine similarity between a query vector and a batch of vectors
+/** Efficiently computes cosine similarity between one query vector and
+    multiple candidate vectors.  Much faster than calling ml_cosine_similarity()
+    in a loop because the query vector is only processed once.
+
+    @param query the query vector
+    @param candidates list of candidate vectors (each same length as query)
+    @return list of cosine similarity scores in the same order as candidates
+
+    @throw ML-VECTOR-ERROR if dimensions don't match
+
+    @par Example:
+    @code{.py}
+    list<float> scores = ml_cosine_similarity_batch(
+        (1.0, 0.0),  # query
+        ((1.0, 0.0), (0.0, 1.0), (0.707, 0.707)),  # candidates
+    );
+    # scores ≈ (1.0, 0.0, 0.707)
+    @endcode
+
+    @since ml 1.0
+*/
+list<float> ml_cosine_similarity_batch(list<auto> query, list<auto> candidates) [dom=DEFAULT] {
+    VectorXd q = qoreListToVector(query, xsink);
+    if (*xsink) { return QoreValue(); }
+    double q_norm = q.norm();
+    if (q_norm == 0.0) {
+        // Zero vector — return all zeros
+        ReferenceHolder<QoreListNode> rv(new QoreListNode(floatTypeInfo), xsink);
+        for (size_t i = 0; i < candidates->size(); ++i) {
+            rv->push(0.0, xsink);
+        }
+        return rv.release();
+    }
+    VectorXd q_normalized = q / q_norm;
+
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(floatTypeInfo), xsink);
+    for (size_t i = 0; i < candidates->size(); ++i) {
+        QoreValue cval = candidates->retrieveEntry(i);
+        const QoreListNode* clist = cval.get<const QoreListNode>();
+        if (!clist) {
+            xsink->raiseException("ML-VECTOR-ERROR",
+                "candidate at index %d is not a list", (int)i);
+            return QoreValue();
+        }
+        VectorXd c = qoreListToVector(clist, xsink);
+        if (*xsink) { return QoreValue(); }
+        if (c.size() != q.size()) {
+            xsink->raiseException("ML-VECTOR-ERROR",
+                "candidate at index %d has dimension %d, expected %d",
+                (int)i, (int)c.size(), (int)q.size());
+            return QoreValue();
+        }
+        double c_norm = c.norm();
+        double sim = (c_norm > 0.0) ? q_normalized.dot(c) / c_norm : 0.0;
+        rv->push(sim, xsink);
+    }
+    return rv.release();
+}
+
 ///@}
